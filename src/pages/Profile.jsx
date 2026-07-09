@@ -266,11 +266,10 @@ export default function Profile() {
         url="https://zokascore.com/profile"
       />
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 80px' }}></div>
+<div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 80px' }}>
 
-      
-        {/* ═══ PROFILE HEADER ═══ */}
-        <div className="pro-enter" style={{
+  {/* PROFILE HEADER */}
+  <div className="pro-enter" style={{
           padding: 32, background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 16, display: 'flex', alignItems: 'center', gap: 24,
           flexWrap: 'wrap', position: 'relative', overflow: 'hidden', marginBottom: 28,
