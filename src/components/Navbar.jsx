@@ -108,7 +108,7 @@ const StatusDot = ({ status }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   NAV LINKS — Home now included here
+   NAV LINKS — Home included alongside others
    ═══════════════════════════════════════════════════════════════ */
 const LINKS = [
   { to: '/', label: 'Home', icon: '🏠' },
@@ -584,10 +584,31 @@ export default function Navbar() {
         willChange:'background, backdrop-filter, box-shadow',
         animation:scrolled?'nvBorderGlow 4s ease-in-out infinite':'none',
       }}>
-        <div className="nv-inn" style={{ maxWidth:'var(--max-width, 1140px)',margin:'0 auto',padding:'0 20px',height:'100%',display:'grid',gridTemplateColumns:'1fr auto',alignItems:'center',gap:6 }}>
+        <div className="nv-inn" style={{ maxWidth:'var(--max-width, 1140px)',margin:'0 auto',padding:'0 20px',height:'100%',display:'grid',gridTemplateColumns:'auto 1fr auto',alignItems:'center',gap:6 }}>
 
-          {/* ── LEFT: Logo (now sole left element) ── */}
-          <div style={{ display:'flex',alignItems:'center',minWidth:0 }}>
+          {/* ── LEFT: Standalone Home button (always visible) ── */}
+          <div style={{ display:'flex',alignItems:'center',gap:8,minWidth:0 }}>
+            <Link to="/" className="nv-bk-btn" style={{
+              display:'inline-flex',alignItems:'center',gap:6,padding:'6px 14px',borderRadius:8,
+              fontSize:'0.75rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',
+              color: isHome ? '#00e676' : '#6b7280',
+              background: isHome ? 'rgba(0,230,118,0.08)' : 'rgba(255,255,255,0.02)',
+              border: isHome ? '1px solid rgba(0,230,118,0.15)' : '1px solid rgba(255,255,255,0.06)',
+              cursor:'pointer',
+              transition:'all 0.25s cubic-bezier(0.22,1,0.36,1)',
+              animation:'nvFadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both',
+              boxShadow: isHome ? '0 0 14px rgba(0,230,118,0.08)' : 'none',
+            }}
+            onMouseEnter={e => { e.currentTarget.style.background='rgba(0,230,118,0.1)';e.currentTarget.style.color='#00e676';e.currentTarget.style.borderColor='rgba(0,230,118,0.2)';e.currentTarget.style.boxShadow='0 0 14px rgba(0,230,118,0.1)'; }}
+            onMouseLeave={e => { e.currentTarget.style.background=isHome?'rgba(0,230,118,0.08)':'rgba(255,255,255,0.02)';e.currentTarget.style.color=isHome?'#00e676':'#6b7280';e.currentTarget.style.borderColor=isHome?'rgba(0,230,118,0.15)':'rgba(255,255,255,0.06)';e.currentTarget.style.boxShadow=isHome?'0 0 14px rgba(0,230,118,0.08)':'none'; }}
+            aria-label="Home"
+            >
+              <Home size={14} /><span className="nv-bk-txt">Home</span>
+            </Link>
+          </div>
+
+          {/* ── CENTER: Logo ── */}
+          <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minWidth:0 }}>
             <Link to="/" style={{
               display:'flex',alignItems:'center',gap:10,textDecoration:'none',cursor:'pointer',
               transition:'all 0.2s ease',position:'relative',
@@ -742,7 +763,7 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Desktop nav links — Home is now first in this group */}
+            {/* Desktop nav links — Home is first in group */}
             <div ref={linksRef} className="nv-dk" style={{ position:'relative',display:'flex',alignItems:'center',height:'100%' }}>
               {LINKS.map((link, i) => {
                 const active = isActive(link.to);
@@ -821,7 +842,7 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* ── Mobile: admin badge + hamburger ── */}
+            {/* ── Mobile: admin badge + points + hamburger ── */}
             {isLoggedIn && userProfile?.role === 'admin' && (
               <Link to={ADMIN_PATH} className="nv-tg" style={{
                 width:36,height:36,alignItems:'center',justifyContent:'center',borderRadius:9,
@@ -953,7 +974,7 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Nav links */}
+            {/* Nav links — includes Home */}
             <div style={{ padding:'8px 12px' }}>
               {LINKS.map((link, i) => {
                 const active = isActive(link.to);
