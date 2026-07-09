@@ -1,0 +1,21 @@
+# Dependencies
+node_modules/
+backend/node_modules/
+
+# Environment files
+.env
+backend/.env
+
+# Firebase Admin
+backend/serviceAccountKey.json
+
+# Logs
+*.log
+backend/logs/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Vite
+dist/

@@ -1,0 +1,21 @@
+{
+  "name": "ZOKASCORE",
+  "short_name": "ZOKASCORE",
+  "description": "Live football scores, predictions and basketball.",
+  "theme_color": "#00E676",
+  "background_color": "#0f172a",
+  "display": "standalone",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/logo192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/logo512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

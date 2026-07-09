@@ -1,0 +1,38 @@
+{
+  "name": "footballprediction-backend",
+  "version": "1.0.0",
+  "description": "Football Prediction Backend - API-Football sync service with Firebase Firestore",
+  "private": true,
+  "main": "index.js",
+  "author": "Kim",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js",
+    "pm2:start": "pm2 start ecosystem.config.js",
+    "pm2:stop": "pm2 stop footballprediction-backend",
+    "pm2:restart": "pm2 restart footballprediction-backend",
+    "pm2:reload": "pm2 reload footballprediction-backend",
+    "pm2:delete": "pm2 delete footballprediction-backend",
+    "pm2:logs": "pm2 logs footballprediction-backend",
+    "pm2:monit": "pm2 monit",
+    "pm2:save": "pm2 save",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "22": "^0.0.0",
+    "axios": "^1.7.0",
+    "dotenv": "^16.4.0",
+    "express": "^4.21.0",
+    "firebase-admin": "^12.6.0",
+    "winston": "^3.15.0",
+    "winston-daily-rotate-file": "^5.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
+  }
+}
