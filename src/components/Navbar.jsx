@@ -1,3 +1,4 @@
+// FILE: src/components/Navbar.jsx
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -9,6 +10,11 @@ import { useAuth } from '../context/AuthContext';
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
+
+/* ═══════════════════════════════════════════════════════════════
+   CONSTANTS
+   ═══════════════════════════════════════════════════════════════ */
+const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 
 /* ═══════════════════════════════════════════════════════════════
    KEYFRAMES + BREAKPOINTS
@@ -102,9 +108,10 @@ const StatusDot = ({ status }) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   NAV LINKS
+   NAV LINKS — Home now included here
    ═══════════════════════════════════════════════════════════════ */
 const LINKS = [
+  { to: '/', label: 'Home', icon: '🏠' },
   { to: '/fixtures', label: 'Fixtures', icon: '⚽' },
   { to: '/predictions', label: 'Predictions', icon: '🎯', badge: 'NEW' },
   { to: '/leaderboard', label: 'Leaderboard', icon: '🏆' },
@@ -577,31 +584,10 @@ export default function Navbar() {
         willChange:'background, backdrop-filter, box-shadow',
         animation:scrolled?'nvBorderGlow 4s ease-in-out infinite':'none',
       }}>
-        <div className="nv-inn" style={{ maxWidth:'var(--max-width, 1140px)',margin:'0 auto',padding:'0 20px',height:'100%',display:'grid',gridTemplateColumns:'auto 1fr auto',alignItems:'center',gap:6 }}>
+        <div className="nv-inn" style={{ maxWidth:'var(--max-width, 1140px)',margin:'0 auto',padding:'0 20px',height:'100%',display:'grid',gridTemplateColumns:'1fr auto',alignItems:'center',gap:6 }}>
 
-          {/* ── LEFT: Home (always visible) ── */}
-          <div style={{ display:'flex',alignItems:'center',gap:8,minWidth:0 }}>
-            <Link to="/" className="nv-bk-btn" style={{
-              display:'inline-flex',alignItems:'center',gap:6,padding:'6px 14px',borderRadius:8,
-              fontSize:'0.75rem',fontWeight:600,textDecoration:'none',whiteSpace:'nowrap',
-              color: isHome ? '#00e676' : '#6b7280',
-              background: isHome ? 'rgba(0,230,118,0.08)' : 'rgba(255,255,255,0.02)',
-              border: isHome ? '1px solid rgba(0,230,118,0.15)' : '1px solid rgba(255,255,255,0.06)',
-              cursor:'pointer',
-              transition:'all 0.25s cubic-bezier(0.22,1,0.36,1)',
-              animation:'nvFadeUp 0.4s cubic-bezier(0.22,1,0.36,1) both',
-              boxShadow: isHome ? '0 0 14px rgba(0,230,118,0.08)' : 'none',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background='rgba(0,230,118,0.1)';e.currentTarget.style.color='#00e676';e.currentTarget.style.borderColor='rgba(0,230,118,0.2)';e.currentTarget.style.boxShadow='0 0 14px rgba(0,230,118,0.1)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background=isHome?'rgba(0,230,118,0.08)':'rgba(255,255,255,0.02)';e.currentTarget.style.color=isHome?'#00e676':'#6b7280';e.currentTarget.style.borderColor=isHome?'rgba(0,230,118,0.15)':'rgba(255,255,255,0.06)';e.currentTarget.style.boxShadow=isHome?'0 0 14px rgba(0,230,118,0.08)':'none'; }}
-            aria-label="Home"
-            >
-              <Home size={14} /><span className="nv-bk-txt">Home</span>
-            </Link>
-          </div>
-
-          {/* ── CENTER: Logo ── */}
-          <div style={{ display:'flex',alignItems:'center',justifyContent:'center',minWidth:0 }}>
+          {/* ── LEFT: Logo (now sole left element) ── */}
+          <div style={{ display:'flex',alignItems:'center',minWidth:0 }}>
             <Link to="/" style={{
               display:'flex',alignItems:'center',gap:10,textDecoration:'none',cursor:'pointer',
               transition:'all 0.2s ease',position:'relative',
@@ -622,7 +608,7 @@ export default function Navbar() {
                 <div style={{ position:'absolute',top:0,left:'-100%',width:'50%',height:'100%',background:'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)',animation:'nvShine 4s ease-in-out 1.5s infinite' }} />
                 <div style={{ position:'absolute',top:0,left:0,right:0,height:'45%',background:'linear-gradient(180deg, rgba(255,255,255,0.22) 0%, transparent 100%)',borderRadius:'11px 11px 0 0',pointerEvents:'none' }} />
               </div>
-              <div style={{ display:'flex',alignItems:'baseline',gap:0 }}>
+              <div className="nv-dk" style={{ display:'flex',alignItems:'baseline',gap:0 }}>
                 <span style={{ fontWeight:800,fontSize:'1.15rem',letterSpacing:'0.02em',color:'#e2e8f0',whiteSpace:'nowrap',textShadow:'0 0 20px rgba(255,255,255,0.03)' }}>ZOKA</span>
                 <span style={{ fontWeight:900,fontSize:'1.15rem',letterSpacing:'0.03em',color:'#00e676',whiteSpace:'nowrap',marginLeft:1,animation:'nvScoreGlow 3s ease-in-out infinite' }}>SCORE</span>
                 <span style={{ color:'#00e676',fontSize:'1.35rem',lineHeight:1,animation:'nvDotBlink 2.5s ease-in-out infinite',textShadow:'0 0 12px rgba(0,230,118,0.7)',marginLeft:0 }}>.</span>
@@ -756,7 +742,7 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Desktop links */}
+            {/* Desktop nav links — Home is now first in this group */}
             <div ref={linksRef} className="nv-dk" style={{ position:'relative',display:'flex',alignItems:'center',height:'100%' }}>
               {LINKS.map((link, i) => {
                 const active = isActive(link.to);
@@ -793,17 +779,17 @@ export default function Navbar() {
             {isLoggedIn ? (
               <div className="nv-dk" style={{ display:'flex',alignItems:'center',gap:2 }}>
                 {userProfile?.role === 'admin' && (
-                  <Link to="/admin" style={{
+                  <Link to={ADMIN_PATH} style={{
                     width:35,height:35,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',
-                    background:isActive('/admin')?'rgba(0,230,118,0.08)':'transparent',
-                    color:isActive('/admin')?'#00e676':'#6b7280',
-                    border:`1.5px solid ${isActive('/admin')?'rgba(0,230,118,0.18)':'transparent'}`,
+                    background:isActive(ADMIN_PATH)?'rgba(0,230,118,0.08)':'transparent',
+                    color:isActive(ADMIN_PATH)?'#00e676':'#6b7280',
+                    border:`1.5px solid ${isActive(ADMIN_PATH)?'rgba(0,230,118,0.18)':'transparent'}`,
                     cursor:'pointer',textDecoration:'none',transition:'all 0.2s cubic-bezier(0.22,1,0.36,1)',
                     animation:`nvFadeUp 0.4s cubic-bezier(0.22,1,0.36,1) ${LINKS.length*35+170}ms both`,
-                    boxShadow:isActive('/admin')?'0 0 14px rgba(0,230,118,0.12)':'none',
+                    boxShadow:isActive(ADMIN_PATH)?'0 0 14px rgba(0,230,118,0.12)':'none',
                   }}
-                  onMouseEnter={e => { if(!isActive('/admin')){e.currentTarget.style.background='rgba(255,255,255,0.04)';e.currentTarget.style.color='#e2e8f0';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';} }}
-                  onMouseLeave={e => { if(!isActive('/admin')){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6b7280';e.currentTarget.style.borderColor='transparent';} }}
+                  onMouseEnter={e => { if(!isActive(ADMIN_PATH)){e.currentTarget.style.background='rgba(255,255,255,0.04)';e.currentTarget.style.color='#e2e8f0';e.currentTarget.style.borderColor='rgba(255,255,255,0.1)';} }}
+                  onMouseLeave={e => { if(!isActive(ADMIN_PATH)){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#6b7280';e.currentTarget.style.borderColor='transparent';} }}
                   title="Admin"><Shield size={15} /></Link>
                 )}
                 <Link to="/profile" style={{
@@ -835,9 +821,9 @@ export default function Navbar() {
               </Link>
             )}
 
-            {/* Admin badge — mobile only, next to hamburger */}
+            {/* ── Mobile: admin badge + hamburger ── */}
             {isLoggedIn && userProfile?.role === 'admin' && (
-              <Link to="/admin" className="nv-tg" style={{
+              <Link to={ADMIN_PATH} className="nv-tg" style={{
                 width:36,height:36,alignItems:'center',justifyContent:'center',borderRadius:9,
                 border:'1px solid rgba(251,191,36,0.18)',background:'rgba(251,191,36,0.06)',
                 cursor:'pointer',textDecoration:'none',transition:'all 0.15s ease',
@@ -846,29 +832,42 @@ export default function Navbar() {
               }}
               onMouseEnter={e => { e.currentTarget.style.background='rgba(251,191,36,0.14)';e.currentTarget.style.borderColor='rgba(251,191,36,0.3)';e.currentTarget.style.boxShadow='0 0 18px rgba(251,191,36,0.14)'; }}
               onMouseLeave={e => { e.currentTarget.style.background='rgba(251,191,36,0.06)';e.currentTarget.style.borderColor='rgba(251,191,36,0.18)';e.currentTarget.style.boxShadow='0 0 10px rgba(251,191,36,0.06)'; }}
-              title="Admin Panel"
+              title="Admin"
               >
                 <Shield size={15} style={{ color:'#fbbf24' }} />
               </Link>
             )}
 
-            {/* Hamburger */}
-            <button onClick={() => setMobileOpen(p => !p)} className="nv-tg" aria-label={mobileOpen?'Close menu':'Open menu'} aria-expanded={mobileOpen} style={{
-              width:36,height:36,alignItems:'center',justifyContent:'center',color:'#e2e8f0',borderRadius:9,
-              border:'1px solid rgba(255,255,255,0.08)',background:'rgba(255,255,255,0.03)',
-              cursor:'pointer',transition:'all 0.15s ease',boxShadow:'0 0 10px rgba(0,230,118,0.04)',
-            }}
-            onMouseEnter={e => { e.currentTarget.style.background='rgba(0,230,118,0.08)';e.currentTarget.style.borderColor='rgba(0,230,118,0.15)';e.currentTarget.style.boxShadow='0 0 16px rgba(0,230,118,0.12)'; }}
-            onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.borderColor='rgba(255,255,255,0.08)';e.currentTarget.style.boxShadow='0 0 10px rgba(0,230,118,0.04)'; }}
+            {isLoggedIn && userStats.resolved > 0 && (
+              <div className="nv-tg" style={{
+                display:'flex',alignItems:'center',gap:3,padding:'4px 10px',borderRadius:16,
+                background:'rgba(251,191,36,0.06)',border:'1px solid rgba(251,191,36,0.12)',
+              }}>
+                <span style={{ fontSize:'0.72rem' }}>⚡</span>
+                <span style={{ fontWeight:800,fontSize:'0.72rem',color:'#fbbf24',fontFamily:'ui-monospace, monospace' }}>{userStats.points.toLocaleString()}</span>
+              </div>
+            )}
+
+            <button
+              className="nv-tg"
+              onClick={() => setMobileOpen(p => !p)}
+              style={{
+                width:36,height:36,borderRadius:9,display:'flex',alignItems:'center',justifyContent:'center',
+                background:mobileOpen?'rgba(0,230,118,0.08)':'rgba(255,255,255,0.04)',
+                border:`1.5px solid ${mobileOpen?'rgba(0,230,118,0.18)':'rgba(255,255,255,0.08)'}`,
+                color:mobileOpen?'#00e676':'#e2e8f0',cursor:'pointer',
+                transition:'all 0.2s cubic-bezier(0.22,1,0.36,1)',
+              }}
+              aria-label="Menu"
             >
-              {mobileOpen ? <X size={16} /> : <Menu size={16} />}
+              {mobileOpen ? <X size={17} /> : <Menu size={17} />}
             </button>
           </div>
         </div>
       </nav>
 
       {/* ╔═══════════════════════════════════════════════════════╗
-          ║                  MOBILE PANEL                        ║
+          ║              MOBILE DRAWER                           ║
           ╚═══════════════════════════════════════════════════════╝ */}
       {mobileOpen && (
         <>
@@ -876,97 +875,86 @@ export default function Navbar() {
           <div
             onClick={() => setMobileOpen(false)}
             style={{
-              position:'fixed',inset:0,zIndex:9998,
-              background:'rgba(0,0,0,0.6)',
-              backdropFilter:'blur(4px)',
-              animation:'nvOverlayIn 0.25s ease both',
+              position:'fixed',inset:0,zIndex:998,background:'rgba(0,0,0,0.6)',
+              backdropFilter:'blur(4px)',animation:'nvOverlayIn 0.25s ease both',
             }}
           />
 
           {/* Panel */}
           <div style={{
-            position:'fixed',top:0,right:0,bottom:0,zIndex:9999,
-            width:'min(320px, 85vw)',
-            background:'rgba(8,12,24,0.98)',
-            borderLeft:'1px solid rgba(0,230,118,0.08)',
+            position:'fixed',top:0,right:0,bottom:0,zIndex:999,width:'min(320px, 85vw)',
+            background:'rgba(8,13,24,0.98)',borderLeft:'1px solid rgba(0,230,118,0.08)',
             boxShadow:'-8px 0 40px rgba(0,0,0,0.5), -0 0 60px rgba(0,230,118,0.03)',
-            backdropFilter:'blur(30px)',
+            backdropFilter:'blur(30px)',overflowY:'auto',
             animation:'nvMobSlide 0.35s cubic-bezier(0.22,1,0.36,1) both',
-            display:'flex',flexDirection:'column',
-            overflow:'hidden',
           }}>
-            <PitchLines />
-
-            {/* Panel header */}
-            <div style={{
-              padding:'20px 20px 16px',
-              borderBottom:'1px solid rgba(255,255,255,0.05)',
-              display:'flex',alignItems:'center',justifyContent:'space-between',
-            }}>
-              <div style={{ display:'flex',alignItems:'center',gap:10 }}>
+            {/* Mobile header */}
+            <div style={{ padding:'20px 20px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',borderBottom:'1px solid rgba(255,255,255,0.05)' }}>
+              <div style={{ display:'flex',alignItems:'center',gap:8 }}>
                 <div style={{
-                  width:36,height:36,borderRadius:10,
+                  width:30,height:30,borderRadius:8,overflow:'hidden',flexShrink:0,
                   background:'linear-gradient(145deg, #00e676, #059669)',
                   display:'flex',alignItems:'center',justifyContent:'center',
-                  boxShadow:'0 0 16px rgba(0,230,118,0.25)',
+                  boxShadow:'0 0 14px rgba(0,230,118,0.25)',
                 }}>
-                  <FootballIcon size={20} />
+                  <FootballIcon size={18} />
                 </div>
-                <div>
-                  <div style={{ fontWeight:800,fontSize:'0.88rem',color:'#e2e8f0' }}>ZOKASCORE</div>
-                  {isLoggedIn && (
-                    <div style={{ fontSize:'0.62rem',color:'#6b7280',marginTop:1 }}>
-                      {userProfile?.displayName || 'Player'}
-                      {userRank && <span style={{ color:'#fbbf24',marginLeft:6 }}>#{userRank}</span>}
-                    </div>
-                  )}
-                </div>
+                <span style={{ fontWeight:800,fontSize:'0.95rem',color:'#e2e8f0' }}>ZOKA<span style={{ color:'#00e676' }}>SCORE</span></span>
               </div>
               <button onClick={() => setMobileOpen(false)} style={{
                 width:32,height:32,borderRadius:8,display:'flex',alignItems:'center',justifyContent:'center',
-                background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.06)',
-                color:'#6b7280',cursor:'pointer',transition:'all 0.15s ease',
-              }}
-              onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,0.1)';e.currentTarget.style.color='#ef4444';e.currentTarget.style.borderColor='rgba(239,68,68,0.15)'; }}
-              onMouseLeave={e => { e.currentTarget.style.background='rgba(255,255,255,0.04)';e.currentTarget.style.color='#6b7280';e.currentTarget.style.borderColor='rgba(255,255,255,0.06)'; }}
-              >
-                <X size={14} />
+                background:'rgba(255,255,255,0.04)',border:'1px solid rgba(255,255,255,0.08)',
+                color:'#6b7280',cursor:'pointer',
+              }}>
+                <X size={16} />
               </button>
             </div>
 
-            {/* Points display */}
-            {isLoggedIn && userStats.resolved > 0 && (
-              <div style={{
-                margin:'12px 16px',padding:'12px 16px',borderRadius:12,
-                background:'linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(251,191,36,0.02) 100%)',
-                border:'1px solid rgba(251,191,36,0.1)',
-                display:'flex',alignItems:'center',justifyContent:'space-between',
-                animation:'nvMobItemIn 0.3s cubic-bezier(0.22,1,0.36,1) 50ms both',
-              }}>
-                <div style={{ display:'flex',alignItems:'center',gap:8 }}>
-                  <span style={{ fontSize:'1rem' }}>⚡</span>
-                  <div>
-                    <div style={{ fontWeight:800,fontSize:'1rem',color:'#fbbf24',fontFamily:'ui-monospace, monospace' }}>{userStats.points.toLocaleString()}</div>
-                    <div style={{ fontSize:'0.56rem',color:'#92400e',fontWeight:600 }}>
-                      {userStats.exact} exact · {userStats.result} result · {userStats.miss} miss
+            {/* User info (if logged in) */}
+            {isLoggedIn && userProfile && (
+              <div style={{ padding:'16px 20px',borderBottom:'1px solid rgba(255,255,255,0.05)',background:'rgba(0,230,118,0.02)' }}>
+                <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:10 }}>
+                  <div style={{
+                    width:38,height:38,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',
+                    background:'linear-gradient(135deg, rgba(0,230,118,0.15), rgba(0,230,118,0.05))',
+                    border:'1px solid rgba(0,230,118,0.15)',color:'#00e676',fontWeight:800,fontSize:'0.9rem',
+                  }}>
+                    {(userProfile.displayName || 'U')[0].toUpperCase()}
+                  </div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontSize:'0.84rem',fontWeight:700,color:'#e2e8f0',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                      {userProfile.displayName || 'User'}
+                    </div>
+                    <div style={{ fontSize:'0.68rem',color:'#6b7280',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>
+                      {userProfile.email || ''}
                     </div>
                   </div>
+                  {userRank && (
+                    <div style={{ textAlign:'center' }}>
+                      <div style={{ fontSize:'0.7rem',fontWeight:900,color:'#fbbf24',fontFamily:'ui-monospace, monospace' }}>#{userRank}</div>
+                      <div style={{ fontSize:'0.48rem',color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em' }}>Rank</div>
+                    </div>
+                  )}
                 </div>
-                {streak > 0 && (
-                  <div style={{
-                    padding:'4px 10px',borderRadius:8,
-                    background:'rgba(249,115,22,0.1)',border:'1px solid rgba(249,115,22,0.15)',
-                    fontSize:'0.68rem',fontWeight:700,color:'#f97316',
-                    display:'flex',alignItems:'center',gap:4,
-                  }}>
-                    🔥 {streak} streak
+                {userStats.resolved > 0 && (
+                  <div style={{ display:'flex',gap:8 }}>
+                    {[
+                      { label: 'Points', val: userStats.points, color: '#fbbf24' },
+                      { label: 'Exact', val: userStats.exact, color: '#00e676' },
+                      { label: 'Result', val: userStats.result, color: '#38bdf8' },
+                    ].map(s => (
+                      <div key={s.label} style={{ flex:1,textAlign:'center',padding:'8px 4px',borderRadius:8,background:'rgba(255,255,255,0.02)',border:'1px solid rgba(255,255,255,0.04)' }}>
+                        <div style={{ fontSize:'0.88rem',fontWeight:900,color:s.color,fontFamily:'ui-monospace, monospace' }}>{s.val}</div>
+                        <div style={{ fontSize:'0.52rem',color:'#6b7280',fontWeight:600,textTransform:'uppercase',letterSpacing:'0.04em',marginTop:2 }}>{s.label}</div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
             )}
 
             {/* Nav links */}
-            <div style={{ flex:1,overflowY:'auto',padding:'8px 12px' }}>
+            <div style={{ padding:'8px 12px' }}>
               {LINKS.map((link, i) => {
                 const active = isActive(link.to);
                 return (
@@ -975,110 +963,84 @@ export default function Navbar() {
                     to={link.to}
                     onClick={() => setMobileOpen(false)}
                     style={{
-                      display:'flex',alignItems:'center',gap:12,
-                      padding:'12px 14px',borderRadius:10,
-                      marginBottom:4,
-                      background:active ? 'rgba(0,230,118,0.08)' : 'transparent',
-                      border:active ? '1px solid rgba(0,230,118,0.12)' : '1px solid transparent',
-                      color:active ? '#00e676' : '#9ca3af',
-                      textDecoration:'none',
-                      transition:'all 0.2s ease',
-                      animation:`nvMobItemIn 0.3s cubic-bezier(0.22,1,0.36,1) ${80 + i * 40}ms both`,
+                      display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
+                      textDecoration:'none',cursor:'pointer',marginBottom:2,
+                      background:active?'rgba(0,230,118,0.08)':'transparent',
+                      border:`1px solid ${active?'rgba(0,230,118,0.12)':'transparent'}`,
+                      transition:'all 0.15s ease',
+                      animation:`nvMobItemIn 0.3s cubic-bezier(0.22,1,0.36,1) ${i*40+50}ms both`,
                     }}
-                    onMouseEnter={e => { if(!active){e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.color='#e2e8f0';} }}
-                    onMouseLeave={e => { if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';} }}
+                    onMouseEnter={e => { if(!active){e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.borderColor='rgba(255,255,255,0.06)';} }}
+                    onMouseLeave={e => { if(!active){e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent';} }}
                   >
-                    <span style={{ fontSize:'1.1rem',width:28,textAlign:'center',flexShrink:0 }}>{link.icon}</span>
-                    <span style={{ flex:1,fontWeight:active?700:600,fontSize:'0.85rem' }}>{link.label}</span>
+                    <span style={{ fontSize:'1.1rem',width:24,textAlign:'center',flexShrink:0 }}>{link.icon}</span>
+                    <span style={{ flex:1,fontSize:'0.84rem',fontWeight:active?700:500,color:active?'#00e676':'#e2e8f0' }}>{link.label}</span>
                     {link.isLive && <span style={{ width:6,height:6,borderRadius:'50%',background:'#ef4444',boxShadow:'0 0 8px rgba(239,68,68,0.6)',animation:'nvLiveDot 1.5s ease-in-out infinite' }} />}
-                    {link.badge && <span style={{ fontSize:'0.48rem',fontWeight:800,color:'#0a0f1e',background:'linear-gradient(135deg, #00e676, #00c853)',padding:'2px 6px',borderRadius:4,letterSpacing:'0.06em' }}>{link.badge}</span>}
-                    {active && <CheckCircle size={14} style={{ color:'#00e676',opacity:0.6 }} />}
+                    {link.badge && <span style={{ fontSize:'0.5rem',fontWeight:800,color:'#0a0f1e',background:'linear-gradient(135deg, #00e676, #00c853)',padding:'2px 6px',borderRadius:4,letterSpacing:'0.06em' }}>{link.badge}</span>}
+                    {active && <ChevronRight size={14} style={{ color:'#00e676',opacity:0.6 }} />}
                   </Link>
                 );
               })}
 
-              {/* Admin link in mobile panel */}
-              {isLoggedIn && userProfile?.role === 'admin' && (
-                <Link
-                  to="/admin"
-                  onClick={() => setMobileOpen(false)}
-                  style={{
-                    display:'flex',alignItems:'center',gap:12,
-                    padding:'12px 14px',borderRadius:10,
-                    marginBottom:4,
-                    background:isActive('/admin') ? 'rgba(251,191,36,0.08)' : 'transparent',
-                    border:isActive('/admin') ? '1px solid rgba(251,191,36,0.12)' : '1px solid transparent',
-                    color:isActive('/admin') ? '#fbbf24' : '#9ca3af',
-                    textDecoration:'none',
-                    transition:'all 0.2s ease',
-                    animation:`nvMobItemIn 0.3s cubic-bezier(0.22,1,0.36,1) ${80 + LINKS.length * 40}ms both`,
-                  }}
-                  onMouseEnter={e => { if(!isActive('/admin')){e.currentTarget.style.background='rgba(251,191,36,0.04)';e.currentTarget.style.color='#fbbf24';} }}
-                  onMouseLeave={e => { if(!isActive('/admin')){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';} }}
-                >
-                  <Shield size={18} style={{ width:28,textAlign:'center',flexShrink:0 }} />
-                  <span style={{ flex:1,fontWeight:isActive('/admin')?700:600,fontSize:'0.85rem' }}>Admin Panel</span>
-                  <span style={{ fontSize:'0.48rem',fontWeight:800,color:'#0a0f1e',background:'linear-gradient(135deg, #fbbf24, #f59e0b)',padding:'2px 6px',borderRadius:4,letterSpacing:'0.06em' }}>ADMIN</span>
-                  {isActive('/admin') && <CheckCircle size={14} style={{ color:'#fbbf24',opacity:0.6 }} />}
-                </Link>
-              )}
+              {/* Auth links in mobile */}
+              <div style={{ height:1,background:'rgba(255,255,255,0.05)',margin:'12px 14px' }} />
 
-              {/* Profile link in mobile panel */}
-              {isLoggedIn && (
-                <Link
-                  to="/profile"
-                  onClick={() => setMobileOpen(false)}
-                  style={{
-                    display:'flex',alignItems:'center',gap:12,
-                    padding:'12px 14px',borderRadius:10,
-                    marginBottom:4,
-                    background:isActive('/profile') ? 'rgba(0,230,118,0.08)' : 'transparent',
-                    border:isActive('/profile') ? '1px solid rgba(0,230,118,0.12)' : '1px solid transparent',
-                    color:isActive('/profile') ? '#00e676' : '#9ca3af',
-                    textDecoration:'none',
-                    transition:'all 0.2s ease',
-                    animation:`nvMobItemIn 0.3s cubic-bezier(0.22,1,0.36,1) ${80 + (LINKS.length + 1) * 40}ms both`,
-                  }}
-                  onMouseEnter={e => { if(!isActive('/profile')){e.currentTarget.style.background='rgba(255,255,255,0.03)';e.currentTarget.style.color='#e2e8f0';} }}
-                  onMouseLeave={e => { if(!isActive('/profile')){e.currentTarget.style.background='transparent';e.currentTarget.style.color='#9ca3af';} }}
-                >
-                  <User size={18} style={{ width:28,textAlign:'center',flexShrink:0 }} />
-                  <span style={{ flex:1,fontWeight:isActive('/profile')?700:600,fontSize:'0.85rem' }}>Profile</span>
-                  {isActive('/profile') && <CheckCircle size={14} style={{ color:'#00e676',opacity:0.6 }} />}
-                </Link>
-              )}
-            </div>
-
-            {/* Panel footer */}
-            <div style={{
-              padding:'16px',borderTop:'1px solid rgba(255,255,255,0.05)',
-              display:'flex',flexDirection:'column',gap:8,
-            }}>
               {isLoggedIn ? (
-                <button onClick={handleLogout} style={{
-                  display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-                  padding:'11px',borderRadius:10,
-                  background:'rgba(239,68,68,0.06)',border:'1px solid rgba(239,68,68,0.1)',
-                  color:'#ef4444',fontWeight:700,fontSize:'0.82rem',
-                  cursor:'pointer',transition:'all 0.2s ease',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,0.12)';e.currentTarget.style.borderColor='rgba(239,68,68,0.2)'; }}
-                onMouseLeave={e => { e.currentTarget.style.background='rgba(239,68,68,0.06)';e.currentTarget.style.borderColor='rgba(239,68,68,0.1)'; }}
-                >
-                  <LogOut size={14} /> Sign Out
-                </button>
+                <>
+                  <Link to="/profile" onClick={() => setMobileOpen(false)} style={{
+                    display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
+                    textDecoration:'none',cursor:'pointer',marginBottom:2,
+                    background:isActive('/profile')?'rgba(0,230,118,0.08)':'transparent',
+                    border:`1px solid ${isActive('/profile')?'rgba(0,230,118,0.12)':'transparent'}`,
+                    transition:'all 0.15s ease',
+                  }}
+                  onMouseEnter={e => { if(!isActive('/profile')){e.currentTarget.style.background='rgba(255,255,255,0.03)';} }}
+                  onMouseLeave={e => { if(!isActive('/profile')){e.currentTarget.style.background='transparent';} }}
+                  >
+                    <User size={18} style={{ color:isActive('/profile')?'#00e676':'#6b7280',width:24,textAlign:'center' }} />
+                    <span style={{ flex:1,fontSize:'0.84rem',fontWeight:isActive('/profile')?700:500,color:isActive('/profile')?'#00e676':'#e2e8f0' }}>Profile</span>
+                    {isActive('/profile') && <ChevronRight size={14} style={{ color:'#00e676',opacity:0.6 }} />}
+                  </Link>
+
+                  {userProfile?.role === 'admin' && (
+                    <Link to={ADMIN_PATH} onClick={() => setMobileOpen(false)} style={{
+                      display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
+                      textDecoration:'none',cursor:'pointer',marginBottom:2,
+                      background:isActive(ADMIN_PATH)?'rgba(251,191,36,0.08)':'transparent',
+                      border:`1px solid ${isActive(ADMIN_PATH)?'rgba(251,191,36,0.15)':'transparent'}`,
+                      transition:'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => { if(!isActive(ADMIN_PATH)){e.currentTarget.style.background='rgba(255,255,255,0.03)';} }}
+                    onMouseLeave={e => { if(!isActive(ADMIN_PATH)){e.currentTarget.style.background='transparent';} }}
+                    >
+                      <Shield size={18} style={{ color:isActive(ADMIN_PATH)?'#fbbf24':'#6b7280',width:24,textAlign:'center' }} />
+                      <span style={{ flex:1,fontSize:'0.84rem',fontWeight:isActive(ADMIN_PATH)?700:500,color:isActive(ADMIN_PATH)?'#fbbf24':'#e2e8f0' }}>Admin Panel</span>
+                      {isActive(ADMIN_PATH) && <ChevronRight size={14} style={{ color:'#fbbf24',opacity:0.6 }} />}
+                    </Link>
+                  )}
+
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:10,
+                      background:'transparent',border:'1px solid transparent',cursor:'pointer',
+                      width:'100%',textAlign:'left',transition:'all 0.15s ease',
+                    }}
+                    onMouseEnter={e => { e.currentTarget.style.background='rgba(239,68,68,0.06)';e.currentTarget.style.borderColor='rgba(239,68,68,0.1)'; }}
+                    onMouseLeave={e => { e.currentTarget.style.background='transparent';e.currentTarget.style.borderColor='transparent'; }}
+                  >
+                    <LogOut size={18} style={{ color:'#ef4444',width:24,textAlign:'center' }} />
+                    <span style={{ flex:1,fontSize:'0.84rem',fontWeight:500,color:'#ef4444' }}>Sign Out</span>
+                  </button>
+                </>
               ) : (
                 <Link to="/login" onClick={() => setMobileOpen(false)} style={{
                   display:'flex',alignItems:'center',justifyContent:'center',gap:8,
-                  padding:'11px',borderRadius:10,
-                  background:'linear-gradient(135deg, #00e676, #00c853)',
-                  color:'#0a0f1e',fontWeight:700,fontSize:'0.82rem',
-                  textDecoration:'none',transition:'all 0.2s ease',
-                  boxShadow:'0 2px 12px rgba(0,230,118,0.2)',
-                }}
-                onMouseEnter={e => { e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 4px 20px rgba(0,230,118,0.3)'; }}
-                onMouseLeave={e => { e.currentTarget.style.transform='translateY(0)';e.currentTarget.style.boxShadow='0 2px 12px rgba(0,230,118,0.2)'; }}
-                >
+                  padding:'12px 20px',borderRadius:10,marginTop:4,
+                  background:'linear-gradient(135deg, #00e676, #00c853)',color:'#0a0f1e',
+                  fontWeight:700,fontSize:'0.84rem',textDecoration:'none',
+                  boxShadow:'0 2px 16px rgba(0,230,118,0.25)',
+                }}>
                   <Zap size={14} strokeWidth={2.5} /> Sign In
                 </Link>
               )}

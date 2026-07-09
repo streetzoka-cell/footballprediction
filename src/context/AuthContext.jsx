@@ -54,7 +54,6 @@ export function AuthProvider({ children }) {
         setUserProfile(newProfile);
       }
     } catch (err) {
-      // If read fails (shouldn't with public read rules), don't crash
       console.warn('[Auth] Profile fetch failed:', err.message);
       setUserProfile(null);
     }
@@ -89,7 +88,7 @@ export function AuthProvider({ children }) {
       setCurrentUser(user);
 
       if (user) {
-        // Fetch profile and check admin role IN PARALLEL — no waiting one after the other
+        // Fetch profile and check admin role IN PARALLEL
         await Promise.all([
           fetchOrCreateUserProfile(user),
           checkAdminRole(user),
@@ -110,10 +109,7 @@ export function AuthProvider({ children }) {
   ═══════════════════════════════════════════════════════════ */
   async function register(email, password, displayName) {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    // Profile creation is handled by onAuthStateChanged → fetchOrCreateUserProfile
-    // But we set displayName here since we have it from the form
     if (displayName && cred.user) {
-      // Update the auth profile name
       try {
         await cred.user.updateProfile({ displayName });
       } catch (e) {
@@ -149,6 +145,7 @@ export function AuthProvider({ children }) {
     isAdmin,
     isRegistered: !!currentUser,
     loading,
+    authLoading: loading,          // ← alias for route guards
     register,
     login,
     loginWithGoogle,
@@ -156,9 +153,10 @@ export function AuthProvider({ children }) {
     fetchUserProfile: fetchOrCreateUserProfile,
   };
 
+  // Always render children — let route guards handle loading UI
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

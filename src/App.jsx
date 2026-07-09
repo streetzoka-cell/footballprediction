@@ -3,6 +3,7 @@
 import {
   Routes,
   Route,
+  Navigate,
   useLocation,
 } from "react-router-dom";
 
@@ -13,7 +14,7 @@ import {
   Suspense,
 } from "react";
 
-import { AuthProvider } from "./context/AuthContext";
+import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import { initApp } from "./utils/api";
 import { initBasketball } from "./utils/basketballApi";
@@ -35,6 +36,54 @@ const Leaderboard = lazy(() => import("./pages/Leaderboard"));
 const Login = lazy(() => import("./pages/Login"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Admin = lazy(() => import("./pages/Admin"));
+
+/* ═══════════════════════════════════════════════════════════════
+   PROTECTED ROUTE — requires login, redirects to /login
+   ═══════════════════════════════════════════════════════════════ */
+function ProtectedRoute({ children }) {
+  const { currentUser, authLoading } = useAuth();
+  const location = useLocation();
+
+  if (authLoading) return <AppLoader />;
+  if (!currentUser) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  return children;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   GUEST ROUTE — redirects away if already logged in
+   ═══════════════════════════════════════════════════════════════ */
+function GuestRoute({ children }) {
+  const { currentUser, authLoading } = useAuth();
+
+  if (authLoading) return <AppLoader />;
+  if (currentUser) {
+    return <Navigate to="/profile" replace />;
+  }
+
+  return children;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN ROUTE — requires login + admin role
+   (Admin.jsx also has its own guard, this is a first-pass gate)
+   ═══════════════════════════════════════════════════════════════ */
+function AdminRoute({ children }) {
+  const { currentUser, userProfile, authLoading } = useAuth();
+  const location = useLocation();
+
+  if (authLoading) return <AppLoader />;
+  if (!currentUser) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+  if (userProfile?.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
+}
 
 function ScrollToTop() {
   const { pathname } = useLocation();
@@ -68,17 +117,12 @@ function PageTransition({ children }) {
     <div
       style={{
         opacity: visible ? 1 : 0,
-        transform: visible
-          ? "translateY(0)"
-          : "translateY(18px)",
-
+        transform: visible ? "translateY(0)" : "translateY(18px)",
         transition: `
           opacity ${NORMAL} ${EASE_OUT},
           transform ${NORMAL} ${EASE_OUT}
         `,
-
         willChange: "opacity, transform",
-
         minHeight: "80vh",
       }}
     >
@@ -110,6 +154,7 @@ export default function App() {
 
           <Suspense fallback={<AppLoader />}>
             <Routes>
+              {/* Public Routes */}
               <Route
                 path="/"
                 element={
@@ -173,32 +218,44 @@ export default function App() {
                 }
               />
 
+              {/* Guest-Only Route — redirects to /profile if logged in */}
               <Route
                 path="/login"
                 element={
-                  <PageTransition>
-                    <Login />
-                  </PageTransition>
+                  <GuestRoute>
+                    <PageTransition>
+                      <Login />
+                    </PageTransition>
+                  </GuestRoute>
                 }
               />
 
+              {/* Protected Route — requires login */}
               <Route
                 path="/profile"
                 element={
-                  <PageTransition>
-                    <Profile />
-                  </PageTransition>
+                  <ProtectedRoute>
+                    <PageTransition>
+                      <Profile />
+                    </PageTransition>
+                  </ProtectedRoute>
                 }
               />
 
+              {/* Admin Route — requires login + admin role */}
               <Route
-                path="/admin"
+                path="/zks-admin-8f9x2-control-panel"
                 element={
-                  <PageTransition>
-                    <Admin />
-                  </PageTransition>
+                  <AdminRoute>
+                    <PageTransition>
+                      <Admin />
+                    </PageTransition>
+                  </AdminRoute>
                 }
               />
+
+              {/* Redirect unknown URLs to Home */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </Suspense>
         </main>
