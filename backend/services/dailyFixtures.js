@@ -259,16 +259,35 @@ class DailyFixturesService {
   // "meta says done but data missing" bug.
   // ==========================================================
 
+    // ==========================================================
+  // DATA INTEGRITY VERIFICATION
+  // 
+  // Reads collections directly instead of using repo methods
+  // that may not exist in all repository implementations.
+  // ==========================================================
+
   async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
-      const [todayDocs, yesterdayDocs] = await Promise.all([
-        this.repo.getAllToday(),
-        this.repo.getAllYesterday(),
+      // Read collections directly from Firestore
+      // This avoids requiring getAllYesterday/getAllToday methods
+      // that may not exist in the repository
+      const { db } = require("../config/firebase");
+      const { collection, getDocs } = require("firebase/firestore");
+      
+      if (!db) return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+
+      const [todaySnap, yesterdaySnap] = await Promise.all([
+        getDocs(collection(db, "todayFixtures")),
+        getDocs(collection(db, "yesterdayFixtures")),
       ]);
+
+      const todayDocs = todaySnap.docs.map(d => d.data());
+      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
 
       const todayForDate = todayDocs.filter(d => d.date === todayStr);
       const yesterdayForDate = yesterdayDocs.filter(d => d.date === yesterdayStr);
 
+      // Valid if we have data for the expected dates, OR if both are empty (first run)
       return {
         valid: todayForDate.length > 0 || yesterdayForDate.length > 0 || 
                (todayDocs.length === 0 && yesterdayDocs.length === 0),
@@ -279,10 +298,10 @@ class DailyFixturesService {
       };
     } catch (err) {
       logger.error(`[DailyFixtures] Integrity check failed: ${err.message}`);
+      // If we can't verify, assume invalid so we re-run (safe default)
       return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
     }
   }
-
   // ==========================================================
   // PRIVATE
   // ==========================================================

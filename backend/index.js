@@ -258,59 +258,54 @@ async function main() {
     basketballFixturesRepo
   );
 
-  // ── 4. Services ──
-  // 
-  // NOTE: Constructor signatures changed after adding data integrity verification:
-  //   DailyFixturesService(repo, teamsProcessor)         — ftProcessor removed
-  //   BasketballDailyFixturesService(repo)               — ftProcessor removed
-  //   LiveFixturesService(repo, ftProcessor)             — unchanged
-  //   BasketballLiveFixturesService(repo, ftProcessor)   — unchanged
-  //
-  const services = {
-    // Football Daily: FT recovery now handled inline during rollover
-    // No longer needs ftProcessor as a dependency
-    footballDailyFixtures: new DailyFixturesService(
-      fixturesRepo,
-      teamsProcessor  // ✅ Correct: (repo, teamsProcessor)
-    ),
+    // ── 4. Services ──
+  
+  // Football Daily: Handles rollover + tomorrow fetch
+  const footballDailyFixtures = new DailyFixturesService(
+    fixturesRepo,
+    teamsProcessor
+  );
 
-    // Football Live: Still needs ftProcessor for live→finished transitions
+  // Basketball Daily: Handles rollover + tomorrow fetch
+  let basketballDailyFixtures = null;
+  if (isBasketballConfigured) {
+    basketballDailyFixtures = new BasketballDailyFixturesService(
+      basketballFixturesRepo
+    );
+  }
+
+  // Build services object AFTER creating instances
+  // This ensures the rollover wrappers can reference the instances
+  const services = {
+    // Football
+    footballDailyFixtures: footballDailyFixtures,
+    footballDailyRollover: {
+      run: () => footballDailyFixtures.rollover()
+    },
     footballLiveFixtures: new LiveFixturesService(
       fixturesRepo,
-      ftProcessor  // ✅ Correct: (repo, ftProcessor)
+      ftProcessor
     ),
-
-    footballStandings: new StandingsService(
-      standingRepo
-    ),
-
-    footballLeagues: new LeaguesService(
-      leagueRepo
-    ),
+    footballStandings: new StandingsService(standingRepo),
+    footballLeagues: new LeaguesService(leagueRepo),
   };
 
-  if (isBasketballConfigured) {
+  if (isBasketballConfigured && basketballDailyFixtures) {
     logger.info("[Startup] Basketball enabled");
 
-    // Basketball Daily: FT recovery now handled inline during rollover
-    // No longer needs ftProcessor as a dependency
-    services.basketballDailyFixtures =
-      new BasketballDailyFixturesService(
-        basketballFixturesRepo  // ✅ Correct: (repo) only
-      );
-
-    // Basketball Live: Still needs ftProcessor for live→finished transitions
-    services.basketballLiveFixtures =
-      new BasketballLiveFixturesService(
-        basketballFixturesRepo,
-        basketballFtProcessor  // ✅ Correct: (repo, ftProcessor)
-      );
+    services.basketballDailyFixtures = basketballDailyFixtures;
+    services.basketballDailyRollover = {
+      run: () => basketballDailyFixtures.rollover()
+    };
+    services.basketballLiveFixtures = new BasketballLiveFixturesService(
+      basketballFixturesRepo,
+      basketballFtProcessor
+    );
   } else {
     logger.warn(
       "[Startup] Basketball disabled — set API_BASKETBALL_KEY"
     );
   }
-
   // ── 5. Scheduler ──
   scheduler = new Scheduler(services);
 

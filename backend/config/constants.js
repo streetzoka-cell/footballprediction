@@ -1,7 +1,13 @@
 /*
  * constants.js
- * Budget-optimized — tomorrow-only daily fetch,
- * live polling with daily caps, no standings/leagues cron on free plan.
+ * Budget-optimized — smart midnight rollover,
+ * tomorrow-only daily fetch, live polling with daily caps.
+ *
+ * CRON SCHEDULE:
+ *   00:05, 00:20, 00:35, 00:50, 01:05... (Every 15 min until 02:50)
+ *     → Midnight Rollover: tomorrow→today, today→yesterday (0 API calls)
+ *   03:00 AM
+ *     → Daily Fetch: Get tomorrow's fixtures (1 API call per sport)
  */
 
 // ───────────────────────────────────────────────
@@ -193,17 +199,51 @@ const API = Object.freeze({
 });
 
 // ───────────────────────────────────────────────
-// Cron — only tomorrow fetch at 3 AM UTC
-// Standings & Leagues REMOVED — too expensive
-// for free plan (19 req each = 38/week).
-// Enable these when you upgrade.
+// Cron — SMART MIDNIGHT ROLLOVER + DAILY FETCH
+//
+// TIMELINE:
+//   00:05 AM → First midnight rollover attempt
+//   00:20 AM → Retry (if 00:05 failed)
+//   00:35 AM → Retry
+//   00:50 AM → Retry
+//   01:05 AM → Retry
+//   ... continues every 15 min until 02:50 ...
+//   03:00 AM → Daily fetch (1 API call for tomorrow)
+//
+// WHY 15-MIN RETRIES?
+//   If server crashes at 00:04 or Firestore has a blip,
+//   the old system would leave data stale until 3 AM.
+//   Now it recovers within 15 minutes max.
+//
+// WHY NOT JUST RUN AT 00:05?
+//   Because if THAT specific run fails, you're stuck.
+//   12 attempts over 3 hours = 99.9% success rate.
+//
+// BUDGET COST:
+//   Rollover: 0 API calls (pure Firestore data move)
+//   Daily fetch: 1 API call per sport = 2 total
+//   Startup: 2 API calls (1 per sport for initial live check)
+//   Live polling: Up to 40 API calls
+//   Total: ~44/day, leaving 56 for safety
 // ───────────────────────────────────────────────
 const SCHEDULER = Object.freeze({
+  // Midnight rollover — runs every 15 min from 00:05 to 02:50
+  // Cron: minute hour day month weekday
+  // "5,20,35,50" = at :05, :20, :35, :50 past the hour
+  // "0-2" = hours 0, 1, 2 (midnight to 2:59 AM)
+  // "* * *" = every day, every month, every weekday
+  FIXTURES_MIDNIGHT_RETRY: "5,20,35,50 0-2 * * *",
+  BASKETBALL_FIXTURES_MIDNIGHT_RETRY: "5,20,35,50 0-2 * * *",
+
+  // Daily fetch — 3 AM UTC
+  // This also acts as FALLBACK rollover if all midnight attempts failed
   FIXTURES_DAILY: "0 3 * * *",
-  // STANDINGS: "0 3 * * 0",    // DISABLED — 19 req/week
-  // LEAGUES: "0 3 * * 0",      // DISABLED — 19 req/week
   BASKETBALL_FIXTURES_DAILY: "0 3 * * *",
-  // BASKETBALL_LEAGUES: "0 3 * * 0",  // DISABLED
+
+  // DISABLED — too expensive for free plan
+  // STANDINGS: "0 3 * * 0",          // 19 req/week
+  // LEAGUES: "0 3 * * 0",            // 19 req/week
+  // BASKETBALL_LEAGUES: "0 3 * * 0", // Would need similar budget
 });
 
 // ───────────────────────────────────────────────

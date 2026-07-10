@@ -1,6 +1,7 @@
 /*
  * basketballDailyFixtures.js
- * Same integrity verification fix as football.
+ * Smart daily fetch with SEPARATE midnight rollover.
+ * Same pattern as football.
  */
 
 const {
@@ -13,6 +14,7 @@ const {
   BASKETBALL_FINISHED_STATUSES,
   getDateOffset,
   META_DOCS,
+  SCHEDULER,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
@@ -29,79 +31,57 @@ class BasketballDailyFixturesService {
   }
 
   // ==========================================================
-  // PUBLIC
+  // MIDNIGHT ROLLOVER (0 API calls)
   // ==========================================================
 
-  async run() {
+  async rollover() {
     if (!isBasketballConfigured) {
-      logger.warn(
-        "[BasketballDaily] Skipping — API not configured"
-      );
-      return { total: 0, writes: 0, apiCalls: 0, duration: 0, deduped: true };
+      return { skipped: true, rolloverYesterday: 0, rolloverToday: 0, recoveredFT: 0 };
     }
 
     const todayStr = getDateOffset(0);
     const yesterdayStr = getDateOffset(-1);
-    const tomorrowStr = getDateOffset(1);
 
-    logger.info(
-      `[BasketballDaily] Run for ${tomorrowStr} (today: ${todayStr})`
-    );
+    logger.info(`[BBDailyRollover] Checking for ${todayStr}...`);
 
-    // ══════════════════════════════════════════════════════
-    // META DEDUP WITH DATA INTEGRITY VERIFICATION
-    // ══════════════════════════════════════════════════════
     const meta = await getMeta(META_DOCS.BASKETBALL_SCHEDULER);
-    const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
-
-    if (alreadyFetchedToday) {
+    if (meta?.lastRolloverDate === todayStr) {
       const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
-      
       if (integrity.valid) {
         logger.info(
-          `[BasketballDaily] Data verified (today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}) — skipping`
+          `[BBDailyRollover] Already done — today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}`
         );
-        return { total: 0, writes: 0, apiCalls: 0, duration: 0, deduped: true };
+        return { 
+          skipped: true, 
+          rolloverYesterday: integrity.yesterdayCount, 
+          rolloverToday: integrity.todayCount,
+          recoveredFT: 0,
+        };
       }
-
-      logger.warn(
-        `⚠️ [BasketballDaily] DATA INTEGRITY CHECK FAILED! ` +
-        `todayFixtures: ${integrity.todayTotal} (${integrity.todayCount} for ${todayStr}), ` +
-        `yesterdayFixtures: ${integrity.yesterdayTotal} (${integrity.yesterdayCount} for ${yesterdayStr}) ` +
-        `— FORCING RECOVERY`
-      );
+      logger.warn(`[BBDailyRollover] Meta says done but DATA MISSING — re-rolling`);
     }
 
     const startTime = Date.now();
 
-    // ══════════════════════════════════════════
-    // PHASE 1: 3-DAY ROLLOVER
-    // ══════════════════════════════════════════
-
-    let rolloverYesterday = 0;
-    let rolloverToday = 0;
-    let recoveredFT = 0;
-    let rolloverSuccess = false;
-
-    const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
-      this.repo.getAllToday(),
-      this.repo.getAllTomorrow(),
-    ]);
-
     try {
+      const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
+        this.repo.getAllToday(),
+        this.repo.getAllTomorrow(),
+      ]);
+
+      let rolloverYesterday = 0;
+      let rolloverToday = 0;
+      let recoveredFT = 0;
+
       if (currentTodayDocs.length > 0 || currentTomorrowDocs.length > 0) {
-        const validYesterday = currentTodayDocs.filter(
-          (d) => d.date === yesterdayStr
-        );
-        const validToday = currentTomorrowDocs.filter(
-          (d) => d.date === todayStr
-        );
+        const validYesterday = currentTodayDocs.filter(d => d.date === yesterdayStr);
+        const validToday = currentTomorrowDocs.filter(d => d.date === todayStr);
 
         if (validYesterday.length > 0) {
           const r = await this.repo.replaceYesterday(validYesterday);
           rolloverYesterday = r.written;
 
-          const ftGames = validYesterday.filter((d) =>
+          const ftGames = validYesterday.filter(d =>
             BASKETBALL_FINISHED_STATUSES.includes(d.status)
           );
           if (ftGames.length > 0) {
@@ -118,90 +98,165 @@ class BasketballDailyFixturesService {
         } else {
           await this.repo.replaceToday([]);
         }
-
-        logger.info(
-          `[BasketballDaily] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
-        );
       } else {
         await this.repo.replaceYesterday([]);
         await this.repo.replaceToday([]);
-        logger.info(`[BasketballDaily] First run — no rollover data`);
+        logger.info(`[BBDailyRollover] First run — no data to roll`);
       }
 
       const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
-      rolloverSuccess = afterRollover.valid;
+      
+      if (afterRollover.valid) {
+        await setMeta(META_DOCS.BASKETBALL_SCHEDULER, {
+          ...(meta || {}),
+          lastRolloverDate: todayStr,
+          rolloverYesterday,
+          rolloverToday,
+          recoveredFT,
+          rolloverAt: new Date().toISOString(),
+        });
+
+        const duration = Date.now() - startTime;
+        logger.info(
+          `[BBDailyRollover] SUCCESS — ${rolloverYesterday} → yesterday, ` +
+          `${rolloverToday} → today, ${recoveredFT} FT recovered, ${duration}ms`
+        );
+
+        return { skipped: false, success: true, rolloverYesterday, rolloverToday, recoveredFT, duration };
+      } else {
+        logger.error(`[BBDailyRollover] VERIFICATION FAILED`);
+        return { skipped: false, success: false, error: 'VERIFICATION_FAILED' };
+      }
+
     } catch (err) {
-      logger.error(`[BasketballDaily] Rollover failed: ${err.message}`);
-      rolloverSuccess = false;
+      logger.error(`[BBDailyRollover] FAILED: ${err.message}`);
+      return { skipped: false, success: false, error: err.message };
+    }
+  }
+
+  // ==========================================================
+  // FULL RUN
+  // ==========================================================
+async run() {
+  if (!isBasketballConfigured) {
+    return {
+      total: 0,
+      writes: 0,
+      apiCalls: 0,
+      duration: 0,
+    };
+  }
+
+  const todayStr = getDateOffset(0);
+  const yesterdayStr = getDateOffset(-1);
+  const tomorrowStr = getDateOffset(1);
+    logger.info(
+      `[BasketballDaily] Full run for ${tomorrowStr} (today: ${todayStr})`
+    );
+
+    const startTime = Date.now();
+
+    // ══════════════════════════════════════════
+    // PHASE 1: ROLLOVER (if not done at midnight)
+    // ══════════════════════════════════════════
+    
+    let rolloverResult;
+    const meta = await getMeta(META_DOCS.BASKETBALL_SCHEDULER);
+    const rolloverDone = meta?.lastRolloverDate === todayStr;
+
+    if (rolloverDone) {
+      const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
+      if (integrity.valid) {
+        logger.info(`[BasketballDaily] Rollover already done — skipping`);
+        rolloverResult = { 
+          skipped: true, 
+          rolloverYesterday: integrity.yesterdayCount, 
+          rolloverToday: integrity.todayCount,
+          recoveredFT: 0,
+        };
+      } else {
+        logger.warn(`[BasketballDaily] Rollover meta exists but data missing — re-rolling`);
+        rolloverResult = await this.rollover();
+      }
+    } else {
+      logger.info(`[BasketballDaily] Rollover not done — running now`);
+      rolloverResult = await this.rollover();
     }
 
     // ══════════════════════════════════════════
-    // PHASE 2: FETCH NEW TOMORROW
+    // PHASE 2: FETCH TOMORROW (1 API call)
     // ══════════════════════════════════════════
 
     let fetchTotal = 0;
     let fetchWrites = 0;
     let fetchSuccess = false;
 
-    if (!isBasketballBudgetAvailable(1)) {
-      logger.warn(
-        `[BasketballDaily] Budget too low — skipping tomorrow fetch`
-      );
-    } else {
-      try {
-        const result = await this._fetchTomorrow(tomorrowStr);
-        fetchTotal = result.total;
-        fetchWrites = result.writes;
+    const fetchDone = meta?.lastDailyFetchDate === todayStr;
+    
+    if (fetchDone) {
+      const tomorrowDocs = await this.repo.getAllTomorrow();
+      const tomorrowForDate = tomorrowDocs.filter(d => d.date === tomorrowStr);
+      
+      if (tomorrowForDate.length > 0) {
+        logger.info(`[BasketballDaily] Tomorrow fetch already done — skipping`);
+        fetchTotal = tomorrowForDate.length;
+        fetchWrites = tomorrowForDate.length;
         fetchSuccess = true;
-      } catch (err) {
-        logger.error(`[BasketballDaily] Tomorrow fetch failed: ${err.message}`);
-        fetchSuccess = false;
+      } else {
+        logger.warn(`[BasketballDaily] Fetch meta exists but tomorrow data missing — re-fetching`);
+      }
+    }
+
+    if (!fetchSuccess) {
+      if (!isBasketballBudgetAvailable(1)) {
+        logger.warn(`[BasketballDaily] Budget too low — skipping tomorrow fetch`);
+      } else {
+        try {
+          const result = await this._fetchTomorrow(tomorrowStr);
+          fetchTotal = result.total;
+          fetchWrites = result.writes;
+          fetchSuccess = true;
+        } catch (err) {
+          logger.error(`[BasketballDaily] Tomorrow fetch failed: ${err.message}`);
+          fetchSuccess = false;
+        }
       }
     }
 
     // ══════════════════════════════════════════
-    // PHASE 3: UPDATE META — ONLY IF SUCCESSFUL
+    // PHASE 3: UPDATE META
     // ══════════════════════════════════════════
 
-    const shouldUpdateMeta = rolloverSuccess && (fetchSuccess || !isBasketballBudgetAvailable(1));
-
-    if (shouldUpdateMeta) {
+    if (fetchSuccess) {
       await setMeta(META_DOCS.BASKETBALL_SCHEDULER, {
+        ...(await getMeta(META_DOCS.BASKETBALL_SCHEDULER)) || {},
         lastDailyFetchDate: todayStr,
         lastTomorrowDate: tomorrowStr,
-        rolloverYesterday,
-        rolloverToday,
-        recoveredFT,
         fetchTotal,
         fetchWrites,
-        verifiedAt: new Date().toISOString(),
+        fetchedAt: new Date().toISOString(),
       });
-      logger.info(`[BasketballDaily] Meta updated successfully`);
-    } else {
-      logger.warn(
-        `[BasketballDaily] Meta NOT updated — rollover: ${rolloverSuccess}, fetch: ${fetchSuccess}`
-      );
     }
 
     const duration = Date.now() - startTime;
 
     logger.info(
-      `[BasketballDaily] Complete — rollover: ${rolloverYesterday}+${rolloverToday}, ` +
-      `FT recovered: ${recoveredFT}, fetched: ${fetchTotal} (${fetchWrites} written), ` +
-      `metaUpdated: ${shouldUpdateMeta}, ${duration} ms`
+      `[BasketballDaily] Complete — ` +
+      `rollover: ${rolloverResult.rolloverYesterday || 0}+${rolloverResult.rolloverToday || 0}, ` +
+      `FT recovered: ${rolloverResult.recoveredFT || 0}, ` +
+      `fetched: ${fetchTotal} (${fetchWrites} written), ` +
+      `${duration}ms`
     );
 
     return {
       total: fetchTotal,
-      writes: fetchWrites + rolloverYesterday + rolloverToday,
-      apiCalls: fetchTotal > 0 || fetchWrites >= 0 ? 1 : 0,
+      writes: fetchWrites + (rolloverResult.rolloverYesterday || 0) + (rolloverResult.rolloverToday || 0),
+      apiCalls: fetchSuccess ? 1 : 0,
       duration,
-      rolloverYesterday,
-      rolloverToday,
-      recoveredFT,
+      rolloverYesterday: rolloverResult.rolloverYesterday || 0,
+      rolloverToday: rolloverResult.rolloverToday || 0,
+      recoveredFT: rolloverResult.recoveredFT || 0,
       deduped: false,
-      metaUpdated: shouldUpdateMeta,
-      recovery: alreadyFetchedToday && !shouldUpdateMeta,
     };
   }
 
@@ -209,12 +264,20 @@ class BasketballDailyFixturesService {
   // DATA INTEGRITY VERIFICATION
   // ==========================================================
 
-  async _verifyDataIntegrity(todayStr, yesterdayStr) {
+    async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
-      const [todayDocs, yesterdayDocs] = await Promise.all([
-        this.repo.getAllToday(),
-        this.repo.getAllYesterday(),
+      const { db } = require("../config/firebase");
+      const { collection, getDocs } = require("firebase/firestore");
+      
+      if (!db) return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+
+      const [todaySnap, yesterdaySnap] = await Promise.all([
+        getDocs(collection(db, "basketballTodayFixtures")),
+        getDocs(collection(db, "basketballYesterdayFixtures")),
       ]);
+
+      const todayDocs = todaySnap.docs.map(d => d.data());
+      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
 
       const todayForDate = todayDocs.filter(d => d.date === todayStr);
       const yesterdayForDate = yesterdayDocs.filter(d => d.date === yesterdayStr);
@@ -234,7 +297,7 @@ class BasketballDailyFixturesService {
   }
 
   // ==========================================================
-  // PRIVATE
+  // PRIVATE: FETCH TOMORROW
   // ==========================================================
 
   async _fetchTomorrow(tomorrowStr) {
@@ -292,33 +355,25 @@ class BasketballDailyFixturesService {
 
     return {
       id: fixture.id,
-
       date: fixture.date,
       timestamp: fixture.timestamp,
-
       status: fixture.status?.short || "NS",
       statusLong: fixture.status?.long || "Not Started",
       elapsed: fixture.status?.elapsed ?? null,
-
       leagueId: fixture.league?.id,
       leagueName: fixture.league?.name,
       leagueCountry: fixture.league?.country,
       leagueLogo: fixture.league?.logo,
       season: fixture.league?.season,
-
       homeTeamId: fixture.teams?.home?.id,
       homeTeamName: fixture.teams?.home?.name,
       homeTeamLogo: fixture.teams?.home?.logo,
-
       awayTeamId: fixture.teams?.away?.id,
       awayTeamName: fixture.teams?.away?.name,
       awayTeamLogo: fixture.teams?.away?.logo,
-
       pointsHome: scores.home?.total ?? null,
       pointsAway: scores.away?.total ?? null,
-
       sport: "basketball",
-
       _updatedAt: new Date().toISOString(),
     };
   }

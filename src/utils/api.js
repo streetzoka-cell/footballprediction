@@ -10,13 +10,24 @@
 // Firestore IS the cache.
 //
 // Collections populated by backend:
-//   yesterdayFixtures      ← 3-day rollover at 3 AM (0 API calls)
-//   todayFixtures          ← 3-day rollover at 3 AM (0 API calls)
+//   yesterdayFixtures      ← Smart midnight rollover (00:05 AM, 0 API calls)
+//   todayFixtures          ← Smart midnight rollover (00:05 AM, 0 API calls)
 //   tomorrowFixtures       ← 1 API call/day at 3 AM
 //   liveFixtures           ← live polling, updated every 2 min during matches
 //   finishedFixtures       ← live→finished transitions + overnight recovery
 //   teams                  ← extracted from tomorrow fetch
 //   (same pattern for basketball*)
+//
+// ROLLOVER TIMELINE:
+//   00:05 AM → First rollover attempt (tomorrow→today, today→yesterday)
+//   00:20 AM → Retry if 00:05 failed (continues every 15 min until 02:50)
+//   03:00 AM → Daily fetch for tomorrow's fixtures (1 API call)
+//
+// FRONTEND HANDLING:
+//   The _readDayFixtures function has built-in fallback logic.
+//   If "today" data isn't in todayFixtures (e.g., rollover delayed),
+//   it scans tomorrowFixtures and yesterdayFixtures too.
+//   Users see correct data even during the ~20 min rollover window.
 
 import { db, auth } from './firebase';
 import {
@@ -264,6 +275,20 @@ function isInWindow(date) {
   return (
     d === getYesterdayStr() || d === getTodayStr() || d === getTomorrowStr()
   );
+}
+
+/**
+ * Check if we're in the "waiting for rollover" window (00:00 - 00:20 AM).
+ * During this time, data might be transitioning between collections.
+ * The fallback logic in _readDayFixtures handles this transparently,
+ * but this function lets the UI show a subtle "updating..." indicator.
+ */
+export function isInRolloverWindow() {
+  const now = new Date();
+  const utcHour = now.getUTCHours();
+  const utcMinute = now.getUTCMinutes();
+  // Between 00:00 and 00:25 UTC
+  return utcHour === 0 && utcMinute < 25;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -553,17 +578,36 @@ function _emptyResult(error = null) {
     forceFailed: false,
     cacheSource: 'backend',
     allFinished: false,
+    isRolloverWindow: isInRolloverWindow(),
   };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    INTERNAL: Read fixtures for a specific date
    ═══════════════════════════════════════════════════════════════
-   Handles the midnight–3 AM gap:
-     At midnight the calendar date shifts but the backend's
-     3-day rollover hasn't fired yet. "Today's" data is still
-     in the TOMORROW collection. This function falls back to
-     scanning all 3 day collections when the primary returns 0.
+   SMART FALLBACK LOGIC:
+   
+   With the new midnight rollover system (00:05 AM with 15-min
+   retries), data transitions happen quickly. But this function
+   handles ALL edge cases:
+   
+   1. NORMAL (99% of requests):
+      Primary collection has the right data → return immediately.
+      No extra reads.
+   
+   2. MIDNIGHT TRANSITION (00:00 - 00:20 AM):
+      Calendar date changed but rollover hasn't run yet.
+      "Today's" data is still in tomorrowFixtures.
+      Fallback scans all 3 collections → finds it.
+   
+   3. SERVER DOWNTIME:
+      Server was down for multiple days.
+      Old docs have wrong dates (e.g., tomorrowFixtures has
+      yesterday's date). The date filter catches this.
+   
+   4. ROLLOVER FAILURE:
+      If rollover failed completely and 3 AM fetch also failed,
+      the fallback still tries to find data anywhere.
    ═══════════════════════════════════════════════════════════════ */
 async function _readDayFixtures(yesterdayColl, todayColl, tomorrowColl, date) {
   const yesterdayStr = getYesterdayStr();
@@ -584,10 +628,12 @@ async function _readDayFixtures(yesterdayColl, todayColl, tomorrowColl, date) {
   // If we got results, return immediately (99% of requests)
   if (filtered.length > 0) return filtered;
 
-  // MIDNIGHT–3 AM FALLBACK:
-  // Between midnight and 3 AM, "today" data might still be
-  // in the tomorrow collection (or yesterday in today).
-  // Scan all 3 collections to find it.
+  // SMART FALLBACK:
+  // Scan all 3 collections to find data for this date.
+  // This handles:
+  //   - Midnight transition (data in wrong collection)
+  //   - Server downtime (rollover skipped)
+  //   - Partial failures (one collection empty)
   const all = await Promise.all([
     _readCollection(yesterdayColl),
     _readCollection(todayColl),
@@ -631,6 +677,7 @@ export const fetchFixtures = async (date, forceRefresh = false) => {
       cacheSource: 'backend',
       allFinished:
         matches.length > 0 && matches.every((m) => m.isFinished),
+      isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
     console.warn('[Data] fetchFixtures error:', err.message);
@@ -774,6 +821,7 @@ export const fetchBasketballFixtures = async (date) => {
       cacheSource: 'backend',
       allFinished:
         matches.length > 0 && matches.every((m) => m.isFinished),
+      isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
     console.warn('[Data] fetchBasketballFixtures error:', err.message);
@@ -953,7 +1001,7 @@ export const fetchTeamFixtures = async (teamId) => {
         _readCollection(COLL.TODAY),
         _readCollection(COLL.TOMORROW),
         _readCollection(COLL.FINISHED),
-        _readCollection(COLL.LIVE), // ← was missing before
+        _readCollection(COLL.LIVE),
       ]
     );
 
@@ -976,7 +1024,7 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
         _readCollection(COLL.BASKETBALL_TODAY),
         _readCollection(COLL.BASKETBALL_TOMORROW),
         _readCollection(COLL.BASKETBALL_FINISHED),
-        _readCollection(COLL.BASKETBALL_LIVE), // ← was missing before
+        _readCollection(COLL.BASKETBALL_LIVE),
       ]
     );
 
@@ -992,8 +1040,12 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 
 /* ═══════════════════════════════════════════════════════════════
    BACKEND STATUS — Read meta docs
-   Shows when the backend last synced, budget remaining, etc.
-   Use this to display "Last updated: 3:00 AM" in the UI.
+   Shows when the backend last synced, rollover status, etc.
+   
+   Returns parsed, user-friendly data:
+   - rolloverAt: When the midnight rollover happened
+   - fetchedAt: When tomorrow's fixtures were fetched
+   - rolloverStatus: 'complete' | 'pending' | 'unknown'
    ═══════════════════════════════════════════════════════════════ */
 export const fetchBackendStatus = async () => {
   if (!db) return null;
@@ -1003,17 +1055,75 @@ export const fetchBackendStatus = async () => {
       getDoc(doc(db, COLL.META, 'basketballScheduler')),
     ]);
 
+    const footballRaw = footballSnap.exists() ? footballSnap.data() : null;
+    const basketballRaw = basketballSnap.exists() ? basketballSnap.data() : null;
+
+    // Parse rollover status for a sport
+    const parseSportStatus = (raw) => {
+      if (!raw) return { status: 'unknown', rolloverAt: null, fetchedAt: null };
+      
+      const todayStr = getTodayStr();
+      const rolloverDone = raw.lastRolloverDate === todayStr;
+      const fetchDone = raw.lastDailyFetchDate === todayStr;
+
+      return {
+        status: rolloverDone ? 'complete' : 'pending',
+        rolloverAt: raw.rolloverAt || null,
+        fetchedAt: raw.fetchedAt || null,
+        rolloverYesterday: raw.rolloverYesterday ?? null,
+        rolloverToday: raw.rolloverToday ?? null,
+        recoveredFT: raw.recoveredFT ?? null,
+        fetchTotal: raw.fetchTotal ?? null,
+        fetchWrites: raw.fetchWrites ?? null,
+        lastRolloverDate: raw.lastRolloverDate || null,
+        lastDailyFetchDate: raw.lastDailyFetchDate || null,
+        lastTomorrowDate: raw.lastTomorrowDate || null,
+      };
+    };
+
     return {
-      football: footballSnap.exists() ? footballSnap.data() : null,
-      basketball: basketballSnap.exists()
-        ? basketballSnap.data()
-        : null,
+      football: parseSportStatus(footballRaw),
+      basketball: parseSportStatus(basketballRaw),
+      // Raw data for debugging
+      _raw: {
+        football: footballRaw,
+        basketball: basketballRaw,
+      },
       fetchedAt: new Date().toISOString(),
+      isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
     console.warn('[Data] Backend status error:', err.message);
     return null;
   }
+};
+
+/**
+ * Get a human-readable status message for the UI.
+ * Examples:
+ *   "Updated at 00:05 AM"
+ *   "Rollover pending..."
+ *   "Updated at 3:00 AM"
+ */
+export const getSyncStatusMessage = (status) => {
+  if (!status) return 'Unknown';
+  
+  if (status.status === 'pending') {
+    return isInRolloverWindow() 
+      ? 'Updating...' 
+      : 'Rollover pending';
+  }
+  
+  if (status.rolloverAt) {
+    try {
+      const d = new Date(status.rolloverAt);
+      return `Updated at ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
+    } catch {
+      return 'Updated';
+    }
+  }
+  
+  return 'Updated';
 };
 
 /* ═══════════════════════════════════════════════════════════════

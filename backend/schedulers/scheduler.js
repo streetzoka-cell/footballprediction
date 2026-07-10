@@ -1,19 +1,15 @@
 /*
  * scheduler.js
- * Perfect scheduler — meta-aware initial sync,
- * cap-governed live polling, no wasted requests.
+ * Smart scheduler with midnight rollover + adaptive live polling.
  *
- * CONSTRUCTOR CHANGE:
- *   DailyFixturesService no longer takes ftProcessor.
- *   new DailyFixturesService(repo, teamsProcessor)
- *   new BasketballDailyFixturesService(repo)
+ * CRON SCHEDULE:
+ *   00:05, 00:20, 00:35, 00:50, 01:05... (Every 15 min until 3 AM)
+ *     → Calls rollover() to shift data: tomorrow→today, today→yesterday
+ *     → 0 API calls. Skips if meta says already done.
  *
- * INITIAL SYNC LOGIC:
- *   1. Always run live check (need real-time data)
- *   2. Check meta before daily fetch (dedup)
- *   3. If meta says already fetched today → skip daily
- *
- * WORST CASE: 44 API calls/day out of 100.
+ *   03:00 AM (Once daily)
+ *     → Calls run() to fetch tomorrow's fixtures (1 API call)
+ *     → Also verifies rollover happened (fallback if midnight cron failed)
  */
 
 const { SCHEDULER, LIVE_POLLING, API } = require("../config/constants");
@@ -43,10 +39,6 @@ class Scheduler {
 
   // ==========================================================
   // INITIAL SYNC
-  //
-  // Live: ALWAYS run (users need real-time scores immediately)
-  // Daily: Run ONLY if meta says we haven't fetched today
-  //   → Saves 2 requests on server restart after 3 AM cron
   // ==========================================================
 
   async runInitialSync() {
@@ -61,13 +53,11 @@ class Scheduler {
       await this._tryRun("basketballLiveFixtures");
     }
 
-    // Daily — check meta first, skip if already done
-    const footballDailyResult = await this._tryRunDaily(
-      "footballDailyFixtures"
-    );
+    // Daily — full run handles rollover check + tomorrow fetch
+    await this._tryRun("footballDailyFixtures");
 
     if (isBasketballConfigured) {
-      await this._tryRunDaily("basketballDailyFixtures");
+      await this._tryRun("basketballDailyFixtures");
     }
 
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -81,9 +71,7 @@ class Scheduler {
 
   start() {
     this.running = true;
-    logger.info(
-      "[Scheduler] Starting budget-perfect scheduler..."
-    );
+    logger.info("[Scheduler] Starting smart scheduler...");
 
     // 1. Adaptive live polling loops
     this._startLivePolling("football");
@@ -92,7 +80,23 @@ class Scheduler {
       this._startLivePolling("basketball");
     }
 
-    // 2. Cron — daily tomorrow fetch only
+    // 2. Midnight Rollover Crons (Every 15 min from 00:05 to 02:50)
+    // These call rollover() which is 0 API calls and idempotent
+    this._startCron(
+      "footballDailyRollover",
+      SCHEDULER.FIXTURES_MIDNIGHT_RETRY
+    );
+
+    if (isBasketballConfigured) {
+      this._startCron(
+        "basketballDailyRollover",
+        SCHEDULER.BASKETBALL_FIXTURES_MIDNIGHT_RETRY
+      );
+    }
+
+    // 3. Daily Fetch Crons (3 AM)
+    // These call run() which fetches tomorrow (1 API call)
+    // and acts as a fallback if rollover failed at midnight
     this._startCron(
       "footballDailyFixtures",
       SCHEDULER.FIXTURES_DAILY
@@ -142,14 +146,6 @@ class Scheduler {
 
   // ==========================================================
   // LIVE POLLING LOOP
-  //
-  // Interval selection:
-  //   capReached       → 60 min (wait for midnight)
-  //   no live games    → 10 min (idle)
-  //   budget > 30      →  2 min (active)
-  //   budget 10-30     → 10 min (conserving)
-  //   budget < 10      → 30 min (critical)
-  //   budget = 0       → 60 min (exhausted)
   // ==========================================================
 
   _startLivePolling(sport) {
@@ -221,7 +217,6 @@ class Scheduler {
         const remaining = getBudget();
         const liveUsed = getLiveCount();
 
-        // Budget exhausted
         if (remaining !== null && remaining <= 0) {
           logger.warn(
             `[Scheduler] ${sport} paused — budget 0/${API.DAILY_BUDGET}`
@@ -230,7 +225,6 @@ class Scheduler {
           continue;
         }
 
-        // Below minimum
         if (
           remaining !== null &&
           remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL
@@ -239,12 +233,10 @@ class Scheduler {
           continue;
         }
 
-        // Execute
         const result = await service.run();
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        // Pick interval
         let interval;
 
         if (result?.capReached) {
@@ -286,10 +278,6 @@ class Scheduler {
         await this._sleep(LIVE_POLLING.ERROR_BACKOFF_MS);
       }
     }
-
-    logger.info(
-      `[Scheduler] ${sport} live polling exited`
-    );
   }
 
   // ==========================================================
@@ -333,58 +321,74 @@ class Scheduler {
 
   _getMsUntilCron(cronExpr) {
     const parts = cronExpr.trim().split(/\s+/);
-    const minute =
-      parts[0] === "*" ? 0 : parseInt(parts[0], 10);
-    const hour =
-      parts[1] === "*" ? 0 : parseInt(parts[1], 10);
-    const dayOfWeek = parts[4];
-
+    
+    // Handle comma-separated minutes (e.g., "5,20,35,50")
+    const minuteParts = parts[0].split(',');
+    const hourParts = parts[1].split('-');
+    
     const now = new Date();
-    const next = new Date(now);
-    next.setUTCHours(hour, minute, 0, 0);
-
-    if (dayOfWeek !== "*") {
-      const target = parseInt(dayOfWeek, 10) % 7;
-      const current = next.getUTCDay();
-      let daysUntil = target - current;
-
-      if (daysUntil < 0) daysUntil += 7;
-      if (daysUntil === 0 && next <= now) daysUntil = 7;
-
-      next.setUTCDate(next.getUTCDate() + daysUntil);
+    const currentMinute = now.getUTCMinutes();
+    const currentHour = now.getUTCHours();
+    
+    // Parse target minutes
+    const targetMinutes = minuteParts.map(m => parseInt(m, 10)).sort((a, b) => a - b);
+    
+    // Parse target hours
+    let targetHours = [];
+    if (hourParts.length === 2) {
+      const startH = parseInt(hourParts[0], 10);
+      const endH = parseInt(hourParts[1], 10);
+      for (let h = startH; h <= endH; h++) {
+        targetHours.push(h);
+      }
     } else {
-      if (next <= now) {
-        next.setUTCDate(next.getUTCDate() + 1);
+      targetHours = [parseInt(hourParts[0], 10)];
+    }
+
+    // Find the next occurrence
+    let minMs = Infinity;
+
+    for (const h of targetHours) {
+      for (const m of targetMinutes) {
+        const next = new Date(now);
+        next.setUTCHours(h, m, 0, 0);
+
+        if (next <= now) {
+          // If this time has passed today, check if it's a recurring pattern
+          // For daily patterns, move to tomorrow
+          if (parts[2] === '*' && parts[3] === '*' && parts[4] === '*') {
+            next.setUTCDate(next.getUTCDate() + 1);
+          } else {
+            continue;
+          }
+        }
+
+        const diff = next - now;
+        if (diff > 0 && diff < minMs) {
+          minMs = diff;
+        }
       }
     }
 
-    const ms = next - now;
+    // Fallback: if no time found today (e.g., window closed), schedule for tomorrow's first occurrence
+    if (minMs === Infinity) {
+      const firstMin = targetMinutes[0];
+      const firstHour = targetHours[0];
+      const next = new Date(now);
+      next.setUTCHours(firstHour, firstMin, 0, 0);
+      next.setUTCDate(next.getUTCDate() + 1);
+      minMs = next - now;
+    }
+
     logger.info(
-      `[Scheduler] Next "${cronExpr}" in ${Math.round(ms / 60000)} min`
+      `[Scheduler] Next "${cronExpr}" in ${Math.round(minMs / 60000)} min`
     );
-    return ms;
+    return minMs;
   }
 
   // ==========================================================
   // HELPERS
   // ==========================================================
-
-  /**
-   * Try running a daily service.
-   * The service itself handles meta dedup internally.
-   * This wrapper just catches and logs errors.
-   */
-  async _tryRunDaily(serviceName) {
-    const service = this.services[serviceName];
-    if (!service) {
-      logger.warn(
-        `[Scheduler] ${serviceName} not registered — skipping`
-      );
-      return;
-    }
-
-    await this._executeJob(serviceName, service, true);
-  }
 
   async _tryRun(serviceName) {
     const service = this.services[serviceName];
@@ -439,6 +443,8 @@ class Scheduler {
         rolloverYesterday: result.rolloverYesterday ?? null,
         rolloverToday: result.rolloverToday ?? null,
         recoveredFT: result.recoveredFT ?? null,
+        skipped: result.skipped ?? null,
+        success: result.success ?? null,
       };
     }
 
@@ -470,42 +476,11 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Budget (100/day) ═══");
-    logger.info(
-      `  Daily fetch (3-day rollover): 2 req (FB + BB)`
-    );
-    logger.info(
-      `  Football live cap: ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`
-    );
-    logger.info(
-      `  Basketball live cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`
-    );
-    logger.info(`  Max total: 44/day | Reserve: 56/day`);
-    logger.info("[Scheduler] ═══ 3-Day Rollover ═══");
-    logger.info(
-      "  tomorrowFixtures → todayFixtures → yesterdayFixtures"
-    );
-    logger.info("  Overnight FT games auto-recovered");
-    logger.info("  Meta dedup prevents double-fetch on restart");
-    logger.info("[Scheduler] ═══ Live Intervals ═══");
-    logger.info(
-      `  Active:   ${LIVE_POLLING.ACTIVE_INTERVAL_MS / 1000}s`
-    );
-    logger.info(
-      `  Idle:     ${LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS / 1000}s`
-    );
-    logger.info(
-      `  Conserving: ${LIVE_POLLING.LOW_BUDGET_INTERVAL_MS / 1000}s`
-    );
-    logger.info(
-      `  Critical:  ${LIVE_POLLING.CRITICAL_INTERVAL_MS / 1000}s`
-    );
-    logger.info(
-      `  Cap hit:   ${LIVE_POLLING.CAP_REACHED_INTERVAL_MS / 1000}s`
-    );
-    logger.info("[Scheduler] ═══ Disabled (free plan) ═══");
-    logger.info("  Standings — 19 req/week");
-    logger.info("  Leagues   — 19 req/week");
+    logger.info("[Scheduler] ═══ Smart Schedule ═══");
+    logger.info("  Midnight Rollover: Every 15 min (00:05 - 02:50)");
+    logger.info("  Daily Fetch:      03:00 AM (1 API call)");
+    logger.info("  Live Polling:     Adaptive (2-60 min)");
+    logger.info("[Scheduler] ════════════════════════");
   }
 }
 

@@ -59,18 +59,28 @@ class BasketballLiveFixturesService {
 
     const startTime = Date.now();
 
-    // ── Fetch (1 API call) ──
-    let response;
-    try {
-      response = await withRetry(
-        () => basketballApi.get("/games", { params: { live: "all" } }),
-        "BasketballLive:fetch"
-      );
-    } catch (err) {
-      logger.error(`[BasketballLive] Fetch failed: ${err.message}`);
-      return this._emptyResult();
-    }
+   // ── Fetch today's games (1 API call) ──
+// API-Basketball does not support live=all.
+// We fetch today's games and detect live status locally.
+let response;
 
+try {
+  const today = new Date().toISOString().slice(0, 10);
+
+  response = await withRetry(
+    () =>
+      basketballApi.get("/games", {
+        params: {
+          date: today,
+        },
+      }),
+    "BasketballLive:fetch"
+  );
+
+} catch (err) {
+  logger.error(`[BasketballLive] Fetch failed: ${err.message}`);
+  return this._emptyResult();
+}
     // ── Count this live request ──
     const liveCount = incrementBasketballLiveCounter();
 
@@ -84,9 +94,25 @@ class BasketballLiveFixturesService {
     const rawFixtures = response?.response || [];
 
     // ── Filter ──
-    const filtered = rawFixtures.filter((f) =>
-      this.trackedLeagueIds.has(f.league?.id)
-    );
+    const filtered = rawFixtures.filter((f) => {
+  const isTrackedLeague = this.trackedLeagueIds.has(f.league?.id);
+
+  const liveStatuses = [
+    "Q1",
+    "Q2",
+    "Q3",
+    "Q4",
+    "OT",
+    "LIVE",
+    "IN PLAY"
+  ];
+
+  const isLive = liveStatuses.includes(
+    f.status?.short?.toUpperCase()
+  );
+
+  return isTrackedLeague && isLive;
+});
 
     logger.info(
       `[BasketballLive] API: ${rawFixtures.length} total, ${filtered.length} tracked [live req ${liveCount}/${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}]`
