@@ -52,6 +52,24 @@ const YESTERDAY = getDateOffset(-1);
 const TOMORROW = getDateOffset(1);
 
 // ───────────────────────────────────────────────
+// LEAGUE FILTER TOGGLE
+//
+// true  = SUMMER MODE — fetch ALL leagues from API
+//          (MLS, Liga MX, Brazil, Argentina, Australia,
+//           China, Belarus, Bolivia, etc.)
+//          No extra API calls — same 1 call/day.
+//          More Firestore writes (~100-200 docs/day).
+//
+// false = SEASON MODE — only fetch leagues marked
+//          active: true in the LEAGUES list below.
+//          Use this during Aug-May when Top 5 Europe
+//          are active and you don't want lower-division noise.
+//
+// FLIP THIS TO false IN AUGUST WHEN EUROPEAN SEASONS START
+// ───────────────────────────────────────────────
+const TRACK_ALL_LEAGUES = true;
+
+// ───────────────────────────────────────────────
 // Football Leagues
 // World Cup, UCL, Europa, Conference all active
 // ───────────────────────────────────────────────
@@ -99,10 +117,12 @@ const LEAGUES = Object.freeze([
   { id: 136, name: "Serie B",                country: "Italy",       flag: "🇮🇹", season: SEASON, priority: 30, active: false },
   { id: 79,  name: "2. Bundesliga",           country: "Germany",     flag: "🇩🇪", season: SEASON, priority: 31, active: false },
   { id: 62,  name: "Ligue 2",                country: "France",      flag: "🇫🇷", season: SEASON, priority: 32, active: false },
-  { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 33, active: false },
-  { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 34, active: false },
-  { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 35, active: false },
-  { id: 128, name: "Primera División",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 36, active: false },
+
+  // ═══ SUMMER LEAGUES ═══
+  { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 33, active: true },
+  { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 34, active: true },
+  { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 35, active: true },
+  { id: 128, name: "Primera División",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 36, active: true },
 ]);
 
 // ───────────────────────────────────────────────
@@ -315,5 +335,6 @@ module.exports = Object.freeze({
   BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
   COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING,
   FT_FETCH, RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT,
+  TRACK_ALL_LEAGUES,
   getCurrentSeason, getCurrentBasketballSeason,
 });

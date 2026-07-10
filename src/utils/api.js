@@ -198,9 +198,16 @@ const LEAGUE_COLORS = {
   44: '#ffd700', // Liga ACB
   34: '#008c45', // LBA
   32: '#000000', // BBL
-  36: '#002395', // LNB Pro A
+  36: ' #002395', // LNB Pro A
   49: '#00843d', // NBL
+
+// Summer leagues
+  253: '#0047AB', // MLS — blue
+  262: '#006341', // Liga MX — green
+  71:  '#009C3B', // Brazil Serie A — green
+  128: '#75AADB', // Argentina Primera — light blue
 };
+
 
 const getLeagueColor = (id) => LEAGUE_COLORS[id] || '#1e293b';
 

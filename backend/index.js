@@ -105,45 +105,122 @@ function startHealthServer() {
   // ── Manual Recovery Endpoint ──
   // Use this if data is missing and you don't want to wait for next cron
   // GET /api/recover?sport=football|basketball|all
-  const { doc } = require("firebase/firestore");
-  const { db } = require("./config/firebase");
+  const { getDb } = require("./config/firebase");
 
   app.get("/api/recover", async (req, res) => {
     const sport = req.query.sport || "all";
-    
+
     try {
+      const db = getDb();
       const results = {};
-      
+
       if (sport === "all" || sport === "football") {
         // Delete meta to bypass dedup, forcing full re-run
         try {
-          await deleteDoc(doc(db, "meta", "footballScheduler"));
+          await db.collection("meta").doc("footballScheduler").delete();
           logger.info("[Recover] Deleted football scheduler meta");
         } catch (e) {
           logger.warn(`[Recover] Meta delete failed (may not exist): ${e.message}`);
         }
-        
+
         if (scheduler?.services?.footballDailyFixtures) {
           results.football = await scheduler.services.footballDailyFixtures.run();
         }
       }
-      
+
       if (sport === "all" || sport === "basketball") {
+        try {
+          await db.collection("meta").doc("basketballScheduler").delete();
+          logger.info("[Recover] Deleted basketball scheduler meta");
+        } catch (e) {
+          logger.warn(`[Recover] Meta delete failed (may not exist): ${e.message}`);
+        }
+
         if (scheduler?.services?.basketballDailyFixtures) {
-          try {
-            await deleteDoc(doc(db, "meta", "basketballScheduler"));
-            logger.info("[Recover] Deleted basketball scheduler meta");
-          } catch (e) {
-            logger.warn(`[Recover] Meta delete failed (may not exist): ${e.message}`);
-          }
-          
           results.basketball = await scheduler.services.basketballDailyFixtures.run();
         }
       }
-      
+
       res.json({ success: true, results });
     } catch (err) {
       logger.error(`[Recover] Failed: ${err.message}`);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
+  // ── Backfill Endpoint — fetches today + yesterday directly ──
+  // GET /api/backfill?sport=football|basketball|all
+  app.get("/api/backfill", async (req, res) => {
+    const sport = req.query.sport || "all";
+    const { getDateOffset, LEAGUES, TRACK_ALL_LEAGUES } = require("./config/constants");
+    const todayStr = getDateOffset(0);
+    const yesterdayStr = getDateOffset(-1);
+
+    try {
+      const results = {};
+
+      if (sport === "all" || sport === "football") {
+        const { api, isBudgetAvailable } = require("./config/api");
+        const tracked = new Set(LEAGUES.filter(l => l.active).map(l => l.id));
+
+        // Fetch today
+        if (isBudgetAvailable(1)) {
+          const todayRaw = await api.get("/fixtures", { params: { date: todayStr } });
+          const todayGames = TRACK_ALL_LEAGUES
+            ? (todayRaw?.response || [])
+            : (todayRaw?.response || []).filter(f => tracked.has(f.league?.id));
+          const todayDocs = todayGames.map(f => ({
+            id: f.fixture.id, date: f.fixture.date, timestamp: f.fixture.timestamp,
+            status: f.fixture.status.short, statusLong: f.fixture.status.long,
+            elapsed: f.fixture.status.elapsed ?? null,
+            leagueId: f.league.id, leagueName: f.league.name,
+            leagueCountry: f.league.country, leagueLogo: f.league.logo,
+            leagueFlag: f.league.flag ?? null, season: f.league.season,
+            round: f.league.round,
+            homeTeamId: f.teams.home.id, homeTeamName: f.teams.home.name,
+            homeTeamLogo: f.teams.home.logo,
+            awayTeamId: f.teams.away.id, awayTeamName: f.teams.away.name,
+            awayTeamLogo: f.teams.away.logo,
+            goalsHome: f.goals.home, goalsAway: f.goals.away,
+            sport: "football", _updatedAt: new Date().toISOString(),
+          }));
+
+          const { replaceCollection } = require("./config/firebase");
+          const todayResult = await replaceCollection("todayFixtures", todayDocs);
+          results.footballToday = { fetched: todayGames.length, ...todayResult };
+        }
+
+        // Fetch yesterday
+        if (isBudgetAvailable(1)) {
+          const yestRaw = await api.get("/fixtures", { params: { date: yesterdayStr } });
+          const yestGames = TRACK_ALL_LEAGUES
+            ? (yestRaw?.response || [])
+            : (yestRaw?.response || []).filter(f => tracked.has(f.league?.id));
+          const yestDocs = yestGames.map(f => ({
+            id: f.fixture.id, date: f.fixture.date, timestamp: f.fixture.timestamp,
+            status: f.fixture.status.short, statusLong: f.fixture.status.long,
+            elapsed: f.fixture.status.elapsed ?? null,
+            leagueId: f.league.id, leagueName: f.league.name,
+            leagueCountry: f.league.country, leagueLogo: f.league.logo,
+            leagueFlag: f.league.flag ?? null, season: f.league.season,
+            round: f.league.round,
+            homeTeamId: f.teams.home.id, homeTeamName: f.teams.home.name,
+            homeTeamLogo: f.teams.home.logo,
+            awayTeamId: f.teams.away.id, awayTeamName: f.teams.away.name,
+            awayTeamLogo: f.teams.away.logo,
+            goalsHome: f.goals.home, goalsAway: f.goals.away,
+            sport: "football", _updatedAt: new Date().toISOString(),
+          }));
+
+          const { replaceCollection } = require("./config/firebase");
+          const yestResult = await replaceCollection("yesterdayFixtures", yestDocs);
+          results.footballYesterday = { fetched: yestGames.length, ...yestResult };
+        }
+      }
+
+      res.json({ success: true, results });
+    } catch (err) {
+      logger.error(`[Backfill] Failed: ${err.message}`);
       res.status(500).json({ success: false, error: err.message });
     }
   });
@@ -258,67 +335,59 @@ async function main() {
     basketballFixturesRepo
   );
 
-      // ==========================================================
-  // DATA INTEGRITY VERIFICATION
-  // 
-  // SIMPLIFIED LOGIC:
-  //   - If both collections are empty → VALID (first run or clean state)
-  //   - If today has data for today's date → VALID
-  //   - If yesterday has data for yesterday's date → VALID
-  //   - Otherwise → INVALID (stale data from wrong day)
-  // ==========================================================
+  // ── 4. Services ──
+  //
+  // NOTE: Constructor signatures changed after adding data integrity verification:
+  //   DailyFixturesService(repo, teamsProcessor)         — ftProcessor removed
+  //   BasketballDailyFixturesService(repo)               — ftProcessor removed
+  //   LiveFixturesService(repo, ftProcessor)             — unchanged
+  //   BasketballLiveFixturesService(repo, ftProcessor)   — unchanged
+  //
+  const services = {
+    // Football Daily: FT recovery now handled inline during rollover
+    // No longer needs ftProcessor as a dependency
+    footballDailyFixtures: new DailyFixturesService(
+      fixturesRepo,
+      teamsProcessor  // ✅ Correct: (repo, teamsProcessor)
+    ),
 
-  async _verifyDataIntegrity(todayStr, yesterdayStr) {
-    try {
-      // Use dynamic require to avoid circular dependency issues
-      const firebaseModule = require("../config/firebase");
-      const db = firebaseModule.db || firebaseModule.default?.db;
-      
-      if (!db) {
-        logger.warn(`[DailyFixtures] No db instance — skipping verification`);
-        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
-      }
+    // Football Live: Still needs ftProcessor for live→finished transitions
+    footballLiveFixtures: new LiveFixturesService(
+      fixturesRepo,
+      ftProcessor  // ✅ Correct: (repo, ftProcessor)
+    ),
 
-      const { collection, getDocs } = require("firebase/firestore");
+    footballStandings: new StandingsService(
+      standingRepo
+    ),
 
-      const [todaySnap, yesterdaySnap] = await Promise.all([
-        getDocs(collection(db, "todayFixtures")),
-        getDocs(collection(db, "yesterdayFixtures")),
-      ]);
+    footballLeagues: new LeaguesService(
+      leagueRepo
+    ),
+  };
 
-      const todayDocs = todaySnap.docs.map(d => d.data());
-      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
+  if (isBasketballConfigured) {
+    logger.info("[Startup] Basketball enabled");
 
-      const todayTotal = todayDocs.length;
-      const yesterdayTotal = yesterdayDocs.length;
-      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
-      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
+    // Basketball Daily: FT recovery now handled inline during rollover
+    // No longer needs ftProcessor as a dependency
+    services.basketballDailyFixtures =
+      new BasketballDailyFixturesService(
+        basketballFixturesRepo  // ✅ Correct: (repo) only
+      );
 
-      // FIRST RUN: Both empty = valid (nothing to verify)
-      if (todayTotal === 0 && yesterdayTotal === 0) {
-        logger.debug(`[DailyFixtures] Verification: first run (both empty) — valid`);
-        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
-      }
-
-      // HAS DATA: Check if dates match what we expect
-      const valid = todayCount > 0 || yesterdayCount > 0;
-      
-      if (!valid) {
-        logger.warn(
-          `[DailyFixtures] Verification: stale data — ` +
-          `today: ${todayTotal} docs (${todayCount} for ${todayStr}), ` +
-          `yesterday: ${yesterdayTotal} docs (${yesterdayCount} for ${yesterdayStr})`
-        );
-      }
-
-      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
-    } catch (err) {
-      logger.error(`[DailyFixtures] Verification error: ${err.message}`);
-      // On error, assume INVALID so we re-run (safe default)
-      return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
-    }
+    // Basketball Live: Still needs ftProcessor for live→finished transitions
+    services.basketballLiveFixtures =
+      new BasketballLiveFixturesService(
+        basketballFixturesRepo,
+        basketballFtProcessor  // ✅ Correct: (repo, ftProcessor)
+      );
+  } else {
+    logger.warn(
+      "[Startup] Basketball disabled — set API_BASKETBALL_KEY"
+    );
   }
-  
+
   // ── 5. Scheduler ──
   scheduler = new Scheduler(services);
 

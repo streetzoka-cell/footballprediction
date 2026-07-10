@@ -13,7 +13,7 @@ const {
   incrementBasketballLiveCounter,
   getBasketballLiveRequestsToday,
 } = require("../config/basketballApi");
-const { BASKETBALL_LEAGUES, LIVE_POLLING } = require("../config/constants");
+const { BASKETBALL_LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
 
@@ -59,28 +59,28 @@ class BasketballLiveFixturesService {
 
     const startTime = Date.now();
 
-   // ── Fetch today's games (1 API call) ──
-// API-Basketball does not support live=all.
-// We fetch today's games and detect live status locally.
-let response;
+    // ── Fetch today's games (1 API call) ──
+    // API-Basketball does not support live=all.
+    // We fetch today's games and detect live status locally.
+    let response;
 
-try {
-  const today = new Date().toISOString().slice(0, 10);
+    try {
+      const today = new Date().toISOString().slice(0, 10);
 
-  response = await withRetry(
-    () =>
-      basketballApi.get("/games", {
-        params: {
-          date: today,
-        },
-      }),
-    "BasketballLive:fetch"
-  );
+      response = await withRetry(
+        () =>
+          basketballApi.get("/games", {
+            params: {
+              date: today,
+            },
+          }),
+        "BasketballLive:fetch"
+      );
+    } catch (err) {
+      logger.error(`[BasketballLive] Fetch failed: ${err.message}`);
+      return this._emptyResult();
+    }
 
-} catch (err) {
-  logger.error(`[BasketballLive] Fetch failed: ${err.message}`);
-  return this._emptyResult();
-}
     // ── Count this live request ──
     const liveCount = incrementBasketballLiveCounter();
 
@@ -93,26 +93,26 @@ try {
 
     const rawFixtures = response?.response || [];
 
-    // ── Filter ──
+    // ── Filter to live games (skip league filter if TRACK_ALL_LEAGUES) ──
     const filtered = rawFixtures.filter((f) => {
-  const isTrackedLeague = this.trackedLeagueIds.has(f.league?.id);
+      const isTrackedLeague = TRACK_ALL_LEAGUES || this.trackedLeagueIds.has(f.league?.id);
 
-  const liveStatuses = [
-    "Q1",
-    "Q2",
-    "Q3",
-    "Q4",
-    "OT",
-    "LIVE",
-    "IN PLAY"
-  ];
+      const liveStatuses = [
+        "Q1",
+        "Q2",
+        "Q3",
+        "Q4",
+        "OT",
+        "LIVE",
+        "IN PLAY"
+      ];
 
-  const isLive = liveStatuses.includes(
-    f.status?.short?.toUpperCase()
-  );
+      const isLive = liveStatuses.includes(
+        f.status?.short?.toUpperCase()
+      );
 
-  return isTrackedLeague && isLive;
-});
+      return isTrackedLeague && isLive;
+    });
 
     logger.info(
       `[BasketballLive] API: ${rawFixtures.length} total, ${filtered.length} tracked [live req ${liveCount}/${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}]`

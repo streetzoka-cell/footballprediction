@@ -15,6 +15,7 @@ const {
   getDateOffset,
   META_DOCS,
   SCHEDULER,
+  TRACK_ALL_LEAGUES,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
@@ -51,9 +52,9 @@ class BasketballDailyFixturesService {
         logger.info(
           `[BBDailyRollover] Already done — today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}`
         );
-        return { 
-          skipped: true, 
-          rolloverYesterday: integrity.yesterdayCount, 
+        return {
+          skipped: true,
+          rolloverYesterday: integrity.yesterdayCount,
           rolloverToday: integrity.todayCount,
           recoveredFT: 0,
         };
@@ -105,7 +106,7 @@ class BasketballDailyFixturesService {
       }
 
       const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
-      
+
       if (afterRollover.valid) {
         await setMeta(META_DOCS.BASKETBALL_SCHEDULER, {
           ...(meta || {}),
@@ -137,19 +138,19 @@ class BasketballDailyFixturesService {
   // ==========================================================
   // FULL RUN
   // ==========================================================
-async run() {
-  if (!isBasketballConfigured) {
-    return {
-      total: 0,
-      writes: 0,
-      apiCalls: 0,
-      duration: 0,
-    };
-  }
+  async run() {
+    if (!isBasketballConfigured) {
+      return {
+        total: 0,
+        writes: 0,
+        apiCalls: 0,
+        duration: 0,
+      };
+    }
 
-  const todayStr = getDateOffset(0);
-  const yesterdayStr = getDateOffset(-1);
-  const tomorrowStr = getDateOffset(1);
+    const todayStr = getDateOffset(0);
+    const yesterdayStr = getDateOffset(-1);
+    const tomorrowStr = getDateOffset(1);
     logger.info(
       `[BasketballDaily] Full run for ${tomorrowStr} (today: ${todayStr})`
     );
@@ -159,7 +160,7 @@ async run() {
     // ══════════════════════════════════════════
     // PHASE 1: ROLLOVER (if not done at midnight)
     // ══════════════════════════════════════════
-    
+
     let rolloverResult;
     const meta = await getMeta(META_DOCS.BASKETBALL_SCHEDULER);
     const rolloverDone = meta?.lastRolloverDate === todayStr;
@@ -168,9 +169,9 @@ async run() {
       const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
       if (integrity.valid) {
         logger.info(`[BasketballDaily] Rollover already done — skipping`);
-        rolloverResult = { 
-          skipped: true, 
-          rolloverYesterday: integrity.yesterdayCount, 
+        rolloverResult = {
+          skipped: true,
+          rolloverYesterday: integrity.yesterdayCount,
           rolloverToday: integrity.todayCount,
           recoveredFT: 0,
         };
@@ -192,11 +193,11 @@ async run() {
     let fetchSuccess = false;
 
     const fetchDone = meta?.lastDailyFetchDate === todayStr;
-    
+
     if (fetchDone) {
       const tomorrowDocs = await this.repo.getAllTomorrow();
       const tomorrowForDate = tomorrowDocs.filter(d => d.date === tomorrowStr);
-      
+
       if (tomorrowForDate.length > 0) {
         logger.info(`[BasketballDaily] Tomorrow fetch already done — skipping`);
         fetchTotal = tomorrowForDate.length;
@@ -264,46 +265,73 @@ async run() {
   // DATA INTEGRITY VERIFICATION
   // ==========================================================
 
-       async _verifyDataIntegrity(todayStr, yesterdayStr) {
+  async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
       const { getDb } = require("../config/firebase");
       const db = getDb();
-      
-      if (!db) {
-        logger.warn(`[BasketballDaily] No db instance — skipping verification`);
-        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
-      }
-
-      const { collection, getDocs } = require("firebase/firestore");
 
       const [todaySnap, yesterdaySnap] = await Promise.all([
-        getDocs(collection(db, "basketballTodayFixtures")),
-        getDocs(collection(db, "basketballYesterdayFixtures")),
+        db.collection(
+          this.repo.constructor.name.includes("Basketball")
+            ? "basketballTodayFixtures"
+            : "todayFixtures"
+        ).get(),
+        db.collection(
+          this.repo.constructor.name.includes("Basketball")
+            ? "basketballYesterdayFixtures"
+            : "yesterdayFixtures"
+        ).get(),
       ]);
 
-      const todayDocs = todaySnap.docs.map(d => d.data());
-      const laterdayDocs = yesterdaySnap.docs.map(d => d.data());
+      const todayDocs = todaySnap.docs.map((doc) => doc.data());
+      const yesterdayDocs = yesterdaySnap.docs.map((doc) => doc.data());
 
       const todayTotal = todayDocs.length;
       const yesterdayTotal = yesterdayDocs.length;
-      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
-      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
 
-      // FIRST RUN: Both empty = valid
+      const todayCount = todayDocs.filter(
+        (doc) => doc.date === todayStr
+      ).length;
+
+      const yesterdayCount = yesterdayDocs.filter(
+        (doc) => doc.date === yesterdayStr
+      ).length;
+
+      // First run
       if (todayTotal === 0 && yesterdayTotal === 0) {
-        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+        return {
+          valid: true,
+          todayCount,
+          todayTotal,
+          yesterdayCount,
+          yesterdayTotal,
+        };
       }
 
-      // HAS DATA: Check dates
       const valid = todayCount > 0 || yesterdayCount > 0;
-      
-      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+
+      return {
+        valid,
+        todayCount,
+        todayTotal,
+        yesterdayCount,
+        yesterdayTotal,
+      };
     } catch (err) {
-      logger.error(`[BasketballDaily] Verification error: ${err.message}`);
-      return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      logger.error(
+        `[${this.constructor.name}] Verification error: ${err.message}`
+      );
+
+      return {
+        valid: false,
+        todayCount: 0,
+        todayTotal: 0,
+        yesterdayCount: 0,
+        yesterdayTotal: 0,
+      };
     }
   }
-  
+
   // ==========================================================
   // PRIVATE: FETCH TOMORROW
   // ==========================================================
@@ -337,9 +365,9 @@ async run() {
 
     const allFixtures = raw?.response || [];
 
-    const filtered = allFixtures.filter((f) =>
-      this.trackedLeagueIds.has(f.league?.id)
-    );
+    const filtered = TRACK_ALL_LEAGUES
+      ? allFixtures
+      : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
 
     const docs = filtered.map((f) => this.normalize(f));
 

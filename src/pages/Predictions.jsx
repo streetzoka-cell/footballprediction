@@ -7,12 +7,12 @@ import {
   LogIn, Crown, Users, ChevronDown, ChevronUp, Timer,
   Medal, Flame, AlertTriangle, Sparkles, CircleCheck,
   CircleX, Hourglass, ThumbsUp, ThumbsDown, Pencil,
-  Filter, Layers
+  Filter, Layers, History
 } from 'lucide-react';
 import { db } from '../utils/firebase';
 import {
   doc, setDoc, collection, query, where, deleteDoc,
-  Timestamp, onSnapshot
+  Timestamp, onSnapshot, getDoc, orderBy
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import SEO from "../components/SEO";
@@ -76,6 +76,71 @@ async function saveZokaVote(uid, matchId, vote) {
 
 async function removeZokaVote(uid, matchId) {
   await deleteDoc(doc(db, 'zoka_votes', `${uid}_${matchId}`));
+}
+
+/* ═══════════════════════════════════════════════════
+   PREDICTION HISTORY — Resolve & Persist
+   ═══════════════════════════════════════════════════ */
+async function resolvePrediction(uid, pred, actualH, actualA) {
+  if (!db) return null;
+  const resultId = `${uid}_${pred.matchId}`;
+  const resultRef = doc(db, 'prediction_results', resultId);
+
+  // Already resolved — skip
+  const existing = await getDoc(resultRef);
+  if (existing.exists()) return existing.data();
+
+  const r = calcPoints(pred.homeScore, pred.awayScore, actualH, actualA);
+  const result = {
+    userId: uid,
+    matchId: String(pred.matchId),
+    predId: pred.predId,
+    matchDate: pred.matchDate || todayStr(),
+    homeTeam: pred.homeTeam || 'Home',
+    awayTeam: pred.awayTeam || 'Away',
+    homeLogo: pred.homeLogo || null,
+    awayLogo: pred.awayLogo || null,
+    league: pred.league || '',
+    kickoff: pred.kickoff || null,
+    predictedHome: pred.homeScore,
+    predictedAway: pred.awayScore,
+    actualHome: actualH,
+    actualAway: actualA,
+    points: r.points,
+    resultType: r.type,
+    resolvedAt: Timestamp.now(),
+  };
+
+  await setDoc(resultRef, result);
+
+  // Increment cumulative total (read-modify-write)
+  const totalRef = doc(db, 'user_points_total', uid);
+  const totalSnap = await getDoc(totalRef);
+  const cur = totalSnap.exists() ? totalSnap.data() : {
+    totalPoints: 0, exactCount: 0, resultCount: 0,
+    missCount: 0, predictionsCount: 0,
+  };
+  await setDoc(totalRef, {
+    totalPoints: cur.totalPoints + r.points,
+    exactCount: cur.exactCount + (r.type === 'exact' ? 1 : 0),
+    resultCount: cur.resultCount + (r.type === 'result' ? 1 : 0),
+    missCount: cur.missCount + (r.type === 'miss' ? 1 : 0),
+    predictionsCount: cur.predictionsCount + 1,
+    updatedAt: Timestamp.now(),
+  });
+
+  return result;
+}
+
+// Group history by date
+function groupByDate(items) {
+  const groups = {};
+  items.forEach(item => {
+    const d = item.matchDate || 'unknown';
+    if (!groups[d]) groups[d] = [];
+    groups[d].push(item);
+  });
+  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -332,6 +397,11 @@ export default function Predictions() {
   const [votingId, setVotingId] = useState(null);
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
+  
+    const [showHistory, setShowHistory] = useState(false);
+  const [history, setHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [totalPoints, setTotalPoints] = useState(null);
 
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -367,6 +437,52 @@ export default function Predictions() {
     const unsub = onSnapshot(q, snap => setZokaVotes(snap.docs.map(d => d.data())), () => {});
     return () => unsub();
   }, []);
+
+    /* ── Auto-resolve predictions when matches finish ── */
+  useEffect(() => {
+    if (!uid || !db) return;
+    const finishedPreds = activePreds.filter(
+      p => p.status === 'finished' && p.homeScore != null
+    );
+    finishedPreds.forEach(pred => {
+      const myPred = userPredMap[pred.id];
+      if (myPred) {
+        resolvePrediction(uid, myPred, pred.homeScore, pred.awayScore)
+          .catch(e => console.error('[Resolve]', e.message));
+      }
+    });
+  }, [activePreds, userPredMap, uid]);
+
+  /* ── Fetch prediction history ── */
+  useEffect(() => {
+    if (!uid || !db || !showHistory) return;
+    setHistoryLoading(true);
+    const q = query(
+      collection(db, 'prediction_results'),
+      where('userId', '==', uid),
+      orderBy('resolvedAt', 'desc'),
+      // Firestore requires composite index for orderBy + where.
+      // If you get an error, create the index in Firebase Console
+      // or remove the orderBy and sort client-side below.
+      limit(200)
+    );
+    const unsub = onSnapshot(q, snap => {
+      setHistory(snap.docs.map(d => d.data()));
+      setHistoryLoading(false);
+    }, () => setHistoryLoading(false));
+    return () => unsub();
+  }, [uid, showHistory]);
+
+  /* ── Fetch cumulative points ── */
+  useEffect(() => {
+    if (!uid || !db) return;
+    const unsub = onSnapshot(
+      doc(db, 'user_points_total', uid),
+      snap => setTotalPoints(snap.exists() ? snap.data() : null),
+      () => {}
+    );
+    return () => unsub();
+  }, [uid]);
 
   /* ── Derived ── */
   const globalDeadline = useMemo(() => {
@@ -431,19 +547,21 @@ export default function Predictions() {
   const finalizedCount = activePreds.filter(p => p.status === 'finished').length;
 
   /* ── Filtered matches ── */
-  const filteredPreds = useMemo(() => {
+    const filteredPreds = useMemo(() => {
+    if (filter === 'history') return []; // History has its own section
     if (filter === 'predicted') return activePreds.filter(p => userPredMap[p.id]);
     if (filter === 'unpredicted') return activePreds.filter(p => !userPredMap[p.id] && p.status !== 'finished');
     if (filter === 'finished') return activePreds.filter(p => p.status === 'finished');
     return activePreds;
   }, [activePreds, userPredMap, filter]);
 
+
   const filterCounts = useMemo(() => ({
     all: activePreds.length,
     predicted: activePreds.filter(p => userPredMap[p.id]).length,
     unpredicted: activePreds.filter(p => !userPredMap[p.id] && p.status !== 'finished').length,
     finished: activePreds.filter(p => p.status === 'finished').length,
-  }), [activePreds, userPredMap]);
+  }), [activePreds, userPredMap, history] );
 
   /* ── Handlers ── */
   const handleSave = async (pred) => {
@@ -674,8 +792,8 @@ export default function Predictions() {
               { key: 'all', label: 'All', Icon: Layers },
               { key: 'predicted', label: 'Predicted', Icon: CheckCircle },
               { key: 'unpredicted', label: 'Open', Icon: Target },
-              { key: 'finished', label: 'Finished', Icon: Trophy },
-            ].map(f => (
+
+                   { key: 'finished', label: 'Finished', Icon: Trophy },               { key: 'history', label: 'History', Icon: History },      ].map(f => (
               <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>
                 <f.Icon size={11} style={{ verticalAlign: 'middle' }} /> {f.label}
                 <span style={{ marginLeft: 3, opacity: .6, fontVariantNumeric: 'tabular-nums' }}>{filterCounts[f.key]}</span>
@@ -690,6 +808,149 @@ export default function Predictions() {
           </div>
         )}
 
+
+                {/* ═══ PREDICTION HISTORY ═══ */}
+        {filter === 'history' && (
+          <div className="p-up">
+            {!isLoggedIn ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
+                <LogIn size={32} style={{ color: 'var(--text-muted)', marginBottom: 10 }} />
+                <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.9rem', margin: '0 0 6px' }}>Sign in to view your history</p>
+                <button onClick={() => navigate('/login')} className="zb" style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 10, fontSize: '.82rem', fontWeight: 800, background: 'var(--accent)', border: 'none', color: 'var(--bg-deep)' }}>
+                  <LogIn size={14} /> Sign In
+                </button>
+              </div>
+            ) : historyLoading && history.length === 0 ? (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} />)}
+              </div>
+            ) : history.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
+                <History size={32} style={{ color: 'var(--text-muted)', marginBottom: 10 }} />
+                <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.9rem', margin: '0 0 4px' }}>No prediction history yet</p>
+                <p style={{ color: 'var(--text-muted)', fontSize: '.78rem', margin: 0 }}>Make predictions and wait for matches to finish. Results appear here forever.</p>
+              </div>
+            ) : (
+              <>
+                {/* Cumulative Stats Banner */}
+                {totalPoints && (
+                  <div className="mc p-sc" style={{ marginBottom: 14, background: 'linear-gradient(135deg, rgba(168,85,247,.06), rgba(0,230,118,.03))', borderColor: 'rgba(168,85,247,.12)', padding: '16px 18px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(168,85,247,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}><Trophy size={18} /></div>
+                      <div>
+                        <div style={{ fontSize: '.58rem', fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '.06em' }}>All-Time Stats</div>
+                        <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>{totalPoints.predictionsCount} predictions resolved</div>
+                      </div>
+                      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
+                        <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#a855f7', fontFamily: 'var(--font-display)', lineHeight: 1 }}><AnimNum value={totalPoints.totalPoints} /></div>
+                        <div style={{ fontSize: '.5rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Total Points</div>
+                      </div>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+                      {[
+                        { label: 'Exact', value: totalPoints.exactCount, color: 'var(--accent)', bg: 'rgba(0,230,118,.08)' },
+                        { label: 'Result', value: totalPoints.resultCount, color: 'var(--gold)', bg: 'rgba(245,197,66,.08)' },
+                        { label: 'Miss', value: totalPoints.missCount, color: '#ef4444', bg: 'rgba(239,68,68,.06)' },
+                        { label: 'Accuracy', value: totalPoints.predictionsCount > 0 ? `${Math.round(((totalPoints.exactCount + totalPoints.resultCount) / totalPoints.predictionsCount) * 100)}%` : '0%', color: '#60a5fa', bg: 'rgba(59,130,246,.08)' },
+                      ].map(s => (
+                        <div key={s.label} style={{ textAlign: 'center', padding: '8px 6px', borderRadius: 8, background: s.bg }}>
+                          <div style={{ fontSize: '1.05rem', fontWeight: 900, color: s.color, fontFamily: 'var(--font-display)', lineHeight: 1 }}>{s.value}</div>
+                          <div style={{ fontSize: '.5rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em', marginTop: 2 }}>{s.label}</div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Grouped by date */}
+                {groupByDate(history).map(([date, items]) => {
+                  const isToday = date === todayStr();
+                  const isYesterday = date === new Date(Date.now() - 86400000).toISOString().split('T')[0];
+                  const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+                  const dayPoints = items.reduce((s, i) => s + i.points, 0);
+                  const dayExact = items.filter(i => i.resultType === 'exact').length;
+                  const dayResult = items.filter(i => i.resultType === 'result').length;
+                  const dayMiss = items.filter(i => i.resultType === 'miss').length;
+
+                  return (
+                    <div key={date} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
+                        <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-primary)' }}>{dateLabel}</span>
+                        <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{items.length} matches</span>
+                        <div style={{ flex: 1 }} />
+                        <span style={{ fontSize: '.62rem', fontWeight: 800, color: '#a855f7', fontFamily: 'var(--font-display)' }}>+{dayPoints}</span>
+                        <span style={{ fontSize: '.56rem', fontWeight: 600, color: 'var(--accent)' }}>{dayExact}✓</span>
+                        <span style={{ fontSize: '.56rem', fontWeight: 600, color: 'var(--gold)' }}>{dayResult}→</span>
+                        {dayMiss > 0 && <span style={{ fontSize: '.56rem', fontWeight: 600, color: '#ef4444' }}>{dayMiss}✗</span>}
+                      </div>
+
+                      {items.map((item, i) => (
+                        <div key={item.predId} className="p-sr" style={{
+                          padding: '10px 14px',
+                          borderRadius: 10,
+                          marginBottom: 4,
+                          background: 'var(--bg-card)',
+                          border: item.resultType === 'exact' ? '1px solid rgba(0,230,118,.15)' : item.resultType === 'result' ? '1px solid rgba(245,197,66,.1)' : '1px solid var(--border)',
+                          animationDelay: `${i * 20}ms`,
+                        }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                            {/* Teams */}
+                            {item.homeLogo && <img src={item.homeLogo} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain' }} />}
+                            <span style={{ flex: 1, fontSize: '.74rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.homeTeam}</span>
+
+                            {/* Predicted score */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{
+                                fontSize: '.88rem', fontWeight: 900, fontFamily: 'var(--font-display)',
+                                fontVariantNumeric: 'tabular-nums',
+                                padding: '2px 8px', borderRadius: 6,
+                                background: 'rgba(168,85,247,.08)',
+                                border: '1px solid rgba(168,85,247,.15)',
+                                color: '#a855f7',
+                              }}>
+                                {item.predictedHome}-{item.predictedAway}
+                              </span>
+                            </div>
+
+                            {/* Actual score */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                              <span style={{
+                                fontSize: '.88rem', fontWeight: 900, fontFamily: 'var(--font-display)',
+                                fontVariantNumeric: 'tabular-nums',
+                                padding: '2px 8px', borderRadius: 6,
+                                background: item.resultType === 'exact' ? 'rgba(0,230,118,.08)' : item.resultType === 'result' ? 'rgba(245,197,66,.06)' : 'rgba(239,68,68,.05)',
+                                border: `1px solid ${item.resultType === 'exact' ? 'rgba(0,230,118,.15)' : item.resultType === 'result' ? 'rgba(245,197,66,.1)' : 'rgba(239,68,68,.1)'}`,
+                                color: item.resultType === 'exact' ? 'var(--accent)' : item.resultType === 'result' ? 'var(--gold)' : '#ef4444',
+                              }}>
+                                {item.actualHome}-{item.actualAway}
+                              </span>
+                            </div>
+
+                            <span style={{ flex: 1, fontSize: '.74rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{item.awayTeam}</span>
+                            {item.awayLogo && <img src={item.awayLogo} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain' }} />}
+
+                            {/* Result badge */}
+                            <div style={{ width: 52, textAlign: 'right', flexShrink: 0 }}>
+                              <ResultBadge type={item.resultType} points={item.points} />
+                            </div>
+                          </div>
+                          {/* League + time row */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, paddingLeft: 28, paddingRight: 52 }}>
+                            {item.league && <span style={{ fontSize: '.52rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,.03)', padding: '1px 6px', borderRadius: 4 }}>{item.league}</span>}
+                            {item.kickoff && <span style={{ fontSize: '.52rem', color: 'var(--text-muted)' }}>{item.kickoff}</span>}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </>
+            )}
+          </div>
+        )}
+
+
+        
         {/* ═══ MATCH CARDS ═══ */}
         {loading ? (
           <div>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} />)}</div>

@@ -20,6 +20,7 @@ const {
   FINISHED_STATUSES,
   getDateOffset,
   META_DOCS,
+  TRACK_ALL_LEAGUES,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
@@ -59,17 +60,17 @@ class DailyFixturesService {
 
     if (alreadyFetchedToday) {
       const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
-      
+
       if (integrity.valid) {
         logger.info(
           `[DailyFixtures] Data verified (today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}) — skipping (meta dedup)`
         );
-        return { 
-          total: 0, 
-          writes: 0, 
-          apiCalls: 0, 
-          duration: 0, 
-          deduped: true 
+        return {
+          total: 0,
+          writes: 0,
+          apiCalls: 0,
+          duration: 0,
+          deduped: true
         };
       }
 
@@ -140,7 +141,7 @@ class DailyFixturesService {
 
       const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
       rolloverSuccess = afterRollover.valid;
-      
+
       if (!rolloverSuccess) {
         logger.error(
           `[DailyFixtures] ROLLOVER VERIFICATION FAILED — data may be inconsistent`
@@ -233,44 +234,70 @@ class DailyFixturesService {
   // DATA INTEGRITY VERIFICATION (ONLY ONE COPY)
   // ==========================================================
 
-     async _verifyDataIntegrity(todayStr, yesterdayStr) {
+  async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
-      // Use getDb() — the ONLY way to access db from firebase.js
       const { getDb } = require("../config/firebase");
       const db = getDb();
-      
-      if (!db) {
-        logger.warn(`[DailyFixtures] No db instance — skipping verification`);
-        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
-      }
-
-      const { collection, getDocs } = require("firebase/firestore");
 
       const [todaySnap, yesterdaySnap] = await Promise.all([
-        getDocs(collection(db, "todayFixtures")),
-        getDocs(collection(db, "yesterdayFixtures")),
+        db.collection(
+          this.repo.constructor.name.includes("Basketball")
+            ? "basketballTodayFixtures"
+            : "todayFixtures"
+        ).get(),
+        db.collection(
+          this.repo.constructor.name.includes("Basketball")
+            ? "basketballYesterdayFixtures"
+            : "yesterdayFixtures"
+        ).get(),
       ]);
 
-      const todayDocs = todaySnap.docs.map(d => d.data());
-      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
+      const todayDocs = todaySnap.docs.map((doc) => doc.data());
+      const yesterdayDocs = yesterdaySnap.docs.map((doc) => doc.data());
 
       const todayTotal = todayDocs.length;
       const yesterdayTotal = yesterdayDocs.length;
-      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
-      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
 
-      // FIRST RUN: Both empty = valid
+      const todayCount = todayDocs.filter(
+        (doc) => doc.date === todayStr
+      ).length;
+
+      const yesterdayCount = yesterdayDocs.filter(
+        (doc) => doc.date === yesterdayStr
+      ).length;
+
+      // First run
       if (todayTotal === 0 && yesterdayTotal === 0) {
-        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+        return {
+          valid: true,
+          todayCount,
+          todayTotal,
+          yesterdayCount,
+          yesterdayTotal,
+        };
       }
 
-      // HAS DATA: Check if dates match
       const valid = todayCount > 0 || yesterdayCount > 0;
-      
-      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+
+      return {
+        valid,
+        todayCount,
+        todayTotal,
+        yesterdayCount,
+        yesterdayTotal,
+      };
     } catch (err) {
-      logger.error(`[DailyFixtures] Verification error: ${err.message}`);
-      return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      logger.error(
+        `[${this.constructor.name}] Verification error: ${err.message}`
+      );
+
+      return {
+        valid: false,
+        todayCount: 0,
+        todayTotal: 0,
+        yesterdayCount: 0,
+        yesterdayTotal: 0,
+      };
     }
   }
 
@@ -304,9 +331,9 @@ class DailyFixturesService {
 
     const allFixtures = raw?.response || [];
 
-    const filtered = allFixtures.filter((f) =>
-      this.trackedLeagueIds.has(f.league?.id)
-    );
+    const filtered = TRACK_ALL_LEAGUES
+      ? allFixtures
+      : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
 
     const docs = filtered.map((f) => this.normalize(f));
 
