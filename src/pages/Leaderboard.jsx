@@ -5,9 +5,13 @@ import {
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
   Calendar, Medal, Star, Loader, ChevronDown, Award
 } from 'lucide-react';
+
+import {
+  useUniversalResolver,
+  useDailyLeaderboard,
+  useHistoricalLeaderboard,
+} from '../hooks/useMatchData';
 import { useAuth } from '../context/AuthContext';
-import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot, getDocs, orderBy } from 'firebase/firestore';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -131,26 +135,8 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   HELPERS & CONFIG
+   CONFIG
    ═══════════════════════════════════════════════════════════════ */
-const todayStr = () => new Date().toISOString().split('T')[0];
-const getWeekStart = () => {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.getFullYear(), d.getMonth(), diff).toISOString().split('T')[0];
-};
-const getMonthStart = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-
-function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
-}
-
 const AVATAR_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899','#64748b','#78716c'];
 const PODIUM_CFG = [
   { h:140, border:'var(--gold)', bg:'linear-gradient(180deg,rgba(245,197,66,.18) 0%,rgba(245,197,66,.04) 100%)', text:'var(--gold)', avatar:80, font:'1.4rem', shadow:'0 0 30px rgba(245,197,66,.2)', order:2 },
@@ -237,130 +223,23 @@ export default function Leaderboard() {
   const [tab, setTab] = useState('daily');
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [isLive, setIsLive] = useState(false);
   const [shownCount, setShownCount] = useState(10);
 
-  const [dailyPreds, setDailyPreds] = useState([]);
-  const [dailyScores, setDailyScores] = useState(new Map());
-  const [historicalData, setHistoricalData] = useState(null);
+  /* ── Data from useMatchData (single source of truth) ── */
+  useUniversalResolver();
 
-  /* ── 1. Real-time Daily Listener ── */
-  useEffect(() => {
-    if (!db || tab !== 'daily') return;
-    setLoading(true); setIsLive(true);
+  const daily = useDailyLeaderboard();
+  const historical = useHistoricalLeaderboard(tab === 'daily' ? 'weekly' : tab);
 
-    const unsubScores = onSnapshot(
-      query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr())),
-      snap => {
-        const m = new Map();
-        snap.docs.forEach(d => { const data = d.data(); if (data.status === 'finished' && data.homeScore != null) m.set(String(data.matchId), { h:data.homeScore, a:data.awayScore }); });
-        setDailyScores(m);
-      }, err => console.error('[LB] Scores err:', err)
-    );
+  /* ── Select active data based on tab ── */
+  const activeLB = tab === 'daily' ? daily.entries : historical.entries;
+  const loading = tab === 'daily' ? daily.loading : historical.loading;
+  const error = tab === 'daily' ? null : historical.error;
+  const isLive = tab === 'daily' ? daily.isLive : false;
+  const stats = tab === 'daily' ? daily.stats : historical.stats;
 
-    const unsubPreds = onSnapshot(
-      query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr())),
-      snap => { setDailyPreds(snap.docs.map(d => d.data())); setLoading(false); setError(null); },
-      err => {
-        console.error('[LB] Daily err:', err);
-        if (err.code === 'permission-denied') setError('permissions');
-        else setError(err.message);
-        setLoading(false); setIsLive(false);
-      }
-    );
-    return () => { unsubScores(); unsubPreds(); };
-  }, [tab]);
-
-  /* ── 2. Historical Fetch (Weekly/Monthly/Goat) ── */
-  const fetchHistorical = useCallback(async (period) => {
-    if (!db) return;
-    setLoading(true); setError(null); setIsLive(false);
-    try {
-      if (period === 'goat') {
-        const snap = await getDocs(collection(db, 'user_points_total'));
-        setHistoricalData({ type:'goat', data:snap.docs.map(d => ({ id:d.id, ...d.data() })) });
-        setLoading(false); return;
-      }
-      let startDate;
-      if (period === 'weekly') startDate = getWeekStart();
-      else startDate = getMonthStart();
-      const snap = await getDocs(query(collection(db, 'prediction_results'), where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))));
-      setHistoricalData({ type:'results', data:snap.docs.map(d => d.data()) });
-      setLoading(false);
-    } catch (err) {
-      console.error('[LB] Historical err:', err);
-      if (err.code === 'permission-denied') setError('permissions');
-      else setError(err.message);
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (tab === 'weekly' || tab === 'monthly' || tab === 'goat') fetchHistorical(tab);
-  }, [tab, fetchHistorical]);
-
-  useEffect(() => { setShownCount(10); setSearch(''); }, [tab]);
-
-  /* ── 3. Compute Daily Leaderboard ── */
-  const computeLeaderboard = (preds, sMap) => {
-    const userMap = {};
-    preds.forEach(p => {
-      if (!userMap[p.userId]) userMap[p.userId] = { uid:p.userId, displayName:p.displayName||'Anonymous', points:0, predictions:0, exact:0, result:0, miss:0, resolved:0 };
-      const u = userMap[p.userId]; u.predictions++;
-      const actual = sMap.get(String(p.matchId));
-      if (!actual) return;
-      u.resolved++;
-      const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
-      u.points += r.points;
-      if (r.type === 'exact') u.exact++;
-      else if (r.type === 'result') u.result++;
-      else u.miss++;
-    });
-    return Object.values(userMap).filter(u => u.predictions > 0)
-      .sort((a,b) => b.points - a.points || b.exact - a.exact || b.result - a.result)
-      .map((u,i) => ({ ...u, rank:i+1, accuracy:u.resolved > 0 ? Math.round(((u.exact+u.result)/u.resolved)*100) : 0 }));
-  };
-
-  const dailyLB = useMemo(() => computeLeaderboard(dailyPreds, dailyScores), [dailyPreds, dailyScores]);
-
-  /* ── 4. Compute Historical Leaderboard ── */
-  const historicalLB = useMemo(() => {
-    if (!historicalData?.data) return [];
-    if (historicalData.type === 'goat') {
-      return historicalData.data
-        .filter(u => (u.predictionsCount||0) > 0)
-        .sort((a,b) => b.totalPoints - a.totalPoints || b.exactCount - a.exactCount || b.resultCount - a.resultCount)
-        .map((u,i) => ({ uid:u.id, displayName:u.displayName||'Player', points:u.totalPoints||0, predictions:u.predictionsCount||0, exact:u.exactCount||0, result:u.resultCount||0, miss:u.missCount||0, resolved:u.predictionsCount||0, rank:0, accuracy:(u.predictionsCount||0) > 0 ? Math.round(((u.exactCount+u.resultCount)/u.predictionsCount)*100) : 0 }))
-        .map((u,i) => ({ ...u, rank:i+1 }));
-    }
-    const userMap = {};
-    historicalData.data.forEach(r => {
-      if (!userMap[r.userId]) userMap[r.userId] = { uid:r.userId, displayName:r.displayName||'Player', points:0, predictions:0, exact:0, result:0, miss:0, resolved:0 };
-      const u = userMap[r.userId]; u.predictions++; u.resolved++; u.points += r.points||0;
-      if (r.resultType === 'exact') u.exact++;
-      else if (r.resultType === 'result') u.result++;
-      else u.miss++;
-    });
-    return Object.values(userMap).filter(u => u.predictions > 0)
-      .sort((a,b) => b.points - a.points || b.exact - a.exact || b.result - a.result)
-      .map((u,i) => ({ ...u, rank:i+1, accuracy:u.resolved > 0 ? Math.round(((u.exact+u.result)/u.resolved)*100) : 0 }));
-  }, [historicalData]);
-
-  const activeLB = tab === 'daily' ? dailyLB : historicalLB;
-  const top3 = useMemo(() => activeLB.slice(0,3), [activeLB]);
+  const top3 = useMemo(() => activeLB.slice(0, 3), [activeLB]);
   const rest = useMemo(() => activeLB.slice(3), [activeLB]);
-
-  const stats = useMemo(() => {
-    if (!activeLB.length) return { avg:'0.0', preds:0, exact:0, players:0 };
-    return {
-      avg:(activeLB.reduce((s,u) => s+u.accuracy, 0)/activeLB.length).toFixed(1),
-      preds:activeLB.reduce((s,u) => s+u.predictions, 0),
-      exact:activeLB.reduce((s,u) => s+u.exact, 0),
-      players:activeLB.length,
-    };
-  }, [activeLB]);
 
   const myEntry = useMemo(() => {
     if (!currentUser?.uid) return null;
@@ -373,11 +252,14 @@ export default function Leaderboard() {
     return activeLB.filter(u => u.displayName.toLowerCase().includes(q));
   }, [activeLB, search]);
 
-  const filteredTop3 = useMemo(() => filtered.slice(0,3), [filtered]);
+  const filteredTop3 = useMemo(() => filtered.slice(0, 3), [filtered]);
   const filteredRest = useMemo(() => filtered.slice(3), [filtered]);
 
   const handleClear = useCallback(() => { setSearch(''); searchRef.current?.focus(); }, []);
-  const handleLoadMore = () => setShownCount(prev => Math.min(prev+15, 100));
+  const handleLoadMore = () => setShownCount(prev => Math.min(prev + 15, 100));
+
+  /* Reset on tab switch */
+  useEffect(() => { setShownCount(10); setSearch(''); }, [tab]);
 
   /* ═══════════════════════════════════════════════════════════
      RENDER

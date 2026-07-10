@@ -1,0 +1,90 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title>ZokaScore Logo</title>
+
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#081C42"/>
+      <stop offset="100%" stop-color="#0A2D4F"/>
+    </linearGradient>
+
+    <linearGradient id="green" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#37F67D"/>
+      <stop offset="100%" stop-color="#18C964"/>
+    </linearGradient>
+
+    <radialGradient id="glow" cx="50%" cy="50%" r="60%">
+      <stop offset="0%" stop-color="#35F87B" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#35F87B" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="12" flood-color="#000000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect
+    x="16"
+    y="16"
+    width="480"
+    height="480"
+    rx="112"
+    fill="url(#bg)"
+    stroke="#29E978"
+    stroke-width="6"
+  />
+
+  <!-- Glow -->
+  <circle cx="256" cy="256" r="180" fill="url(#glow)"/>
+
+  <!-- Green Z -->
+  <path
+    d="M132 118
+       H348
+       L174 392"
+    fill="none"
+    stroke="url(#green)"
+    stroke-width="54"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#shadow)"
+  />
+
+  <!-- White Z -->
+  <path
+    d="M370 118
+       L164 392
+       H370"
+    fill="none"
+    stroke="#FFFFFF"
+    stroke-width="54"
+    stroke-linecap="round"
+    stroke-linejoin="round"
+    filter="url(#shadow)"
+  />
+
+  <!-- Football -->
+  <g transform="translate(346 336)" filter="url(#shadow)">
+    <circle r="68" fill="#FFFFFF"/>
+
+    <polygon
+      points="
+      0,-18
+      18,-6
+      11,16
+      -11,16
+      -18,-6"
+      fill="#173A6C"
+    />
+
+    <path d="M0-68V-36M68 0H36M0 68V36M-68 0H-36"
+          stroke="#173A6C"
+          stroke-width="6"
+          stroke-linecap="round"/>
+
+    <circle r="68"
+            fill="none"
+            stroke="#173A6C"
+            stroke-width="4"/>
+  </g>
+</svg>

@@ -1,6 +1,6 @@
 // FILE: src/pages/Predictions.jsx
 //
-// READ-ONLY CLIENT — All scoring is handled by Admin.jsx
+// READ-ONLY CLIENT — All scoring is handled by useUniversalResolver
 // This file just displays results from prediction_results
 // and reads cumulative stats from user_points_total
 //
@@ -14,19 +14,29 @@ import {
   CircleX, Hourglass, ThumbsUp, ThumbsDown, Pencil,
   Filter, Layers, History, Check, X
 } from 'lucide-react';
-import { db } from '../utils/firebase';
-import {
-  doc, setDoc, collection, query, where, deleteDoc,
-  Timestamp, onSnapshot, getDoc
-} from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
+import {
+  useUniversalResolver,
+  useActivePredictions,
+  useAllUserPredictions,
+  useMyPredictions,
+  usePredictionResults,
+  useUserPoints,
+  useZokaPicks,
+  useZokaVotes,
+  useDailyLeaderboard,
+  useMyStats,
+  savePrediction,
+  saveZokaVote,
+  removeZokaVote,
+  calcPoints,
+  todayStr,
+} from '../hooks/useMatchData';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════════════ */
-const todayStr = () => new Date().toISOString().split('T')[0];
-
 function parseKickoff(kickoff, dateStr) {
   if (!kickoff) return null;
   let d = new Date(kickoff);
@@ -38,15 +48,6 @@ function parseKickoff(kickoff, dateStr) {
   return null;
 }
 
-function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
-}
-
 function timeAgo(ts) {
   if (!ts) return '';
   const diff = Date.now() - (ts?.toMillis?.() || ts);
@@ -54,42 +55,6 @@ function timeAgo(ts) {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
-}
-
-async function savePrediction(uid, displayName, pred, h, a) {
-  await setDoc(doc(db, 'user_predictions', `${uid}_${pred.id}`), {
-    userId: uid, displayName: displayName || 'Anonymous',
-    matchId: pred.matchId, predId: pred.id,
-    homeScore: h, awayScore: a,
-    matchDate: pred.matchDate || todayStr(),
-    homeTeam: pred.homeTeam?.name || 'Home',
-    awayTeam: pred.awayTeam?.name || 'Away',
-    homeLogo: pred.homeTeam?.logo || null,
-    awayLogo: pred.awayTeam?.logo || null,
-    league: pred.league?.name || '',
-    kickoff: pred.kickoff || null,
-    createdAt: Timestamp.now(), updatedAt: Timestamp.now(),
-  }, { merge: true });
-}
-
-async function saveZokaVote(uid, matchId, vote) {
-  await setDoc(doc(db, 'zoka_votes', `${uid}_${matchId}`), {
-    userId: uid, matchId, vote, date: todayStr(), createdAt: Timestamp.now(),
-  }, { merge: true });
-}
-
-async function removeZokaVote(uid, matchId) {
-  await deleteDoc(doc(db, 'zoka_votes', `${uid}_${matchId}`));
-}
-
-function groupByDate(items) {
-  const groups = {};
-  items.forEach(item => {
-    const d = item.matchDate || 'unknown';
-    if (!groups[d]) groups[d] = [];
-    groups[d].push(item);
-  });
-  return Object.entries(groups).sort((a, b) => b[0].localeCompare(a[0]));
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -235,7 +200,6 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
        MOBILE BREAKPOINTS
        ═══════════════════════════════════════════════════════════ */
     @media(max-width:700px){
-      /* Leaderboard: vertical card layout */
       .rr{
         grid-template-columns:32px 1fr auto!important;
         gap:8px;
@@ -255,15 +219,12 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
       .pred-btn{padding:8px 16px;font-size:1rem}
       .qp-grid{grid-template-columns:repeat(4,1fr)!important;gap:6px!important}
 
-      /* Toggle buttons */
       .tog-btn{padding:14px 16px;min-height:52px}
       .tog-badge{min-width:22px;height:22px;font-size:.7rem}
 
-      /* Filter buttons scroll */
       .filter-scroll{gap:8px!important}
       .filter-btn{padding:9px 16px;font-size:.82rem;min-height:42px}
 
-      /* Stats grid */
       .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
     }
 
@@ -359,7 +320,7 @@ function VoteBar({ agree, disagree }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   TOGGLE SECTION — BIGGER TOUCH TARGETS
+   TOGGLE SECTION
    ═══════════════════════════════════════════════════════════════ */
 function ToggleSection({ id, icon, iconBg, iconColor, title, badge, badgeBg, badgeColor, defaultOpen, children, style }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -383,7 +344,7 @@ function ToggleSection({ id, icon, iconBg, iconColor, title, badge, badgeBg, bad
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SAVE TOAST — BOLDER
+   SAVE TOAST
    ═══════════════════════════════════════════════════════════════ */
 function SaveToast({ show, score }) {
   if (!show) return null;
@@ -398,7 +359,7 @@ function SaveToast({ show, score }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   LOGIN PROMPT MODAL — BIGGER
+   LOGIN PROMPT MODAL
    ═══════════════════════════════════════════════════════════════ */
 function LoginPromptModal({ onClose }) {
   const navigate = useNavigate();
@@ -436,13 +397,22 @@ export default function Predictions() {
   const isLoggedIn = !!uid;
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
 
-  const [activePreds, setActivePreds] = useState([]);
-  const [zokaPicks, setZokaPicks] = useState(null);
-  const [allPreds, setAllPreds] = useState([]);
-  const [zokaVotes, setZokaVotes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  /* ═══════════════════════════════════════════════════════════
+     DATA — All from useMatchData.js (single source of truth)
+     ═══════════════════════════════════════════════════════════ */
+  useUniversalResolver();
 
+  const { preds: activePreds, scoreMap, loading, error } = useActivePredictions();
+  const { predCounts, predDist } = useAllUserPredictions();
+  const userPredMap = useMyPredictions(uid);
+  const { results: userResults, resultMap: userResultMap } = usePredictionResults(uid);
+  const totalPoints = useUserPoints(uid);
+  const zokaPicks = useZokaPicks();
+  const { voteStats: zokaVoteStats, userVotes: userZokaVotes } = useZokaVotes();
+  const { entries: leaderboard } = useDailyLeaderboard();
+  const userStats = useMyStats(uid);
+
+  /* ── Local UI state only ── */
   const [editingId, setEditingId] = useState(null);
   const [editH, setEditH] = useState('');
   const [editA, setEditA] = useState('');
@@ -450,78 +420,11 @@ export default function Predictions() {
   const [votingId, setVotingId] = useState(null);
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
-
   const [showHistory, setShowHistory] = useState(false);
-  const [history, setHistory] = useState([]);
-  const [historyLoading, setHistoryLoading] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
 
-  const [totalPoints, setTotalPoints] = useState(null);
-  const [userResults, setUserResults] = useState([]);
-
   const [now, setNow] = useState(Date.now());
-  const [lastUpdate, setLastUpdate] = useState(null);
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
-
-  /* ── Data fetching ── */
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      setActivePreds(list); setLastUpdate(Date.now()); setLoading(false); setError(null);
-    }, (err) => { console.error(err); setError(err); setLoading(false); });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(doc(db, 'zoka_picks', todayStr()), snap => setZokaPicks(snap.exists() ? snap.data() : null), () => setZokaPicks(null));
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => { setAllPreds(snap.docs.map(d => d.data())); setLastUpdate(Date.now()); }, () => {});
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'zoka_votes'), where('date', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => setZokaVotes(snap.docs.map(d => d.data())), () => {});
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!uid || !db) return;
-    const q = query(collection(db, 'prediction_results'), where('userId', '==', uid));
-    const unsub = onSnapshot(q, snap => {
-      const results = snap.docs.map(d => d.data());
-      results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0));
-      setUserResults(results);
-    }, () => {});
-    return () => unsub();
-  }, [uid]);
-
-  useEffect(() => {
-    if (!uid || !db) return;
-    const unsub = onSnapshot(doc(db, 'user_points_total', uid), snap => setTotalPoints(snap.exists() ? snap.data() : null), () => {});
-    return () => unsub();
-  }, [uid]);
-
-  useEffect(() => {
-    if (!uid || !db || !showHistory) return;
-    setHistoryLoading(true);
-    const q = query(collection(db, 'prediction_results'), where('userId', '==', uid));
-    const unsub = onSnapshot(q, snap => {
-      const results = snap.docs.map(d => d.data());
-      results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0));
-      setHistory(results); setHistoryLoading(false);
-    }, () => setHistoryLoading(false));
-    return () => unsub();
-  }, [uid, showHistory]);
 
   /* ── Derived ── */
   const globalDeadline = useMemo(() => {
@@ -532,63 +435,12 @@ export default function Predictions() {
   const isGlobalLocked = globalDeadline ? now > globalDeadline.getTime() : false;
   const allFinished = activePreds.length > 0 && activePreds.every(p => p.status === 'finished');
 
-  const scoreMap = useMemo(() => {
-    const m = new Map();
-    activePreds.forEach(p => { if (p.status === 'finished' && p.homeScore != null) m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore }); });
-    return m;
-  }, [activePreds]);
-
-  const userPredMap = useMemo(() => {
-    if (!uid) return {};
-    const m = {};
-    allPreds.filter(p => p.userId === uid).forEach(p => { m[p.predId] = p; });
-    return m;
-  }, [allPreds, uid]);
-
-  const userResultMap = useMemo(() => {
-    const m = {};
-    userResults.forEach(r => { m[r.matchId] = r; });
-    return m;
-  }, [userResults]);
-
-  const predCounts = useMemo(() => { const m = {}; allPreds.forEach(p => { m[p.predId] = (m[p.predId] || 0) + 1; }); return m; }, [allPreds]);
-  const predDist = useMemo(() => { const m = {}; allPreds.forEach(p => { if (!m[p.predId]) m[p.predId] = {}; const k = `${p.homeScore}-${p.awayScore}`; m[p.predId][k] = (m[p.predId][k] || 0) + 1; }); return m; }, [allPreds]);
-  const zokaVoteStats = useMemo(() => { const s = {}; zokaVotes.forEach(v => { if (!s[v.matchId]) s[v.matchId] = { agree: 0, disagree: 0, total: 0 }; if (v.vote === 'agree') s[v.matchId].agree++; else s[v.matchId].disagree++; s[v.matchId].total++; }); return s; }, [zokaVotes]);
-  const userZokaVotes = useMemo(() => { if (!uid) return {}; const m = {}; zokaVotes.filter(v => v.userId === uid).forEach(v => { m[v.matchId] = v.vote; }); return m; }, [zokaVotes, uid]);
-
-  const userStats = useMemo(() => {
-    if (totalPoints) {
-      const exact = totalPoints.exactCount || 0;
-      const result = totalPoints.resultCount || 0;
-      const miss = totalPoints.missCount || 0;
-      const points = totalPoints.totalPoints || 0;
-      const resolved = exact + result + miss;
-      return { predicted: Object.keys(userPredMap).length, total: activePreds.length, exact, result, miss, points, resolved, accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0 };
-    }
-    const my = Object.values(userPredMap);
-    let exact = 0, result = 0, miss = 0, points = 0, resolved = 0;
-    my.forEach(p => { const a = scoreMap.get(String(p.matchId)); if (!a) return; resolved++; const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a); points += r.points; if (r.type === 'exact') exact++; else if (r.type === 'result') result++; else miss++; });
-    return { predicted: my.length, total: activePreds.length, exact, result, miss, points, resolved, accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0 };
-  }, [userPredMap, scoreMap, activePreds, totalPoints]);
-
   const streak = useMemo(() => {
-    const resolved = userResults.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)).map(r => r.resultType !== 'miss' ? 1 : 0);
+    const resolved = [...userResults].sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)).map(r => r.resultType !== 'miss' ? 1 : 0);
     let s = 0;
     for (let i = resolved.length - 1; i >= 0; i--) { if (resolved[i]) s++; else break; }
     return s;
   }, [userResults]);
-
-  const leaderboard = useMemo(() => {
-    const um = {};
-    allPreds.forEach(p => {
-      if (!um[p.userId]) um[p.userId] = { uid: p.userId, name: p.displayName || 'Anonymous', exact: 0, result: 0, miss: 0, points: 0, total: 0, resolved: 0 };
-      const u = um[p.userId]; u.total++;
-      const a = scoreMap.get(String(p.matchId)); if (!a) return; u.resolved++;
-      const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a); u.points += r.points;
-      if (r.type === 'exact') u.exact++; else if (r.type === 'result') u.result++; else u.miss++;
-    });
-    return Object.values(um).filter(u => u.total > 0).sort((a, b) => b.points - a.points || b.exact - a.exact || b.result - a.result).map((u, i) => ({ ...u, rank: i + 1, accuracy: u.resolved > 0 ? Math.round(((u.exact + u.result) / u.resolved) * 100) : 0 }));
-  }, [allPreds, scoreMap]);
 
   const myRank = useMemo(() => { if (!uid) return null; return leaderboard.find(u => u.uid === uid) || null; }, [leaderboard, uid]);
   const topPlayer = leaderboard.length > 0 ? leaderboard[0] : null;
@@ -646,7 +498,7 @@ export default function Predictions() {
   };
 
   /* ═══════════════════════════════════════════════════════════
-     RENDER: MATCH CARD (MOBILE-OPTIMIZED)
+     RENDER: MATCH CARD
      ═══════════════════════════════════════════════════════════ */
   const renderMatchCard = (pred, idx) => {
     const isEditing = editingId === pred.id;
@@ -686,7 +538,6 @@ export default function Predictions() {
 
         {/* Teams + Score */}
         <div style={{ display:'flex', alignItems:'center', gap:10, padding:'14px 16px' }}>
-          {/* Home */}
           <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
             {pred.homeLogo ? <img src={pred.homeLogo} alt="" style={{ width:32, height:32, borderRadius:8, objectFit:'contain', flexShrink:0 }} /> : <div style={{ width:32, height:32, borderRadius:8, background:'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'.8rem' }}>⚽</div>}
             <span style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
@@ -694,7 +545,6 @@ export default function Predictions() {
             </span>
           </div>
 
-          {/* Score / Edit */}
           {isEditing ? (
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
               <input type="text" inputMode="numeric" maxLength={2} className={`pi ${editH !== '' ? 'hv' : ''}`} value={editH} onChange={e => setEditH(e.target.value.replace(/[^0-9]/g, '').slice(0,2))} placeholder="H" autoFocus />
@@ -716,7 +566,6 @@ export default function Predictions() {
             </button>
           )}
 
-          {/* Away */}
           <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, minWidth:0, justifyContent:'flex-end' }}>
             <span style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>
               {pred.awayTeam?.shortName || pred.awayTeam?.name || 'TBD'}
@@ -728,7 +577,6 @@ export default function Predictions() {
         {/* Edit actions */}
         {isEditing && (
           <div style={{ padding:'0 16px 6px', animation:'pCo .25s ease both' }}>
-            {/* Quick picks */}
             <div className="qp-grid" style={{ display:'grid', gridTemplateColumns:'repeat(8,1fr)', gap:6, marginBottom:12 }}>
               {QUICK_PICKS.map((qp, i) => (
                 <button key={i} type="button" className={`qp-btn ${editH === String(qp.h) && editA === String(qp.a) ? 'selected' : ''}`} onClick={() => quickPick(qp.h, qp.a)}>
@@ -778,7 +626,6 @@ export default function Predictions() {
       : null;
     const vs = zokaVoteStats[String(pick.matchId)] || { agree: 0, disagree: 0, total: 0 };
     const myVote = userZokaVotes[String(pick.matchId)];
-    const isFin = pick.status === 'finished';
 
     return (
       <div key={i} className="p-card" style={{
@@ -787,18 +634,15 @@ export default function Predictions() {
         border: res?.type === 'exact' ? '1.5px solid rgba(0,230,118,.25)' : res?.type === 'result' ? '1.5px solid rgba(245,197,66,.2)' : '1px solid var(--border)',
         marginBottom:8, animationDelay:`${i * 35}ms`,
       }}>
-        {/* Teams + Scores row */}
         <div style={{ display:'flex', alignItems:'center', gap:8, marginBottom:10 }}>
           <span style={{ fontSize:'.72rem', fontWeight:900, color:'var(--text-muted)', width:18, textAlign:'center', fontFamily:'var(--font-display)' }}>{i + 1}</span>
           {pick.homeLogo && <img src={pick.homeLogo} alt="" style={{ width:22, height:22, borderRadius:5, objectFit:'contain', flexShrink:0 }} />}
           <span style={{ flex:1, fontSize:'.88rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pick.homeTeam?.shortName || pick.homeTeam?.name}</span>
 
-          {/* Zoka score */}
           <span style={{ fontSize:'1.05rem', fontWeight:900, fontFamily:'var(--font-display)', color:'var(--gold)', background:'rgba(245,197,66,.08)', padding:'5px 12px', borderRadius:8, border:'1px solid rgba(245,197,66,.15)', fontVariantNumeric:'tabular-nums' }}>
             {pick.adminPick?.home ?? '?'}-{pick.adminPick?.away ?? '?'}
           </span>
 
-          {/* Actual score */}
           <span style={{ fontSize:'.95rem', fontWeight:800, color: actual ? 'var(--accent)' : 'var(--text-muted)', fontFamily:'var(--font-display)', fontVariantNumeric:'tabular-nums', minWidth:40, textAlign:'center' }}>
             {actual ? `${actual.h}-${actual.a}` : '–'}
           </span>
@@ -807,10 +651,8 @@ export default function Predictions() {
           {pick.awayLogo && <img src={pick.awayLogo} alt="" style={{ width:22, height:22, borderRadius:5, objectFit:'contain', flexShrink:0 }} />}
         </div>
 
-        {/* Result badge */}
         {res && res.type !== 'pending' && <div style={{ marginBottom:10 }}><ResultBadge result={res} /></div>}
 
-        {/* Vote bar + buttons */}
         {vs.total > 0 && (
           <div style={{ marginBottom:8 }}><VoteBar agree={vs.agree} disagree={vs.disagree} /></div>
         )}
@@ -827,7 +669,7 @@ export default function Predictions() {
   };
 
   /* ═══════════════════════════════════════════════════════════
-     RENDER: LEADERBOARD ROW (MOBILE CARD)
+     RENDER: LEADERBOARD ROW
      ═══════════════════════════════════════════════════════════ */
   const renderLbRow = (u, i) => {
     const isMe = u.uid === uid;
@@ -840,9 +682,9 @@ export default function Predictions() {
           {u.rank === 1 ? <Crown size={15} style={{ color:'#fbbf24' }} /> : u.rank <= 3 ? <Medal size={14} style={{ color: u.rank === 2 ? '#94a3b8' : '#d97706' }} /> : <span style={{ fontWeight:800, color:'var(--text-muted)', fontFamily:'var(--font-display)', fontSize:'.82rem' }}>{u.rank}</span>}
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0 }}>
-          <div style={{ width:28, height:28, borderRadius:8, background: isMe ? 'rgba(0,230,118,.12)' : 'rgba(255,255,255,.04)', border: isMe ? '1.5px solid rgba(0,230,118,.2)' : '1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.72rem', fontWeight:900, color: isMe ? 'var(--accent)' : 'var(--text-muted)', flexShrink:0 }}>{(u.name || '?').charAt(0).toUpperCase()}</div>
+          <div style={{ width:28, height:28, borderRadius:8, background: isMe ? 'rgba(0,230,118,.12)' : 'rgba(255,255,255,.04)', border: isMe ? '1.5px solid rgba(0,230,118,.2)' : '1px solid var(--border)', display:'flex', alignItems:'center', justifyContent:'center', fontSize:'.72rem', fontWeight:900, color: isMe ? 'var(--accent)' : 'var(--text-muted)', flexShrink:0 }}>{(u.displayName || '?').charAt(0).toUpperCase()}</div>
           <span style={{ fontWeight: isMe ? 900 : 700, color: isMe ? 'var(--accent)' : 'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'.88rem' }}>
-            {u.name}{isMe && <span style={{ fontSize:'.65rem', color:'var(--accent)', marginLeft:5, fontWeight:800 }}>YOU</span>}
+            {u.displayName}{isMe && <span style={{ fontSize:'.65rem', color:'var(--accent)', marginLeft:5, fontWeight:800 }}>YOU</span>}
           </span>
         </div>
         <span className="hm" style={{ fontWeight:900, color:'#a855f7', fontFamily:'var(--font-display)', fontSize:'.95rem' }}>{u.points}</span>
@@ -851,10 +693,29 @@ export default function Predictions() {
         <div className="rr-me-info" style={{ display:'none' }}>
           <span style={{ fontSize:'.82rem', fontWeight:700, color:'var(--gold)' }}>{u.result} results</span>
           <span style={{ fontSize:'.82rem', fontWeight:700, color:'var(--text-muted)' }}>{u.accuracy}% acc</span>
-          <span style={{ fontSize:'.82rem', fontWeight:900, color:'#a855f7' }}>{u.points} pts</span>
+          <span style={{ fontSize:'.82rem', fontWeight:900, color:'#a855f7', fontFamily:'var(--font-display)' }}>{u.points} pts</span>
         </div>
-        <span className="hm" style={{ fontWeight:800, color:'var(--gold)', fontFamily:'var(--font-display)' }}>{u.result}</span>
+        <span className="hm" style={{ fontWeight:700, color:'var(--gold)', fontSize:'.88rem' }}>{u.result}</span>
         <span className="hm" style={{ fontWeight:700, color:'var(--text-muted)', fontSize:'.82rem' }}>{u.accuracy}%</span>
+      </div>
+    );
+  };
+
+  /* ═══════════════════════════════════════════════════════════
+     RENDER: HISTORY ROW
+     ═══════════════════════════════════════════════════════════ */
+  const renderHistoryRow = (r, i) => {
+    const resColor = r.resultType === 'exact' ? 'var(--accent)' : r.resultType === 'result' ? 'var(--gold)' : '#ef4444';
+    const resIcon = r.resultType === 'exact' ? <CircleCheck size={13} /> : r.resultType === 'result' ? <TrendingUp size={13} /> : <CircleX size={13} />;
+    return (
+      <div key={`${r.matchId}_${i}`} className="p-sr" style={{ display:'flex', alignItems:'center', gap:12, padding:'12px 14px', borderRadius:12, background: i % 2 === 0 ? 'var(--bg-surface)' : 'transparent', marginBottom:6, animationDelay:`${i * 20}ms` }}>
+        <span style={{ fontSize:'.72rem', fontWeight:700, color:'var(--text-muted)', minWidth:28, textAlign:'center' }}>{r.homeTeam?.slice(0,3) || '???'}</span>
+        <span style={{ fontSize:'.88rem', fontWeight:800, color:'var(--text-muted)', fontFamily:'var(--font-display)', fontVariantNumeric:'tabular-nums' }}>{r.predictedHome}-{r.predictedAway}</span>
+        <span style={{ fontSize:'.72rem', color:'var(--text-muted)' }}>→</span>
+        <span style={{ fontSize:'.88rem', fontWeight:900, color:'var(--text-primary)', fontFamily:'var(--font-display)', fontVariantNumeric:'tabular-nums' }}>{r.actualHome}-{r.actualAway}</span>
+        <div style={{ flex:1 }} />
+        <span style={{ display:'flex', alignItems:'center', gap:4, fontSize:'.78rem', fontWeight:800, color:resColor }}>{resIcon} {r.points > 0 ? `+${r.points}` : '0'}</span>
+        <span style={{ fontSize:'.68rem', color:'var(--text-muted)' }}>{timeAgo(r.resolvedAt)}</span>
       </div>
     );
   };
@@ -863,229 +724,192 @@ export default function Predictions() {
      MAIN RENDER
      ═══════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight:'100vh',overflow:'hidden',minHeight:'100dvh',overflow:'hidden', background:'var(--bg-deep)' }}>
-      <SEO title="Today's Predictions" description="Make your football score predictions for today's matches." keywords="football predictions, score predictions, Zoka Picks" url="https://zokascore.com/predictions" />
+    <div style={{ minHeight:'100vh',overflow:'hidden', minHeight:'100dvh',overflow:'hidden', background:'var(--bg-deep)' }}>
+      <SEO
+        title="Predictions"
+        description="Make your football score predictions, compete with others, and climb the ZOKASCORE leaderboard."
+        keywords="football predictions, score predictions, predict matches, ZOKASCORE predictions"
+        url="https://zokascore.com/predictions"
+      />
 
-      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
-      <SaveToast show={toast} score={toast} />
-
-      {/* ── STICKY HEADER ── */}
-      <div style={{ position:'sticky',top:0,zIndex:100,background:'rgba(10,10,10,.94)',backdropFilter:'blur(20px)',borderBottom:'1.5px solid var(--border)' }}>
-        <div style={{ maxWidth:840,margin:'0 auto',padding:'12px 16px',display:'flex',alignItems:'center',justifyContent:'space-between',gap:10 }}>
-          <div style={{ display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0 }}>
-            <div style={{ display:'flex',alignItems:'center',gap:7,cursor:'pointer' }} onClick={() => navigate('/')}>
-              <div style={{ width:32,height:32,borderRadius:9,background:'var(--accent)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--bg-deep)' }}><Target size={16} /></div>
-              <span style={{ fontSize:'.92rem',fontWeight:900,color:'var(--text-primary)',whiteSpace:'nowrap' }}>ZOKASCORE</span>
-            </div>
-            <div style={{ flex:1 }} />
-            {lastUpdate && (
-              <span style={{ fontSize:'.72rem',color:'var(--text-muted)',fontWeight:600,whiteSpace:'nowrap',display:'flex',alignItems:'center',gap:4 }}>
-                <span style={{ width:6,height:6,borderRadius:'50%',background:'var(--accent)',display:'inline-block' }} /> {timeAgo(lastUpdate)}
-              </span>
-            )}
+      {/* Sticky Header */}
+      <div style={{ position:'sticky', top:0, zIndex:100, background:'rgba(10,10,10,.9)', backdropFilter:'blur(20px)', borderBottom:'1px solid var(--border)' }}>
+        <div style={{ maxWidth:920, margin:'0 auto', padding:'16px 20px', display:'flex', alignItems:'center', justifyContent:'space-between' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, cursor:'pointer' }} onClick={() => navigate('/')}>
+            <div style={{ width:30, height:30, borderRadius:9, background:'linear-gradient(145deg,#00e676,#00c853)', display:'flex', alignItems:'center', justifyContent:'center', fontWeight:900, fontSize:'.76rem', color:'var(--bg-deep)', fontFamily:'var(--font-display)', boxShadow:'0 2px 10px rgba(0,230,118,.25)' }}>Z</div>
+            <span style={{ fontSize:'.9rem', fontWeight:800, color:'var(--text-primary)' }}>zokascore<span style={{ color:'var(--accent)' }}>.xyz</span></span>
           </div>
-          <div style={{ display:'flex',alignItems:'center',gap:8,flexShrink:0 }}>
-            {globalDeadline && !isGlobalLocked && !allFinished && (
-              <div className="p-sd" style={{ display:'flex',alignItems:'center',gap:6,padding:'6px 14px',borderRadius:10,background:'rgba(245,197,66,.06)',border:'1.5px solid rgba(245,197,66,.12)' }}>
-                <Timer size={13} style={{ color:'var(--gold)' }} /><Countdown deadline={globalDeadline.getTime()} />
-              </div>
-            )}
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
             {isGlobalLocked && !allFinished && (
-              <div style={{ display:'flex',alignItems:'center',gap:5,padding:'6px 14px',borderRadius:10,background:'rgba(239,68,68,.06)',border:'1.5px solid rgba(239,68,68,.12)' }}>
-                <Lock size={12} style={{ color:'#ef4444' }} /><span style={{ fontSize:'.82rem',fontWeight:900,color:'#ef4444' }}>LOCKED</span>
-              </div>
+              <span style={{ fontSize:'.78rem', fontWeight:800, color:'#ef4444', display:'flex', alignItems:'center', gap:4 }}><Lock size={12} /> Locked</span>
             )}
-            {allFinished && (
-              <div style={{ display:'flex',alignItems:'center',gap:5,padding:'6px 14px',borderRadius:10,background:'rgba(0,230,118,.06)',border:'1.5px solid rgba(0,230,118,.12)' }}>
-                <Trophy size={12} style={{ color:'var(--accent)' }} /><span style={{ fontSize:'.82rem',fontWeight:900,color:'var(--accent)' }}>RESULTS</span>
-              </div>
-            )}
+            <button onClick={() => navigate('/leaderboard')} className="zb" style={{ padding:'8px 16px', borderRadius:10, background:'rgba(245,197,66,.08)', border:'1px solid rgba(245,197,66,.15)', color:'var(--gold)', fontWeight:800, fontSize:'.82rem', display:'flex', alignItems:'center', gap:6, minHeight:38 }}>
+              <Trophy size={14} /> Ranks
+            </button>
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth:840,margin:'0 auto',padding:'20px 16px 120px' }}>
-
-        {/* ═══ TITLE ═══ */}
-        <div className="p-up" style={{ marginBottom:20 }}>
-          <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:6,flexWrap:'wrap' }}>
-            <h1 style={{ fontSize:'1.6rem',fontWeight:900,color:'var(--text-primary)',margin:0,letterSpacing:'-.02em',display:'flex',alignItems:'center',gap:10 }}>
-              <Star size={22} style={{ color:'var(--gold)' }} /> Today's Predictions
-            </h1>
-            {streak >= 2 && <span className="streak-badge"><Flame size={13} /> {streak} streak</span>}
+      <div style={{ maxWidth:920, margin:'0 auto', padding:'24px 20px 100px' }}>
+        {/* Error */}
+        {error && (
+          <div className="p-up" style={{ display:'flex', flexDirection:'column', alignItems:'center', gap:12, padding:36, background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:16, textAlign:'center', marginBottom:24 }}>
+            <AlertTriangle size={32} style={{ color:'#f59e0b' }} />
+            <div style={{ fontWeight:700, color:'var(--text-primary)' }}>Failed to load matches</div>
+            <div style={{ fontSize:'.84rem', color:'var(--text-muted)', maxWidth:300 }}>{error.message || error}</div>
           </div>
-          <p style={{ fontSize:'.88rem',color:'var(--text-muted)',margin:0,fontWeight:600,lineHeight:1.5 }}>
-            {isLoggedIn ? '10 pts exact · 3 pts result · No deletions · Edit until 1hr before kickoff · Results auto-scored' : "View matches and Zoka Picks. Log in to predict and climb the leaderboard."}
-          </p>
-        </div>
-
-        {/* ═══ TOP PLAYER ═══ */}
-        {topPlayer && (
-          <ToggleSection id="top" icon={<Crown size={16} />} iconBg="rgba(245,197,66,.12)" iconColor="#fbbf24" title="Top Predictor" badge={`${topPlayer.points} pts`} badgeBg="rgba(245,197,66,.12)" badgeColor="#fbbf24" defaultOpen={true} style={{ marginBottom:14,animationDelay:'50ms' }}>
-            <div style={{ display:'flex',alignItems:'center',gap:14,padding:'16px 18px',background:'linear-gradient(135deg,rgba(251,191,36,.06),rgba(251,191,36,.01))',border:'1.5px solid rgba(251,197,66,.15)',borderRadius:12 }}>
-              <div style={{ width:50,height:50,borderRadius:14,background:'linear-gradient(135deg,#fbbf24,#f59e0b)',display:'flex',alignItems:'center',justifyContent:'center',color:'#1a1a1a',flexShrink:0,boxShadow:'0 4px 16px rgba(245,197,66,.2)' }}><Crown size={24} /></div>
-              <div style={{ flex:1,minWidth:0 }}>
-                <div style={{ fontSize:'.72rem',fontWeight:800,color:'var(--gold)',textTransform:'uppercase',letterSpacing:'.08em' }}>Leading Today</div>
-                <div style={{ fontSize:'1.1rem',fontWeight:900,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',marginTop:2 }}>
-                  {topPlayer.name}{topPlayer.uid === uid && <span style={{ fontSize:'.65rem',color:'var(--gold)',marginLeft:6,fontWeight:800 }}>YOU!</span>}
-                </div>
-                <div style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600,marginTop:2 }}>{topPlayer.exact} exact · {topPlayer.result} results · {topPlayer.accuracy}% acc</div>
-              </div>
-              <div style={{ textAlign:'right',flexShrink:0 }}>
-                <div style={{ fontSize:'1.7rem',fontWeight:900,color:'#fbbf24',fontFamily:'var(--font-display)',lineHeight:1 }}><AnimNum value={topPlayer.points} delay={200} /></div>
-                <div style={{ fontSize:'.62rem',fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginTop:2 }}>Points</div>
-              </div>
-            </div>
-          </ToggleSection>
         )}
 
-        {/* ═══ USER STATS ═══ */}
-        {isLoggedIn && (
-          <ToggleSection id="stats" icon={<BarChart3 size={16} />} iconBg="rgba(168,85,247,.12)" iconColor="#a855f7" title="My Stats" badge={`${userStats.predicted}/${userStats.total}`} badgeBg="rgba(168,85,247,.1)" badgeColor="#a855f7" defaultOpen={true} style={{ marginBottom:14,animationDelay:'80ms' }}>
-            <div className="stats-grid" style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(120px,1fr))',gap:8,marginBottom:12 }}>
-              {[
-                { label:'Points',value:userStats.points,color:'#a855f7',bg:'rgba(168,85,247,.1)',Icon:Zap },
-                { label:'Exact',value:userStats.exact,color:'var(--accent)',bg:'rgba(0,230,118,.1)',Icon:CircleCheck },
-                { label:'Result',value:userStats.result,color:'var(--gold)',bg:'rgba(245,197,66,.1)',Icon:TrendingUp },
-                { label:'Accuracy',value:`${userStats.accuracy}%`,color:'#60a5fa',bg:'rgba(59,130,246,.1)',Icon:Target },
-                { label:'Rank',value:myRank ? `#${myRank.rank}` : '—',color:myRank?.rank<=3?'var(--gold)':'var(--text-primary)',bg:myRank?.rank<=3?'rgba(245,197,66,.1)':'rgba(255,255,255,.03)',Icon:Trophy },
-              ].map((s,i) => (
-                <div key={s.label} className="p-sc" style={{ animationDelay:`${i*40}ms`,background:'var(--bg-surface)',border:'1.5px solid var(--border)',borderRadius:12,padding:'14px',display:'flex',alignItems:'center',gap:10 }}>
-                  <div style={{ width:36,height:36,borderRadius:10,background:s.bg,display:'flex',alignItems:'center',justifyContent:'center',color:s.color,flexShrink:0 }}><s.Icon size={16} /></div>
-                  <div>
-                    <div style={{ fontSize:'1.1rem',fontWeight:900,color:s.color,fontFamily:'var(--font-display)',lineHeight:1 }}>
-                      <AnimNum value={typeof s.value==='number'?s.value:0} delay={i*60+100} />
-                      {typeof s.value==='string'&&(s.value.startsWith('#')||s.value==='—')?s.value:''}
-                    </div>
-                    <div style={{ fontSize:'.65rem',color:'var(--text-muted)',textTransform:'uppercase',fontWeight:700,letterSpacing:'.06em',marginTop:3 }}>{s.label}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
-            {userStats.total > 0 && (
-              <div style={{ height:6,borderRadius:3,background:'rgba(255,255,255,.04)',overflow:'hidden' }}>
-                <div className="p-bl" style={{ height:'100%',borderRadius:3,background:userStats.predicted===userStats.total?'linear-gradient(90deg,var(--accent),#00c853)':'rgba(0,230,118,.5)',width:`${(userStats.predicted/userStats.total)*100}%` }} />
+        {!error && (
+          <>
+            {/* Stats Cards */}
+            <div className="stats-grid" style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(170px,1fr))', gap:10, marginBottom:20 }}>
+              <div className="sc-card p-pop" style={{ animationDelay:'0ms' }}>
+                <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>Your Points</div>
+                <div style={{ fontSize:'1.5rem', fontWeight:900, color:'#a855f7', fontFamily:'var(--font-display)' }}><AnimNum value={userStats.points} /> <span style={{ fontSize:'.7rem', color:'var(--text-muted)' }}>pts</span></div>
               </div>
-            )}
-          </ToggleSection>
-        )}
+              <div className="sc-card p-pop" style={{ animationDelay:'60ms' }}>
+                <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>Accuracy</div>
+                <div style={{ fontSize:'1.5rem', fontWeight:900, color:'var(--accent)', fontFamily:'var(--font-display)' }}><AnimNum value={userStats.accuracy} />%</div>
+              </div>
+              <div className="sc-card p-pop" style={{ animationDelay:'120ms' }}>
+                <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>Predicted</div>
+                <div style={{ fontSize:'1.5rem', fontWeight:900, color:'var(--text-primary)', fontFamily:'var(--font-display)' }}><AnimNum value={userStats.predicted} /> <span style={{ fontSize:'.7rem', color:'var(--text-muted)' }}>/ {userStats.total}</span></div>
+              </div>
+              <div className="sc-card p-pop" style={{ animationDelay:'180ms' }}>
+                <div style={{ fontSize:'.7rem', fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginBottom:6 }}>Exact Scores</div>
+                <div style={{ fontSize:'1.5rem', fontWeight:900, color:'var(--gold)', fontFamily:'var(--font-display)' }}><AnimNum value={userStats.exact} /></div>
+              </div>
+            </div>
 
-        {/* ═══ LEADERBOARD ═══ */}
-        {leaderboard.length > 0 && (
-          <ToggleSection id="lb" icon={<Trophy size={16} />} iconBg="rgba(168,85,247,.12)" iconColor="#a855f7" title="Rankings" badge={leaderboard.length} badgeBg="rgba(168,85,247,.1)" badgeColor="#a855f7" defaultOpen={false} style={{ marginBottom:14,animationDelay:'120ms' }}>
-            <div className="sc-card" style={{ borderColor:'rgba(168,85,247,.1)',background:'linear-gradient(135deg,rgba(168,85,247,.03),transparent)',padding:'16px 14px' }}>
-              {myRank && (
-                <div style={{ display:'flex',alignItems:'center',gap:8,marginBottom:12,padding:'10px 14px',borderRadius:10,background:'rgba(0,230,118,.06)',border:'1.5px solid rgba(0,230,118,.15)' }}>
-                  <span style={{ fontSize:'.88rem',fontWeight:800,color:'var(--accent)' }}>Your rank: <strong>#{myRank.rank}</strong> · {myRank.points} pts · {myRank.accuracy}% acc</span>
+            {/* Streak + Deadline row */}
+            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:18, flexWrap:'wrap', gap:10 }}>
+              {streak > 1 && (
+                <div className="streak-badge p-up" style={{ animationDelay:'250ms' }}>
+                  <Flame size={14} /> {streak} streak
                 </div>
               )}
-              <div className="rr" style={{ color:'var(--text-muted)',fontWeight:800,fontSize:'.72rem',textTransform:'uppercase',letterSpacing:'.06em',background:'transparent',marginBottom:6,borderRadius:'10px 10px 0 0',borderBottom:'1.5px solid var(--border)' }}>
-                <span>#</span><span>Player</span><span className="hm">Pts</span><span>Exact</span><span className="hm">Result</span><span className="hm">Acc%</span>
-              </div>
-              {leaderboard.slice(0,30).map((u,i) => renderLbRow(u,i))}
-            </div>
-          </ToggleSection>
-        )}
-
-        {/* ═══ ZOKA PICKS ═══ */}
-        {zokaPicks?.matches?.length > 0 && (
-          <ToggleSection id="zoka" icon={<Sparkles size={16} />} iconBg="rgba(245,197,66,.12)" iconColor="var(--gold)" title="Zoka Picks" badge={zokaPicks.matches.length} badgeBg="rgba(245,197,66,.1)" badgeColor="var(--gold)" defaultOpen={true} style={{ marginBottom:14,animationDelay:'100ms' }}>
-            <div style={{ display:'flex',flexDirection:'column',gap:0 }}>
-              {zokaPicks.matches.map((pick,i) => renderZokaRow(pick,i))}
-            </div>
-          </ToggleSection>
-        )}
-
-        {/* ═══ FILTER BUTTONS ═══ */}
-        <div className="hsb filter-scroll" style={{ display:'flex',gap:8,marginBottom:18,overflowX:'auto',paddingBottom:4 }}>
-          {[
-            { key:'all',label:'All',count:filterCounts.all },
-            { key:'predicted',label:'My Picks',count:filterCounts.predicted },
-            { key:'unpredicted',label:'Open',count:filterCounts.unpredicted },
-            { key:'finished',label:'Finished',count:filterCounts.finished },
-          ].map(f => (
-            <button key={f.key} onClick={() => setFilter(f.key)} className={`filter-btn ${filter===f.key?'active':''}`}>
-              {f.label} ({f.count})
-            </button>
-          ))}
-          {isLoggedIn && (
-            <button onClick={() => setShowHistory(!showHistory)} className={`filter-btn ${filter==='history'?'active':''}`} style={showHistory ? { borderColor:'rgba(168,85,247,.2)',background:'rgba(168,85,247,.08)',color:'#a855f7' } : {}}>
-              <History size={14} /> History
-            </button>
-          )}
-        </div>
-
-        {/* ═══ MATCH CARDS ═══ */}
-        {loading ? (
-          <div style={{ display:'flex',flexDirection:'column',gap:12 }}>{[0,1,2].map(i => <Skeleton key={i} />)}</div>
-        ) : error ? (
-          <div style={{ padding:'48px 24px',textAlign:'center',border:'2px dashed var(--border)',borderRadius:16,background:'var(--bg-surface)' }}>
-            <AlertTriangle size={40} style={{ color:'var(--text-muted)',marginBottom:14,opacity:.5 }} />
-            <div style={{ fontSize:'1rem',fontWeight:800,color:'var(--text-muted)',marginBottom:6 }}>Failed to load predictions</div>
-            <div style={{ fontSize:'.88rem',fontWeight:600,color:'var(--text-muted)',opacity:.6 }}>Check your connection and try again</div>
-          </div>
-        ) : filteredPreds.length === 0 ? (
-          <div style={{ padding:'48px 24px',textAlign:'center',border:'2px dashed var(--border)',borderRadius:16,background:'var(--bg-surface)' }}>
-            <Target size={40} style={{ color:'var(--text-muted)',marginBottom:14,opacity:.5 }} />
-            <div style={{ fontSize:'1rem',fontWeight:800,color:'var(--text-muted)',marginBottom:6 }}>
-              {filter === 'predicted' ? 'No predictions yet' : filter === 'unpredicted' ? 'All matches predicted!' : filter === 'finished' ? 'No finished matches' : 'No matches available'}
-            </div>
-            <div style={{ fontSize:'.88rem',fontWeight:600,color:'var(--text-muted)',opacity:.6 }}>
-              {filter === 'predicted' ? 'Tap "Predict" on a match above to get started' : filter === 'unpredicted' ? 'Great job! Wait for results.' : 'Check back later for today\'s fixtures.'}
-            </div>
-          </div>
-        ) : (
-          filteredPreds.map((pred,i) => renderMatchCard(pred,i))
-        )}
-
-        {/* ═══ HISTORY ═══ */}
-        {showHistory && (
-          <div className="p-up" style={{ marginTop:24 }}>
-            <h3 style={{ fontSize:'1.15rem',fontWeight:900,color:'var(--text-primary)',margin:'0 0 16px',display:'flex',alignItems:'center',gap:10 }}>
-              <History size={18} style={{ color:'#a855f7' }} /> Prediction History
-            </h3>
-            {historyLoading ? (
-              <div style={{ padding:'40px',textAlign:'center' }}><Loader size={24} style={{ animation:'pSh .8s linear infinite',color:'var(--text-muted)' }} /></div>
-            ) : history.length === 0 ? (
-              <div style={{ padding:'40px 24px',textAlign:'center',border:'2px dashed var(--border)',borderRadius:16,background:'var(--bg-surface)' }}>
-                <div style={{ fontSize:'.95rem',fontWeight:800,color:'var(--text-muted)',marginBottom:6 }}>No prediction history yet</div>
-                <div style={{ fontSize:'.85rem',fontWeight:600,color:'var(--text-muted)',opacity:.6 }}>Results will appear here after matches finish</div>
-              </div>
-            ) : (
-              groupByDate(history).map(([date, items]) => (
-                <div key={date} style={{ marginBottom:20 }}>
-                  <div style={{ fontSize:'.85rem',fontWeight:800,color:'var(--text-muted)',textTransform:'uppercase',letterSpacing:'.06em',marginBottom:10,padding:'0 4px',display:'flex',alignItems:'center',gap:8 }}>
-                    <CalendarDays size={14} /> {date} <span style={{ fontWeight:600,opacity:.6 }}>({items.length} results)</span>
-                  </div>
-                  {items.map((r,i) => (
-                    <div key={i} className="p-card" style={{
-                      padding:'14px 16px',borderRadius:14,marginBottom:8,background:'var(--bg-card)',
-                      border: r.resultType==='exact' ? '1.5px solid rgba(0,230,118,.2)' : r.resultType==='result' ? '1.5px solid rgba(245,197,66,.15)' : '1px solid var(--border)',
-                      animationDelay:`${i*30}ms`,
-                    }}>
-                      <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',gap:8,marginBottom:8 }}>
-                        <div style={{ display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0 }}>
-                          {r.homeLogo && <img src={r.homeLogo} alt="" style={{ width:22,height:22,borderRadius:5,objectFit:'contain',flexShrink:0 }} />}
-                          <span style={{ fontSize:'.88rem',fontWeight:800,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{r.homeTeam}</span>
-                        </div>
-                        <div style={{ display:'flex',alignItems:'center',gap:6 }}>
-                          <span style={{ fontSize:'.78rem',fontWeight:700,color:'var(--text-muted)' }}>You: <strong style={{ color:'var(--gold)' }}>{r.predictedHome}-{r.predictedAway}</strong></span>
-                          <span style={{ fontSize:'.78rem',fontWeight:700,color:'var(--text-muted)' }}>Actual: <strong style={{ color:'var(--accent)' }}>{r.actualHome}-{r.actualAway}</strong></span>
-                        </div>
-                        <div style={{ display:'flex',alignItems:'center',gap:8,flex:1,minWidth:0,justifyContent:'flex-end' }}>
-                          <span style={{ fontSize:'.88rem',fontWeight:800,color:'var(--text-primary)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',textAlign:'right' }}>{r.awayTeam}</span>
-                          {r.awayLogo && <img src={r.awayLogo} alt="" style={{ width:22,height:22,borderRadius:5,objectFit:'contain',flexShrink:0 }} />}
-                        </div>
-                      </div>
-                      <ResultBadge result={{ type:r.resultType,points:r.points }} />
-                    </div>
-                  ))}
+              {globalDeadline && !isGlobalLocked && (
+                <div className="p-up" style={{ display:'flex', alignItems:'center', gap:8, animationDelay:'300ms' }}>
+                  <Timer size={14} style={{ color:'var(--gold)' }} />
+                  <span style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-muted)' }}>Closes in</span>
+                  <Countdown deadline={globalDeadline.getTime()} />
                 </div>
-              ))
+              )}
+              {myRank && (
+                <div className="p-up" style={{ display:'flex', alignItems:'center', gap:6, fontSize:'.82rem', fontWeight:800, color:'var(--text-muted)', animationDelay:'350ms' }}>
+                  <Medal size={14} style={{ color: myRank.rank <= 3 ? 'var(--gold)' : 'var(--text-muted)' }} />
+                  Your rank: <span style={{ color: myRank.rank <= 3 ? 'var(--gold)' : 'var(--accent)', fontWeight:900 }}>#{myRank.rank}</span> · {myRank.points} pts
+                </div>
+              )}
+            </div>
+
+            {/* Filter buttons */}
+            <div className="filter-scroll hsb" style={{ display:'flex', gap:8, marginBottom:20, overflowX:'auto', WebkitOverflowScrolling:'touch', paddingBottom:4 }}>
+              {[
+                { key:'all', label:'All', count:filterCounts.all },
+                { key:'predicted', label:'Predicted', count:filterCounts.predicted },
+                { key:'unpredicted', label:'Open', count:filterCounts.unpredicted },
+                { key:'finished', label:'Finished', count:filterCounts.finished },
+              ].map(f => (
+                <button key={f.key} onClick={() => setFilter(f.key)} className={`filter-btn ${filter === f.key ? 'active' : ''}`}>
+                  {f.label} <span style={{ opacity:.6 }}>({f.count})</span>
+                </button>
+              ))}
+            </div>
+
+            {/* Match Cards */}
+            {filter !== 'history' && (
+              loading ? (
+                <div>{Array.from({ length:3 }).map((_,i) => <Skeleton key={i} />)}</div>
+              ) : filteredPreds.length === 0 ? (
+                <div style={{ textAlign:'center', padding:44, color:'var(--text-muted)', fontSize:'.92rem', fontWeight:600 }}>
+                  {filter === 'predicted' ? 'No predictions made yet.' : filter === 'unpredicted' ? 'No open matches remaining.' : filter === 'finished' ? 'No finished matches yet.' : 'No matches available today.'}
+                </div>
+              ) : (
+                filteredPreds.map((p, i) => renderMatchCard(p, i))
+              )
             )}
-          </div>
+
+            {/* Zoka Picks */}
+            {zokaPicks && zokaPicks.matches && zokaPicks.matches.length > 0 && (
+              <ToggleSection
+                icon={<Star size={18} />}
+                iconBg="rgba(245,197,66,.1)"
+                iconColor="var(--gold)"
+                title="Zoka's Picks"
+                badge={zokaPicks.matches.length}
+                badgeBg="rgba(245,197,66,.12)"
+                badgeColor="var(--gold)"
+                defaultOpen={false}
+                style={{ marginTop:8 }}
+              >
+                {zokaPicks.matches.map((pick, i) => renderZokaRow(pick, i))}
+              </ToggleSection>
+            )}
+
+            {/* Mini Leaderboard */}
+            <ToggleSection
+              icon={<Trophy size={18} />}
+              iconBg="rgba(168,85,247,.1)"
+              iconColor="#a855f7"
+              title="Live Leaderboard"
+              badge={leaderboard.length}
+              badgeBg="rgba(168,85,247,.1)"
+              badgeColor="#a855f7"
+              defaultOpen={false}
+              style={{ marginTop:8 }}
+            >
+              {topPlayer && (
+                <div style={{ display:'flex', alignItems:'center', gap:10, padding:'12px 16px', marginBottom:10, borderRadius:12, background:'rgba(245,197,66,.06)', border:'1px solid rgba(245,197,66,.12)' }}>
+                  <Crown size={16} style={{ color:'var(--gold)' }} />
+                  <span style={{ fontSize:'.84rem', fontWeight:700, color:'var(--text-primary)' }}>Leading: <strong style={{ color:'var(--gold)' }}>{topPlayer.displayName}</strong> with {topPlayer.points} pts</span>
+                </div>
+              )}
+              {leaderboard.slice(0, 15).map((u, i) => renderLbRow(u, i))}
+              {leaderboard.length > 15 && (
+                <div style={{ textAlign:'center', padding:12 }}>
+                  <button onClick={() => navigate('/leaderboard')} className="zb" style={{ padding:'10px 24px', borderRadius:10, background:'rgba(168,85,247,.06)', border:'1px solid rgba(168,85,247,.15)', color:'#a855f7', fontWeight:800, fontSize:'.84rem', display:'inline-flex', alignItems:'center', gap:6 }}>
+                    View Full Leaderboard <ChevronDown size={14} />
+                  </button>
+                </div>
+              )}
+            </ToggleSection>
+
+            {/* Prediction History */}
+            <ToggleSection
+              icon={<History size={18} />}
+              iconBg="rgba(59,130,246,.1)"
+              iconColor="#60a5fa"
+              title="Your History"
+              badge={userResults.length}
+              badgeBg="rgba(59,130,246,.1)"
+              badgeColor="#60a5fa"
+              defaultOpen={false}
+              style={{ marginTop:8 }}
+            >
+              {!isLoggedIn ? (
+                <div style={{ textAlign:'center', padding:36, color:'var(--text-muted)', fontSize:'.88rem', fontWeight:600 }}>
+                  <LogIn size={24} style={{ marginBottom:8, opacity:.5 }} /><br />
+                  Login to see your prediction history.
+                </div>
+              ) : userResults.length === 0 ? (
+                <div style={{ textAlign:'center', padding:36, color:'var(--text-muted)', fontSize:'.88rem', fontWeight:600 }}>
+                  No resolved predictions yet. Results appear here after matches finish.
+                </div>
+              ) : (
+                userResults.slice(0, 30).map((r, i) => renderHistoryRow(r, i))
+              )}
+            </ToggleSection>
+          </>
         )}
       </div>
+
+      {/* Login Modal */}
+      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
+
+      {/* Save Toast */}
+      <SaveToast show={!!toast} score={toast} />
     </div>
   );
 }

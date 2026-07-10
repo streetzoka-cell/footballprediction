@@ -16,34 +16,27 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
 import {
   collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
-  updateDoc, writeBatch, serverTimestamp, getDoc, getDocs, orderBy, limit, increment
+  updateDoc, writeBatch, serverTimestamp, getDoc, getDocs,
+  increment
 } from 'firebase/firestore';
 import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
+import {
+  useUniversalResolver,
+  useActivePredictions,
+  useZokaPicks,
+  todayStr,
+  tomorrowStr,
+  calcPoints,
+} from '../hooks/useMatchData';
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════════════ */
-const todayStr = () => new Date().toISOString().split('T')[0];
-const tomorrowStr = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-};
-
 function safeMatches(res) {
   if (!res) return [];
   if (Array.isArray(res)) return res;
   if (res && Array.isArray(res.matches)) return res.matches;
   return [];
-}
-
-function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
 }
 
 const ST = {
@@ -75,7 +68,7 @@ const TABS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
-   GLOBAL AUTO-RESOLVER
+   RESOLVER — kept local for Admin's write-path context
    ═══════════════════════════════════════════════════════════════ */
 async function resolveAllUsersForMatch(matchId, actualH, actualA, matchDate) {
   if (!db) return 0;
@@ -127,14 +120,13 @@ function useInterval(cb, ms) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   INJECT STYLES — MOBILE-FIRST, BOLD, FOOTBALL VIBE
+   INJECT STYLES
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('adm-mob-v17')) return;
   const s = document.createElement('style');
   s.id = 'adm-mob-v17';
   s.textContent = `
-    /* ── Keyframes ── */
     @keyframes afu{from{opacity:0;transform:translateY(16px)}
 body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes asp{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -152,7 +144,6 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     @keyframes count-up{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
     @keyframes card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 
-    /* ── Utility classes ── */
     .ae{animation:afu .45s cubic-bezier(.22,1,.36,1) both}
     .fl{animation:afl 2s ease-out}
     .si{animation:slide-in .35s cubic-bezier(.22,1,.36,1) both}
@@ -163,69 +154,53 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     .count-up{animation:count-up .4s cubic-bezier(.22,1,.36,1) both}
     .card-in{animation:card-in .4s cubic-bezier(.22,1,.36,1) both}
 
-    /* ── Buttons ── */
     .zb{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent}
     .zb:hover{transform:translateY(-1px);filter:brightness(1.08)}
     .zb:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
 
-    /* ── Scrollbar hide ── */
     .sh::-webkit-scrollbar{display:none}.sh{scrollbar-width:none}
 
-    /* ── Skeleton ── */
     .sk{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite}
 
-    /* ── Live dot ── */
     .live-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;animation:pulse-live 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(239,68,68,.6);flex-shrink:0}
 
-    /* ── Toast ── */
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:14px 24px;border-radius:14px;font-size:.9rem;font-weight:700;z-index:9999;animation:slide-in .3s ease-out;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px;max-width:90vw;white-space:nowrap}
 
-    /* ── Zoka row highlight ── */
     .zoka-row{background:linear-gradient(90deg,rgba(245,197,66,.06) 0%,rgba(245,197,66,.02) 100%)!important;border-color:rgba(245,197,66,.3)!important}
 
-    /* ── Live match border pulse ── */
     .match-live-border{animation:live-border-glow 2s ease-in-out infinite}
 
-    /* ── Result badge — BIGGER on mobile ── */
     .result-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:800;letter-spacing:.02em;font-family:var(--font-display,monospace);white-space:nowrap}
 
-    /* ── Score prediction inputs — BIGGER touch targets ── */
     .pi{width:54px;height:48px;padding:0;border-radius:10px;background:var(--bg-surface);border:2px solid rgba(245,197,66,.25);color:var(--gold);text-align:center;font-weight:900;font-size:1.15rem;outline:none;font-variant-numeric:tabular-nums;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
     .pi:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.2)}
     .pi::placeholder{color:var(--text-muted);opacity:.35;font-weight:700;font-size:.9rem}
     .pi.has-val{border-color:var(--gold);background:rgba(245,197,66,.06)}
 
-    /* ── Tabs — BIGGER touch targets ── */
     .tab-btn{position:relative;display:flex;align-items:center;gap:8px;padding:14px 20px;font-weight:800;font-size:.88rem;color:var(--text-muted);background:transparent;border:none;cursor:pointer;transition:color .2s,background .2s;border-radius:12px 12px 0 0;white-space:nowrap;-webkit-tap-highlight-color:transparent;min-height:50px}
     .tab-btn:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
     .tab-btn.active{color:var(--gold);background:rgba(245,197,66,.06)}
     .tab-btn.active::after{content:'';position:absolute;bottom:0;left:14px;right:14px;height:3px;background:var(--gold);border-radius:3px 3px 0 0;animation:tab-indicator .25s ease-out;box-shadow:0 0 10px rgba(245,197,66,.4)}
 
-    /* ── Section card ── */
     .section-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
     .section-title{font-size:1.05rem;font-weight:900;color:var(--text-primary);margin:0 0 16px;display:flex;align-items:center;gap:10px;letter-spacing:.01em}
 
-    /* ── Stat mini cards ── */
     .stat-mini{display:flex;flex-direction:column;align-items:center;padding:14px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;min-width:0}
     .stat-mini .num{font-size:1.5rem;font-weight:900;font-family:var(--font-display);line-height:1}
     .stat-mini .lbl{font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
 
-    /* ── Staff row ── */
     .staff-row{display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:10px;transition:background .15s}
     .staff-row:hover{background:rgba(255,255,255,.03)}
 
-    /* ── User row — DESKTOP grid ── */
     .user-row{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 90px;align-items:center;gap:12px;padding:14px 18px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:8px;font-size:.88rem;font-weight:600;transition:background .15s}
     .user-row:hover{background:rgba(255,255,255,.03)}
     .user-header{color:var(--text-muted);font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;background:transparent;border-bottom:2px solid var(--border);border-radius:12px 12px 0 0;margin-bottom:10px}
     .user-header:hover{background:transparent}
 
-    /* ── Input fields ── */
     .input-field{padding:12px 16px;border-radius:12px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);font-size:.95rem;font-weight:600;outline:none;transition:border-color .2s,box-shadow .2s;width:100%;min-height:50px;-webkit-appearance:none;appearance:none}
     .input-field:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.12)}
     .input-field::placeholder{color:var(--text-muted);opacity:.5}
 
-    /* ── Buttons ── */
     .btn-primary{padding:14px 24px;border-radius:12px;font-size:.9rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:all .18s;min-height:50px;-webkit-tap-highlight-color:transparent}
     .btn-primary:hover{transform:translateY(-1px);filter:brightness(1.08)}
     .btn-primary:active{transform:translateY(0) scale(.97)}
@@ -242,64 +217,32 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
 
     .btn-sm{padding:10px 14px;border-radius:10px;font-size:.82rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:44px;-webkit-tap-highlight-color:transparent}
 
-    /* ── Role badge ── */
     .role-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:8px;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
 
-    /* ── Empty state ── */
     .empty-state{padding:48px 24px;text-align:center;border:2px dashed var(--border);border-radius:16px;background:var(--bg-surface)}
 
-    /* ── League pill ── */
     .league-pill{padding:8px 16px;border-radius:10px;font-size:.82rem;font-weight:700;border:none;white-space:nowrap;-webkit-tap-highlight-color:transparent;min-height:40px;display:inline-flex;align-items:center;gap:6px}
 
-    /* ── Match action button ── */
     .match-action{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;transition:all .15s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
     .match-action:active{transform:scale(.9)}
 
-    /* ═══════════════════════════════════════════════════════════
-       MOBILE BREAKPOINTS
-       ═══════════════════════════════════════════════════════════ */
     @media(max-width:768px){
-      /* User rows become stacked cards */
-      .user-row{
-        grid-template-columns:1fr!important;
-        gap:8px;
-        padding:16px;
-        border-radius:14px;
-      }
+      .user-row{grid-template-columns:1fr!important;gap:8px;padding:16px;border-radius:14px}
       .user-row .hide-mobile{display:none!important}
-      .user-header{
-        grid-template-columns:1fr!important;
-        gap:4px;
-        padding:12px 16px;
-        font-size:.72rem;
-      }
+      .user-header{grid-template-columns:1fr!important;gap:4px;padding:12px 16px;font-size:.72rem}
       .user-header .hide-mobile{display:none!important}
-
-      /* Stat mini cards slightly smaller */
       .stat-mini{padding:12px 6px;border-radius:10px}
       .stat-mini .num{font-size:1.3rem}
       .stat-mini .lbl{font-size:.65rem}
-
-      /* Tabs scroll nicely */
       .tab-btn{padding:12px 16px;font-size:.82rem;min-height:46px}
-
-      /* Section cards tighter padding */
       .section-card{padding:16px;border-radius:14px}
       .section-title{font-size:.95rem;margin-bottom:14px}
-
-      /* Published result rows stack */
       .pub-row{flex-direction:column!important;align-items:stretch!important;gap:10px!important}
       .pub-row .pub-teams{flex-direction:row!important;justify-content:space-between!important}
       .pub-row .pub-scores{flex-direction:row!important;justify-content:center!important;gap:12px!important}
       .pub-row .pub-badge{align-self:flex-end!important}
-
-      /* Score inputs */
       .pi{width:52px;height:46px;font-size:1.1rem}
-
-      /* Toast bottom center */
       .toast{bottom:20px;font-size:.85rem;padding:12px 20px;border-radius:12px}
-
-      /* Action buttons full width on small screens */
       .action-bar{flex-direction:column!important;align-items:stretch!important}
       .action-bar .btn-primary,.action-bar .btn-ghost{width:100%;justify-content:center}
     }
@@ -314,15 +257,13 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
   
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-      .toggle-hidden-items{transition:none!important}
     }
 `;
   document.head.appendChild(s);
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   TOAST COMPONENT
+   TOAST
    ═══════════════════════════════════════════════════════════════ */
 function Toast({ message, type, onDone }) {
   useEffect(() => { const t = setTimeout(onDone, 3500); return () => clearTimeout(t); }, [onDone]);
@@ -339,7 +280,7 @@ function Toast({ message, type, onDone }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   RESULT BADGE — BOLD, CLEAR
+   RESULT BADGE
    ═══════════════════════════════════════════════════════════════ */
 function ResultBadge({ pick }) {
   if (!pick.adminPick || pick.status !== 'finished') return null;
@@ -394,7 +335,6 @@ export default function Admin() {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [tick, setTick] = useState(0);
 
-  const [preds, setPreds] = useState([]);
   const [flashIds, setFlashIds] = useState([]);
 
   const [zokaSel, setZokaSel] = useState({});
@@ -402,11 +342,7 @@ export default function Admin() {
   const [savedFlash, setSavedFlash] = useState(false);
 
   const [syncMsg, setSyncMsg] = useState('');
-
-  const [publishState, setPublishState] = useState('checking');
   const [publishing, setPublishing] = useState(false);
-  const [publishedAt, setPublishedAt] = useState(null);
-  const [publishedPicks, setPublishedPicks] = useState(null);
 
   const [toast, setToast] = useState(null);
 
@@ -428,8 +364,20 @@ export default function Admin() {
   // Resolution tracking
   const [resolvedMatches, setResolvedMatches] = useState(new Set());
 
-  const predsRef = useRef([]);
+  /* ═══════════════════════════════════════════════════════════
+     DATA — From useMatchData.js (single source of truth for reads)
+     ═══════════════════════════════════════════════════════════ */
+  useUniversalResolver();
+  const { preds } = useActivePredictions(date);
+  const publishedPicks = useZokaPicks(date);
+
+  // Keep a ref for the auto-resolver to use synchronously
+  const predsRef = useRef(preds);
   useEffect(() => { predsRef.current = preds; }, [preds]);
+
+  // Derive publish state from hook data
+  const publishState = publishedPicks ? 'published' : 'draft';
+  const publishedAt = publishedPicks?.publishedAt || null;
 
   useInterval(() => setTick(t => t + 1), 10000);
 
@@ -445,7 +393,7 @@ export default function Admin() {
   }, [currentUser, userProfile]);
 
   /* ═══════════════════════════════════════════════════════════
-     LOAD FIXTURES
+     LOAD FIXTURES (external API)
   ═══════════════════════════════════════════════════════════ */
   const loadFx = useCallback(async (d) => {
     setFxLoad(true); setFxErr(null); setDataSource('loading');
@@ -464,7 +412,9 @@ export default function Admin() {
   }, []);
 
   /* ═══════════════════════════════════════════════════════════
-     REAL-TIME FIXTURES + AUTO-RESOLVER
+     REAL-TIME FIXTURES + AUTO-RESOLVER (external API + writes)
+     Writes to active_predictions & zoka_picks, then resolves.
+     useUniversalResolver provides a safety net for when Admin isn't open.
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!isAdmin) return;
@@ -537,37 +487,7 @@ export default function Admin() {
   useEffect(() => { resolvedMatches.current = new Set(); setResolvedMatches(new Set()); }, [date]);
 
   /* ═══════════════════════════════════════════════════════════
-     LISTEN TO ACTIVE PREDICTIONS
-  ═══════════════════════════════════════════════════════════ */
-  useEffect(() => {
-    if (!isAdmin || !db) return;
-    const q = query(collection(db, 'active_predictions'), where('matchDate', '==', date));
-    const unsub = onSnapshot(q, (snap) => {
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      setPreds(list);
-    }, err => console.error('[Admin] Preds snapshot:', err));
-    return () => unsub();
-  }, [isAdmin, date]);
-
-  /* ═══════════════════════════════════════════════════════════
-     LISTEN TO PUBLISH STATE
-  ═══════════════════════════════════════════════════════════ */
-  useEffect(() => {
-    if (!isAdmin || !db) return;
-    const unsub = onSnapshot(doc(db, 'zoka_picks', date), (snap) => {
-      if (snap.exists()) {
-        setPublishState('published'); setPublishedAt(snap.data().publishedAt); setPublishedPicks(snap.data());
-        const sel = {};
-        (snap.data().matches || []).forEach(m => { if (m.adminPick) sel[String(m.matchId)] = { h: String(m.adminPick.home), a: String(m.adminPick.away) }; });
-        setZokaSel(prev => Object.keys(prev).length === 0 ? sel : prev);
-      } else { setPublishState('draft'); setPublishedAt(null); setPublishedPicks(null); }
-    }, () => { setPublishState('draft'); setPublishedPicks(null); });
-    return () => unsub();
-  }, [isAdmin, date]);
-
-  /* ═══════════════════════════════════════════════════════════
-     LISTEN TO STAFF
+     LISTEN TO STAFF (local — not in useMatchData)
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!isAdmin || !db) return;
@@ -811,7 +731,7 @@ export default function Admin() {
   }
 
   /* ═══════════════════════════════════════════════════════════
-     RENDER: MATCH ROW FOR ZOKA/MATCHES TABS
+     RENDER: MATCH ROW
   ═══════════════════════════════════════════════════════════ */
   const renderMatchRow = (match, idx, mode) => {
     const mid = String(match.id);
@@ -826,140 +746,63 @@ export default function Admin() {
     const isFlash = flashIds.includes(pred?.id);
 
     return (
-      <div
-        key={mid}
-        className={`card-in ${sel ? 'zoka-row' : ''} ${isLive ? 'match-live-border' : ''} ${isFlash ? 'fl' : ''}`}
-        style={{
-          display:'flex', flexDirection:'column', gap:12,
-          padding:'16px', borderRadius:14,
+      <div key={mid} className={`card-in ${sel ? 'zoka-row' : ''} ${isLive ? 'match-live-border' : ''} ${isFlash ? 'fl' : ''}`}
+        style={{ display:'flex', flexDirection:'column', gap:12, padding:'16px', borderRadius:14,
           background: isFlash ? 'rgba(0,230,118,.06)' : 'var(--bg-surface)',
           border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : sel ? 'rgba(245,197,66,.25)' : 'var(--border)'}`,
-          marginBottom:10,
-          animationDelay: `${idx * 30}ms`,
-        }}
-      >
-        {/* Top row: league + status + actions */}
+          marginBottom:10, animationDelay: `${idx * 30}ms` }}>
         <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
           <div style={{ display:'flex', alignItems:'center', gap:8, minWidth:0, flex:1 }}>
             {match.league?.emblem && <img src={match.league.emblem} alt="" style={{ width:20, height:20, borderRadius:4, objectFit:'contain', flexShrink:0 }} />}
-            <span style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {match.league?.name || 'Unknown'}
-            </span>
+            <span style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{match.league?.name || 'Unknown'}</span>
           </div>
           <div style={{ display:'flex', alignItems:'center', gap:6, flexShrink:0 }}>
             {isLive && <span className="live-dot" />}
-            <span style={{
-              fontSize:'.78rem', fontWeight:800, color:st.c,
-              background:st.b, padding:'4px 12px', borderRadius:8,
-              letterSpacing:'.04em',
-            }}>
+            <span style={{ fontSize:'.78rem', fontWeight:800, color:st.c, background:st.b, padding:'4px 12px', borderRadius:8, letterSpacing:'.04em' }}>
               {isLive && match.minute != null ? `${match.minute}'` : st.l}
             </span>
           </div>
         </div>
-
-        {/* Teams + Score */}
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-          {/* Home */}
           <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
             {match.homeLogo ? <img src={match.homeLogo} alt="" style={{ width:28, height:28, borderRadius:6, objectFit:'contain', flexShrink:0 }} /> : <div style={{ width:28, height:28, borderRadius:6, background:'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'.7rem' }}>⚽</div>}
-            <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-              {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
-            </span>
+            <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}</span>
           </div>
-
-          {/* Score box */}
-          <div style={{
-            display:'flex', alignItems:'center', gap:6,
-            background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)',
-            padding:'8px 16px', borderRadius:10,
-            border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}`,
-            minWidth:80, justifyContent:'center',
-          }}>
-            <span style={{ fontSize:'1.2rem', fontWeight:900, fontFamily:'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric:'tabular-nums' }}>
-              {match.homeScore ?? '-'}
-            </span>
+          <div style={{ display:'flex', alignItems:'center', gap:6, background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)', padding:'8px 16px', borderRadius:10, border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}`, minWidth:80, justifyContent:'center' }}>
+            <span style={{ fontSize:'1.2rem', fontWeight:900, fontFamily:'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric:'tabular-nums' }}>{match.homeScore ?? '-'}</span>
             <span style={{ fontSize:'.9rem', fontWeight:600, color:'var(--text-muted)' }}>–</span>
-            <span style={{ fontSize:'1.2rem', fontWeight:900, fontFamily:'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric:'tabular-nums' }}>
-              {match.awayScore ?? '-'}
-            </span>
+            <span style={{ fontSize:'1.2rem', fontWeight:900, fontFamily:'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric:'tabular-nums' }}>{match.awayScore ?? '-'}</span>
           </div>
-
-          {/* Away */}
           <div style={{ flex:1, display:'flex', alignItems:'center', gap:10, minWidth:0, justifyContent:'flex-end' }}>
-            <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>
-              {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
-            </span>
+            <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}</span>
             {match.awayLogo ? <img src={match.awayLogo} alt="" style={{ width:28, height:28, borderRadius:6, objectFit:'contain', flexShrink:0 }} /> : <div style={{ width:28, height:28, borderRadius:6, background:'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontSize:'.7rem' }}>⚽</div>}
           </div>
         </div>
-
-        {/* Kickoff time */}
         {!isLive && !isFin && match.kickoff && (
-          <div style={{ fontSize:'.82rem', fontWeight:600, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:6 }}>
-            <Clock size={13} /> {match.kickoff}
-          </div>
+          <div style={{ fontSize:'.82rem', fontWeight:600, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:6 }}><Clock size={13} /> {match.kickoff}</div>
         )}
-
-        {/* Zoka pick inputs */}
         {isZoka && sel && (
           <div style={{ display:'flex', alignItems:'center', gap:10, paddingTop:8, borderTop:'1px solid rgba(245,197,66,.12)' }}>
-            <span style={{ fontSize:'.82rem', fontWeight:800, color:'var(--gold)', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}>
-              <Star size={14} fill="var(--gold)" /> Your Pick:
-            </span>
+            <span style={{ fontSize:'.82rem', fontWeight:800, color:'var(--gold)', whiteSpace:'nowrap', display:'flex', alignItems:'center', gap:5 }}><Star size={14} fill="var(--gold)" /> Your Pick:</span>
             <div style={{ display:'flex', alignItems:'center', gap:8 }}>
-              <input
-                type="text" inputMode="numeric" maxLength={2}
-                className={`pi ${sel.h !== '' ? 'has-val' : ''}`}
-                value={sel.h} onChange={e => updateZokaScore(mid, 'h', e.target.value)}
-                placeholder="H"
-              />
+              <input type="text" inputMode="numeric" maxLength={2} className={`pi ${sel.h !== '' ? 'has-val' : ''}`} value={sel.h} onChange={e => updateZokaScore(mid, 'h', e.target.value)} placeholder="H" />
               <span style={{ fontSize:'1rem', fontWeight:700, color:'var(--text-muted)' }}>–</span>
-              <input
-                type="text" inputMode="numeric" maxLength={2}
-                className={`pi ${sel.a !== '' ? 'has-val' : ''}`}
-                value={sel.a} onChange={e => updateZokaScore(mid, 'a', e.target.value)}
-                placeholder="A"
-              />
+              <input type="text" inputMode="numeric" maxLength={2} className={`pi ${sel.a !== '' ? 'has-val' : ''}`} value={sel.a} onChange={e => updateZokaScore(mid, 'a', e.target.value)} placeholder="A" />
             </div>
           </div>
         )}
-
-        {/* Action buttons row */}
         <div style={{ display:'flex', alignItems:'center', gap:8, paddingTop:8, borderTop:'1px solid var(--border)' }}>
           {isZoka && (
-            <button
-              onClick={() => toggleZokaPick(match)}
-              className="btn-sm zb"
-              style={{
-                background: sel ? 'rgba(245,197,66,.15)' : 'rgba(245,197,66,.06)',
-                color: 'var(--gold)', border: `1px solid ${sel ? 'rgba(245,197,66,.3)' : 'rgba(245,197,66,.15)'}`,
-                flex:1,
-              }}
-            >
-              <Star size={15} fill={sel ? 'var(--gold)' : 'none'} />
-              {sel ? 'Selected' : 'Zoka Pick'}
+            <button onClick={() => toggleZokaPick(match)} className="btn-sm zb" style={{ background: sel ? 'rgba(245,197,66,.15)' : 'rgba(245,197,66,.06)', color: 'var(--gold)', border: `1px solid ${sel ? 'rgba(245,197,66,.3)' : 'rgba(245,197,66,.15)'}`, flex:1 }}>
+              <Star size={15} fill={sel ? 'var(--gold)' : 'none'} /> {sel ? 'Selected' : 'Zoka Pick'}
             </button>
           )}
           {isMatch && (
             <>
-              <button
-                onClick={() => handleAdd(match)}
-                disabled={isPred || isFull}
-                className="btn-sm zb"
-                style={{
-                  background: isPred ? 'rgba(0,230,118,.1)' : 'rgba(0,230,118,.06)',
-                  color: 'var(--accent)', border: `1px solid ${isPred ? 'rgba(0,230,118,.25)' : 'rgba(0,230,118,.15)'}`,
-                  flex:1,
-                }}
-              >
+              <button onClick={() => handleAdd(match)} disabled={isPred || isFull} className="btn-sm zb" style={{ background: isPred ? 'rgba(0,230,118,.1)' : 'rgba(0,230,118,.06)', color: 'var(--accent)', border: `1px solid ${isPred ? 'rgba(0,230,118,.25)' : 'rgba(0,230,118,.15)'}`, flex:1 }}>
                 {isPred ? <><CheckCircle2 size={15} /> Featured</> : <><Plus size={15} /> Feature</>}
               </button>
-              {isPred && (
-                <button onClick={() => removePred(pred)} className="btn-danger" style={{ flexShrink:0 }}>
-                  <Trash2 size={14} />
-                </button>
-              )}
+              {isPred && <button onClick={() => removePred(pred)} className="btn-danger" style={{ flexShrink:0 }}><Trash2 size={14} /></button>}
             </>
           )}
         </div>
@@ -968,86 +811,20 @@ export default function Admin() {
   };
 
   /* ═══════════════════════════════════════════════════════════
-     RENDER: PUBLISHED RESULT ROW (MOBILE CARD)
+     RENDER: PUBLISHED RESULT ROW
   ═══════════════════════════════════════════════════════════ */
   const renderPubResult = (pick, i) => (
-    <div key={i} className="pub-row card-in" style={{
-      display:'flex', flexDirection:'column', gap:10,
-      padding:'14px 16px', borderRadius:12,
-      background:'var(--bg-surface)', border:'1px solid var(--border)', marginBottom:8,
-      animationDelay: `${i * 40}ms`,
-    }}>
-      <div className="pub-teams" style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
-        <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
-          {pick.homeLogo && <img src={pick.homeLogo} alt="" style={{ width:24, height:24, borderRadius:5, objectFit:'contain', flexShrink:0 }} />}
-          <span style={{ fontSize:'.9rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pick.homeTeam?.name}</span>
-        </div>
-        <span style={{ fontSize:'.78rem', fontWeight:800, color:'var(--text-muted)' }}>vs</span>
-        <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0, justifyContent:'flex-end' }}>
-          <span style={{ fontSize:'.9rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{pick.awayTeam?.name}</span>
-          {pick.awayLogo && <img src={pick.awayLogo} alt="" style={{ width:24, height:24, borderRadius:5, objectFit:'contain', flexShrink:0 }} />}
-        </div>
+    <div key={i} className="pub-row card-in" style={{ display:'flex', alignItems:'center', gap:14, padding:'14px 16px', borderRadius:12, background:'var(--bg-surface)', border:'1px solid var(--border)', marginBottom:8, animationDelay:`${i*25}ms` }}>
+      <div className="pub-teams" style={{ flex:1, display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
+        {pick.homeLogo && <img src={pick.homeLogo} alt="" style={{ width:22, height:22, borderRadius:5, objectFit:'contain', flexShrink:0 }} />}
+        <span style={{ fontSize:'.85rem', fontWeight:700, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pick.homeTeam?.shortName || pick.homeTeam?.name}</span>
       </div>
-      <div className="pub-scores" style={{ display:'flex', alignItems:'center', justifyContent:'center', gap:16 }}>
-        <div style={{ textAlign:'center' }}>
-          <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--gold)', marginBottom:2 }}>PICK</div>
-          <div style={{ fontSize:'1.15rem', fontWeight:900, fontFamily:'var(--font-display)', color:'var(--gold)', background:'rgba(245,197,66,.08)', padding:'4px 14px', borderRadius:8, border:'1px solid rgba(245,197,66,.15)' }}>
-            {pick.adminPick?.home ?? '?'} – {pick.adminPick?.away ?? '?'}
-          </div>
-        </div>
-        <div style={{ textAlign:'center' }}>
-          <div style={{ fontSize:'.72rem', fontWeight:700, color:'var(--text-muted)', marginBottom:2 }}>ACTUAL</div>
-          <div style={{ fontSize:'1.15rem', fontWeight:900, fontFamily:'var(--font-display)', color:'var(--text-primary)', background:'rgba(255,255,255,.03)', padding:'4px 14px', borderRadius:8, border:'1px solid var(--border)' }}>
-            {pick.homeScore != null ? `${pick.homeScore} – ${pick.awayScore}` : '– vs –'}
-          </div>
-        </div>
+      <div className="pub-scores" style={{ display:'flex', alignItems:'center', gap:8, flexShrink:0 }}>
+        <span style={{ fontSize:'.95rem', fontWeight:900, fontFamily:'var(--font-display)', color:'var(--gold)', fontVariantNumeric:'tabular-nums' }}>{pick.adminPick?.home ?? '?'}-{pick.adminPick?.away ?? '?'}</span>
+        <span style={{ fontSize:'.8rem', color:'var(--text-muted)' }}>→</span>
+        <span style={{ fontSize:'.95rem', fontWeight:900, fontFamily:'var(--font-display)', color: pick.status === 'finished' ? 'var(--accent)' : 'var(--text-muted)', fontVariantNumeric:'tabular-nums' }}>{pick.homeScore ?? '?'}-{pick.awayScore ?? '?'}</span>
       </div>
-      <div className="pub-badge" style={{ alignSelf:'flex-end' }}>
-        <ResultBadge pick={pick} />
-      </div>
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════
-     RENDER: USER ROW (MOBILE CARD)
-  ═══════════════════════════════════════════════════════════ */
-  const renderUserRow = (u, i) => (
-    <div key={u.id} className="user-row card-in" style={{ animationDelay:`${i * 30}ms` }}>
-      {/* Name + Email */}
-      <div style={{ minWidth:0 }}>
-        <div style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
-          {u.displayName || 'Unknown'}
-        </div>
-        <div className="hide-mobile" style={{ fontSize:'.82rem', fontWeight:600, color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', marginTop:2 }}>
-          {u.email || '—'}
-        </div>
-      </div>
-      {/* Role */}
-      <div>
-        <span className="role-badge" style={{
-          background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(0,230,118,.08)',
-          color: u.role === 'admin' ? '#ef4444' : 'var(--accent)',
-          border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'rgba(0,230,118,.15)'}`,
-        }}>
-          {u.role === 'admin' ? <><Crown size={12} /> Admin</> : <><User size={12} /> User</>}
-        </span>
-      </div>
-      {/* Joined */}
-      <div className="hide-mobile" style={{ fontSize:'.85rem', fontWeight:600, color:'var(--text-muted)' }}>
-        {formatTimeAgo(u.createdAt)}
-      </div>
-      {/* Actions */}
-      <div style={{ display:'flex', gap:6, justifyContent:'flex-end' }}>
-        {u.role !== 'admin' ? (
-          <button onClick={() => updateUserRole(u.id, 'admin')} className="btn-sm zb" style={{ background:'rgba(239,68,68,.08)', color:'#ef4444', border:'1px solid rgba(239,68,68,.15)' }}>
-            <Shield size={14} /> Make Admin
-          </button>
-        ) : (
-          <button onClick={() => updateUserRole(u.id, 'user')} className="btn-sm zb" style={{ background:'rgba(0,230,118,.08)', color:'var(--accent)', border:'1px solid rgba(0,230,118,.15)' }}>
-            <User size={14} /> Remove Admin
-          </button>
-        )}
-      </div>
+      <div className="pub-badge" style={{ flexShrink:0 }}><ResultBadge pick={pick} /></div>
     </div>
   );
 
@@ -1056,468 +833,266 @@ export default function Admin() {
   ═══════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight:'100vh',overflow:'hidden', background:'var(--bg-deep)' }}>
-      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
-
-      <div style={{ maxWidth:960, margin:'0 auto', padding:'16px 16px 120px' }}>
-
-        {/* ═══════════════════════════════════════════════════
-            HEADER
-        ═══════════════════════════════════════════════════ */}
-        <div className="ae" style={{ marginBottom:20 }}>
-          {/* Title row */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:14 }}>
-            <ShieldAlert size={22} style={{ color:'var(--gold)' }} />
-            <h1 style={{ margin:0, fontSize:'1.3rem', fontWeight:900, color:'var(--text-primary)', letterSpacing:'.01em' }}>Admin Panel</h1>
+      {/* Header */}
+      <div style={{ position:'sticky',top:0,zIndex:100,background:'rgba(10,10,10,.92)',backdropFilter:'blur(20px)',borderBottom:'1px solid var(--border)' }}>
+        <div style={{ maxWidth:920,margin:'0 auto',padding:'14px 20px',display:'flex',alignItems:'center',justifyContent:'space-between' }}>
+          <div style={{ display:'flex',alignItems:'center',gap:10,cursor:'pointer' }} onClick={() => navigate('/')}>
+            <div style={{ width:30,height:30,borderRadius:9,background:'linear-gradient(145deg,#f5c542,#f59e0b)',display:'flex',alignItems:'center',justifyContent:'center',fontWeight:900,fontSize:'.76rem',color:'var(--bg-deep)',fontFamily:'var(--font-display)' }}>Z</div>
+            <span style={{ fontSize:'.9rem',fontWeight:800,color:'var(--text-primary)' }}>Admin<span style={{ color:'var(--gold)' }}>.zokascore</span></span>
           </div>
-
-          {/* Sync message */}
-          {syncMsg && (
-            <div className="si" style={{
-              fontSize:'.85rem', fontWeight:700, color:'var(--accent)',
-              background:'rgba(0,230,118,.08)', padding:'12px 18px', borderRadius:12,
-              border:'1px solid rgba(0,230,118,.15)', marginBottom:12,
-              display:'flex', alignItems:'center', gap:8,
-            }}>
-              <CheckCircle2 size={16} /> {syncMsg}
-            </div>
-          )}
-
-          {/* Controls row */}
-          <div style={{ display:'flex', alignItems:'center', gap:10, flexWrap:'wrap' }}>
-            {/* Day toggle */}
-            <div style={{ display:'flex', gap:4, background:'var(--bg-card)', border:'1px solid var(--border)', borderRadius:12, padding:4, flex:1, minWidth:180 }}>
-              {['today', 'tomorrow'].map(d => (
-                <button key={d} className="zb" onClick={() => setDay(d)} style={{
-                  flex:1, padding:'10px 16px', borderRadius:10, fontSize:'.88rem', fontWeight:800,
-                  border:'none', background: day === d ? 'rgba(245,197,66,.12)' : 'transparent',
-                  color: day === d ? 'var(--gold)' : 'var(--text-muted)', textTransform:'capitalize',
-                }}>
-                  {d}
-                </button>
-              ))}
-            </div>
-            {/* Refresh */}
-            <button onClick={handleRefresh} disabled={refreshing} className="btn-ghost" style={{ flexShrink:0 }}>
-              <RefreshCw size={16} style={refreshing ? { animation:'asp 1s linear infinite' } : {}} />
-              {refreshing ? '...' : 'Refresh'}
+          <div style={{ display:'flex',alignItems:'center',gap:8 }}>
+            <button onClick={() => setDay(d => d === 'today' ? 'tomorrow' : 'today')} className="zb" style={{ padding:'8px 16px',borderRadius:10,background: day === 'tomorrow' ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.04)',border: day === 'tomorrow' ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)',color: day === 'tomorrow' ? 'var(--gold)' : 'var(--text-muted)',fontWeight:700,fontSize:'.82rem',display:'flex',alignItems:'center',gap:6 }}>
+              <CalendarDays size={14} /> {day === 'today' ? 'Today' : 'Tomorrow'}
             </button>
+            <button onClick={() => navigate('/')} className="zb" style={{ padding:'8px 14px',borderRadius:10,background:'rgba(255,255,255,.04)',border:'1px solid var(--border)',color:'var(--text-muted)',fontSize:'.82rem' }}>Exit</button>
           </div>
         </div>
+      </div>
 
-        {/* ═══════════════════════════════════════════════════
-            STATS ROW
-        ═══════════════════════════════════════════════════ */}
-        <div className="ae" style={{ display:'grid', gridTemplateColumns:'repeat(5, 1fr)', gap:8, marginBottom:20 }}>
-          {[
-            { label:'Fixtures', value:fx.length, color:'var(--text-primary)' },
-            { label:'Featured', value:preds.length, color:'var(--gold)' },
-            { label:'Finished', value:finCnt, color:'var(--accent)' },
-            { label:'Live', value:liveCount, color:'#ef4444' },
-            { label:'Resolved', value:resolvedMatches.size, color:'#a855f7' },
-          ].map((s, i) => (
-            <div key={s.label} className="stat-mini count-up" style={{ animationDelay:`${i * 50}ms` }}>
-              <span className="num" style={{ color:s.color }}>{s.value}</span>
-              <span className="lbl">{s.label}</span>
-            </div>
-          ))}
+      <div style={{ maxWidth:920,margin:'0 auto',padding:'20px 20px 100px' }}>
+        {/* Stats row */}
+        <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:10,marginBottom:20 }}>
+          <div className="stat-mini ae" style={{ animationDelay:'0ms' }}><div className="num" style={{ color: dataSource === 'backend' ? 'var(--accent)' : 'var(--text-muted)' }}>{fx.length}</div><div className="lbl">Fixtures</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'60ms' }}><div className="num" style={{ color: preds.length > 0 ? '#60a5fa' : 'var(--text-muted)' }}>{preds.length}</div><div className="lbl">Featured</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'120ms' }}><div className="num" style={{ color: liveCount > 0 ? '#ef4444' : 'var(--text-muted)' }}>{liveCount}</div><div className="lbl">Live</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'180ms' }}><div className="num" style={{ color: finCnt > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>{finCnt}</div><div className="lbl">Finished</div></div>
         </div>
 
-        {/* ═══════════════════════════════════════════════════
-            TABS
-        ═══════════════════════════════════════════════════ */}
-        <div style={{ display:'flex', borderBottom:'2px solid var(--border)', marginBottom:20, overflowX:'auto' }} className="sh">
+        {/* Sync message */}
+        {syncMsg && (
+          <div className="ae" style={{ padding:'12px 18px',marginBottom:16,borderRadius:12,background:'rgba(0,230,118,.06)',border:'1px solid rgba(0,230,118,.15)',fontSize:'.84rem',fontWeight:700,color:'var(--accent)',textAlign:'center' }}>{syncMsg}</div>
+        )}
+
+        {/* Tabs */}
+        <div className="sh" style={{ display:'flex',gap:4,borderBottom:'1px solid var(--border)',marginBottom:24,overflowX:'auto' }}>
           {TABS.map(t => (
-            <button key={t.key} className={`tab-btn ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-              <t.icon size={16} /> {t.label}
+            <button key={t.key} onClick={() => setTab(t.key)} className={`tab-btn ${tab === t.key ? 'active' : ''}`}>
+              <t.Icon size={15} /> {t.label}
             </button>
           ))}
         </div>
 
-        {/* ═══════════════════════════════════════════════════
-            TAB: ZOKA PICKS
-        ═══════════════════════════════════════════════════ */}
+        {/* ═══ ZOKA PICKS TAB ═══ */}
         {tab === 'zoka' && (
           <div className="ae">
-            {/* Zoka Stats */}
-            <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, marginBottom:16 }}>
-              {[
-                { label:'Selected', value:zokaCount, color:'var(--gold)', max:`/${MAX_ZOKA}` },
-                { label:'Scored', value:zokaScored, color: zokaScored === zokaCount && zokaCount > 0 ? 'var(--accent)' : '#f59e0b' },
-                { label:'Status', value:publishState === 'published' ? 'LIVE' : '—', color:publishState === 'published' ? 'var(--accent)' : 'var(--text-muted)' },
-              ].map((s, i) => (
-                <div key={s.label} className="stat-mini count-up" style={{ animationDelay:`${i * 60}ms` }}>
-                  <span className="num" style={{ color:s.color, animationDelay:`${i * 60}ms` }}>{s.value}{s.max || ''}</span>
-                  <span className="lbl">{s.label}</span>
-                </div>
+            {/* League filter */}
+            <div className="sh" style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }}>
+              <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)',border: lg === 'all' ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>All</button>
+              {leagues.map(l => (
+                <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)',border: lg === l.id ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>
+                  {l.logo && <img src={l.logo} alt="" style={{ width:14,height:14,borderRadius:3,objectFit:'contain' }} />}
+                  {l.name} ({l.n})
+                </button>
               ))}
             </div>
 
-            {/* Published results mini stats */}
-            {publishState === 'published' && publishedPicks?.matches && (
-              <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:6, marginBottom:16 }}>
-                {[
-                  { label:'Exact', value:publishedResults.exact, color:'var(--accent)' },
-                  { label:'Result', value:publishedResults.result, color:'var(--gold)' },
-                  { label:'Miss', value:publishedResults.miss, color:'#ef4444' },
-                  { label:'Pending', value:publishedResults.pending, color:'var(--text-muted)' },
-                ].map((s, i) => (
-                  <div key={s.label} style={{
-                    textAlign:'center', padding:'10px 6px', borderRadius:10,
-                    background:'var(--bg-surface)', border:'1px solid var(--border)',
-                  }}>
-                    <div style={{ fontSize:'1.2rem', fontWeight:900, color:s.color, fontFamily:'var(--font-display)' }}>{s.value}</div>
-                    <div style={{ fontSize:'.68rem', fontWeight:700, color:'var(--text-muted)', textTransform:'uppercase', letterSpacing:'.04em', marginTop:2 }}>{s.label}</div>
-                  </div>
-                ))}
+            {fxLoad ? (
+              <div style={{ display:'grid',gap:10 }}>
+                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk" style={{ height:120,borderRadius:14 }} />)}
               </div>
-            )}
-
-            {/* Action Bar */}
-            <div className={`section-card action-bar ${savedFlash ? 'save-flash' : ''}`} style={{
-              display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:12,
-              borderColor:'rgba(245,197,66,.15)', background:'linear-gradient(135deg, rgba(245,197,66,.05), transparent)',
-            }}>
-              <div style={{ display:'flex', alignItems:'center', gap:10 }}>
-                <Sparkles size={20} style={{ color:'var(--gold)' }} />
-                <div>
-                  <span style={{ fontWeight:900, fontSize:'.95rem', color:'var(--gold)' }}>Zoka Picks — {date}</span>
-                  {publishedAt && <span style={{ display:'block', fontSize:'.78rem', fontWeight:600, color:'var(--text-muted)', marginTop:2 }}>Published {formatTimeAgo(publishedAt)}</span>}
-                </div>
-              </div>
-              <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
-                <button onClick={saveZokaPicks} disabled={zokaCount === 0 || savingZoka} className="btn-primary" style={{ background:'linear-gradient(135deg, #00e676, #00c853)', color:'#000', boxShadow:'0 4px 20px rgba(0,230,118,.25)' }}>
-                  {savingZoka ? <Loader size={16} style={{ animation:'asp 1s linear infinite' }} /> : <Save size={16} />}
-                  {savingZoka ? 'Saving...' : 'Save'}
-                </button>
-                {publishState === 'published' ? (
-                  <button onClick={unpublishZokaPicks} disabled={publishing} className="btn-ghost" style={{ borderColor:'rgba(239,68,68,.2)', color:'#ef4444' }}>
-                    <EyeOff size={15} /> {publishing ? '...' : 'Unpublish'}
-                  </button>
-                ) : (
-                  <button onClick={publishZokaPicks} disabled={!zokaReady || publishing} className="btn-primary" style={{ background:'linear-gradient(135deg, #f59e0b, #d97706)', color:'#000', boxShadow:'0 4px 20px rgba(245,197,66,.25)' }}>
-                    {publishing ? <Loader size={16} style={{ animation:'asp 1s linear infinite' }} /> : <Rocket size={16} />}
-                    {publishing ? 'Publishing...' : 'Publish Live'}
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Missing scores warning */}
-            {zokaScored < zokaCount && zokaCount > 0 && (
-              <div style={{
-                padding:'14px 18px', borderRadius:12, marginBottom:16,
-                background:'rgba(245,158,11,.08)', border:'1px solid rgba(245,158,11,.2)',
-                display:'flex', alignItems:'center', gap:10, fontSize:'.9rem', fontWeight:700, color:'#f59e0b',
-              }}>
-                <AlertTriangle size={18} /> {zokaCount - zokaScored} score{zokaCount - zokaScored !== 1 ? 's' : ''} missing — enter all to publish
-              </div>
-            )}
-
-            {/* Published Results */}
-            {publishState === 'published' && publishedPicks?.matches && (
-              <div className="section-card">
-                <h3 className="section-title"><Trophy size={18} style={{ color:'var(--gold)' }} /> Published Results</h3>
-                {publishedPicks.matches.map((pick, i) => renderPubResult(pick, i))}
-              </div>
-            )}
-
-            {/* League filter */}
-            {leagues.length > 1 && (
-              <div className="ae sh" style={{ display:'flex', gap:6, marginBottom:14, overflowX:'auto', paddingBottom:4 }}>
-                <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.04)', color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)', border: lg === 'all' ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>
-                  All ({fx.length})
-                </button>
-                {leagues.map(l => (
-                  <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.04)', color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)', border: lg === l.id ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>
-                    {l.logo && <img src={l.logo} alt="" style={{ width:16, height:16, borderRadius:3, objectFit:'contain' }} />}
-                    {l.name} ({l.n})
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Match list */}
-            {shown.length === 0 ? (
-              <div className="empty-state">
-                <RadioTower size={40} style={{ color:'var(--text-muted)', marginBottom:14, opacity:.4 }} />
-                <div style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-muted)', marginBottom:6 }}>No matches found</div>
-                <div style={{ fontSize:'.88rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>{fxErr || 'Try refreshing or changing the date'}</div>
-              </div>
+            ) : shown.length === 0 ? (
+              <div className="empty-state"><RadioTower size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No fixtures</div><div style={{ fontSize:'.85rem',color:'var(--text-muted)' }}>{fxErr || 'No matches for this date'}</div></div>
             ) : (
               shown.map((m, i) => renderMatchRow(m, i, 'zoka'))
+            )}
+
+            {/* Save / Publish bar */}
+            {zokaCount > 0 && (
+              <div className="action-bar" style={{ display:'flex',gap:10,marginTop:20,padding:'16px',borderRadius:14,background:'var(--bg-card)',border:'1px solid var(--border)' }}>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:'.9rem',fontWeight:800,color:'var(--text-primary)' }}>{zokaCount} pick{zokaCount > 1 ? 's' : ''} selected</div>
+                  <div style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600 }}>{zokaScored}/{zokaCount} scored {zokaReady ? '✓' : ''}</div>
+                </div>
+                <button onClick={saveZokaPicks} disabled={savingZoka || zokaCount === 0} className="btn-ghost" style={{ background: savedFlash ? 'rgba(0,230,118,.12)' : undefined }}>
+                  <Save size={15} /> {savingZoka ? 'Saving...' : 'Save Draft'}
+                </button>
+                <button onClick={publishZokaPicks} disabled={publishing || !zokaReady} className="btn-primary" style={{ background:'linear-gradient(135deg,#f5c542,#f59e0b)',color:'#000' }}>
+                  <Send size={15} /> {publishing ? 'Publishing...' : 'PUBLISH'}
+                </button>
+              </div>
+            )}
+
+            {/* Published results */}
+            {publishState === 'published' && publishedPicks?.matches && (
+              <div className="section-card ae" style={{ animationDelay:'.1s' }}>
+                <div className="section-title"><Trophy size={18} style={{ color:'var(--gold)' }} /> Published Results</div>
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,marginBottom:20 }}>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--accent)' }}>{publishedResults.exact}</div><div className="lbl">Exact</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--gold)' }}>{publishedResults.result}</div><div className="lbl">Result</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'#ef4444' }}>{publishedResults.miss}</div><div className="lbl">Miss</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--text-muted)' }}>{publishedResults.pending}</div><div className="lbl">Pending</div></div>
+                </div>
+                {publishedPicks.matches.map((pick, i) => renderPubResult(pick, i))}
+                <div style={{ marginTop:16,textAlign:'center' }}>
+                  <span style={{ fontSize:'.72rem',color:'var(--text-muted)',fontWeight:600 }}>Published {formatTimeAgo(publishedAt)}</span>
+                </div>
+                <div style={{ textAlign:'center',marginTop:12 }}>
+                  <button onClick={unpublishZokaPicks} disabled={publishing} className="btn-danger"><Trash2 size={14} /> Unpublish</button>
+                </div>
+              </div>
             )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════
-            TAB: MATCHES
-        ═══════════════════════════════════════════════════ */}
+        {/* ═══ MATCHES TAB ═══ */}
         {tab === 'matches' && (
           <div className="ae">
-            {/* Featured count */}
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-              <h3 className="section-title" style={{ margin:0 }}>
-                <RadioTower size={18} style={{ color:'var(--accent)' }} /> All Matches
-                <span style={{ fontSize:'.82rem', fontWeight:700, color:'var(--text-muted)', marginLeft:8 }}>{fx.length} total</span>
-              </h3>
-              <span style={{ fontSize:'.88rem', fontWeight:800, color: isFull ? '#ef4444' : 'var(--accent)' }}>
-                {preds.length}/{MAX_FEATURED} featured
-              </span>
-            </div>
-
-            {isFull && (
-              <div style={{ padding:'14px 18px', borderRadius:12, marginBottom:16, background:'rgba(239,68,68,.06)', border:'1px solid rgba(239,68,68,.15)', display:'flex', alignItems:'center', gap:10, fontSize:'.88rem', fontWeight:700, color:'#ef4444' }}>
-                <AlertTriangle size={18} /> Featured limit reached — remove one to add another
-              </div>
-            )}
-
-            {/* League filter */}
-            {leagues.length > 1 && (
-              <div className="ae sh" style={{ display:'flex', gap:6, marginBottom:14, overflowX:'auto', paddingBottom:4 }}>
-                <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.04)', color: lg === 'all' ? 'var(--accent)' : 'var(--text-muted)', border: lg === 'all' ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>
-                  All ({fx.length})
+            <div className="sh" style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }}>
+              <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--accent)' : 'var(--text-muted)',border: lg === 'all' ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>All</button>
+              {leagues.map(l => (
+                <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--accent)' : 'var(--text-muted)',border: lg === l.id ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>
+                  {l.logo && <img src={l.logo} alt="" style={{ width:14,height:14,borderRadius:3,objectFit:'contain' }} />}
+                  {l.name} ({l.n})
                 </button>
-                {leagues.map(l => (
-                  <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.04)', color: lg === l.id ? 'var(--accent)' : 'var(--text-muted)', border: lg === l.id ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>
-                    {l.logo && <img src={l.logo} alt="" style={{ width:16, height:16, borderRadius:3, objectFit:'contain' }} />}
-                    {l.name} ({l.n})
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {shown.length === 0 ? (
-              <div className="empty-state">
-                <RadioTower size={40} style={{ color:'var(--text-muted)', marginBottom:14, opacity:.4 }} />
-                <div style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-muted)', marginBottom:6 }}>No matches found</div>
-                <div style={{ fontSize:'.88rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>{fxErr || 'Try refreshing'}</div>
-              </div>
+              ))}
+            </div>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
+              <div style={{ fontSize:'.88rem',fontWeight:700,color:'var(--text-muted)' }}>{preds.length}/{MAX_FEATURED} featured</div>
+              <button onClick={handleRefresh} disabled={refreshing} className="btn-ghost" style={{ padding:'8px 14px' }}><RefreshCw size={14} style={refreshing ? { animation:'asp 1s linear infinite' } : {}} /> Refresh</button>
+            </div>
+            {fxLoad ? (
+              <div style={{ display:'grid',gap:10 }}>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk" style={{ height:100,borderRadius:14 }} />)}</div>
+            ) : shown.length === 0 ? (
+              <div className="empty-state"><RadioTower size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No fixtures</div></div>
             ) : (
               shown.map((m, i) => renderMatchRow(m, i, 'matches'))
             )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════
-            TAB: RESULTS
-        ═══════════════════════════════════════════════════ */}
+        {/* ═══ RESULTS TAB ═══ */}
         {tab === 'results' && (
-          <div className="ae">
-            <h3 className="section-title"><Trophy size={18} style={{ color:'var(--accent)' }} /> Featured Match Results</h3>
-
-            {preds.filter(p => p.status === 'finished').length === 0 ? (
-              <div className="empty-state">
-                <Trophy size={40} style={{ color:'var(--text-muted)', marginBottom:14, opacity:.4 }} />
-                <div style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-muted)', marginBottom:6 }}>No finished matches yet</div>
-                <div style={{ fontSize:'.88rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>Results appear here automatically when matches end</div>
-              </div>
-            ) : (
-              preds.filter(p => p.status === 'finished').map((pred, i) => (
-                <div key={pred.id} className="card-in" style={{
-                  padding:'16px', borderRadius:14, background:'var(--bg-surface)',
-                  border:'1px solid rgba(0,230,118,.12)', marginBottom:10,
-                  animationDelay:`${i * 40}ms`,
-                }}>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:10 }}>
-                    <span style={{ fontSize:'.78rem', fontWeight:700, color:'var(--text-muted)' }}>{pred.league?.name || ''}</span>
-                    <span style={{ fontSize:'.82rem', fontWeight:800, color:'var(--accent)', background:'rgba(0,230,118,.08)', padding:'4px 12px', borderRadius:8 }}>FT</span>
-                  </div>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0 }}>
-                      {pred.homeLogo && <img src={pred.homeLogo} alt="" style={{ width:26, height:26, borderRadius:6, objectFit:'contain', flexShrink:0 }} />}
-                      <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{pred.homeTeam?.name}</span>
-                    </div>
-                    <div style={{ fontSize:'1.3rem', fontWeight:900, fontFamily:'var(--font-display)', color:'var(--accent)', background:'rgba(0,230,118,.08)', padding:'6px 18px', borderRadius:10, border:'1px solid rgba(0,230,118,.15)', fontVariantNumeric:'tabular-nums' }}>
-                      {pred.homeScore} – {pred.awayScore}
-                    </div>
-                    <div style={{ display:'flex', alignItems:'center', gap:8, flex:1, minWidth:0, justifyContent:'flex-end' }}>
-                      <span style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', textAlign:'right' }}>{pred.awayTeam?.name}</span>
-                      {pred.awayLogo && <img src={pred.awayLogo} alt="" style={{ width:26, height:26, borderRadius:6, objectFit:'contain', flexShrink:0 }} />}
-                    </div>
-                  </div>
-                  <div style={{ marginTop:10, fontSize:'.82rem', fontWeight:600, color:'var(--text-muted)', display:'flex', alignItems:'center', gap:6 }}>
-                    <CheckCircle2 size={14} style={{ color:'var(--accent)' }} /> Auto-resolved · {formatTimeAgo(pred.finishedAt)}
-                  </div>
+          <div className="ae section-card">
+            <div className="section-title"><Trophy size={18} style={{ color:'var(--gold)' }} /> Zoka Pick Results</div>
+            {publishState === 'published' && publishedPicks?.matches ? (
+              <>
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,marginBottom:20 }}>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--accent)' }}>{publishedResults.exact}</div><div className="lbl">Exact</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--gold)' }}>{publishedResults.result}</div><div className="lbl">Result</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'#ef4444' }}>{publishedResults.miss}</div><div className="lbl">Miss</div></div>
+                  <div className="stat-mini"><div className="num" style={{ color:'var(--text-muted)' }}>{publishedResults.pending}</div><div className="lbl">Pending</div></div>
                 </div>
-              ))
+                {publishedPicks.matches.map((pick, i) => renderPubResult(pick, i))}
+              </>
+            ) : (
+              <div className="empty-state"><Trophy size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No published picks yet</div></div>
             )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════
-            TAB: STAFF
-        ═══════════════════════════════════════════════════ */}
+        {/* ═══ STAFF TAB ═══ */}
         {tab === 'staff' && (
           <div className="ae">
-            <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
-              <h3 className="section-title" style={{ margin:0 }}><UserCog size={18} style={{ color:'var(--gold)' }} /> Staff Members</h3>
-              <button onClick={() => setShowAddStaff(!showAddStaff)} className="btn-ghost" style={{ borderColor:'rgba(245,197,66,.2)', color:'var(--gold)' }}>
-                <Plus size={15} /> Add
-              </button>
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
+              <div style={{ fontSize:'.95rem',fontWeight:800,color:'var(--text-primary)' }}>Team ({staffList.length})</div>
+              <button onClick={() => setShowAddStaff(p => !p)} className="btn-primary" style={{ padding:'10px 18px',fontSize:'.85rem' }}><UserPlus size={15} /> Add</button>
             </div>
-
-            {/* Add staff form */}
             {showAddStaff && (
-              <div className="section-card pi-pop" style={{ marginBottom:16, borderColor:'rgba(245,197,66,.15)' }}>
-                <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-                  <input
-                    value={newStaffName} onChange={e => setNewStaffName(e.target.value)}
-                    placeholder="Staff name" className="input-field"
-                  />
-                  <div style={{ display:'flex', gap:8 }}>
-                    {['admin','lead','analyst','writer'].map(r => (
-                      <button key={r} onClick={() => setNewStaffRole(r)} className="zb" style={{
-                        flex:1, padding:'10px 8px', borderRadius:10, fontSize:'.82rem', fontWeight:800,
-                        border: `1.5px solid ${newStaffRole === r ? 'rgba(245,197,66,.3)' : 'var(--border)'}`,
-                        background: newStaffRole === r ? 'rgba(245,197,66,.1)' : 'var(--bg-surface)',
-                        color: newStaffRole === r ? 'var(--gold)' : 'var(--text-muted)',
-                        textTransform:'capitalize',
-                      }}>
-                        {r}
-                      </button>
-                    ))}
-                  </div>
-                  <div style={{ display:'flex', gap:8 }}>
-                    <button onClick={addStaff} disabled={!newStaffName.trim()} className="btn-primary" style={{ flex:1, background:'linear-gradient(135deg, var(--gold), #d97706)', color:'#000' }}>
-                      <Check size={16} /> Add Staff
-                    </button>
-                    <button onClick={() => setShowAddStaff(false)} className="btn-ghost" style={{ flexShrink:0 }}>
-                      <X size={16} />
-                    </button>
-                  </div>
+              <div className="section-card" style={{ marginBottom:16 }}>
+                <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
+                  <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)} placeholder="Name" className="input-field" style={{ flex:2,minWidth:150 }} />
+                  <select value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)} className="input-field" style={{ flex:1,minWidth:120,cursor:'pointer' }}>
+                    <option value="admin">Admin</option>
+                    <option value="lead">Lead</option>
+                    <option value="analyst">Analyst</option>
+                    <option value="writer">Writer</option>
+                  </select>
+                  <button onClick={addStaff} className="btn-primary" style={{ padding:'12px 20px' }}><Check size={15} /> Add</button>
+                  <button onClick={() => setShowAddStaff(false)} className="btn-ghost" style={{ padding:'12px 16px' }}><X size={15} /></button>
                 </div>
               </div>
             )}
-
             {staffLoad ? (
-              <div style={{ padding:40, textAlign:'center' }}><Loader size={24} style={{ animation:'asp 1s linear infinite', color:'var(--text-muted)' }} /></div>
+              <div style={{ display:'grid',gap:10 }}>{Array.from({ length:3 }).map((_, i) => <div key={i} className="sk" style={{ height:72,borderRadius:12 }} />)}</div>
             ) : staffList.length === 0 ? (
-              <div className="empty-state">
-                <UserCog size={40} style={{ color:'var(--text-muted)', marginBottom:14, opacity:.4 }} />
-                <div style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-muted)', marginBottom:6 }}>No staff members</div>
-                <div style={{ fontSize:'.88rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>Add your first staff member above</div>
-              </div>
+              <div className="empty-state"><UserCog size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No staff members</div></div>
             ) : (
-              staffList.map((s, i) => (
-                <div key={s.id} className="staff-row card-in" style={{ animationDelay:`${i * 40}ms` }}>
-                  <div style={{
-                    width:44, height:44, borderRadius:12,
-                    background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : s.role === 'lead' ? 'rgba(245,197,66,.1)' : 'rgba(0,230,118,.08)',
-                    display:'flex', alignItems:'center', justifyContent:'center',
-                    fontSize:'1rem', fontWeight:900,
-                    color: s.role === 'admin' ? '#ef4444' : s.role === 'lead' ? 'var(--gold)' : 'var(--accent)',
-                    flexShrink:0, border: `1px solid ${s.role === 'admin' ? 'rgba(239,68,68,.15)' : s.role === 'lead' ? 'rgba(245,197,66,.15)' : 'rgba(0,230,118,.12)'}`,
-                  }}>
-                    {s.name?.[0]?.toUpperCase() || '?'}
+              staffList.map(s => (
+                <div key={s.id} className="staff-row">
+                  <div style={{ width:40,height:40,borderRadius:10,background:'rgba(245,197,66,.1)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:900,fontSize:'.9rem',flexShrink:0 }}>{(s.name || '?').charAt(0).toUpperCase()}</div>
+                  <div style={{ flex:1,minWidth:0 }}>
+                    <div style={{ fontWeight:700,color:'var(--text-primary)',fontSize:'.92rem' }}>{s.name}</div>
+                    <div style={{ fontSize:'.75rem',color:'var(--text-muted)',fontWeight:600 }}>{s.bio || 'No bio'}</div>
                   </div>
-                  <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)' }}>{s.name}</div>
-                    <div style={{ fontSize:'.82rem', fontWeight:600, color:'var(--text-muted)', marginTop:2, textTransform:'capitalize' }}>{s.role}</div>
-                  </div>
-                  <span className="role-badge" style={{
-                    background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : s.role === 'lead' ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.04)',
-                    color: s.role === 'admin' ? '#ef4444' : s.role === 'lead' ? 'var(--gold)' : 'var(--text-muted)',
-                    border: `1px solid ${s.role === 'admin' ? 'rgba(239,68,68,.15)' : s.role === 'lead' ? 'rgba(245,197,66,.15)' : 'var(--border)'}`,
-                    textTransform:'capitalize',
-                  }}>
-                    {s.role}
-                  </span>
-                  <button onClick={() => deleteStaff(s.id)} className="btn-danger">
-                    <Trash2 size={14} />
-                  </button>
+                  <span className="role-badge" style={{ background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(0,230,118,.08)',color: s.role === 'admin' ? '#ef4444' : 'var(--accent)',border: `1px solid ${s.role === 'admin' ? 'rgba(239,68,68,.2)' : 'rgba(0,230,118,.15)'}` }}>{s.role}</span>
+                  {editingStaff === s.id ? (
+                    <div style={{ display:'flex',gap:6 }}>
+                      <select value={s.role} onChange={e => updateStaff(s.id, { role: e.target.value })} className="input-field" style={{ width:100,padding:'8px 10px',minHeight:36,fontSize:'.8rem' }}>
+                        <option value="admin">Admin</option><option value="lead">Lead</option><option value="analyst">Analyst</option><option value="writer">Writer</option>
+                      </select>
+                      <button onClick={() => setEditingStaff(null)} className="btn-ghost" style={{ padding:'8px 10px' }}><Check size={14} /></button>
+                    </div>
+                  ) : (
+                    <div style={{ display:'flex',gap:6 }}>
+                      <button onClick={() => setEditingStaff(s.id)} className="btn-ghost" style={{ padding:'8px 10px' }}><Pencil size={14} /></button>
+                      <button onClick={() => deleteStaff(s.id)} className="btn-danger" style={{ padding:'8px 10px' }}><Trash2 size={14} /></button>
+                    </div>
+                  )}
                 </div>
               ))
             )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════
-            TAB: USERS
-        ═══════════════════════════════════════════════════ */}
+        {/* ═══ USERS TAB ═══ */}
         {tab === 'users' && (
           <div className="ae">
-            <h3 className="section-title"><Users size={18} style={{ color:'var(--accent)' }} /> User Management</h3>
-
-            {/* Controls */}
-            <div style={{ display:'flex', flexDirection:'column', gap:10, marginBottom:16 }}>
-              {/* Search */}
-              <div style={{ position:'relative' }}>
-                <Search size={18} style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
-                <input
-                  value={userSearch} onChange={e => setUserSearch(e.target.value)}
-                  placeholder="Search by name, email, or UID..." className="input-field"
-                  style={{ paddingLeft:44 }}
-                />
+            <div style={{ display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center' }}>
+              {!usersLoaded && <button onClick={loadUsers} disabled={usersLoad} className="btn-primary" style={{ padding:'10px 20px',fontSize:'.85rem' }}><Database size={15} /> {usersLoad ? 'Loading...' : 'Load Users'}</button>}
+              <div style={{ flex:1,minWidth:200,position:'relative' }}>
+                <Search size={15} style={{ position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)',pointerEvents:'none' }} />
+                <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search name, email, uid..." className="input-field" style={{ paddingLeft:40 }} />
               </div>
-              <div style={{ display:'flex', gap:8 }}>
-                {!usersLoaded ? (
-                  <button onClick={loadUsers} disabled={usersLoad} className="btn-primary" style={{ flex:1, background:'linear-gradient(135deg, #00e676, #00c853)', color:'#000' }}>
-                    {usersLoad ? <Loader size={16} style={{ animation:'asp 1s linear infinite' }} /> : <Database size={16} />}
-                    {usersLoad ? 'Loading...' : 'Load All Users'}
-                  </button>
-                ) : (
-                  <div style={{ flex:1, display:'flex', gap:6 }}>
-                    {['all','admin','user'].map(f => (
-                      <button key={f} onClick={() => setUserFilter(f)} className="zb" style={{
-                        flex:1, padding:'10px 8px', borderRadius:10, fontSize:'.82rem', fontWeight:800,
-                        border: `1.5px solid ${userFilter === f ? 'rgba(0,230,118,.25)' : 'var(--border)'}`,
-                        background: userFilter === f ? 'rgba(0,230,118,.08)' : 'var(--bg-surface)',
-                        color: userFilter === f ? 'var(--accent)' : 'var(--text-muted)',
-                        textTransform:'capitalize',
-                      }}>
-                        {f} {f === 'all' ? `(${usersList.length})` : f === 'admin' ? `(${usersList.filter(u=>u.role==='admin').length})` : `(${usersList.filter(u=>u.role!=='admin').length})`}
-                      </button>
-                    ))}
-                  </div>
-                )}
+              <div style={{ display:'flex',gap:6 }}>
+                {['all','admin','user'].map(f => (
+                  <button key={f} onClick={() => setUserFilter(f)} className="btn-sm zb" style={{ background: userFilter === f ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: userFilter === f ? 'var(--gold)' : 'var(--text-muted)',border: userFilter === f ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)',padding:'8px 14px',fontSize:'.8rem' }}>{f === 'all' ? 'All' : f === 'admin' ? 'Admins' : 'Users'}</button>
+                ))}
               </div>
             </div>
-
-            {/* User list */}
-            {usersLoaded && filteredUsers.length === 0 && (
-              <div className="empty-state">
-                <Users size={40} style={{ color:'var(--text-muted)', marginBottom:14, opacity:.4 }} />
-                <div style={{ fontSize:'1rem', fontWeight:800, color:'var(--text-muted)', marginBottom:6 }}>{userSearch || userFilter !== 'all' ? 'No users match your filter' : 'No users found'}</div>
-                <div style={{ fontSize:'.88rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>{userSearch || userFilter !== 'all' ? 'Try adjusting your search or filter' : 'Users will appear here when they sign up'}</div>
-              </div>
-            )}
-
-            {/* Header row (desktop only columns) */}
-            {usersLoaded && filteredUsers.length > 0 && (
-              <div className="user-row user-header" style={{ fontSize:'.78rem' }}>
-                <span>User</span>
-                <span className="hide-mobile">Email</span>
-                <span>Role</span>
-                <span className="hide-mobile">Joined</span>
-                <span style={{ textAlign:'right' }}>Actions</span>
-              </div>
-            )}
-
-            {filteredUsers.map((u, i) => renderUserRow(u, i))}
-
-            {usersLoaded && filteredUsers.length > 0 && (
-              <div style={{ textAlign:'center', padding:'16px', fontSize:'.88rem', fontWeight:700, color:'var(--text-muted)' }}>
-                Showing {filteredUsers.length} of {usersList.length} users
-              </div>
+            {!usersLoaded ? (
+              <div className="empty-state"><Database size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>Click "Load Users" to fetch</div></div>
+            ) : usersLoad ? (
+              <div style={{ display:'grid',gap:10 }}>{Array.from({ length:5 }).map((_, i) => <div key={i} className="sk" style={{ height:56,borderRadius:12 }} />)}</div>
+            ) : filteredUsers.length === 0 ? (
+              <div className="empty-state"><Users size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No users found</div></div>
+            ) : (
+              <>
+                <div className="user-row user-header">
+                  <span>User</span><span className="hide-mobile">Email</span><span className="hide-mobile">Role</span><span className="hide-mobile">Joined</span><span>Actions</span>
+                </div>
+                {filteredUsers.map(u => (
+                  <div key={u.id} className="user-row">
+                    <div style={{ display:'flex',alignItems:'center',gap:10,minWidth:0 }}>
+                      <div style={{ width:32,height:32,borderRadius:8,background:'rgba(0,230,118,.08)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--accent)',fontWeight:800,fontSize:'.8rem',flexShrink:0 }}>{(u.displayName || u.email || '?').charAt(0).toUpperCase()}</div>
+                      <div style={{ minWidth:0,overflow:'hidden' }}><div style={{ fontWeight:700,color:'var(--text-primary)',fontSize:'.88rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{u.displayName || 'Unknown'}</div></div>
+                    </div>
+                    <span className="hide-mobile" style={{ fontSize:'.8rem',color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{u.email || '—'}</span>
+                    <span className="hide-mobile"><span className="role-badge" style={{ background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)',color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)',border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'var(--border)'}`,fontSize:'.7rem',padding:'3px 10px' }}>{u.role || 'user'}</span></span>
+                    <span className="hide-mobile" style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600 }}>{formatTimeAgo(u.createdAt)}</span>
+                    <div style={{ display:'flex',gap:6,justifyContent:'flex-end' }}>
+                      <select value={u.role || 'user'} onChange={e => updateUserRole(u.id, e.target.value)} className="input-field" style={{ width:'auto',padding:'6px 8px',minHeight:34,fontSize:'.75rem',cursor:'pointer' }}>
+                        <option value="user">User</option><option value="admin">Admin</option>
+                      </select>
+                    </div>
+                  </div>
+                ))}
+                <div style={{ marginTop:12,fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600,textAlign:'center' }}>{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</div>
+              </>
             )}
           </div>
         )}
 
-        {/* ═══════════════════════════════════════════════════
-            FOOTER INFO
-        ═══════════════════════════════════════════════════ */}
-        <div style={{
-          textAlign:'center', padding:'24px 16px', marginTop:20,
-          borderTop:'1px solid var(--border)',
-        }}>
-          <div style={{ fontSize:'.82rem', fontWeight:700, color:'var(--text-muted)', marginBottom:4 }}>
-            Last update: {lastUpdate ? formatTimeAgo(lastUpdate) : 'Never'}
-          </div>
-          <div style={{ fontSize:'.78rem', fontWeight:600, color:'var(--text-muted)', opacity:.6 }}>
-            Source: {dataSource} · Auto-resolve: {resolvedMatches.size} matches
-          </div>
+        {/* Footer info */}
+        <div className="ae" style={{ marginTop:32,padding:'16px 20px',borderRadius:14,background:'rgba(255,255,255,.02)',border:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,animationDelay:'.3s' }}>
+          <Info size={16} style={{ color:'var(--text-muted)',flexShrink:0 }} />
+          <span style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600,lineHeight:1.5 }}>
+            Auto-resolver active — finished matches are scored in real-time. useUniversalResolver runs on every page as a safety net.
+          </span>
         </div>
       </div>
+
+      {/* Toast */}
+      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }

@@ -1278,22 +1278,24 @@ export default function Fixtures() {
           </div>
         ))}
 
-        {filtered.length === 0 && (
+               {filtered.length === 0 && (
           <div className="fx-empty fx-enter">
-            <div className="fx-empty-icon fx-float" style={{ background: 'rgba(255,255,255,.04)', color: 'var(--text-muted)' }}>
-              <CalendarDays size={22} />
+            <div className="fx-empty-icon fx-float" style={{ background: 'rgba(59,130,246,.08)', color: '#3b82f6' }}>
+              <Search size={22} />
             </div>
-            <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>No matches found</div>
-            <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
-              {searchQ ? 'Try a different search term' : 'No fixtures match your filters'}
+            <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              {searchQ ? 'No matches found' : favFilter ? 'No favorite teams playing' : 'No matches'}
+            </div>
+            <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', maxWidth: 280, lineHeight: 1.5 }}>
+              {searchQ ? `No results for "${searchQ}"` : favFilter ? 'Star teams to filter by favorites' : 'No fixtures scheduled for this date.'}
             </div>
           </div>
         )}
       </div>
 
-      {showJump && (
+      {showJump && firstLiveId && (
         <button className="fx-jump-btn" onClick={jumpToLive}>
-          <span className="fx-live-dot" style={{ width: 6, height: 6 }} />
+          <Zap size={14} />
           Jump to Live
         </button>
       )}

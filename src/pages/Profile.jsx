@@ -8,16 +8,14 @@ import { useAuth } from '../context/AuthContext';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION — Unified zoka_ prefix, mobile-first, bold
-   ═════════════════════════════════════════════════════════════ */
+   STYLE INJECTION
+   ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('profile-zoka-v4')) return;
   const s = document.createElement('style');
   s.id = 'profile-zoka-v4';
   s.textContent = `
-    /* ── Keyframes (zoka_ prefix, consistent with Login) ── */
-    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}
-body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
+    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
     @keyframes zoka_popIn{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
     @keyframes zoka_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     @keyframes zoka_barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
@@ -28,7 +26,8 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     @keyframes zoka_shine{0%{left:-100%}100%{left:200%}}
     @keyframes zoka_glowBreathe{0%,100%{box-shadow:0 0 14px rgba(0,230,118,.15)}50%{box-shadow:0 0 28px rgba(0,230,118,.25)}}
 
-    /* ── Utility classes ── */
+    body{overflow-x:hidden;width:100%;max-width:100vw}
+
     .pro-enter{animation:zoka_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
     .pro-pop{animation:zoka_popIn .4s cubic-bezier(.22,1,.36,1) both}
     .pro-bar{transform-origin:left;animation:zoka_barFill .8s cubic-bezier(.22,1,.36,1) both}
@@ -37,7 +36,6 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     .pro-count{animation:zoka_countUp .3s cubic-bezier(.22,1,.36,1) both}
     .skel-profile{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:zoka_shimmer 1.5s ease-in-out infinite;border-radius:10px}
 
-    /* ── Button system (matches Login .zoka-btn exactly) ── */
     .zoka-btn{
       transition:all .18s cubic-bezier(.22,1,.36,1);
       cursor:pointer;outline:none;
@@ -46,9 +44,6 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
     .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
 
-    /* ═══════════════════════════════════════════════════════════
-       MOBILE BREAKPOINTS
-       ═══════════════════════════════════════════════════════════ */
     @media(max-width:768px){
       .pro-header-inner{flex-direction:column!important;align-items:center!important;text-align:center!important;gap:20px!important}
       .pro-header-info{align-items:center!important}
@@ -72,16 +67,14 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
   
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-      .toggle-hidden-items{transition:none!important}
     }
 `;
   document.head.appendChild(s);
 };
 
-/* ═════════════════════════════════════════════════════════════════════════
-   HELPERS — Compatible with both old and new field names
-   ═════════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════════════ */
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -98,7 +91,17 @@ const useInView = (threshold = 0.1) => {
   return [ref, visible];
 };
 
-/* ── Badge Definitions — uses helper functions ── */
+// ✅ FIX: Add the missing helper functions
+const getPredictions = (p) => p?.predictions || 0;
+const getExact = (p) => p?.correctScore || 0;
+const getResult = (p) => p?.correctResult || 0;
+const getPoints = (p) => p?.points || 0;
+const calculateAccuracy = (exact, result, total) => {
+  if (!total || total < 1) return 0;
+  return Math.min(100, Math.round(((exact + result) / total) * 100));
+};
+
+/* ── Badge Definitions ── */
 const BADGE_DEFS = [
   { id: 'first-pred', name: 'First Step', icon: '👟', color: '#60a5fa', check: (p) => getPredictions(p) >= 1, hint: 'Make your first prediction' },
   { id: 'pred-10', name: 'Getting Started', icon: '🎯', color: 'var(--accent)', check: (p) => getPredictions(p) >= 10, hint: 'Make 10 predictions' },
@@ -109,7 +112,7 @@ const BADGE_DEFS = [
   { id: 'top-100', name: 'Top 100', icon: '🏆', color: '#eab308', check: (p) => getPoints(p) > 0, hint: 'Score points on the leaderboard' },
 ];
 
-/* ═════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
 const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 0, icon }) => {
@@ -233,12 +236,11 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
   );
 };
 
-/* ═════════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    SKELETON
-   ═════════════════════════════════════════════════════════════════════════════════
-   */
+   ═══════════════════════════════════════════════════════════════ */
 const ProfileSkeleton = () => (
-  <div style={{ minHeight: '100vh',overflow:'hidden', minHeight: '100dvh',overflow:'hidden', background: 'var(--bg-deep)' }}>
+  <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 100px' }}>
       <div style={{ padding: 34, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28 }}>
         <div className="skel-profile" style={{ width: 92, height: 92, borderRadius: '50%', flexShrink: 0 }} />
@@ -261,9 +263,9 @@ const ProfileSkeleton = () => (
   </div>
 );
 
-/* ═══════════════════════════════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════
    MAIN PROFILE COMPONENT
-   ═════════════════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════════════════ */
 export default function Profile() {
   injectStyles();
   const { currentUser, userProfile, logout, loading: authLoading } = useAuth();
@@ -302,7 +304,7 @@ export default function Profile() {
   }, [logout, navigate]);
 
   return (
-    <div style={{ minHeight: '100vh',overflow:'hidden', minHeight: '100dvh',overflow:'hidden', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
       <SEO
         title="My Profile"
         description="View your prediction stats, accuracy, badges, and leaderboard rank on ZOKASCORE."
@@ -318,11 +320,9 @@ export default function Profile() {
           borderRadius: 18, display: 'flex', alignItems: 'center', gap: 28,
           flexWrap: 'wrap', position: 'relative', overflow: 'hidden', marginBottom: 30,
         }}>
-          {/* Top accent line */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), #69f0ae, transparent)' }} />
 
           <div className="pro-header-inner" style={{ display: 'flex', alignItems: 'center', gap: 28, flex: 1, minWidth: 280 }}>
-            {/* Avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
               <div className="pro-avatar" style={{
                 width: 92, height: 92, borderRadius: '50%',
@@ -346,7 +346,6 @@ export default function Profile() {
               }}>{isDemo ? '?' : '✓'}</div>
             </div>
 
-            {/* Info */}
             <div className="pro-header-info" style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{
                 margin: 0, fontSize: '1.55rem', fontWeight: 900, color: 'var(--text-primary)',
@@ -363,7 +362,7 @@ export default function Profile() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.88rem', color: 'var(--text-muted)', marginTop: 5, justifyContent: 'center' }}>
                 <Mail size={14} /> {profile.email}
               </div>
-              <div style={{ display: 'flex', alignItems: center, gap: 16, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                 {memberSince && (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.8rem', color: 'var(--text-muted)' }}>
                     <Calendar size={14} /> {memberSince}
@@ -376,7 +375,6 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Ring + Actions */}
           <div className="pro-header-right" style={{ display: 'flex', alignItems: 'center', gap: 22, flexShrink: 0 }}>
             <AccuracyRing value={accuracyNum} size={116} />
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
@@ -418,7 +416,7 @@ export default function Profile() {
           borderRadius: 16, marginBottom: 30,
         }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, fontSize: '.86rem' }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 700, display: 'flex', alignItems: ' center', gap: 7 }}>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>
               <TrendingUp size={15} /> Score Breakdown
             </span>
             <span style={{ color: 'var(--text-muted)' }}>
@@ -430,22 +428,13 @@ export default function Profile() {
             {hasData ? (
               <>
                 {exact > 0 && (
-                  <div className="pro-bar" style={{
-                    flex: exact, background: 'var(--accent)',
-                    borderRadius: 6, animationDelay: '0.3s',
-                  }} title={`Exact: ${exact}`} />
+                  <div className="pro-bar" style={{ flex: exact, background: 'var(--accent)', borderRadius: 6, animationDelay: '0.3s' }} title={`Exact: ${exact}`} />
                 )}
                 {result > 0 && (
-                  <div className="pro-bar" style={{
-                    flex: result, background: 'var(--gold)',
-                    borderRadius: 6, animationDelay: '0.45s',
-                  }} title={`Result: ${result}`} />
+                  <div className="pro-bar" style={{ flex: result, background: 'var(--gold)', borderRadius: 6, animationDelay: '0.45s' }} title={`Result: ${result}`} />
                 )}
                 {missedCount > 0 && (
-                  <div className="pro-bar" style={{
-                    flex: missedCount, background: 'rgba(255,255,255,.06)',
-                    borderRadius: 6, animationDelay: '0.6s',
-                  }} />
+                  <div className="pro-bar" style={{ flex: missedCount, background: 'rgba(255,255,255,.06)', borderRadius: 6, animationDelay: '0.6s' }} />
                 )}
               </>
             ) : (
@@ -469,24 +458,15 @@ export default function Profile() {
         {/* ═══ BADGES ═══ */}
         <div style={{ marginBottom: 40 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h3 style={{
-              display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.15rem',
-              fontWeight: 900, color: 'var(--text-primary)', margin: 0,
-            }}>
+            <h3 style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
               <Shield size={22} style={{ color: 'var(--gold)' }} /> Badges
             </h3>
-            <span style={{
-              fontSize: '.8rem', fontWeight: 600, color: 'var(--text-muted)',
-              padding: '4px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10,
-            }}>{earnedBadges.length}/{BADGE_DEFS.length}</span>
+            <span style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--text-muted)', padding: '4px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10 }}>{earnedBadges.length}/{BADGE_DEFS.length}</span>
           </div>
 
           {earnedBadges.length > 0 && (
             <div style={{ marginBottom: 18 }}>
-              <div style={{
-                fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)',
-                marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em',
-              }}>Earned</div>
+              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>Earned</div>
               <div className="pro-badge-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                 {earnedBadges.map((badge, i) => (
                   <BadgeCard key={badge.id} badge={badge} earned delay={i * 70} />
@@ -497,10 +477,7 @@ export default function Profile() {
 
           {lockedBadges.length > 0 && (
             <div>
-              <div style={{
-                fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)',
-                marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em',
-              }}>Locked</div>
+              <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em' }}>Locked</div>
               <div className="pro-badge-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                 {lockedBadges.map((badge, i) => (
                   <BadgeCard key={badge.id} badge={badge} earned={false} delay={(earnedBadges.length + i) * 70} />
@@ -523,23 +500,16 @@ export default function Profile() {
             {isDemo ? (
               <>
                 <h2 className="pro-cta-title" style={{ margin: '0 0 12px', fontSize: '1.65rem', fontWeight: 900 }}>Start Predicting</h2>
-                <p style={{
-                  color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440,
-                  margin: '0 auto 28px', lineHeight: 1.6,
-                }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.6 }}>
                   Sign in to track your predictions, earn badges, and climb the leaderboard.
                 </p>
-                <button
-                  onClick={() => navigate('/login')}
-                  className="zoka-btn"
-                  style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 10,
-                    padding: '14px 36px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
-                    color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
-                    border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
-                    minHeight: 56,
-                  }}
-                >
+                <button onClick={() => navigate('/login')} className="zoka-btn" style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 10,
+                  padding: '14px 36px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                  color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
+                  border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                  minHeight: 56,
+                }}>
                   Sign In <ArrowRight size={18} />
                 </button>
               </>
@@ -548,40 +518,29 @@ export default function Profile() {
                 <h2 className="pro-cta-title" style={{ margin: '0 0 12px', fontSize: '1.65rem', fontWeight: 900 }}>
                   {hasData ? 'Keep the Streak Going' : 'Make Your First Pick'}
                 </h2>
-                <p style={{
-                  color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440,
-                  margin: '0 auto 28px', lineHeight: 1.6,
-                }}>
+                <p style={{ color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.6 }}>
                   {hasData
                     ? "Predict today's matches and climb the global leaderboard."
                     : "Browse today's fixtures and make your first prediction to start earning badges."
                   }
                 </p>
                 <div className="pro-cta-btns" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-                  <button
-                    onClick={() => navigate('/fixtures')}
-                    className="zoka-btn"
-                    style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 10,
-                      padding: '14px 30px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
-                      color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
-                      border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
-                      minHeight: 56,
-                    }}
-                  >
+                  <button onClick={() => navigate('/fixtures')} className="zoka-btn" style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 10,
+                    padding: '14px 30px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                    color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
+                    border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                    minHeight: 56,
+                  }}>
                     <Zap size={18} /> {hasData ? "Today's Picks" : 'Browse Fixtures'}
                   </button>
                   {hasData && (
-                    <button
-                      onClick={() => navigate('/leaderboard')}
-                      className="zoka-btn"
-                      style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 10,
-                        padding: '14px 30px', borderRadius: 14, background: 'transparent',
-                        border: '1.5px solid var(--border)', color: 'var(--text-primary)',
-                        fontWeight: 700, fontSize: '.94rem', minHeight: 56,
-                      }}
-                    >
+                    <button onClick={() => navigate('/leaderboard')} className="zoka-btn" style={{
+                      display: 'inline-flex', alignItems: 'center', gap: 10,
+                      padding: '14px 30px', borderRadius: 14, background: 'transparent',
+                      border: '1.5px solid var(--border)', color: 'var(--text-primary)',
+                      fontWeight: 700, fontSize: '.94rem', minHeight: 56,
+                    }}>
                       <Trophy size={18} /> Leaderboard
                     </button>
                   )}
