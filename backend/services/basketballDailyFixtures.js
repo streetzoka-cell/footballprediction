@@ -264,12 +264,17 @@ async run() {
   // DATA INTEGRITY VERIFICATION
   // ==========================================================
 
-    async _verifyDataIntegrity(todayStr, yesterdayStr) {
+       async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
-      const { db } = require("../config/firebase");
-      const { collection, getDocs } = require("firebase/firestore");
+      const { getDb } = require("../config/firebase");
+      const db = getDb();
       
-      if (!db) return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      if (!db) {
+        logger.warn(`[BasketballDaily] No db instance — skipping verification`);
+        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      }
+
+      const { collection, getDocs } = require("firebase/firestore");
 
       const [todaySnap, yesterdaySnap] = await Promise.all([
         getDocs(collection(db, "basketballTodayFixtures")),
@@ -277,25 +282,28 @@ async run() {
       ]);
 
       const todayDocs = todaySnap.docs.map(d => d.data());
-      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
+      const laterdayDocs = yesterdaySnap.docs.map(d => d.data());
 
-      const todayForDate = todayDocs.filter(d => d.date === todayStr);
-      const yesterdayForDate = yesterdayDocs.filter(d => d.date === yesterdayStr);
+      const todayTotal = todayDocs.length;
+      const yesterdayTotal = yesterdayDocs.length;
+      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
+      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
 
-      return {
-        valid: todayForDate.length > 0 || yesterdayForDate.length > 0 || 
-               (todayDocs.length === 0 && yesterdayDocs.length === 0),
-        todayCount: todayForDate.length,
-        todayTotal: todayDocs.length,
-        yesterdayCount: yesterdayForDate.length,
-        yesterdayTotal: yesterdayDocs.length,
-      };
+      // FIRST RUN: Both empty = valid
+      if (todayTotal === 0 && yesterdayTotal === 0) {
+        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+      }
+
+      // HAS DATA: Check dates
+      const valid = todayCount > 0 || yesterdayCount > 0;
+      
+      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
     } catch (err) {
-      logger.error(`[BasketballDaily] Integrity check failed: ${err.message}`);
+      logger.error(`[BasketballDaily] Verification error: ${err.message}`);
       return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
     }
   }
-
+  
   // ==========================================================
   // PRIVATE: FETCH TOMORROW
   // ==========================================================

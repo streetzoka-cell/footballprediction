@@ -258,54 +258,67 @@ async function main() {
     basketballFixturesRepo
   );
 
-    // ── 4. Services ──
+      // ==========================================================
+  // DATA INTEGRITY VERIFICATION
+  // 
+  // SIMPLIFIED LOGIC:
+  //   - If both collections are empty → VALID (first run or clean state)
+  //   - If today has data for today's date → VALID
+  //   - If yesterday has data for yesterday's date → VALID
+  //   - Otherwise → INVALID (stale data from wrong day)
+  // ==========================================================
+
+  async _verifyDataIntegrity(todayStr, yesterdayStr) {
+    try {
+      // Use dynamic require to avoid circular dependency issues
+      const firebaseModule = require("../config/firebase");
+      const db = firebaseModule.db || firebaseModule.default?.db;
+      
+      if (!db) {
+        logger.warn(`[DailyFixtures] No db instance — skipping verification`);
+        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      }
+
+      const { collection, getDocs } = require("firebase/firestore");
+
+      const [todaySnap, yesterdaySnap] = await Promise.all([
+        getDocs(collection(db, "todayFixtures")),
+        getDocs(collection(db, "yesterdayFixtures")),
+      ]);
+
+      const todayDocs = todaySnap.docs.map(d => d.data());
+      const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
+
+      const todayTotal = todayDocs.length;
+      const yesterdayTotal = yesterdayDocs.length;
+      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
+      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
+
+      // FIRST RUN: Both empty = valid (nothing to verify)
+      if (todayTotal === 0 && yesterdayTotal === 0) {
+        logger.debug(`[DailyFixtures] Verification: first run (both empty) — valid`);
+        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+      }
+
+      // HAS DATA: Check if dates match what we expect
+      const valid = todayCount > 0 || yesterdayCount > 0;
+      
+      if (!valid) {
+        logger.warn(
+          `[DailyFixtures] Verification: stale data — ` +
+          `today: ${todayTotal} docs (${todayCount} for ${todayStr}), ` +
+          `yesterday: ${yesterdayTotal} docs (${yesterdayCount} for ${yesterdayStr})`
+        );
+      }
+
+      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+    } catch (err) {
+      logger.error(`[DailyFixtures] Verification error: ${err.message}`);
+      // On error, assume INVALID so we re-run (safe default)
+      return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+    }
+  }
   
-  // Football Daily: Handles rollover + tomorrow fetch
-  const footballDailyFixtures = new DailyFixturesService(
-    fixturesRepo,
-    teamsProcessor
-  );
-
-  // Basketball Daily: Handles rollover + tomorrow fetch
-  let basketballDailyFixtures = null;
-  if (isBasketballConfigured) {
-    basketballDailyFixtures = new BasketballDailyFixturesService(
-      basketballFixturesRepo
-    );
-  }
-
-  // Build services object AFTER creating instances
-  // This ensures the rollover wrappers can reference the instances
-  const services = {
-    // Football
-    footballDailyFixtures: footballDailyFixtures,
-    footballDailyRollover: {
-      run: () => footballDailyFixtures.rollover()
-    },
-    footballLiveFixtures: new LiveFixturesService(
-      fixturesRepo,
-      ftProcessor
-    ),
-    footballStandings: new StandingsService(standingRepo),
-    footballLeagues: new LeaguesService(leagueRepo),
-  };
-
-  if (isBasketballConfigured && basketballDailyFixtures) {
-    logger.info("[Startup] Basketball enabled");
-
-    services.basketballDailyFixtures = basketballDailyFixtures;
-    services.basketballDailyRollover = {
-      run: () => basketballDailyFixtures.rollover()
-    };
-    services.basketballLiveFixtures = new BasketballLiveFixturesService(
-      basketballFixturesRepo,
-      basketballFtProcessor
-    );
-  } else {
-    logger.warn(
-      "[Startup] Basketball disabled — set API_BASKETBALL_KEY"
-    );
-  }
   // ── 5. Scheduler ──
   scheduler = new Scheduler(services);
 

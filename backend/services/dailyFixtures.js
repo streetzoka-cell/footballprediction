@@ -1,6 +1,6 @@
 ﻿/*
  * dailyFixtures.js
- * Perfect daily fetch with 3-day rollover + DATA INTEGRITY VERIFICATION.
+ * Smart daily fetch with 3-day rollover + DATA INTEGRITY VERIFICATION.
  *
  * BUDGET: 1 API call per day.
  *
@@ -53,9 +53,6 @@ class DailyFixturesService {
 
     // ══════════════════════════════════════════════════════
     // META DEDUP WITH DATA INTEGRITY VERIFICATION
-    // 
-    // OLD: Just checked meta date → skip
-    // NEW: Check meta date AND verify data actually exists
     // ══════════════════════════════════════════════════════
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
@@ -76,17 +73,6 @@ class DailyFixturesService {
         };
       }
 
-      // ══════════════════════════════════════════════════════
-      // DATA INTEGRITY FAILED — FORCE RECOVERY
-      // 
-      // This happens when:
-      //   - 3AM cron ran but Firestore writes timed out
-      //   - Server crashed mid-write
-      //   - Network error during batch write
-      // 
-      // The meta said "done" but the data isn't there.
-      // We MUST re-run to fix it.
-      // ══════════════════════════════════════════════════════
       logger.warn(
         `⚠️ [DailyFixtures] DATA INTEGRITY CHECK FAILED! ` +
         `Meta says "${todayStr}" done but: ` +
@@ -94,7 +80,6 @@ class DailyFixturesService {
         `yesterdayFixtures has ${integrity.yesterdayTotal} docs (${integrity.yesterdayCount} for ${yesterdayStr}) ` +
         `— FORCING RECOVERY`
       );
-      // Fall through to run the full process
     }
 
     const startTime = Date.now();
@@ -153,9 +138,6 @@ class DailyFixturesService {
         logger.info(`[DailyFixtures] First run — no rollover data`);
       }
 
-      // ══════════════════════════════════════════
-      // VERIFY ROLLOVER SUCCEEDED BEFORE CONTINUING
-      // ══════════════════════════════════════════
       const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
       rolloverSuccess = afterRollover.valid;
       
@@ -181,6 +163,8 @@ class DailyFixturesService {
       logger.warn(
         `[DailyFixtures] Budget too low — skipping tomorrow fetch`
       );
+      // If budget too low, that's not a failure — allow meta update
+      fetchSuccess = true;
     } else {
       try {
         const result = await this._fetchTomorrow(tomorrowStr);
@@ -199,15 +183,9 @@ class DailyFixturesService {
 
     // ══════════════════════════════════════════
     // PHASE 3: UPDATE META — ONLY IF SUCCESSFUL
-    // 
-    // CRITICAL FIX: Only update meta if BOTH:
-    //   1. Rollover succeeded (or was first run)
-    //   2. Tomorrow fetch succeeded (or budget was too low, not API error)
-    // 
-    // This prevents the "meta says done but data missing" bug.
     // ══════════════════════════════════════════
 
-    const shouldUpdateMeta = rolloverSuccess && (fetchSuccess || !isBudgetAvailable(1));
+    const shouldUpdateMeta = rolloverSuccess && fetchSuccess;
 
     if (shouldUpdateMeta) {
       await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
@@ -252,29 +230,21 @@ class DailyFixturesService {
   }
 
   // ==========================================================
-  // DATA INTEGRITY VERIFICATION
-  // 
-  // Checks that the actual data in Firestore matches what
-  // we expect for today and yesterday. This prevents the
-  // "meta says done but data missing" bug.
+  // DATA INTEGRITY VERIFICATION (ONLY ONE COPY)
   // ==========================================================
 
-    // ==========================================================
-  // DATA INTEGRITY VERIFICATION
-  // 
-  // Reads collections directly instead of using repo methods
-  // that may not exist in all repository implementations.
-  // ==========================================================
-
-  async _verifyDataIntegrity(todayStr, yesterdayStr) {
+     async _verifyDataIntegrity(todayStr, yesterdayStr) {
     try {
-      // Read collections directly from Firestore
-      // This avoids requiring getAllYesterday/getAllToday methods
-      // that may not exist in the repository
-      const { db } = require("../config/firebase");
-      const { collection, getDocs } = require("firebase/firestore");
+      // Use getDb() — the ONLY way to access db from firebase.js
+      const { getDb } = require("../config/firebase");
+      const db = getDb();
       
-      if (!db) return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      if (!db) {
+        logger.warn(`[DailyFixtures] No db instance — skipping verification`);
+        return { valid: true, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+      }
+
+      const { collection, getDocs } = require("firebase/firestore");
 
       const [todaySnap, yesterdaySnap] = await Promise.all([
         getDocs(collection(db, "todayFixtures")),
@@ -284,24 +254,26 @@ class DailyFixturesService {
       const todayDocs = todaySnap.docs.map(d => d.data());
       const yesterdayDocs = yesterdaySnap.docs.map(d => d.data());
 
-      const todayForDate = todayDocs.filter(d => d.date === todayStr);
-      const yesterdayForDate = yesterdayDocs.filter(d => d.date === yesterdayStr);
+      const todayTotal = todayDocs.length;
+      const yesterdayTotal = yesterdayDocs.length;
+      const todayCount = todayDocs.filter(d => d.date === todayStr).length;
+      const yesterdayCount = yesterdayDocs.filter(d => d.date === yesterdayStr).length;
 
-      // Valid if we have data for the expected dates, OR if both are empty (first run)
-      return {
-        valid: todayForDate.length > 0 || yesterdayForDate.length > 0 || 
-               (todayDocs.length === 0 && yesterdayDocs.length === 0),
-        todayCount: todayForDate.length,
-        todayTotal: todayDocs.length,
-        yesterdayCount: yesterdayForDate.length,
-        yesterdayTotal: yesterdayDocs.length,
-      };
+      // FIRST RUN: Both empty = valid
+      if (todayTotal === 0 && yesterdayTotal === 0) {
+        return { valid: true, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
+      }
+
+      // HAS DATA: Check if dates match
+      const valid = todayCount > 0 || yesterdayCount > 0;
+      
+      return { valid, todayCount, todayTotal, yesterdayCount, yesterdayTotal };
     } catch (err) {
-      logger.error(`[DailyFixtures] Integrity check failed: ${err.message}`);
-      // If we can't verify, assume invalid so we re-run (safe default)
+      logger.error(`[DailyFixtures] Verification error: ${err.message}`);
       return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
     }
   }
+
   // ==========================================================
   // PRIVATE
   // ==========================================================
@@ -319,7 +291,7 @@ class DailyFixturesService {
       logger.error(
         `[DailyFixtures] Tomorrow fetch failed: ${err.message}`
       );
-      throw err; // Re-throw so caller knows it failed
+      throw err;
     }
 
     const errors = raw?.errors || {};
@@ -361,14 +333,11 @@ class DailyFixturesService {
 
     return {
       id: f.id,
-
       date: f.date,
       timestamp: f.timestamp,
-
       status: f.status.short,
       statusLong: f.status.long,
       elapsed: f.status.elapsed ?? null,
-
       leagueId: l.id,
       leagueName: l.name,
       leagueCountry: l.country,
@@ -376,20 +345,15 @@ class DailyFixturesService {
       leagueFlag: l.flag ?? null,
       season: l.season,
       round: l.round,
-
       homeTeamId: t.home.id,
       homeTeamName: t.home.name,
       homeTeamLogo: t.home.logo,
-
       awayTeamId: t.away.id,
       awayTeamName: t.away.name,
       awayTeamLogo: t.away.logo,
-
       goalsHome: g.home,
       goalsAway: g.away,
-
       sport: "football",
-
       _updatedAt: new Date().toISOString(),
     };
   }
