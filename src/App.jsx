@@ -17,7 +17,6 @@ import {
 import { AuthProvider, useAuth } from "./context/AuthContext";
 
 import { initApp } from "./utils/api";
-import { initBasketball } from "./utils/basketballApi";
 
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -133,9 +132,8 @@ function PageTransition({ children }) {
 
 export default function App() {
   useEffect(() => {
-    initApp();
-    initBasketball();
-  }, []);
+  initApp();
+}, []);
 
   return (
     <AuthProvider>

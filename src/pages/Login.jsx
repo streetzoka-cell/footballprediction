@@ -1,32 +1,57 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X, Zap } from 'lucide-react';
 import SEO from "../components/SEO";
+
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION — PRODUCTION LOGIN
+   STYLE INJECTION — MOBILE-FIRST, BOLD, FOOTBALL VIBE
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('auth-pro-v1')) return;
+  if (document.getElementById('auth-mob-v2')) return;
   const s = document.createElement('style');
-  s.id = 'auth-pro-v1';
+  s.id = 'auth-mob-v2';
   s.textContent = `
-    @keyframes auth_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes auth_pop{0%{transform:scale(.92);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
+    @keyframes auth_fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes auth_pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.015)}100%{transform:scale(1);opacity:1}}
     @keyframes auth_spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-    @keyframes auth_glow{0%,100%{box-shadow:0 0 20px rgba(0,230,118,.1)}50%{box-shadow:0 0 40px rgba(0,230,118,.2)}}
+    @keyframes auth_glow{0%,100%{box-shadow:0 0 20px rgba(0,230,118,.12)}50%{box-shadow:0 0 44px rgba(0,230,118,.22)}}
+    @keyframes auth_pulse{0%,100%{opacity:.6}50%{opacity:1}}
+    @keyframes auth_slideErr{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes auth_shine{0%{left:-100%}100%{left:200%}}
+    @keyframes auth_float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
+    @keyframes auth_borderGlow{0%,100%{border-color:rgba(0,230,118,.08)}50%{border-color:rgba(0,230,118,.18)}}
+
     .auth-enter{animation:auth_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
-    .auth-pop{animation:auth_pop .4s cubic-bezier(.22,1,.36,1) both}
-    .zoka-btn{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none}
-    .zoka-btn:hover{transform:translateY(-1px)}
-    .zoka-btn:active{transform:translateY(0) scale(.98)}
+    .auth-pop{animation:auth_pop .45s cubic-bezier(.22,1,.36,1) both}
+    .auth-glow{animation:auth_glow 3s ease-in-out infinite}
+    .auth-float{animation:auth_float 4s ease-in-out infinite}
+
+    .zoka-btn{
+      transition:all .18s cubic-bezier(.22,1,.36,1);
+      cursor:pointer;outline:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
+    .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
+
+    /* Remove autofill styling interference */
+    input:-webkit-autofill,
+    input:-webkit-autofill:hover,
+    input:-webkit-autofill:focus{
+      -webkit-box-shadow:0 0 0 1000px var(--bg-surface) inset;
+      -webkit-text-fill-color:var(--text-primary);
+      transition:background-color 5000s ease-in-out 0s;
+    }
   `;
   document.head.appendChild(s);
 };
 
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
-/* ── Password Strength ───────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   PASSWORD STRENGTH — BIGGER, CLEARER
+   ═══════════════════════════════════════════════════════════════ */
 const PasswordStrength = ({ password }) => {
   if (!password) return null;
   let score = 0;
@@ -41,40 +66,101 @@ const PasswordStrength = ({ password }) => {
   const activeColor = colors[Math.max(0, score - 1)];
 
   return (
-    <div style={{ marginTop: 8 }}>
-      <div style={{ display: 'flex', height: 3, borderRadius: 2, background: 'rgba(255,255,255,.06)', overflow: 'hidden', gap: 3 }}>
+    <div style={{ marginTop: 12, animation: 'auth_fadeUp .3s ease both' }}>
+      <div style={{ display: 'flex', height: 5, borderRadius: 3, background: 'rgba(255,255,255,.06)', overflow: 'hidden', gap: 4 }}>
         {[0, 1, 2, 3, 4].map(i => (
-          <div key={i} style={{ flex: 1, height: '100%', borderRadius: 2, background: i < score ? activeColor : 'transparent', transition: `background 0.3s ${i * 60}ms` }} />
+          <div key={i} style={{
+            flex: 1, height: '100%', borderRadius: 3,
+            background: i < score ? activeColor : 'transparent',
+            transition: `background 0.35s ${EASE_OUT} ${i * 70}ms`,
+            boxShadow: i < score ? `0 0 8px ${activeColor}44` : 'none',
+          }} />
         ))}
       </div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 6 }}>
-        <span style={{ fontSize: '.72rem', fontWeight: 600, color: activeColor }}>{labels[Math.max(0, score - 1)]}</span>
-        {password.length < 6 && <span style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>6+ characters required</span>}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+        <span style={{ fontSize: '.85rem', fontWeight: 800, color: activeColor, letterSpacing: '.02em' }}>
+          {labels[Math.max(0, score - 1)]}
+        </span>
+        {password.length < 6 && (
+          <span style={{ fontSize: '.82rem', fontWeight: 600, color: '#ef4444' }}>6+ characters required</span>
+        )}
       </div>
     </div>
   );
 };
 
-/* ── Input Field ─────────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   INPUT FIELD — BIGGER TOUCH TARGETS, BOLDER
+   ═══════════════════════════════════════════════════════════════ */
 const InputField = ({ icon, type, placeholder, value, onChange, required, minLength, autoFocus, label }) => {
   const [focused, setFocused] = useState(false);
   const [showPass, setShowPass] = useState(false);
   const isPassword = type === 'password';
 
   return (
-    <div style={{ marginBottom: 16 }}>
-      {label && <label style={{ display: 'block', fontSize: '.76rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>{label}</label>}
+    <div style={{ marginBottom: 20 }}>
+      {label && (
+        <label style={{
+          display: 'block', fontSize: '.85rem', fontWeight: 800,
+          color: focused ? 'var(--accent)' : 'var(--text-muted)',
+          marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em',
+          transition: 'color .2s',
+        }}>
+          {label}
+        </label>
+      )}
       <div style={{ position: 'relative' }}>
-        <div style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: focused ? 'var(--accent)' : 'var(--text-muted)', transition: 'color .2s', display: 'flex', alignItems: 'center', pointerEvents: 'none' }}>{icon}</div>
+        <div style={{
+          position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
+          color: focused ? 'var(--accent)' : 'var(--text-muted)',
+          transition: 'color .2s', display: 'flex', alignItems: 'center', pointerEvents: 'none',
+        }}>
+          {icon}
+        </div>
         <input
           type={isPassword ? (showPass ? 'text' : 'password') : type}
-          placeholder={placeholder} value={value} onChange={onChange} required={required} minLength={minLength} autoFocus={autoFocus}
-          onFocus={() => setFocused(true)} onBlur={() => setFocused(false)}
-          style={{ width: '100%', padding: '12px 42px 12px 42px', borderRadius: 10, background: 'var(--bg-surface)', border: `1.5px solid ${focused ? 'var(--accent)' : 'var(--border)'}`, color: 'var(--text-primary)', fontSize: '.88rem', fontWeight: 500, outline: 'none', transition: 'border-color .2s, box-shadow .2s', boxShadow: focused ? '0 0 0 3px rgba(0,230,118,.1)' : 'none', boxSizing: 'border-box' }}
+          placeholder={placeholder}
+          value={value}
+          onChange={onChange}
+          required={required}
+          minLength={minLength}
+          autoFocus={autoFocus}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          style={{
+            width: '100%',
+            padding: '16px 50px 16px 50px',
+            borderRadius: 14,
+            background: focused ? 'rgba(0,230,118,.03)' : 'var(--bg-surface)',
+            border: `2px solid ${focused ? 'var(--accent)' : 'var(--border)'}`,
+            color: 'var(--text-primary)',
+            fontSize: '1rem',
+            fontWeight: 600,
+            outline: 'none',
+            transition: 'border-color .2s, box-shadow .2s, background .2s',
+            boxShadow: focused ? '0 0 0 4px rgba(0,230,118,.1)' : 'none',
+            boxSizing: 'border-box',
+            minHeight: 56,
+            WebkitAppearance: 'none',
+            appearance: 'none',
+          }}
         />
         {isPassword && (
-          <button type="button" onClick={() => setShowPass(p => !p)} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: focused ? 'var(--accent)' : 'var(--text-muted)', padding: 4, background: 'none', border: 'none', cursor: 'pointer', transition: 'color .2s', display: 'flex' }} aria-label="Toggle password visibility">
-            {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
+          <button
+            type="button"
+            onClick={() => setShowPass(p => !p)}
+            style={{
+              position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
+              color: focused ? 'var(--accent)' : 'var(--text-muted)',
+              padding: 6, background: 'none', border: 'none',
+              cursor: 'pointer', transition: 'color .2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              width: 40, height: 40, borderRadius: 10,
+              WebkitTapHighlightColor: 'transparent',
+            }}
+            aria-label="Toggle password visibility"
+          >
+            {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         )}
       </div>
@@ -82,10 +168,37 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
   );
 };
 
-/* ── Main Component ──────────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════
+   FOOTBALL PITCH DECORATION
+   ═══════════════════════════════════════════════════════════════ */
+const PitchDecoration = () => (
+  <svg
+    width="100%" height="100%"
+    style={{ position: 'absolute', inset: 0, opacity: 0.018, pointerEvents: 'none' }}
+    preserveAspectRatio="none"
+    viewBox="0 0 400 600"
+  >
+    <rect x="0" y="0" width="400" height="600" fill="none" stroke="white" strokeWidth="2" />
+    <line x1="200" y1="0" x2="200" y2="600" stroke="white" strokeWidth="1.5" />
+    <circle cx="200" cy="300" r="60" fill="none" stroke="white" strokeWidth="1.5" />
+    <circle cx="200" cy="300" r="3" fill="white" />
+    <rect x="80" y="0" width="240" height="80" fill="none" stroke="white" strokeWidth="1.5" />
+    <rect x="140" y="0" width="120" height="30" fill="none" stroke="white" strokeWidth="1" />
+    <rect x="80" y="520" width="240" height="80" fill="none" stroke="white" strokeWidth="1.5" />
+    <rect x="140" y="570" width="120" height="30" fill="none" stroke="white" strokeWidth="1" />
+    <path d="M80 80 L0 120" stroke="white" strokeWidth="1" />
+    <path d="M320 80 L400 120" stroke="white" strokeWidth="1" />
+    <path d="M80 520 L0 480" stroke="white" strokeWidth="1" />
+    <path d="M320 520 L400 480" stroke="white" strokeWidth="1" />
+  </svg>
+);
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN LOGIN COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
 export default function Login() {
   injectStyles();
-  
+
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -115,13 +228,13 @@ export default function Login() {
       }
       navigate('/profile');
     } catch (err) {
-      const errors = { 
-        'auth/user-not-found': 'No account found with this email', 
-        'auth/wrong-password': 'Incorrect password', 
-        'auth/email-already-in-use': 'Email already registered', 
-        'auth/weak-password': 'Password must be at least 6 characters', 
-        'auth/invalid-email': 'Invalid email address', 
-        'auth/invalid-credential': 'Invalid email or password' 
+      const errors = {
+        'auth/user-not-found': 'No account found with this email',
+        'auth/wrong-password': 'Incorrect password',
+        'auth/email-already-in-use': 'Email already registered',
+        'auth/weak-password': 'Password must be at least 6 characters',
+        'auth/invalid-email': 'Invalid email address',
+        'auth/invalid-credential': 'Invalid email or password',
       };
       setError(errors[err.code] || err.message);
     }
@@ -142,8 +255,18 @@ export default function Login() {
     setTimeout(() => { setIsLogin(p => !p); setModeTrans(false); }, 250);
   }, []);
 
-    return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, position: 'relative', overflow: 'hidden' }}>
+  return (
+    <div style={{
+      minHeight: '100vh',
+      minHeight: '100dvh',
+      background: 'var(--bg-deep)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 20,
+      position: 'relative',
+      overflow: 'hidden',
+    }}>
       <SEO
         title="Sign In"
         description="Sign in to ZOKASCORE to track your football predictions, earn badges, and climb the leaderboard."
@@ -151,51 +274,159 @@ export default function Login() {
         url="https://zokascore.com/login"
       />
 
-      {/* Background Glow Effects */}
+      {/* ── Background Decorations ── */}
+      <PitchDecoration />
 
-      <div style={{ position: 'absolute', top: '-20%', left: '10%', width: '40%', height: '60%', background: 'radial-gradient(ellipse, rgba(0,230,118,.04) 0%, transparent 70%)', pointerEvents: 'none' }} />
-      <div style={{ position: 'absolute', bottom: '-10%', right: '10%', width: '30%', height: '50%', background: 'radial-gradient(ellipse, rgba(59,130,246,.03) 0%, transparent 70%)', pointerEvents: 'none' }} />
+      {/* Green glow top-left */}
+      <div style={{
+        position: 'absolute', top: '-25%', left: '-10%',
+        width: '70%', height: '65%',
+        background: 'radial-gradient(ellipse, rgba(0,230,118,.06) 0%, transparent 65%)',
+        pointerEvents: 'none',
+      }} />
+      {/* Blue glow bottom-right */}
+      <div style={{
+        position: 'absolute', bottom: '-15%', right: '-10%',
+        width: '60%', height: '55%',
+        background: 'radial-gradient(ellipse, rgba(59,130,246,.04) 0%, transparent 65%)',
+        pointerEvents: 'none',
+      }} />
+      {/* Subtle green accent glow behind card */}
+      <div style={{
+        position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -55%)',
+        width: '120%', height: '60%',
+        background: 'radial-gradient(ellipse, rgba(0,230,118,.035) 0%, transparent 55%)',
+        pointerEvents: 'none',
+      }} />
 
-      <div className="auth-pop" style={{ 
-        width: '100%', maxWidth: 420, background: 'var(--bg-card)', 
-        border: '1px solid var(--border)', borderRadius: 20, 
-        padding: '36px 32px', position: 'relative', zIndex: 1,
-        boxShadow: '0 24px 60px rgba(0,0,0,.3)', backdropFilter: 'blur(12px)'
-      }}>
-        <div style={{ textAlign: 'center', marginBottom: 28 }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'linear-gradient(135deg, var(--accent), #69f0ae)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16, boxShadow: '0 8px 24px rgba(0,230,118,.2)' }}>
-            <span style={{ color: 'var(--bg-deep)', fontWeight: 900, fontSize: '1.2rem', fontFamily: 'var(--font-display)' }}>Z</span>
+      {/* ── Main Card ── */}
+      <div
+        className="auth-pop auth-glow"
+        style={{
+          width: '100%',
+          maxWidth: 440,
+          background: 'var(--bg-card)',
+          border: '1.5px solid rgba(0,230,118,.08)',
+          borderRadius: 24,
+          padding: '40px 28px 32px',
+          position: 'relative',
+          zIndex: 1,
+          boxShadow: '0 24px 64px rgba(0,0,0,.35), 0 0 80px rgba(0,230,118,.03)',
+          backdropFilter: 'blur(16px)',
+          animation: 'auth_borderGlow 4s ease-in-out infinite, auth_pop .45s cubic-bezier(.22,1,.36,1) both',
+          overflow: 'hidden',
+        }}
+      >
+        {/* Shine effect on card */}
+        <div style={{
+          position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%',
+          background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.02), transparent)',
+          animation: 'auth_shine 6s ease-in-out 2s infinite',
+          pointerEvents: 'none',
+        }} />
+
+        {/* ── Header: Logo + Title ── */}
+        <div style={{ textAlign: 'center', marginBottom: 32, position: 'relative' }}>
+          {/* Logo */}
+          <div
+            className="auth-float"
+            style={{
+              width: 68, height: 68, borderRadius: 20,
+              background: 'linear-gradient(145deg, #00e676 0%, #00c853 40%, #059669 100%)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              marginBottom: 20,
+              boxShadow: '0 8px 28px rgba(0,230,118,.3), 0 2px 8px rgba(0,230,118,.2), inset 0 1px 0 rgba(255,255,255,.2)',
+              position: 'relative', overflow: 'hidden',
+            }}
+          >
+            <span style={{ color: 'var(--bg-deep)', fontWeight: 900, fontSize: '1.5rem', fontFamily: 'var(--font-display)', textShadow: '0 1px 0 rgba(255,255,255,.15)' }}>Z</span>
+            {/* Glossy top half */}
+            <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(180deg, rgba(255,255,255,.22) 0%, transparent 100%)', borderRadius: '20px 20px 0 0', pointerEvents: 'none' }} />
           </div>
-          <h2 style={{ margin: 0, fontSize: '1.6rem', fontWeight: 800, color: 'var(--text-primary)', opacity: modeTrans ? 0 : 1, transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)', transition: `opacity .2s, transform .2s` }}>
+
+          {/* Title */}
+          <h2 style={{
+            margin: 0, fontSize: '1.7rem', fontWeight: 900,
+            color: 'var(--text-primary)', letterSpacing: '.01em',
+            opacity: modeTrans ? 0 : 1,
+            transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)',
+            transition: `opacity .2s, transform .2s`,
+          }}>
             {isLogin ? 'Welcome Back' : 'Create Account'}
           </h2>
-          <p style={{ margin: '6px 0 0', fontSize: '.88rem', color: 'var(--text-muted)', opacity: modeTrans ? 0 : 1, transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)', transition: `opacity .2s .05s, transform .2s .05s` }}>
+          <p style={{
+            margin: '8px 0 0', fontSize: '.95rem', fontWeight: 600,
+            color: 'var(--text-muted)',
+            opacity: modeTrans ? 0 : 1,
+            transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)',
+            transition: `opacity .2s .05s, transform .2s .05s`,
+          }}>
             {isLogin ? 'Sign in to track your predictions' : 'Join the prediction community'}
           </p>
         </div>
 
+        {/* ── Error Message ── */}
         {error && (
-          <div style={{ 
-            padding: '12px 16px', background: 'rgba(239,68,68,.08)', 
-            border: '1px solid rgba(239,68,68,.2)', borderRadius: 10, 
-            color: '#ef4444', fontSize: '.84rem', marginBottom: 20, 
-            display: 'flex', alignItems: 'center', gap: 10,
-            opacity: errorVis ? 1 : 0, transform: errorVis ? 'translateY(0)' : 'translateY(-8px)', 
-            transition: 'opacity .3s, transform .3s' 
+          <div style={{
+            padding: '16px 18px',
+            background: 'rgba(239,68,68,.08)',
+            border: '1.5px solid rgba(239,68,68,.2)',
+            borderRadius: 14,
+            color: '#ef4444',
+            fontSize: '.92rem',
+            fontWeight: 700,
+            marginBottom: 24,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+            opacity: errorVis ? 1 : 0,
+            transform: errorVis ? 'translateY(0)' : 'translateY(-10px)',
+            transition: 'opacity .3s, transform .3s',
+            animation: errorVis ? 'auth_slideErr .3s ease both' : 'none',
           }}>
-            <span style={{ flex: 1 }}>{error}</span>
-            <button onClick={() => setError('')} className="zoka-btn" style={{ background: 'none', border: 'none', color: '#ef4444', padding: 2, display: 'flex', opacity: .6 }} aria-label="Dismiss error"><X size={16} /></button>
+            <span style={{ flex: 1, lineHeight: 1.4 }}>{error}</span>
+            <button
+              onClick={() => setError('')}
+              className="zoka-btn"
+              style={{
+                background: 'rgba(239,68,68,.1)', border: 'none',
+                color: '#ef4444', padding: 6, display: 'flex',
+                borderRadius: 8, width: 32, height: 32,
+                alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}
+              aria-label="Dismiss error"
+            >
+              <X size={16} />
+            </button>
           </div>
         )}
 
-        <button onClick={handleGoogle} disabled={loading} className="zoka-btn" style={{ 
-          width: '100%', padding: '12px', borderRadius: 10, 
-          background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', 
-          color: 'var(--text-primary)', fontWeight: 600, fontSize: '.88rem', 
-          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, 
-          marginBottom: 20, opacity: loading ? .6 : 1 
-        }}>
-          <svg width="18" height="18" viewBox="0 0 24 24">
+        {/* ── Google Button ── */}
+        <button
+          onClick={handleGoogle}
+          disabled={loading}
+          className="zoka-btn"
+          style={{
+            width: '100%',
+            padding: '16px',
+            borderRadius: 14,
+            background: 'rgba(255,255,255,.04)',
+            border: '1.5px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontWeight: 700,
+            fontSize: '.95rem',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 12,
+            marginBottom: 24,
+            opacity: loading ? .5 : 1,
+            minHeight: 54,
+            transition: 'all .18s cubic-bezier(.22,1,.36,1), opacity .2s',
+          }}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
             <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
@@ -204,52 +435,203 @@ export default function Login() {
           Continue with Google
         </button>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
-          <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'uppercase' }}>or use email</span>
-          <div style={{ flex: 1, height: 1, background: 'var(--border)' }} />
+        {/* ── Divider ── */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
+          <div style={{ flex: 1, height: 1.5, background: 'var(--border)', borderRadius: 1 }} />
+          <span style={{
+            fontSize: '.82rem', fontWeight: 800,
+            color: 'var(--text-muted)', textTransform: 'uppercase',
+            letterSpacing: '.1em',
+          }}>
+            or use email
+          </span>
+          <div style={{ flex: 1, height: 1.5, background: 'var(--border)', borderRadius: 1 }} />
         </div>
 
+        {/* ── Form ── */}
         <form onSubmit={handleSubmit}>
-          <div style={{ overflow: 'hidden', maxHeight: isLogin ? '0px' : '120px', opacity: isLogin ? 0 : 1, transition: `max-height .4s ${EASE_OUT}, opacity .3s` }}>
-            <InputField icon={<User size={18} />} type="text" placeholder="Your display name" value={displayName} onChange={e => setDisplayName(e.target.value)} label="Display Name" autoFocus={!isLogin} />
+          {/* Display Name (register only) */}
+          <div style={{
+            overflow: 'hidden',
+            maxHeight: isLogin ? '0px' : '140px',
+            opacity: isLogin ? 0 : 1,
+            transition: `max-height .45s ${EASE_OUT}, opacity .35s`,
+          }}>
+            <InputField
+              icon={<User size={20} />}
+              type="text"
+              placeholder="Your display name"
+              value={displayName}
+              onChange={e => setDisplayName(e.target.value)}
+              label="Display Name"
+              autoFocus={!isLogin}
+            />
           </div>
-          
-          <InputField icon={<Mail size={18} />} type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} label="Email" required autoFocus={isLogin} />
-          <InputField icon={<Lock size={18} />} type="password" placeholder="Min. 6 characters" value={password} onChange={e => setPassword(e.target.value)} label="Password" required minLength={6} />
-          
+
+          {/* Email */}
+          <InputField
+            icon={<Mail size={20} />}
+            type="email"
+            placeholder="you@example.com"
+            value={email}
+            onChange={e => setEmail(e.target.value)}
+            label="Email"
+            required
+            autoFocus={isLogin}
+          />
+
+          {/* Password */}
+          <InputField
+            icon={<Lock size={20} />}
+            type="password"
+            placeholder="Min. 6 characters"
+            value={password}
+            onChange={e => setPassword(e.target.value)}
+            label="Password"
+            required
+            minLength={6}
+          />
+
+          {/* Password strength (register only) */}
           {!isLogin && <PasswordStrength password={password} />}
 
+          {/* Forgot password (login only) */}
           {isLogin && (
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20, opacity: modeTrans ? 0 : 1, transition: 'opacity .2s' }}>
-              <button type="button" className="zoka-btn" style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--accent)', fontSize: '.82rem', fontWeight: 600, padding: 0 }}>Forgot password?</button>
+            <div style={{
+              display: 'flex', justifyContent: 'flex-end', marginBottom: 24,
+              opacity: modeTrans ? 0 : 1, transition: 'opacity .2s',
+            }}>
+              <button
+                type="button"
+                className="zoka-btn"
+                style={{
+                  background: 'none', border: 'none', cursor: 'pointer',
+                  color: 'var(--accent)', fontSize: '.9rem',
+                  fontWeight: 700, padding: '4px 0',
+                }}
+              >
+                Forgot password?
+              </button>
             </div>
           )}
 
-          <button type="submit" className="zoka-btn" disabled={loading} style={{ 
-            width: '100%', height: 48, fontSize: '.92rem', position: 'relative', overflow: 'hidden', 
-            borderRadius: 10, background: 'var(--accent)', color: 'var(--bg-deep)', 
-            fontWeight: 700, border: 'none', boxShadow: '0 4px 14px rgba(0,230,118,.2)' 
-          }}>
-            <span style={{ opacity: loading ? 0 : 1, transform: loading ? 'translateY(8px)' : 'translateY(0)', transition: 'opacity .2s, transform .2s', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              {isLogin ? 'Sign In' : 'Create Account'} <ArrowRight size={18} />
+          {/* Submit Button */}
+          <button
+            type="submit"
+            className="zoka-btn"
+            disabled={loading}
+            style={{
+              width: '100%',
+              height: 58,
+              fontSize: '1.05rem',
+              position: 'relative',
+              overflow: 'hidden',
+              borderRadius: 16,
+              background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+              color: 'var(--bg-deep)',
+              fontWeight: 900,
+              border: 'none',
+              boxShadow: '0 6px 24px rgba(0,230,118,.3), 0 2px 8px rgba(0,230,118,.15), inset 0 1px 0 rgba(255,255,255,.2)',
+              letterSpacing: '.02em',
+              marginTop: isLogin ? 0 : 8,
+            }}
+          >
+            {/* Shine on button */}
+            <div style={{
+              position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%',
+              background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent)',
+              animation: 'auth_shine 4s ease-in-out 1s infinite',
+              pointerEvents: 'none',
+            }} />
+            <span style={{
+              opacity: loading ? 0 : 1,
+              transform: loading ? 'translateY(8px)' : 'translateY(0)',
+              transition: 'opacity .2s, transform .2s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              position: 'relative', zIndex: 1,
+            }}>
+              {isLogin ? 'Sign In' : 'Create Account'}
+              <ArrowRight size={20} strokeWidth={2.5} />
             </span>
-            {loading && <span style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}><Loader size={22} style={{ animation: 'auth_spin .8s linear infinite' }} /></span>}
+            {loading && (
+              <span style={{
+                position: 'absolute', top: '50%', left: '50%',
+                transform: 'translate(-50%, -50%)',
+              }}>
+                <Loader size={26} style={{ animation: 'auth_spin .7s linear infinite' }} />
+              </span>
+            )}
           </button>
         </form>
 
-        <div style={{ textAlign: 'center', marginTop: 24, fontSize: '.84rem', color: 'var(--text-muted)' }}>
+        {/* ── Toggle Mode ── */}
+        <div style={{
+          textAlign: 'center', marginTop: 28,
+          fontSize: '.95rem', fontWeight: 600, color: 'var(--text-muted)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button onClick={toggleMode} className="zoka-btn" style={{ background: 'none', border: 'none', color: 'var(--accent)', fontWeight: 700, cursor: 'pointer', fontSize: '.84rem', padding: 0 }}>
+          <button
+            onClick={toggleMode}
+            className="zoka-btn"
+            style={{
+              background: 'none', border: 'none', color: 'var(--accent)',
+              fontWeight: 900, cursor: 'pointer', fontSize: '.95rem',
+              padding: '4px 0', position: 'relative',
+            }}
+          >
             {isLogin ? 'Sign Up' : 'Sign In'}
           </button>
         </div>
 
-        <div style={{ marginTop: 24, padding: '14px 16px', background: 'rgba(255,255,255,.02)', border: '1px solid var(--border)', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
-          <Shield size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-          <p style={{ textAlign: 'left', margin: 0, fontSize: '.72rem', color: 'var(--text-muted)', lineHeight: 1.5 }}>
-            Secure authentication powered by Firebase. Configure in <code style={{ background: 'rgba(255,255,255,.06)', padding: '1px 5px', borderRadius: 4, fontSize: '.68rem' }}>.env</code> to enable live mode.
-          </p>
+        {/* ── Security Footer ── */}
+        <div style={{
+          marginTop: 28, padding: '16px 18px',
+          background: 'rgba(255,255,255,.02)',
+          border: '1px solid var(--border)',
+          borderRadius: 14,
+          display: 'flex', alignItems: 'flex-start', gap: 14,
+        }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(0,230,118,.06)',
+            border: '1px solid rgba(0,230,118,.1)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
+          }}>
+            <Shield size={18} style={{ color: 'var(--accent)' }} />
+          </div>
+          <div>
+            <p style={{
+              textAlign: 'left', margin: 0,
+              fontSize: '.82rem', fontWeight: 700,
+              color: 'var(--text-muted)', lineHeight: 1.6,
+              marginBottom: 4,
+            }}>
+              Secure authentication powered by Firebase
+            </p>
+            <p style={{
+              textAlign: 'left', margin: 0,
+              fontSize: '.78rem', fontWeight: 600,
+              color: 'var(--text-muted)', lineHeight: 1.5, opacity: .7,
+            }}>
+              Configure in <code style={{
+                background: 'rgba(255,255,255,.06)', padding: '2px 8px',
+                borderRadius: 6, fontSize: '.75rem', fontWeight: 700,
+              }}>.env</code> to enable live mode.
+            </p>
+          </div>
+        </div>
+
+        {/* ── Football decoration at bottom ── */}
+        <div style={{
+          textAlign: 'center', marginTop: 20,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+          opacity: .25,
+        }}>
+          <div style={{ width: 40, height: 1, background: 'var(--border)' }} />
+          <span style={{ fontSize: '.7rem' }}>⚽</span>
+          <div style={{ width: 40, height: 1, background: 'var(--border)' }} />
         </div>
       </div>
     </div>

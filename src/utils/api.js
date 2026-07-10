@@ -164,65 +164,157 @@ export const initFirebaseSync = async () => {
    LEAGUE COLORS
    ═══════════════════════════════════════════════════════════════ */
 const LEAGUE_COLORS = {
-  // Football — Top 5
-  39: '#3d195b', // Premier League
-  140: '#ee8707', // La Liga
-  135: '#024494', // Serie A
-  78: '#d20515', // Bundesliga
-  61: '#091c3e', // Ligue 1
-  // Football — UEFA
-  2: '#001838', // Champions League
-  3: '#ff6b00', // Europa League
-  848: '#2d6a4f', // Conference League
-  // Football — International
-  1: '#1a3c6e', // World Cup
-  4: '#003366', // Euro Championship
-  5: '#004d99', // Nations League
-  // Football — Domestic Cups
-  40: '#5c2d91', // Championship
-  44: '#2d4a22', // FA Cup
-  45: '#1a1a2e', // League Cup
-  143: '#c60b1e', // Copa del Rey
-  137: '#024494', // Coppa Italia
-  81: '#d20515', // DFB Pokal
-  66: '#091c3e', // Coupe de France
-  // Football — Secondary
-  94: '#006600', // Primeira Liga
-  88: '#e63e21', // Eredivisie
-  203: '#c8102e', // Süper Lig
-  50: '#003087', // Premiership (Scotland)
-  // Basketball
-  12: '#c8102e', // NBA
-  13: '#003399', // EuroLeague
-  14: '#cc0000', // EuroCup
-  44: '#ffd700', // Liga ACB
-  34: '#008c45', // LBA
-  32: '#000000', // BBL
-  36: ' #002395', // LNB Pro A
-  49: '#00843d', // NBL
+  // ── Football — Top 5 ──
+  39: '#3d195b',   // Premier League
+  140: '#ee8707',  // La Liga
+  135: '#024494',  // Serie A
+  78: '#d20515',   // Bundesliga
+  61: '#091c3e',   // Ligue 1
 
-// Summer leagues
-  253: '#0047AB', // MLS — blue
-  262: '#006341', // Liga MX — green
-  71:  '#009C3B', // Brazil Serie A — green
-  128: '#75AADB', // Argentina Primera — light blue
+  // ── Football — UEFA ──
+  2: '#001838',    // Champions League
+  3: '#ff6b00',    // Europa League
+  848: '#2d6a4f',  // Conference League
+
+  // ── Football — International ──
+  1: '#1a3c6e',    // World Cup
+  4: '#003366',    // Euro Championship
+  5: '#004d99',    // Nations League
+
+  // ── Football — Domestic Cups ──
+  40: '#5c2d91',   // Championship
+  44: '#2d4a22',   // FA Cup
+  45: '#1a1a2e',   // League Cup
+  143: '#c60b1e',  // Copa del Rey
+  137: '#024494',  // Coppa Italia
+  81: '#d20515',   // DFB Pokal
+  66: '#091c3e',   // Coupe de France
+
+  // ── Football — Secondary ──
+  94: '#006600',   // Primeira Liga
+  88: '#e63e21',   // Eredivisie
+  203: '#c8102e',  // Süper Lig
+  50: '#003087',   // Premiership (Scotland)
+
+  // ── Football — Summer leagues ──
+  253: '#0047AB',  // MLS
+  262: '#006341',  // Liga MX
+  71: '#009C3B',   // Brazil Serie A
+  128: '#75AADB',  // Argentina Primera
+
+  // ── Basketball — Major ──
+  12: '#1D428A',   // NBA (navy blue)
+  13: '#003399',   // EuroLeague
+  14: '#cc0000',   // EuroCup
+  44: '#ffd700',   // Liga ACB (Spain)
+  34: '#008c45',   // LBA (Italy)
+  32: '#000000',   // BBL (Germany)
+  36: '#002395',   // LNB Pro A (France)
+  49: '#00843d',   // NBL (Australia)
+
+  // ── Basketball — Secondary ──
+  115: '#002868',  // Liga Americas
+  116: '#DD0000',  // ABA League
+  114: '#003DA5',  // Adriatic League
+  119: '#00205B',  // Basketball Champions League
+  132: '#CE1126',  // NBL (Australia)
+  766: '#7B2D8B',  // BCL Americas
+  891: '#FF6600',  // FIBA Europe Cup
+  33: '#00843D',   // HEBA A1 (Greece)
+  35: '#FEBE10',   // BNXT League
+  37: '#003DA5',   // VTB United League
+  38: '#00205B',   // Chinese CBA
+  40: '#CE1126',   // Korean KBL
+  41: '#009B3A',   // Brazilian NBB
+  42: '#FFD700',   // Japanese B.League
+  43: '#006233',   // Filipino PBA
+  45: '#003087',   // Lebanese FLB
+  60: '#7B2D8B',   // EuroCup Women
+  61: '#FF6600',   // FIBA Europe Cup Women
+  62: '#002868',   // Women's EuroLeague
 };
-
 
 const getLeagueColor = (id) => LEAGUE_COLORS[id] || '#1e293b';
 
 /* ═══════════════════════════════════════════════════════════════
    STATUS CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
+
+// ── Football ──
 const FB_LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P'];
 const FB_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO'];
 const FB_SCHEDULED_STATUSES = ['TBD', 'NS', 'SUSP', 'PST', 'CANC', 'INT'];
 
+// ── Basketball ──
+// API-Basketball uses: Q1/Q2/Q3/Q4 or 1Q/2Q/3Q/4Q for live, OT for overtime
 const BASKETBALL_LIVE_STATUSES = [
-  '1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT',
+  '1Q', 'Q1',
+  '2Q', 'Q2',
+  '3Q', 'Q3',
+  '4Q', 'Q4',
+  'OT', 'HT',
 ];
-const BASKETBALL_FINISHED_STATUSES = ['FT', 'ABD'];
-const BASKETBALL_SCHEDULED_STATUSES = ['NS', 'POSTP', 'CANC', 'SUSP'];
+
+// API-Basketball uses: FT for finished, AOT for finished after overtime, ABD for abandoned
+const BASKETBALL_FINISHED_STATUSES = ['FT', 'AOT', 'ABD'];
+
+// API-Basketball uses: NS for not started, POST for postponed, CANC for cancelled, SUSP for suspended
+const BASKETBALL_SCHEDULED_STATUSES = ['NS', 'POST', 'CANC', 'SUSP'];
+
+/* ═══════════════════════════════════════════════════════════════
+   BASKETBALL LEAGUE PRIORITY (for predictions ranking)
+   ═══════════════════════════════════════════════════════════════ */
+export const BASKETBALL_LEAGUE_PRIORITY = {
+  // Tier 1 — Major global leagues
+  12: 100,   // NBA
+  13: 95,    // EuroLeague
+
+  // Tier 2 — Top European domestic
+  44: 85,    // Liga ACB (Spain)
+  34: 82,    // LBA (Italy)
+  36: 80,    // LNB Pro A (France)
+  32: 78,    // BBL (Germany)
+  33: 76,    // HEBA A1 (Greece)
+
+  // Tier 3 — European secondary
+  14: 72,    // EuroCup
+  119: 70,   // Basketball Champions League
+  116: 68,   // ABA League
+  114: 66,   // Adriatic League
+  37: 64,    // VTB United League
+  35: 62,    // BNXT League
+
+  // Tier 4 — International / Americas
+  132: 58,   // NBL (Australia)
+  49: 56,    // NBL (Australia — alt ID)
+  115: 54,   // Liga Americas
+  766: 52,   // BCL Americas
+  891: 50,   // FIBA Europe Cup
+
+  // Tier 5 — Asian / other
+  38: 45,    // Chinese CBA
+  42: 43,    // Japanese B.League
+  43: 41,    // Filipino PBA
+  41: 40,    // Brazilian NBB
+  45: 38,    // Lebanese FLB
+  40: 36,    // Korean KBL
+
+  // Tier 6 — Women's
+  62: 30,    // Women's EuroLeague
+  60: 28,    // EuroCup Women
+  61: 26,    // FIBA Europe Cup Women
+};
+
+/**
+ * Get priority score for a basketball league.
+ * Used by prediction views to sort games by importance.
+ * @param {string|number} leagueId
+ * @returns {number} Priority score (0-100)
+ */
+export const getBasketballLeaguePriority = (leagueId) => {
+  const id = Number(leagueId);
+  return BASKETBALL_LEAGUE_PRIORITY[id] || 20;
+};
 
 /* ═══════════════════════════════════════════════════════════════
    DATE / TIME HELPERS
@@ -285,16 +377,13 @@ function isInWindow(date) {
 }
 
 /**
- * Check if we're in the "waiting for rollover" window (00:00 - 00:20 AM).
+ * Check if we're in the "waiting for rollover" window (00:00 - 00:25 UTC).
  * During this time, data might be transitioning between collections.
- * The fallback logic in _readDayFixtures handles this transparently,
- * but this function lets the UI show a subtle "updating..." indicator.
  */
 export function isInRolloverWindow() {
   const now = new Date();
   const utcHour = now.getUTCHours();
   const utcMinute = now.getUTCMinutes();
-  // Between 00:00 and 00:25 UTC
   return utcHour === 0 && utcMinute < 25;
 }
 
@@ -423,6 +512,11 @@ function _transformFootballFormat(m) {
 function _transformBasketballFormat(m) {
   const id = String(m.id || '');
   const s = m.status || '';
+
+  // Map currentPeriod (1-5) to display string for minute field
+  const periodMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4', 5: 'OT' };
+  const minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
+
   return {
     id,
     sport: 'basketball',
@@ -482,7 +576,7 @@ function _transformBasketballFormat(m) {
     isLive: BASKETBALL_LIVE_STATUSES.includes(s),
     isFinished: BASKETBALL_FINISHED_STATUSES.includes(s),
     isScheduled: BASKETBALL_SCHEDULED_STATUSES.includes(s),
-    minute: m.currentPeriod ?? null,
+    minute,
     venue: null,
     referee: null,
   };
@@ -593,25 +687,25 @@ function _emptyResult(error = null) {
    INTERNAL: Read fixtures for a specific date
    ═══════════════════════════════════════════════════════════════
    SMART FALLBACK LOGIC:
-   
+
    With the new midnight rollover system (00:05 AM with 15-min
    retries), data transitions happen quickly. But this function
    handles ALL edge cases:
-   
+
    1. NORMAL (99% of requests):
       Primary collection has the right data → return immediately.
       No extra reads.
-   
+
    2. MIDNIGHT TRANSITION (00:00 - 00:20 AM):
       Calendar date changed but rollover hasn't run yet.
       "Today's" data is still in tomorrowFixtures.
       Fallback scans all 3 collections → finds it.
-   
+
    3. SERVER DOWNTIME:
       Server was down for multiple days.
       Old docs have wrong dates (e.g., tomorrowFixtures has
       yesterday's date). The date filter catches this.
-   
+
    4. ROLLOVER FAILURE:
       If rollover failed completely and 3 AM fetch also failed,
       the fallback still tries to find data anywhere.
@@ -791,7 +885,7 @@ export const subscribeToTodayFixtures = (callback) => {
     },
     (err) => {
       if (!active) return;
-      callback({ matches: [], error: err.message });
+      callback({ matches, error: err.message });
     }
   );
   return () => {
@@ -935,7 +1029,7 @@ export const subscribeToBasketballTodayFixtures = (callback) => {
     },
     (err) => {
       if (!active) return;
-      callback({ matches: [], error: err.message });
+      callback({ matches, error: err.message });
     }
   );
   return () => {
@@ -1048,7 +1142,7 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 /* ═══════════════════════════════════════════════════════════════
    BACKEND STATUS — Read meta docs
    Shows when the backend last synced, rollover status, etc.
-   
+
    Returns parsed, user-friendly data:
    - rolloverAt: When the midnight rollover happened
    - fetchedAt: When tomorrow's fixtures were fetched
@@ -1068,7 +1162,7 @@ export const fetchBackendStatus = async () => {
     // Parse rollover status for a sport
     const parseSportStatus = (raw) => {
       if (!raw) return { status: 'unknown', rolloverAt: null, fetchedAt: null };
-      
+
       const todayStr = getTodayStr();
       const rolloverDone = raw.lastRolloverDate === todayStr;
       const fetchDone = raw.lastDailyFetchDate === todayStr;
@@ -1085,6 +1179,7 @@ export const fetchBackendStatus = async () => {
         lastRolloverDate: raw.lastRolloverDate || null,
         lastDailyFetchDate: raw.lastDailyFetchDate || null,
         lastTomorrowDate: raw.lastTomorrowDate || null,
+        fetchDone,
       };
     };
 
@@ -1114,13 +1209,13 @@ export const fetchBackendStatus = async () => {
  */
 export const getSyncStatusMessage = (status) => {
   if (!status) return 'Unknown';
-  
+
   if (status.status === 'pending') {
-    return isInRolloverWindow() 
-      ? 'Updating...' 
+    return isInRolloverWindow()
+      ? 'Updating...'
       : 'Rollover pending';
   }
-  
+
   if (status.rolloverAt) {
     try {
       const d = new Date(status.rolloverAt);
@@ -1129,7 +1224,7 @@ export const getSyncStatusMessage = (status) => {
       return 'Updated';
     }
   }
-  
+
   return 'Updated';
 };
 

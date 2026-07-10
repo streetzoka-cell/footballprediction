@@ -13,6 +13,7 @@ import {
   getTodayStr,
   getYesterdayStr,
   getTomorrowStr,
+  getBasketballLeaguePriority,
 } from '../utils/api';
 
 import { useAuth } from '../context/AuthContext';
@@ -78,12 +79,8 @@ const injectStyles = () => {
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS & UTILITIES
    ═══════════════════════════════════════════════════════════════ */
-const LEAGUE_PRIORITY_BB = {
-  12: 100, 13: 88, 132: 82, 115: 78, 766: 75, 891: 70, 116: 72, 114: 68, 119: 65,
-};
-
 function gamePriorityScore(g) {
-  const base = LEAGUE_PRIORITY_BB[g.leagueKey] || 30;
+  const base = getBasketballLeaguePriority(g.leagueKey);
   const liveBoost = g.isLive ? 50 : 0;
   const scheduledBoost = g.isScheduled ? 10 : 0;
   return base + liveBoost + scheduledBoost;
@@ -165,7 +162,7 @@ const StatusBadge = ({ game }) => {
   if (game.isLive) { bg = 'rgba(239,68,68,.15)'; color = '#ef4444'; label = game.minute || s; }
   else if (game.isFinished) { bg = 'rgba(34,197,94,.1)'; color = '#4ade80'; label = s === 'AOT' ? 'OT' : 'FT'; }
   else if (s === 'SUSP') { bg = 'rgba(245,158,11,.1)'; color = '#f59e0b'; label = 'SUSP'; }
-  else if (s === 'POSTP') { bg = 'rgba(245,158,11,.1)'; color = '#f59e0b'; label = 'POSTP'; }
+  else if (s === 'POST') { bg = 'rgba(245,158,11,.1)'; color = '#f59e0b'; label = 'POSTP'; }
   else if (s === 'CANC') { bg = 'rgba(239,68,68,.1)'; color = '#ef4444'; label = 'CANC'; }
 
   return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 6, letterSpacing: .3, background: bg, color, animation: 'bb_badgePop .35s ease' }}>{label}</span>;
@@ -289,10 +286,9 @@ const PredictCard = ({ game, prediction, onPredict, onRemove, loggedIn, index })
   const currentPick = prediction?.pick || null;
   const kickOff = game.kickoff || '';
 
-  const pickLabels = { home: game.homeTeam?.name || 'Home', draw: 'Draw', away: game.awayTeam?.name || 'Away' };
+  const pickLabels = { home: game.homeTeam?.name || 'Home', away: game.awayTeam?.name || 'Away' };
   const pickColors = {
     home: { bg: currentPick === 'home' ? 'rgba(29,66,138,.18)' : 'rgba(255,255,255,.04)', border: currentPick === 'home' ? '#1D428A' : 'var(--border)', color: currentPick === 'home' ? '#60a5fa' : 'var(--text-secondary)' },
-    draw: { bg: currentPick === 'draw' ? 'rgba(245,197,66,.18)' : 'rgba(255,255,255,.04)', border: currentPick === 'draw' ? 'var(--gold)' : 'var(--border)', color: currentPick === 'draw' ? 'var(--gold)' : 'var(--text-secondary)' },
     away: { bg: currentPick === 'away' ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.04)', border: currentPick === 'away' ? '#ef4444' : 'var(--border)', color: currentPick === 'away' ? '#ef4444' : 'var(--text-secondary)' },
   };
 
@@ -331,9 +327,9 @@ const PredictCard = ({ game, prediction, onPredict, onRemove, loggedIn, index })
       </div>
       {!isFinished && (
         <div style={{ display: 'flex', gap: 8 }}>
-          {['home', 'draw', 'away'].map((pick) => (
+          {['home', 'away'].map((pick) => (
             <button key={pick} className="zoka-btn" onClick={() => handlePick(pick)}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 9, background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: pick === 'draw' ? '.78rem' : '.72rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              style={{ flex: 1, padding: '10px 0', borderRadius: 9, background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: '.72rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {pickLabels[pick]}
               {currentPick === pick && <CheckCircle2 size={13} style={{ marginLeft: 3, flexShrink: 0 }} />}
               {!loggedIn && <Lock size={10} style={{ position: 'absolute', top: 4, right: 5, opacity: .4 }} />}
@@ -385,7 +381,6 @@ export default function Basketball() {
   const yesterdayStr = useMemo(() => getYesterdayStr(), []);
   const tomorrowStr = useMemo(() => getTomorrowStr(), []);
 
-  // The 3 dates the backend actually populates
   const windowDates = useMemo(() => [yesterdayStr, todayStr, tomorrowStr], [yesterdayStr, todayStr, tomorrowStr]);
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
@@ -458,7 +453,6 @@ export default function Basketball() {
 
   /* ═══════════════════════════════════════════════════════════
      INITIAL LOAD — fetch all 3 window dates in parallel
-     yesterday + today + tomorrow, then mark loading done
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (initialLoadDone.current) return;
@@ -471,7 +465,6 @@ export default function Basketball() {
       setError(null);
 
       try {
-        // Fetch all 3 days in parallel — they hit different collections
         const [yRes, tRes, tmRes] = await Promise.all([
           fetchBasketballFixtures(yesterdayStr),
           fetchBasketballFixtures(todayStr),
@@ -484,7 +477,6 @@ export default function Basketball() {
         const tMatches = tRes?.matches || [];
         const tmMatches = tmRes?.matches || [];
 
-        // Mark all 3 as loaded
         loadedDatesRef.current.add(yesterdayStr);
         loadedDatesRef.current.add(todayStr);
         loadedDatesRef.current.add(tomorrowStr);
@@ -501,11 +493,7 @@ export default function Basketball() {
           [tomorrowStr]: tmMatches,
         }));
 
-        // If the selected date (today) had an error, set it
         if (tRes?.error) setError(tRes.error);
-        else if (tMatches.length === 0 && yMatches.length === 0 && tmMatches.length === 0) {
-          // All 3 empty — might be off-season or backend issue, don't show error
-        }
       } catch (err) {
         if (!cancelled) {
           console.warn('[Basketball] Initial load error:', err.message);
@@ -517,19 +505,17 @@ export default function Basketball() {
     })();
 
     return () => { cancelled = true; };
-  }, [yesterdayStr, todayStr, tomorrowStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [yesterdayStr, todayStr, tomorrowStr]);
 
   /* ═══════════════════════════════════════════════════════════
-     LOAD ON DATE CHANGE — only for dates outside the 3-day window
-     (which would return empty from api.jsx anyway, but keeps
-     the code path clean for future expansion)
+     LOAD ON DATE CHANGE
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (initialLoadDone.current && !windowDates.includes(selectedDate)) {
       fetchDate(selectedDate);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [selectedDate]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedDate]);
 
   /* ═══════════════════════════════════════════════════════════
      REAL-TIME LIVE — onSnapshot on basketballLiveFixtures
@@ -552,10 +538,8 @@ export default function Basketball() {
 
   /* ═══════════════════════════════════════════════════════════
      PRE-FETCH extra future dates for predictions view
-     (beyond the 3-day window already loaded)
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
-    // Skip the 3 days already loaded; fetch days 4-8 for predict view
     const futureDates = dates
       .filter(d => d.date > tomorrowStr)
       .slice(0, 7);
@@ -567,16 +551,15 @@ export default function Basketball() {
         if (res?.matches) setPredictData(prev => ({ ...prev, [d.date]: res.matches }));
       } catch {}
     });
-  }, [tomorrowStr]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tomorrowStr]);
 
   /* ═══════════════════════════════════════════════════════════
-     MANUAL REFRESH — re-fetches selected date only
+     MANUAL REFRESH
   ═══════════════════════════════════════════════════════════ */
   const handleRefresh = useCallback(() => {
     if (refreshing) return;
     setRefreshing(true);
     setError(null);
-    // Allow re-fetch by removing from loaded set
     loadedDatesRef.current.delete(selectedDate);
 
     fetchBasketballFixtures(selectedDate)
@@ -629,7 +612,7 @@ export default function Basketball() {
   const finishedLeagues = grouped.filter(l => l.games.every(g => g.isFinished));
 
   /* ═══════════════════════════════════════════════════════════
-     GAME COUNTS PER DATE — for date pill badges
+     GAME COUNTS PER DATE
   ═══════════════════════════════════════════════════════════ */
   const gameCounts = useMemo(() => {
     const counts = {};
@@ -658,7 +641,6 @@ export default function Basketball() {
     return getTopPredictGames(data, 10);
   }, [predictData, predictDay, upcomingOpen, tomorrowStr]);
 
-  // Predict view dates: tomorrow first, then further out
   const predictViewDates = useMemo(() => {
     const furtherOut = dates.filter(d => d.date > tomorrowStr).slice(0, 7);
     return furtherOut;
@@ -687,7 +669,8 @@ export default function Basketball() {
         url="https://zokascore.com/basketball"
       />
 
-      {/* ═══ HEADER ═══ */}      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,14,23,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', animation: 'bb_slideDown .4s ease' }}>
+      {/* ═══ HEADER ═══ */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,14,23,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', animation: 'bb_slideDown .4s ease' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: '#1D428A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '.72rem', color: '#fff', fontFamily: 'var(--font-display)' }}>Z</div>
@@ -836,95 +819,217 @@ export default function Basketball() {
                 <div style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>Pick basketball game outcomes</div>
               </div>
               {!loggedIn && (
-                <button className="zoka-btn" onClick={() => setShowLoginModal(true)} style={{ marginLeft: 'auto', padding: '7px 14px', borderRadius: 8, background: '#1D428A', color: '#fff', fontWeight: 700, fontSize: '.72rem', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
-                  <LogIn size={12} /> Login
+                <button
+                  className="zoka-btn"
+                  onClick={() => setShowLoginModal(true)}
+                  style={{
+                    marginLeft: 'auto',
+                    padding: '7px 14px',
+                    borderRadius: 8,
+                    background: 'rgba(29,66,138,.12)',
+                    border: '1px solid rgba(29,66,138,.3)',
+                    color: '#60a5fa',
+                    fontWeight: 600,
+                    fontSize: '.78rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <Lock size={12} /> Sign in
                 </button>
               )}
-            </div>
-
-            {Object.keys(predictions).length > 0 && (
-              <div className="bb-enter" style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderRadius: 10, background: 'rgba(29,66,138,.06)', border: '1px solid rgba(29,66,138,.12)', marginBottom: 14 }}>
-                <CheckCircle2 size={14} style={{ color: '#60a5fa' }} />
-                <span style={{ fontSize: '.74rem', fontWeight: 600, color: '#60a5fa' }}>{Object.keys(predictions).length} prediction{Object.keys(predictions).length !== 1 ? 's' : ''} made</span>
-              </div>
-            )}
-
-            {/* Today's games */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 2px' }}>
-                <Sparkles size={14} style={{ color: '#60a5fa' }} />
-                <span style={{ fontSize: '.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>Today's Games</span>
-                <span style={{ fontSize: '.64rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'rgba(29,66,138,.1)', color: '#60a5fa' }}>TOP 10</span>
-              </div>
-              {todayPredictGames.length === 0 ? (
-                <div style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '.82rem', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                  No upcoming basketball games today for prediction
+              {loggedIn && Object.keys(predictions).length > 0 && (
+                <div style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 20, background: 'rgba(29,66,138,.12)', border: '1px solid rgba(29,66,138,.25)', fontSize: '.72rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <CheckCircle2 size={12} />
+                  {Object.keys(predictions).length} pick{Object.keys(predictions).length !== 1 ? 's' : ''}
                 </div>
-              ) : (
-                todayPredictGames.map((g, i) => (
-                  <PredictCard key={String(g.id)} game={g} prediction={predictions[String(g.id)]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} index={i} />
-                ))
               )}
             </div>
 
-            {/* Tomorrow's games — always shown since we pre-fetched */}
-            <div style={{ marginBottom: 20 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10, padding: '0 2px' }}>
-                <CalendarDays size={14} style={{ color: '#f97316' }} />
-                <span style={{ fontSize: '.84rem', fontWeight: 800, color: 'var(--text-primary)' }}>Tomorrow</span>
-                <span style={{ fontSize: '.64rem', fontWeight: 700, padding: '2px 8px', borderRadius: 6, background: 'rgba(249,115,22,.1)', color: '#f97316' }}>TOP 10</span>
-              </div>
-              {tomorrowPredictGames.length === 0 ? (
-                <div style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '.82rem', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                  No upcoming basketball games tomorrow for prediction
-                </div>
-              ) : (
-                tomorrowPredictGames.map((g, i) => (
-                  <PredictCard key={String(g.id)} game={g} prediction={predictions[String(g.id)]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} index={i} />
-                ))
-              )}
-            </div>
-
-            {/* Further upcoming days toggle */}
-            {predictViewDates.length > 0 && (
-              <div style={{ marginBottom: 12 }}>
-                <button className="zoka-btn" onClick={() => setUpcomingOpen(!upcomingOpen)} style={{ width: '100%', padding: '12px 16px', borderRadius: 10, background: 'var(--bg-card)', border: `1px solid ${upcomingOpen ? 'rgba(29,66,138,.15)' : 'var(--border)'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', color: 'var(--text-primary)', fontWeight: 700, fontSize: '.82rem' }}>
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    <CalendarDays size={14} style={{ color: 'var(--text-muted)' }} />
-                    Further Ahead
+            {/* ── Day selector tabs ── */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }} className="date-scroll-hide">
+              <button
+                className="zoka-btn"
+                onClick={() => { setPredictDay('today'); setUpcomingOpen(false); }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '.76rem',
+                  background: predictDay === 'today' && !upcomingOpen ? '#1D428A' : 'rgba(255,255,255,.03)',
+                  color: predictDay === 'today' && !upcomingOpen ? '#fff' : 'var(--text-muted)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Today
+                {todayPredictGames.length > 0 && (
+                  <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 6, background: predictDay === 'today' && !upcomingOpen ? 'rgba(255,255,255,.2)' : 'rgba(29,66,138,.15)', fontSize: '.62rem', fontWeight: 800 }}>
+                    {todayPredictGames.length}
                   </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 500 }}>{predictViewDates.length} days</span>
-                    <div style={{ transition: 'transform .2s', transform: upcomingOpen ? 'rotate(180deg)' : 'rotate(0)', color: 'var(--text-muted)' }}>
-                      <ChevronDown size={15} />
-                    </div>
-                  </div>
+                )}
+              </button>
+              <button
+                className="zoka-btn"
+                onClick={() => { setPredictDay(tomorrowStr); setUpcomingOpen(false); }}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  fontWeight: 700,
+                  fontSize: '.76rem',
+                  background: predictDay === tomorrowStr && !upcomingOpen ? '#1D428A' : 'rgba(255,255,255,.03)',
+                  color: predictDay === tomorrowStr && !upcomingOpen ? '#fff' : 'var(--text-muted)',
+                  whiteSpace: 'nowrap',
+                }}
+              >
+                Tomorrow
+                {tomorrowPredictGames.length > 0 && (
+                  <span style={{ marginLeft: 6, padding: '1px 6px', borderRadius: 6, background: predictDay === tomorrowStr && !upcomingOpen ? 'rgba(255,255,255,.2)' : 'rgba(29,66,138,.15)', fontSize: '.62rem', fontWeight: 800 }}>
+                    {tomorrowPredictGames.length}
+                  </span>
+                )}
+              </button>
+              {predictViewDates.length > 0 && (
+                <button
+                  className="zoka-btn"
+                  onClick={() => { setUpcomingOpen(!upcomingOpen); if (!upcomingOpen) setPredictDay(predictViewDates[0]?.date || ''); }}
+                  style={{
+                    padding: '8px 16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    fontWeight: 700,
+                    fontSize: '.76rem',
+                    background: upcomingOpen ? '#1D428A' : 'rgba(255,255,255,.03)',
+                    color: upcomingOpen ? '#fff' : 'var(--text-muted)',
+                    whiteSpace: 'nowrap',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 4,
+                  }}
+                >
+                  More
+                  <ChevronDown size={12} style={{ transform: upcomingOpen ? 'rotate(180deg)' : 'none', transition: 'transform .2s' }} />
                 </button>
+              )}
+            </div>
+
+            {/* ── Upcoming date sub-tabs ── */}
+            {upcomingOpen && predictViewDates.length > 0 && (
+              <div className="bb-expand" style={{ display: 'flex', gap: 4, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }} >
+                {predictViewDates.map(d => (
+                  <button
+                    key={d.date}
+                    className="zoka-btn"
+                    onClick={() => setPredictDay(d.date)}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: 6,
+                      border: 'none',
+                      fontWeight: 600,
+                      fontSize: '.7rem',
+                      background: predictDay === d.date ? 'rgba(29,66,138,.25)' : 'rgba(255,255,255,.02)',
+                      color: predictDay === d.date ? '#60a5fa' : 'var(--text-muted)',
+                      whiteSpace: 'nowrap',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 1,
+                    }}
+                  >
+                    <span style={{ fontSize: '.58rem', textTransform: 'uppercase' }}>{d.day}</span>
+                    <span style={{ fontWeight: 800, fontSize: '.82rem' }}>{d.num}</span>
+                    <span>{d.month}</span>
+                  </button>
+                ))}
               </div>
             )}
 
-            {upcomingOpen && predictViewDates.length > 0 && (
-              <div className="bb-expand" style={{ marginBottom: 16 }}>
-                <div style={{ display: 'flex', gap: 6, marginBottom: 12, overflowX: 'auto', paddingBottom: 4 }} className="date-scroll-hide">
-                  {predictViewDates.map(d => (
-                    <button key={d.date} className="zoka-btn" onClick={() => setPredictDay(d.date)}
-                      style={{ padding: '6px 14px', borderRadius: 8, fontSize: '.72rem', fontWeight: 700, whiteSpace: 'nowrap', border: 'none',
-                        background: predictDay === d.date ? '#1D428A' : 'rgba(255,255,255,.04)',
-                        color: predictDay === d.date ? '#fff' : 'var(--text-muted)' }}>
-                      {d.day} {d.num} {d.month}
-                    </button>
-                  ))}
-                </div>
-
-                {upcomingPredictGames.length === 0 ? (
-                  <div style={{ padding: '28px 18px', textAlign: 'center', color: 'var(--text-muted)', fontSize: '.82rem', background: 'var(--bg-card)', borderRadius: 12, border: '1px solid var(--border)' }}>
-                    No upcoming games for this date
-                  </div>
-                ) : (
-                  upcomingPredictGames.map((g, i) => (
-                    <PredictCard key={String(g.id)} game={g} prediction={predictions[String(g.id)]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} index={i} />
+            {/* ── Predict cards ── */}
+            {(predictDay === 'today' && !upcomingOpen) && (
+              <>
+                {todayPredictGames.length > 0 ? (
+                  todayPredictGames.map((g, i) => (
+                    <PredictCard
+                      key={g.id}
+                      game={g}
+                      index={i}
+                      prediction={predictions[g.id]}
+                      onPredict={handlePredict}
+                      onRemove={handleRemovePredict}
+                      loggedIn={loggedIn}
+                    />
                   ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🏀</div>
+                    <div style={{ fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 600 }}>No upcoming games today</div>
+                    <div style={{ fontSize: '.72rem', color: '#334155', marginTop: 4 }}>Check tomorrow or later dates</div>
+                  </div>
                 )}
+              </>
+            )}
+
+            {(predictDay === tomorrowStr && !upcomingOpen) && (
+              <>
+                {tomorrowPredictGames.length > 0 ? (
+                  tomorrowPredictGames.map((g, i) => (
+                    <PredictCard
+                      key={g.id}
+                      game={g}
+                      index={i}
+                      prediction={predictions[g.id]}
+                      onPredict={handlePredict}
+                      onRemove={handleRemovePredict}
+                      loggedIn={loggedIn}
+                    />
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🏀</div>
+                    <div style={{ fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 600 }}>No upcoming games tomorrow</div>
+                    <div style={{ fontSize: '.72rem', color: '#334155', marginTop: 4 }}>Check later dates</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {upcomingOpen && predictDay && predictDay !== 'today' && predictDay !== tomorrowStr && (
+              <>
+                {upcomingPredictGames.length > 0 ? (
+                  upcomingPredictGames.map((g, i) => (
+                    <PredictCard
+                      key={g.id}
+                      game={g}
+                      index={i}
+                      prediction={predictions[g.id]}
+                      onPredict={handlePredict}
+                      onRemove={handleRemovePredict}
+                      loggedIn={loggedIn}
+                    />
+                  ))
+                ) : (
+                  <div style={{ textAlign: 'center', padding: '40px 20px' }}>
+                    <div style={{ fontSize: 36, marginBottom: 12 }}>🏀</div>
+                    <div style={{ fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 600 }}>No games scheduled</div>
+                    <div style={{ fontSize: '.72rem', color: '#334155', marginTop: 4 }}>Data only available for yesterday, today, and tomorrow</div>
+                  </div>
+                )}
+              </>
+            )}
+
+            {/* ── Prediction summary footer ── */}
+            {loggedIn && Object.keys(predictions).length > 0 && (
+              <div style={{ marginTop: 24, padding: '16px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                  <Star size={16} style={{ color: 'var(--gold)' }} />
+                  <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Your Predictions</span>
+                  <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--text-muted)' }}>{Object.keys(predictions).length} total</span>
+                </div>
+                <div style={{ fontSize: '.72rem', color: '#334155', lineHeight: 1.5 }}>
+                  Predictions are saved to your account. Leaderboard and scoring coming soon!
+                </div>
               </div>
             )}
           </div>

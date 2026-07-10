@@ -1,4 +1,9 @@
 // FILE: src/pages/Predictions.jsx
+// 
+// READ-ONLY CLIENT — All scoring is handled by Admin.jsx
+// This file just displays results from prediction_results
+// and reads cumulative stats from user_points_total
+//
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -7,16 +12,15 @@ import {
   LogIn, Crown, Users, ChevronDown, ChevronUp, Timer,
   Medal, Flame, AlertTriangle, Sparkles, CircleCheck,
   CircleX, Hourglass, ThumbsUp, ThumbsDown, Pencil,
-  Filter, Layers, History
+  Filter, Layers, History, Check, X
 } from 'lucide-react';
 import { db } from '../utils/firebase';
 import {
   doc, setDoc, collection, query, where, deleteDoc,
-  Timestamp, onSnapshot, getDoc, orderBy
+  Timestamp, onSnapshot, getDoc
 } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
 import SEO from "../components/SEO";
-
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -34,6 +38,7 @@ function parseKickoff(kickoff, dateStr) {
   return null;
 }
 
+// Kept for leaderboard on-the-fly computation
 function calcPoints(predH, predA, actualH, actualA) {
   if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
   if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
@@ -76,60 +81,6 @@ async function saveZokaVote(uid, matchId, vote) {
 
 async function removeZokaVote(uid, matchId) {
   await deleteDoc(doc(db, 'zoka_votes', `${uid}_${matchId}`));
-}
-
-/* ═══════════════════════════════════════════════════
-   PREDICTION HISTORY — Resolve & Persist
-   ═══════════════════════════════════════════════════ */
-async function resolvePrediction(uid, pred, actualH, actualA) {
-  if (!db) return null;
-  const resultId = `${uid}_${pred.matchId}`;
-  const resultRef = doc(db, 'prediction_results', resultId);
-
-  // Already resolved — skip
-  const existing = await getDoc(resultRef);
-  if (existing.exists()) return existing.data();
-
-  const r = calcPoints(pred.homeScore, pred.awayScore, actualH, actualA);
-  const result = {
-    userId: uid,
-    matchId: String(pred.matchId),
-    predId: pred.predId,
-    matchDate: pred.matchDate || todayStr(),
-    homeTeam: pred.homeTeam || 'Home',
-    awayTeam: pred.awayTeam || 'Away',
-    homeLogo: pred.homeLogo || null,
-    awayLogo: pred.awayLogo || null,
-    league: pred.league || '',
-    kickoff: pred.kickoff || null,
-    predictedHome: pred.homeScore,
-    predictedAway: pred.awayScore,
-    actualHome: actualH,
-    actualAway: actualA,
-    points: r.points,
-    resultType: r.type,
-    resolvedAt: Timestamp.now(),
-  };
-
-  await setDoc(resultRef, result);
-
-  // Increment cumulative total (read-modify-write)
-  const totalRef = doc(db, 'user_points_total', uid);
-  const totalSnap = await getDoc(totalRef);
-  const cur = totalSnap.exists() ? totalSnap.data() : {
-    totalPoints: 0, exactCount: 0, resultCount: 0,
-    missCount: 0, predictionsCount: 0,
-  };
-  await setDoc(totalRef, {
-    totalPoints: cur.totalPoints + r.points,
-    exactCount: cur.exactCount + (r.type === 'exact' ? 1 : 0),
-    resultCount: cur.resultCount + (r.type === 'result' ? 1 : 0),
-    missCount: cur.missCount + (r.type === 'miss' ? 1 : 0),
-    predictionsCount: cur.predictionsCount + 1,
-    updatedAt: Timestamp.now(),
-  });
-
-  return result;
 }
 
 // Group history by date
@@ -230,7 +181,6 @@ const injectStyles = () => {
     .pred-btn.editable{cursor:pointer}
     .pred-btn.editable:hover{background:rgba(0,230,118,.14);transform:scale(1.04);box-shadow:0 0 16px rgba(0,230,118,.15)}
     .pred-btn.locked{border-color:rgba(255,255,255,.08);background:rgba(255,255,255,.03);color:var(--text-secondary)}
-    .pred-btn.result{border-color:rgba(168,85,247,.2);background:rgba(168,85,247,.06);color:#a855f7}
     .vote-btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid var(--border);background:rgba(255,255,255,.02);color:var(--text-muted);cursor:pointer;transition:all .18s cubic-bezier(.22,1,.36,1)}
     .vote-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
     .vote-btn.agree-active{border-color:rgba(0,230,118,.3);background:rgba(0,230,118,.1);color:var(--accent)}
@@ -250,7 +200,6 @@ const injectStyles = () => {
     .filter-btn{padding:6px 14px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid var(--border);background:transparent;color:var(--text-muted);cursor:pointer;transition:all .15s ease;white-space:nowrap}
     .filter-btn:hover{background:rgba(255,255,255,.04);color:var(--text-primary)}
     .filter-btn.active{background:rgba(0,230,118,.08);border-color:rgba(0,230,118,.2);color:var(--accent)}
-    .confetti-particle{position:absolute;pointer-events:none;animation:pConfetti .8s cubic-bezier(.22,1,.36,1) forwards}
     .toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;animation:pToast 2.5s cubic-bezier(.22,1,.36,1) both;pointer-events:none}
     .streak-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.62rem;font-weight:800;background:linear-gradient(135deg,rgba(249,115,22,.12),rgba(239,68,68,.08));border:1px solid rgba(249,115,22,.2);color:#f97316;animation:pStreak 2s ease-in-out infinite}
     @media(max-width:700px){
@@ -302,18 +251,22 @@ function Skeleton() {
 /* ═══════════════════════════════════════════════════════════════
    RESULT BADGE
    ═══════════════════════════════════════════════════════════════ */
-function ResultBadge({ type, points }) {
-  if (type === 'pending') return null;
-  const c = { exact: { bg: 'rgba(0,230,118,.14)', bd: 'rgba(0,230,118,.25)', cl: 'var(--accent)', lbl: 'EXACT SCORE' }, result: { bg: 'rgba(245,197,66,.1)', bd: 'rgba(245,197,66,.2)', cl: 'var(--gold)', lbl: 'CORRECT RESULT' }, miss: { bg: 'rgba(239,68,68,.08)', bd: 'rgba(239,68,68,.15)', cl: '#ef4444', lbl: 'MISS' } }[type];
+function ResultBadge({ result }) {
+  if (!result || result.type === 'pending') return null;
+  const c = {
+    exact: { bg: 'rgba(0,230,118,.14)', bd: 'rgba(0,230,118,.25)', cl: 'var(--accent)', lbl: 'EXACT SCORE' },
+    result: { bg: 'rgba(245,197,66,.1)', bd: 'rgba(245,197,66,.2)', cl: 'var(--gold)', lbl: 'CORRECT RESULT' },
+    miss: { bg: 'rgba(239,68,68,.08)', bd: 'rgba(239,68,68,.15)', cl: '#ef4444', lbl: 'MISS' },
+  }[result.type];
   if (!c) return null;
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-      <span className={type === 'exact' ? 'p-ce' : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, fontSize: '.66rem', fontWeight: 800, background: c.bg, border: `1px solid ${c.bd}`, color: c.cl }}>
-        {type === 'exact' ? <CircleCheck size={11} /> : type === 'result' ? <TrendingUp size={11} /> : <CircleX size={11} />} {c.lbl}
+      <span className={result.type === 'exact' ? 'p-ce' : ''} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, padding: '4px 10px', borderRadius: 6, fontSize: '.66rem', fontWeight: 800, background: c.bg, border: `1px solid ${c.bd}`, color: c.cl }}>
+        {result.type === 'exact' ? <CircleCheck size={11} /> : result.type === 'result' ? <TrendingUp size={11} /> : <CircleX size={11} />} {c.lbl}
       </span>
-      {points > 0 && (
+      {result.points > 0 && (
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, padding: '3px 8px', borderRadius: 6, fontSize: '.66rem', fontWeight: 800, background: 'rgba(168,85,247,.1)', border: '1px solid rgba(168,85,247,.18)', color: '#a855f7' }}>
-          <Zap size={10} /> +{points}
+          <Zap size={10} /> +{result.points}
         </span>
       )}
     </div>
@@ -374,6 +327,63 @@ function SaveToast({ show, score }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   LOGIN PROMPT MODAL
+   ═══════════════════════════════════════════════════════════════ */
+function LoginPromptModal({ onClose }) {
+  const navigate = useNavigate();
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 9999,
+        background: 'rgba(0,0,0,.6)', backdropFilter: 'blur(6px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}
+    >
+      <div
+        onClick={e => e.stopPropagation()}
+        className="p-sc"
+        style={{
+          background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 16, padding: '28px 24px', maxWidth: 340, width: '100%',
+          textAlign: 'center',
+        }}
+      >
+        <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(0,230,118,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', color: 'var(--accent)' }}>
+          <LogIn size={24} />
+        </div>
+        <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 6 }}>Login Required</div>
+        <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginBottom: 20, lineHeight: 1.5 }}>
+          You need to be logged in to make predictions and compete on the leaderboard.
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            onClick={onClose}
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 10, border: '1px solid var(--border)',
+              background: 'transparent', color: 'var(--text-muted)', fontWeight: 700, fontSize: '.82rem', cursor: 'pointer',
+            }}
+          >
+            Cancel
+          </button>
+          <button
+            onClick={() => { onClose(); navigate('/login'); }}
+            className="zb"
+            style={{
+              flex: 1, padding: '10px 0', borderRadius: 10, border: 'none',
+              background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 800, fontSize: '.82rem',
+            }}
+          >
+            Log In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN
    ═══════════════════════════════════════════════════════════════ */
 export default function Predictions() {
@@ -389,6 +399,7 @@ export default function Predictions() {
   const [allPreds, setAllPreds] = useState([]);
   const [zokaVotes, setZokaVotes] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   const [editingId, setEditingId] = useState(null);
   const [editH, setEditH] = useState('');
@@ -397,11 +408,17 @@ export default function Predictions() {
   const [votingId, setVotingId] = useState(null);
   const [toast, setToast] = useState(null);
   const [filter, setFilter] = useState('all');
-  
-    const [showHistory, setShowHistory] = useState(false);
+
+  const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [historyLoading, setHistoryLoading] = useState(false);
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  
+  // NOW READS FROM FIRESTORE — written by Admin.jsx
   const [totalPoints, setTotalPoints] = useState(null);
+
+  // Individual match results — written by Admin.jsx
+  const [userResults, setUserResults] = useState([]);
 
   const [now, setNow] = useState(Date.now());
   const [lastUpdate, setLastUpdate] = useState(null);
@@ -413,8 +430,8 @@ export default function Predictions() {
     const q = query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr()));
     const unsub = onSnapshot(q, snap => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0));
-      setActivePreds(list); setLastUpdate(Date.now()); setLoading(false);
-    }, () => setLoading(false));
+      setActivePreds(list); setLastUpdate(Date.now()); setLoading(false); setError(null);
+    }, (err) => { console.error(err); setError(err); setLoading(false); });
     return () => unsub();
   }, []);
 
@@ -438,42 +455,19 @@ export default function Predictions() {
     return () => unsub();
   }, []);
 
-    /* ── Auto-resolve predictions when matches finish ── */
+  /* ── READ prediction_results (written by Admin.jsx) ── */
   useEffect(() => {
     if (!uid || !db) return;
-    const finishedPreds = activePreds.filter(
-      p => p.status === 'finished' && p.homeScore != null
-    );
-    finishedPreds.forEach(pred => {
-      const myPred = userPredMap[pred.id];
-      if (myPred) {
-        resolvePrediction(uid, myPred, pred.homeScore, pred.awayScore)
-          .catch(e => console.error('[Resolve]', e.message));
-      }
-    });
-  }, [activePreds, userPredMap, uid]);
-
-  /* ── Fetch prediction history ── */
-  useEffect(() => {
-    if (!uid || !db || !showHistory) return;
-    setHistoryLoading(true);
-    const q = query(
-      collection(db, 'prediction_results'),
-      where('userId', '==', uid),
-      orderBy('resolvedAt', 'desc'),
-      // Firestore requires composite index for orderBy + where.
-      // If you get an error, create the index in Firebase Console
-      // or remove the orderBy and sort client-side below.
-      limit(200)
-    );
+    const q = query(collection(db, 'prediction_results'), where('userId', '==', uid));
     const unsub = onSnapshot(q, snap => {
-      setHistory(snap.docs.map(d => d.data()));
-      setHistoryLoading(false);
-    }, () => setHistoryLoading(false));
+      const results = snap.docs.map(d => d.data());
+      results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0));
+      setUserResults(results);
+    }, () => {});
     return () => unsub();
-  }, [uid, showHistory]);
+  }, [uid]);
 
-  /* ── Fetch cumulative points ── */
+  /* ── READ cumulative points (written by Admin.jsx) ── */
   useEffect(() => {
     if (!uid || !db) return;
     const unsub = onSnapshot(
@@ -483,6 +477,20 @@ export default function Predictions() {
     );
     return () => unsub();
   }, [uid]);
+
+  /* ── Fetch prediction history (reads from prediction_results) ── */
+  useEffect(() => {
+    if (!uid || !db || !showHistory) return;
+    setHistoryLoading(true);
+    const q = query(collection(db, 'prediction_results'), where('userId', '==', uid));
+    const unsub = onSnapshot(q, snap => {
+      const results = snap.docs.map(d => d.data());
+      results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0));
+      setHistory(results);
+      setHistoryLoading(false);
+    }, () => setHistoryLoading(false));
+    return () => unsub();
+  }, [uid, showHistory]);
 
   /* ── Derived ── */
   const globalDeadline = useMemo(() => {
@@ -506,29 +514,56 @@ export default function Predictions() {
     return m;
   }, [allPreds, uid]);
 
+  const userResultMap = useMemo(() => {
+    const m = {};
+    userResults.forEach(r => { m[r.matchId] = r; });
+    return m;
+  }, [userResults]);
+
   const predCounts = useMemo(() => { const m = {}; allPreds.forEach(p => { m[p.predId] = (m[p.predId] || 0) + 1; }); return m; }, [allPreds]);
   const predDist = useMemo(() => { const m = {}; allPreds.forEach(p => { if (!m[p.predId]) m[p.predId] = {}; const k = `${p.homeScore}-${p.awayScore}`; m[p.predId][k] = (m[p.predId][k] || 0) + 1; }); return m; }, [allPreds]);
   const zokaVoteStats = useMemo(() => { const s = {}; zokaVotes.forEach(v => { if (!s[v.matchId]) s[v.matchId] = { agree: 0, disagree: 0, total: 0 }; if (v.vote === 'agree') s[v.matchId].agree++; else s[v.matchId].disagree++; s[v.matchId].total++; }); return s; }, [zokaVotes]);
   const userZokaVotes = useMemo(() => { if (!uid) return {}; const m = {}; zokaVotes.filter(v => v.userId === uid).forEach(v => { m[v.matchId] = v.vote; }); return m; }, [zokaVotes, uid]);
 
   const userStats = useMemo(() => {
+    if (totalPoints) {
+      const total = totalPoints.predictionsCount || 0;
+      const exact = totalPoints.exactCount || 0;
+      const result = totalPoints.resultCount || 0;
+      const miss = totalPoints.missCount || 0;
+      const points = totalPoints.totalPoints || 0;
+      const resolved = exact + result + miss;
+      return {
+        predicted: Object.keys(userPredMap).length, 
+        total: activePreds.length,
+        exact, result, miss, points, resolved,
+        accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
+      };
+    }
     const my = Object.values(userPredMap);
     let exact = 0, result = 0, miss = 0, points = 0, resolved = 0;
-    my.forEach(p => { const a = scoreMap.get(String(p.matchId)); if (!a) return; resolved++; const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a); points += r.points; if (r.type === 'exact') exact++; else if (r.type === 'result') result++; else miss++; });
-    return { predicted: my.length, total: activePreds.length, exact, result, miss, points, resolved, accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0 };
-  }, [userPredMap, scoreMap, activePreds]);
-
-  /* ── Streak calculation ── */
-  const streak = useMemo(() => {
-    const my = Object.values(userPredMap);
-    const resolved = my.filter(p => { const a = scoreMap.get(String(p.matchId)); return a != null; }).map(p => {
+    my.forEach(p => {
       const a = scoreMap.get(String(p.matchId));
-      return calcPoints(p.homeScore, p.awayScore, a.h, a.a).type !== 'miss' ? 1 : 0;
+      if (!a) return; resolved++;
+      const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a);
+      points += r.points;
+      if (r.type === 'exact') exact++; else if (r.type === 'result') result++; else miss++;
     });
+    return {
+      predicted: my.length, total: activePreds.length,
+      exact, result, miss, points, resolved,
+      accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
+    };
+  }, [userPredMap, scoreMap, activePreds, totalPoints]);
+
+  const streak = useMemo(() => {
+    const resolved = userResults
+      .sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0))
+      .map(r => r.resultType !== 'miss' ? 1 : 0);
     let s = 0;
     for (let i = resolved.length - 1; i >= 0; i--) { if (resolved[i]) s++; else break; }
     return s;
-  }, [userPredMap, scoreMap]);
+  }, [userResults]);
 
   const leaderboard = useMemo(() => {
     const um = {};
@@ -546,22 +581,20 @@ export default function Predictions() {
   const topPlayer = leaderboard.length > 0 ? leaderboard[0] : null;
   const finalizedCount = activePreds.filter(p => p.status === 'finished').length;
 
-  /* ── Filtered matches ── */
-    const filteredPreds = useMemo(() => {
-    if (filter === 'history') return []; // History has its own section
+  const filteredPreds = useMemo(() => {
+    if (filter === 'history') return [];
     if (filter === 'predicted') return activePreds.filter(p => userPredMap[p.id]);
     if (filter === 'unpredicted') return activePreds.filter(p => !userPredMap[p.id] && p.status !== 'finished');
     if (filter === 'finished') return activePreds.filter(p => p.status === 'finished');
     return activePreds;
   }, [activePreds, userPredMap, filter]);
 
-
   const filterCounts = useMemo(() => ({
     all: activePreds.length,
     predicted: activePreds.filter(p => userPredMap[p.id]).length,
     unpredicted: activePreds.filter(p => !userPredMap[p.id] && p.status !== 'finished').length,
     finished: activePreds.filter(p => p.status === 'finished').length,
-  }), [activePreds, userPredMap, history] );
+  }), [activePreds, userPredMap]);
 
   /* ── Handlers ── */
   const handleSave = async (pred) => {
@@ -578,6 +611,7 @@ export default function Predictions() {
   };
 
   const startEdit = (pred) => {
+    if (!isLoggedIn) { setShowLoginModal(true); return; }
     const ex = userPredMap[pred.id];
     setEditingId(pred.id);
     setEditH(ex ? String(ex.homeScore) : '');
@@ -599,10 +633,10 @@ export default function Predictions() {
     return { score: e[0][0], count: e[0][1], total: Object.values(d).reduce((s, c) => s + c, 0) };
   };
 
-  /* ═══════════════════════════════════════════════════════════
+  /* ═══════════════════════════════════
      RENDER
-     ═══════════════════════════════════════════════════════════ */
-    return (
+     ═══════════════════════════════════ */
+  return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
       <SEO
         title="Today's Predictions"
@@ -610,6 +644,9 @@ export default function Predictions() {
         keywords="football predictions, score predictions, predict football scores, today's predictions, Zoka Picks"
         url="https://zokascore.com/predictions"
       />
+
+      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
+      <SaveToast show={toast} score={toast} />
 
       {/* ── STICKY HEADER ── */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,10,10,.92)', backdropFilter: 'blur(18px)', borderBottom: '1px solid var(--border)' }}>
@@ -659,7 +696,7 @@ export default function Predictions() {
             )}
           </div>
           <p style={{ fontSize: '.78rem', color: 'var(--text-muted)', margin: 0, fontWeight: 500 }}>
-            {isLoggedIn ? '10 pts exact · 3 pts result · No deletions · Edit until 1hr before kickoff' : "View matches and Zoka Picks. Log in to predict and climb the leaderboard."}
+            {isLoggedIn ? '10 pts exact · 3 pts result · No deletions · Edit until 1hr before kickoff · Results auto-scored' : "View matches and Zoka Picks. Log in to predict and climb the leaderboard."}
           </p>
         </div>
 
@@ -697,7 +734,10 @@ export default function Predictions() {
                 <div key={s.label} className="p-sc" style={{ animationDelay: `${i * 40}ms`, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 10, padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: 8, background: s.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.color, flexShrink: 0 }}><s.Icon size={14} /></div>
                   <div>
-                    <div style={{ fontSize: '.95rem', fontWeight: 900, color: s.color, fontFamily: 'var(--font-display)', lineHeight: 1 }}><AnimNum value={typeof s.value === 'number' ? s.value : 0} delay={i * 60 + 100} />{typeof s.value === 'string' && s.value.startsWith('#') ? s.value : typeof s.value === 'string' ? s.value : ''}</div>
+                    <div style={{ fontSize: '.95rem', fontWeight: 900, color: s.color, fontFamily: 'var(--font-display)', lineHeight: 1 }}>
+                      <AnimNum value={typeof s.value === 'number' ? s.value : 0} delay={i * 60 + 100} />
+                      {typeof s.value === 'string' && (s.value.startsWith('#') || s.value === '—') ? s.value : ''}
+                    </div>
                     <div style={{ fontSize: '.5rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em', marginTop: 1 }}>{s.label}</div>
                   </div>
                 </div>
@@ -751,7 +791,9 @@ export default function Predictions() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
               {zokaPicks.matches.map((pick, i) => {
                 const actual = scoreMap.get(String(pick.matchId));
-                const res = pick.adminPick ? calcPoints(pick.adminPick.home, pick.adminPick.away, actual?.h, actual?.a) : null;
+                const res = pick.adminPick
+                  ? (userResultMap[String(pick.matchId)] || calcPoints(pick.adminPick.home, pick.adminPick.away, actual?.h, actual?.a))
+                  : null;
                 const vs = zokaVoteStats[String(pick.matchId)] || { agree: 0, disagree: 0, total: 0 };
                 const myVote = userZokaVotes[String(pick.matchId)];
                 return (
@@ -765,11 +807,7 @@ export default function Predictions() {
                       <span style={{ flex: 1, fontSize: '.72rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{pick.awayTeam?.name}</span>
                       {pick.awayLogo && <img src={pick.awayLogo} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain' }} />}
                       <div style={{ width: 65, textAlign: 'right' }}>
-                        {res && res.type !== 'pending' && (
-                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 2, padding: '2px 6px', borderRadius: 4, fontSize: '.56rem', fontWeight: 800, background: res.type === 'exact' ? 'rgba(0,230,118,.12)' : res.type === 'result' ? 'rgba(245,197,66,.08)' : 'rgba(239,68,68,.06)', color: res.type === 'exact' ? 'var(--accent)' : res.type === 'result' ? 'var(--gold)' : '#ef4444' }}>
-                            {res.type === 'exact' ? '✓ EXACT' : res.type === 'result' ? '✓ RESULT' : '✗ MISS'}
-                          </span>
-                        )}
+                        {res && res.type !== 'pending' && <ResultBadge result={res} />}
                       </div>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, paddingLeft: 19, paddingRight: 81 }}>
@@ -785,324 +823,129 @@ export default function Predictions() {
           </ToggleSection>
         )}
 
-        {/* ═══ MATCH FILTER TABS ═══ */}
-        {!loading && activePreds.length > 0 && (
-          <div className="p-up" style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12, overflowX: 'auto', paddingBottom: 2, animationDelay: '180ms' }}>
-            {[
-              { key: 'all', label: 'All', Icon: Layers },
-              { key: 'predicted', label: 'Predicted', Icon: CheckCircle },
-              { key: 'unpredicted', label: 'Open', Icon: Target },
+        {/* ═══ LOADING SKELETONS ═══ */}
+        {loading && !error && Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} style={{ animationDelay: `${i * 80}ms` }} />)}
 
-                   { key: 'finished', label: 'Finished', Icon: Trophy },               { key: 'history', label: 'History', Icon: History },      ].map(f => (
-              <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>
-                <f.Icon size={11} style={{ verticalAlign: 'middle' }} /> {f.label}
-                <span style={{ marginLeft: 3, opacity: .6, fontVariantNumeric: 'tabular-nums' }}>{filterCounts[f.key]}</span>
-              </button>
-            ))}
-            <div style={{ flex: 1 }} />
-            {!isLoggedIn && (
-              <button onClick={() => navigate('/login')} className="zb" style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 12px', borderRadius: 7, fontSize: '.66rem', fontWeight: 700, background: 'var(--accent)', border: 'none', color: 'var(--bg-deep)', flexShrink: 0 }}>
-                <LogIn size={11} /> Sign In
-              </button>
-            )}
+        {/* ═══ ERROR STATE ═══ */}
+        {error && (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <AlertTriangle size={48} style={{ color: '#ef4444', marginBottom: 16 }} />
+            <div style={{ fontSize: 14, color: '#ef4444', fontWeight: 600 }}>Failed to load predictions</div>
+            <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', marginTop: 6 }}>Check your connection and try again</div>
           </div>
         )}
 
+        {/* ═══ PREDICTION CARDS ═══ */}
+        {!loading && !error && filteredPreds.length === 0 && filter !== 'history' && (
+          <div style={{ textAlign: 'center', padding: '60px 20px' }}>
+            <div style={{ fontSize: 48, marginBottom: 16, animation: 'bb_float 4s ease-in-out infinite', display: 'inline-block' }}>⚽</div>
+            <div style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>No games available for this filter</div>
+            <div style={{ fontSize: '.72rem', color: '#334155', marginTop: 6 }}>Try "All" or "Unpredicted"</div>
+          </div>
+        )}
 
-                {/* ═══ PREDICTION HISTORY ═══ */}
-        {filter === 'history' && (
-          <div className="p-up">
-            {!isLoggedIn ? (
-              <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
-                <LogIn size={32} style={{ color: 'var(--text-muted)', marginBottom: 10 }} />
-                <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.9rem', margin: '0 0 6px' }}>Sign in to view your history</p>
-                <button onClick={() => navigate('/login')} className="zb" style={{ marginTop: 12, display: 'inline-flex', alignItems: 'center', gap: 6, padding: '8px 20px', borderRadius: 10, fontSize: '.82rem', fontWeight: 800, background: 'var(--accent)', border: 'none', color: 'var(--bg-deep)' }}>
-                  <LogIn size={14} /> Sign In
+        {!loading && !error && filteredPreds.length > 0 && filter !== 'history' && (
+          <div key={filter} className="p-up">
+            {/* Filter tabs */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }} className="hsb">
+              {[
+                { key: 'all', label: 'All', count: filterCounts.all },
+                { key: 'predicted', label: 'Predicted', count: filterCounts.predicted },
+                { key: 'unpredicted', label: 'Unpredicted', count: filterCounts.unpredicted },
+                { key: 'finished', label: 'Finished', count: filterCounts.finished },
+              ].map(f => (
+                <button key={f.key} className={`filter-btn ${filter === f.key ? 'active' : ''}`} onClick={() => setFilter(f.key)}>
+                  {f.label} ({f.count})
                 </button>
-              </div>
-            ) : historyLoading && history.length === 0 ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} />)}
-              </div>
-            ) : history.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '48px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
-                <History size={32} style={{ color: 'var(--text-muted)', marginBottom: 10 }} />
-                <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.9rem', margin: '0 0 4px' }}>No prediction history yet</p>
-                <p style={{ color: 'var(--text-muted)', fontSize: '.78rem', margin: 0 }}>Make predictions and wait for matches to finish. Results appear here forever.</p>
-              </div>
-            ) : (
-              <>
-                {/* Cumulative Stats Banner */}
-                {totalPoints && (
-                  <div className="mc p-sc" style={{ marginBottom: 14, background: 'linear-gradient(135deg, rgba(168,85,247,.06), rgba(0,230,118,.03))', borderColor: 'rgba(168,85,247,.12)', padding: '16px 18px' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
-                      <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(168,85,247,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#a855f7' }}><Trophy size={18} /></div>
-                      <div>
-                        <div style={{ fontSize: '.58rem', fontWeight: 700, color: '#a855f7', textTransform: 'uppercase', letterSpacing: '.06em' }}>All-Time Stats</div>
-                        <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', fontWeight: 500 }}>{totalPoints.predictionsCount} predictions resolved</div>
-                      </div>
-                      <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-                        <div style={{ fontSize: '1.6rem', fontWeight: 900, color: '#a855f7', fontFamily: 'var(--font-display)', lineHeight: 1 }}><AnimNum value={totalPoints.totalPoints} /></div>
-                        <div style={{ fontSize: '.5rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.04em' }}>Total Points</div>
-                      </div>
+              ))}
+            </div>
+
+            {filteredPreds.map((pred, i) => {
+              const actual = scoreMap.get(String(pred.matchId));
+              const myPred = userPredMap[pred.id];
+              const myResult = userResultMap[String(pred.matchId)]; 
+              const isEditing = editingId === pred.id;
+              const isLocked = pred.status === 'finished' || isGlobalLocked || (pred.kickoff && parseKickoff(pred.kickoff, pred.matchDate) && Date.now() > parseKickoff(pred.kickoff, pred.matchDate).getTime() - 3600000);
+
+              return (
+                <div key={pred.id} className="mc p-sr" style={{ animationDelay: `${i * 40}ms` }}>
+                  {/* Header */}
+                  <div style={{ padding: '14px 16px 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      {pred.homeLogo && <img src={pred.homeLogo} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: 'contain' }} />}
+                      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{pred.homeTeam?.name}</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
-                      {[
-                        { label: 'Exact', value: totalPoints.exactCount, color: 'var(--accent)', bg: 'rgba(0,230,118,.08)' },
-                        { label: 'Result', value: totalPoints.resultCount, color: 'var(--gold)', bg: 'rgba(245,197,66,.08)' },
-                        { label: 'Miss', value: totalPoints.missCount, color: '#ef4444', bg: 'rgba(239,68,68,.06)' },
-                        { label: 'Accuracy', value: totalPoints.predictionsCount > 0 ? `${Math.round(((totalPoints.exactCount + totalPoints.resultCount) / totalPoints.predictionsCount) * 100)}%` : '0%', color: '#60a5fa', bg: 'rgba(59,130,246,.08)' },
-                      ].map(s => (
-                        <div key={s.label} style={{ textAlign: 'center', padding: '8px 6px', borderRadius: 8, background: s.bg }}>
-                          <div style={{ fontSize: '1.05rem', fontWeight: 900, color: s.color, fontFamily: 'var(--font-display)', lineHeight: 1 }}>{s.value}</div>
-                          <div style={{ fontSize: '.5rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em', marginTop: 2 }}>{s.label}</div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Grouped by date */}
-                {groupByDate(history).map(([date, items]) => {
-                  const isToday = date === todayStr();
-                  const isYesterday = date === new Date(Date.now() - 86400000).toISOString().split('T')[0];
-                  const dateLabel = isToday ? 'Today' : isYesterday ? 'Yesterday' : new Date(date + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-                  const dayPoints = items.reduce((s, i) => s + i.points, 0);
-                  const dayExact = items.filter(i => i.resultType === 'exact').length;
-                  const dayResult = items.filter(i => i.resultType === 'result').length;
-                  const dayMiss = items.filter(i => i.resultType === 'miss').length;
-
-                  return (
-                    <div key={date} style={{ marginBottom: 16 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, padding: '0 4px' }}>
-                        <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-primary)' }}>{dateLabel}</span>
-                        <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{items.length} matches</span>
-                        <div style={{ flex: 1 }} />
-                        <span style={{ fontSize: '.62rem', fontWeight: 800, color: '#a855f7', fontFamily: 'var(--font-display)' }}>+{dayPoints}</span>
-                        <span style={{ fontSize: '.56rem', fontWeight: 600, color: 'var(--accent)' }}>{dayExact}✓</span>
-                        <span style={{ fontSize: '.56rem', fontWeight: 600, color: 'var(--gold)' }}>{dayResult}→</span>
-                        {dayMiss > 0 && <span style={{ fontSize: '.56rem', fontWeight: 600, color: '#ef4444' }}>{dayMiss}✗</span>}
-                      </div>
-
-                      {items.map((item, i) => (
-                        <div key={item.predId} className="p-sr" style={{
-                          padding: '10px 14px',
-                          borderRadius: 10,
-                          marginBottom: 4,
-                          background: 'var(--bg-card)',
-                          border: item.resultType === 'exact' ? '1px solid rgba(0,230,118,.15)' : item.resultType === 'result' ? '1px solid rgba(245,197,66,.1)' : '1px solid var(--border)',
-                          animationDelay: `${i * 20}ms`,
-                        }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                            {/* Teams */}
-                            {item.homeLogo && <img src={item.homeLogo} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain' }} />}
-                            <span style={{ flex: 1, fontSize: '.74rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.homeTeam}</span>
-
-                            {/* Predicted score */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{
-                                fontSize: '.88rem', fontWeight: 900, fontFamily: 'var(--font-display)',
-                                fontVariantNumeric: 'tabular-nums',
-                                padding: '2px 8px', borderRadius: 6,
-                                background: 'rgba(168,85,247,.08)',
-                                border: '1px solid rgba(168,85,247,.15)',
-                                color: '#a855f7',
-                              }}>
-                                {item.predictedHome}-{item.predictedAway}
-                              </span>
-                            </div>
-
-                            {/* Actual score */}
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                              <span style={{
-                                fontSize: '.88rem', fontWeight: 900, fontFamily: 'var(--font-display)',
-                                fontVariantNumeric: 'tabular-nums',
-                                padding: '2px 8px', borderRadius: 6,
-                                background: item.resultType === 'exact' ? 'rgba(0,230,118,.08)' : item.resultType === 'result' ? 'rgba(245,197,66,.06)' : 'rgba(239,68,68,.05)',
-                                border: `1px solid ${item.resultType === 'exact' ? 'rgba(0,230,118,.15)' : item.resultType === 'result' ? 'rgba(245,197,66,.1)' : 'rgba(239,68,68,.1)'}`,
-                                color: item.resultType === 'exact' ? 'var(--accent)' : item.resultType === 'result' ? 'var(--gold)' : '#ef4444',
-                              }}>
-                                {item.actualHome}-{item.actualAway}
-                              </span>
-                            </div>
-
-                            <span style={{ flex: 1, fontSize: '.74rem', fontWeight: 600, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{item.awayTeam}</span>
-                            {item.awayLogo && <img src={item.awayLogo} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain' }} />}
-
-                            {/* Result badge */}
-                            <div style={{ width: 52, textAlign: 'right', flexShrink: 0 }}>
-                              <ResultBadge type={item.resultType} points={item.points} />
-                            </div>
-                          </div>
-                          {/* League + time row */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, paddingLeft: 28, paddingRight: 52 }}>
-                            {item.league && <span style={{ fontSize: '.52rem', fontWeight: 600, color: 'var(--text-muted)', background: 'rgba(255,255,255,.03)', padding: '1px 6px', borderRadius: 4 }}>{item.league}</span>}
-                            {item.kickoff && <span style={{ fontSize: '.52rem', color: 'var(--text-muted)' }}>{item.kickoff}</span>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  );
-                })}
-              </>
-            )}
-          </div>
-        )}
-
-
-        
-        {/* ═══ MATCH CARDS ═══ */}
-        {loading ? (
-          <div>{Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} />)}</div>
-        ) : activePreds.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '56px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
-            <CalendarDays size={36} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-            <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.92rem', margin: '0 0 6px' }}>No matches selected yet</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '.8rem', margin: 0 }}>Admin hasn't set up today's predictions.</p>
-          </div>
-        ) : filteredPreds.length === 0 ? (
-          <div style={{ textAlign: 'center', padding: '36px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
-            <Filter size={28} style={{ color: 'var(--text-muted)', marginBottom: 10, opacity: .5 }} />
-            <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.88rem', margin: '0 0 4px' }}>No matches in this filter</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '.78rem', margin: 0 }}>Try a different tab above.</p>
-          </div>
-        ) : (
-          filteredPreds.map((pred, i) => {
-            const isFinished = pred.status === 'finished';
-            const actual = scoreMap.get(String(pred.matchId));
-            const userPred = userPredMap[pred.id];
-            const isEditing = editingId === pred.id;
-            const count = predCounts[pred.id] || 0;
-            const popular = getPopular(pred.id);
-            const res = userPred && actual ? calcPoints(userPred.homeScore, userPred.awayScore, actual.h, actual.a) : null;
-            const matchKickoff = parseKickoff(pred.kickoff, pred.matchDate || todayStr());
-            const isMatchLocked = matchKickoff ? now > matchKickoff.getTime() - 3600000 : isGlobalLocked;
-            const canEditThis = isLoggedIn && !isFinished && !isMatchLocked;
-            const canPredict = isLoggedIn && !isFinished && !isMatchLocked && !userPred;
-            const matchLockTime = matchKickoff ? matchKickoff.getTime() - 3600000 : null;
-            const matchLockDiff = matchLockTime ? matchLockTime - now : null;
-
-            let borderCol = 'var(--border)', leftBorder = '4px solid var(--border)';
-            if (res?.type === 'exact') { borderCol = 'rgba(0,230,118,.25)'; leftBorder = '4px solid var(--accent)'; }
-            else if (res?.type === 'result') { borderCol = 'rgba(245,197,66,.2)'; leftBorder = '4px solid var(--gold)'; }
-            else if (res?.type === 'miss') { borderCol = 'rgba(239,68,68,.15)'; leftBorder = '4px solid rgba(239,68,68,.4)'; }
-            else if (userPred && !isFinished) { borderCol = 'rgba(0,230,118,.2)'; leftBorder = '4px solid rgba(0,230,118,.5)'; }
-
-            return (
-              <div key={pred.id} className="mc p-up" style={{ border: `1px solid ${borderCol}`, borderLeft: leftBorder, animationDelay: `${i * 40}ms` }}>
-                {/* Top bar */}
-                <div style={{ padding: '12px 16px 0', display: 'flex', alignItems: 'center', gap: 6, fontSize: '.64rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase' }}>
-                  {pred.league?.logo && <img src={pred.league.logo} alt="" style={{ width: 12, height: 12, borderRadius: 2 }} />}
-                  <span>{pred.league?.name || 'Competition'}</span>
-                  <span style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}><Clock size={9} />{pred.kickoff || 'TBD'}</span>
-                  {count > 0 && <span style={{ display: 'flex', alignItems: 'center', gap: 3, padding: '2px 6px', borderRadius: 4, background: 'rgba(59,130,246,.06)', color: '#60a5fa', fontWeight: 700, textTransform: 'none' }}><Users size={8} />{count}</span>}
-                </div>
-
-                {/* Teams + Center */}
-                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                    {pred.homeTeam?.logo && <img src={pred.homeTeam.logo} alt="" style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />}
-                    <span style={{ fontSize: '.84rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pred.homeTeam?.name || 'Home'}</span>
-                  </div>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, minWidth: 100 }}>
-                    {isFinished ? (
-                      <>
-                        <span style={{ fontSize: '1.25rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{pred.homeScore} – {pred.awayScore}</span>
-                        <span style={{ fontSize: '.54rem', fontWeight: 700, color: 'var(--accent)' }}>FT</span>
-                        {userPred && (
-                          <button className="pred-btn result" style={{ padding: '3px 10px', fontSize: '.74rem' }}>{userPred.homeScore}-{userPred.awayScore}</button>
-                        )}
-                      </>
-                    ) : isEditing ? (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                        <input className={`pi ${editH ? 'hv' : ''}`} placeholder="–" value={editH} onChange={e => setEditH(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} maxLength={2} autoFocus />
+                    
+                    {isEditing ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <input className={`pi hv ${editH ? 'has-val' : ''}`} value={editH} onChange={e => setEditH(e.target.value)} placeholder="H" autoFocus maxLength={2} />
                         <span style={{ fontSize: '.8rem', color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
-                        <input className={`pi ${editA ? 'hv' : ''}`} placeholder="–" value={editA} onChange={e => setEditA(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} maxLength={2} />
+                        <input className={`pi hv ${editA ? 'has-val' : ''}`} value={editA} onChange={e => setEditA(e.target.value)} placeholder="A" maxLength={2} />
+                        <button className="zb" onClick={() => handleSave(pred)} disabled={saving || !editH || !editA} style={{ padding: '6px 14px', borderRadius: 8, background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 800, fontSize: '.76rem', border: 'none' }}>
+                          {saving ? <Loader size={12} style={{ animation: 'asp 1s linear infinite' }} /> : <Check size={14} />}
+                        </button>
+                        <button className="zb" onClick={() => { setEditingId(null); }} style={{ padding: '6px 10px', borderRadius: 8, background: 'rgba(239,68,68,.08)', border: '1px solid rgba(239,68,68,.15)', color: '#ef4444' }}>
+                          <X size={14} />
+                        </button>
                       </div>
-                    ) : userPred ? (
-                      <button className={`pred-btn ${canEditThis ? 'editable' : 'locked'}`} onClick={canEditThis ? () => startEdit(pred) : undefined} style={{ fontSize: '1.05rem' }}>
-                        {userPred.homeScore}-{userPred.awayScore}
-                        {canEditThis ? <Pencil size={11} /> : <Lock size={9} />}
-                      </button>
                     ) : (
-                      <>
-                        <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'rgba(0,230,118,.5)', letterSpacing: '.05em' }}>VS</span>
-                        {canPredict && (
-                          <button onClick={() => startEdit(pred)} className="zb shn" style={{ padding: '5px 16px', borderRadius: 8, fontSize: '.7rem', fontWeight: 800, background: 'var(--accent)', color: 'var(--bg-deep)', border: 'none', display: 'flex', alignItems: 'center', gap: 4 }}>
-                            <Target size={10} /> Predict
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {!isLocked ? (
+                          <button className="pred-btn editable" onClick={() => startEdit(pred)}>
+                            {myPred ? <><Pencil size={13} style={{ marginRight: 4 }} />{myPred.homeScore}-{myPred.awayScore}</> : <><Pencil size={13} style={{ marginRight: 4 }} />Predict</>}
                           </button>
+                        ) : (
+                          <div className="pred-btn locked">
+                            {myPred ? <>{myPred.homeScore}-{myPred.awayScore}</> : <><Clock size={13} style={{ marginRight: 4}} />{pred.kickoff || '—'}</>}
+                          </div>
                         )}
-                      </>
+                        {myResult && myResult.type !== 'pending' && <ResultBadge result={myResult} />}
+                      </div>
                     )}
-                  </div>
-                  <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', minWidth: 0 }}>
-                    <span style={{ fontSize: '.84rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>{pred.awayTeam?.name || 'Away'}</span>
-                    {pred.awayTeam?.logo && <img src={pred.awayTeam.logo} alt="" style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', flexShrink: 0 }} />}
-                  </div>
-                </div>
 
-                {/* Popular hint */}
-                {!isFinished && popular && popular.total >= 3 && (
-                  <div style={{ padding: '0 16px', marginBottom: 5 }}>
-                    <span style={{ fontSize: '.58rem', color: 'var(--text-muted)', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 3 }}><Flame size={8} style={{ color: '#f97316' }} /> Popular: {popular.score} ({Math.round((popular.count / popular.total) * 100)}%)</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{pred.awayTeam?.name}</span>
+                      {pred.awayLogo && <img src={pred.awayLogo} alt="" style={{ width: 22, height: 22, borderRadius: 4, objectFit: 'contain' }} />}
+                    </div>
                   </div>
-                )}
 
-                {/* Result badge */}
-                {res && <div style={{ padding: '0 16px' }}><ResultBadge type={res.type} points={res.points} /></div>}
-
-                {/* Edit mode: quick picks + save */}
-                {isEditing && (
-                  <div className="p-co" style={{ padding: '10px 16px', borderTop: '1px solid var(--border)', background: 'rgba(0,230,118,.02)' }}>
-                    <div style={{ fontSize: '.58rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: 6, textTransform: 'uppercase', letterSpacing: '.04em' }}>Quick Pick</div>
-                    <div className="qp-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(8, 1fr)', gap: 4, marginBottom: 10 }}>
-                      {QUICK_PICKS.map(qp => (
-                        <button key={`${qp.h}-${qp.a}`} className={`qp-btn ${editH === String(qp.h) && editA === String(qp.a) ? 'selected' : ''}`} onClick={() => quickPick(qp.h, qp.a)}>{qp.h}-{qp.a}</button>
+                  {/* Quick picks when editing */}
+                  {isEditing && (
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8, paddingTop: 12, borderTop: '1px solid var(--border)', padding: '12px 16px' }}>
+                      {QUICK_PICKS.map((qp, qi) => (
+                        <button key={`${qp.h}-${qp.a}`} className={`qp-btn ${editH === String(qp.h) && editA === String(qp.a) ? 'selected' : ''}`} onClick={() => quickPick(qp.h, qp.a)}>
+                          {qp.h}-{qp.a}
+                        </button>
                       ))}
                     </div>
-                    <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                      <button onClick={() => { setEditingId(null); setEditH(''); setEditA(''); }} style={{ padding: '7px 14px', borderRadius: 7, fontSize: '.72rem', fontWeight: 600, background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', color: 'var(--text-muted)', cursor: 'pointer' }}>Cancel</button>
-                      <button onClick={() => handleSave(pred)} disabled={saving || !editH || !editA} className="zb shn" style={{ padding: '7px 18px', borderRadius: 7, fontSize: '.72rem', fontWeight: 800, background: 'var(--accent)', color: 'var(--bg-deep)', border: 'none', display: 'flex', alignItems: 'center', gap: 5 }}>
-                        {saving ? <Loader size={12} style={{ animation: 'pSh 1s linear infinite' }} /> : <Save size={12} />}{userPred ? 'Update' : 'Lock In'}
-                      </button>
+                  )}
+
+                  {/* Actual score row for finished matches */}
+                  {actual && (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px 14px' }}>
+                      <span style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600 }}>Actual:</span>
+                      <span style={{ fontSize: '.9rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{actual.h}-{actual.a}</span>
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {/* Lock countdown */}
-                {!isFinished && userPred && !isMatchLocked && matchLockDiff != null && matchLockDiff > 0 && (
-                  <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 4, fontSize: '.56rem', fontWeight: 600, color: matchLockDiff < 1800000 ? '#ef4444' : 'var(--text-muted)' }}>
-                    <Hourglass size={8} /> Edits close in <Countdown deadline={matchLockTime} />
-                  </div>
-                )}
-                {!isFinished && userPred && isMatchLocked && (
-                  <div style={{ padding: '0 16px 8px', display: 'flex', alignItems: 'center', gap: 4, fontSize: '.56rem', fontWeight: 700, color: 'var(--text-muted)' }}><Lock size={8} /> Pick locked</div>
-                )}
-              </div>
-            );
-          })
-        )}
-
-        {/* ═══ LOGIN CTA ═══ */}
-        {!isLoggedIn && !loading && activePreds.length > 0 && (
-          <div className="p-up" style={{ marginTop: 16, padding: '22px 20px', textAlign: 'center', background: 'linear-gradient(135deg,rgba(0,230,118,.04),transparent)', border: '1px solid rgba(0,230,118,.1)', borderRadius: 14 }}>
-            <Target size={26} style={{ color: 'var(--accent)', marginBottom: 10 }} />
-            <p style={{ color: 'var(--text-primary)', fontWeight: 700, fontSize: '.92rem', margin: '0 0 6px' }}>Want to compete?</p>
-            <p style={{ color: 'var(--text-muted)', fontSize: '.78rem', margin: '0 0 14px' }}>Log in to make predictions and climb the leaderboard.</p>
-            <button onClick={() => navigate('/login')} className="zb shn" style={{ padding: '10px 26px', borderRadius: 10, background: 'var(--accent)', color: 'var(--bg-deep)', border: 'none', fontWeight: 700, fontSize: '.82rem', display: 'inline-flex', alignItems: 'center', gap: 7 }}><LogIn size={14} /> Sign In</button>
-          </div>
-        )}
-
-        {/* ═══ FOOTER ═══ */}
-        {isLoggedIn && (
-          <div style={{ textAlign: 'center', padding: '18px 0 0', fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 500, opacity: .5 }}>
-            <AlertTriangle size={9} style={{ verticalAlign: 'middle', marginRight: 3, opacity: .6 }} /> Predictions are final once locked. No deletions.
+                  {/* Popular pick */}
+                  {!isEditing && predCounts[pred.id] > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px 12px', fontSize: '.58rem', color: 'var(--text-muted)', borderTop: !actual ? '1px solid var(--border)' : 'none', paddingTop: !actual ? 12 : 0 }}>
+                      <Users size={10} />
+                      <span>{predCounts[pred.id]} predictions</span>
+                      {getPopular(pred.id) && (
+                        <span style={{ marginLeft: 'auto', fontWeight: 700, color: 'var(--gold)' }}>
+                          Popular: {getPopular(pred.id).score} ({getPopular(pred.id).count}/{getPopular(pred.id).total})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
-
-      {/* ── SAVE TOAST ── */}
-      <SaveToast show={!!toast} score={toast} />
     </div>
   );
 }

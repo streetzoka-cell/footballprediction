@@ -7,9 +7,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs, orderBy } from 'firebase/firestore';
 import SEO from "../components/SEO";
-
 
 /* ═══════════════════════════════════════════════════════════════
    STYLES
@@ -65,7 +64,7 @@ const getWeekStart = () => {
   return new Date(d.getFullYear(), d.getMonth(), diff).toISOString().split('T')[0];
 };
 const getMonthStart = () => new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0];
-const GOAT_START = '2024-01-01'; // Adjust based on your app launch
+const GOAT_START = '2024-01-01';
 
 function calcPoints(predH, predA, actualH, actualA) {
   if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
@@ -166,18 +165,18 @@ export default function Leaderboard() {
   const [error, setError] = useState(null);
   const [isLive, setIsLive] = useState(false);
   const [shownCount, setShownCount] = useState(10);
-  
+
   // Data state
   const [dailyPreds, setDailyPreds] = useState([]);
   const [dailyScores, setDailyScores] = useState(new Map());
-  const [historicalData, setHistoricalData] = useState([]); // For Weekly/Monthly/Goat
+  const [historicalData, setHistoricalData] = useState(null);
 
   /* ── 1. Real-time Daily Listener ── */
   useEffect(() => {
     if (!db || tab !== 'daily') return;
     setLoading(true);
     setIsLive(true);
-    
+
     const unsubScores = onSnapshot(
       query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr())),
       snap => {
@@ -213,28 +212,28 @@ export default function Leaderboard() {
     setError(null);
     setIsLive(false);
 
-    let startDate;
-    if (period === 'weekly') startDate = getWeekStart();
-    else if (period === 'monthly') startDate = getMonthStart();
-    else startDate = GOAT_START;
-
     try {
-      // Fetch scores for the period
-      const scoresSnap = await getDocs(query(collection(db, 'active_predictions'), where('matchDate', '>=', startDate)));
-      const sMap = new Map();
-      scoresSnap.docs.forEach(d => {
-        const data = d.data();
-        if (data.matchDate > todayStr()) return; // Ignore future
-        if (data.status === 'finished' && data.homeScore != null) {
-          sMap.set(`${data.matchDate}_${data.matchId}`, { h: data.homeScore, a: data.awayScore });
-        }
-      });
+      // GOAT: Use pre-computed cumulative totals (fast, 1 read)
+      if (period === 'goat') {
+        const snap = await getDocs(collection(db, 'user_points_total'));
+        setHistoricalData({ type: 'goat', data: snap.docs.map(d => ({ id: d.id, ...d.data() })) });
+        setLoading(false);
+        return;
+      }
 
-      // Fetch predictions for the period
-      const predsSnap = await getDocs(query(collection(db, 'user_predictions'), where('matchDate', '>=', startDate)));
-      const preds = predsSnap.docs.map(d => d.data()).filter(p => p.matchDate <= todayStr());
-      
-      setHistoricalData({ preds, scoreMap: sMap });
+      // Weekly / Monthly: Query resolved prediction results (permanent data)
+      let startDate;
+      if (period === 'weekly') startDate = getWeekStart();
+      else startDate = getMonthStart();
+
+      const snap = await getDocs(
+        query(
+          collection(db, 'prediction_results'),
+          where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))
+        )
+      );
+
+      setHistoricalData({ type: 'results', data: snap.docs.map(d => d.data()) });
       setLoading(false);
     } catch (err) {
       console.error('[LB] Historical err:', err);
@@ -253,7 +252,7 @@ export default function Leaderboard() {
   // Reset shown count on tab change
   useEffect(() => { setShownCount(10); setSearch(''); }, [tab]);
 
-  /* ── 3. Compute Leaderboard ── */
+  /* ── 3. Compute Daily Leaderboard ── */
   const computeLeaderboard = (preds, sMap) => {
     const userMap = {};
     preds.forEach(p => {
@@ -280,9 +279,62 @@ export default function Leaderboard() {
   };
 
   const dailyLB = useMemo(() => computeLeaderboard(dailyPreds, dailyScores), [dailyPreds, dailyScores]);
+
+  /* ── 4. Compute Historical Leaderboard ── */
   const historicalLB = useMemo(() => {
-    if (!historicalData.preds) return [];
-    return computeLeaderboard(historicalData.preds, historicalData.scoreMap);
+    if (!historicalData || !historicalData.data) return [];
+
+    // GOAT: Pre-computed cumulative totals
+    if (historicalData.type === 'goat') {
+      return historicalData.data
+        .filter(u => (u.predictionsCount || 0) > 0)
+        .sort((a, b) => b.totalPoints - a.totalPoints || b.exactCount - a.exactCount || b.resultCount - a.resultCount)
+        .map((u, i) => ({
+          uid: u.id,
+          displayName: u.displayName || 'Player',
+          points: u.totalPoints || 0,
+          predictions: u.predictionsCount || 0,
+          exact: u.exactCount || 0,
+          result: u.resultCount || 0,
+          miss: u.missCount || 0,
+          resolved: u.predictionsCount || 0,
+          rank: 0,
+          accuracy: (u.predictionsCount || 0) > 0
+            ? Math.round(((u.exactCount + u.resultCount) / u.predictionsCount) * 100)
+            : 0,
+        }))
+        .map((u, i) => ({ ...u, rank: i + 1 }));
+    }
+
+    // Weekly / Monthly: Aggregate from prediction_results (points already computed per match)
+    const userMap = {};
+    historicalData.data.forEach(r => {
+      if (!userMap[r.userId]) {
+        userMap[r.userId] = {
+          uid: r.userId,
+          displayName: r.displayName || 'Player',
+          points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
+        };
+      }
+      const u = userMap[r.userId];
+      u.predictions++;
+      u.resolved++;
+      u.points += r.points || 0;
+      if (r.resultType === 'exact') u.exact++;
+      else if (r.resultType === 'result') u.result++;
+      else u.miss++;
+    });
+
+    return Object.values(userMap)
+      .filter(u => u.predictions > 0)
+      .sort((a, b) => b.points - a.points || b.exact - a.exact || b.result - a.result)
+      .map((u, i) => ({
+        ...u,
+        rank: i + 1,
+        accuracy: u.resolved > 0
+          ? Math.round(((u.exact + u.result) / u.resolved) * 100)
+          : 0,
+      }));
   }, [historicalData]);
 
   const activeLB = tab === 'daily' ? dailyLB : historicalLB;
@@ -317,7 +369,7 @@ export default function Leaderboard() {
   /* ═══════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════ */
- return (
+  return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
       <SEO
         title="Leaderboard"
@@ -326,8 +378,7 @@ export default function Leaderboard() {
         url="https://zokascore.com/leaderboard"
       />
 
-
-{/* Header */}
+      {/* Header */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,10,10,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 920, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
@@ -353,7 +404,7 @@ export default function Leaderboard() {
           </p>
         </div>
 
-        {/* My Rank Card (Always visible if logged in) */}
+        {/* My Rank Card */}
         {myEntry && (
           <div className="lb-up" style={{
             marginBottom: 24, padding: '16px 20px', borderRadius: 14,
@@ -378,8 +429,21 @@ export default function Leaderboard() {
         {/* Error */}
         {error && (
           <div className="lb-up" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16, padding: 40, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, textAlign: 'center', marginBottom: 24 }}>
-            {error === 'permissions' ? (<><ShieldAlert size={36} style={{ color: '#f59e0b' }} /><div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.05rem' }}>Permissions Required</div><div style={{ fontSize: '.84rem', color: 'var(--text-muted)', maxWidth: 400, lineHeight: 1.6 }}>Allow read access to <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>user_predictions</code> and <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>active_predictions</code>.</div></>) 
-            : (<><AlertCircle size={36} style={{ color: '#ef4444' }} /><div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Failed to load</div><div style={{ fontSize: '.82rem', color: 'var(--text-muted)', maxWidth: 300 }}>{error}</div></>)}
+            {error === 'permissions' ? (
+              <>
+                <ShieldAlert size={36} style={{ color: '#f59e0b' }} />
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.05rem' }}>Permissions Required</div>
+                <div style={{ fontSize: '.84rem', color: 'var(--text-muted)', maxWidth: 400, lineHeight: 1.6 }}>
+                  Allow read access to <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>user_predictions</code>, <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>active_predictions</code>, <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>prediction_results</code>, and <code style={{ background: 'rgba(255,255,255,.06)', padding: '2px 6px', borderRadius: 4 }}>user_points_total</code>.
+                </div>
+              </>
+            ) : (
+              <>
+                <AlertCircle size={36} style={{ color: '#ef4444' }} />
+                <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>Failed to load</div>
+                <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', maxWidth: 300 }}>{error}</div>
+              </>
+            )}
           </div>
         )}
 
@@ -522,7 +586,7 @@ export default function Leaderboard() {
             <BarChart3 size={16} />
           </div>
           <p style={{ fontSize: '.78rem', color: 'var(--text-secondary)', lineHeight: 1.6, margin: 0 }}>
-            {tab === 'daily' ? 'Live updates as matches finish.' : `Aggregated stats from ${tab === 'goat' ? 'all time' : `this ${tab}`}.`} 
+            {tab === 'daily' ? 'Live updates as matches finish.' : `Aggregated stats from ${tab === 'goat' ? 'all time' : `this ${tab}`}.`}
             Exact score = <strong style={{ color: 'var(--accent)', fontWeight: 700 }}>10 pts</strong>, correct result = <strong style={{ color: 'var(--gold)', fontWeight: 700 }}>3 pts</strong>.
           </p>
         </div>
