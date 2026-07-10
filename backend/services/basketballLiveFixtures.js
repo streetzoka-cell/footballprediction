@@ -2,7 +2,9 @@
  * basketballLiveFixtures.js
  * Fetches live basketball fixtures with DAILY CAP.
  *
- * Budget cost: UP TO 15 requests/day (hard cap).
+ * FIX: Same writes object bug as football.
+ * FIX: Body-level error detection (API returns 200
+ *      with errors object when rate limited).
  */
 
 const {
@@ -20,8 +22,7 @@ const logger = require("../utils/logger");
 class BasketballLiveFixturesService {
   constructor(repo, ftProcessor) {
     if (!repo) throw new Error("BasketballFixturesRepository is required.");
-    if (!ftProcessor)
-      throw new Error("BasketballFinishedFixturesProcessor is required.");
+    if (!ftProcessor) throw new Error("BasketballFinishedFixturesProcessor is required.");
 
     this.repo = repo;
     this.ftProcessor = ftProcessor;
@@ -43,13 +44,11 @@ class BasketballLiveFixturesService {
       return this._emptyResult();
     }
 
-    // ── Guard 1: API budget ──
     if (!isBasketballBudgetAvailable(LIVE_POLLING.MIN_BUDGET_TO_POLL)) {
       logger.warn("[BasketballLive] Skipping — budget exhausted");
-      return this._emptyResult();
+      return this._emptyResult({ capReached: true });
     }
 
-    // ── Guard 2: Daily live cap ──
     if (!isBasketballLiveCapAvailable()) {
       logger.warn(
         `[BasketballLive] Daily live cap reached (${getBasketballLiveRequestsToday()}/${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}) — skipping`
@@ -59,20 +58,14 @@ class BasketballLiveFixturesService {
 
     const startTime = Date.now();
 
-    // ── Fetch today's games (1 API call) ──
-    // API-Basketball does not support live=all.
-    // We fetch today's games and detect live status locally.
     let response;
-
     try {
       const today = new Date().toISOString().slice(0, 10);
 
       response = await withRetry(
         () =>
           basketballApi.get("/games", {
-            params: {
-              date: today,
-            },
+            params: { date: today },
           }),
         "BasketballLive:fetch"
       );
@@ -81,30 +74,22 @@ class BasketballLiveFixturesService {
       return this._emptyResult();
     }
 
-    // ── Count this live request ──
     const liveCount = incrementBasketballLiveCounter();
 
-    // ── Check API errors ──
+    // FIX: Check body-level errors AND treat as cap-reached
     const apiErrors = response?.errors || {};
     if (Object.keys(apiErrors).length > 0) {
       logger.warn(`[BasketballLive] API blocked: ${JSON.stringify(apiErrors)}`);
-      return this._emptyResult();
+      return this._emptyResult({ capReached: true });
     }
 
     const rawFixtures = response?.response || [];
 
-    // ── Filter to live games (skip league filter if TRACK_ALL_LEAGUES) ──
     const filtered = rawFixtures.filter((f) => {
       const isTrackedLeague = TRACK_ALL_LEAGUES || this.trackedLeagueIds.has(f.league?.id);
 
       const liveStatuses = [
-        "Q1",
-        "Q2",
-        "Q3",
-        "Q4",
-        "OT",
-        "LIVE",
-        "IN PLAY"
+        "Q1", "Q2", "Q3", "Q4", "OT", "LIVE", "IN PLAY"
       ];
 
       const isLive = liveStatuses.includes(
@@ -130,10 +115,12 @@ class BasketballLiveFixturesService {
 
     // ── Write ──
     const docs = filtered.map((f) => this.normalize(f));
-    let writes = 0;
+    // FIX: Extract .written from result object
+    let writeCount = 0;
 
     if (docs.length > 0) {
-      writes = await this.repo.replaceLive(docs);
+      const result = await this.repo.replaceLive(docs);
+      writeCount = result.written;
     } else if (previousIds.size > 0) {
       await this.repo.clearLive();
       this.lastLiveSnapshot.clear();
@@ -148,13 +135,14 @@ class BasketballLiveFixturesService {
     const duration = Date.now() - startTime;
     const hasLive = docs.length > 0;
 
+    // FIX: Use writeCount not result object
     logger.info(
-      `[BasketballLive] ${writes} live, ${transitioned} → finished, ${duration} ms`
+      `[BasketballLive] ${writeCount} live, ${transitioned} → finished, ${duration} ms`
     );
 
     return {
       total: filtered.length,
-      writes,
+      writes: writeCount,
       removed: transitioned,
       hasLive,
       duration,
@@ -200,32 +188,25 @@ class BasketballLiveFixturesService {
 
     return {
       id: fixture.id,
-
       date: fixture.date,
       timestamp: fixture.timestamp,
-
       status: fixture.status?.short || "NS",
       statusLong: fixture.status?.long || "Not Started",
       elapsed: fixture.status?.elapsed ?? null,
       currentPeriod: this._getCurrentPeriod(fixture.status?.short),
-
       leagueId: fixture.league?.id,
       leagueName: fixture.league?.name,
       leagueCountry: fixture.league?.country,
       leagueLogo: fixture.league?.logo,
       season: fixture.league?.season,
-
       homeTeamId: fixture.teams?.home?.id,
       homeTeamName: fixture.teams?.home?.name,
       homeTeamLogo: fixture.teams?.home?.logo,
-
       awayTeamId: fixture.teams?.away?.id,
       awayTeamName: fixture.teams?.away?.name,
       awayTeamLogo: fixture.teams?.away?.logo,
-
       pointsHome: scores.home?.total ?? null,
       pointsAway: scores.away?.total ?? null,
-
       q1Home: scores.home?.q1 ?? null,
       q1Away: scores.away?.q1 ?? null,
       q2Home: scores.home?.q2 ?? null,
@@ -234,15 +215,12 @@ class BasketballLiveFixturesService {
       q3Away: scores.away?.q3 ?? null,
       q4Home: scores.home?.q4 ?? null,
       q4Away: scores.away?.q4 ?? null,
-
       otHome: scores.home?.ot ?? null,
       otAway: scores.away?.ot ?? null,
-
       firstQuarterStart: periods.firstQuarterStart ?? null,
       secondQuarterStart: periods.secondQuarterStart ?? null,
       thirdQuarterStart: periods.thirdQuarterStart ?? null,
       fourthQuarterStart: periods.fourthQuarterStart ?? null,
-
       sport: "basketball",
       _updatedAt: new Date().toISOString(),
     };

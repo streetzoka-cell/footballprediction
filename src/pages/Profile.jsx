@@ -6,37 +6,75 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import SEO from "../components/SEO";
+
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION
-   ═══════════════════════════════════════════════════════════════ */
+   STYLE INJECTION — Unified zoka_ prefix, mobile-first, bold
+   ═════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('profile-pro-v2')) return;
+  if (document.getElementById('profile-zoka-v4')) return;
   const s = document.createElement('style');
-  s.id = 'profile-pro-v2';
+  s.id = 'profile-zoka-v4';
   s.textContent = `
-    @keyframes pro_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes pro_pop{0%{transform:scale(.92);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
-    @keyframes pro_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes barGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-    @keyframes badgeUnlock{0%{transform:scale(.8) rotate(-5deg);opacity:0}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1) rotate(0);opacity:1}}
-    @keyframes pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.25)}50%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
-    @keyframes slideInRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-    .pro-enter{animation:pro_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
-    .pro-pop{animation:pro_pop .4s cubic-bezier(.22,1,.36,1) both}
-    .pro-bar-grow{animation:barGrow .8s cubic-bezier(.22,1,.36,1) both;transform-origin:left}
-    .pro-badge-unlock{animation:badgeUnlock .5s cubic-bezier(.22,1,.36,1) both}
-    .pro-slide-r{animation:slideInRight .4s cubic-bezier(.22,1,.36,1) both}
-    .skel-profile{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:pro_shimmer 1.5s ease-in-out infinite;border-radius:8px}
-    .zoka-btn{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none}
-    .zoka-btn:hover{transform:translateY(-1px)}
-    .zoka-btn:active{transform:translateY(0) scale(.98)}
+    /* ── Keyframes (zoka_ prefix, consistent with Login) ── */
+    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes zoka_popIn{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
+    @keyframes zoka_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes zoka_barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+    @keyframes zoka_badgeUnlock{0%{transform:scale(.8) rotate(-5deg);opacity:0}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1) rotate(0);opacity:1}}
+    @keyframes zoka_pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.25)}50%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
+    @keyframes zoka_slideRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes zoka_countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes zoka_shine{0%{left:-100%}100%{left:200%}}
+    @keyframes zoka_glowBreathe{0%,100%{box-shadow:0 0 14px rgba(0,230,118,.15)}50%{box-shadow:0 0 28px rgba(0,230,118,.25)}}
+
+    /* ── Utility classes ── */
+    .pro-enter{animation:zoka_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
+    .pro-pop{animation:zoka_popIn .4s cubic-bezier(.22,1,.36,1) both}
+    .pro-bar{transform-origin:left;animation:zoka_barFill .8s cubic-bezier(.22,1,.36,1) both}
+    .pro-badge-unlock{animation:zoka_badgeUnlock .5s cubic-bezier(.22,1,.36,1) both}
+    .pro-slide-r{animation:zoka_slideRight .4s cubic-bezier(.22,1,.36,1) both}
+    .pro-count{animation:zoka_countUp .3s cubic-bezier(.22,1,.36,1) both}
+    .skel-profile{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:zoka_shimmer 1.5s ease-in-out infinite;border-radius:10px}
+
+    /* ── Button system (matches Login .zoka-btn exactly) ── */
+    .zoka-btn{
+      transition:all .18s cubic-bezier(.22,1,.36,1);
+      cursor:pointer;outline:none;
+      -webkit-tap-highlight-color:transparent;
+    }
+    .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
+    .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
+
+    /* ═══════════════════════════════════════════════════════════
+       MOBILE BREAKPOINTS
+       ═══════════════════════════════════════════════════════════ */
+    @media(max-width:768px){
+      .pro-header-inner{flex-direction:column!important;align-items:center!important;text-align:center!important;gap:20px!important}
+      .pro-header-info{align-items:center!important}
+      .pro-header-right{align-items:center!important;flex-direction:row!important;gap:16px!important}
+      .pro-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
+      .pro-breakdown-bar{height:12px!important}
+      .pro-badge-grid{grid-template-columns:1fr!important}
+      .pro-cta-btns{flex-direction:column!important;align-items:stretch!important}
+      .pro-cta-btns .zoka-btn{width:100%;justify-content:center}
+    }
+
+    @media(max-width:420px){
+      .pro-header-inner{padding:24px 20px!important;gap:16px!important}
+      .pro-avatar{width:76px!important;height:76px!important;font-size:1.7rem!important}
+      .pro-ring{width:96px!important;height:96px!important}
+      .pro-ring-text{font-size:1.3rem!important}
+      .pro-stats-grid{gap:8px!important}
+      .pro-stat-val{font-size:1.7rem!important}
+      .pro-cta-title{font-size:1.4rem!important}
+    }
   `;
   document.head.appendChild(s);
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   HOOKS — Fixed: stable opts reference prevents infinite re-renders
-   ═══════════════════════════════════════════════════════════════ */
+/* ═════════════════════════════════════════════════════════════════════════
+   HELPERS — Compatible with both old and new field names
+   ═════════════════════════════════════════════════════════════════ */
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -49,30 +87,24 @@ const useInView = (threshold = 0.1) => {
     );
     obs.observe(el);
     return () => obs.disconnect();
-  }, [threshold]); // ← stable primitive, not object reference
+  }, [threshold]);
   return [ref, visible];
 };
 
-const calculateAccuracy = (exact, result, total) => {
-  if (!total || total === 0) return 0;
-  return parseFloat(((exact + result) / total * 100).toFixed(1));
-};
-
-/* ── Badge Definitions ── */
+/* ── Badge Definitions — uses helper functions ── */
 const BADGE_DEFS = [
-  { id: 'first-pred', name: 'First Step', icon: '👟', color: '#60a5fa', check: (p) => p.predictions >= 1, hint: 'Make your first prediction' },
-  { id: 'pred-10', name: 'Getting Started', icon: '🎯', color: 'var(--accent)', check: (p) => p.predictions >= 10, hint: 'Make 10 predictions' },
-  { id: 'pred-50', name: 'Dedicated', icon: '📊', color: '#8b5cf6', check: (p) => p.predictions >= 50, hint: 'Reach 50 predictions' },
-  { id: 'exact-1', name: 'Bullseye', icon: '🎯', color: '#f97116', check: (p) => p.correctScore >= 1, hint: 'Get 1 exact score correct' },
-  { id: 'exact-10', name: 'Sharpshooter', icon: '🔥', color: '#ef4444', check: (p) => p.correctScore >= 10, hint: 'Get 10 exact scores correct' },
-  { id: 'acc-50', name: '50% Club', icon: '🧠', color: 'var(--gold)', check: (p) => calculateAccuracy(p.correctScore, p.correctResult, p.predictions) >= 50, hint: 'Reach 50% accuracy' },
-  { id: 'top-100', name: 'Top 100', icon: '🏆', color: '#eab308', check: (p) => p.points > 0, hint: 'Score points on the leaderboard' },
+  { id: 'first-pred', name: 'First Step', icon: '👟', color: '#60a5fa', check: (p) => getPredictions(p) >= 1, hint: 'Make your first prediction' },
+  { id: 'pred-10', name: 'Getting Started', icon: '🎯', color: 'var(--accent)', check: (p) => getPredictions(p) >= 10, hint: 'Make 10 predictions' },
+  { id: 'pred-50', name: 'Dedicated', icon: '📊', color: '#8b5cf6', check: (p) => getPredictions(p) >= 50, hint: 'Reach 50 predictions' },
+  { id: 'exact-1', name: 'Bullseye', icon: '🎯', color: '#f97116', check: (p) => getExact(p) >= 1, hint: 'Get 1 exact score correct' },
+  { id: 'exact-10', name: 'Sharpshooter', icon: '🔥', color: '#ef4444', check: (p) => getExact(p) >= 10, hint: 'Get 10 exact scores correct' },
+  { id: 'acc-50', name: '50% Club', icon: '🧠', color: 'var(--gold)', check: (p) => calculateAccuracy(getExact(p), getResult(p), getPredictions(p)) >= 50, hint: 'Reach 50% accuracy (min 10 preds)' },
+  { id: 'top-100', name: 'Top 100', icon: '🏆', color: '#eab308', check: (p) => getPoints(p) > 0, hint: 'Score points on the leaderboard' },
 ];
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═════════════════════════════════════════════════════════════════════
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
-
 const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 0, icon }) => {
   const [val, setVal] = useState(0);
   const [ref, visible] = useInView(0.5);
@@ -94,8 +126,8 @@ const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 
 
   return (
     <div ref={ref} className="pro-pop" style={{
-      padding: '20px 16px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-      borderRadius: 14, textAlign: 'center', position: 'relative', overflow: 'hidden',
+      padding: '22px 18px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+      borderRadius: 16, textAlign: 'center', position: 'relative', overflow: 'hidden',
       animationDelay: `${delay}ms`,
     }}>
       <div style={{
@@ -105,24 +137,24 @@ const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 
       }} />
       {icon && (
         <div style={{
-          width: 36, height: 36, borderRadius: 10, background: `${color}15`,
+          width: 38, height: 38, borderRadius: 11, background: `${color}15`,
           display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           color, marginBottom: 10,
         }}>{icon}</div>
       )}
-      <div style={{
-        fontFamily: 'var(--font-display)', fontSize: '2rem', fontWeight: 800, lineHeight: 1,
-        color, marginBottom: 5, position: 'relative',
+      <div className="pro-stat-val" style={{
+        fontFamily: 'var(--font-display)', fontSize: '2.1rem', fontWeight: 900, lineHeight: 1,
+        color, marginBottom: 6, position: 'relative',
       }}>{val}{suffix}</div>
       <div style={{
-        fontSize: '.7rem', color: 'var(--text-muted)', fontWeight: 600,
+        fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600,
         textTransform: 'uppercase', letterSpacing: '.06em', position: 'relative',
       }}>{label}</div>
     </div>
   );
 };
 
-const AccuracyRing = ({ value, size = 110 }) => {
+const AccuracyRing = ({ value, size = 116 }) => {
   const [ref, visible] = useInView(0.5);
   const stroke = 6;
   const r = (size - stroke) / 2;
@@ -131,7 +163,7 @@ const AccuracyRing = ({ value, size = 110 }) => {
   const color = value >= 70 ? 'var(--accent)' : value >= 50 ? 'var(--gold)' : '#f97116';
 
   return (
-    <div ref={ref} className="pro-pop" style={{
+    <div ref={ref} className="pro-pop pro-ring" style={{
       width: size, height: size, position: 'relative',
       opacity: visible ? 1 : 0, animationDelay: '0.2s',
     }}>
@@ -143,8 +175,8 @@ const AccuracyRing = ({ value, size = 110 }) => {
         />
       </svg>
       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
-        <span style={{ fontFamily: 'var(--font-display)', fontSize: '1.6rem', fontWeight: 800, color, lineHeight: 1 }}>{value}%</span>
-        <span style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 2 }}>Accuracy</span>
+        <span className="pro-ring-text" style={{ fontFamily: 'var(--font-display)', fontSize: '1.7rem', fontWeight: 900, color, lineHeight: 1 }}>{value}%</span>
+        <span style={{ fontSize: '.64rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.04em', marginTop: 3 }}>Accuracy</span>
       </div>
     </div>
   );
@@ -166,53 +198,55 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
       onMouseLeave={() => setHovered(false)}
     >
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 10, padding: '10px 16px',
+        display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px',
         background: hovered && earned ? `${badge.color}12` : 'var(--bg-card)',
-        border: `1px solid ${hovered && earned ? `${badge.color}30` : 'var(--border)'}`,
-        borderRadius: 20, transition: 'all .2s',
-        boxShadow: hovered && earned ? `0 4px 16px ${badge.color}18` : 'none',
+        border: `1.5px solid ${hovered && earned ? `${badge.color}30` : 'var(--border)'}`,
+        borderRadius: 22, transition: 'all .2s',
+        boxShadow: hovered && earned ? `0 4px 18px ${badge.color}18` : 'none',
         position: 'relative', overflow: 'hidden',
+        minHeight: 52,
       }}>
         <span style={{
-          width: 30, height: 30, borderRadius: '50%',
+          width: 34, height: 34, borderRadius: '50%',
           background: `${badge.color}${earned ? '20' : '08'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: '.85rem', flexShrink: 0,
-          boxShadow: earned ? `0 0 12px ${badge.color}20` : 'none',
+          fontSize: '.9rem', flexShrink: 0,
+          boxShadow: earned ? `0 0 14px ${badge.color}22` : 'none',
           transition: 'box-shadow .3s',
         }}>{badge.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontSize: '.82rem', fontWeight: 600, color: earned ? 'var(--text-primary)' : 'var(--text-muted)', display: 'block' }}>{badge.name}</span>
+          <span style={{ fontSize: '.86rem', fontWeight: 700, color: earned ? 'var(--text-primary)' : 'var(--text-muted)', display: 'block' }}>{badge.name}</span>
           {!earned && hovered && (
-            <span className="pro-slide-r" style={{ fontSize: '.66rem', color: 'var(--text-muted)', display: 'block', marginTop: 1 }}>{badge.hint}</span>
+            <span className="pro-slide-r" style={{ fontSize: '.68rem', color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>{badge.hint}</span>
           )}
         </div>
-        {!earned && <Lock size={12} style={{ color: 'var(--text-muted)', opacity: .4, flexShrink: 0 }} />}
+        {!earned && <Lock size={13} style={{ color: 'var(--text-muted)', opacity: .4, flexShrink: 0 }} />}
       </div>
     </div>
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   SKELETON — prevents flash of demo state before auth resolves
-   ═══════════════════════════════════════════════════════════════ */
+/* ═════════════════════════════════════════════════════════════════════════════════
+   SKELETON
+   ═════════════════════════════════════════════════════════════════════════════════
+   */
 const ProfileSkeleton = () => (
-  <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 80px' }}>
-      <div style={{ padding: 32, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28 }}>
-        <div className="skel-profile" style={{ width: 88, height: 88, borderRadius: '50%', flexShrink: 0 }} />
+  <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--bg-deep)' }}>
+    <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 100px' }}>
+      <div style={{ padding: 34, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28 }}>
+        <div className="skel-profile" style={{ width: 92, height: 92, borderRadius: '50%', flexShrink: 0 }} />
         <div style={{ flex: 1 }}>
-          <div className="skel-profile" style={{ width: 180, height: 22, marginBottom: 10 }} />
-          <div className="skel-profile" style={{ width: 220, height: 14, marginBottom: 8 }} />
-          <div className="skel-profile" style={{ width: 140, height: 12 }} />
+          <div className="skel-profile" style={{ width: 180, height: 24, marginBottom: 12 }} />
+          <div className="skel-profile" style={{ width: 220, height: 16, marginBottom: 10 }} />
+          <div className="skel-profile" style={{ width: 140, height: 14 }} />
         </div>
-        <div className="skel-profile" style={{ width: 110, height: 110, borderRadius: '50%', flexShrink: 0 }} />
+        <div className="skel-profile" style={{ width: 116, height: 116, borderRadius: '50%', flexShrink: 0 }} />
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14, marginBottom: 28 }}>
         {[0, 1, 2, 3].map(i => (
-          <div key={i} style={{ padding: 20, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, textAlign: 'center' }}>
-            <div className="skel-profile" style={{ width: 60, height: 28, margin: '0 auto 8px' }} />
-            <div className="skel-profile" style={{ width: 90, height: 10, margin: '0 auto' }} />
+          <div key={i} style={{ padding: 22, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, textAlign: 'center' }}>
+            <div className="skel-profile" style={{ width: 64, height: 30, margin: '0 auto 10px' }} />
+            <div className="skel-profile" style={{ width: 96, height: 12, margin: '0 auto' }} />
           </div>
         ))}
       </div>
@@ -220,25 +254,28 @@ const ProfileSkeleton = () => (
   </div>
 );
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════════════════════════════════════════
    MAIN PROFILE COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
+   ═════════════════════════════════════════════════════════════════════════ */
 export default function Profile() {
   injectStyles();
   const { currentUser, userProfile, logout, loading: authLoading } = useAuth();
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  // Show skeleton while auth is resolving
   if (authLoading) return <ProfileSkeleton />;
 
   const profile = userProfile || {
-    displayName: 'Guest', email: 'Sign in to get started', points: 0,
-    predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
+    displayName: 'Guest', email: 'Sign in to get started',
+    points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
   };
 
-  const accuracyNum = calculateAccuracy(profile.correctScore, profile.correctResult, profile.predictions);
-  const initials = useMemo(() => profile.displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
+  const exact = getExact(profile);
+  const result = getResult(profile);
+  const total = getPredictions(profile);
+  const points = getPoints(profile);
+  const accuracyNum = calculateAccuracy(exact, result, total);
+  const initials = useMemo(() => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
   const memberSince = useMemo(
     () => currentUser?.metadata?.creationTime
       ? new Date(currentUser.metadata.creationTime).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -248,9 +285,9 @@ export default function Profile() {
 
   const earnedBadges = useMemo(() => BADGE_DEFS.filter(b => b.check(profile)), [profile]);
   const lockedBadges = useMemo(() => BADGE_DEFS.filter(b => !b.check(profile)), [profile]);
-  const missedCount = Math.max(0, profile.predictions - profile.correctScore - profile.correctResult);
-  const totalCorrect = profile.correctScore + profile.correctResult;
-  const hasData = profile.predictions > 0;
+  const missedCount = Math.max(0, total - exact - result);
+  const totalCorrect = exact + result;
+  const hasData = total > 0;
 
   const handleLogout = useCallback(async () => {
     try { await logout(); } catch {}
@@ -258,7 +295,7 @@ export default function Profile() {
   }, [logout, navigate]);
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--bg-deep)' }}>
       <SEO
         title="My Profile"
         description="View your prediction stats, accuracy, badges, and leaderboard rank on ZOKASCORE."
@@ -266,94 +303,94 @@ export default function Profile() {
         url="https://zokascore.com/profile"
       />
 
-<div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 80px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 20px 100px' }}>
 
-  {/* PROFILE HEADER */}
-  <div className="pro-enter" style={{
-          padding: 32, background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 16, display: 'flex', alignItems: 'center', gap: 24,
-          flexWrap: 'wrap', position: 'relative', overflow: 'hidden', marginBottom: 28,
+        {/* ═══ PROFILE HEADER ═══ */}
+        <div className="pro-enter" style={{
+          padding: 34, background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 18, display: 'flex', alignItems: 'center', gap: 28,
+          flexWrap: 'wrap', position: 'relative', overflow: 'hidden', marginBottom: 30,
         }}>
           {/* Top accent line */}
           <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), #69f0ae, transparent)' }} />
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: 24, flex: 1, minWidth: 280 }}>
+          <div className="pro-header-inner" style={{ display: 'flex', alignItems: 'center', gap: 28, flex: 1, minWidth: 280 }}>
             {/* Avatar */}
             <div style={{ position: 'relative', flexShrink: 0 }}>
-              <div style={{
-                width: 88, height: 88, borderRadius: '50%',
+              <div className="pro-avatar" style={{
+                width: 92, height: 92, borderRadius: '50%',
                 background: isDemo
                   ? 'linear-gradient(135deg, var(--text-muted), rgba(255,255,255,.1))'
                   : 'linear-gradient(135deg, var(--accent), #69f0ae)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '2rem', fontWeight: 900, color: 'var(--bg-deep)',
+                fontSize: '2.1rem', fontWeight: 900, color: 'var(--bg-deep)',
                 boxShadow: isDemo
-                  ? '0 0 0 3px var(--bg-card), 0 0 0 5px rgba(255,255,255,.1)'
-                  : '0 0 0 3px var(--bg-card), 0 0 0 5px rgba(0,230,118,.3)',
+                  ? '0 0 0 3px var(--bg-card), 0 0 0 6px rgba(255,255,255,.1)'
+                  : '0 0 0 3px var(--bg-card), 0 0 0 6px rgba(0,230,118,.3)',
                 fontFamily: 'var(--font-display)',
                 transition: 'all .3s',
               }}>{initials}</div>
               <div style={{
-                position: 'absolute', bottom: 0, right: 0, width: 24, height: 24,
+                position: 'absolute', bottom: 0, right: 0, width: 26, height: 26,
                 borderRadius: '50%', border: '2px solid var(--bg-card)',
                 background: isDemo ? 'var(--text-muted)' : 'var(--accent)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
-                fontSize: '.6rem', color: 'var(--bg-deep)', fontWeight: 800,
+                fontSize: '.64rem', color: 'var(--bg-deep)', fontWeight: 800,
               }}>{isDemo ? '?' : '✓'}</div>
             </div>
 
             {/* Info */}
-            <div style={{ flex: 1, minWidth: 0 }}>
+            <div className="pro-header-info" style={{ flex: 1, minWidth: 0 }}>
               <h2 style={{
-                margin: 0, fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)',
+                margin: 0, fontSize: '1.55rem', fontWeight: 900, color: 'var(--text-primary)',
                 display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
               }}>
                 {profile.displayName}
                 {profile.role === 'admin' && (
                   <span style={{
-                    fontSize: '.64rem', padding: '2px 8px', borderRadius: 6,
+                    fontSize: '.66rem', padding: '3px 10px', borderRadius: 7,
                     background: 'rgba(239,68,68,.12)', color: '#ef4444', fontWeight: 700,
                   }}>ADMIN</span>
                 )}
               </h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.86rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.88rem', color: 'var(--text-muted)', marginTop: 5, justifyContent: 'center' }}>
                 <Mail size={14} /> {profile.email}
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginTop: 8, flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: center, gap: 16, marginTop: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
                 {memberSince && (
-                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.78rem', color: 'var(--text-muted)' }}>
-                    <Calendar size={13} /> {memberSince}
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.8rem', color: 'var(--text-muted)' }}>
+                    <Calendar size={14} /> {memberSince}
                   </span>
                 )}
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.78rem', color: earnedBadges.length > 0 ? 'var(--gold)' : 'var(--text-muted)' }}>
-                  <Star size={13} fill={earnedBadges.length > 0 ? 'var(--gold)' : 'none'} /> {earnedBadges.length}/{BADGE_DEFS.length}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.8rem', color: earnedBadges.length > 0 ? 'var(--gold)' : 'var(--text-muted)' }}>
+                  <Star size={14} fill={earnedBadges.length > 0 ? 'var(--gold)' : 'none' } /> {earnedBadges.length}/{BADGE_DEFS.length}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Ring + Actions */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
-            <AccuracyRing value={accuracyNum} size={110} />
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div className="pro-header-right" style={{ display: 'flex', alignItems: 'center', gap: 22, flexShrink: 0 }}>
+            <AccuracyRing value={accuracyNum} size={116} />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {!isDemo && (
                 <button className="zoka-btn" style={{
-                  padding: '8px 14px', borderRadius: 8, background: 'rgba(255,255,255,.04)',
-                  border: '1px solid var(--border)', color: 'var(--text-primary)',
-                  fontWeight: 600, fontSize: '.78rem', display: 'flex', alignItems: 'center',
-                  gap: 6, whiteSpace: 'nowrap',
+                  padding: '10px 16px', borderRadius: 10, background: 'rgba(255,255,255,.04)',
+                  border: '1.5px solid var(--border)', color: 'var(--text-primary)',
+                  fontWeight: 700, fontSize: '.82rem', display: 'flex', alignItems: 'center',
+                  gap: 7, whiteSpace: 'nowrap', minHeight: 44,
                 }}>
-                  <Edit3 size={14} /> Edit
+                  <Edit3 size={15} /> Edit
                 </button>
               )}
               {!isDemo && (
                 <button onClick={handleLogout} className="zoka-btn" style={{
-                  padding: '8px 14px', borderRadius: 8, background: 'rgba(239,68,68,.06)',
-                  border: '1px solid rgba(239,68,68,.12)', color: '#ef4444',
-                  fontWeight: 600, fontSize: '.78rem', display: 'flex', alignItems: 'center',
-                  gap: 6, whiteSpace: 'nowrap',
+                  padding: '10px 16px', borderRadius: 10, background: 'rgba(239,68,68,.06)',
+                  border: '1.5px solid rgba(239,68,68,.12)', color: '#ef4444',
+                  fontWeight: 700, fontSize: '.82rem', display: 'flex', alignItems: 'center',
+                  gap: 7, whiteSpace: 'nowrap', minHeight: 44,
                 }}>
-                  <LogOut size={14} /> Sign Out
+                  <LogOut size={15} /> Sign Out
                 </button>
               )}
             </div>
@@ -361,91 +398,91 @@ export default function Profile() {
         </div>
 
         {/* ═══ STATS GRID ═══ */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 28 }}>
-          <AnimatedStat value={profile.points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={16} />} />
-          <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={16} />} />
-          <AnimatedStat value={profile.predictions} label="Predictions" color="#60a5fa" delay={160} icon={<Calendar size={16} />} />
-          <AnimatedStat value={profile.correctScore} label="Exact Scores" color="#f97116" delay={240} icon={<Flame size={16} />} />
+        <div className="pro-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 30 }}>
+          <AnimatedStat value={points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={17} />} />
+          <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={17} />} />
+          <AnimatedStat value={total} label="Predictions" color="#60a5fa" delay={160} icon={<Calendar size={17} />} />
+          <AnimatedStat value={exact} label="Exact Scores" color="#f97116" delay={240} icon={<Flame size={17} />} />
         </div>
 
         {/* ═══ BREAKDOWN BAR ═══ */}
         <div style={{
-          padding: '18px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 14, marginBottom: 28,
+          padding: '20px 22px', background: 'var(--bg-card)', border: '1px solid var(--border)',
+          borderRadius: 16, marginBottom: 30,
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, fontSize: '.82rem' }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <TrendingUp size={14} /> Score Breakdown
+          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, fontSize: '.86rem' }}>
+            <span style={{ color: 'var(--text-secondary)', fontWeight: 700, display: 'flex', alignItems: ' center', gap: 7 }}>
+              <TrendingUp size={15} /> Score Breakdown
             </span>
             <span style={{ color: 'var(--text-muted)' }}>
-              {hasData ? `${totalCorrect} correct from ${profile.predictions}` : 'No predictions yet'}
+              {hasData ? `${totalCorrect} correct from ${total}` : 'No predictions yet'}
             </span>
           </div>
 
-          <div style={{ display: 'flex', height: 10, borderRadius: 5, overflow: 'hidden', gap: 3, background: 'rgba(255,255,255,.03)' }}>
+          <div className="pro-breakdown-bar" style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', gap: 4, background: 'rgba(255,255,255,.03)' }}>
             {hasData ? (
               <>
-                {profile.correctScore > 0 && (
-                  <div className="pro-bar-grow" style={{
-                    flex: profile.correctScore, background: 'var(--accent)',
-                    borderRadius: 5, animationDelay: '0.3s',
-                  }} title={`Exact: ${profile.correctScore}`} />
+                {exact > 0 && (
+                  <div className="pro-bar" style={{
+                    flex: exact, background: 'var(--accent)',
+                    borderRadius: 6, animationDelay: '0.3s',
+                  }} title={`Exact: ${exact}`} />
                 )}
-                {profile.correctResult > 0 && (
-                  <div className="pro-bar-grow" style={{
-                    flex: profile.correctResult, background: 'var(--gold)',
-                    borderRadius: 5, animationDelay: '0.45s',
-                  }} title={`Result: ${profile.correctResult}`} />
+                {result > 0 && (
+                  <div className="pro-bar" style={{
+                    flex: result, background: 'var(--gold)',
+                    borderRadius: 6, animationDelay: '0.45s',
+                  }} title={`Result: ${result}`} />
                 )}
                 {missedCount > 0 && (
-                  <div className="pro-bar-grow" style={{
+                  <div className="pro-bar" style={{
                     flex: missedCount, background: 'rgba(255,255,255,.06)',
-                    borderRadius: 5, animationDelay: '0.6s',
+                    borderRadius: 6, animationDelay: '0.6s',
                   }} />
                 )}
               </>
             ) : (
-              <div style={{ flex: 1, background: 'rgba(255,255,255,.03)', borderRadius: 5 }} />
+              <div style={{ flex: 1, background: 'rgba(255,255,255,.03)', borderRadius: 6 }} />
             )}
           </div>
 
-          <div style={{ display: 'flex', gap: 20, marginTop: 10, fontSize: '.72rem', color: 'var(--text-muted)' }}>
+          <div style={{ display: 'flex', gap: 22, marginTop: 12, fontSize: '.74rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--accent)' }} />Exact (3pts)
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--accent)' }} /> Exact (10pts)
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: 'var(--gold)' }} />Result (1pt)
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--gold)' }} /> Result (3pts)
             </span>
             <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 8, height: 8, borderRadius: 2, background: 'rgba(255,255,255,.06)' }} />Missed
+              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'rgba(255,255,255,.06)' }} /> Missed
             </span>
           </div>
         </div>
 
         {/* ═══ BADGES ═══ */}
-        <div style={{ marginBottom: 36 }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+        <div style={{ marginBottom: 40 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h3 style={{
-              display: 'flex', alignItems: 'center', gap: 8, fontSize: '1.1rem',
-              fontWeight: 800, color: 'var(--text-primary)', margin: 0,
+              display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.15rem',
+              fontWeight: 900, color: 'var(--text-primary)', margin: 0,
             }}>
-              <Shield size={20} style={{ color: 'var(--gold)' }} /> Badges
+              <Shield size={22} style={{ color: 'var(--gold)' }} /> Badges
             </h3>
             <span style={{
-              fontSize: '.78rem', fontWeight: 600, color: 'var(--text-muted)',
-              padding: '3px 10px', background: 'rgba(255,255,255,.04)', borderRadius: 10,
+              fontSize: '.8rem', fontWeight: 600, color: 'var(--text-muted)',
+              padding: '4px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10,
             }}>{earnedBadges.length}/{BADGE_DEFS.length}</span>
           </div>
 
           {earnedBadges.length > 0 && (
-            <div style={{ marginBottom: 16 }}>
+            <div style={{ marginBottom: 18 }}>
               <div style={{
-                fontSize: '.7rem', fontWeight: 700, color: 'var(--text-muted)',
-                marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em',
+                fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)',
+                marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em',
               }}>Earned</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
+              <div className="pro-badge-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                 {earnedBadges.map((badge, i) => (
-                  <BadgeCard key={badge.id} badge={badge} earned delay={i * 60} />
+                  <BadgeCard key={badge.id} badge={badge} earned delay={i * 70} />
                 ))}
               </div>
             </div>
@@ -454,12 +491,12 @@ export default function Profile() {
           {lockedBadges.length > 0 && (
             <div>
               <div style={{
-                fontSize: '.7rem', fontWeight: 700, color: 'var(--text-muted)',
-                marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.04em',
+                fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)',
+                marginBottom: 10, textTransform: 'uppercase', letterSpacing: '.04em',
               }}>Locked</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(210px, 1fr))', gap: 8 }}>
+              <div className="pro-badge-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                 {lockedBadges.map((badge, i) => (
-                  <BadgeCard key={badge.id} badge={badge} earned={false} delay={(earnedBadges.length + i) * 60} />
+                  <BadgeCard key={badge.id} badge={badge} earned={false} delay={(earnedBadges.length + i) * 70} />
                 ))}
               </div>
             </div>
@@ -468,20 +505,20 @@ export default function Profile() {
 
         {/* ═══ CTA ═══ */}
         <div className="pro-enter" style={{
-          textAlign: 'center', padding: '48px 24px',
+          textAlign: 'center', padding: '52px 28px',
           background: isDemo
             ? 'linear-gradient(135deg, rgba(0,230,118,.06) 0%, rgba(96,165,250,.04) 100%)'
             : 'linear-gradient(135deg, rgba(0,230,118,.06) 0%, transparent 100%)',
-          border: `1px solid ${isDemo ? 'rgba(0,230,118,.12)' : 'rgba(0,230,118,.08)'}`,
-          borderRadius: 16, position: 'relative', overflow: 'hidden',
+          border: `1.5px solid ${isDemo ? 'rgba(0,230,118,.12)' : 'rgba(0,230,118,.08)'}`,
+          borderRadius: 18, position: 'relative', overflow: 'hidden',
         }}>
           <div style={{ position: 'relative' }}>
             {isDemo ? (
               <>
-                <h2 style={{ margin: '0 0 10px', fontSize: '1.6rem', fontWeight: 900 }}>Start Predicting</h2>
+                <h2 className="pro-cta-title" style={{ margin: '0 0 12px', fontSize: '1.65rem', fontWeight: 900 }}>Start Predicting</h2>
                 <p style={{
-                  color: 'var(--text-muted)', fontSize: '.92rem', maxWidth: 420,
-                  margin: '0 auto 24px', lineHeight: 1.6,
+                  color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440,
+                  margin: '0 auto 28px', lineHeight: 1.6,
                 }}>
                   Sign in to track your predictions, earn badges, and climb the leaderboard.
                 </p>
@@ -489,10 +526,11 @@ export default function Profile() {
                   onClick={() => navigate('/login')}
                   className="zoka-btn"
                   style={{
-                    display: 'inline-flex', alignItems: 'center', gap: 8,
-                    padding: '12px 32px', borderRadius: 10, background: 'var(--accent)',
-                    color: 'var(--bg-deep)', fontWeight: 700, fontSize: '.9rem',
-                    border: 'none', boxShadow: '0 4px 18px rgba(0,230,118,.2)',
+                    display: 'inline-flex', alignItems: 'center', gap: 10,
+                    padding: '14px 36px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                    color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
+                    border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                    minHeight: 56,
                   }}
                 >
                   Sign In <ArrowRight size={18} />
@@ -500,27 +538,28 @@ export default function Profile() {
               </>
             ) : (
               <>
-                <h2 style={{ margin: '0 0 10px', fontSize: '1.6rem', fontWeight: 900 }}>
+                <h2 className="pro-cta-title" style={{ margin: '0 0 12px', fontSize: '1.65rem', fontWeight: 900 }}>
                   {hasData ? 'Keep the Streak Going' : 'Make Your First Pick'}
                 </h2>
                 <p style={{
-                  color: 'var(--text-muted)', fontSize: '.92rem', maxWidth: 420,
-                  margin: '0 auto 24px', lineHeight: 1.6,
+                  color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440,
+                  margin: '0 auto 28px', lineHeight: 1.6,
                 }}>
                   {hasData
                     ? "Predict today's matches and climb the global leaderboard."
                     : "Browse today's fixtures and make your first prediction to start earning badges."
                   }
                 </p>
-                <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+                <div className="pro-cta-btns" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button
                     onClick={() => navigate('/fixtures')}
                     className="zoka-btn"
                     style={{
-                      display: 'inline-flex', alignItems: 'center', gap: 8,
-                      padding: '12px 28px', borderRadius: 10, background: 'var(--accent)',
-                      color: 'var(--bg-deep)', fontWeight: 700, fontSize: '.9rem',
-                      border: 'none', boxShadow: '0 4px 18px rgba(0,230,118,.2)',
+                      display: 'inline-flex', alignItems: 'center', gap: 10,
+                      padding: '14px 30px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                      color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
+                      border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                      minHeight: 56,
                     }}
                   >
                     <Zap size={18} /> {hasData ? "Today's Picks" : 'Browse Fixtures'}
@@ -530,10 +569,10 @@ export default function Profile() {
                       onClick={() => navigate('/leaderboard')}
                       className="zoka-btn"
                       style={{
-                        display: 'inline-flex', alignItems: 'center', gap: 8,
-                        padding: '12px 28px', borderRadius: 10, background: 'transparent',
-                        border: '1px solid var(--border)', color: 'var(--text-primary)',
-                        fontWeight: 600, fontSize: '.9rem',
+                        display: 'inline-flex', alignItems: 'center', gap: 10,
+                        padding: '14px 30px', borderRadius: 14, background: 'transparent',
+                        border: '1.5px solid var(--border)', color: 'var(--text-primary)',
+                        fontWeight: 700, fontSize: '.94rem', minHeight: 56,
                       }}
                     >
                       <Trophy size={18} /> Leaderboard

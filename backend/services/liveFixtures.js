@@ -2,14 +2,9 @@
  * liveFixtures.js
  * Fetches live football fixtures with DAILY CAP.
  *
- * Budget cost: UP TO 25 requests/day (hard cap).
- * Real-time scores for users viewing live matches.
- *
- * Key changes from original:
- *   - Checks isLiveCapAvailable() BEFORE fetching
- *   - Increments live counter AFTER successful fetch
- *   - When cap hit → returns empty (scheduler slows to 60min)
- *   - No other changes to logic
+ * FIX: `writes` was logged as `[object Object]` because
+ * replaceLive() returns `{ deleted, written }` but the
+ * log used `${writes}` instead of `${writes.written}`.
  */
 
 const {
@@ -74,16 +69,16 @@ class LiveFixturesService {
     // ── Count this live request ──
     const liveCount = incrementLiveCounter();
 
-    // ── Check for API-level errors ──
+    // ── Check for API-level errors (including body-level) ──
     const apiErrors = response?.errors || {};
     if (Object.keys(apiErrors).length > 0) {
       logger.warn(`[LiveFixtures] API blocked: ${JSON.stringify(apiErrors)}`);
-      return this._emptyResult();
+      return this._emptyResult({ capReached: true });
     }
 
     const rawFixtures = response?.response || [];
 
-    // ── Filter to tracked leagues (or all if TRACK_ALL_LEAGUES) ──
+    // ── Filter to tracked leagues ──
     const filtered = TRACK_ALL_LEAGUES
       ? rawFixtures
       : rawFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
@@ -92,7 +87,7 @@ class LiveFixturesService {
       `[LiveFixtures] API: ${rawFixtures.length} total, ${filtered.length} tracked [live req ${liveCount}/${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}]`
     );
 
-    // ── Detect transitions via in-memory diff ──
+    // ── Detect transitions ──
     const previousIds = new Set(this.lastLiveSnapshot.keys());
     const newIds = new Set(filtered.map((f) => f.fixture.id));
     const disappearedIds = [...previousIds].filter((id) => !newIds.has(id));
@@ -104,10 +99,12 @@ class LiveFixturesService {
 
     // ── Write live fixtures ──
     const docs = filtered.map((f) => this.normalize(f));
-    let writes = 0;
+    // FIX: result is { deleted, written }, extract .written
+    let writeCount = 0;
 
     if (docs.length > 0) {
-      writes = await this.repo.replaceLive(docs);
+      const result = await this.repo.replaceLive(docs);
+      writeCount = result.written;
     } else if (previousIds.size > 0) {
       await this.repo.clearLive();
       this.lastLiveSnapshot.clear();
@@ -122,13 +119,14 @@ class LiveFixturesService {
     const duration = Date.now() - startTime;
     const hasLive = docs.length > 0;
 
+    // FIX: Use writeCount (number) not result (object)
     logger.info(
-      `[LiveFixtures] ${writes} live, ${transitioned} → finished, ${duration} ms`
+      `[LiveFixtures] ${writeCount} live, ${transitioned} → finished, ${duration} ms`
     );
 
     return {
       total: filtered.length,
-      writes,
+      writes: writeCount,
       removed: transitioned,
       hasLive,
       duration,
@@ -176,15 +174,12 @@ class LiveFixturesService {
 
     return {
       id: f.id,
-
       date: f.date,
       timestamp: f.timestamp,
-
       status: f.status.short,
       statusLong: f.status.long,
       elapsed: f.status.elapsed ?? null,
       referee: f.referee ?? null,
-
       leagueId: l.id,
       leagueName: l.name,
       leagueCountry: l.country,
@@ -192,39 +187,26 @@ class LiveFixturesService {
       leagueFlag: l.flag ?? null,
       season: l.season,
       round: l.round,
-
       homeTeamId: t.home.id,
       homeTeamName: t.home.name,
       homeTeamLogo: t.home.logo,
-
       awayTeamId: t.away.id,
       awayTeamName: t.away.name,
       awayTeamLogo: t.away.logo,
-
       goalsHome: g.home,
       goalsAway: g.away,
-
       scoreHalftimeHome: s.halftime?.home ?? null,
       scoreHalftimeAway: s.halftime?.away ?? null,
-
       scoreFulltimeHome: s.fulltime?.home ?? null,
       scoreFulltimeAway: s.fulltime?.away ?? null,
-
       scoreExtratimeHome: s.extratime?.home ?? null,
       scoreExtratimeAway: s.extratime?.away ?? null,
-
       scorePenaltyHome: s.penalty?.home ?? null,
       scorePenaltyAway: s.penalty?.away ?? null,
-
       sport: "football",
-
       _updatedAt: new Date().toISOString(),
     };
   }
-
-  // ==========================================================
-  // HELPERS
-  // ==========================================================
 
   _emptyResult(extra = {}) {
     return {

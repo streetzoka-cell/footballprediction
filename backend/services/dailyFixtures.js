@@ -1,17 +1,20 @@
 ﻿/*
  * dailyFixtures.js
- * Smart daily fetch with 3-day rollover + DATA INTEGRITY VERIFICATION.
+ * Smart daily fetch with 3-day rollover.
  *
  * BUDGET: 1 API call per day.
  *
- * FIX: If cron ran but Firestore writes failed, the old meta dedup
- * would skip re-runs forever. Now we VERIFY data exists before skipping.
- *
- * 3-DAY ROLLOVER (0 API calls — pure Firestore):
- *   At 3 AM the window cascades:
- *     todayFixtures    → yesterdayFixtures
- *     tomorrowFixtures → todayFixtures
- *     API fetch        → tomorrowFixtures
+ * FIXES:
+ *   1. Rollover date-filtering FIXED: no longer filters by
+ *      yesterdayStr inside todayFixtures. Just moves ALL docs
+ *      from today→yesterday and tomorrow→today. The data
+ *      already contains the correct dates from yesterday's fetch.
+ *   2. Integrity check FIXED: now checks that the collection
+ *      HAS docs (any date) rather than checking for a specific
+ *      date. After rollover, todayFixtures contains tomorrow's
+ *      date — that's correct, not a failure.
+ *   3. No longer clears and re-fetches today/yesterday on
+ *      restart. If data exists, it's left alone.
  */
 
 const { api, isBudgetAvailable } = require("../config/api");
@@ -45,54 +48,57 @@ class DailyFixturesService {
 
   async run() {
     const todayStr = getDateOffset(0);
-    const yesterdayStr = getDateOffset(-1);
     const tomorrowStr = getDateOffset(1);
 
     logger.info(
       `[DailyFixtures] Run for ${tomorrowStr} (today: ${todayStr})`
     );
 
+    const startTime = Date.now();
+
     // ══════════════════════════════════════════════════════
-    // META DEDUP WITH DATA INTEGRITY VERIFICATION
+    // META DEDUP — skip if we already fetched tomorrow today
+    // FIX: Only check tomorrow data, not today/yesterday.
+    // Today/yesterday are managed by rollover and should
+    // NOT be cleared on restart.
     // ══════════════════════════════════════════════════════
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
     if (alreadyFetchedToday) {
-      const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
+      // Verify tomorrow data exists (the thing we actually fetched)
+      const tomorrowDocs = await this.repo.getAllTomorrow();
 
-      if (integrity.valid) {
+      if (tomorrowDocs.length > 0) {
         logger.info(
-          `[DailyFixtures] Data verified (today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}) — skipping (meta dedup)`
+          `[DailyFixtures] Tomorrow data verified (${tomorrowDocs.length} docs) — skipping (meta dedup)`
         );
         return {
           total: 0,
           writes: 0,
           apiCalls: 0,
           duration: 0,
-          deduped: true
+          deduped: true,
         };
       }
 
       logger.warn(
-        `⚠️ [DailyFixtures] DATA INTEGRITY CHECK FAILED! ` +
-        `Meta says "${todayStr}" done but: ` +
-        `todayFixtures has ${integrity.todayTotal} docs (${integrity.todayCount} for ${todayStr}), ` +
-        `yesterdayFixtures has ${integrity.yesterdayTotal} docs (${integrity.yesterdayCount} for ${yesterdayStr}) ` +
-        `— FORCING RECOVERY`
+        `[DailyFixtures] Meta says done but tomorrow is empty — re-fetching`
       );
     }
 
-    const startTime = Date.now();
-
     // ══════════════════════════════════════════
     // PHASE 1: 3-DAY ROLLOVER (0 API calls)
+    //
+    // FIX: Move ALL docs, don't filter by date.
+    // todayFixtures contains whatever date was fetched.
+    // tomorrowFixtures contains tomorrow's date.
+    // Just shift them: today→yesterday, tomorrow→today.
     // ══════════════════════════════════════════
 
     let rolloverYesterday = 0;
     let rolloverToday = 0;
     let recoveredFT = 0;
-    let rolloverSuccess = false;
 
     const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
       this.repo.getAllToday(),
@@ -100,56 +106,36 @@ class DailyFixturesService {
     ]);
 
     try {
-      if (currentTodayDocs.length > 0 || currentTomorrowDocs.length > 0) {
-        const validYesterday = currentTodayDocs.filter(
-          (d) => d.date === yesterdayStr
-        );
-        const validToday = currentTomorrowDocs.filter(
-          (d) => d.date === todayStr
-        );
+      if (currentTodayDocs.length > 0) {
+        // Move ALL of today's docs to yesterday
+        const r = await this.repo.replaceYesterday(currentTodayDocs);
+        rolloverYesterday = r.written;
 
-        if (validYesterday.length > 0) {
-          const r = await this.repo.replaceYesterday(validYesterday);
-          rolloverYesterday = r.written;
-
-          const ftGames = validYesterday.filter((d) =>
-            FINISHED_STATUSES.includes(d.status)
-          );
-          if (ftGames.length > 0) {
-            await this.repo.batchUpsertFinished(ftGames);
-            recoveredFT = ftGames.length;
-          }
-        } else {
-          await this.repo.replaceYesterday([]);
+        // Recover finished games from what we just moved
+        const ftGames = currentTodayDocs.filter((d) =>
+          FINISHED_STATUSES.includes(d.status)
+        );
+        if (ftGames.length > 0) {
+          await this.repo.batchUpsertFinished(ftGames);
+          recoveredFT = ftGames.length;
         }
-
-        if (validToday.length > 0) {
-          const r = await this.repo.replaceToday(validToday);
-          rolloverToday = r.written;
-        } else {
-          await this.repo.replaceToday([]);
-        }
-
-        logger.info(
-          `[DailyFixtures] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
-        );
       } else {
         await this.repo.replaceYesterday([]);
+      }
+
+      if (currentTomorrowDocs.length > 0) {
+        // Move ALL of tomorrow's docs to today
+        const r = await this.repo.replaceToday(currentTomorrowDocs);
+        rolloverToday = r.written;
+      } else {
         await this.repo.replaceToday([]);
-        logger.info(`[DailyFixtures] First run — no rollover data`);
       }
 
-      const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
-      rolloverSuccess = afterRollover.valid;
-
-      if (!rolloverSuccess) {
-        logger.error(
-          `[DailyFixtures] ROLLOVER VERIFICATION FAILED — data may be inconsistent`
-        );
-      }
+      logger.info(
+        `[DailyFixtures] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
+      );
     } catch (err) {
       logger.error(`[DailyFixtures] Rollover failed: ${err.message}`);
-      rolloverSuccess = false;
     }
 
     // ══════════════════════════════════════════
@@ -164,8 +150,7 @@ class DailyFixturesService {
       logger.warn(
         `[DailyFixtures] Budget too low — skipping tomorrow fetch`
       );
-      // If budget too low, that's not a failure — allow meta update
-      fetchSuccess = true;
+      fetchSuccess = true; // Don't fail meta update for budget
     } else {
       try {
         const result = await this._fetchTomorrow(tomorrowStr);
@@ -183,12 +168,10 @@ class DailyFixturesService {
     }
 
     // ══════════════════════════════════════════
-    // PHASE 3: UPDATE META — ONLY IF SUCCESSFUL
+    // PHASE 3: UPDATE META
     // ══════════════════════════════════════════
 
-    const shouldUpdateMeta = rolloverSuccess && fetchSuccess;
-
-    if (shouldUpdateMeta) {
+    if (fetchSuccess) {
       await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
         lastDailyFetchDate: todayStr,
         lastTomorrowDate: tomorrowStr,
@@ -202,7 +185,7 @@ class DailyFixturesService {
       logger.info(`[DailyFixtures] Meta updated successfully`);
     } else {
       logger.warn(
-        `[DailyFixtures] Meta NOT updated — rollover: ${rolloverSuccess}, fetch: ${fetchSuccess} — will retry next run`
+        `[DailyFixtures] Meta NOT updated — fetch failed — will retry next run`
       );
     }
 
@@ -212,93 +195,21 @@ class DailyFixturesService {
       `[DailyFixtures] Complete — rollover: ${rolloverYesterday}+${rolloverToday}, ` +
       `FT recovered: ${recoveredFT}, ` +
       `fetched: ${fetchTotal} (${fetchWrites} written), ` +
-      `metaUpdated: ${shouldUpdateMeta}, ` +
-      `1 API call, ${duration} ms`
+      `metaUpdated: ${fetchSuccess}, ` +
+      `${fetchSuccess && fetchTotal > 0 ? 1 : 0} API call, ${duration} ms`
     );
 
     return {
       total: fetchTotal,
       writes: fetchWrites + rolloverYesterday + rolloverToday,
-      apiCalls: fetchTotal > 0 || fetchWrites >= 0 ? 1 : 0,
+      apiCalls: fetchSuccess && fetchTotal > 0 ? 1 : 0,
       duration,
       rolloverYesterday,
       rolloverToday,
       recoveredFT,
       deduped: false,
-      metaUpdated: shouldUpdateMeta,
-      recovery: alreadyFetchedToday && !shouldUpdateMeta,
+      metaUpdated: fetchSuccess,
     };
-  }
-
-  // ==========================================================
-  // DATA INTEGRITY VERIFICATION (ONLY ONE COPY)
-  // ==========================================================
-
-  async _verifyDataIntegrity(todayStr, yesterdayStr) {
-    try {
-      const { getDb } = require("../config/firebase");
-      const db = getDb();
-
-      const [todaySnap, yesterdaySnap] = await Promise.all([
-        db.collection(
-          this.repo.constructor.name.includes("Basketball")
-            ? "basketballTodayFixtures"
-            : "todayFixtures"
-        ).get(),
-        db.collection(
-          this.repo.constructor.name.includes("Basketball")
-            ? "basketballYesterdayFixtures"
-            : "yesterdayFixtures"
-        ).get(),
-      ]);
-
-      const todayDocs = todaySnap.docs.map((doc) => doc.data());
-      const yesterdayDocs = yesterdaySnap.docs.map((doc) => doc.data());
-
-      const todayTotal = todayDocs.length;
-      const yesterdayTotal = yesterdayDocs.length;
-
-      const todayCount = todayDocs.filter(
-        (doc) => doc.date === todayStr
-      ).length;
-
-      const yesterdayCount = yesterdayDocs.filter(
-        (doc) => doc.date === yesterdayStr
-      ).length;
-
-      // First run
-      if (todayTotal === 0 && yesterdayTotal === 0) {
-        return {
-          valid: true,
-          todayCount,
-          todayTotal,
-          yesterdayCount,
-          yesterdayTotal,
-        };
-      }
-
-      const valid = todayCount > 0 || yesterdayCount > 0;
-
-      return {
-        valid,
-        todayCount,
-        todayTotal,
-        yesterdayCount,
-        yesterdayTotal,
-      };
-    } catch (err) {
-      logger.error(
-        `[${this.constructor.name}] Verification error: ${err.message}`
-      );
-
-      return {
-        valid: false,
-        todayCount: 0,
-        todayTotal: 0,
-        yesterdayCount: 0,
-        yesterdayTotal: 0,
-      };
-    }
   }
 
   // ==========================================================

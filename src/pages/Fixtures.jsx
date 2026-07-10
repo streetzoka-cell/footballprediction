@@ -1,10 +1,9 @@
 // FILE: src/pages/Fixtures.jsx
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, RefreshCw, WifiOff, Search, X, SlidersHorizontal,
-  Star, Volume2, VolumeX, Clock, ArrowUp,
-  Pause, Flag, Zap, ChevronDown, Filter
+  CalendarDays, RefreshCw, WifiOff, Search, X,
+  Star, Volume2, VolumeX, Clock,
+  Pause, Flag, Zap
 } from 'lucide-react';
 import {
   fetchFixtures,
@@ -107,14 +106,6 @@ const injectStyles = () => {
     @keyframes fxJumpPulse {
       0%, 100% { box-shadow: 0 4px 16px rgba(239,68,68,.2); }
       50%      { box-shadow: 0 4px 28px rgba(239,68,68,.4); }
-    }
-    @keyframes fxSlideDown {
-      from { opacity: 0; max-height: 0; }
-      to   { opacity: 1; max-height: 300px; }
-    }
-    @keyframes fxDotBounce {
-      0%, 80%, 100% { transform: translateY(0); }
-      40%           { transform: translateY(-3px); }
     }
 
     /* ═══ UTILITY CLASSES ═══ */
@@ -240,11 +231,6 @@ const injectStyles = () => {
       background: rgba(0,230,118,.08);
       color: var(--accent);
       border-color: rgba(0,230,118,.2);
-    }
-    .fx-action-btn.live-active {
-      background: rgba(239,68,68,.08);
-      color: #ef4444;
-      border-color: rgba(239,68,68,.2);
     }
 
     /* ═══ SEARCH BAR ═══ */
@@ -798,7 +784,6 @@ function getAutoStatus(m) {
    ═══════════════════════════════════════════════════════════════ */
 export default function Fixtures() {
   injectStyles();
-  const navigate = useNavigate();
 
   /* ── State ── */
   const [date, setDate] = useState(TODAY);
@@ -867,7 +852,7 @@ export default function Fixtures() {
   /* ═══════════════════════════════════════════════════════════
      KICKOFF DETECTION
      ═══════════════════════════════════════════════════════════ */
-  const detectKickOffs = useCallback((live) => {
+    const detectKickOffs = useCallback((live) => {
     const newKO = new Set();
     live.forEach(m => {
       const id = String(m.id);
@@ -878,7 +863,14 @@ export default function Fixtures() {
     });
     if (newKO.size > 0) {
       setKickOffs(p => new Set([...p, ...newKO]));
-      newKO.forEach(k => setTO(`ko-${k}`, () => setKickOffs(p => { const n = new Set(p); n.delete(k); return n; }), 5000));
+      newKO.forEach(k => {
+        const key = `ko-${k}`;
+        setTO(key, () => setKickOffs(p => {
+          const n = new Set(p);
+          n.delete(k);
+          return n;
+        }), 5000);
+      });
     }
   }, []);
 
@@ -1056,7 +1048,6 @@ export default function Fixtures() {
         <div className={cls} style={{ animationDelay: `${idx * 20}ms`, paddingLeft: (isLive || isHT || isFT) ? 17 : 16 }} onClick={() => setExpanded(isExp ? null : String(m.id))}>
           {(isLive || isHT || isFT) && <div className="fx-left-bar" style={{ background: leftColor }} />}
 
-          {/* Status row — centered */}
           <div className="fx-status-row">
             {isLive && <span className="fx-badge fx-badge-live"><span className="fx-live-dot" /> LIVE</span>}
             {isLive && auto.auto && <span style={{ fontSize: '.5rem', opacity: .5, fontWeight: 600 }}>AUTO</span>}
@@ -1068,9 +1059,7 @@ export default function Fixtures() {
             {!isLive && !isHT && !isFT && m.kickoff && <span className="fx-badge-time"><Clock size={10} /> {m.kickoff}</span>}
           </div>
 
-          {/* Teams — centered VS layout */}
           <div className="fx-teams">
-            {/* Home */}
             <div className="fx-team-col home">
               <div className="fx-team-info">
                 {m.homeLogo && <img className="fx-team-logo" src={m.homeLogo} alt="" loading="lazy" />}
@@ -1081,7 +1070,6 @@ export default function Fixtures() {
               </button>
             </div>
 
-            {/* Score center */}
             <div className="fx-score-center">
               {auto.showScore ? (
                 <div className="fx-score-pair">
@@ -1094,7 +1082,6 @@ export default function Fixtures() {
               )}
             </div>
 
-            {/* Away */}
             <div className="fx-team-col away">
               <div className="fx-team-info">
                 {m.awayLogo && <img className="fx-team-logo" src={m.awayLogo} alt="" loading="lazy" />}
@@ -1106,14 +1093,12 @@ export default function Fixtures() {
             </div>
           </div>
 
-          {/* Progress */}
           {isLive && minute > 0 && (
             <div className="fx-progress">
               <div className="fx-progress-fill" style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg, ${pColor}, ${pColor}88)` }} />
             </div>
           )}
 
-          {/* Status overlay */}
           {isStatusAnim && (
             <div className="fx-overlay">
               <div className="fx-overlay-badge" style={{
@@ -1128,7 +1113,6 @@ export default function Fixtures() {
           )}
         </div>
 
-        {/* Expanded panel */}
         {isExp && (
           <div className="fx-expanded">
             <ScoreBreakdown match={m} />
@@ -1204,12 +1188,21 @@ export default function Fixtures() {
      RENDER
      ═══════════════════════════════════════════════════════════ */
   if (loading) return <div className="fx-page"><Skeleton /></div>;
+  if (error) return (
+    <div className="fx-page">
+      <div className="fx-container fx-enter">
+        <div className="fx-header">
+          <h1>⚽ Fixtures</h1>
+        </div>
+        <ErrorView />
+      </div>
+    </div>
+  );
 
   return (
     <div className="fx-page">
       <SEO title={liveCount > 0 ? `${liveCount} LIVE Matches` : 'Football Fixtures & Live Scores'} description={liveCount > 0 ? `${liveCount} live football matches right now.` : "Today's football fixtures with live scores."} />
 
-      {/* Goal notification */}
       {goalNotif && (
         <div className="fx-goal-notif" key={goalNotif.key}>
           <span style={{ fontSize: '1.1rem' }}>⚽</span>
@@ -1221,13 +1214,11 @@ export default function Fixtures() {
 
       <div className="fx-container fx-enter">
 
-        {/* Header — centered */}
         <div className="fx-header">
           <h1>⚽ Fixtures</h1>
           <span className="sub">{dateLabel(date)}{liveCount > 0 && <span style={{ color: '#ef4444', fontWeight: 700, marginLeft: 6 }}>· {liveCount} LIVE</span>}</span>
         </div>
 
-        {/* Date tabs — centered */}
         <div className="fx-date-tabs">
           {DATES.map(d => (
             <button key={d} className={`fx-date-tab ${date === d ? 'active' : ''}`} onClick={() => setDate(d)}>
@@ -1237,7 +1228,6 @@ export default function Fixtures() {
           ))}
         </div>
 
-        {/* Action bar — centered */}
         <div className="fx-actions">
           <button className={`fx-action-btn ${searchOpen ? 'active' : ''}`} onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQ(''); }}>
             {searchOpen ? <X size={13} /> : <Search size={13} />}
@@ -1256,7 +1246,6 @@ export default function Fixtures() {
           </button>
         </div>
 
-        {/* Search bar — collapsible */}
         <div className={`fx-search-wrap ${searchOpen ? 'open' : 'closed'}`}>
           <div className="fx-search-bar">
             <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -1265,7 +1254,6 @@ export default function Fixtures() {
           </div>
         </div>
 
-        {/* Live ticker */}
         {liveMatches.length > 0 && (
           <div className="fx-ticker">
             {liveMatches.map(m => (
@@ -1274,58 +1262,39 @@ export default function Fixtures() {
                 <span style={{ color: 'rgba(255,255,255,.7)', fontWeight: 600, fontSize: '.64rem' }}>{m.homeTeam?.shortName || m.homeTeam?.name}</span>
                 <span className="fx-ticker-score">{m.homeScore ?? 0}-{m.awayScore ?? 0}</span>
                 <span style={{ color: 'rgba(255,255,255,.7)', fontWeight: 600, fontSize: '.64rem' }}>{m.awayTeam?.shortName || m.awayTeam?.name}</span>
-                {m.minute != null && <span style={{ color: 'rgba(239,68,68,.6)', fontSize: '.6rem', fontWeight: 700, fontFamily: 'var(--font-display)' }}>{m.minute}&apos;</span>}
               </div>
             ))}
           </div>
         )}
 
-        {/* Error */}
-        {error && <ErrorView />}
-
-        {/* Matches grouped by league */}
-        {!error && grouped.length === 0 && (
-          <div className="fx-empty fx-enter">
-            <div className="fx-empty-icon fx-float" style={{ background: 'rgba(59,130,246,.08)', color: '#3b82f6' }}><Search size={22} /></div>
-            <div style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--text-primary)' }}>No matches found</div>
-            <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>Try adjusting your search or filters</div>
-            {(searchQ || favFilter) && (
-              <button className="fx-btn" style={{ padding: '8px 18px', borderRadius: 8, background: 'rgba(255,255,255,.05)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: '.78rem', fontWeight: 600 }} onClick={() => { setSearchQ(''); setFavFilter(false); setSearchOpen(false); }}>
-                Clear filters
-              </button>
-            )}
-          </div>
-        )}
-
-        {!error && grouped.map(league => (
-          <div key={league.id} className="fx-league">
+        {grouped.map((league, i) => (
+          <div key={league.id} className="fx-league" style={{ animationDelay: `${i * 40}ms` }}>
             <div className="fx-league-header">
               {league.logo && <img src={league.logo} alt="" loading="lazy" />}
               <span>{league.name}</span>
               <span className="count">{league.matches.length}</span>
             </div>
-            {league.matches.map((m, i) => (
-              <div key={m.id} id={`fx-card-${m.id}`}>
-                {renderCard(m, i)}
-              </div>
-            ))}
+            {league.matches.map((m, idx) => renderCard(m, idx))}
           </div>
         ))}
 
-        {/* Footer spacer info */}
-        {!error && grouped.length > 0 && (
-          <div style={{ textAlign: 'center', padding: '20px 0 0', fontSize: '.68rem', color: 'var(--text-muted)', opacity: .4 }}>
-            {fixtures.length} match{fixtures.length !== 1 ? 'es' : ''} · Tap a match for details
+        {filtered.length === 0 && (
+          <div className="fx-empty fx-enter">
+            <div className="fx-empty-icon fx-float" style={{ background: 'rgba(255,255,255,.04)', color: 'var(--text-muted)' }}>
+              <CalendarDays size={22} />
+            </div>
+            <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>No matches found</div>
+            <div style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
+              {searchQ ? 'Try a different search term' : 'No fixtures match your filters'}
+            </div>
           </div>
         )}
       </div>
 
-      {/* Jump to live — fixed bottom center */}
-      {showJump && liveMatches.length > 0 && (
+      {showJump && (
         <button className="fx-jump-btn" onClick={jumpToLive}>
           <span className="fx-live-dot" style={{ width: 6, height: 6 }} />
-          {liveCount} LIVE
-          <ArrowUp size={13} />
+          Jump to Live
         </button>
       )}
     </div>

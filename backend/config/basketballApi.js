@@ -1,8 +1,11 @@
 /*
  * basketballApi.js
  * Central Axios client for API-Basketball.
- * Same budget tracking pattern as api.js but
- * independent counters — separate 100/day limit.
+ *
+ * FIX: Response interceptor now detects body-level
+ * rate limit errors (200 status with errors object)
+ * and forces budget to 0 — prevents infinite retries
+ * when API returns "request limit reached" in body.
  */
 
 const axios = require("axios");
@@ -10,9 +13,6 @@ const env = require("./env");
 const logger = require("../utils/logger");
 const { LIVE_POLLING } = require("./constants");
 
-// ───────────────────────────────────────────────
-// Is basketball configured?
-// ───────────────────────────────────────────────
 const isBasketballConfigured = Boolean(env.API_BASKETBALL_KEY);
 
 // ───────────────────────────────────────────────
@@ -77,7 +77,7 @@ function incrementBasketballLiveCounter() {
 }
 
 // ───────────────────────────────────────────────
-// Axios Instance — only created if key exists
+// Axios Instance
 // ───────────────────────────────────────────────
 let basketballApi = null;
 
@@ -122,6 +122,23 @@ if (isBasketballConfigured) {
       const headerRemaining =
         response.headers?.["x-ratelimit-requests-remaining"];
       updateFromHeader(headerRemaining);
+
+      // FIX: Check body-level errors — API-Basketball returns 200
+      // with { errors: { requests: "You have reached..." } }
+      // when daily limit is hit. Without this, budget stays at 99
+      // and the service retries every 10min forever.
+      const data = response.data;
+      if (data?.errors && typeof data.errors === "object") {
+        const errorKeys = Object.keys(data.errors);
+        if (errorKeys.length > 0) {
+          const errorMsg = Object.values(data.errors).join(", ");
+          if (errorMsg.toLowerCase().includes("request limit") ||
+              errorMsg.toLowerCase().includes("rate limit")) {
+            logger.warn(`[BasketballAPI] Body-level rate limit — forcing budget to 0`);
+            remainingRequests = 0;
+          }
+        }
+      }
 
       logger.info(
         `[BasketballAPI] ← ${response.config.url} [${remainingRequests}/100]`

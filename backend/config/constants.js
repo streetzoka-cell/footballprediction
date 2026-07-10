@@ -2,12 +2,6 @@
  * constants.js
  * Budget-optimized — smart midnight rollover,
  * tomorrow-only daily fetch, live polling with daily caps.
- *
- * CRON SCHEDULE:
- *   00:05, 00:20, 00:35, 00:50, 01:05... (Every 15 min until 02:50)
- *     → Midnight Rollover: tomorrow→today, today→yesterday (0 API calls)
- *   03:00 AM
- *     → Daily Fetch: Get tomorrow's fixtures (1 API call per sport)
  */
 
 // ───────────────────────────────────────────────
@@ -53,45 +47,24 @@ const TOMORROW = getDateOffset(1);
 
 // ───────────────────────────────────────────────
 // LEAGUE FILTER TOGGLE
-//
-// true  = SUMMER MODE — fetch ALL leagues from API
-//          (MLS, Liga MX, Brazil, Argentina, Australia,
-//           China, Belarus, Bolivia, etc.)
-//          No extra API calls — same 1 call/day.
-//          More Firestore writes (~100-200 docs/day).
-//
-// false = SEASON MODE — only fetch leagues marked
-//          active: true in the LEAGUES list below.
-//          Use this during Aug-May when Top 5 Europe
-//          are active and you don't want lower-division noise.
-//
-// FLIP THIS TO false IN AUGUST WHEN EUROPEAN SEASONS START
 // ───────────────────────────────────────────────
 const TRACK_ALL_LEAGUES = true;
 
 // ───────────────────────────────────────────────
 // Football Leagues
-// World Cup, UCL, Europa, Conference all active
 // ───────────────────────────────────────────────
 const LEAGUES = Object.freeze([
-  // ═══ TOP 5 EUROPE ═══
   { id: 39,  name: "Premier League",         country: "England",  flag: "🏴",  season: SEASON, priority: 1,  active: true },
   { id: 140, name: "La Liga",                country: "Spain",    flag: "🇪🇸", season: SEASON, priority: 2,  active: true },
   { id: 135, name: "Serie A",                country: "Italy",    flag: "🇮🇹", season: SEASON, priority: 3,  active: true },
   { id: 78,  name: "Bundesliga",              country: "Germany",  flag: "🇩🇪", season: SEASON, priority: 4,  active: true },
   { id: 61,  name: "Ligue 1",                country: "France",   flag: "🇫🇷", season: SEASON, priority: 5,  active: true },
-
-  // ═══ UEFA CLUB — ALL ACTIVE ═══
   { id: 2,   name: "UEFA Champions League",   country: "World",  flag: "🇪🇺", season: SEASON, priority: 6,  active: true },
   { id: 3,   name: "UEFA Europa League",     country: "World",  flag: "🇪🇺", season: SEASON, priority: 7,  active: true },
   { id: 848, name: "UEFA Conference League", country: "World",  flag: "🇪🇺", season: SEASON, priority: 8,  active: true },
-
-  // ═══ INTERNATIONAL — ALL ACTIVE ═══
   { id: 1,   name: "World Cup",              country: "World",  flag: "🌍", season: SEASON, priority: 9,  active: true },
   { id: 4,   name: "Euro Championship",      country: "World",  flag: "🇪🇺", season: SEASON, priority: 10, active: true },
   { id: 5,   name: "UEFA Nations League",    country: "World",  flag: "🇪🇺", season: SEASON, priority: 11, active: true },
-
-  // ═══ DOMESTIC CUPS ═══
   { id: 40,  name: "Championship",            country: "England", flag: "🏴",  season: SEASON, priority: 12, active: true },
   { id: 44,  name: "FA Cup",                 country: "England", flag: "🏴",  season: SEASON, priority: 13, active: true },
   { id: 45,  name: "League Cup",              country: "England", flag: "🏴",  season: SEASON, priority: 14, active: true },
@@ -99,14 +72,10 @@ const LEAGUES = Object.freeze([
   { id: 137, name: "Coppa Italia",           country: "Italy",   flag: "🇮🇹", season: SEASON, priority: 16, active: true },
   { id: 81,  name: "DFB Pokal",              country: "Germany", flag: "🇩🇪", season: SEASON, priority: 17, active: true },
   { id: 66,  name: "Coupe de France",        country: "France",  flag: "🇫🇷", season: SEASON, priority: 18, active: true },
-
-  // ═══ SECONDARY EUROPE ═══
   { id: 94,  name: "Primeira Liga",          country: "Portugal",    flag: "🇵🇹", season: SEASON, priority: 19, active: true },
   { id: 88,  name: "Eredivisie",             country: "Netherlands", flag: "🇳🇱", season: SEASON, priority: 20, active: true },
   { id: 203, name: "Süper Lig",              country: "Turkey",      flag: "🇹🇷", season: SEASON, priority: 21, active: true },
   { id: 50,  name: "Premiership",            country: "Scotland",    flag: "🏴",  season: SEASON, priority: 22, active: true },
-
-  // ═══ INACTIVE ═══
   { id: 144, name: "First Division A",       country: "Belgium",     flag: "🇧🇪", season: SEASON, priority: 23, active: false },
   { id: 121, name: "Bundesliga",             country: "Austria",     flag: "🇦🇹", season: SEASON, priority: 24, active: false },
   { id: 105, name: "Super League",           country: "Greece",      flag: "🇬🇷", season: SEASON, priority: 25, active: false },
@@ -117,8 +86,6 @@ const LEAGUES = Object.freeze([
   { id: 136, name: "Serie B",                country: "Italy",       flag: "🇮🇹", season: SEASON, priority: 30, active: false },
   { id: 79,  name: "2. Bundesliga",           country: "Germany",     flag: "🇩🇪", season: SEASON, priority: 31, active: false },
   { id: 62,  name: "Ligue 2",                country: "France",      flag: "🇫🇷", season: SEASON, priority: 32, active: false },
-
-  // ═══ SUMMER LEAGUES ═══
   { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 33, active: true },
   { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 34, active: true },
   { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 35, active: true },
@@ -219,87 +186,35 @@ const API = Object.freeze({
 });
 
 // ───────────────────────────────────────────────
-// Cron — SMART MIDNIGHT ROLLOVER + DAILY FETCH
-//
-// TIMELINE:
-//   00:05 AM → First midnight rollover attempt
-//   00:20 AM → Retry (if 00:05 failed)
-//   00:35 AM → Retry
-//   00:50 AM → Retry
-//   01:05 AM → Retry
-//   ... continues every 15 min until 02:50 ...
-//   03:00 AM → Daily fetch (1 API call for tomorrow)
-//
-// WHY 15-MIN RETRIES?
-//   If server crashes at 00:04 or Firestore has a blip,
-//   the old system would leave data stale until 3 AM.
-//   Now it recovers within 15 minutes max.
-//
-// WHY NOT JUST RUN AT 00:05?
-//   Because if THAT specific run fails, you're stuck.
-//   12 attempts over 3 hours = 99.9% success rate.
-//
-// BUDGET COST:
-//   Rollover: 0 API calls (pure Firestore data move)
-//   Daily fetch: 1 API call per sport = 2 total
-//   Startup: 2 API calls (1 per sport for initial live check)
-//   Live polling: Up to 40 API calls
-//   Total: ~44/day, leaving 56 for safety
+// Cron — 3 AM daily only
 // ───────────────────────────────────────────────
 const SCHEDULER = Object.freeze({
-  // Midnight rollover — runs every 15 min from 00:05 to 02:50
-  // Cron: minute hour day month weekday
-  // "5,20,35,50" = at :05, :20, :35, :50 past the hour
-  // "0-2" = hours 0, 1, 2 (midnight to 2:59 AM)
-  // "* * *" = every day, every month, every weekday
-  FIXTURES_MIDNIGHT_RETRY: "5,20,35,50 0-2 * * *",
-  BASKETBALL_FIXTURES_MIDNIGHT_RETRY: "5,20,35,50 0-2 * * *",
-
-  // Daily fetch — 3 AM UTC
-  // This also acts as FALLBACK rollover if all midnight attempts failed
   FIXTURES_DAILY: "0 3 * * *",
   BASKETBALL_FIXTURES_DAILY: "0 3 * * *",
-
-  // DISABLED — too expensive for free plan
-  // STANDINGS: "0 3 * * 0",          // 19 req/week
-  // LEAGUES: "0 3 * * 0",            // 19 req/week
-  // BASKETBALL_LEAGUES: "0 3 * * 0", // Would need similar budget
 });
 
 // ───────────────────────────────────────────────
-// Live Polling — BUDGET-HARDENED
+// Live Polling — FREE PLAN OPTIMIZED
 //
-// Key change: DAILY_CAP per sport.
-// Football gets 25 live requests/day max.
-// Basketball gets 15 live requests/day max.
-// That + 2 daily + 2 startup = 44 total.
-// 56 requests reserved for safety.
+// Football: 20/day cap
+// Basketball: 10/day cap
 //
-// Intervals are SLOWER to stretch the cap:
-//   Has live:    2 min (was 1 min)
-//   No live:     10 min (was 5 min)
-//   Low budget:  10 min
-//   Critical:    30 min
-//   Cap reached: 60 min (just check if new day reset)
+// Budget: ~22 football/day, ~12 basketball/day
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
-  // Per-sport daily caps
-  FOOTBALL_DAILY_LIVE_CAP: 25,
-  BASKETBALL_DAILY_LIVE_CAP: 15,
+  FOOTBALL_DAILY_LIVE_CAP: 20,
+  BASKETBALL_DAILY_LIVE_CAP: 10,
 
-  // Intervals (milliseconds)
-  ACTIVE_INTERVAL_MS: 120000,        // 2 min — when live games exist
-  NO_LIVE_CHECK_INTERVAL_MS: 600000, // 10 min — idle check
-  LOW_BUDGET_INTERVAL_MS: 600000,    // 10 min — conserving
-  CRITICAL_INTERVAL_MS: 1800000,     // 30 min — almost empty
-  CAP_REACHED_INTERVAL_MS: 3600000,  // 60 min — wait for midnight
+  ACTIVE_INTERVAL_MS: 300000,
+  NO_LIVE_CHECK_INTERVAL_MS: 1800000,
+  LOW_BUDGET_INTERVAL_MS: 1800000,
+  CRITICAL_INTERVAL_MS: 3600000,
+  CAP_REACHED_INTERVAL_MS: 3600000,
 
-  // Budget thresholds
   LOW_BUDGET_THRESHOLD: 30,
   CRITICAL_BUDGET_THRESHOLD: 10,
   MIN_BUDGET_TO_POLL: 3,
 
-  // Error handling
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS: 60000,
 });

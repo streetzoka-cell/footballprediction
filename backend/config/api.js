@@ -2,6 +2,10 @@
  * api.js
  * Central Axios client for API-Football.
  * Tracks daily budget AND daily live request count.
+ *
+ * FIX: Response interceptor now checks for body-level
+ * errors (rate limit message in 200 response) and
+ * forces budget to 0 when detected.
  */
 
 const axios = require("axios");
@@ -24,7 +28,6 @@ function resetIfNewDay() {
   if (lastResetDate !== today) {
     remainingRequests = null;
     lastResetDate = today;
-    // Reset live counter too
     liveRequestsToday = 0;
     logger.info(`[API] New day (${today}) — budget + live counter reset`);
   }
@@ -51,9 +54,7 @@ function updateFromHeader(headerValue) {
 }
 
 // ───────────────────────────────────────────────
-// Live Request Counter — hard cap per day
-// Independent of API header — this is OUR limit
-// so we never accidentally burn budget on live.
+// Live Request Counter
 // ───────────────────────────────────────────────
 let liveRequestsToday = 0;
 
@@ -85,7 +86,7 @@ const api = axios.create({
 });
 
 // ───────────────────────────────────────────────
-// Request Interceptor — Budget Guard + Logger
+// Request Interceptor
 // ───────────────────────────────────────────────
 api.interceptors.request.use(
   (config) => {
@@ -113,13 +114,32 @@ api.interceptors.request.use(
 );
 
 // ───────────────────────────────────────────────
-// Response Interceptor — Budget Sync + Error Map
+// Response Interceptor
+// FIX: Check body-level errors too (API returns
+// 200 with { errors: { requests: "..." } } when
+// daily limit is hit on some endpoints)
 // ───────────────────────────────────────────────
 api.interceptors.response.use(
   (response) => {
     const headerRemaining =
       response.headers?.["x-ratelimit-requests-remaining"];
     updateFromHeader(headerRemaining);
+
+    // FIX: Check body-level errors — API sometimes returns 200
+    // with an errors object when rate limited
+    const data = response.data;
+    if (data?.errors && typeof data.errors === "object") {
+      const errorKeys = Object.keys(data.errors);
+      if (errorKeys.length > 0) {
+        const errorMsg = Object.values(data.errors).join(", ");
+        // Check if it's a rate limit message
+        if (errorMsg.toLowerCase().includes("request limit") ||
+            errorMsg.toLowerCase().includes("rate limit")) {
+          logger.warn(`[API] Body-level rate limit detected — forcing budget to 0`);
+          remainingRequests = 0;
+        }
+      }
+    }
 
     logger.info(
       `[API] ← ${response.config.url} [${remainingRequests}/100]`
