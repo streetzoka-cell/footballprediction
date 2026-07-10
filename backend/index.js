@@ -53,6 +53,7 @@ const Scheduler = require("./schedulers/scheduler");
 let scheduler = null;
 let server = null;
 let isShuttingDown = false;
+
 // ==========================================================
 // HEALTH CHECK SERVER
 // ==========================================================
@@ -101,14 +102,61 @@ function startHealthServer() {
     res.send("OK");
   });
 
+  // ── Manual Recovery Endpoint ──
+  // Use this if data is missing and you don't want to wait for next cron
+  // GET /api/recover?sport=football|basketball|all
+  const { doc } = require("firebase/firestore");
+  const { db } = require("./config/firebase");
+
+  app.get("/api/recover", async (req, res) => {
+    const sport = req.query.sport || "all";
+    
+    try {
+      const results = {};
+      
+      if (sport === "all" || sport === "football") {
+        // Delete meta to bypass dedup, forcing full re-run
+        try {
+          await deleteDoc(doc(db, "meta", "footballScheduler"));
+          logger.info("[Recover] Deleted football scheduler meta");
+        } catch (e) {
+          logger.warn(`[Recover] Meta delete failed (may not exist): ${e.message}`);
+        }
+        
+        if (scheduler?.services?.footballDailyFixtures) {
+          results.football = await scheduler.services.footballDailyFixtures.run();
+        }
+      }
+      
+      if (sport === "all" || sport === "basketball") {
+        if (scheduler?.services?.basketballDailyFixtures) {
+          try {
+            await deleteDoc(doc(db, "meta", "basketballScheduler"));
+            logger.info("[Recover] Deleted basketball scheduler meta");
+          } catch (e) {
+            logger.warn(`[Recover] Meta delete failed (may not exist): ${e.message}`);
+          }
+          
+          results.basketball = await scheduler.services.basketballDailyFixtures.run();
+        }
+      }
+      
+      res.json({ success: true, results });
+    } catch (err) {
+      logger.error(`[Recover] Failed: ${err.message}`);
+      res.status(500).json({ success: false, error: err.message });
+    }
+  });
+
   server = app.listen(env.PORT, () => {
     logger.info(
-  `[Server] Health server listening on port ${env.PORT}`
-);
+      `[Server] Health server listening on port ${env.PORT}`
+    );
   });
 
   return server;
 }
+
 // ==========================================================
 // GRACEFUL SHUTDOWN
 //
@@ -209,47 +257,60 @@ async function main() {
   const basketballFtProcessor = new BasketballFinishedFixturesProcessor(
     basketballFixturesRepo
   );
-// ── 4. Services ──
-const services = {
-  footballDailyFixtures: new DailyFixturesService(
-    fixturesRepo,
-    ftProcessor,
-    teamsProcessor
-  ),
 
-  footballLiveFixtures: new LiveFixturesService(
-    fixturesRepo,
-    ftProcessor
-  ),
+  // ── 4. Services ──
+  // 
+  // NOTE: Constructor signatures changed after adding data integrity verification:
+  //   DailyFixturesService(repo, teamsProcessor)         — ftProcessor removed
+  //   BasketballDailyFixturesService(repo)               — ftProcessor removed
+  //   LiveFixturesService(repo, ftProcessor)             — unchanged
+  //   BasketballLiveFixturesService(repo, ftProcessor)   — unchanged
+  //
+  const services = {
+    // Football Daily: FT recovery now handled inline during rollover
+    // No longer needs ftProcessor as a dependency
+    footballDailyFixtures: new DailyFixturesService(
+      fixturesRepo,
+      teamsProcessor  // ✅ Correct: (repo, teamsProcessor)
+    ),
 
-  footballStandings: new StandingsService(
-    standingRepo
-  ),
+    // Football Live: Still needs ftProcessor for live→finished transitions
+    footballLiveFixtures: new LiveFixturesService(
+      fixturesRepo,
+      ftProcessor  // ✅ Correct: (repo, ftProcessor)
+    ),
 
-  footballLeagues: new LeaguesService(
-    leagueRepo
-  ),
-};
+    footballStandings: new StandingsService(
+      standingRepo
+    ),
 
-if (isBasketballConfigured) {
-  logger.info("[Startup] Basketball enabled");
+    footballLeagues: new LeaguesService(
+      leagueRepo
+    ),
+  };
 
-  services.basketballDailyFixtures =
-    new BasketballDailyFixturesService(
-      basketballFixturesRepo,
-      basketballFtProcessor
+  if (isBasketballConfigured) {
+    logger.info("[Startup] Basketball enabled");
+
+    // Basketball Daily: FT recovery now handled inline during rollover
+    // No longer needs ftProcessor as a dependency
+    services.basketballDailyFixtures =
+      new BasketballDailyFixturesService(
+        basketballFixturesRepo  // ✅ Correct: (repo) only
+      );
+
+    // Basketball Live: Still needs ftProcessor for live→finished transitions
+    services.basketballLiveFixtures =
+      new BasketballLiveFixturesService(
+        basketballFixturesRepo,
+        basketballFtProcessor  // ✅ Correct: (repo, ftProcessor)
+      );
+  } else {
+    logger.warn(
+      "[Startup] Basketball disabled — set API_BASKETBALL_KEY"
     );
+  }
 
-  services.basketballLiveFixtures =
-    new BasketballLiveFixturesService(
-      basketballFixturesRepo,
-      basketballFtProcessor
-    );
-} else {
-  logger.warn(
-    "[Startup] Basketball disabled — set API_BASKETBALL_KEY"
-  );
-}
   // ── 5. Scheduler ──
   scheduler = new Scheduler(services);
 

@@ -1,31 +1,17 @@
 ﻿/*
  * dailyFixtures.js
- * Perfect daily fetch with 3-day rollover.
+ * Perfect daily fetch with 3-day rollover + DATA INTEGRITY VERIFICATION.
  *
  * BUDGET: 1 API call per day.
  *
- * THE DATE BUG THIS FIXES:
- *   Old code used module-level TOMORROW constant — computed once
- *   at server start. If server ran for 3 days, it kept fetching
- *   the same date. Now dates are computed fresh inside run().
+ * FIX: If cron ran but Firestore writes failed, the old meta dedup
+ * would skip re-runs forever. Now we VERIFY data exists before skipping.
  *
  * 3-DAY ROLLOVER (0 API calls — pure Firestore):
  *   At 3 AM the window cascades:
  *     todayFixtures    → yesterdayFixtures
  *     tomorrowFixtures → todayFixtures
  *     API fetch        → tomorrowFixtures
- *
- *   Result: users always see yesterday/today/tomorrow schedule.
- *
- * META DEDUP:
- *   If server restarts after cron already ran, run() checks
- *   meta doc and skips the fetch. Saves 1 request.
- *
- * OVERNIGHT FT RECOVERY:
- *   Games that finished between last night's live poll and
- *   this morning's cron are caught during rollover — their
- *   normalized docs are written to finishedFixtures.
- *   0 API calls — data already in Firestore.
  */
 
 const { api, isBudgetAvailable } = require("../config/api");
@@ -40,13 +26,6 @@ const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
 
 class DailyFixturesService {
-  /**
-   * @param {FixturesRepository} repo
-   * @param {TeamsProcessor} teamsProcessor
-   *
-   * NOTE: ftProcessor removed — FT recovery handled inline
-   * from rollover data (0 API calls, already-normalized docs).
-   */
   constructor(repo, teamsProcessor) {
     if (!repo) throw new Error("FixturesRepository is required.");
     if (!teamsProcessor) throw new Error("TeamsProcessor is required.");
@@ -64,7 +43,6 @@ class DailyFixturesService {
   // ==========================================================
 
   async run() {
-    // ── Dynamic dates (fixes stale constant bug) ──
     const todayStr = getDateOffset(0);
     const yesterdayStr = getDateOffset(-1);
     const tomorrowStr = getDateOffset(1);
@@ -73,80 +51,122 @@ class DailyFixturesService {
       `[DailyFixtures] Run for ${tomorrowStr} (today: ${todayStr})`
     );
 
-    // ── Meta dedup — skip if already fetched today ──
+    // ══════════════════════════════════════════════════════
+    // META DEDUP WITH DATA INTEGRITY VERIFICATION
+    // 
+    // OLD: Just checked meta date → skip
+    // NEW: Check meta date AND verify data actually exists
+    // ══════════════════════════════════════════════════════
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
-    if (meta?.lastDailyFetchDate === todayStr) {
-      logger.info(
-        `[DailyFixtures] Already fetched ${tomorrowStr} today — skipping (meta dedup)`
+    const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
+
+    if (alreadyFetchedToday) {
+      const integrity = await this._verifyDataIntegrity(todayStr, yesterdayStr);
+      
+      if (integrity.valid) {
+        logger.info(
+          `[DailyFixtures] Data verified (today: ${integrity.todayCount}, yesterday: ${integrity.yesterdayCount}) — skipping (meta dedup)`
+        );
+        return { 
+          total: 0, 
+          writes: 0, 
+          apiCalls: 0, 
+          duration: 0, 
+          deduped: true 
+        };
+      }
+
+      // ══════════════════════════════════════════════════════
+      // DATA INTEGRITY FAILED — FORCE RECOVERY
+      // 
+      // This happens when:
+      //   - 3AM cron ran but Firestore writes timed out
+      //   - Server crashed mid-write
+      //   - Network error during batch write
+      // 
+      // The meta said "done" but the data isn't there.
+      // We MUST re-run to fix it.
+      // ══════════════════════════════════════════════════════
+      logger.warn(
+        `⚠️ [DailyFixtures] DATA INTEGRITY CHECK FAILED! ` +
+        `Meta says "${todayStr}" done but: ` +
+        `todayFixtures has ${integrity.todayTotal} docs (${integrity.todayCount} for ${todayStr}), ` +
+        `yesterdayFixtures has ${integrity.yesterdayTotal} docs (${integrity.yesterdayCount} for ${yesterdayStr}) ` +
+        `— FORCING RECOVERY`
       );
-      return { total: 0, writes: 0, apiCalls: 0, duration: 0, deduped: true };
+      // Fall through to run the full process
     }
 
     const startTime = Date.now();
 
     // ══════════════════════════════════════════
     // PHASE 1: 3-DAY ROLLOVER (0 API calls)
-    // Read both collections FIRST, then write.
-    // This avoids reading back docs we just wrote.
     // ══════════════════════════════════════════
 
     let rolloverYesterday = 0;
     let rolloverToday = 0;
     let recoveredFT = 0;
+    let rolloverSuccess = false;
 
     const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
       this.repo.getAllToday(),
       this.repo.getAllTomorrow(),
     ]);
 
-    // Skip rollover entirely on first run (both empty)
-    if (currentTodayDocs.length > 0 || currentTomorrowDocs.length > 0) {
-      // ── Filter by correct dates (handles server downtime) ──
-      // If server was down 2 days, old docs have wrong dates.
-      // Only roll over docs that match the target date.
-      const validYesterday = currentTodayDocs.filter(
-        (d) => d.date === yesterdayStr
-      );
-      const validToday = currentTomorrowDocs.filter(
-        (d) => d.date === todayStr
-      );
-
-      // ── Write yesterday (today's old data → yesterday) ──
-      if (validYesterday.length > 0) {
-        const r = await this.repo.replaceYesterday(validYesterday);
-        rolloverYesterday = r.written;
-
-        // ── Recover overnight FT games ──
-        // Games that finished after last live poll are in
-        // todayFixtures with FT status but never transitioned.
-        const ftGames = validYesterday.filter((d) =>
-          FINISHED_STATUSES.includes(d.status)
+    try {
+      if (currentTodayDocs.length > 0 || currentTomorrowDocs.length > 0) {
+        const validYesterday = currentTodayDocs.filter(
+          (d) => d.date === yesterdayStr
         );
-        if (ftGames.length > 0) {
-          await this.repo.batchUpsertFinished(ftGames);
-          recoveredFT = ftGames.length;
+        const validToday = currentTomorrowDocs.filter(
+          (d) => d.date === todayStr
+        );
+
+        if (validYesterday.length > 0) {
+          const r = await this.repo.replaceYesterday(validYesterday);
+          rolloverYesterday = r.written;
+
+          const ftGames = validYesterday.filter((d) =>
+            FINISHED_STATUSES.includes(d.status)
+          );
+          if (ftGames.length > 0) {
+            await this.repo.batchUpsertFinished(ftGames);
+            recoveredFT = ftGames.length;
+          }
+        } else {
+          await this.repo.replaceYesterday([]);
         }
+
+        if (validToday.length > 0) {
+          const r = await this.repo.replaceToday(validToday);
+          rolloverToday = r.written;
+        } else {
+          await this.repo.replaceToday([]);
+        }
+
+        logger.info(
+          `[DailyFixtures] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
+        );
       } else {
-        // Clear stale yesterday even if nothing to write
         await this.repo.replaceYesterday([]);
-      }
-
-      // ── Write today (tomorrow's old data → today) ──
-      if (validToday.length > 0) {
-        const r = await this.repo.replaceToday(validToday);
-        rolloverToday = r.written;
-      } else {
         await this.repo.replaceToday([]);
+        logger.info(`[DailyFixtures] First run — no rollover data`);
       }
 
-      logger.info(
-        `[DailyFixtures] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
-      );
-    } else {
-      // First run — clear empty collections to be safe
-      await this.repo.replaceYesterday([]);
-      await this.repo.replaceToday([]);
-      logger.info(`[DailyFixtures] First run — no rollover data`);
+      // ══════════════════════════════════════════
+      // VERIFY ROLLOVER SUCCEEDED BEFORE CONTINUING
+      // ══════════════════════════════════════════
+      const afterRollover = await this._verifyDataIntegrity(todayStr, yesterdayStr);
+      rolloverSuccess = afterRollover.valid;
+      
+      if (!rolloverSuccess) {
+        logger.error(
+          `[DailyFixtures] ROLLOVER VERIFICATION FAILED — data may be inconsistent`
+        );
+      }
+    } catch (err) {
+      logger.error(`[DailyFixtures] Rollover failed: ${err.message}`);
+      rolloverSuccess = false;
     }
 
     // ══════════════════════════════════════════
@@ -155,35 +175,57 @@ class DailyFixturesService {
 
     let fetchTotal = 0;
     let fetchWrites = 0;
+    let fetchSuccess = false;
 
     if (!isBudgetAvailable(1)) {
       logger.warn(
         `[DailyFixtures] Budget too low — skipping tomorrow fetch`
       );
     } else {
-      const result = await this._fetchTomorrow(tomorrowStr);
-      fetchTotal = result.total;
-      fetchWrites = result.writes;
+      try {
+        const result = await this._fetchTomorrow(tomorrowStr);
+        fetchTotal = result.total;
+        fetchWrites = result.writes;
+        fetchSuccess = true;
 
-      // Extract teams from new tomorrow data
-      if (result.raw.length > 0) {
-        await this.teamsProcessor.process(result.raw);
+        if (result.raw.length > 0) {
+          await this.teamsProcessor.process(result.raw);
+        }
+      } catch (err) {
+        logger.error(`[DailyFixtures] Tomorrow fetch failed: ${err.message}`);
+        fetchSuccess = false;
       }
     }
 
     // ══════════════════════════════════════════
-    // PHASE 3: UPDATE META
+    // PHASE 3: UPDATE META — ONLY IF SUCCESSFUL
+    // 
+    // CRITICAL FIX: Only update meta if BOTH:
+    //   1. Rollover succeeded (or was first run)
+    //   2. Tomorrow fetch succeeded (or budget was too low, not API error)
+    // 
+    // This prevents the "meta says done but data missing" bug.
     // ══════════════════════════════════════════
 
-    await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
-      lastDailyFetchDate: todayStr,
-      lastTomorrowDate: tomorrowStr,
-      rolloverYesterday,
-      rolloverToday,
-      recoveredFT,
-      fetchTotal,
-      fetchWrites,
-    });
+    const shouldUpdateMeta = rolloverSuccess && (fetchSuccess || !isBudgetAvailable(1));
+
+    if (shouldUpdateMeta) {
+      await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
+        lastDailyFetchDate: todayStr,
+        lastTomorrowDate: tomorrowStr,
+        rolloverYesterday,
+        rolloverToday,
+        recoveredFT,
+        fetchTotal,
+        fetchWrites,
+        verifiedAt: new Date().toISOString(),
+      });
+      logger.info(`[DailyFixtures] Meta updated successfully`);
+    } else {
+      logger.warn(
+        `[DailyFixtures] Meta NOT updated — rollover: ${rolloverSuccess}, fetch: ${fetchSuccess} — will retry next run`
+      );
+    }
 
     const duration = Date.now() - startTime;
 
@@ -191,6 +233,7 @@ class DailyFixturesService {
       `[DailyFixtures] Complete — rollover: ${rolloverYesterday}+${rolloverToday}, ` +
       `FT recovered: ${recoveredFT}, ` +
       `fetched: ${fetchTotal} (${fetchWrites} written), ` +
+      `metaUpdated: ${shouldUpdateMeta}, ` +
       `1 API call, ${duration} ms`
     );
 
@@ -203,7 +246,41 @@ class DailyFixturesService {
       rolloverToday,
       recoveredFT,
       deduped: false,
+      metaUpdated: shouldUpdateMeta,
+      recovery: alreadyFetchedToday && !shouldUpdateMeta,
     };
+  }
+
+  // ==========================================================
+  // DATA INTEGRITY VERIFICATION
+  // 
+  // Checks that the actual data in Firestore matches what
+  // we expect for today and yesterday. This prevents the
+  // "meta says done but data missing" bug.
+  // ==========================================================
+
+  async _verifyDataIntegrity(todayStr, yesterdayStr) {
+    try {
+      const [todayDocs, yesterdayDocs] = await Promise.all([
+        this.repo.getAllToday(),
+        this.repo.getAllYesterday(),
+      ]);
+
+      const todayForDate = todayDocs.filter(d => d.date === todayStr);
+      const yesterdayForDate = yesterdayDocs.filter(d => d.date === yesterdayStr);
+
+      return {
+        valid: todayForDate.length > 0 || yesterdayForDate.length > 0 || 
+               (todayDocs.length === 0 && yesterdayDocs.length === 0),
+        todayCount: todayForDate.length,
+        todayTotal: todayDocs.length,
+        yesterdayCount: yesterdayForDate.length,
+        yesterdayTotal: yesterdayDocs.length,
+      };
+    } catch (err) {
+      logger.error(`[DailyFixtures] Integrity check failed: ${err.message}`);
+      return { valid: false, todayCount: 0, todayTotal: 0, yesterdayCount: 0, yesterdayTotal: 0 };
+    }
   }
 
   // ==========================================================
@@ -223,7 +300,7 @@ class DailyFixturesService {
       logger.error(
         `[DailyFixtures] Tomorrow fetch failed: ${err.message}`
       );
-      return { total: 0, writes: 0, raw: [] };
+      throw err; // Re-throw so caller knows it failed
     }
 
     const errors = raw?.errors || {};
