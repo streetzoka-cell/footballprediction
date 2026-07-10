@@ -132,7 +132,8 @@ const injectStyles = () => {
   s.id = 'pred-mob-v12';
   s.textContent = `
     /* ── Keyframes ── */
-    @keyframes pUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes pUp{from{opacity:0;transform:translateY(20px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes pSc{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
     @keyframes pSd{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes pSr{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
@@ -272,7 +273,13 @@ const injectStyles = () => {
       .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
       .pred-btn{padding:8px 14px;font-size:.95rem}
     }
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -856,7 +863,7 @@ export default function Predictions() {
      MAIN RENDER
      ═══════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight:'100vh',minHeight:'100dvh', background:'var(--bg-deep)' }}>
+    <div style={{ minHeight:'100vh',overflow:'hidden',minHeight:'100dvh',overflow:'hidden', background:'var(--bg-deep)' }}>
       <SEO title="Today's Predictions" description="Make your football score predictions for today's matches." keywords="football predictions, score predictions, Zoka Picks" url="https://zokascore.com/predictions" />
 
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}

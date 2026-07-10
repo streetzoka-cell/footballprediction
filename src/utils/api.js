@@ -10,24 +10,25 @@
 // Firestore IS the cache.
 //
 // Collections populated by backend:
-//   yesterdayFixtures      ← Smart midnight rollover (00:05 AM, 0 API calls)
-//   todayFixtures          ← Smart midnight rollover (00:05 AM, 0 API calls)
+//   yesterdayFixtures      ← Rollover at 3 AM (0 API calls — pure Firestore move)
+//   todayFixtures          ← Rollover at 3 AM (0 API calls — pure Firestore move)
 //   tomorrowFixtures       ← 1 API call/day at 3 AM
-//   liveFixtures           ← live polling, updated every 2 min during matches
-//   finishedFixtures       ← live→finished transitions + overnight recovery
+//   liveFixtures           ← live polling, updated every 5 min during matches
+//   finishedFixtures       ← live->finished transitions + rollover FT recovery
 //   teams                  ← extracted from tomorrow fetch
 //   (same pattern for basketball*)
 //
-// ROLLOVER TIMELINE:
-//   00:05 AM → First rollover attempt (tomorrow→today, today→yesterday)
-//   00:20 AM → Retry if 00:05 failed (continues every 15 min until 02:50)
-//   03:00 AM → Daily fetch for tomorrow's fixtures (1 API call)
+// BACKEND TIMELINE:
+//   Startup      -> Live check (1 API call per sport)
+//   Every 5 min  -> Live poll if games active (up to 20 football, 10 basketball/day)
+//   Every 30 min -> Live poll if no games (idle check)
+//   03:00 AM UTC -> Rollover (tomorrow->today, today->yesterday) + fetch new tomorrow
 //
 // FRONTEND HANDLING:
 //   The _readDayFixtures function has built-in fallback logic.
-//   If "today" data isn't in todayFixtures (e.g., rollover delayed),
-//   it scans tomorrowFixtures and yesterdayFixtures too.
-//   Users see correct data even during the ~20 min rollover window.
+//   If data isn't in the expected collection (e.g., during 3 AM transition),
+//   it scans all 3 collections to find it by date.
+//   Users see correct data even during the brief rollover window.
 
 import { db, auth } from './firebase';
 import {
@@ -164,74 +165,59 @@ export const initFirebaseSync = async () => {
    LEAGUE COLORS
    ═══════════════════════════════════════════════════════════════ */
 const LEAGUE_COLORS = {
-  // ── Football — Top 5 ──
-  39: '#3d195b',   // Premier League
-  140: '#ee8707',  // La Liga
-  135: '#024494',  // Serie A
-  78: '#d20515',   // Bundesliga
-  61: '#091c3e',   // Ligue 1
-
-  // ── Football — UEFA ──
-  2: '#001838',    // Champions League
-  3: '#ff6b00',    // Europa League
-  848: '#2d6a4f',  // Conference League
-
-  // ── Football — International ──
-  1: '#1a3c6e',    // World Cup
-  4: '#003366',    // Euro Championship
-  5: '#004d99',    // Nations League
-
-  // ── Football — Domestic Cups ──
-  40: '#5c2d91',   // Championship
-  44: '#2d4a22',   // FA Cup
-  45: '#1a1a2e',   // League Cup
-  143: '#c60b1e',  // Copa del Rey
-  137: '#024494',  // Coppa Italia
-  81: '#d20515',   // DFB Pokal
-  66: '#091c3e',   // Coupe de France
-
-  // ── Football — Secondary ──
-  94: '#006600',   // Primeira Liga
-  88: '#e63e21',   // Eredivisie
-  203: '#c8102e',  // Süper Lig
-  50: '#003087',   // Premiership (Scotland)
-
-  // ── Football — Summer leagues ──
-  253: '#0047AB',  // MLS
-  262: '#006341',  // Liga MX
-  71: '#009C3B',   // Brazil Serie A
-  128: '#75AADB',  // Argentina Primera
-
-  // ── Basketball — Major ──
-  12: '#1D428A',   // NBA (navy blue)
-  13: '#003399',   // EuroLeague
-  14: '#cc0000',   // EuroCup
-  44: '#ffd700',   // Liga ACB (Spain)
-  34: '#008c45',   // LBA (Italy)
-  32: '#000000',   // BBL (Germany)
-  36: '#002395',   // LNB Pro A (France)
-  49: '#00843d',   // NBL (Australia)
-
-  // ── Basketball — Secondary ──
-  115: '#002868',  // Liga Americas
-  116: '#DD0000',  // ABA League
-  114: '#003DA5',  // Adriatic League
-  119: '#00205B',  // Basketball Champions League
-  132: '#CE1126',  // NBL (Australia)
-  766: '#7B2D8B',  // BCL Americas
-  891: '#FF6600',  // FIBA Europe Cup
-  33: '#00843D',   // HEBA A1 (Greece)
-  35: '#FEBE10',   // BNXT League
-  37: '#003DA5',   // VTB United League
-  38: '#00205B',   // Chinese CBA
-  40: '#CE1126',   // Korean KBL
-  41: '#009B3A',   // Brazilian NBB
-  42: '#FFD700',   // Japanese B.League
-  43: '#006233',   // Filipino PBA
-  45: '#003087',   // Lebanese FLB
-  60: '#7B2D8B',   // EuroCup Women
-  61: '#FF6600',   // FIBA Europe Cup Women
-  62: '#002868',   // Women's EuroLeague
+  39: '#3d195b',
+  140: '#ee8707',
+  135: '#024494',
+  78: '#d20515',
+  61: '#091c3e',
+  2: '#001838',
+  3: '#ff6b00',
+  848: '#2d6a4f',
+  1: '#1a3c6e',
+  4: '#003366',
+  5: '#004d99',
+  40: '#5c2d91',
+  44: '#2d4a22',
+  45: '#1a1a2e',
+  143: '#c60b1e',
+  137: '#024494',
+  81: '#d20515',
+  66: '#091c3e',
+  94: '#006600',
+  88: '#e63e21',
+  203: '#c8102e',
+  50: '#003087',
+  253: '#0047AB',
+  262: '#006341',
+  71: '#009C3B',
+  128: '#75AADB',
+  12: '#1D428A',
+  13: '#003399',
+  14: '#cc0000',
+  44: '#ffd700',
+  34: '#008c45',
+  32: '#000000',
+  36: '#002395',
+  49: '#00843d',
+  115: '#002868',
+  116: '#DD0000',
+  114: '#003DA5',
+  119: '#00205B',
+  132: '#CE1126',
+  766: '#7B2D8B',
+  891: '#FF6600',
+  33: '#00843D',
+  35: '#FEBE10',
+  37: '#003DA5',
+  38: '#00205B',
+  40: '#CE1126',
+  41: '#009B3A',
+  42: '#FFD700',
+  43: '#006233',
+  45: '#003087',
+  60: '#7B2D8B',
+  61: '#FF6600',
+  62: '#002868',
 };
 
 const getLeagueColor = (id) => LEAGUE_COLORS[id] || '#1e293b';
@@ -239,78 +225,27 @@ const getLeagueColor = (id) => LEAGUE_COLORS[id] || '#1e293b';
 /* ═══════════════════════════════════════════════════════════════
    STATUS CONSTANTS
    ═══════════════════════════════════════════════════════════════ */
-
-// ── Football ──
 const FB_LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P'];
 const FB_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO'];
 const FB_SCHEDULED_STATUSES = ['TBD', 'NS', 'SUSP', 'PST', 'CANC', 'INT'];
 
-// ── Basketball ──
-// API-Basketball uses: Q1/Q2/Q3/Q4 or 1Q/2Q/3Q/4Q for live, OT for overtime
 const BASKETBALL_LIVE_STATUSES = [
-  '1Q', 'Q1',
-  '2Q', 'Q2',
-  '3Q', 'Q3',
-  '4Q', 'Q4',
-  'OT', 'HT',
+  '1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT',
 ];
-
-// API-Basketball uses: FT for finished, AOT for finished after overtime, ABD for abandoned
 const BASKETBALL_FINISHED_STATUSES = ['FT', 'AOT', 'ABD'];
-
-// API-Basketball uses: NS for not started, POST for postponed, CANC for cancelled, SUSP for suspended
 const BASKETBALL_SCHEDULED_STATUSES = ['NS', 'POST', 'CANC', 'SUSP'];
 
 /* ═══════════════════════════════════════════════════════════════
-   BASKETBALL LEAGUE PRIORITY (for predictions ranking)
+   BASKETBALL LEAGUE PRIORITY
    ═══════════════════════════════════════════════════════════════ */
 export const BASKETBALL_LEAGUE_PRIORITY = {
-  // Tier 1 — Major global leagues
-  12: 100,   // NBA
-  13: 95,    // EuroLeague
-
-  // Tier 2 — Top European domestic
-  44: 85,    // Liga ACB (Spain)
-  34: 82,    // LBA (Italy)
-  36: 80,    // LNB Pro A (France)
-  32: 78,    // BBL (Germany)
-  33: 76,    // HEBA A1 (Greece)
-
-  // Tier 3 — European secondary
-  14: 72,    // EuroCup
-  119: 70,   // Basketball Champions League
-  116: 68,   // ABA League
-  114: 66,   // Adriatic League
-  37: 64,    // VTB United League
-  35: 62,    // BNXT League
-
-  // Tier 4 — International / Americas
-  132: 58,   // NBL (Australia)
-  49: 56,    // NBL (Australia — alt ID)
-  115: 54,   // Liga Americas
-  766: 52,   // BCL Americas
-  891: 50,   // FIBA Europe Cup
-
-  // Tier 5 — Asian / other
-  38: 45,    // Chinese CBA
-  42: 43,    // Japanese B.League
-  43: 41,    // Filipino PBA
-  41: 40,    // Brazilian NBB
-  45: 38,    // Lebanese FLB
-  40: 36,    // Korean KBL
-
-  // Tier 6 — Women's
-  62: 30,    // Women's EuroLeague
-  60: 28,    // EuroCup Women
-  61: 26,    // FIBA Europe Cup Women
+  12: 100, 13: 95, 44: 85, 34: 82, 36: 80, 32: 78, 33: 76,
+  14: 72, 119: 70, 116: 68, 114: 66, 37: 64, 35: 62,
+  132: 58, 49: 56, 115: 54, 766: 52, 891: 50,
+  38: 45, 42: 43, 43: 41, 41: 40, 45: 38, 40: 36,
+  62: 30, 60: 28, 61: 26,
 };
 
-/**
- * Get priority score for a basketball league.
- * Used by prediction views to sort games by importance.
- * @param {string|number} leagueId
- * @returns {number} Priority score (0-100)
- */
 export const getBasketballLeaguePriority = (leagueId) => {
   const id = Number(leagueId);
   return BASKETBALL_LEAGUE_PRIORITY[id] || 20;
@@ -368,7 +303,6 @@ export function getTomorrowStr() {
   return d.toISOString().split('T')[0];
 }
 
-/** Check if a date falls within the 3-day window the backend populates */
 function isInWindow(date) {
   const d = date || '';
   return (
@@ -377,21 +311,21 @@ function isInWindow(date) {
 }
 
 /**
- * Check if we're in the "waiting for rollover" window (00:00 - 00:25 UTC).
+ * Check if we're in the 3 AM rollover window (02:55 - 03:10 UTC).
  * During this time, data might be transitioning between collections.
+ * The fallback logic in _readDayFixtures handles this transparently.
  */
 export function isInRolloverWindow() {
   const now = new Date();
   const utcHour = now.getUTCHours();
   const utcMinute = now.getUTCMinutes();
-  return utcHour === 0 && utcMinute < 25;
+  return (utcHour === 2 && utcMinute >= 55) || (utcHour === 3 && utcMinute < 10);
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   COLLECTION NAMES — must match backend/config/constants.js
+   COLLECTION NAMES
    ═══════════════════════════════════════════════════════════════ */
 const COLL = {
-  // Football
   LIVE: 'liveFixtures',
   YESTERDAY: 'yesterdayFixtures',
   TODAY: 'todayFixtures',
@@ -400,8 +334,6 @@ const COLL = {
   STANDINGS: 'standings',
   LEAGUES: 'leagues',
   TEAMS: 'teams',
-
-  // Basketball
   BASKETBALL_LIVE: 'basketballLiveFixtures',
   BASKETBALL_YESTERDAY: 'basketballYesterdayFixtures',
   BASKETBALL_TODAY: 'basketballTodayFixtures',
@@ -410,32 +342,21 @@ const COLL = {
   BASKETBALL_STANDINGS: 'basketballStandings',
   BASKETBALL_LEAGUES: 'basketballLeagues',
   BASKETBALL_TEAMS: 'basketballTeams',
-
-  // Backend meta
   META: 'meta',
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   TRANSFORM: Backend doc → Frontend match object
-   Detects sport from doc shape and delegates.
+   TRANSFORM: Backend doc -> Frontend match object
    ═══════════════════════════════════════════════════════════════ */
 export function transformMatch(m) {
   if (!m) return null;
-  // Legacy cached data had nested fixture/teams/goals structure
   if (m.fixture) return _transformApiFormat(m);
-  // Basketball: detected by sport field or basketball-specific fields
-  if (
-    m.sport === 'basketball' ||
-    m.pointsHome !== undefined ||
-    m.q1Home !== undefined
-  ) {
+  if (m.sport === 'basketball' || m.pointsHome !== undefined || m.q1Home !== undefined) {
     return _transformBasketballFormat(m);
   }
-  // Football: default
   return _transformFootballFormat(m);
 }
 
-// ── Football ──
 function _transformFootballFormat(m) {
   const id = String(m.id || '');
   const s = m.status || '';
@@ -445,18 +366,8 @@ function _transformFootballFormat(m) {
     date: m.date || null,
     kickoff: formatTime(m.date),
     timestamp: m.timestamp || null,
-    homeTeam: {
-      id: String(m.homeTeamId || ''),
-      name: m.homeTeamName || 'TBD',
-      abbr: '',
-      color: '#333',
-    },
-    awayTeam: {
-      id: String(m.awayTeamId || ''),
-      name: m.awayTeamName || 'TBD',
-      abbr: '',
-      color: '#333',
-    },
+    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
+    awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
     homeId: String(m.homeTeamId || ''),
     awayId: String(m.awayTeamId || ''),
     homeLogo: m.homeTeamLogo || null,
@@ -482,22 +393,10 @@ function _transformFootballFormat(m) {
     score: {
       home: m.goalsHome ?? null,
       away: m.goalsAway ?? null,
-      halfTime: {
-        home: m.scoreHalftimeHome ?? null,
-        away: m.scoreHalftimeAway ?? null,
-      },
-      fullTime: {
-        home: m.scoreFulltimeHome ?? m.goalsHome ?? null,
-        away: m.scoreFulltimeAway ?? m.goalsAway ?? null,
-      },
-      extraTime: {
-        home: m.scoreExtratimeHome ?? null,
-        away: m.scoreExtratimeAway ?? null,
-      },
-      penalties: {
-        home: m.scorePenaltyHome ?? null,
-        away: m.scorePenaltyAway ?? null,
-      },
+      halfTime: { home: m.scoreHalftimeHome ?? null, away: m.scoreHalftimeAway ?? null },
+      fullTime: { home: m.scoreFulltimeHome ?? m.goalsHome ?? null, away: m.scoreFulltimeAway ?? m.goalsAway ?? null },
+      extraTime: { home: m.scoreExtratimeHome ?? null, away: m.scoreExtratimeAway ?? null },
+      penalties: { home: m.scorePenaltyHome ?? null, away: m.scorePenaltyAway ?? null },
     },
     isLive: FB_LIVE_STATUSES.includes(s),
     isFinished: FB_FINISHED_STATUSES.includes(s),
@@ -508,33 +407,19 @@ function _transformFootballFormat(m) {
   };
 }
 
-// ── Basketball ──
 function _transformBasketballFormat(m) {
   const id = String(m.id || '');
   const s = m.status || '';
-
-  // Map currentPeriod (1-5) to display string for minute field
   const periodMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4', 5: 'OT' };
   const minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
-
   return {
     id,
     sport: 'basketball',
     date: m.date || null,
     kickoff: formatTime(m.date),
     timestamp: m.timestamp || null,
-    homeTeam: {
-      id: String(m.homeTeamId || ''),
-      name: m.homeTeamName || 'TBD',
-      abbr: '',
-      color: '#333',
-    },
-    awayTeam: {
-      id: String(m.awayTeamId || ''),
-      name: m.awayTeamName || 'TBD',
-      abbr: '',
-      color: '#333',
-    },
+    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
+    awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
     homeId: String(m.homeTeamId || ''),
     awayId: String(m.awayTeamId || ''),
     homeLogo: m.homeTeamLogo || null,
@@ -561,10 +446,7 @@ function _transformBasketballFormat(m) {
       home: m.pointsHome ?? null,
       away: m.pointsAway ?? null,
       halfTime: null,
-      fullTime: {
-        home: m.pointsHome ?? null,
-        away: m.pointsAway ?? null,
-      },
+      fullTime: { home: m.pointsHome ?? null, away: m.pointsAway ?? null },
       extraTime: null,
       penalties: null,
       q1: { home: m.q1Home ?? null, away: m.q1Away ?? null },
@@ -582,7 +464,6 @@ function _transformBasketballFormat(m) {
   };
 }
 
-// ── Legacy API format (backward compat for any cached data) ──
 function _transformApiFormat(m) {
   const fixture = m.fixture || {};
   const teams = m.teams || {};
@@ -598,18 +479,8 @@ function _transformApiFormat(m) {
     kickoff: formatTime(fixture.date),
     timestamp: fixture.timestamp || null,
     sport: 'football',
-    homeTeam: {
-      id: homeId,
-      name: teams.home?.name || 'TBD',
-      abbr: teams.home?.code || '',
-      color: '#333',
-    },
-    awayTeam: {
-      id: awayId,
-      name: teams.away?.name || 'TBD',
-      abbr: teams.away?.code || '',
-      color: '#333',
-    },
+    homeTeam: { id: homeId, name: teams.home?.name || 'TBD', abbr: teams.home?.code || '', color: '#333' },
+    awayTeam: { id: awayId, name: teams.away?.name || 'TBD', abbr: teams.away?.code || '', color: '#333' },
     homeId,
     awayId,
     homeLogo: teams.home?.logo || null,
@@ -635,22 +506,10 @@ function _transformApiFormat(m) {
     score: {
       home: goals.home,
       away: goals.away,
-      halfTime: {
-        home: score.halftime?.home ?? null,
-        away: score.halftime?.away ?? null,
-      },
-      fullTime: {
-        home: score.fulltime?.home ?? goals.home,
-        away: score.fulltime?.away ?? goals.away,
-      },
-      extraTime: {
-        home: score.extratime?.home ?? null,
-        away: score.extratime?.away ?? null,
-      },
-      penalties: {
-        home: score.penalty?.home ?? null,
-        away: score.penalty?.away ?? null,
-      },
+      halfTime: { home: score.halftime?.home ?? null, away: score.halftime?.away ?? null },
+      fullTime: { home: score.fulltime?.home ?? goals.home, away: score.fulltime?.away ?? goals.away },
+      extraTime: { home: score.extratime?.home ?? null, away: score.extratime?.away ?? null },
+      penalties: { home: score.penalty?.home ?? null, away: score.penalty?.away ?? null },
     },
     isLive: FB_LIVE_STATUSES.includes(s),
     isFinished: FB_FINISHED_STATUSES.includes(s),
@@ -662,7 +521,7 @@ function _transformApiFormat(m) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   INTERNAL: Read collection → transform → return matches
+   INTERNAL: Read collection -> transform -> return matches
    ═══════════════════════════════════════════════════════════════ */
 async function _readCollection(collName) {
   if (!db) return [];
@@ -688,65 +547,54 @@ function _emptyResult(error = null) {
    ═══════════════════════════════════════════════════════════════
    SMART FALLBACK LOGIC:
 
-   With the new midnight rollover system (00:05 AM with 15-min
-   retries), data transitions happen quickly. But this function
-   handles ALL edge cases:
+   The backend does a single rollover at 3 AM UTC:
+     tomorrowFixtures -> todayFixtures
+     todayFixtures     -> yesterdayFixtures
+     API fetch         -> tomorrowFixtures
+
+   This function handles edge cases:
 
    1. NORMAL (99% of requests):
-      Primary collection has the right data → return immediately.
-      No extra reads.
+      Primary collection has the right data -> return immediately.
 
-   2. MIDNIGHT TRANSITION (00:00 - 00:20 AM):
-      Calendar date changed but rollover hasn't run yet.
-      "Today's" data is still in tomorrowFixtures.
-      Fallback scans all 3 collections → finds it.
+   2. 3 AM TRANSITION (02:55 - 03:10 UTC):
+      Data is moving between collections. Fallback scans all 3
+      collections to find matches for the requested date.
 
    3. SERVER DOWNTIME:
-      Server was down for multiple days.
-      Old docs have wrong dates (e.g., tomorrowFixtures has
-      yesterday's date). The date filter catches this.
+      Server was down during 3 AM. Old docs may be in the "wrong"
+      collection by date. The date filter catches this.
 
    4. ROLLOVER FAILURE:
-      If rollover failed completely and 3 AM fetch also failed,
-      the fallback still tries to find data anywhere.
+      If 3 AM run failed completely, fallback still tries to find
+      data anywhere.
    ═══════════════════════════════════════════════════════════════ */
 async function _readDayFixtures(yesterdayColl, todayColl, tomorrowColl, date) {
   const yesterdayStr = getYesterdayStr();
   const tomorrowStr = getTomorrowStr();
 
-  // Pick the most likely collection based on date
   let primaryColl = todayColl;
   if (date === yesterdayStr) primaryColl = yesterdayColl;
   else if (date === tomorrowStr) primaryColl = tomorrowColl;
 
-  // Read primary collection
   const primary = await _readCollection(primaryColl);
   const filtered = primary.filter((m) => {
     const md = m.date ? m.date.split('T')[0] : '';
     return md === date;
   });
 
-  // If we got results, return immediately (99% of requests)
   if (filtered.length > 0) return filtered;
 
-  // SMART FALLBACK:
-  // Scan all 3 collections to find data for this date.
-  // This handles:
-  //   - Midnight transition (data in wrong collection)
-  //   - Server downtime (rollover skipped)
-  //   - Partial failures (one collection empty)
   const all = await Promise.all([
     _readCollection(yesterdayColl),
     _readCollection(todayColl),
     _readCollection(tomorrowColl),
   ]);
 
-  return all
-    .flat()
-    .filter((m) => {
-      const md = m.date ? m.date.split('T')[0] : '';
-      return md === date;
-    });
+  return all.flat().filter((m) => {
+    const md = m.date ? m.date.split('T')[0] : '';
+    return md === date;
+  });
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -755,20 +603,9 @@ async function _readDayFixtures(yesterdayColl, todayColl, tomorrowColl, date) {
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (!db) return _emptyResult('NO_DB');
   await waitForAuth();
-
-  // Backend only populates 3-day window — anything outside = empty
-  if (!isInWindow(date)) {
-    return _emptyResult(null);
-  }
-
+  if (!isInWindow(date)) return _emptyResult(null);
   try {
-    const matches = await _readDayFixtures(
-      COLL.YESTERDAY,
-      COLL.TODAY,
-      COLL.TOMORROW,
-      date
-    );
-
+    const matches = await _readDayFixtures(COLL.YESTERDAY, COLL.TODAY, COLL.TOMORROW, date);
     return {
       matches,
       error: null,
@@ -776,8 +613,7 @@ export const fetchFixtures = async (date, forceRefresh = false) => {
       isStale: false,
       forceFailed: false,
       cacheSource: 'backend',
-      allFinished:
-        matches.length > 0 && matches.every((m) => m.isFinished),
+      allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
       isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
@@ -790,13 +626,12 @@ export const fetchYesterdayFixtures = () => fetchFixtures(getYesterdayStr());
 export const fetchTomorrowFixtures = () => fetchFixtures(getTomorrowStr());
 
 /* ═══════════════════════════════════════════════════════════════
-   FOOTBALL: Finished fixtures (results page)
+   FOOTBALL: Finished fixtures
    ═══════════════════════════════════════════════════════════════ */
 export const fetchFinishedFixtures = async () => {
   if (!db) return [];
   try {
     const matches = await _readCollection(COLL.FINISHED);
-    // Sort newest first
     return matches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   } catch (err) {
     console.warn('[Data] fetchFinishedFixtures error:', err.message);
@@ -819,23 +654,10 @@ export const fetchLiveScores = async () => {
 
 /* ═══════════════════════════════════════════════════════════════
    FOOTBALL: Real-time subscriptions
-   ═══════════════════════════════════════════════════════════════
-   These use Firestore onSnapshot — the browser receives
-   updates INSTANTLY when the backend writes new live data.
-   Zero polling. Zero API calls from the browser.
    ═══════════════════════════════════════════════════════════════ */
 export const subscribeToLiveFixtures = (callback) => {
   if (!db) {
-    setTimeout(
-      () =>
-        callback({
-          matches: [],
-          hasLive: false,
-          liveCount: 0,
-          error: 'NO_DB',
-        }),
-      0
-    );
+    setTimeout(() => callback({ matches: [], hasLive: false, liveCount: 0, error: 'NO_DB' }), 0);
     return () => {};
   }
   let active = true;
@@ -844,35 +666,19 @@ export const subscribeToLiveFixtures = (callback) => {
     (snap) => {
       if (!active) return;
       const matches = snap.docs.map((d) => transformMatch(d.data()));
-      callback({
-        matches,
-        hasLive: matches.length > 0,
-        liveCount: matches.length,
-        error: null,
-      });
+      callback({ matches, hasLive: matches.length > 0, liveCount: matches.length, error: null });
     },
     (err) => {
       if (!active) return;
-      callback({
-        matches: [],
-        hasLive: false,
-        liveCount: 0,
-        error: err.message,
-      });
+      callback({ matches: [], hasLive: false, liveCount: 0, error: err.message });
     }
   );
-  return () => {
-    active = false;
-    unsub();
-  };
+  return () => { active = false; unsub(); };
 };
 
 export const subscribeToTodayFixtures = (callback) => {
   if (!db) {
-    setTimeout(
-      () => callback({ matches: [], error: 'NO_DB' }),
-      0
-    );
+    setTimeout(() => callback({ matches: [], error: 'NO_DB' }), 0);
     return () => {};
   }
   let active = true;
@@ -888,10 +694,7 @@ export const subscribeToTodayFixtures = (callback) => {
       callback({ matches, error: err.message });
     }
   );
-  return () => {
-    active = false;
-    unsub();
-  };
+  return () => { active = false; unsub(); };
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -900,19 +703,9 @@ export const subscribeToTodayFixtures = (callback) => {
 export const fetchBasketballFixtures = async (date) => {
   if (!db) return _emptyResult('NO_DB');
   await waitForAuth();
-
-  if (!isInWindow(date)) {
-    return _emptyResult(null);
-  }
-
+  if (!isInWindow(date)) return _emptyResult(null);
   try {
-    const matches = await _readDayFixtures(
-      COLL.BASKETBALL_YESTERDAY,
-      COLL.BASKETBALL_TODAY,
-      COLL.BASKETBALL_TOMORROW,
-      date
-    );
-
+    const matches = await _readDayFixtures(COLL.BASKETBALL_YESTERDAY, COLL.BASKETBALL_TODAY, COLL.BASKETBALL_TOMORROW, date);
     return {
       matches,
       error: null,
@@ -920,8 +713,7 @@ export const fetchBasketballFixtures = async (date) => {
       isStale: false,
       forceFailed: false,
       cacheSource: 'backend',
-      allFinished:
-        matches.length > 0 && matches.every((m) => m.isFinished),
+      allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
       isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
@@ -930,13 +722,11 @@ export const fetchBasketballFixtures = async (date) => {
   }
 };
 
-export const fetchBasketballYesterdayFixtures = () =>
-  fetchBasketballFixtures(getYesterdayStr());
-export const fetchBasketballTomorrowFixtures = () =>
-  fetchBasketballFixtures(getTomorrowStr());
+export const fetchBasketballYesterdayFixtures = () => fetchBasketballFixtures(getYesterdayStr());
+export const fetchBasketballTomorrowFixtures = () => fetchBasketballFixtures(getTomorrowStr());
 
 /* ═══════════════════════════════════════════════════════════════
-   BASKETBALL: Finished fixtures (results page)
+   BASKETBALL: Finished fixtures
    ═══════════════════════════════════════════════════════════════ */
 export const fetchBasketballFinishedFixtures = async () => {
   if (!db) return [];
@@ -944,10 +734,7 @@ export const fetchBasketballFinishedFixtures = async () => {
     const matches = await _readCollection(COLL.BASKETBALL_FINISHED);
     return matches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   } catch (err) {
-    console.warn(
-      '[Data] fetchBasketballFinishedFixtures error:',
-      err.message
-    );
+    console.warn('[Data] fetchBasketballFinishedFixtures error:', err.message);
     return [];
   }
 };
@@ -970,16 +757,7 @@ export const fetchBasketballLiveScores = async () => {
    ═══════════════════════════════════════════════════════════════ */
 export const subscribeToBasketballLiveFixtures = (callback) => {
   if (!db) {
-    setTimeout(
-      () =>
-        callback({
-          matches: [],
-          hasLive: false,
-          liveCount: 0,
-          error: 'NO_DB',
-        }),
-      0
-    );
+    setTimeout(() => callback({ matches: [], hasLive: false, liveCount: 0, error: 'NO_DB' }), 0);
     return () => {};
   }
   let active = true;
@@ -988,35 +766,19 @@ export const subscribeToBasketballLiveFixtures = (callback) => {
     (snap) => {
       if (!active) return;
       const matches = snap.docs.map((d) => transformMatch(d.data()));
-      callback({
-        matches,
-        hasLive: matches.length > 0,
-        liveCount: matches.length,
-        error: null,
-      });
+      callback({ matches, hasLive: matches.length > 0, liveCount: matches.length, error: null });
     },
     (err) => {
       if (!active) return;
-      callback({
-        matches: [],
-        hasLive: false,
-        liveCount: 0,
-        error: err.message,
-      });
+      callback({ matches: [], hasLive: false, liveCount: 0, error: err.message });
     }
   );
-  return () => {
-    active = false;
-    unsub();
-  };
+  return () => { active = false; unsub(); };
 };
 
 export const subscribeToBasketballTodayFixtures = (callback) => {
   if (!db) {
-    setTimeout(
-      () => callback({ matches: [], error: 'NO_DB' }),
-      0
-    );
+    setTimeout(() => callback({ matches: [], error: 'NO_DB' }), 0);
     return () => {};
   }
   let active = true;
@@ -1032,23 +794,16 @@ export const subscribeToBasketballTodayFixtures = (callback) => {
       callback({ matches, error: err.message });
     }
   );
-  return () => {
-    active = false;
-    unsub();
-  };
+  return () => { active = false; unsub(); };
 };
 
 /* ═══════════════════════════════════════════════════════════════
    STANDINGS
-   Returns empty on free plan (cron disabled).
-   Ready for when you upgrade — no code changes needed.
    ═══════════════════════════════════════════════════════════════ */
 export const fetchLeagueStandings = async (leagueId) => {
   if (!db) return [];
   try {
-    const snap = await getDoc(
-      doc(db, COLL.STANDINGS, String(leagueId))
-    );
+    const snap = await getDoc(doc(db, COLL.STANDINGS, String(leagueId)));
     if (!snap.exists()) return [];
     return snap.data().standings || [];
   } catch (err) {
@@ -1060,9 +815,7 @@ export const fetchLeagueStandings = async (leagueId) => {
 export const fetchBasketballLeagueStandings = async (leagueId) => {
   if (!db) return [];
   try {
-    const snap = await getDoc(
-      doc(db, COLL.BASKETBALL_STANDINGS, String(leagueId))
-    );
+    const snap = await getDoc(doc(db, COLL.BASKETBALL_STANDINGS, String(leagueId)));
     if (!snap.exists()) return [];
     return snap.data().standings || [];
   } catch (err) {
@@ -1073,14 +826,11 @@ export const fetchBasketballLeagueStandings = async (leagueId) => {
 
 /* ═══════════════════════════════════════════════════════════════
    LEAGUES
-   Returns empty on free plan (cron disabled).
-   Ready for when you upgrade.
    ═══════════════════════════════════════════════════════════════ */
 export const fetchLeagues = async (sport = 'football') => {
   if (!db) return [];
   try {
-    const collName =
-      sport === 'basketball' ? COLL.BASKETBALL_LEAGUES : COLL.LEAGUES;
+    const collName = sport === 'basketball' ? COLL.BASKETBALL_LEAGUES : COLL.LEAGUES;
     const snap = await getDocs(collection(db, collName));
     return snap.docs.map((d) => d.data());
   } catch (err) {
@@ -1091,21 +841,17 @@ export const fetchLeagues = async (sport = 'football') => {
 
 /* ═══════════════════════════════════════════════════════════════
    TEAM FIXTURES — Search across ALL collections
-   Includes LIVE so a team playing right now shows up.
    ═══════════════════════════════════════════════════════════════ */
 export const fetchTeamFixtures = async (teamId) => {
   if (!db) return [];
   try {
-    const [yesterday, today, tomorrow, finished, live] = await Promise.all(
-      [
-        _readCollection(COLL.YESTERDAY),
-        _readCollection(COLL.TODAY),
-        _readCollection(COLL.TOMORROW),
-        _readCollection(COLL.FINISHED),
-        _readCollection(COLL.LIVE),
-      ]
-    );
-
+    const [yesterday, today, tomorrow, finished, live] = await Promise.all([
+      _readCollection(COLL.YESTERDAY),
+      _readCollection(COLL.TODAY),
+      _readCollection(COLL.TOMORROW),
+      _readCollection(COLL.FINISHED),
+      _readCollection(COLL.LIVE),
+    ]);
     const tid = String(teamId);
     return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
       .filter((m) => m.homeId === tid || m.awayId === tid)
@@ -1119,16 +865,13 @@ export const fetchTeamFixtures = async (teamId) => {
 export const fetchBasketballTeamFixtures = async (teamId) => {
   if (!db) return [];
   try {
-    const [yesterday, today, tomorrow, finished, live] = await Promise.all(
-      [
-        _readCollection(COLL.BASKETBALL_YESTERDAY),
-        _readCollection(COLL.BASKETBALL_TODAY),
-        _readCollection(COLL.BASKETBALL_TOMORROW),
-        _readCollection(COLL.BASKETBALL_FINISHED),
-        _readCollection(COLL.BASKETBALL_LIVE),
-      ]
-    );
-
+    const [yesterday, today, tomorrow, finished, live] = await Promise.all([
+      _readCollection(COLL.BASKETBALL_YESTERDAY),
+      _readCollection(COLL.BASKETBALL_TODAY),
+      _readCollection(COLL.BASKETBALL_TOMORROW),
+      _readCollection(COLL.BASKETBALL_FINISHED),
+      _readCollection(COLL.BASKETBALL_LIVE),
+    ]);
     const tid = String(teamId);
     return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
       .filter((m) => m.homeId === tid || m.awayId === tid)
@@ -1141,12 +884,17 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 
 /* ═══════════════════════════════════════════════════════════════
    BACKEND STATUS — Read meta docs
-   Shows when the backend last synced, rollover status, etc.
-
-   Returns parsed, user-friendly data:
-   - rolloverAt: When the midnight rollover happened
-   - fetchedAt: When tomorrow's fixtures were fetched
-   - rolloverStatus: 'complete' | 'pending' | 'unknown'
+   ═══════════════════════════════════════════════════════════════
+   The backend writes these fields to meta/footballScheduler
+   and meta/basketballScheduler:
+     - lastDailyFetchDate: "2026-07-10" (the date when run() completed)
+     - lastTomorrowDate:   "2026-07-11" (which date was fetched)
+     - verifiedAt:         ISO timestamp
+     - fetchTotal:         number of fixtures fetched
+     - fetchWrites:        number written to Firestore
+     - rolloverYesterday:  count moved to yesterday
+     - rolloverToday:      count moved to today
+     - recoveredFT:        count of finished games recovered
    ═══════════════════════════════════════════════════════════════ */
 export const fetchBackendStatus = async () => {
   if (!db) return null;
@@ -1159,24 +907,20 @@ export const fetchBackendStatus = async () => {
     const footballRaw = footballSnap.exists() ? footballSnap.data() : null;
     const basketballRaw = basketballSnap.exists() ? basketballSnap.data() : null;
 
-    // Parse rollover status for a sport
     const parseSportStatus = (raw) => {
-      if (!raw) return { status: 'unknown', rolloverAt: null, fetchedAt: null };
+      if (!raw) return { status: 'unknown', fetchedAt: null };
 
       const todayStr = getTodayStr();
-      const rolloverDone = raw.lastRolloverDate === todayStr;
       const fetchDone = raw.lastDailyFetchDate === todayStr;
 
       return {
-        status: rolloverDone ? 'complete' : 'pending',
-        rolloverAt: raw.rolloverAt || null,
-        fetchedAt: raw.fetchedAt || null,
+        status: fetchDone ? 'complete' : 'pending',
+        fetchedAt: raw.verifiedAt || null,
         rolloverYesterday: raw.rolloverYesterday ?? null,
         rolloverToday: raw.rolloverToday ?? null,
         recoveredFT: raw.recoveredFT ?? null,
         fetchTotal: raw.fetchTotal ?? null,
         fetchWrites: raw.fetchWrites ?? null,
-        lastRolloverDate: raw.lastRolloverDate || null,
         lastDailyFetchDate: raw.lastDailyFetchDate || null,
         lastTomorrowDate: raw.lastTomorrowDate || null,
         fetchDone,
@@ -1186,11 +930,7 @@ export const fetchBackendStatus = async () => {
     return {
       football: parseSportStatus(footballRaw),
       basketball: parseSportStatus(basketballRaw),
-      // Raw data for debugging
-      _raw: {
-        football: footballRaw,
-        basketball: basketballRaw,
-      },
+      _raw: { football: footballRaw, basketball: basketballRaw },
       fetchedAt: new Date().toISOString(),
       isRolloverWindow: isInRolloverWindow(),
     };
@@ -1202,23 +942,17 @@ export const fetchBackendStatus = async () => {
 
 /**
  * Get a human-readable status message for the UI.
- * Examples:
- *   "Updated at 00:05 AM"
- *   "Rollover pending..."
- *   "Updated at 3:00 AM"
  */
 export const getSyncStatusMessage = (status) => {
   if (!status) return 'Unknown';
 
   if (status.status === 'pending') {
-    return isInRolloverWindow()
-      ? 'Updating...'
-      : 'Rollover pending';
+    return isInRolloverWindow() ? 'Updating...' : 'Waiting for daily sync';
   }
 
-  if (status.rolloverAt) {
+  if (status.fetchedAt) {
     try {
-      const d = new Date(status.rolloverAt);
+      const d = new Date(status.fetchedAt);
       return `Updated at ${d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`;
     } catch {
       return 'Updated';
@@ -1229,41 +963,19 @@ export const getSyncStatusMessage = (status) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   MATCH DETAILS (not fetched by backend on free plan — stubs)
-   These return empty so the UI renders a clean "unavailable"
-   state instead of crashing or showing a loading spinner.
+   MATCH DETAILS (stubs — not fetched on free plan)
    ═══════════════════════════════════════════════════════════════ */
-export const fetchMatchEvents = async () => ({
-  events: [],
-  error: null,
-  fromCache: 'backend',
-});
-
-export const fetchMatchLineups = async () => ({
-  lineups: [],
-  error: null,
-  fromCache: 'backend',
-});
-
-export const fetchMatchStatistics = async () => ({
-  statistics: [],
-  error: null,
-  fromCache: 'backend',
-});
+export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'backend' });
+export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'backend' });
+export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'backend' });
 
 /* ═══════════════════════════════════════════════════════════════
    CACHE COMPATIBILITY (no-ops — Firestore IS the cache)
-   Kept so any component that imports these doesn't break.
    ═══════════════════════════════════════════════════════════════ */
 export const loadFixturesFromAnyCache = async (date) => {
   const res = await fetchFixtures(date);
   return res.matches.length > 0
-    ? {
-        matches: res.matches,
-        source: 'backend',
-        stale: false,
-        allFinished: res.allFinished,
-      }
+    ? { matches: res.matches, source: 'backend', stale: false, allFinished: res.allFinished }
     : null;
 };
 
@@ -1271,42 +983,25 @@ export const loadCachedFixtures = () => null;
 export const getCachedDatesSync = () => [];
 export const getCombinedCachedDates = async () => [];
 export const getCacheStatus = () => null;
-export const getCacheStats = () => ({
-  dates: 0,
-  total: 0,
-  finished: 0,
-  cachedDates: [],
-});
+export const getCacheStats = () => ({ dates: 0, total: 0, finished: 0, cachedDates: [] });
 export const clearAllCache = () => {};
 
 /* ═══════════════════════════════════════════════════════════════
    QUOTA COMPATIBILITY (no API calls from browser = no quota)
    ═══════════════════════════════════════════════════════════════ */
 export const getQuotaStatus = () => ({
-  used: 0,
-  limit: 99999,
-  remaining: 99999,
-  percent: 0,
-  date: '',
-  isToday: false,
-  blocked: false,
-  hardBlocked: false,
+  used: 0, limit: 99999, remaining: 99999, percent: 0, date: '', isToday: false, blocked: false, hardBlocked: false,
 });
 
-export const LIVE_POLL_ACTIVE = 60_000;
-export const LIVE_POLL_IDLE = 300_000;
-export const LIVE_POLL_BLOCKED = 600_000;
+export const LIVE_POLL_ACTIVE = 60000;
+export const LIVE_POLL_IDLE = 300000;
+export const LIVE_POLL_BLOCKED = 600000;
 export const getLivePollInterval = () => LIVE_POLL_ACTIVE;
 
 /* ═══════════════════════════════════════════════════════════════
    SYNC COMPATIBILITY (no-ops — backend handles all syncing)
    ═══════════════════════════════════════════════════════════════ */
-export const dailySyncToFirestore = async () => ({
-  done: true,
-  skipped: true,
-  reason: 'BACKEND',
-});
-
+export const dailySyncToFirestore = async () => ({ done: true, skipped: true, reason: 'BACKEND' });
 export const syncDateToFirestore = async () => false;
 export const getLastSyncStatus = () => null;
 

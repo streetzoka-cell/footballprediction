@@ -30,7 +30,8 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'bb-pro-v3';
   s.textContent = `
-    @keyframes bb_fadeInUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes bb_fadeInUp{from{opacity:0;transform:translateY(18px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes bb_slideDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:translateY(0)}}
     @keyframes bb_slideInLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
     @keyframes bb_scoreFlash{0%{transform:scale(1)}25%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(1);filter:brightness(1)}}
@@ -62,7 +63,7 @@ const injectStyles = () => {
     .zoka-btn:active{transform:translateY(0) scale(.97)}
     .zoka-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
     .zoka-card:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.15)}
-    .zoka-glass{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .zoka-glass{backdrop-filter:;-webkit-backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
     .bball-icon{animation:bballBounce 1.5s ease-in-out infinite}
     .bball-glow{animation:sportGlow 2s ease-in-out infinite}
     .sport-switch{display:flex;gap:6px;padding:4px;border-radius:10px;background:var(--bg-card);border:1px solid var(--border)}
@@ -72,7 +73,13 @@ const injectStyles = () => {
     .sport-pill.active{color:var(--bg-deep)}
     .sport-pill.inactive{color:var(--text-muted);background:transparent}
     .sport-pill.inactive:hover{color:var(--text-primary);background:rgba(255,255,255,.04)}
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -659,7 +666,7 @@ export default function Basketball() {
   let sectionIdx = 0;
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', animation: 'bb_fadeInUp .45s ease' }}>
+    <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)', animation: 'bb_fadeInUp .45s ease' }}>
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO

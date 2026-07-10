@@ -16,7 +16,8 @@ const injectStyles = () => {
   s.id = 'profile-zoka-v4';
   s.textContent = `
     /* ── Keyframes (zoka_ prefix, consistent with Login) ── */
-    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes zoka_popIn{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
     @keyframes zoka_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     @keyframes zoka_barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
@@ -68,7 +69,13 @@ const injectStyles = () => {
       .pro-stat-val{font-size:1.7rem!important}
       .pro-cta-title{font-size:1.4rem!important}
     }
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -231,7 +238,7 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
    ═════════════════════════════════════════════════════════════════════════════════
    */
 const ProfileSkeleton = () => (
-  <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--bg-deep)' }}>
+  <div style={{ minHeight: '100vh',overflow:'hidden', minHeight: '100dvh',overflow:'hidden', background: 'var(--bg-deep)' }}>
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 100px' }}>
       <div style={{ padding: 34, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', alignItems: 'center', gap: 24, marginBottom: 28 }}>
         <div className="skel-profile" style={{ width: 92, height: 92, borderRadius: '50%', flexShrink: 0 }} />
@@ -295,7 +302,7 @@ export default function Profile() {
   }, [logout, navigate]);
 
   return (
-    <div style={{ minHeight: '100vh', minHeight: '100dvh', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100vh',overflow:'hidden', minHeight: '100dvh',overflow:'hidden', background: 'var(--bg-deep)' }}>
       <SEO
         title="My Profile"
         description="View your prediction stats, accuracy, badges, and leaderboard rank on ZOKASCORE."

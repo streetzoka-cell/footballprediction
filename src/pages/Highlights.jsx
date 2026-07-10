@@ -10,7 +10,8 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'yt-pro-v1';
   s.textContent = `
-    @keyframes yt_fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes yt_fadeUp{from{opacity:0;transform:translateY(20px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes yt_pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
     @keyframes yt_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     .yt-enter{animation:yt_fadeUp .5s cubic-bezier(.22,1,.36,1) both}
@@ -20,7 +21,13 @@ const injectStyles = () => {
     .zoka-btn:hover{transform:translateY(-2px)}
     .zoka-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
     .zoka-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,.3)}
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -59,7 +66,7 @@ export default function Highlights() {
   );
 
    return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)' }}>
       <SEO
         title="Match Highlights"
         description="Watch the latest football match highlights, goals and action from Europe's top leagues."

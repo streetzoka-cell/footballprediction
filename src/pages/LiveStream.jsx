@@ -14,7 +14,8 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'ls-v2';
   s.textContent = `
-    @keyframes lsUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes lsUp{from{opacity:0;transform:translateY(18px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes lsPop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
     @keyframes lsSlide{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
     @keyframes lsShim{0%{background-position:-200% 0}100%{background-position:200% 0}}
@@ -38,7 +39,13 @@ const injectStyles = () => {
     .sc-arrow{transition:transform .2s}
     .sc-visit{transition:all .2s}
     .hide-sb::-webkit-scrollbar{display:none}.hide-sb{scrollbar-width:none}
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -254,7 +261,7 @@ export default function LiveStream() {
   const clearSearch = useCallback(() => setSearch(''), []);
 
    return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)' }}>
 
       <SEO
         title="Where to Watch Live Football"

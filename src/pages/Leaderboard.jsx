@@ -19,7 +19,8 @@ const injectStyles = () => {
   s.id = 'lb-zoka-v6';
   s.textContent = `
     /* ── Keyframes (zoka_ prefix, consistent with Login) ── */
-    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(20px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes zoka_slideRow{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
     @keyframes zoka_popIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
     @keyframes zoka_crownFloat{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-6px) rotate(5deg)}}
@@ -119,7 +120,13 @@ const injectStyles = () => {
       .lb-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
       .lb-podium-user{max-width:100px!important}
     }
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -376,7 +383,7 @@ export default function Leaderboard() {
      RENDER
      ═══════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight:'100vh', minHeight:'100dvh', background:'var(--bg-deep)' }}>
+    <div style={{ minHeight:'100vh',overflow:'hidden', minHeight:'100dvh',overflow:'hidden', background:'var(--bg-deep)' }}>
       <SEO
         title="Leaderboard"
         description="ZOKASCORE prediction leaderboard. See top predictors ranked by daily, weekly, monthly, and all-time performance."

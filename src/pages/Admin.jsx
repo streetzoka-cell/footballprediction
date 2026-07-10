@@ -135,7 +135,8 @@ const injectStyles = () => {
   s.id = 'adm-mob-v17';
   s.textContent = `
     /* ── Keyframes ── */
-    @keyframes afu{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes afu{from{opacity:0;transform:translateY(16px)}
+body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
     @keyframes asp{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     @keyframes afl{0%{background:rgba(0,230,118,.18)}100%{background:transparent}}
     @keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.4}}
@@ -310,7 +311,13 @@ const injectStyles = () => {
       .section-card{padding:14px}
       .pi{width:48px;height:44px;font-size:1rem}
     }
-  `;
+  
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
+      .toggle-hidden-items{transition:none!important}
+    }
+`;
   document.head.appendChild(s);
 };
 
@@ -793,7 +800,7 @@ export default function Admin() {
   if (authLoad) return null;
   if (!isAdmin) {
     return (
-      <div style={{ minHeight:'100vh', background:'var(--bg-deep)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
+      <div style={{ minHeight:'100vh',overflow:'hidden', background:'var(--bg-deep)', display:'flex', alignItems:'center', justifyContent:'center', padding:24 }}>
         <div style={{ textAlign:'center', padding:'48px 32px', ...S.card }}>
           <ShieldAlert size={56} style={{ color:'#ef4444', marginBottom:20 }} />
           <h2 style={{ margin:'0 0 12px', color:'var(--text-primary)', fontSize:'1.3rem', fontWeight:900 }}>Access Denied</h2>
@@ -1048,7 +1055,7 @@ export default function Admin() {
      MAIN RENDER
   ═══════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight:'100vh', background:'var(--bg-deep)' }}>
+    <div style={{ minHeight:'100vh',overflow:'hidden', background:'var(--bg-deep)' }}>
       {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
 
       <div style={{ maxWidth:960, margin:'0 auto', padding:'16px 16px 120px' }}>

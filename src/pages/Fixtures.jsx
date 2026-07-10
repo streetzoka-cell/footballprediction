@@ -603,7 +603,7 @@ const injectStyles = () => {
       align-items: center;
       justify-content: center;
       background: rgba(0,0,0,.35);
-      backdrop-filter: blur(3px);
+      backdrop-filter:;-webkit-backdrop-filter: blur(3px);
       border-radius: inherit;
       z-index: 2;
       pointer-events: none;
@@ -618,7 +618,7 @@ const injectStyles = () => {
       display: flex;
       align-items: center;
       gap: 8px;
-      backdrop-filter: blur(8px);
+      backdrop-filter:;-webkit-backdrop-filter: blur(8px);
       animation: fxStatusOverlay 3.5s cubic-bezier(.22,1,.36,1) both;
     }
 
@@ -631,7 +631,7 @@ const injectStyles = () => {
       background: linear-gradient(135deg, rgba(239,68,68,.95), rgba(220,38,38,.92));
       color: #fff;
       text-align: center;
-      backdrop-filter: blur(12px);
+      backdrop-filter:;-webkit-backdrop-filter: blur(12px);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -656,7 +656,7 @@ const injectStyles = () => {
       border-radius: 28px;
       border: 1.5px solid rgba(239,68,68,.3);
       background: rgba(239,68,68,.12);
-      backdrop-filter: blur(16px);
+      backdrop-filter:;-webkit-backdrop-filter: blur(16px);
       color: #ef4444;
       font-size: .78rem;
       font-weight: 700;
