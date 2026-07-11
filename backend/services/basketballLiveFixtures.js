@@ -1,251 +1,161 @@
-/*
- * basketballLiveFixtures.js
- * Fetches live basketball fixtures with DAILY CAP.
- *
- * FIX: Same writes object bug as football.
- * FIX: Body-level error detection (API returns 200
- *      with errors object when rate limited).
- */
-
 const {
-  basketballApi,
-  isBasketballConfigured,
-  isBasketballBudgetAvailable,
-  isBasketballLiveCapAvailable,
-  incrementBasketballLiveCounter,
-  getBasketballLiveRequestsToday,
+  basketballApi, isBasketballConfigured, isBasketballBudgetAvailable,
+  isBasketballLiveCapAvailable, incrementBasketballLiveCounter, getBasketballLiveRequestsToday,
 } = require("../config/basketballApi");
-const { BASKETBALL_LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES } = require("../config/constants");
+const { BASKETBALL_LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
+const { batchWrite, deleteByIds } = require("../config/firebase");
+const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 
 class BasketballLiveFixturesService {
   constructor(repo, ftProcessor) {
     if (!repo) throw new Error("BasketballFixturesRepository is required.");
     if (!ftProcessor) throw new Error("BasketballFinishedFixturesProcessor is required.");
-
     this.repo = repo;
     this.ftProcessor = ftProcessor;
-
     this.lastLiveSnapshot = new Map();
-
     this.trackedLeagueIds = new Set(
-      BASKETBALL_LEAGUES.filter((l) => l.active).map((l) => l.id)
+      BASKETBALL_LEAGUES.filter(function (l) { return l.active; }).map(function (l) { return l.id; })
     );
   }
 
-  // ==========================================================
-  // PUBLIC
-  // ==========================================================
-
   async run() {
-    if (!isBasketballConfigured) {
-      logger.warn("[BasketballLive] Skipping — API not configured");
-      return this._emptyResult();
-    }
+    if (!isBasketballConfigured) return this._emptyResult();
+    if (!isBasketballBudgetAvailable(LIVE_POLLING.MIN_BUDGET_TO_POLL)) return this._emptyResult({ capReached: true });
+    if (!isBasketballLiveCapAvailable()) return this._emptyResult({ capReached: true });
 
-    if (!isBasketballBudgetAvailable(LIVE_POLLING.MIN_BUDGET_TO_POLL)) {
-      logger.warn("[BasketballLive] Skipping — budget exhausted");
-      return this._emptyResult({ capReached: true });
-    }
-
-    if (!isBasketballLiveCapAvailable()) {
-      logger.warn(
-        `[BasketballLive] Daily live cap reached (${getBasketballLiveRequestsToday()}/${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}) — skipping`
-      );
-      return this._emptyResult({ capReached: true });
-    }
-
-    const startTime = Date.now();
-
-    let response;
+    var startTime = Date.now();
+    var response;
     try {
-      const today = new Date().toISOString().slice(0, 10);
-
       response = await withRetry(
-        () =>
-          basketballApi.get("/games", {
-            params: { date: today },
-          }),
+        function () { return basketballApi.get("/games", { params: { date: new Date().toISOString().slice(0, 10) } }); },
         "BasketballLive:fetch"
       );
     } catch (err) {
-      logger.error(`[BasketballLive] Fetch failed: ${err.message}`);
       return this._emptyResult();
     }
 
-    const liveCount = incrementBasketballLiveCounter();
+    incrementBasketballLiveCounter();
 
-    // FIX: Check body-level errors AND treat as cap-reached
-    const apiErrors = response?.errors || {};
-    if (Object.keys(apiErrors).length > 0) {
-      logger.warn(`[BasketballLive] API blocked: ${JSON.stringify(apiErrors)}`);
-      return this._emptyResult({ capReached: true });
-    }
+    var apiErrors = response && response.errors ? response.errors : {};
+    if (Object.keys(apiErrors).length > 0) return this._emptyResult({ capReached: true });
 
-    const rawFixtures = response?.response || [];
+    var rawFixtures = (response && response.response) ? response.response : [];
+    var liveStatuses = ["Q1", "Q2", "Q3", "Q4", "OT", "LIVE", "IN PLAY"];
 
-    const filtered = rawFixtures.filter((f) => {
-      const isTrackedLeague = TRACK_ALL_LEAGUES || this.trackedLeagueIds.has(f.league?.id);
+    var filtered = rawFixtures.filter(function (f) {
+      var isTracked = TRACK_ALL_LEAGUES || this.trackedLeagueIds.has(f.league && f.league.id);
+      var isLive = liveStatuses.indexOf((f.status && f.status.short && f.status.short.toUpperCase()) || "") !== -1;
+      return isTracked && isLive;
+    }.bind(this));
 
-      const liveStatuses = [
-        "Q1", "Q2", "Q3", "Q4", "OT", "LIVE", "IN PLAY"
-      ];
+    logger.info("[BasketballLive] API: " + rawFixtures.length + " total, " + filtered.length + " tracked");
 
-      const isLive = liveStatuses.includes(
-        f.status?.short?.toUpperCase()
-      );
+    var newDocs = filtered.map(function (f) { return this.normalize(f); }.bind(this));
+    var newIds = new Set(newDocs.map(function (d) { return d.id; }));
+    var oldIds = new Set(this.lastLiveSnapshot.keys());
+    var disappearedIds = [];
+    oldIds.forEach(function (id) { if (!newIds.has(id)) disappearedIds.push(id); });
 
-      return isTrackedLeague && isLive;
-    });
-
-    logger.info(
-      `[BasketballLive] API: ${rawFixtures.length} total, ${filtered.length} tracked [live req ${liveCount}/${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}]`
-    );
-
-    // ── Detect transitions ──
-    const previousIds = new Set(this.lastLiveSnapshot.keys());
-    const newIds = new Set(filtered.map((f) => f.id));
-    const disappearedIds = [...previousIds].filter((id) => !newIds.has(id));
-
-    let transitioned = 0;
+    var transitioned = 0;
     if (disappearedIds.length > 0) {
-      transitioned = await this._handleTransitions(disappearedIds);
+      var toFinish = [];
+      disappearedIds.forEach(function (id) {
+        var last = this.lastLiveSnapshot.get(id);
+        if (!last) return;
+        toFinish.push({
+          id: last.id, date: last.date, timestamp: last.timestamp,
+          status: "FT", statusLong: "Game Finished", elapsed: null, currentPeriod: null,
+          leagueId: last.leagueId, leagueName: last.leagueName,
+          leagueCountry: last.leagueCountry, leagueLogo: last.leagueLogo, season: last.season,
+          homeTeamId: last.homeTeamId, homeTeamName: last.homeTeamName, homeTeamLogo: last.homeTeamLogo,
+          awayTeamId: last.awayTeamId, awayTeamName: last.awayTeamName, awayTeamLogo: last.awayTeamLogo,
+          pointsHome: last.pointsHome, pointsAway: last.pointsAway,
+          q1Home: last.q1Home, q1Away: last.q1Away, q2Home: last.q2Home, q2Away: last.q2Away,
+          q3Home: last.q3Home, q3Away: last.q3Away, q4Home: last.q4Home, q4Away: last.q4Away,
+          otHome: last.otHome, otAway: last.otAway,
+          sport: "basketball", _updatedAt: new Date().toISOString(),
+        });
+      }.bind(this));
+      if (toFinish.length > 0) {
+        logger.info("[BasketballLive] Transitioning " + toFinish.length + " → finished");
+        await this.repo.batchUpsertFinished(toFinish);
+        cache.invalidate("bb:finished");
+        transitioned = toFinish.length;
+      }
     }
 
-    // ── Write ──
-    const docs = filtered.map((f) => this.normalize(f));
-    // FIX: Extract .written from result object
-    let writeCount = 0;
+    var writeCount = 0;
+    var isFirstPoll = this.lastLiveSnapshot.size === 0;
 
-    if (docs.length > 0) {
-      const result = await this.repo.replaceLive(docs);
-      writeCount = result.written;
-    } else if (previousIds.size > 0) {
-      await this.repo.clearLive();
-      this.lastLiveSnapshot.clear();
+    if (isFirstPoll) {
+      if (newDocs.length > 0) {
+        var r = await this.repo.replaceLive(newDocs);
+        writeCount = r.written;
+      }
+    } else {
+      var toWrite = newDocs.filter(function (d) {
+        var old = this.lastLiveSnapshot.get(d.id);
+        if (!old) return true;
+        return d.pointsHome !== old.pointsHome || d.pointsAway !== old.pointsAway ||
+               d.status !== old.status || d.elapsed !== old.elapsed;
+      }.bind(this));
+      if (toWrite.length > 0) {
+        writeCount = await this.repo.batchWrite(COLLECTIONS.BASKETBALL_LIVE_FIXTURES, toWrite);
+      }
+      if (disappearedIds.length > 0) {
+        await deleteByIds(COLLECTIONS.BASKETBALL_LIVE_FIXTURES, disappearedIds);
+      }
+      if (newDocs.length === 0 && oldIds.size > 0) {
+        await deleteByIds(COLLECTIONS.BASKETBALL_LIVE_FIXTURES, Array.from(oldIds));
+      }
     }
 
-    // ── Update snapshot ──
     this.lastLiveSnapshot.clear();
-    for (const doc of docs) {
-      this.lastLiveSnapshot.set(doc.id, doc);
-    }
+    newDocs.forEach(function (doc) { this.lastLiveSnapshot.set(doc.id, doc); }.bind(this));
+    cache.invalidate("bb:live");
 
-    const duration = Date.now() - startTime;
-    const hasLive = docs.length > 0;
-
-    // FIX: Use writeCount not result object
-    logger.info(
-      `[BasketballLive] ${writeCount} live, ${transitioned} → finished, ${duration} ms`
-    );
-
-    return {
-      total: filtered.length,
-      writes: writeCount,
-      removed: transitioned,
-      hasLive,
-      duration,
-      capReached: false,
-    };
+    logger.info("[BasketballLive] " + writeCount + " written, " + transitioned + "→finished");
+    return { total: newDocs.length, writes: writeCount, removed: transitioned, hasLive: newDocs.length > 0, duration: Date.now() - startTime, capReached: false };
   }
-
-  // ==========================================================
-  // TRANSITIONS
-  // ==========================================================
-
-  async _handleTransitions(disappearedIds) {
-    const toFinish = [];
-
-    for (const id of disappearedIds) {
-      const lastKnown = this.lastLiveSnapshot.get(id);
-      if (!lastKnown) continue;
-
-      toFinish.push({
-        ...lastKnown,
-        status: "FT",
-        statusLong: "Game Finished",
-        elapsed: null,
-        currentPeriod: null,
-        _updatedAt: new Date().toISOString(),
-      });
-    }
-
-    if (toFinish.length === 0) return 0;
-
-    logger.info(`[BasketballLive] Transitioning ${toFinish.length} → finished`);
-    await this.repo.batchUpsertFinished(toFinish);
-    return toFinish.length;
-  }
-
-  // ==========================================================
-  // NORMALIZE
-  // ==========================================================
 
   normalize(fixture) {
-    const scores = fixture.scores || {};
-    const periods = fixture.periods || {};
-
+    var scores = fixture.scores || {};
+    var periods = fixture.periods || {};
+    var periodMap = { "1Q": 1, Q1: 1, "2Q": 2, Q2: 2, "3Q": 3, Q3: 3, "4Q": 4, Q4: 4, OT: 5 };
     return {
-      id: fixture.id,
-      date: fixture.date,
-      timestamp: fixture.timestamp,
-      status: fixture.status?.short || "NS",
-      statusLong: fixture.status?.long || "Not Started",
-      elapsed: fixture.status?.elapsed ?? null,
-      currentPeriod: this._getCurrentPeriod(fixture.status?.short),
-      leagueId: fixture.league?.id,
-      leagueName: fixture.league?.name,
-      leagueCountry: fixture.league?.country,
-      leagueLogo: fixture.league?.logo,
-      season: fixture.league?.season,
-      homeTeamId: fixture.teams?.home?.id,
-      homeTeamName: fixture.teams?.home?.name,
-      homeTeamLogo: fixture.teams?.home?.logo,
-      awayTeamId: fixture.teams?.away?.id,
-      awayTeamName: fixture.teams?.away?.name,
-      awayTeamLogo: fixture.teams?.away?.logo,
-      pointsHome: scores.home?.total ?? null,
-      pointsAway: scores.away?.total ?? null,
-      q1Home: scores.home?.q1 ?? null,
-      q1Away: scores.away?.q1 ?? null,
-      q2Home: scores.home?.q2 ?? null,
-      q2Away: scores.away?.q2 ?? null,
-      q3Home: scores.home?.q3 ?? null,
-      q3Away: scores.away?.q3 ?? null,
-      q4Home: scores.home?.q4 ?? null,
-      q4Away: scores.away?.q4 ?? null,
-      otHome: scores.home?.ot ?? null,
-      otAway: scores.away?.ot ?? null,
-      firstQuarterStart: periods.firstQuarterStart ?? null,
-      secondQuarterStart: periods.secondQuarterStart ?? null,
-      thirdQuarterStart: periods.thirdQuarterStart ?? null,
-      fourthQuarterStart: periods.fourthQuarterStart ?? null,
-      sport: "basketball",
-      _updatedAt: new Date().toISOString(),
+      id: fixture.id, date: fixture.date, timestamp: fixture.timestamp,
+      status: (fixture.status && fixture.status.short) || "NS",
+      statusLong: (fixture.status && fixture.status.long) || "Not Started",
+      elapsed: (fixture.status && fixture.status.elapsed) != null ? fixture.status.elapsed : null,
+      currentPeriod: periodMap[(fixture.status && fixture.status.short)] || null,
+      leagueId: fixture.league && fixture.league.id, leagueName: fixture.league && fixture.league.name,
+      leagueCountry: fixture.league && fixture.league.country, leagueLogo: fixture.league && fixture.league.logo,
+      season: fixture.league && fixture.league.season,
+      homeTeamId: fixture.teams && fixture.teams.home && fixture.teams.home.id,
+      homeTeamName: fixture.teams && fixture.teams.home && fixture.teams.home.name,
+      homeTeamLogo: fixture.teams && fixture.teams.home && fixture.teams.home.logo,
+      awayTeamId: fixture.teams && fixture.teams.away && fixture.teams.away.id,
+      awayTeamName: fixture.teams && fixture.teams.away && fixture.teams.away.name,
+      awayTeamLogo: fixture.teams && fixture.teams.away && fixture.teams.away.logo,
+      pointsHome: (scores.home && scores.home.total) != null ? scores.home.total : null,
+      pointsAway: (scores.away && scores.away.total) != null ? scores.away.total : null,
+      q1Home: scores.home && scores.home.q1, q1Away: scores.away && scores.away.q1,
+      q2Home: scores.home && scores.home.q2, q2Away: scores.away && scores.away.q2,
+      q3Home: scores.home && scores.home.q3, q3Away: scores.away && scores.away.q3,
+      q4Home: scores.home && scores.home.q4, q4Away: scores.away && scores.away.q4,
+      otHome: scores.home && scores.home.ot, otAway: scores.away && scores.away.ot,
+      firstQuarterStart: periods.firstQuarterStart || null,
+      secondQuarterStart: periods.secondQuarterStart || null,
+      thirdQuarterStart: periods.thirdQuarterStart || null,
+      fourthQuarterStart: periods.fourthQuarterStart || null,
+      sport: "basketball", _updatedAt: new Date().toISOString(),
     };
   }
 
-  _getCurrentPeriod(statusShort) {
-    const map = {
-      "1Q": 1, Q1: 1,
-      "2Q": 2, Q2: 2,
-      "3Q": 3, Q3: 3,
-      "4Q": 4, Q4: 4,
-      OT: 5,
-    };
-    return map[statusShort] ?? null;
-  }
-
-  _emptyResult(extra = {}) {
-    return {
-      total: 0,
-      writes: 0,
-      removed: 0,
-      hasLive: false,
-      duration: 0,
-      ...extra,
-    };
+  _emptyResult(extra) {
+    return { total: 0, writes: 0, removed: 0, hasLive: false, duration: 0, capReached: false };
   }
 }
 

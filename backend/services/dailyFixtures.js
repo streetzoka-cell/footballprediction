@@ -2,31 +2,40 @@
  * dailyFixtures.js
  * Smart daily fetch with 3-day rollover.
  *
- * BUDGET: 1 API call per day.
+ * ★ BUDGET OVERHAUL:
  *
- * FIXES:
- *   1. Rollover date-filtering FIXED: no longer filters by
- *      yesterdayStr inside todayFixtures. Just moves ALL docs
- *      from today→yesterday and tomorrow→today. The data
- *      already contains the correct dates from yesterday's fetch.
- *   2. Integrity check FIXED: now checks that the collection
- *      HAS docs (any date) rather than checking for a specific
- *      date. After rollover, todayFixtures contains tomorrow's
- *      date — that's correct, not a failure.
- *   3. No longer clears and re-fetches today/yesterday on
- *      restart. If data exists, it's left alone.
+ * OLD rollover (per day):
+ *   getAllToday()          → 100 reads
+ *   getAllTomorrow()       → 100 reads
+ *   replaceYesterday()     → 100 reads + 100 deletes + 100 writes
+ *   replaceToday()         → 100 reads + 100 deletes + 100 writes
+ *   replaceTomorrow()      → 100 reads + 100 deletes + 100 writes
+ *   TOTAL: 500 reads + 300 deletes + 300 writes = 1,100 ops
+ *
+ * NEW rollover (per day):
+ *   Use in-memory cache    → 0 reads
+ *   diffWrite yesterday    → 0 reads + ~0 deletes + 100 writes
+ *   diffWrite today        → 0 reads + ~0 deletes + 100 writes
+ *   diffWrite tomorrow     → 0 reads + ~0 deletes + 100 writes
+ *   TOTAL: 0 reads + ~0 deletes + 300 writes = ~300 ops
+ *
+ *   73% reduction in ops, 100% reduction in reads
+ *
+ * On restart (rare): one-time 200 reads to warm cache.
  */
 
 const { api, isBudgetAvailable } = require("../config/api");
 const {
   LEAGUES,
   FINISHED_STATUSES,
+  COLLECTIONS,
   getDateOffset,
   META_DOCS,
   TRACK_ALL_LEAGUES,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
+const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 
 class DailyFixturesService {
@@ -40,6 +49,17 @@ class DailyFixturesService {
     this.trackedLeagueIds = new Set(
       LEAGUES.filter((l) => l.active).map((l) => l.id)
     );
+
+    // ★ In-memory cache — survives between scheduler runs,
+    // lost on process restart (acceptable — warmup handles it)
+    this._docCache = {
+      yesterday: [],
+      today: [],
+      tomorrow: [],
+      yesterdayIds: new Set(),
+      todayIds: new Set(),
+      tomorrowIds: new Set(),
+    };
   }
 
   // ==========================================================
@@ -57,21 +77,32 @@ class DailyFixturesService {
     const startTime = Date.now();
 
     // ══════════════════════════════════════════════════════
-    // META DEDUP — skip if we already fetched tomorrow today
-    // FIX: Only check tomorrow data, not today/yesterday.
-    // Today/yesterday are managed by rollover and should
-    // NOT be cleared on restart.
+    // META DEDUP — check cache first (0 reads)
     // ══════════════════════════════════════════════════════
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
     if (alreadyFetchedToday) {
-      // Verify tomorrow data exists (the thing we actually fetched)
-      const tomorrowDocs = await this.repo.getAllTomorrow();
-
-      if (tomorrowDocs.length > 0) {
+      // Check in-memory cache FIRST (0 reads)
+      if (this._docCache.tomorrow.length > 0) {
         logger.info(
-          `[DailyFixtures] Tomorrow data verified (${tomorrowDocs.length} docs) — skipping (meta dedup)`
+          `[DailyFixtures] Cache verified (${this._docCache.tomorrow.length} tomorrow docs) — skipping`
+        );
+        return {
+          total: 0,
+          writes: 0,
+          apiCalls: 0,
+          duration: 0,
+          deduped: true,
+        };
+      }
+
+      // Cache empty (restart) — one-time warmup from Firestore
+      logger.info(`[DailyFixtures] Cache empty after restart — warming up...`);
+      await this._warmupCache();
+      if (this._docCache.tomorrow.length > 0) {
+        logger.info(
+          `[DailyFixtures] Warmup done (${this._docCache.tomorrow.length} docs) — skipping`
         );
         return {
           total: 0,
@@ -83,36 +114,40 @@ class DailyFixturesService {
       }
 
       logger.warn(
-        `[DailyFixtures] Meta says done but tomorrow is empty — re-fetching`
+        `[DailyFixtures] Meta says done but no data found — re-fetching`
       );
     }
 
     // ══════════════════════════════════════════
-    // PHASE 1: 3-DAY ROLLOVER (0 API calls)
+    // PHASE 1: 3-DAY ROLLOVER (0 Firestore reads!)
     //
-    // FIX: Move ALL docs, don't filter by date.
-    // todayFixtures contains whatever date was fetched.
-    // tomorrowFixtures contains tomorrow's date.
-    // Just shift them: today→yesterday, tomorrow→today.
+    // Uses in-memory cache instead of reading from Firestore.
+    // today→yesterday, tomorrow→today
     // ══════════════════════════════════════════
 
     let rolloverYesterday = 0;
     let rolloverToday = 0;
+    let rolloverDeleted = 0;
     let recoveredFT = 0;
 
-    const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
-      this.repo.getAllToday(),
-      this.repo.getAllTomorrow(),
-    ]);
+    const yesterdayDocs = this._docCache.today;
+    const todayDocs = this._docCache.tomorrow;
+    const yesterdayPrevIds = this._docCache.todayIds;
+    const todayPrevIds = this._docCache.tomorrowIds;
 
     try {
-      if (currentTodayDocs.length > 0) {
-        // Move ALL of today's docs to yesterday
-        const r = await this.repo.replaceYesterday(currentTodayDocs);
+      // Write yesterday (merge) + delete only stale docs
+      if (yesterdayDocs.length > 0) {
+        const r = await this.repo.diffWrite(
+          COLLECTIONS.YESTERDAY_FIXTURES,
+          yesterdayDocs,
+          yesterdayPrevIds
+        );
         rolloverYesterday = r.written;
+        rolloverDeleted += r.deleted;
 
-        // Recover finished games from what we just moved
-        const ftGames = currentTodayDocs.filter((d) =>
+        // Recover finished games
+        const ftGames = yesterdayDocs.filter((d) =>
           FINISHED_STATUSES.includes(d.status)
         );
         if (ftGames.length > 0) {
@@ -120,19 +155,38 @@ class DailyFixturesService {
           recoveredFT = ftGames.length;
         }
       } else {
-        await this.repo.replaceYesterday([]);
+        // No docs to write — delete any leftover stale docs
+        if (this._docCache.yesterdayIds.size > 0) {
+          const d = await this.repo.removeByIds(
+            COLLECTIONS.YESTERDAY_FIXTURES,
+            [...this._docCache.yesterdayIds]
+          );
+          rolloverDeleted += d;
+        }
       }
 
-      if (currentTomorrowDocs.length > 0) {
-        // Move ALL of tomorrow's docs to today
-        const r = await this.repo.replaceToday(currentTomorrowDocs);
+      // Write today (merge) + delete only stale docs
+      if (todayDocs.length > 0) {
+        const r = await this.repo.diffWrite(
+          COLLECTIONS.TODAY_FIXTURES,
+          todayDocs,
+          todayPrevIds
+        );
         rolloverToday = r.written;
+        rolloverDeleted += r.deleted;
       } else {
-        await this.repo.replaceToday([]);
+        if (this._docCache.todayIds.size > 0) {
+          const d = await this.repo.removeByIds(
+            COLLECTIONS.TODAY_FIXTURES,
+            [...this._docCache.todayIds]
+          );
+          rolloverDeleted += d;
+        }
       }
 
       logger.info(
-        `[DailyFixtures] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
+        `[DailyFixtures] Rollover: ${rolloverYesterday}→yesterday, ` +
+        `${rolloverToday}→today, ${recoveredFT} FT, ${rolloverDeleted} stale deleted`
       );
     } catch (err) {
       logger.error(`[DailyFixtures] Rollover failed: ${err.message}`);
@@ -145,17 +199,19 @@ class DailyFixturesService {
     let fetchTotal = 0;
     let fetchWrites = 0;
     let fetchSuccess = false;
+    let tomorrowNewIds = new Set();
 
     if (!isBudgetAvailable(1)) {
       logger.warn(
         `[DailyFixtures] Budget too low — skipping tomorrow fetch`
       );
-      fetchSuccess = true; // Don't fail meta update for budget
+      fetchSuccess = true;
     } else {
       try {
         const result = await this._fetchTomorrow(tomorrowStr);
         fetchTotal = result.total;
         fetchWrites = result.writes;
+        tomorrowNewIds = result.newIds;
         fetchSuccess = true;
 
         if (result.raw.length > 0) {
@@ -168,10 +224,28 @@ class DailyFixturesService {
     }
 
     // ══════════════════════════════════════════
-    // PHASE 3: UPDATE META
+    // PHASE 3: UPDATE IN-MEMORY CACHE
+    // ══════════════════════════════════════════
+
+    this._docCache.yesterday = yesterdayDocs;
+    this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
+    this._docCache.today = todayDocs;
+    this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
+    // tomorrow updated from fetch result
+    if (fetchSuccess) {
+      // Keep existing tomorrow cache if fetch didn't return new data
+      if (tomorrowNewIds.size > 0) {
+        this._docCache.tomorrowIds = tomorrowNewIds;
+      }
+    }
+
+    // ══════════════════════════════════════════
+    // PHASE 4: UPDATE META (no read needed — merge handles it)
     // ══════════════════════════════════════════
 
     if (fetchSuccess) {
+      // ★ Removed unnecessary getMeta() read before setMeta()
+      // setMeta uses merge:true — existing fields are preserved
       await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
         lastDailyFetchDate: todayStr,
         lastTomorrowDate: tomorrowStr,
@@ -182,21 +256,24 @@ class DailyFixturesService {
         fetchWrites,
         verifiedAt: new Date().toISOString(),
       });
-      logger.info(`[DailyFixtures] Meta updated successfully`);
-    } else {
-      logger.warn(
-        `[DailyFixtures] Meta NOT updated — fetch failed — will retry next run`
-      );
+      logger.info(`[DailyFixtures] Meta updated`);
     }
+
+    // ══════════════════════════════════════════
+    // PHASE 5: INVALIDATE API CACHE
+    // ══════════════════════════════════════════
+
+    cache.invalidatePrefix("ft:");
 
     const duration = Date.now() - startTime;
 
     logger.info(
-      `[DailyFixtures] Complete — rollover: ${rolloverYesterday}+${rolloverToday}, ` +
-      `FT recovered: ${recoveredFT}, ` +
+      `[DailyFixtures] Complete — ` +
+      `rollover: ${rolloverYesterday}+${rolloverToday}, ` +
+      `stale deleted: ${rolloverDeleted}, ` +
+      `FT: ${recoveredFT}, ` +
       `fetched: ${fetchTotal} (${fetchWrites} written), ` +
-      `metaUpdated: ${fetchSuccess}, ` +
-      `${fetchSuccess && fetchTotal > 0 ? 1 : 0} API call, ${duration} ms`
+      `${fetchSuccess && fetchTotal > 0 ? 1 : 0} API call, ${duration}ms`
     );
 
     return {
@@ -215,6 +292,35 @@ class DailyFixturesService {
   // ==========================================================
   // PRIVATE
   // ==========================================================
+
+  /**
+   * Warmup in-memory cache from Firestore after restart.
+   * One-time cost: ~200 reads. Only happens on restart.
+   */
+  async _warmupCache() {
+    try {
+      const [todayDocs, tomorrowDocs] = await Promise.all([
+        this.repo.getAllToday(),
+        this.repo.getAllTomorrow(),
+      ]);
+
+      if (todayDocs.length > 0) {
+        this._docCache.today = todayDocs;
+        this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
+      }
+
+      if (tomorrowDocs.length > 0) {
+        this._docCache.tomorrow = tomorrowDocs;
+        this._docCache.tomorrowIds = new Set(tomorrowDocs.map((d) => String(d.id)));
+      }
+
+      logger.info(
+        `[DailyFixtures] Warmup: today=${todayDocs.length}, tomorrow=${tomorrowDocs.length}`
+      );
+    } catch (err) {
+      logger.error(`[DailyFixtures] Warmup failed: ${err.message}`);
+    }
+  }
 
   async _fetchTomorrow(tomorrowStr) {
     logger.info(`[DailyFixtures] Fetching tomorrow (${tomorrowStr})...`);
@@ -237,7 +343,7 @@ class DailyFixturesService {
       logger.warn(
         `[DailyFixtures] Blocked: ${JSON.stringify(errors)}`
       );
-      return { total: 0, writes: 0, raw: [] };
+      return { total: 0, writes: 0, raw: [], newIds: new Set() };
     }
 
     const allFixtures = raw?.response || [];
@@ -248,19 +354,39 @@ class DailyFixturesService {
 
     const docs = filtered.map((f) => this.normalize(f));
 
+    // ★ Use diffWrite instead of replaceCollection
     let written = 0;
+    let newIds = new Set();
+
     if (docs.length > 0) {
-      const result = await this.repo.replaceTomorrow(docs);
+      const result = await this.repo.diffWrite(
+        COLLECTIONS.TOMORROW_FIXTURES,
+        docs,
+        this._docCache.tomorrowIds
+      );
       written = result.written;
+      newIds = result.newIds;
+
+      // Update cache immediately
+      this._docCache.tomorrow = docs;
+      this._docCache.tomorrowIds = newIds;
     } else {
-      await this.repo.replaceTomorrow([]);
+      // No docs — delete any stale tomorrow docs
+      if (this._docCache.tomorrowIds.size > 0) {
+        await this.repo.removeByIds(
+          COLLECTIONS.TOMORROW_FIXTURES,
+          [...this._docCache.tomorrowIds]
+        );
+        this._docCache.tomorrow = [];
+        this._docCache.tomorrowIds = new Set();
+      }
     }
 
     logger.info(
       `[DailyFixtures] Tomorrow: ${filtered.length} tracked, ${written} written`
     );
 
-    return { total: filtered.length, writes: written, raw: filtered };
+    return { total: filtered.length, writes: written, raw: filtered, newIds };
   }
 
   normalize(fixture) {

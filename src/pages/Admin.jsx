@@ -7,7 +7,7 @@ import {
   CalendarDays, BarChart3, Eye, EyeOff, Crown, Pencil, Check, Radio,
   AlertTriangle, Loader, Plus, ChevronDown, Send, Globe, CircleDot,
   ArrowUpToLine, Unplug, Clock, TrendingUp, Star, Sparkles, X,
-  Rocket, Monitor, Save, Ban, RadioTower, BadgeCheck, Database,
+  Rocket, Monitor, Save, Ban, BadgeCheck, Database,
   ArrowRight, Timer, Hash, Users, UserCog, Search, Mail, Shield,
   ChevronRight, LayoutDashboard, StarOff, Copy, CheckCheck, FolderOpen,
   UserPlus, UserMinus, ToggleLeft, ToggleRight, Info, Filter, SortAsc
@@ -61,7 +61,7 @@ const MAX_ZOKA = 10;
 
 const TABS = [
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
-  { key: 'matches', label: 'Matches', icon: RadioTower },
+  { key: 'matches', label: 'Matches', icon: Radio },
   { key: 'results', label: 'Results', icon: Trophy },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'users', label: 'Users', icon: Users },
@@ -363,6 +363,7 @@ export default function Admin() {
 
   // Resolution tracking
   const [resolvedMatches, setResolvedMatches] = useState(new Set());
+  const resolvedMatchesRef = useRef(new Set());
 
   /* ═══════════════════════════════════════════════════════════
      DATA — From useMatchData.js (single source of truth for reads)
@@ -467,10 +468,10 @@ export default function Admin() {
           setSyncMsg(`Updating ${updatedIds.length} result${updatedIds.length > 1 ? 's' : ''}...`);
           let totalResolved = 0;
           for (const [matchId, scores] of finishedMap.entries()) {
-            if (resolvedMatches.current.has(matchId)) continue;
+            if (resolvedMatchesRef.current.has(matchId)) continue;
             try {
               const count = await resolveAllUsersForMatch(matchId, scores.h, scores.a, date);
-              if (count > 0) { totalResolved += count; resolvedMatches.current.add(matchId); setResolvedMatches(prev => new Set([...prev, matchId])); }
+              if (count > 0) { totalResolved += count; resolvedMatchesRef.current.add(matchId); setResolvedMatches(prev => new Set([...prev, matchId])); }
             } catch (e) { console.error(`[Admin] Failed to resolve match ${matchId}:`, e); }
           }
           if (totalResolved > 0) {
@@ -484,7 +485,7 @@ export default function Admin() {
     return () => unsub();
   }, [isAdmin, date, showToast, dataSource]);
 
-  useEffect(() => { resolvedMatches.current = new Set(); setResolvedMatches(new Set()); }, [date]);
+  useEffect(() => { resolvedMatchesRef.current = new Set(); setResolvedMatches(new Set()); }, [date]);
 
   /* ═══════════════════════════════════════════════════════════
      LISTEN TO STAFF (local — not in useMatchData)
@@ -829,6 +830,147 @@ export default function Admin() {
   );
 
   /* ═══════════════════════════════════════════════════════════
+     RENDER: STAFF TAB
+  ═══════════════════════════════════════════════════════════ */
+  const renderStaffTab = () => (
+    <div className="section-card ae">
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16 }}>
+        <h3 className="section-title" style={{ margin:0 }}><UserCog size={18} /> Staff Members</h3>
+        <button onClick={() => setShowAddStaff(v => !v)} className="btn-sm zb" style={{ background:'rgba(245,197,66,.08)', color:'var(--gold)', border:'1px solid rgba(245,197,66,.2)' }}>
+          <Plus size={15} /> Add
+        </button>
+      </div>
+
+      {showAddStaff && (
+        <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }} className="card-in">
+          <input className="input-field" style={{ flex:2, minWidth:150 }} placeholder="Name" value={newStaffName} onChange={e => setNewStaffName(e.target.value)} />
+          <select className="input-field" style={{ flex:1, minWidth:120 }} value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)}>
+            <option value="admin">Admin</option>
+            <option value="lead">Lead</option>
+            <option value="analyst">Analyst</option>
+            <option value="writer">Writer</option>
+          </select>
+          <button onClick={addStaff} className="btn-primary" style={{ background:'var(--gold)', color:'var(--bg-deep)' }}><Check size={16} /> Add</button>
+        </div>
+      )}
+
+      {staffLoad ? (
+        <div className="sk" style={{ height:60, borderRadius:12, marginBottom:10 }} />
+      ) : staffList.length === 0 ? (
+        <div className="empty-state"><Users size={32} style={{ color:'var(--text-muted)', marginBottom:12 }} /><p style={{ color:'var(--text-muted)', fontWeight:700, margin:0 }}>No staff members yet</p></div>
+      ) : (
+        staffList.map(s => (
+          <div key={s.id} className="staff-row">
+            <div style={{ width:40, height:40, borderRadius:10, background:'rgba(245,197,66,.08)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontWeight:900, fontSize:'.9rem', color:'var(--gold)' }}>
+              {(s.name || '?')[0].toUpperCase()}
+            </div>
+            <div style={{ flex:1, minWidth:0 }}>
+              <div style={{ fontSize:'.95rem', fontWeight:800, color:'var(--text-primary)' }}>{s.name || 'Unnamed'}</div>
+              <span className="role-badge" style={{
+                background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : s.role === 'lead' ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.04)',
+                color: s.role === 'admin' ? '#ef4444' : s.role === 'lead' ? 'var(--gold)' : 'var(--text-muted)',
+                border: `1px solid ${s.role === 'admin' ? 'rgba(239,68,68,.2)' : s.role === 'lead' ? 'rgba(245,197,66,.2)' : 'var(--border)'}`,
+                marginTop: 4,
+              }}>{s.role || 'analyst'}</span>
+            </div>
+            <div style={{ display:'flex', gap:6, flexShrink:0 }}>
+              <button onClick={() => setEditingStaff(editingStaff === s.id ? null : s.id)} className="btn-ghost" style={{ padding:'8px 12px', minWidth:40 }}><Pencil size={14} /></button>
+              <button onClick={() => deleteStaff(s.id)} className="btn-danger" style={{ padding:'8px 12px', minWidth:40 }}><Trash2 size={14} /></button>
+            </div>
+          </div>
+        ))
+      )}
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     RENDER: USERS TAB
+  ═══════════════════════════════════════════════════════════ */
+  const renderUsersTab = () => (
+    <div className="section-card ae">
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:16, flexWrap:'wrap', gap:10 }}>
+        <h3 className="section-title" style={{ margin:0 }}><Users size={18} /> Users</h3>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          {!usersLoaded && (
+            <button onClick={loadUsers} disabled={usersLoad} className="btn-primary" style={{ background:'var(--gold)', color:'var(--bg-deep)', padding:'10px 18px', fontSize:'.82rem' }}>
+              {usersLoad ? <Loader size={14} className="asp" /> : <Database size={14} />} Load Users
+            </button>
+          )}
+          {usersLoaded && (
+            <button onClick={loadUsers} disabled={usersLoad} className="btn-ghost" style={{ padding:'10px 14px', fontSize:'.82rem' }}>
+              <RefreshCw size={14} /> Refresh
+            </button>
+          )}
+        </div>
+      </div>
+
+      {usersLoaded && (
+        <div style={{ display:'flex', gap:10, marginBottom:16, flexWrap:'wrap' }}>
+          <div style={{ flex:2, minWidth:180, position:'relative' }}>
+            <Search size={15} style={{ position:'absolute', left:14, top:'50%', transform:'translateY(-50%)', color:'var(--text-muted)' }} />
+            <input className="input-field" style={{ paddingLeft:38 }} placeholder="Search name, email, uid..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+          </div>
+          <select className="input-field" style={{ flex:1, minWidth:120 }} value={userFilter} onChange={e => setUserFilter(e.target.value)}>
+            <option value="all">All Roles</option>
+            <option value="admin">Admins</option>
+            <option value="user">Users</option>
+          </select>
+        </div>
+      )}
+
+      {usersLoad ? (
+        <><div className="sk" style={{ height:48, borderRadius:12, marginBottom:8 }} /><div className="sk" style={{ height:48, borderRadius:12, marginBottom:8 }} /><div className="sk" style={{ height:48, borderRadius:12 }} /></>
+      ) : usersLoaded ? (
+        <>
+          <div className="user-row user-header">
+            <span>User</span>
+            <span className="hide-mobile">Email</span>
+            <span className="hide-mobile">Role</span>
+            <span className="hide-mobile">Joined</span>
+            <span>Actions</span>
+          </div>
+          {filteredUsers.length === 0 ? (
+            <div className="empty-state" style={{ padding:32 }}><Search size={28} style={{ color:'var(--text-muted)', marginBottom:10 }} /><p style={{ color:'var(--text-muted)', fontWeight:700, margin:0, fontSize:'.88rem' }}>No users found</p></div>
+          ) : filteredUsers.map(u => (
+            <div key={u.id} className="user-row">
+              <div style={{ display:'flex', alignItems:'center', gap:10, minWidth:0 }}>
+                <div style={{ width:32, height:32, borderRadius:8, background:'rgba(255,255,255,.06)', display:'flex', alignItems:'center', justifyContent:'center', flexShrink:0, fontWeight:800, fontSize:'.78rem', color:'var(--text-muted)' }}>
+                  {(u.displayName || u.email || '?')[0].toUpperCase()}
+                </div>
+                <span style={{ fontWeight:700, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{u.displayName || 'Anonymous'}</span>
+              </div>
+              <span className="hide-mobile" style={{ color:'var(--text-muted)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', fontSize:'.82rem' }}>{u.email || '—'}</span>
+              <span className="hide-mobile">
+                <span className="role-badge" style={{
+                  background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)',
+                  color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)',
+                  border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'var(--border)'}`,
+                }}>{u.role || 'user'}</span>
+              </span>
+              <span className="hide-mobile" style={{ color:'var(--text-muted)', fontSize:'.82rem' }}>{formatTimeAgo(u.createdAt)}</span>
+              <div style={{ display:'flex', gap:4, justifyContent:'flex-end' }}>
+                {u.role !== 'admin' && (
+                  <button onClick={() => updateUserRole(u.id, 'admin')} className="btn-sm zb" style={{ background:'rgba(239,68,68,.06)', color:'#ef4444', border:'1px solid rgba(239,68,68,.15)', padding:'6px 10px', fontSize:'.72rem' }}>
+                    <Crown size={12} />
+                  </button>
+                )}
+                {u.role === 'admin' && (
+                  <button onClick={() => updateUserRole(u.id, 'user')} className="btn-sm zb" style={{ background:'rgba(255,255,255,.04)', color:'var(--text-muted)', border:'1px solid var(--border)', padding:'6px 10px', fontSize:'.72rem' }}>
+                    <Ban size={12} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+          <div style={{ marginTop:12, fontSize:'.8rem', fontWeight:700, color:'var(--text-muted)' }}>Showing {filteredUsers.length} of {usersList.length} users</div>
+        </>
+      ) : (
+        <div className="empty-state"><Database size={32} style={{ color:'var(--text-muted)', marginBottom:12 }} /><p style={{ color:'var(--text-muted)', fontWeight:700, margin:0 }}>Click "Load Users" to fetch user data</p></div>
+      )}
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
      MAIN RENDER
   ═══════════════════════════════════════════════════════════ */
   return (
@@ -853,246 +995,194 @@ export default function Admin() {
         {/* Stats row */}
         <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(140px,1fr))',gap:10,marginBottom:20 }}>
           <div className="stat-mini ae" style={{ animationDelay:'0ms' }}><div className="num" style={{ color: dataSource === 'backend' ? 'var(--accent)' : 'var(--text-muted)' }}>{fx.length}</div><div className="lbl">Fixtures</div></div>
-          <div className="stat-mini ae" style={{ animationDelay:'60ms' }}><div className="num" style={{ color: preds.length > 0 ? '#60a5fa' : 'var(--text-muted)' }}>{preds.length}</div><div className="lbl">Featured</div></div>
-          <div className="stat-mini ae" style={{ animationDelay:'120ms' }}><div className="num" style={{ color: liveCount > 0 ? '#ef4444' : 'var(--text-muted)' }}>{liveCount}</div><div className="lbl">Live</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'60ms' }}><div className="num" style={{ color: preds.length > 0 ? '#60a5fa' : 'var(--text-muted)' }}>{preds.length}/{MAX_FEATURED}</div><div className="lbl">Featured</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'120ms' }}><div className="num" style={{ color: hasLive ? '#ef4444' : 'var(--text-muted)' }}>{liveCount}</div><div className="lbl">Live</div></div>
           <div className="stat-mini ae" style={{ animationDelay:'180ms' }}><div className="num" style={{ color: finCnt > 0 ? 'var(--accent)' : 'var(--text-muted)' }}>{finCnt}</div><div className="lbl">Finished</div></div>
+          <div className="stat-mini ae" style={{ animationDelay:'240ms' }}><div className="num" style={{ color: publishState === 'published' ? 'var(--gold)' : 'var(--text-muted)' }}>{publishState === 'published' ? '✓' : '—'}</div><div className="lbl">Published</div></div>
         </div>
 
         {/* Sync message */}
         {syncMsg && (
-          <div className="ae" style={{ padding:'12px 18px',marginBottom:16,borderRadius:12,background:'rgba(0,230,118,.06)',border:'1px solid rgba(0,230,118,.15)',fontSize:'.84rem',fontWeight:700,color:'var(--accent)',textAlign:'center' }}>{syncMsg}</div>
+          <div className="fade-in" style={{ padding:'10px 16px',borderRadius:10,background:'rgba(0,230,118,.06)',border:'1px solid rgba(0,230,118,.15)',marginBottom:16,fontSize:'.82rem',fontWeight:700,color:'var(--accent)',display:'flex',alignItems:'center',gap:8 }}>
+            <Zap size={14} /> {syncMsg}
+          </div>
+        )}
+
+        {/* Error state */}
+        {fxErr && (
+          <div className="section-card" style={{ borderColor:'rgba(239,68,68,.2)',background:'rgba(239,68,68,.04)' }}>
+            <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
+              <AlertTriangle size={18} style={{ color:'#ef4444' }} />
+              <span style={{ fontWeight:800,color:'#ef4444' }}>Failed to load fixtures</span>
+            </div>
+            <p style={{ fontSize:'.88rem',color:'var(--text-muted)',margin:'0 0 12px',fontWeight:600 }}>{fxErr === 'NETWORK' ? 'Network error — check your connection' : `Error: ${fxErr}`}</p>
+            <button onClick={handleRefresh} className="btn-primary" style={{ background:'rgba(239,68,68,.1)',color:'#ef4444',border:'1px solid rgba(239,68,68,.2)' }}><RefreshCw size={15} /> Retry</button>
+          </div>
+        )}
+
+        {/* Loading skeleton */}
+        {fxLoad && fx.length === 0 && (
+          <div style={{ display:'flex',flexDirection:'column',gap:10,marginBottom:20 }}>
+            {[0,1,2,3].map(i => <div key={i} className="sk" style={{ height:100,borderRadius:14,animationDelay:`${i*100}ms` }} />)}
+          </div>
         )}
 
         {/* Tabs */}
-        <div className="sh" style={{ display:'flex',gap:4,borderBottom:'1px solid var(--border)',marginBottom:24,overflowX:'auto' }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} className={`tab-btn ${tab === t.key ? 'active' : ''}`}>
-              <t.Icon size={15} /> {t.label}
-            </button>
-          ))}
+        <div style={{ display:'flex',gap:4,overflowX:'auto',borderBottom:'2px solid var(--border)',marginBottom:20 }} className="sh">
+          {TABS.map(t => {
+            const Icon = t.icon;
+            const count = t.key === 'zoka' ? zokaCount : t.key === 'matches' ? preds.length : t.key === 'results' ? publishedResults.total : t.key === 'staff' ? staffList.length : usersList.length;
+            return (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`tab-btn ${tab === t.key ? 'active' : ''}`}>
+                <Icon size={16} /> {t.label}
+                {count > 0 && <span style={{ fontSize:'.72rem',fontWeight:800,padding:'2px 8px',borderRadius:6,background: tab === t.key ? 'rgba(245,197,66,.15)' : 'rgba(255,255,255,.05)',color: tab === t.key ? 'var(--gold)' : 'var(--text-muted)' }}>{count}</span>}
+              </button>
+            );
+          })}
         </div>
 
-        {/* ═══ ZOKA PICKS TAB ═══ */}
+        {/* ═══════ ZOKA PICKS TAB ═══════ */}
         {tab === 'zoka' && (
           <div className="ae">
-            {/* League filter */}
-            <div className="sh" style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }}>
-              <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)',border: lg === 'all' ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>All</button>
-              {leagues.map(l => (
-                <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)',border: lg === l.id ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)' }}>
-                  {l.logo && <img src={l.logo} alt="" style={{ width:14,height:14,borderRadius:3,objectFit:'contain' }} />}
-                  {l.name} ({l.n})
+            {/* Action bar */}
+            <div className="action-bar" style={{ display:'flex',gap:10,marginBottom:16,flexWrap:'wrap' }}>
+              <button onClick={saveZokaPicks} disabled={zokaCount === 0 || savingZoka} className="btn-ghost" style={{ flex:1,minWidth:120 }}>
+                {savingZoka ? <Loader size={15} className="asp" /> : <Save size={15} />} Save Draft ({zokaCount})
+              </button>
+              <button onClick={publishZokaPicks} disabled={!zokaReady || publishing} className="btn-primary" style={{ flex:1,minWidth:120,background: zokaReady ? 'var(--gold)' : 'rgba(245,197,66,.2)',color: zokaReady ? 'var(--bg-deep)' : 'var(--text-muted)' }}>
+                {publishing ? <Loader size={15} className="asp" /> : <Rocket size={15} />} Publish
+              </button>
+              {publishState === 'published' && (
+                <button onClick={unpublishZokaPicks} disabled={publishing} className="btn-danger" style={{ minWidth:100 }}>
+                  <X size={14} /> Unpublish
                 </button>
-              ))}
+              )}
             </div>
 
-            {fxLoad ? (
-              <div style={{ display:'grid',gap:10 }}>
-                {Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk" style={{ height:120,borderRadius:14 }} />)}
+            {zokaCount > 0 && !zokaReady && (
+              <div style={{ padding:'10px 16px',borderRadius:10,background:'rgba(245,197,66,.06)',border:'1px solid rgba(245,197,66,.15)',marginBottom:16,fontSize:'.82rem',fontWeight:700,color:'var(--gold)',display:'flex',alignItems:'center',gap:8 }}>
+                <AlertTriangle size={14} /> {zokaScored}/{zokaCount} picks have scores — fill all to publish
               </div>
-            ) : shown.length === 0 ? (
-              <div className="empty-state"><RadioTower size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No fixtures</div><div style={{ fontSize:'.85rem',color:'var(--text-muted)' }}>{fxErr || 'No matches for this date'}</div></div>
+            )}
+
+            {savedFlash && (
+              <div className="save-flash" style={{ padding:'10px 16px',borderRadius:10,border:'1px solid rgba(0,230,118,.2)',marginBottom:16,fontSize:'.82rem',fontWeight:700,color:'var(--accent)',display:'flex',alignItems:'center',gap:8 }}>
+                <CheckCheck size={14} /> Draft saved
+              </div>
+            )}
+
+            {/* League filter for zoka */}
+            {leagues.length > 1 && (
+              <div style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }} className="sh">
+                <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)',border: `1px solid ${lg === 'all' ? 'rgba(245,197,66,.2)' : 'var(--border)'}` }}>All ({fx.length})</button>
+                {leagues.map(l => (
+                  <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)',border: `1px solid ${lg === l.id ? 'rgba(245,197,66,.2)' : 'var(--border)'}` }}>
+                    {l.logo && <img src={l.logo} alt="" style={{ width:16,height:16,borderRadius:3,objectFit:'contain' }} />}
+                    {l.name} ({l.n})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {shown.length === 0 ? (
+              <div className="empty-state">
+                <Radio size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} />
+                <p style={{ color:'var(--text-muted)',fontWeight:700,margin:'0 0 6px' }}>No fixtures available</p>
+                <p style={{ color:'var(--text-muted)',fontWeight:600,margin:0,fontSize:'.85rem' }}>Try refreshing or switching days</p>
+              </div>
             ) : (
               shown.map((m, i) => renderMatchRow(m, i, 'zoka'))
-            )}
-
-            {/* Save / Publish bar */}
-            {zokaCount > 0 && (
-              <div className="action-bar" style={{ display:'flex',gap:10,marginTop:20,padding:'16px',borderRadius:14,background:'var(--bg-card)',border:'1px solid var(--border)' }}>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:'.9rem',fontWeight:800,color:'var(--text-primary)' }}>{zokaCount} pick{zokaCount > 1 ? 's' : ''} selected</div>
-                  <div style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600 }}>{zokaScored}/{zokaCount} scored {zokaReady ? '✓' : ''}</div>
-                </div>
-                <button onClick={saveZokaPicks} disabled={savingZoka || zokaCount === 0} className="btn-ghost" style={{ background: savedFlash ? 'rgba(0,230,118,.12)' : undefined }}>
-                  <Save size={15} /> {savingZoka ? 'Saving...' : 'Save Draft'}
-                </button>
-                <button onClick={publishZokaPicks} disabled={publishing || !zokaReady} className="btn-primary" style={{ background:'linear-gradient(135deg,#f5c542,#f59e0b)',color:'#000' }}>
-                  <Send size={15} /> {publishing ? 'Publishing...' : 'PUBLISH'}
-                </button>
-              </div>
-            )}
-
-            {/* Published results */}
-            {publishState === 'published' && publishedPicks?.matches && (
-              <div className="section-card ae" style={{ animationDelay:'.1s' }}>
-                <div className="section-title"><Trophy size={18} style={{ color:'var(--gold)' }} /> Published Results</div>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,marginBottom:20 }}>
-                  <div className="stat-mini"><div className="num" style={{ color:'var(--accent)' }}>{publishedResults.exact}</div><div className="lbl">Exact</div></div>
-                  <div className="stat-mini"><div className="num" style={{ color:'var(--gold)' }}>{publishedResults.result}</div><div className="lbl">Result</div></div>
-                  <div className="stat-mini"><div className="num" style={{ color:'#ef4444' }}>{publishedResults.miss}</div><div className="lbl">Miss</div></div>
-                  <div className="stat-mini"><div className="num" style={{ color:'var(--text-muted)' }}>{publishedResults.pending}</div><div className="lbl">Pending</div></div>
-                </div>
-                {publishedPicks.matches.map((pick, i) => renderPubResult(pick, i))}
-                <div style={{ marginTop:16,textAlign:'center' }}>
-                  <span style={{ fontSize:'.72rem',color:'var(--text-muted)',fontWeight:600 }}>Published {formatTimeAgo(publishedAt)}</span>
-                </div>
-                <div style={{ textAlign:'center',marginTop:12 }}>
-                  <button onClick={unpublishZokaPicks} disabled={publishing} className="btn-danger"><Trash2 size={14} /> Unpublish</button>
-                </div>
-              </div>
             )}
           </div>
         )}
 
-        {/* ═══ MATCHES TAB ═══ */}
+        {/* ═══════ MATCHES TAB ═══════ */}
         {tab === 'matches' && (
           <div className="ae">
-            <div className="sh" style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }}>
-              <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--accent)' : 'var(--text-muted)',border: lg === 'all' ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>All</button>
-              {leagues.map(l => (
-                <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(0,230,118,.1)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--accent)' : 'var(--text-muted)',border: lg === l.id ? '1px solid rgba(0,230,118,.2)' : '1px solid var(--border)' }}>
-                  {l.logo && <img src={l.logo} alt="" style={{ width:14,height:14,borderRadius:3,objectFit:'contain' }} />}
-                  {l.name} ({l.n})
+            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16,flexWrap:'wrap',gap:10 }}>
+              <div style={{ fontSize:'.88rem',fontWeight:700,color:'var(--text-muted)' }}>
+                {preds.length}/{MAX_FEATURED} featured slots used
+              </div>
+              <div style={{ display:'flex',gap:8 }}>
+                <button onClick={handleRefresh} disabled={refreshing} className="btn-ghost" style={{ padding:'10px 14px',fontSize:'.82rem' }}>
+                  {refreshing ? <Loader size={14} className="asp" /> : <RefreshCw size={14} />} Refresh
                 </button>
-              ))}
+              </div>
             </div>
-            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
-              <div style={{ fontSize:'.88rem',fontWeight:700,color:'var(--text-muted)' }}>{preds.length}/{MAX_FEATURED} featured</div>
-              <button onClick={handleRefresh} disabled={refreshing} className="btn-ghost" style={{ padding:'8px 14px' }}><RefreshCw size={14} style={refreshing ? { animation:'asp 1s linear infinite' } : {}} /> Refresh</button>
-            </div>
-            {fxLoad ? (
-              <div style={{ display:'grid',gap:10 }}>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="sk" style={{ height:100,borderRadius:14 }} />)}</div>
-            ) : shown.length === 0 ? (
-              <div className="empty-state"><RadioTower size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No fixtures</div></div>
+
+            {isFull && (
+              <div style={{ padding:'10px 16px',borderRadius:10,background:'rgba(245,197,66,.06)',border:'1px solid rgba(245,197,66,.15)',marginBottom:16,fontSize:'.82rem',fontWeight:700,color:'var(--gold)',display:'flex',alignItems:'center',gap:8 }}>
+                <AlertTriangle size={14} /> All {MAX_FEATURED} featured slots are full — remove one to add another
+              </div>
+            )}
+
+            {leagues.length > 1 && (
+              <div style={{ display:'flex',gap:6,marginBottom:16,overflowX:'auto',paddingBottom:4 }} className="sh">
+                <button onClick={() => setLg('all')} className="league-pill zb" style={{ background: lg === 'all' ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.03)',color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)',border: `1px solid ${lg === 'all' ? 'rgba(245,197,66,.2)' : 'var(--border)'}` }}>All ({fx.length})</button>
+                {leagues.map(l => (
+                  <button key={l.id} onClick={() => setLg(l.id)} className="league-pill zb" style={{ background: lg === l.id ? 'rgba(245,197,66,.1)' : 'rgba(255,255,255,.03)',color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)',border: `1px solid ${lg === l.id ? 'rgba(245,197,66,.2)' : 'var(--border)'}` }}>
+                    {l.logo && <img src={l.logo} alt="" style={{ width:16,height:16,borderRadius:3,objectFit:'contain' }} />}
+                    {l.name} ({l.n})
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {shown.length === 0 ? (
+              <div className="empty-state">
+                <Monitor size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} />
+                <p style={{ color:'var(--text-muted)',fontWeight:700,margin:'0 0 6px' }}>No fixtures</p>
+                <p style={{ color:'var(--text-muted)',fontWeight:600,margin:0,fontSize:'.85rem' }}>Refresh or try another day</p>
+              </div>
             ) : (
               shown.map((m, i) => renderMatchRow(m, i, 'matches'))
             )}
           </div>
         )}
 
-        {/* ═══ RESULTS TAB ═══ */}
+        {/* ═══════ RESULTS TAB ═══════ */}
         {tab === 'results' && (
-          <div className="ae section-card">
-            <div className="section-title"><Trophy size={18} style={{ color:'var(--gold)' }} /> Zoka Pick Results</div>
-            {publishState === 'published' && publishedPicks?.matches ? (
+          <div className="ae">
+            {publishState === 'published' ? (
               <>
-                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:10,marginBottom:20 }}>
+                {/* Results summary */}
+                <div style={{ display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:8,marginBottom:20 }}>
                   <div className="stat-mini"><div className="num" style={{ color:'var(--accent)' }}>{publishedResults.exact}</div><div className="lbl">Exact</div></div>
                   <div className="stat-mini"><div className="num" style={{ color:'var(--gold)' }}>{publishedResults.result}</div><div className="lbl">Result</div></div>
                   <div className="stat-mini"><div className="num" style={{ color:'#ef4444' }}>{publishedResults.miss}</div><div className="lbl">Miss</div></div>
                   <div className="stat-mini"><div className="num" style={{ color:'var(--text-muted)' }}>{publishedResults.pending}</div><div className="lbl">Pending</div></div>
                 </div>
-                {publishedPicks.matches.map((pick, i) => renderPubResult(pick, i))}
+                <div style={{ fontSize:'.82rem',fontWeight:700,color:'var(--text-muted)',marginBottom:12 }}>
+                  Published {formatTimeAgo(publishedAt)} · {publishedResults.total} picks
+                </div>
+                {publishedPicks.matches.map((p, i) => renderPubResult(p, i))}
               </>
             ) : (
-              <div className="empty-state"><Trophy size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No published picks yet</div></div>
+              <div className="empty-state">
+                <Trophy size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} />
+                <p style={{ color:'var(--text-muted)',fontWeight:700,margin:'0 0 6px' }}>No published picks for {day}</p>
+                <p style={{ color:'var(--text-muted)',fontWeight:600,margin:0,fontSize:'.85rem' }}>Go to Zoka Picks tab to create & publish</p>
+              </div>
             )}
           </div>
         )}
 
-        {/* ═══ STAFF TAB ═══ */}
-        {tab === 'staff' && (
-          <div className="ae">
-            <div style={{ display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:16 }}>
-              <div style={{ fontSize:'.95rem',fontWeight:800,color:'var(--text-primary)' }}>Team ({staffList.length})</div>
-              <button onClick={() => setShowAddStaff(p => !p)} className="btn-primary" style={{ padding:'10px 18px',fontSize:'.85rem' }}><UserPlus size={15} /> Add</button>
-            </div>
-            {showAddStaff && (
-              <div className="section-card" style={{ marginBottom:16 }}>
-                <div style={{ display:'flex',gap:10,flexWrap:'wrap' }}>
-                  <input value={newStaffName} onChange={e => setNewStaffName(e.target.value)} placeholder="Name" className="input-field" style={{ flex:2,minWidth:150 }} />
-                  <select value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)} className="input-field" style={{ flex:1,minWidth:120,cursor:'pointer' }}>
-                    <option value="admin">Admin</option>
-                    <option value="lead">Lead</option>
-                    <option value="analyst">Analyst</option>
-                    <option value="writer">Writer</option>
-                  </select>
-                  <button onClick={addStaff} className="btn-primary" style={{ padding:'12px 20px' }}><Check size={15} /> Add</button>
-                  <button onClick={() => setShowAddStaff(false)} className="btn-ghost" style={{ padding:'12px 16px' }}><X size={15} /></button>
-                </div>
-              </div>
-            )}
-            {staffLoad ? (
-              <div style={{ display:'grid',gap:10 }}>{Array.from({ length:3 }).map((_, i) => <div key={i} className="sk" style={{ height:72,borderRadius:12 }} />)}</div>
-            ) : staffList.length === 0 ? (
-              <div className="empty-state"><UserCog size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No staff members</div></div>
-            ) : (
-              staffList.map(s => (
-                <div key={s.id} className="staff-row">
-                  <div style={{ width:40,height:40,borderRadius:10,background:'rgba(245,197,66,.1)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--gold)',fontWeight:900,fontSize:'.9rem',flexShrink:0 }}>{(s.name || '?').charAt(0).toUpperCase()}</div>
-                  <div style={{ flex:1,minWidth:0 }}>
-                    <div style={{ fontWeight:700,color:'var(--text-primary)',fontSize:'.92rem' }}>{s.name}</div>
-                    <div style={{ fontSize:'.75rem',color:'var(--text-muted)',fontWeight:600 }}>{s.bio || 'No bio'}</div>
-                  </div>
-                  <span className="role-badge" style={{ background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(0,230,118,.08)',color: s.role === 'admin' ? '#ef4444' : 'var(--accent)',border: `1px solid ${s.role === 'admin' ? 'rgba(239,68,68,.2)' : 'rgba(0,230,118,.15)'}` }}>{s.role}</span>
-                  {editingStaff === s.id ? (
-                    <div style={{ display:'flex',gap:6 }}>
-                      <select value={s.role} onChange={e => updateStaff(s.id, { role: e.target.value })} className="input-field" style={{ width:100,padding:'8px 10px',minHeight:36,fontSize:'.8rem' }}>
-                        <option value="admin">Admin</option><option value="lead">Lead</option><option value="analyst">Analyst</option><option value="writer">Writer</option>
-                      </select>
-                      <button onClick={() => setEditingStaff(null)} className="btn-ghost" style={{ padding:'8px 10px' }}><Check size={14} /></button>
-                    </div>
-                  ) : (
-                    <div style={{ display:'flex',gap:6 }}>
-                      <button onClick={() => setEditingStaff(s.id)} className="btn-ghost" style={{ padding:'8px 10px' }}><Pencil size={14} /></button>
-                      <button onClick={() => deleteStaff(s.id)} className="btn-danger" style={{ padding:'8px 10px' }}><Trash2 size={14} /></button>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
+        {/* ═══════ STAFF TAB ═══════ */}
+        {tab === 'staff' && renderStaffTab()}
+
+        {/* ═══════ USERS TAB ═══════ */}
+        {tab === 'users' && renderUsersTab()}
+
+        {/* Last update */}
+        {lastUpdate && (
+          <div style={{ marginTop:24,textAlign:'center',fontSize:'.78rem',fontWeight:600,color:'var(--text-muted)',display:'flex',alignItems:'center',justifyContent:'center',gap:6 }}>
+            <Clock size={12} /> Last update: {formatTimeAgo(lastUpdate)}
           </div>
         )}
-
-        {/* ═══ USERS TAB ═══ */}
-        {tab === 'users' && (
-          <div className="ae">
-            <div style={{ display:'flex',gap:10,marginBottom:16,flexWrap:'wrap',alignItems:'center' }}>
-              {!usersLoaded && <button onClick={loadUsers} disabled={usersLoad} className="btn-primary" style={{ padding:'10px 20px',fontSize:'.85rem' }}><Database size={15} /> {usersLoad ? 'Loading...' : 'Load Users'}</button>}
-              <div style={{ flex:1,minWidth:200,position:'relative' }}>
-                <Search size={15} style={{ position:'absolute',left:14,top:'50%',transform:'translateY(-50%)',color:'var(--text-muted)',pointerEvents:'none' }} />
-                <input value={userSearch} onChange={e => setUserSearch(e.target.value)} placeholder="Search name, email, uid..." className="input-field" style={{ paddingLeft:40 }} />
-              </div>
-              <div style={{ display:'flex',gap:6 }}>
-                {['all','admin','user'].map(f => (
-                  <button key={f} onClick={() => setUserFilter(f)} className="btn-sm zb" style={{ background: userFilter === f ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.03)',color: userFilter === f ? 'var(--gold)' : 'var(--text-muted)',border: userFilter === f ? '1px solid rgba(245,197,66,.2)' : '1px solid var(--border)',padding:'8px 14px',fontSize:'.8rem' }}>{f === 'all' ? 'All' : f === 'admin' ? 'Admins' : 'Users'}</button>
-                ))}
-              </div>
-            </div>
-            {!usersLoaded ? (
-              <div className="empty-state"><Database size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>Click "Load Users" to fetch</div></div>
-            ) : usersLoad ? (
-              <div style={{ display:'grid',gap:10 }}>{Array.from({ length:5 }).map((_, i) => <div key={i} className="sk" style={{ height:56,borderRadius:12 }} />)}</div>
-            ) : filteredUsers.length === 0 ? (
-              <div className="empty-state"><Users size={32} style={{ color:'var(--text-muted)',marginBottom:12 }} /><div style={{ fontWeight:700,color:'var(--text-primary)' }}>No users found</div></div>
-            ) : (
-              <>
-                <div className="user-row user-header">
-                  <span>User</span><span className="hide-mobile">Email</span><span className="hide-mobile">Role</span><span className="hide-mobile">Joined</span><span>Actions</span>
-                </div>
-                {filteredUsers.map(u => (
-                  <div key={u.id} className="user-row">
-                    <div style={{ display:'flex',alignItems:'center',gap:10,minWidth:0 }}>
-                      <div style={{ width:32,height:32,borderRadius:8,background:'rgba(0,230,118,.08)',display:'flex',alignItems:'center',justifyContent:'center',color:'var(--accent)',fontWeight:800,fontSize:'.8rem',flexShrink:0 }}>{(u.displayName || u.email || '?').charAt(0).toUpperCase()}</div>
-                      <div style={{ minWidth:0,overflow:'hidden' }}><div style={{ fontWeight:700,color:'var(--text-primary)',fontSize:'.88rem',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{u.displayName || 'Unknown'}</div></div>
-                    </div>
-                    <span className="hide-mobile" style={{ fontSize:'.8rem',color:'var(--text-muted)',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap' }}>{u.email || '—'}</span>
-                    <span className="hide-mobile"><span className="role-badge" style={{ background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)',color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)',border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'var(--border)'}`,fontSize:'.7rem',padding:'3px 10px' }}>{u.role || 'user'}</span></span>
-                    <span className="hide-mobile" style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600 }}>{formatTimeAgo(u.createdAt)}</span>
-                    <div style={{ display:'flex',gap:6,justifyContent:'flex-end' }}>
-                      <select value={u.role || 'user'} onChange={e => updateUserRole(u.id, e.target.value)} className="input-field" style={{ width:'auto',padding:'6px 8px',minHeight:34,fontSize:'.75rem',cursor:'pointer' }}>
-                        <option value="user">User</option><option value="admin">Admin</option>
-                      </select>
-                    </div>
-                  </div>
-                ))}
-                <div style={{ marginTop:12,fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600,textAlign:'center' }}>{filteredUsers.length} user{filteredUsers.length !== 1 ? 's' : ''}</div>
-              </>
-            )}
-          </div>
-        )}
-
-        {/* Footer info */}
-        <div className="ae" style={{ marginTop:32,padding:'16px 20px',borderRadius:14,background:'rgba(255,255,255,.02)',border:'1px solid var(--border)',display:'flex',alignItems:'center',gap:12,animationDelay:'.3s' }}>
-          <Info size={16} style={{ color:'var(--text-muted)',flexShrink:0 }} />
-          <span style={{ fontSize:'.78rem',color:'var(--text-muted)',fontWeight:600,lineHeight:1.5 }}>
-            Auto-resolver active — finished matches are scored in real-time. useUniversalResolver runs on every page as a safety net.
-          </span>
-        </div>
       </div>
 
       {/* Toast */}
-      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+      {toast && <Toast key={toast.key} message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }

@@ -1,221 +1,182 @@
-﻿/*
- * liveFixtures.js
- * Fetches live football fixtures with DAILY CAP.
- *
- * FIX: `writes` was logged as `[object Object]` because
- * replaceLive() returns `{ deleted, written }` but the
- * log used `${writes}` instead of `${writes.written}`.
- */
-
-const {
-  api,
-  isBudgetAvailable,
-  isLiveCapAvailable,
-  incrementLiveCounter,
-  getLiveRequestsToday,
+﻿const {
+  api, isBudgetAvailable, isLiveCapAvailable,
+  incrementLiveCounter, getLiveRequestsToday,
 } = require("../config/api");
-const { LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES } = require("../config/constants");
+const { LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
+const { batchWrite, deleteByIds } = require("../config/firebase");
+const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 
 class LiveFixturesService {
   constructor(repo, ftProcessor) {
     if (!repo) throw new Error("FixturesRepository is required.");
     if (!ftProcessor) throw new Error("FinishedFixturesProcessor is required.");
-
     this.repo = repo;
     this.ftProcessor = ftProcessor;
-
     this.lastLiveSnapshot = new Map();
-
     this.trackedLeagueIds = new Set(
-      LEAGUES.filter((l) => l.active).map((l) => l.id)
+      LEAGUES.filter(function (l) { return l.active; }).map(function (l) { return l.id; })
     );
   }
 
-  // ==========================================================
-  // PUBLIC
-  // ==========================================================
-
   async run() {
-    // ── Guard 1: API budget ──
     if (!isBudgetAvailable(LIVE_POLLING.MIN_BUDGET_TO_POLL)) {
-      logger.warn("[LiveFixtures] Skipping — API budget exhausted");
       return this._emptyResult();
     }
-
-    // ── Guard 2: Daily live cap ──
     if (!isLiveCapAvailable()) {
-      logger.warn(
-        `[LiveFixtures] Daily live cap reached (${getLiveRequestsToday()}/${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}) — skipping`
-      );
       return this._emptyResult({ capReached: true });
     }
 
-    const startTime = Date.now();
-
-    // ── Fetch all live fixtures (1 API call) ──
-    let response;
+    var startTime = Date.now();
+    var response;
     try {
       response = await withRetry(
-        () => api.get("/fixtures", { params: { live: "all" } }),
+        function () { return api.get("/fixtures", { params: { live: "all" } }); },
         "LiveFixtures:fetch"
       );
     } catch (err) {
-      logger.error(`[LiveFixtures] Fetch failed: ${err.message}`);
       return this._emptyResult();
     }
 
-    // ── Count this live request ──
-    const liveCount = incrementLiveCounter();
+    incrementLiveCounter();
 
-    // ── Check for API-level errors (including body-level) ──
-    const apiErrors = response?.errors || {};
+    var apiErrors = response && response.errors ? response.errors : {};
     if (Object.keys(apiErrors).length > 0) {
-      logger.warn(`[LiveFixtures] API blocked: ${JSON.stringify(apiErrors)}`);
       return this._emptyResult({ capReached: true });
     }
 
-    const rawFixtures = response?.response || [];
-
-    // ── Filter to tracked leagues ──
-    const filtered = TRACK_ALL_LEAGUES
+    var rawFixtures = (response && response.response) ? response.response : [];
+    var filtered = TRACK_ALL_LEAGUES
       ? rawFixtures
-      : rawFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+      : rawFixtures.filter(function (f) { return this.trackedLeagueIds.has(f.league && f.league.id); }.bind(this));
 
     logger.info(
-      `[LiveFixtures] API: ${rawFixtures.length} total, ${filtered.length} tracked [live req ${liveCount}/${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}]`
+      "[LiveFixtures] API: " + rawFixtures.length + " total, " + filtered.length + " tracked"
     );
 
-    // ── Detect transitions ──
-    const previousIds = new Set(this.lastLiveSnapshot.keys());
-    const newIds = new Set(filtered.map((f) => f.fixture.id));
-    const disappearedIds = [...previousIds].filter((id) => !newIds.has(id));
+    var newDocs = filtered.map(function (f) { return this.normalize(f); }.bind(this));
+    var newIds = new Set(newDocs.map(function (d) { return d.id; }));
+    var oldIds = new Set(this.lastLiveSnapshot.keys());
+    var disappearedIds = [];
+    oldIds.forEach(function (id) {
+      if (!newIds.has(id)) disappearedIds.push(id);
+    });
 
-    let transitioned = 0;
+    var transitioned = 0;
     if (disappearedIds.length > 0) {
       transitioned = await this._handleTransitions(disappearedIds);
     }
 
-    // ── Write live fixtures ──
-    const docs = filtered.map((f) => this.normalize(f));
-    // FIX: result is { deleted, written }, extract .written
-    let writeCount = 0;
+    var writeCount = 0;
+    var isFirstPoll = this.lastLiveSnapshot.size === 0;
 
-    if (docs.length > 0) {
-      const result = await this.repo.replaceLive(docs);
-      writeCount = result.written;
-    } else if (previousIds.size > 0) {
-      await this.repo.clearLive();
-      this.lastLiveSnapshot.clear();
+    if (isFirstPoll) {
+      // First poll after restart — use replaceLive to be safe
+      if (newDocs.length > 0) {
+        var r = await this.repo.replaceLive(newDocs);
+        writeCount = r.written;
+      }
+    } else {
+      // Normal poll — diff-based (only write changed docs)
+      var toWrite = newDocs.filter(function (d) {
+        var old = this.lastLiveSnapshot.get(d.id);
+        if (!old) return true;
+        return d.goalsHome !== old.goalsHome || d.goalsAway !== old.goalsAway ||
+               d.status !== old.status || d.elapsed !== old.elapsed;
+      }.bind(this));
+
+      if (toWrite.length > 0) {
+        writeCount = await this.repo.batchWrite(COLLECTIONS.LIVE_FIXTURES, toWrite);
+      }
+
+      // Delete disappeared docs by ID
+      if (disappearedIds.length > 0) {
+        await deleteByIds(COLLECTIONS.LIVE_FIXTURES, disappearedIds);
+      }
+
+      // If no live and had some before, clear all
+      if (newDocs.length === 0 && oldIds.size > 0) {
+        await deleteByIds(COLLECTIONS.LIVE_FIXTURES, Array.from(oldIds));
+      }
     }
 
-    // ── Update in-memory snapshot ──
     this.lastLiveSnapshot.clear();
-    for (const doc of docs) {
-      this.lastLiveSnapshot.set(doc.id, doc);
-    }
+    newDocs.forEach(function (doc) { this.lastLiveSnapshot.set(doc.id, doc); }.bind(this));
 
-    const duration = Date.now() - startTime;
-    const hasLive = docs.length > 0;
+    cache.invalidate("ft:live");
 
-    // FIX: Use writeCount (number) not result (object)
+    var duration = Date.now() - startTime;
     logger.info(
-      `[LiveFixtures] ${writeCount} live, ${transitioned} → finished, ${duration} ms`
+      "[LiveFixtures] " + writeCount + " written, " + transitioned + "→finished, " + duration + "ms"
     );
 
     return {
-      total: filtered.length,
-      writes: writeCount,
-      removed: transitioned,
-      hasLive,
-      duration,
-      capReached: false,
+      total: newDocs.length, writes: writeCount, removed: transitioned,
+      hasLive: newDocs.length > 0, duration: duration, capReached: false,
     };
   }
 
-  // ==========================================================
-  // TRANSITIONS
-  // ==========================================================
-
   async _handleTransitions(disappearedIds) {
-    const toFinish = [];
-
-    for (const id of disappearedIds) {
-      const lastKnown = this.lastLiveSnapshot.get(id);
-      if (!lastKnown) continue;
-
+    var toFinish = [];
+    disappearedIds.forEach(function (id) {
+      var lastKnown = this.lastLiveSnapshot.get(id);
+      if (!lastKnown) return;
       toFinish.push({
-        ...lastKnown,
-        status: "FT",
-        statusLong: "Match Finished",
-        elapsed: null,
-        _updatedAt: new Date().toISOString(),
+        id: lastKnown.id,
+        date: lastKnown.date, timestamp: lastKnown.timestamp,
+        status: "FT", statusLong: "Match Finished", elapsed: null,
+        leagueId: lastKnown.leagueId, leagueName: lastKnown.leagueName,
+        leagueCountry: lastKnown.leagueCountry, leagueLogo: lastKnown.leagueLogo,
+        leagueFlag: lastKnown.leagueFlag, season: lastKnown.season, round: lastKnown.round,
+        homeTeamId: lastKnown.homeTeamId, homeTeamName: lastKnown.homeTeamName,
+        homeTeamLogo: lastKnown.homeTeamLogo, awayTeamId: lastKnown.awayTeamId,
+        awayTeamName: lastKnown.awayTeamName, awayTeamLogo: lastKnown.awayTeamLogo,
+        goalsHome: lastKnown.goalsHome, goalsAway: lastKnown.goalsAway,
+        scoreHalftimeHome: lastKnown.scoreHalftimeHome,
+        scoreHalftimeAway: lastKnown.scoreHalftimeAway,
+        scoreFulltimeHome: lastKnown.scoreFulltimeHome,
+        scoreFulltimeAway: lastKnown.scoreFulltimeAway,
+        scoreExtratimeHome: lastKnown.scoreExtratimeHome,
+        scoreExtratimeAway: lastKnown.scoreExtratimeAway,
+        scorePenaltyHome: lastKnown.scorePenaltyHome,
+        scorePenaltyAway: lastKnown.scorePenaltyAway,
+        sport: "football", _updatedAt: new Date().toISOString(),
       });
-    }
+    }.bind(this));
 
     if (toFinish.length === 0) return 0;
-
-    logger.info(`[LiveFixtures] Transitioning ${toFinish.length} → finished`);
+    logger.info("[LiveFixtures] Transitioning " + toFinish.length + " → finished");
     await this.repo.batchUpsertFinished(toFinish);
+    cache.invalidate("ft:finished");
     return toFinish.length;
   }
 
-  // ==========================================================
-  // NORMALIZE
-  // ==========================================================
-
   normalize(fixture) {
-    const f = fixture.fixture;
-    const l = fixture.league;
-    const t = fixture.teams;
-    const g = fixture.goals;
-    const s = fixture.score;
-
+    var f = fixture.fixture, l = fixture.league, t = fixture.teams;
+    var g = fixture.goals, s = fixture.score;
     return {
-      id: f.id,
-      date: f.date,
-      timestamp: f.timestamp,
-      status: f.status.short,
-      statusLong: f.status.long,
-      elapsed: f.status.elapsed ?? null,
-      referee: f.referee ?? null,
-      leagueId: l.id,
-      leagueName: l.name,
-      leagueCountry: l.country,
-      leagueLogo: l.logo,
-      leagueFlag: l.flag ?? null,
-      season: l.season,
-      round: l.round,
-      homeTeamId: t.home.id,
-      homeTeamName: t.home.name,
-      homeTeamLogo: t.home.logo,
-      awayTeamId: t.away.id,
-      awayTeamName: t.away.name,
-      awayTeamLogo: t.away.logo,
-      goalsHome: g.home,
-      goalsAway: g.away,
-      scoreHalftimeHome: s.halftime?.home ?? null,
-      scoreHalftimeAway: s.halftime?.away ?? null,
-      scoreFulltimeHome: s.fulltime?.home ?? null,
-      scoreFulltimeAway: s.fulltime?.away ?? null,
-      scoreExtratimeHome: s.extratime?.home ?? null,
-      scoreExtratimeAway: s.extratime?.away ?? null,
-      scorePenaltyHome: s.penalty?.home ?? null,
-      scorePenaltyAway: s.penalty?.away ?? null,
-      sport: "football",
-      _updatedAt: new Date().toISOString(),
+      id: f.id, date: f.date, timestamp: f.timestamp,
+      status: f.status.short, statusLong: f.status.long,
+      elapsed: f.status.elapsed != null ? f.status.elapsed : null,
+      referee: f.referee || null,
+      leagueId: l.id, leagueName: l.name, leagueCountry: l.country,
+      leagueLogo: l.logo, leagueFlag: l.flag || null, season: l.season, round: l.round,
+      homeTeamId: t.home.id, homeTeamName: t.home.name, homeTeamLogo: t.home.logo,
+      awayTeamId: t.away.id, awayTeamName: t.away.name, awayTeamLogo: t.away.logo,
+      goalsHome: g.home, goalsAway: g.away,
+      scoreHalftimeHome: s.halftime && s.halftime.home, scoreHalftimeAway: s.halftime && s.halftime.away,
+      scoreFulltimeHome: s.fulltime && s.fulltime.home, scoreFulltimeAway: s.fulltime && s.fulltime.away,
+      scoreExtratimeHome: s.extratime && s.extratime.home, scoreExtratimeAway: s.extratime && s.extratime.away,
+      scorePenaltyHome: s.penalty && s.penalty.home, scorePenaltyAway: s.penalty && s.penalty.away,
+      sport: "football", _updatedAt: new Date().toISOString(),
     };
   }
 
-  _emptyResult(extra = {}) {
+  _emptyResult(extra) {
     return {
-      total: 0,
-      writes: 0,
-      removed: 0,
-      hasLive: false,
-      duration: 0,
-      ...extra,
+      total: 0, writes: 0, removed: 0,
+      hasLive: false, duration: 0, capReached: false,
     };
   }
 }

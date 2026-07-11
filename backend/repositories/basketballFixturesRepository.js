@@ -1,22 +1,38 @@
-/*
- * basketballFixturesRepository.js
- * Firestore repository for basketball fixtures.
- * Added getAll methods for 3-day rollover.
- */
-
 const { COLLECTIONS } = require("../config/constants");
 const {
-  replaceCollection,
-  clearCollection,
   batchWrite,
+  deleteByIds,
+  clearCollection,
+  replaceCollection,
   getDb,
 } = require("../config/firebase");
 
 class BasketballFixturesRepository {
 
-  // ==========================================================
-  // DAILY SNAPSHOTS
-  // ==========================================================
+  async diffWrite(collectionPath, docs, previousIds) {
+    const newIdSet = new Set(docs.map((d) => String(d.id)));
+    const toDelete = previousIds
+      ? [...previousIds].filter((id) => !newIdSet.has(id))
+      : [];
+    let deleted = 0;
+    if (toDelete.length > 0) {
+      deleted = await deleteByIds(collectionPath, toDelete);
+    }
+    let written = 0;
+    if (docs.length > 0) {
+      written = await batchWrite(collectionPath, docs);
+    }
+    return { deleted, written, newIds: newIdSet };
+  }
+
+  async removeByIds(collectionPath, ids) {
+    return deleteByIds(collectionPath, ids);
+  }
+
+  // ★ THIS IS THE FIX — was missing before
+  async batchWrite(collectionPath, docs) {
+    return batchWrite(collectionPath, docs);
+  }
 
   async replaceYesterday(docs) {
     return replaceCollection(COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES, docs);
@@ -29,10 +45,6 @@ class BasketballFixturesRepository {
   async replaceTomorrow(docs) {
     return replaceCollection(COLLECTIONS.BASKETBALL_TOMORROW_FIXTURES, docs);
   }
-
-  // ==========================================================
-  // READ — for rollover (0 API cost)
-  // ==========================================================
 
   async getAllTomorrow() {
     const database = getDb();
@@ -50,10 +62,6 @@ class BasketballFixturesRepository {
     return snapshot.docs.map((doc) => doc.data());
   }
 
-  // ==========================================================
-  // LIVE FIXTURES
-  // ==========================================================
-
   async replaceLive(docs) {
     return replaceCollection(COLLECTIONS.BASKETBALL_LIVE_FIXTURES, docs);
   }
@@ -61,10 +69,6 @@ class BasketballFixturesRepository {
   async clearLive() {
     return clearCollection(COLLECTIONS.BASKETBALL_LIVE_FIXTURES);
   }
-
-  // ==========================================================
-  // FINISHED FIXTURES
-  // ==========================================================
 
   async batchUpsertFinished(docs) {
     return batchWrite(COLLECTIONS.BASKETBALL_FINISHED_FIXTURES, docs);

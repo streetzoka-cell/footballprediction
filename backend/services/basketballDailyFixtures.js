@@ -2,8 +2,8 @@
  * basketballDailyFixtures.js
  * Smart daily fetch with 3-day rollover.
  *
- * FIXES: Same as football — no date filtering during
- * rollover, no integrity check that clears data on restart.
+ * ★ BUDGET OVERHAUL: Same as football — in-memory cache,
+ * diffWrite, no reads during rollover.
  */
 
 const {
@@ -14,12 +14,14 @@ const {
 const {
   BASKETBALL_LEAGUES,
   BASKETBALL_FINISHED_STATUSES,
+  COLLECTIONS,
   getDateOffset,
   META_DOCS,
   TRACK_ALL_LEAGUES,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
+const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 
 class BasketballDailyFixturesService {
@@ -30,10 +32,20 @@ class BasketballDailyFixturesService {
     this.trackedLeagueIds = new Set(
       BASKETBALL_LEAGUES.filter((l) => l.active).map((l) => l.id)
     );
+
+    // ★ In-memory cache
+    this._docCache = {
+      yesterday: [],
+      today: [],
+      tomorrow: [],
+      yesterdayIds: new Set(),
+      todayIds: new Set(),
+      tomorrowIds: new Set(),
+    };
   }
 
   // ==========================================================
-  // FULL RUN
+  // PUBLIC
   // ==========================================================
 
   async run() {
@@ -51,7 +63,7 @@ class BasketballDailyFixturesService {
     const startTime = Date.now();
 
     // ══════════════════════════════════════════
-    // META DEDUP — only check tomorrow data
+    // META DEDUP — cache-first (0 reads)
     // ══════════════════════════════════════════
 
     let fetchTotal = 0;
@@ -62,14 +74,24 @@ class BasketballDailyFixturesService {
     const fetchDone = meta?.lastDailyFetchDate === todayStr;
 
     if (fetchDone) {
-      const tomorrowDocs = await this.repo.getAllTomorrow();
-
-      if (tomorrowDocs.length > 0) {
+      if (this._docCache.tomorrow.length > 0) {
         logger.info(
-          `[BasketballDaily] Tomorrow data verified (${tomorrowDocs.length} docs) — skipping`
+          `[BasketballDaily] Cache verified (${this._docCache.tomorrow.length} docs) — skipping`
         );
         return {
-          total: tomorrowDocs.length,
+          total: this._docCache.tomorrow.length,
+          writes: 0,
+          apiCalls: 0,
+          duration: 0,
+          deduped: true,
+        };
+      }
+
+      logger.info(`[BasketballDaily] Cache empty — warming up...`);
+      await this._warmupCache();
+      if (this._docCache.tomorrow.length > 0) {
+        return {
+          total: this._docCache.tomorrow.length,
           writes: 0,
           apiCalls: 0,
           duration: 0,
@@ -78,49 +100,64 @@ class BasketballDailyFixturesService {
       }
 
       logger.warn(
-        `[BasketballDaily] Meta says done but tomorrow is empty — re-fetching`
+        `[BasketballDaily] Meta says done but no data — re-fetching`
       );
     }
 
     // ══════════════════════════════════════════
-    // PHASE 1: ROLLOVER (0 API calls)
-    // FIX: Move ALL docs, no date filtering
+    // PHASE 1: ROLLOVER (0 reads!)
     // ══════════════════════════════════════════
 
     let rolloverYesterday = 0;
     let rolloverToday = 0;
+    let rolloverDeleted = 0;
     let recoveredFT = 0;
 
-    const [currentTodayDocs, currentTomorrowDocs] = await Promise.all([
-      this.repo.getAllToday(),
-      this.repo.getAllTomorrow(),
-    ]);
+    const yesterdayDocs = this._docCache.today;
+    const todayDocs = this._docCache.tomorrow;
 
     try {
-      if (currentTodayDocs.length > 0) {
-        const r = await this.repo.replaceYesterday(currentTodayDocs);
+      if (yesterdayDocs.length > 0) {
+        const r = await this.repo.diffWrite(
+          COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES,
+          yesterdayDocs,
+          this._docCache.todayIds
+        );
         rolloverYesterday = r.written;
+        rolloverDeleted += r.deleted;
 
-        const ftGames = currentTodayDocs.filter((d) =>
+        const ftGames = yesterdayDocs.filter((d) =>
           BASKETBALL_FINISHED_STATUSES.includes(d.status)
         );
         if (ftGames.length > 0) {
           await this.repo.batchUpsertFinished(ftGames);
           recoveredFT = ftGames.length;
         }
-      } else {
-        await this.repo.replaceYesterday([]);
+      } else if (this._docCache.yesterdayIds.size > 0) {
+        rolloverDeleted += await this.repo.removeByIds(
+          COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES,
+          [...this._docCache.yesterdayIds]
+        );
       }
 
-      if (currentTomorrowDocs.length > 0) {
-        const r = await this.repo.replaceToday(currentTomorrowDocs);
+      if (todayDocs.length > 0) {
+        const r = await this.repo.diffWrite(
+          COLLECTIONS.BASKETBALL_TODAY_FIXTURES,
+          todayDocs,
+          this._docCache.tomorrowIds
+        );
         rolloverToday = r.written;
-      } else {
-        await this.repo.replaceToday([]);
+        rolloverDeleted += r.deleted;
+      } else if (this._docCache.todayIds.size > 0) {
+        rolloverDeleted += await this.repo.removeByIds(
+          COLLECTIONS.BASKETBALL_TODAY_FIXTURES,
+          [...this._docCache.todayIds]
+        );
       }
 
       logger.info(
-        `[BasketballDaily] Rollover: ${rolloverYesterday} → yesterday, ${rolloverToday} → today, ${recoveredFT} FT recovered`
+        `[BasketballDaily] Rollover: ${rolloverYesterday}→yesterday, ` +
+        `${rolloverToday}→today, ${recoveredFT} FT, ${rolloverDeleted} stale`
       );
     } catch (err) {
       logger.error(`[BasketballDaily] Rollover failed: ${err.message}`);
@@ -131,7 +168,7 @@ class BasketballDailyFixturesService {
     // ══════════════════════════════════════════
 
     if (!isBasketballBudgetAvailable(1)) {
-      logger.warn(`[BasketballDaily] Budget too low — skipping tomorrow fetch`);
+      logger.warn(`[BasketballDaily] Budget too low — skipping fetch`);
       fetchSuccess = true;
     } else {
       try {
@@ -146,12 +183,16 @@ class BasketballDailyFixturesService {
     }
 
     // ══════════════════════════════════════════
-    // PHASE 3: UPDATE META
+    // PHASE 3: UPDATE CACHE + META
     // ══════════════════════════════════════════
+
+    this._docCache.yesterday = yesterdayDocs;
+    this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
+    this._docCache.today = todayDocs;
+    this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
 
     if (fetchSuccess) {
       await setMeta(META_DOCS.BASKETBALL_SCHEDULER, {
-        ...(await getMeta(META_DOCS.BASKETBALL_SCHEDULER)) || {},
         lastDailyFetchDate: todayStr,
         lastTomorrowDate: tomorrowStr,
         fetchTotal,
@@ -160,14 +201,16 @@ class BasketballDailyFixturesService {
       });
     }
 
+    // Invalidate API cache
+    cache.invalidatePrefix("bb:");
+
     const duration = Date.now() - startTime;
 
     logger.info(
       `[BasketballDaily] Complete — ` +
       `rollover: ${rolloverYesterday}+${rolloverToday}, ` +
-      `FT recovered: ${recoveredFT}, ` +
-      `fetched: ${fetchTotal} (${fetchWrites} written), ` +
-      `${duration}ms`
+      `stale: ${rolloverDeleted}, FT: ${recoveredFT}, ` +
+      `fetched: ${fetchTotal} (${fetchWrites} written), ${duration}ms`
     );
 
     return {
@@ -185,6 +228,26 @@ class BasketballDailyFixturesService {
   // ==========================================================
   // PRIVATE
   // ==========================================================
+
+  async _warmupCache() {
+    try {
+      const [todayDocs, tomorrowDocs] = await Promise.all([
+        this.repo.getAllToday(),
+        this.repo.getAllTomorrow(),
+      ]);
+
+      if (todayDocs.length > 0) {
+        this._docCache.today = todayDocs;
+        this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
+      }
+      if (tomorrowDocs.length > 0) {
+        this._docCache.tomorrow = tomorrowDocs;
+        this._docCache.tomorrowIds = new Set(tomorrowDocs.map((d) => String(d.id)));
+      }
+    } catch (err) {
+      logger.error(`[BasketballDaily] Warmup failed: ${err.message}`);
+    }
+  }
 
   async _fetchTomorrow(tomorrowStr) {
     logger.info(
@@ -222,11 +285,24 @@ class BasketballDailyFixturesService {
     const docs = filtered.map((f) => this.normalize(f));
 
     let written = 0;
+
     if (docs.length > 0) {
-      const result = await this.repo.replaceTomorrow(docs);
+      const result = await this.repo.diffWrite(
+        COLLECTIONS.BASKETBALL_TOMORROW_FIXTURES,
+        docs,
+        this._docCache.tomorrowIds
+      );
       written = result.written;
-    } else {
-      await this.repo.replaceTomorrow([]);
+
+      this._docCache.tomorrow = docs;
+      this._docCache.tomorrowIds = result.newIds;
+    } else if (this._docCache.tomorrowIds.size > 0) {
+      await this.repo.removeByIds(
+        COLLECTIONS.BASKETBALL_TOMORROW_FIXTURES,
+        [...this._docCache.tomorrowIds]
+      );
+      this._docCache.tomorrow = [];
+      this._docCache.tomorrowIds = new Set();
     }
 
     logger.info(
