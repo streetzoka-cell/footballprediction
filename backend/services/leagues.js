@@ -17,6 +17,7 @@ const { api, isBudgetAvailable } = require("../config/api");
 const { LEAGUES, SEASON } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class LeaguesService {
   constructor(leagueRepository) {
@@ -92,6 +93,14 @@ class LeaguesService {
 
     // Replace entire collection (atomic clear + write)
     const result = await this.repo.replaceLeagues(docs);
+
+    // ── Write reference snapshot for frontend ──
+    try {
+      await snapshotWriter.writeReference("leagues", "football", docs);
+    } catch (err) {
+      logger.error(`[Leagues] Snapshot write failed: ${err.message}`);
+    }
+
     const duration = Date.now() - startTime;
 
     logger.info(

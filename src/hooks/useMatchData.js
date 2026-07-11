@@ -1,12 +1,11 @@
 // ═════════════════════════════════════════════════════════════════════════════
 // FILE: src/hooks/useMatchData.js
-// REFACTORED — Uses centralized data layer instead of direct Firestore reads
+// Updated for lazy user data loading
 //
-// ALL hooks now use dataLayer for caching.
-// The cache is shared across all components, so navigating between
-// pages does NOT cause duplicate Firestore reads.
-//
-// HOOK API UNCHANGED — Pages don't need to modify their imports.
+// ★ KEY CHANGE: Hooks that need user data now call
+//   `ensureUserData(uid)` before returning data.
+//   This triggers exactly ONE batch of Firestore reads
+//   per user session, not on every app load.
 // ═════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -26,15 +25,15 @@ import {
 import { dataLayer, todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart } from '../utils/dataLayer';
 import { useAppData } from '../context/AppDataContext';
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    EXPORTED DATE HELPERS
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export { todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart };
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    POINTS CALCULATION
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function calcPoints(predH, predA, actualH, actualA) {
   if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
@@ -45,9 +44,9 @@ export function calcPoints(predH, predA, actualH, actualA) {
   return { points: 0, type: 'miss' };
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    LEADERBOARD HELPERS
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 function computeStats(entries) {
   if (!entries.length) return { avg: '0.0', preds: 0, exact: 0, players: 0 };
@@ -71,9 +70,9 @@ function rankEntries(list) {
     }));
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    CACHE INVALIDATION HELPERS
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function invalidateCache(key) {
   dataLayer.invalidate(key);
@@ -83,9 +82,9 @@ export function invalidateCachePrefix(prefix) {
   dataLayer.invalidatePrefix(prefix);
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: INCREMENTAL DAILY SUMMARY UPDATE
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 async function _updateDailySummaryIncremental(dateStr, resolvedList) {
   if (!db || !resolvedList.length) return;
@@ -137,9 +136,9 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
   }, { merge: true });
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: INCREMENTAL GOAT UPDATE
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 async function _updateGoatIncremental(resolvedList) {
   if (!db || !resolvedList.length) return;
@@ -186,9 +185,9 @@ async function _updateGoatIncremental(resolvedList) {
   }, { merge: true });
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: FULL DAILY SUMMARY REBUILD
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function rebuildDailySummary(dateStr) {
   if (!db) return;
@@ -283,17 +282,17 @@ export async function rebuildDailySummary(dateStr) {
       date: dateStr,
     });
 
-    invalidateCache(`active_${dateStr}`);
-    invalidateCache(`dlb_${dateStr}`);
+    invalidateCache(`active:${dateStr}`);
+    invalidateCache(`dlb:${dateStr}`);
     console.log(`[Summary] Rebuilt for ${dateStr}: ${entries.length} players`);
   } catch (e) {
     console.error('[Summary] Rebuild failed:', e);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: FULL GOAT LEADERBOARD REBUILD
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function rebuildGoatLeaderboard() {
   if (!db) return;
@@ -325,16 +324,16 @@ export async function rebuildGoatLeaderboard() {
       updatedAt: serverTimestamp(),
     });
 
-    invalidateCache('hist_goat');
+    invalidateCache('hist:goat');
     console.log(`[GOAT] Rebuilt: ${entries.length} players`);
   } catch (e) {
     console.error('[GOAT] Rebuild failed:', e);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: FULL PERIOD LEADERBOARD REBUILD
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function rebuildPeriodLeaderboard(period, startDate) {
   if (!db) return;
@@ -346,7 +345,7 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
   }
 
   const docId = period === 'goat' ? 'current' : period === 'weekly' ? `weekly_${startDate}` : `monthly_${startDate}`;
-  const cacheKey = `hist_${period}`;
+  const cacheKey = `hist:${period}`;
 
   try {
     const snap = await getDocs(
@@ -401,9 +400,9 @@ export async function rebuildAllLeaderboards() {
   await rebuildPeriodLeaderboard('monthly');
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN: MATCH RESOLVER
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 const _resolvingNow = new Set();
 
@@ -520,18 +519,18 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
     await _updateDailySummaryIncremental(dateKey, resolvedList);
     await _updateGoatIncremental(resolvedList);
 
-    // Invalidate all affected caches
-    invalidateCachePrefix(`dlb_${dateKey}`);
+    // Invalidate ALL affected caches (memory + localStorage)
+    invalidateCachePrefix(`dlb:${dateKey}`);
     for (const r of resolvedList) {
-      invalidateCache(`upt_${r.userId}`);
-      invalidateCache(`myResults_${r.userId}_${dateKey}`);
-      invalidateCache(`myPreds_${r.userId}_${dateKey}`);
+      invalidateCache(`upt:${r.userId}`);
+      invalidateCache(`myResults:${r.userId}:${dateKey}`);
+      invalidateCache(`myPreds:${r.userId}:${dateKey}`);
     }
-    invalidateCache('hist_goat');
-    invalidateCache('hist_weekly');
-    invalidateCache('hist_monthly');
-    invalidateCache(`active_${dateKey}`);
-    invalidateCache(`zoka_${dateKey}`);
+    invalidateCache('hist:goat');
+    invalidateCache('hist:weekly');
+    invalidateCache('hist:monthly');
+    invalidateCache(`active:${dateKey}`);
+    invalidateCache(`zoka:${dateKey}`);
 
     return resolvedList.length;
   } catch (e) {
@@ -542,19 +541,15 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   NO-OP HOOK (kept for backward compatibility)
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   NO-OP HOOK
+   ═══════════════════════════════════════════════════ */
 
 export function useUniversalResolver() {}
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useActivePredictions
-   ═══════════════════════════════════════════════════════════════
-   NOW uses dataLayer for caching.
-   If date is today, uses context data (no extra reads).
-   If date is different (admin page), fetches via dataLayer.
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useActivePredictions(date) {
   const dateStr = date || todayStr();
@@ -564,7 +559,6 @@ export function useActivePredictions(date) {
   const [preds, setPreds] = useState(null);
   const [loading, setLoading] = useState(!isToday);
 
-  // For today's date, use context data
   useEffect(() => {
     if (isToday) {
       setPreds(appData.activePredictions);
@@ -572,7 +566,6 @@ export function useActivePredictions(date) {
     }
   }, [isToday, appData.activePredictions, appData.loading]);
 
-  // For other dates, fetch via dataLayer
   useEffect(() => {
     if (isToday) return;
 
@@ -613,9 +606,9 @@ export function useActivePredictions(date) {
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useAllUserPredictions
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useAllUserPredictions(date) {
   const dateStr = date || todayStr();
@@ -632,8 +625,6 @@ export function useAllUserPredictions(date) {
     };
   }
 
-  // For other dates, this would need to be implemented
-  // But in practice, this hook is only called with today's date
   return {
     allPreds: [],
     userPredMap: {},
@@ -643,9 +634,12 @@ export function useAllUserPredictions(date) {
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HOOK: useMyPredictions
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   ★ HOOK: useMyPredictions — LAZY LOADING
+   ═══════════════════════════════════════════════════
+   Calls ensureUserData() on first access.
+   Subsequent accesses use cached data (0 reads).
+   ═══════════════════════════════════════════════════ */
 
 export function useMyPredictions(uid, date) {
   const dateStr = date || todayStr();
@@ -654,15 +648,28 @@ export function useMyPredictions(uid, date) {
 
   const [preds, setPreds] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [triggered, setTriggered] = useState(false);
 
-  // For today + authenticated user, use context data
+  // ★ For today + authenticated user: trigger lazy load
   useEffect(() => {
-    if (isToday && uid) {
+    if (isToday && uid && !triggered) {
+      setTriggered(true);
+      setLoading(true);
+      appData.ensureUserData(uid).then(() => {
+        setLoading(false);
+      });
+    }
+  }, [isToday, uid, triggered, appData]);
+
+  // Sync from context after load
+  useEffect(() => {
+    if (isToday && uid && appData._userDataLoaded !== false) {
       setPreds(appData.userPredictions);
+      setLoading(false);
     } else if (!uid) {
       setPreds({});
     }
-  }, [isToday, uid, appData.userPredictions]);
+  }, [isToday, uid, appData.userPredictions, appData._userDataLoaded]);
 
   // For other dates, fetch via dataLayer
   useEffect(() => {
@@ -691,40 +698,54 @@ export function useMyPredictions(uid, date) {
     return () => { cancelled = true; };
   }, [uid, dateStr, isToday]);
 
-  return isToday ? appData.userPredictions : (preds || {});
+  return isToday ? (appData.userPredictions || {}) : (preds || {});
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HOOK: usePredictionResults
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   ★ HOOK: usePredictionResults — LAZY LOADING
+   ═══════════════════════════════════════════════════ */
 
 export function usePredictionResults(uid) {
   const appData = useAppData();
+  const [triggered, setTriggered] = useState(false);
+
+  // Trigger lazy load
+  useEffect(() => {
+    if (uid && !triggered) {
+      setTriggered(true);
+      appData.ensureUserData(uid);
+    }
+  }, [uid, triggered, appData]);
 
   if (!uid) {
     return { results: [], resultMap: {} };
   }
 
-  return appData.predictionResults;
+  return appData.predictionResults || { results: [], resultMap: {} };
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HOOK: useUserPoints
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   ★ HOOK: useUserPoints — LAZY LOADING
+   ═══════════════════════════════════════════════════ */
 
 export function useUserPoints(uid) {
   const appData = useAppData();
+  const [triggered, setTriggered] = useState(false);
 
-  if (!uid) {
-    return null;
-  }
+  useEffect(() => {
+    if (uid && !triggered) {
+      setTriggered(true);
+      appData.ensureUserData(uid);
+    }
+  }, [uid, triggered, appData]);
 
+  if (!uid) return null;
   return appData.userPoints;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useZokaPicks
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useZokaPicks(date) {
   const dateStr = date || todayStr();
@@ -769,9 +790,9 @@ export function useZokaPicks(date) {
   return isToday ? appData.zokaPicks : picks;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useZokaVotes
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useZokaVotes(date) {
   const dateStr = date || todayStr();
@@ -819,9 +840,9 @@ export function useZokaVotes(date) {
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useDailyLeaderboard
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useDailyLeaderboard(date) {
   const dateStr = date || todayStr();
@@ -899,15 +920,14 @@ export function useDailyLeaderboard(date) {
   };
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    HOOK: useHistoricalLeaderboard
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export function useHistoricalLeaderboard(period) {
   const appData = useAppData();
   const [loading, setLoading] = useState(true);
 
-  // Check if we already have this period's data
   const cachedData = appData.historicalLeaderboards[period];
 
   useEffect(() => {
@@ -916,7 +936,6 @@ export function useHistoricalLeaderboard(period) {
       return;
     }
 
-    // Load on-demand
     appData.loadHistoricalLeaderboard(period);
   }, [period, cachedData, appData]);
 
@@ -930,12 +949,21 @@ export function useHistoricalLeaderboard(period) {
   return { entries, top3, rest, stats, loading, error: null, stale };
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   HOOK: useMyStats
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════════════════
+   ★ HOOK: useMyStats — LAZY LOADING
+   ═══════════════════════════════════════════════════ */
 
 export function useMyStats(uid, date) {
   const appData = useAppData();
+  const [triggered, setTriggered] = useState(false);
+
+  // Trigger lazy load when this hook is called
+  useEffect(() => {
+    if (uid && !triggered) {
+      setTriggered(true);
+      appData.ensureUserData(uid);
+    }
+  }, [uid, triggered, appData]);
 
   if (!uid) {
     return {
@@ -951,15 +979,16 @@ export function useMyStats(uid, date) {
       todayResult: 0,
       todayMiss: 0,
       todayPoints: 0,
+      _loaded: false,
     };
   }
 
   return appData.userStats;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ACTION: savePrediction
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function savePrediction(uid, displayName, pred, h, a) {
   if (!db) return;
@@ -987,23 +1016,20 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     { merge: true }
   );
 
-  // Invalidate cache for this user's predictions
-  invalidateCache(`myPreds_${uid}_${dateStr}`);
+  // Invalidate this user's prediction cache
+  invalidateCache(`myPreds:${uid}:${dateStr}`);
 
   // Refresh via data layer
   try {
-    const freshData = await dataLayer.fetchUserPredictions(uid, dateStr);
-    // Notify subscribers
-    // Note: This won't trigger a re-render in the context automatically
-    // The next poll cycle will pick up the change
+    await dataLayer.fetchUserPredictions(uid, dateStr);
   } catch (err) {
     console.warn('[savePrediction] Refresh failed:', err.message);
   }
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ACTION: saveZokaVote
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function saveZokaVote(uid, matchId, vote) {
   if (!db) return;
@@ -1032,12 +1058,12 @@ export async function saveZokaVote(uid, matchId, vote) {
     localStorage.setItem(key, JSON.stringify(existing));
   } catch { /* ignore */ }
 
-  invalidateCache(`zokaVotes_${dateStr}`);
+  invalidateCache(`zokaVotes:${dateStr}`);
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ACTION: removeZokaVote
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export async function removeZokaVote(uid, matchId, newVote) {
   if (!db) return;
@@ -1081,17 +1107,17 @@ export async function removeZokaVote(uid, matchId, newVote) {
   );
 
   try { localStorage.setItem(key, JSON.stringify(existing)); } catch { /* ignore */ }
-  invalidateCache(`zokaVotes_${dateStr}`);
+  invalidateCache(`zokaVotes:${dateStr}`);
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════════════════
    ADMIN EXPORTS
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════════════════ */
 
 export { resolveMatchForAllUsers };
 
 export async function adminRefreshActivePredictions(dateStr) {
-  invalidateCache(`active_${dateStr}`);
+  invalidateCache(`active:${dateStr}`);
   const data = await dataLayer.fetchActivePredictions(dateStr);
   return data;
 }

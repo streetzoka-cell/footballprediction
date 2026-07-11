@@ -16,6 +16,7 @@
  */
 
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class TeamsProcessor {
   constructor(teamRepository) {
@@ -73,6 +74,13 @@ class TeamsProcessor {
     // No diffing needed — data is simple (name, logo)
     // and merge handles idempotency efficiently
     const writes = await this.repo.batchUpsertTeams(docs);
+
+    // ── Write reference snapshot for frontend ──
+    try {
+      await snapshotWriter.writeReference("teams", "football", docs);
+    } catch (err) {
+      logger.error(`[Teams] Snapshot write failed: ${err.message}`);
+    }
 
     const duration = Date.now() - startTime;
 

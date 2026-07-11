@@ -1,21 +1,17 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
 //
-// DATA LAYER — Reads from Node.js backend REST API (NOT Firestore)
+// ★ REFACTORED: All data reads now go through dataLayer
+//   (direct Firestore single-document reads with 3-layer cache).
 //
-// ★ LIVE FIX: Live polling subscription now uses TTL=0 so every
-//   poll actually hits the backend. Previously TTL=120s meant
-//   only 1 in 4 polls (every 2 min) got fresh data, causing
-//   matches to appear "stacked/frozen".
+// This file now only contains:
+// - Transform helpers (transformMatch, formatTime, etc.)
+// - Favorites/preferences (localStorage + Firestore sync)
+// - League colors, status constants
+// - Live polling subscriptions (read from dataLayer, not REST API)
 //
-//   Cost: 0 extra Firestore reads — backend serves from its
-//   own 24-hour memory cache. Each HTTP request is just a
-//   localhost JSON response (~5ms).
-//
-//   With 2,000 visitors:
-//     Before: ~50 HTTP/min to backend (75% blocked by cache)
-//     After:  ~200 HTTP/min to backend (all served from memory)
-//     Firestore reads: 0 (unchanged)
+// The backend REST API is NO LONGER needed for reads.
+// It still runs for the scheduler (writing data from external APIs).
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
@@ -26,142 +22,7 @@ import {
   serverTimestamp,
 } from 'firebase/firestore';
 
-/* ═══════════════════════════════════════════════════
-   BACKEND API CONFIG
-   ═══════════════════════════════════════════════════ */
-const API_BASE = import.meta.env.VITE_API_URL;
-if (!API_BASE) {
-  console.error(
-    '[API] VITE_API_URL environment variable is required. ' +
-    'Set it in your .env file or deployment configuration.'
-  );
-}
-/* ═══════════════════════════════════════════════════
-   FRONTEND IN-MEMORY CACHE
-   ═══════════════════════════════════════════════════
-   Used for one-shot reads (fetchFixtures, fetchLeagues, etc).
-   NOT used by live polling subscriptions (TTL=0 bypasses cache).
-
-   Expired entries persist as "stale" for backend-down fallback.
-   Periodic cleanup removes entries older than 10 minutes.
-   ═══════════════════════════════════════════════════ */
-const _memCache = new Map();
-
-function memGet(key, ttl) {
-  const entry = _memCache.get(key);
-  if (!entry) return undefined;
-  if (ttl <= 0) return undefined;
-  if (Date.now() - entry.ts > ttl) {
-    return undefined;
-  }
-  return entry.data;
-}
-
-function memGetStale(key) {
-  const entry = _memCache.get(key);
-  return entry ? entry.data : undefined;
-}
-
-function memSet(key, data, ttl) {
-  _memCache.set(key, { data, ts: Date.now(), ttl });
-}
-
-function memInvalidate(key) {
-  _memCache.delete(key);
-}
-
-function memInvalidatePrefix(prefix) {
-  for (const k of _memCache.keys()) {
-    if (k.startsWith(prefix)) _memCache.delete(k);
-  }
-}
-
-/* ═══════════════════════════════════════════════════
-   PERIODIC CACHE CLEANUP
-   ═══════════════════════════════════════════════════ */
-const STALE_MAX_AGE = 10 * 60 * 1000;
-
-if (typeof globalThis !== 'undefined') {
-  setInterval(() => {
-    const now = Date.now();
-    for (const [key, entry] of _memCache.entries()) {
-      if (now - entry.ts > STALE_MAX_AGE) {
-        _memCache.delete(key);
-      }
-    }
-  }, 60_000);
-}
-
-/* ═══════════════════════════════════════════════════
-   BACKEND HEALTH TRACKING
-   ═══════════════════════════════════════════════════ */
-let _backendOk = true;
-let _backendConsecutiveFails = 0;
-const BACKEND_FAIL_THRESHOLD = 2;
-
-export function isBackendReachable() {
-  return _backendOk;
-}
-
-export function getBackendFailCount() {
-  return _backendConsecutiveFails;
-}
-
-/* ═══════════════════════════════════════════════════
-   API FETCH HELPER
-   ═══════════════════════════════════════════════════ */
-async function apiFetch(path, options = {}) {
-  const { ttl = 120000, cacheKey = null, fallback = [] } = options;
-
-  const key = cacheKey || path;
-
-  const cached = memGet(key, ttl);
-  if (cached !== undefined) return cached;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-
-    const res = await fetch(`${API_BASE}${path}`, {
-      signal: controller.signal,
-      headers: { 'Accept': 'application/json' },
-    });
-
-    clearTimeout(timeout);
-
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
-    const data = await res.json();
-
-    if (ttl > 0) {
-      memSet(key, data, ttl);
-    }
-
-    _backendOk = true;
-    _backendConsecutiveFails = 0;
-
-    return data;
-  } catch (err) {
-    _backendConsecutiveFails++;
-    if (_backendConsecutiveFails >= BACKEND_FAIL_THRESHOLD) {
-      _backendOk = false;
-    }
-
-    const stale = memGetStale(key);
-    if (stale !== undefined) {
-      console.warn(
-        `[API] Backend unreachable for ${path}, using stale cache (${_backendConsecutiveFails} fails)`
-      );
-      return stale;
-    }
-
-    console.warn(`[API] Backend unreachable for ${path}, no stale cache`);
-    if (Array.isArray(fallback)) return fallback;
-    return fallback;
-  }
-}
+import { dataLayer, todayStr, yesterdayStr, tomorrowStr } from './dataLayer';
 
 /* ═══════════════════════════════════════════════════
    AUTH STATE TRACKING
@@ -202,7 +63,7 @@ const lsGet = (key, fallback) => {
   try {
     const item = localStorage.getItem(key);
     return item ? JSON.parse(item) : fallback;
-  } catch (e) {
+  } catch {
     return fallback;
   }
 };
@@ -210,7 +71,7 @@ const lsGet = (key, fallback) => {
 const lsSet = (key, value) => {
   try {
     localStorage.setItem(key, JSON.stringify(value));
-  } catch (e) { /* storage full */ }
+  } catch { /* storage full */ }
 };
 
 /* ═══════════════════════════════════════════════════
@@ -309,9 +170,7 @@ const FB_LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P'];
 const FB_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO'];
 const FB_SCHEDULED_STATUSES = ['TBD', 'NS', 'SUSP', 'PST', 'CANC', 'INT'];
 
-const BASKETBALL_LIVE_STATUSES = [
-  '1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT',
-];
+const BASKETBALL_LIVE_STATUSES = ['1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT'];
 const BASKETBALL_FINISHED_STATUSES = ['FT', 'AOT', 'ABD'];
 const BASKETBALL_SCHEDULED_STATUSES = ['NS', 'POST', 'CANC', 'SUSP'];
 
@@ -327,8 +186,7 @@ export const BASKETBALL_LEAGUE_PRIORITY = {
 };
 
 export const getBasketballLeaguePriority = (leagueId) => {
-  const id = Number(leagueId);
-  return BASKETBALL_LEAGUE_PRIORITY[id] || 20;
+  return BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
 };
 
 /* ═══════════════════════════════════════════════════
@@ -367,78 +225,20 @@ export function getDateRange(days = 7, startOffset = 0) {
   return dates;
 }
 
-export function getTodayStr() {
-  return new Date().toISOString().split('T')[0];
-}
-
-export function getYesterdayStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
-}
-
-export function getTomorrowStr() {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-}
+export function getTodayStr() { return todayStr(); }
+export function getYesterdayStr() { return yesterdayStr(); }
+export function getTomorrowStr() { return tomorrowStr(); }
 
 function isInWindow(date) {
-  const d = date || '';
-  return (
-    d === getYesterdayStr() || d === getTodayStr() || d === getTomorrowStr()
-  );
+  return [yesterdayStr(), todayStr(), tomorrowStr()].includes(date);
 }
 
 export function isInRolloverWindow() {
   const now = new Date();
-  const utcHour = now.getUTCHours();
-  const utcMinute = now.getUTCMinutes();
-  return (utcHour === 2 && utcMinute >= 55) || (utcHour === 3 && utcMinute < 10);
+  const h = now.getUTCHours();
+  const m = now.getUTCMinutes();
+  return (h === 2 && m >= 55) || (h === 3 && m < 10);
 }
-
-/* ═══════════════════════════════════════════════════
-   API PATH MAP
-   ═══════════════════════════════════════════════════ */
-const API_PATHS = {
-  LIVE: '/api/fixtures/live',
-  YESTERDAY: '/api/fixtures/yesterday',
-  TODAY: '/api/fixtures/today',
-  TOMORROW: '/api/fixtures/tomorrow',
-  FINISHED: '/api/fixtures/finished',
-  STANDINGS: '/api/standings',
-  LEAGUES: '/api/leagues',
-  TEAMS: '/api/teams',
-
-  BASKETBALL_LIVE: '/api/basketball/live',
-  BASKETBALL_YESTERDAY: '/api/basketball/yesterday',
-  BASKETBALL_TODAY: '/api/basketball/today',
-  BASKETBALL_TOMORROW: '/api/basketball/tomorrow',
-  BASKETBALL_FINISHED: '/api/basketball/finished',
-  BASKETBALL_STANDINGS: '/api/basketball/standings',
-  BASKETBALL_LEAGUES: '/api/basketball/leagues',
-  BASKETBALL_TEAMS: '/api/basketball/teams',
-
-  HEALTH: '/health',
-};
-
-/* ═══════════════════════════════════════════════════
-   FRONTEND CACHE TTL CONFIGURATION
-   ═══════════════════════════════════════════════════
-   These TTLs apply to ONE-SHOT reads only
-   (fetchFixtures, fetchLeagues, etc).
-
-   Live polling subscriptions use TTL=0 (no cache)
-   so every poll actually hits the backend.
-   ═══════════════════════════════════════════════════ */
-const FRONTEND_TTL = {
-  TODAY: 300000,       // 5 min — one-shot reads
-  YESTERDAY: 600000,   // 10 min
-  TOMORROW: 600000,    // 10 min
-  FINISHED: 600000,    // 10 min
-  REFERENCE: 3600000,  // 1 hour
-  HEALTH: 60000,       // 1 min
-};
 
 /* ═══════════════════════════════════════════════════
    TRANSFORM HELPERS
@@ -616,141 +416,124 @@ function _transformApiFormat(m) {
 }
 
 /* ═══════════════════════════════════════════════════
-   INTERNAL: Read from backend API
+   ★ FOOTBALL: Fetch fixtures via dataLayer (direct Firestore)
    ═══════════════════════════════════════════════════ */
-async function _readCollection(apiPath, ttl) {
-  const rawDocs = await apiFetch(apiPath, { ttl, fallback: [] });
-  return rawDocs.map((d) => transformMatch(d));
-}
 
-function _emptyResult(error = null) {
-  return {
-    matches: [],
-    error,
-    fromCache: true,
-    isStale: false,
-    forceFailed: false,
-    cacheSource: 'backend',
-    allFinished: false,
-    isRolloverWindow: isInRolloverWindow(),
-  };
-}
-
-/* ═══════════════════════════════════════════════════
-   INTERNAL: Read fixtures for a specific date
-   ═══════════════════════════════════════════════════ */
-async function _readDayFixtures(primaryPath, date) {
-  const ttl = (date === getTodayStr()) ? FRONTEND_TTL.TODAY : FRONTEND_TTL.TOMORROW;
-  const primary = await _readCollection(primaryPath, ttl);
-  return primary.filter((m) => {
-    const md = m.date ? m.date.split('T')[0] : '';
-    return md === date;
-  });
-}
-
-/* ═══════════════════════════════════════════════════
-   FOOTBALL: Fetch by day
-   ═══════════════════════════════════════════════════ */
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (!isInWindow(date)) return _emptyResult(null);
 
   if (forceRefresh) {
-    memInvalidatePrefix('/api/fixtures/');
+    dataLayer.invalidatePrefix('snap:ft:');
   }
 
   try {
-    let primaryPath;
-    if (date === getYesterdayStr()) primaryPath = API_PATHS.YESTERDAY;
-    else if (date === getTomorrowStr()) primaryPath = API_PATHS.TOMORROW;
-    else primaryPath = API_PATHS.TODAY;
+    const snapshot = await dataLayer.fetchFootballSnapshot(date);
 
-    const matches = await _readDayFixtures(primaryPath, date);
+    if (!snapshot) return _emptyResult(null);
+
+    const matches = _getMatchesForDate(snapshot, date);
+    const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
 
     return {
       matches,
       error: null,
       fromCache: true,
-      isStale: !_backendOk,
+      isStale: false,
       forceFailed: false,
-      cacheSource: 'backend',
-      allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
+      cacheSource: 'firestore',
+      allFinished,
       isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
     console.warn('[Data] fetchFixtures error:', err.message);
-    return _emptyResult('NETWORK');
+    return _emptyResult('FIRESTORE');
   }
 };
 
-export const fetchYesterdayFixtures = () => fetchFixtures(getYesterdayStr());
-export const fetchTomorrowFixtures = () => fetchFixtures(getTomorrowStr());
+export const fetchYesterdayFixtures = () => fetchFixtures(yesterdayStr());
+export const fetchTomorrowFixtures = () => fetchFixtures(tomorrowStr());
 
-/* ═══════════════════════════════════════════════════
-   FOOTBALL: Finished fixtures
-   ═══════════════════════════════════════════════════ */
+function _getMatchesForDate(snapshot, date) {
+  const raw = [];
+  const yd = yesterdayStr();
+  const td = todayStr();
+  const tm = tomorrowStr();
+
+  if (date === yd) raw.push(...(snapshot.yesterday || []));
+  else if (date === tm) raw.push(...(snapshot.tomorrow || []));
+  else raw.push(...(snapshot.today || []));
+
+  // Also include live and finished that match the date
+  (snapshot.live || []).forEach((m) => {
+    const md = m.date ? m.date.split('T')[0] : '';
+    if (md === date) raw.push(m);
+  });
+  (snapshot.finished || []).forEach((m) => {
+    const md = m.date ? m.date.split('T')[0] : '';
+    if (md === date) raw.push(m);
+  });
+
+  return raw.map((d) => transformMatch(d));
+}
+
 export const fetchFinishedFixtures = async () => {
   try {
-    const matches = await _readCollection(API_PATHS.FINISHED, FRONTEND_TTL.FINISHED);
-    return matches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  } catch (err) {
-    console.warn('[Data] fetchFinishedFixtures error:', err.message);
+    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
+    if (!snapshot) return [];
+    return (snapshot.finished || []).map((d) => transformMatch(d))
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  } catch {
     return [];
   }
 };
 
-/* ═══════════════════════════════════════════════════
-   FOOTBALL: Live scores (one-shot)
-   ═══════════════════════════════════════════════════ */
 export const fetchLiveScores = async () => {
   try {
-    // One-shot reads can use short cache — it's not polling
-    const matches = await _readCollection(API_PATHS.LIVE, 10000);
-    return { matches, error: null };
+    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
+    if (!snapshot) return { matches: [], error: null };
+    return {
+      matches: (snapshot.live || []).map((d) => transformMatch(d)),
+      error: null,
+    };
   } catch (err) {
     return { matches: [], error: err.message };
   }
 };
 
 /* ═══════════════════════════════════════════════════
-   ★ FOOTBALL: Real-time subscriptions
+   ★ FOOTBALL: Live polling — reads from dataLayer cache
    ═══════════════════════════════════════════════════
-   ★ FIX: Live polling uses TTL=0 so EVERY poll hits the
-   backend. The backend serves from its own 24-hour memory
-   cache (0 Firestore reads), so each HTTP request is just
-   a localhost JSON response (~5ms, 0 quota cost).
-
-   Why not onSnapshot?
-   - onSnapshot opens a persistent Firestore connection
-   - 2,000 users × constant reads = infinite Firestore reads
-   - Polling backend → backend memory cache = 0 Firestore reads
+   ★ No backend REST calls. Reads from dataLayer's
+     in-memory/localStorage cache. Only hits Firestore
+     when cache is expired (1 read per 5-30 min per browser).
    ═══════════════════════════════════════════════════ */
+
 export const subscribeToLiveFixtures = (callback) => {
-  return _createPollingSubscription(
-    API_PATHS.LIVE,
+  return _createDataLayerPollingSubscription(
+    'football',
     callback,
-    { activeMs: 30000, idleMs: 300000, errorMs: 120000 }
+    { activeMs: 30000, idleMs: 300000 }
   );
 };
 
 export const subscribeToTodayFixtures = (callback) => {
-  return _createPollingSubscription(
-    API_PATHS.TODAY,
+  return _createDataLayerPollingSubscription(
+    'football',
     callback,
-    { activeMs: 60000, idleMs: 300000, errorMs: 120000, isLive: false }
+    { activeMs: 60000, idleMs: 300000, includeToday: true }
   );
 };
 
 /**
- * Generic polling subscription factory.
- * ★ Live polls use TTL=0 (bypass cache) — every poll hits backend.
- * ★ Non-live polls use FRONTEND_TTL.TODAY (5min cache) — saves HTTP.
+ * Polling subscription that reads from dataLayer (not REST API).
+ * dataLayer's cache means most polls are 0-cost (memory or localStorage hit).
+ * Only 1 Firestore read per cache expiry per browser.
  */
-function _createPollingSubscription(path, callback, options = {}) {
+function _createDataLayerPollingSubscription(sport, callback, options = {}) {
   const {
     activeMs = 30000,
     idleMs = 300000,
-    errorMs = 120000,
-    isLive = true,
+    includeToday = false,
   } = options;
 
   let timer = null;
@@ -758,75 +541,62 @@ function _createPollingSubscription(path, callback, options = {}) {
   let currentMatches = [];
   let errorCount = 0;
 
-  // Use a separate cache key for polling so it doesn't interfere
-  // with one-shot reads that benefit from caching
-  const pollCacheKey = `${path}:poll`;
-
   const onVisibilityChange = () => {
     if (document.hidden && timer) {
       clearTimeout(timer);
       timer = null;
     } else if (!document.hidden && active && !timer) {
-      const interval = _backendOk
-        ? (isLive ? activeMs : idleMs)
-        : errorMs;
-      timer = setTimeout(poll, interval);
+      timer = setTimeout(poll, activeMs);
     }
   };
 
   const poll = async () => {
     if (!active) return;
-
     if (document.hidden) {
       timer = setTimeout(poll, idleMs);
       return;
     }
 
     try {
-      // ══════════════════════════════════════════════════
-      // ★ THE FIX: TTL=0 for live polls
-      //
-      // Before: ttl=120000 → 75% of polls returned stale cache
-      // After:  ttl=0 → 100% of polls hit backend
-      //
-      // Backend cost: 0 Firestore reads (serves from memory)
-      // Network cost: ~200 bytes JSON over localhost (~5ms)
-      // ══════════════════════════════════════════════════
-      const ttl = isLive ? 0 : FRONTEND_TTL.TODAY;
+      // Invalidate memory cache to force a fresh check
+      // (localStorage still serves as fallback if Firestore is slow)
+      const dateStr = todayStr();
+      dataLayer.invalidate(`snap:${sport === 'basketball' ? 'bb' : 'ft'}:${dateStr}`);
 
-      const rawDocs = await apiFetch(path, {
-        ttl,
-        cacheKey: pollCacheKey,
-        fallback: [],
-      });
+      let snapshot;
+      if (sport === 'basketball') {
+        snapshot = await dataLayer.fetchBasketballSnapshot(dateStr);
+      } else {
+        snapshot = await dataLayer.fetchFootballSnapshot(dateStr);
+      }
 
-      currentMatches = rawDocs.map((d) => transformMatch(d));
       errorCount = 0;
 
-      const hasLive = isLive
-        ? currentMatches.length > 0
-        : currentMatches.some((m) => m.isLive);
-      const liveCount = currentMatches.filter((m) => m.isLive).length;
+      const liveMatches = (snapshot?.live || []).map((d) => transformMatch(d));
+
+      let allMatches = liveMatches;
+      if (includeToday) {
+        const todayMatches = (snapshot?.today || []).map((d) => transformMatch(d));
+        allMatches = [...liveMatches, ...todayMatches];
+      }
+
+      currentMatches = allMatches;
+      const hasLive = liveMatches.length > 0;
+      const liveCount = liveMatches.length;
 
       callback({
-        matches: currentMatches,
+        matches: allMatches,
         hasLive,
         liveCount,
         error: null,
       });
 
-      let nextMs;
-      if (!_backendOk && errorCount === 0) {
-        nextMs = errorMs;
-      } else {
-        nextMs = hasLive ? activeMs : idleMs;
-      }
-
+      const nextMs = hasLive ? activeMs : idleMs;
       if (active) timer = setTimeout(poll, nextMs);
 
     } catch (err) {
       errorCount++;
-      console.warn(`[Poll] ${path} error (${errorCount}):`, err.message);
+      console.warn(`[Poll] ${sport} error (${errorCount}):`, err.message);
 
       callback({
         matches: currentMatches,
@@ -835,7 +605,7 @@ function _createPollingSubscription(path, callback, options = {}) {
         error: err.message,
       });
 
-      const backoffMs = errorMs * Math.min(errorCount, 5);
+      const backoffMs = idleMs * Math.min(errorCount, 5);
       if (active) timer = setTimeout(poll, backoffMs);
     }
   };
@@ -846,154 +616,169 @@ function _createPollingSubscription(path, callback, options = {}) {
 
   return () => {
     active = false;
-    if (timer) {
-      clearTimeout(timer);
-      timer = null;
-    }
+    if (timer) { clearTimeout(timer); timer = null; }
     document.removeEventListener('visibilitychange', onVisibilityChange);
   };
 }
 
 /* ═══════════════════════════════════════════════════
-   BASKETBALL: Fetch by day
+   ★ BASKETBALL: Fetch fixtures via dataLayer
    ═══════════════════════════════════════════════════ */
+
 export const fetchBasketballFixtures = async (date) => {
   if (!isInWindow(date)) return _emptyResult(null);
 
   try {
-    let primaryPath;
-    if (date === getYesterdayStr()) primaryPath = API_PATHS.BASKETBALL_YESTERDAY;
-    else if (date === getTomorrowStr()) primaryPath = API_PATHS.BASKETBALL_TOMORROW;
-    else primaryPath = API_PATHS.BASKETBALL_TODAY;
+    const snapshot = await dataLayer.fetchBasketballSnapshot(date);
 
-    const matches = await _readDayFixtures(primaryPath, date);
+    if (!snapshot) return _emptyResult(null);
+
+    const matches = _getBasketballMatchesForDate(snapshot, date);
+    const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
 
     return {
       matches,
       error: null,
       fromCache: true,
-      isStale: !_backendOk,
+      isStale: false,
       forceFailed: false,
-      cacheSource: 'backend',
-      allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
+      cacheSource: 'firestore',
+      allFinished,
       isRolloverWindow: isInRolloverWindow(),
     };
   } catch (err) {
     console.warn('[Data] fetchBasketballFixtures error:', err.message);
-    return _emptyResult('NETWORK');
+    return _emptyResult('FIRESTORE');
   }
 };
 
-export const fetchBasketballYesterdayFixtures = () => fetchBasketballFixtures(getYesterdayStr());
-export const fetchBasketballTomorrowFixtures = () => fetchBasketballFixtures(getTomorrowStr());
+export const fetchBasketballYesterdayFixtures = () => fetchBasketballFixtures(yesterdayStr());
+export const fetchBasketballTomorrowFixtures = () => fetchBasketballFixtures(tomorrowStr());
 
-/* ═══════════════════════════════════════════════════
-   BASKETBALL: Finished fixtures
-   ═══════════════════════════════════════════════════ */
+function _getBasketballMatchesForDate(snapshot, date) {
+  const raw = [];
+  const yd = yesterdayStr();
+  const tm = tomorrowStr();
+
+  if (date === yd) raw.push(...(snapshot.yesterday || []));
+  else if (date === tm) raw.push(...(snapshot.tomorrow || []));
+  else raw.push(...(snapshot.today || []));
+
+  (snapshot.live || []).forEach((m) => {
+    const md = m.date ? m.date.split('T')[0] : '';
+    if (md === date) raw.push(m);
+  });
+  (snapshot.finished || []).forEach((m) => {
+    const md = m.date ? m.date.split('T')[0] : '';
+    if (md === date) raw.push(m);
+  });
+
+  return raw.map((d) => transformMatch(d));
+}
+
 export const fetchBasketballFinishedFixtures = async () => {
   try {
-    const matches = await _readCollection(API_PATHS.BASKETBALL_FINISHED, FRONTEND_TTL.FINISHED);
-    return matches.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  } catch (err) {
-    console.warn('[Data] fetchBasketballFinishedFixtures error:', err.message);
+    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
+    if (!snapshot) return [];
+    return (snapshot.finished || []).map((d) => transformMatch(d))
+      .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  } catch {
     return [];
   }
 };
 
-/* ═══════════════════════════════════════════════════
-   BASKETBALL: Live scores (one-shot)
-   ═══════════════════════════════════════════════════ */
 export const fetchBasketballLiveScores = async () => {
   try {
-    const matches = await _readCollection(API_PATHS.BASKETBALL_LIVE, 10000);
-    return { matches, error: null };
+    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
+    if (!snapshot) return { matches: [], error: null };
+    return {
+      matches: (snapshot.live || []).map((d) => transformMatch(d)),
+      error: null,
+    };
   } catch (err) {
     return { matches: [], error: err.message };
   }
 };
 
-/* ═══════════════════════════════════════════════════
-   BASKETBALL: Real-time subscriptions
-   ═══════════════════════════════════════════════════ */
 export const subscribeToBasketballLiveFixtures = (callback) => {
-  return _createPollingSubscription(
-    API_PATHS.BASKETBALL_LIVE,
-    callback,
-    { activeMs: 30000, idleMs: 300000, errorMs: 120000 }
-  );
+  return _createDataLayerPollingSubscription('basketball', callback, {
+    activeMs: 30000,
+    idleMs: 300000,
+  });
 };
 
 export const subscribeToBasketballTodayFixtures = (callback) => {
-  return _createPollingSubscription(
-    API_PATHS.BASKETBALL_TODAY,
-    callback,
-    { activeMs: 60000, idleMs: 300000, errorMs: 120000, isLive: false }
-  );
+  return _createDataLayerPollingSubscription('basketball', callback, {
+    activeMs: 60000,
+    idleMs: 300000,
+    includeToday: true,
+  });
 };
 
 /* ═══════════════════════════════════════════════════
-   STANDINGS
+   STANDINGS (via dataLayer single-doc reads)
    ═══════════════════════════════════════════════════ */
+
 export const fetchLeagueStandings = async (leagueId) => {
   try {
-    const allStandings = await apiFetch(API_PATHS.STANDINGS, {
-      ttl: FRONTEND_TTL.REFERENCE,
-      fallback: [],
-    });
-    const leagueDoc = allStandings.find(
+    const allData = await dataLayer.fetchStandings('football');
+    const leagueDoc = allData.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
     return leagueDoc?.standings || [];
-  } catch (err) {
-    console.warn('[Data] Standings error:', err.message);
+  } catch {
     return [];
   }
 };
 
 export const fetchBasketballLeagueStandings = async (leagueId) => {
   try {
-    const allStandings = await apiFetch(API_PATHS.BASKETBALL_STANDINGS, {
-      ttl: FRONTEND_TTL.REFERENCE,
-      fallback: [],
-    });
-    const leagueDoc = allStandings.find(
+    const allData = await dataLayer.fetchStandings('basketball');
+    const leagueDoc = allData.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
     return leagueDoc?.standings || [];
-  } catch (err) {
-    console.warn('[Data] Basketball standings error:', err.message);
+  } catch {
     return [];
   }
 };
 
 /* ═══════════════════════════════════════════════════
-   LEAGUES
+   LEAGUES (via dataLayer single-doc reads)
    ═══════════════════════════════════════════════════ */
+
 export const fetchLeagues = async (sport = 'football') => {
   try {
-    const path = sport === 'basketball' ? API_PATHS.BASKETBALL_LEAGUES : API_PATHS.LEAGUES;
-    return await apiFetch(path, { ttl: FRONTEND_TTL.REFERENCE, fallback: [] });
-  } catch (err) {
-    console.warn('[Data] Leagues error:', err.message);
+    return await dataLayer.fetchLeagues(sport);
+  } catch {
     return [];
   }
 };
 
 /* ═══════════════════════════════════════════════════
-   TEAM FIXTURES
+   TEAM FIXTURES (from cached snapshot)
    ═══════════════════════════════════════════════════ */
+
 export const fetchTeamFixtures = async (teamId) => {
   try {
-    const [yesterday, today, tomorrow, finished, live] = await Promise.all([
-      _readCollection(API_PATHS.YESTERDAY, FRONTEND_TTL.YESTERDAY),
-      _readCollection(API_PATHS.TODAY, FRONTEND_TTL.TODAY),
-      _readCollection(API_PATHS.TOMORROW, FRONTEND_TTL.TOMORROW),
-      _readCollection(API_PATHS.FINISHED, FRONTEND_TTL.FINISHED),
-      _readCollection(API_PATHS.LIVE, 10000),
+    const [ySnap, tSnap, tmSnap] = await Promise.all([
+      dataLayer.fetchFootballSnapshot(yesterdayStr()),
+      dataLayer.fetchFootballSnapshot(todayStr()),
+      dataLayer.fetchFootballSnapshot(tomorrowStr()),
     ]);
+
     const tid = String(teamId);
-    return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
-      .filter((m) => m.homeId === tid || m.awayId === tid)
+    const allRaw = [
+      ...(ySnap?.yesterday || []),
+      ...(tSnap?.today || []),
+      ...(tSnap?.live || []),
+      ...(tSnap?.finished || []),
+      ...(tmSnap?.tomorrow || []),
+    ];
+
+    return allRaw
+      .filter((m) => String(m.homeTeamId) === tid || String(m.awayTeamId) === tid)
+      .map((d) => transformMatch(d))
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       .slice(0, 10);
   } catch {
@@ -1003,16 +788,24 @@ export const fetchTeamFixtures = async (teamId) => {
 
 export const fetchBasketballTeamFixtures = async (teamId) => {
   try {
-    const [yesterday, today, tomorrow, finished, live] = await Promise.all([
-      _readCollection(API_PATHS.BASKETBALL_YESTERDAY, FRONTEND_TTL.YESTERDAY),
-      _readCollection(API_PATHS.BASKETBALL_TODAY, FRONTEND_TTL.TODAY),
-      _readCollection(API_PATHS.BASKETBALL_TOMORROW, FRONTEND_TTL.TOMORROW),
-      _readCollection(API_PATHS.BASKETBALL_FINISHED, FRONTEND_TTL.FINISHED),
-      _readCollection(API_PATHS.BASKETBALL_LIVE, 10000),
+    const [ySnap, tSnap, tmSnap] = await Promise.all([
+      dataLayer.fetchBasketballSnapshot(yesterdayStr()),
+      dataLayer.fetchBasketballSnapshot(todayStr()),
+      dataLayer.fetchBasketballSnapshot(tomorrowStr()),
     ]);
+
     const tid = String(teamId);
-    return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
-      .filter((m) => m.homeId === tid || m.awayId === tid)
+    const allRaw = [
+      ...(ySnap?.yesterday || []),
+      ...(tSnap?.today || []),
+      ...(tSnap?.live || []),
+      ...(tSnap?.finished || []),
+      ...(tmSnap?.tomorrow || []),
+    ];
+
+    return allRaw
+      .filter((m) => String(m.homeTeamId) === tid || String(m.awayTeamId) === tid)
+      .map((d) => transformMatch(d))
       .sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0))
       .slice(0, 10);
   } catch {
@@ -1021,50 +814,31 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 };
 
 /* ═══════════════════════════════════════════════════
-   BACKEND STATUS
+   BACKEND STATUS (now reads from snapshot metadata)
    ═══════════════════════════════════════════════════ */
+
 export const fetchBackendStatus = async () => {
   try {
-    const health = await apiFetch(API_PATHS.HEALTH, {
-      ttl: FRONTEND_TTL.HEALTH,
-      fallback: null,
-    });
+    const snap = await dataLayer.fetchFootballSnapshot(todayStr());
+    if (!snap) return null;
 
-    if (!health) return null;
-
-    const jobs = health.scheduler?.jobs || {};
-
-    const parseJobStatus = (job) => {
-      if (!job) return { status: 'unknown', fetchedAt: null };
-      const result = job.lastResult || {};
-      const todayStr = getTodayStr();
-      const fetchDone = job.lastSync
-        ? job.lastSync.startsWith(todayStr)
-        : false;
-      return {
-        status: job.status === 'success' && fetchDone ? 'complete' : 'pending',
-        fetchedAt: job.lastSync || null,
-        rolloverYesterday: result.rolloverYesterday ?? null,
-        rolloverToday: result.rolloverToday ?? null,
-        recoveredFT: result.recoveredFT ?? null,
-        fetchTotal: result.total ?? null,
-        fetchWrites: result.writes ?? null,
-        lastDailyFetchDate: job.lastSync ? job.lastSync.split('T')[0] : null,
-        lastTomorrowDate: null,
-        fetchDone,
-      };
-    };
+    const updatedAt = snap.updatedAt;
+    const fetchDone = updatedAt?.startsWith(todayStr()) ?? false;
 
     return {
-      football: parseJobStatus(jobs.footballDailyFixtures),
-      basketball: parseJobStatus(jobs.basketballDailyFixtures),
-      _raw: { football: jobs.footballDailyFixtures, basketball: jobs.basketballDailyFixtures },
+      football: {
+        status: fetchDone ? 'complete' : 'pending',
+        fetchedAt: updatedAt || null,
+        fetchDone,
+        lastDailyFetchDate: updatedAt ? updatedAt.split('T')[0] : null,
+      },
+      basketball: null, // Would need basketball snapshot check too
+      _raw: snap,
       fetchedAt: new Date().toISOString(),
       isRolloverWindow: isInRolloverWindow(),
-      budget: health.budget || null,
+      budget: null, // No longer tracking API budget on frontend
     };
-  } catch (err) {
-    console.warn('[Data] Backend status error:', err.message);
+  } catch {
     return null;
   }
 };
@@ -1086,19 +860,17 @@ export const getSyncStatusMessage = (status) => {
 };
 
 /* ═══════════════════════════════════════════════════
-   MATCH DETAILS (stubs)
+   STUBS / COMPATIBILITY
    ═══════════════════════════════════════════════════ */
-export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'backend' });
-export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'backend' });
-export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'backend' });
 
-/* ═══════════════════════════════════════════════════
-   CACHE COMPATIBILITY
-   ═══════════════════════════════════════════════════ */
+export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'firestore' });
+export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'firestore' });
+export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'firestore' });
+
 export const loadFixturesFromAnyCache = async (date) => {
   const res = await fetchFixtures(date);
   return res.matches.length > 0
-    ? { matches: res.matches, source: 'backend', stale: false, allFinished: res.allFinished }
+    ? { matches: res.matches, source: 'firestore', stale: false, allFinished: res.allFinished }
     : null;
 };
 
@@ -1106,14 +878,13 @@ export const loadCachedFixtures = () => null;
 export const getCachedDatesSync = () => [];
 export const getCombinedCachedDates = async () => [];
 export const getCacheStatus = () => null;
-export const getCacheStats = () => ({ dates: 0, total: 0, finished: 0, cachedDates: [] });
-export const clearAllCache = () => {
-  _memCache.clear();
+export const getCacheStats = () => {
+  const stats = dataLayer.getStats();
+  return { dates: 0, total: 0, finished: 0, cachedDates: [], ...stats };
 };
 
-/* ═══════════════════════════════════════════════════
-   QUOTA COMPATIBILITY (no-ops)
-   ═══════════════════════════════════════════════════ */
+export const clearAllCache = () => dataLayer.clear();
+
 export const getQuotaStatus = () => ({
   used: 0, limit: 99999, remaining: 99999,
   percent: 0, date: '', isToday: false,
@@ -1125,14 +896,31 @@ export const LIVE_POLL_IDLE = 300000;
 export const LIVE_POLL_BLOCKED = 600000;
 export const getLivePollInterval = () => LIVE_POLL_ACTIVE;
 
-/* ═══════════════════════════════════════════════════
-   SYNC COMPATIBILITY (no-ops)
-   ═══════════════════════════════════════════════════ */
-export const dailySyncToFirestore = async () => ({ done: true, skipped: true, reason: 'BACKEND' });
+export const dailySyncToFirestore = async () => ({ done: true, skipped: true, reason: 'SNAPSHOTS' });
 export const syncDateToFirestore = async () => false;
 export const getLastSyncStatus = () => null;
+
+export const isBackendReachable = () => true;
+export const getBackendFailCount = () => 0;
 
 export const initApp = async () => {
   await waitForAuth();
   initFirebaseSync();
 };
+
+/* ═══════════════════════════════════════════════════
+   INTERNAL HELPERS
+   ═══════════════════════════════════════════════════ */
+
+function _emptyResult(error = null) {
+  return {
+    matches: [],
+    error,
+    fromCache: true,
+    isStale: false,
+    forceFailed: false,
+    cacheSource: 'firestore',
+    allFinished: false,
+    isRolloverWindow: isInRolloverWindow(),
+  };
+}

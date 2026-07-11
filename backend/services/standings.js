@@ -23,6 +23,7 @@ const { api, isBudgetAvailable } = require("../config/api");
 const { LEAGUES, SEASON } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class StandingsService {
   constructor(standingRepository) {
@@ -105,6 +106,13 @@ class StandingsService {
     let writes = 0;
     if (docs.length > 0) {
       writes = await this.repo.batchUpsertStandings(docs);
+    }
+
+    // ── Write reference snapshot for frontend ──
+    try {
+      await snapshotWriter.writeReference("standings", "football", docs);
+    } catch (err) {
+      logger.error(`[Standings] Snapshot write failed: ${err.message}`);
     }
 
     const duration = Date.now() - startTime;

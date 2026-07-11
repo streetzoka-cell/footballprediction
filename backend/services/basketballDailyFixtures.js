@@ -30,6 +30,7 @@ const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class BasketballDailyFixturesService {
   constructor(repo) {
@@ -270,6 +271,17 @@ class BasketballDailyFixturesService {
 
     // Invalidate API cache
     cache.invalidatePrefix("bb:");
+
+    // ── Write snapshot for frontend (single-doc read) ──
+    try {
+      await snapshotWriter.writeBasketballSnapshot(todayStr, {
+        yesterday: this._docCache.yesterday,
+        today: this._docCache.today,
+        tomorrow: this._docCache.tomorrow,
+      });
+    } catch (err) {
+      logger.error(`[BasketballDaily] Snapshot write failed: ${err.message}`);
+    }
 
     const duration = Date.now() - startTime;
     const totalApiCalls = fillResult.fetches + tomorrowApiCall;

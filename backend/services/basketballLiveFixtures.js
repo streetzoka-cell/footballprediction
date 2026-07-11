@@ -24,6 +24,7 @@ const { withRetry } = require("../utils/retry");
 const { batchWrite, deleteByIds } = require("../config/firebase");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class BasketballLiveFixturesService {
   constructor(repo, ftProcessor) {
@@ -38,6 +39,8 @@ class BasketballLiveFixturesService {
     this.repo = repo;
     this.ftProcessor = ftProcessor;
     this.lastLiveSnapshot = new Map();
+        this.lastFinishedSnapshot = new Map();
+       this.lastFinishedSnapshot = new Map(); 
     this.trackedLeagueIds = new Set(
       BASKETBALL_LEAGUES.filter(function (l) {
         return l.active;
@@ -183,6 +186,12 @@ class BasketballLiveFixturesService {
         );
         await this.repo.batchUpsertFinished(toFinish);
         cache.invalidate("bb:finished");
+
+        // Accumulate for snapshot
+        toFinish.forEach(function (doc) {
+          this.lastFinishedSnapshot.set(String(doc.id), doc);
+        }.bind(this));
+
         transitioned = toFinish.length;
       }
     }
@@ -244,6 +253,19 @@ class BasketballLiveFixturesService {
       cache.invalidate("bb:live");
       if (transitioned > 0) {
         cache.invalidate("bb:finished");
+      }
+
+      // ── Write snapshot for frontend ──
+      try {
+        await snapshotWriter.writeBasketballSnapshot(
+          new Date().toISOString().slice(0, 10),
+          {
+            live: newDocs,
+            finished: Array.from(this.lastFinishedSnapshot.values()),
+          }
+        );
+      } catch (err) {
+        logger.error("[BasketballLive] Snapshot write failed: " + err.message);
       }
     }
 

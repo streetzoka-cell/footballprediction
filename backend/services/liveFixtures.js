@@ -32,6 +32,7 @@ const { withRetry } = require("../utils/retry");
 const { batchWrite, deleteByIds } = require("../config/firebase");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
+const snapshotWriter = require("./snapshotWriter");
 
 class LiveFixturesService {
   constructor(repo, ftProcessor) {
@@ -196,6 +197,19 @@ class LiveFixturesService {
       if (transitioned > 0) {
         cache.invalidate("ft:finished");
       }
+
+      // ── Write snapshot for frontend ──
+      try {
+        await snapshotWriter.writeFootballSnapshot(
+          new Date().toISOString().slice(0, 10),
+          {
+            live: newDocs,
+            finished: Array.from(this.lastFinishedSnapshot.values()),
+          }
+        );
+      } catch (err) {
+        logger.error("[LiveFixtures] Snapshot write failed: " + err.message);
+      }
     }
 
     var duration = Date.now() - startTime;
@@ -271,6 +285,12 @@ class LiveFixturesService {
     );
     await this.repo.batchUpsertFinished(toFinish);
     cache.invalidate("ft:finished");
+
+    // Accumulate for snapshot (avoids merge-replace problem)
+    toFinish.forEach(function (doc) {
+      this.lastFinishedSnapshot.set(String(doc.id), doc);
+    }.bind(this));
+
     return toFinish.length;
   }
 
