@@ -445,6 +445,10 @@ export default function Admin() {
   // ★ NEW: Visible matches with show-more
   const visibleZoka = useMemo(() => showAllZoka ? shown : shown.slice(0, INITIAL_SHOW), [shown, showAllZoka]);
   const hiddenZokaCount = Math.max(0, shown.length - INITIAL_SHOW);
+  
+  // ★ FIX BUG 6: Added visibleMatches for Matches tab
+  const visibleMatches = useMemo(() => showAllMatches ? shown : shown.slice(0, INITIAL_SHOW), [shown, showAllMatches]);
+  const hiddenMatchesCount = Math.max(0, shown.length - INITIAL_SHOW);
 
   const filteredUsers = useMemo(() => {
     let list = usersList;
@@ -506,7 +510,7 @@ export default function Admin() {
         const match = fx.find((m) => String(m.id) === matchId);
         if (match) {
           draftPicks.push({
-            matchId: match.id, homeTeam: match.homeTeam, awayTeam: match.awawayTeam,
+            matchId: match.id, homeTeam: match.homeTeam, awayTeam: match.awayTeam, // ★ FIX BUG 4: Fixed awawayTeam typo
             homeLogo: match.homeLogo || null, awayLogo: match.awayLogo || null,
             league: match.league, kickoff: match.kickoff,
             adminPick: scores.h !== '' && scores.a !== '' ? { home: Number(scores.h), away: Number(scores.a) } : null,
@@ -532,7 +536,8 @@ export default function Admin() {
     try {
       if (zokaPicksForPublish.length === 0) { showToast('No valid picks', 'error'); setPublishing(false); return; }
       const publishedData = { matches: zokaPicksForPublish, publishedAt: serverTimestamp(), date, totalMatches: zokaPicksForPublish.length, isDraft: false };
-      await setDoc(doc(db, 'zokaPicks', date), publishedData);
+      // ★ FIX BUG 5: Fixed collection name mismatch
+      await setDoc(doc(db, 'zoka_picks', date), publishedData); 
       setPicksOverride({ ...publishedData, publishedAt: { seconds: Math.floor(Date.now() / 1000) } });
       invalidateCache(`zoka_${date}`);
       showToast(`PUBLISHED ${zokaPicksForPublish.length} Zoka Picks!`, 'success');
@@ -650,9 +655,6 @@ export default function Admin() {
     );
   }
 
-  /* ═══════════════════════════════════════════════════════════
-     RENDER: MATCH ROW (complete — was cut off at {isFi)
-     ═══════════════════════════════════════════════════════════ */
   const renderMatchRow = (match, idx, mode) => {
     const mid = String(match.id);
     const isZoka = mode === 'zoka';
@@ -676,75 +678,40 @@ export default function Admin() {
           marginBottom: 10, animationDelay: `${idx * 30}ms`,
         }}
       >
-        {/* League + Status */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-            {match.league?.emblem && (
-              <img src={match.league.emblem} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />
-            )}
-            <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {match.league?.name || 'Unknown'}
-            </span>
+            {match.league?.emblem && <img src={match.league.emblem} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />}
+            <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.league?.name || 'Unknown'}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {isLive && <span className="live-dot" />}
             <span style={{ fontSize: '.78rem', fontWeight: 800, color: st.c, background: st.b, padding: '4px 12px', borderRadius: 8, letterSpacing: '.04em' }}>
-              {isLive && match.minute != null ? `${match.minute}' : st.l}
+              {isLive && match.minute != null ? `${match.minute}'` : st.l}
             </span>
           </div>
         </div>
 
-        {/* Teams + Score */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            {match.homeLogo ? (
-              <img src={match.homeLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>
-            )}
-            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
-            </span>
+            {match.homeLogo ? <img src={match.homeLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} /> : <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>}
+            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}</span>
           </div>
 
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, minWidth: 80, justifyContent: 'center',
-            background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)',
-            border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}`,
-          }}>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-              {match.homeScore ?? '-'}
-            </span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, minWidth: 80, justifyContent: 'center', background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)', border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}` }}>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{match.homeScore ?? '-'}</span>
             <span style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>–</span>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
-              {match.awayScore ?? '-'}
-            </span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{match.awayScore ?? '-'}</span>
           </div>
 
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
-            </span>
-            {match.awayLogo ? (
-              <img src={match.awayLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
-            ) : (
-              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>
-            )}
+            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}</span>
+            {match.awayLogo ? <img src={match.awayLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} /> : <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>}
           </div>
         </div>
 
-        {/* Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           {isZoka && (
-            <button
-              className="btn-sm zb"
-              style={{
-                background: sel ? 'rgba(245,197,66,.15)' : 'rgba(255,255,255,.04)',
-                border: `1px solid ${sel ? 'rgba(245,197,66,.4)' : 'var(--border)'}`,
-                color: sel ? 'var(--gold)' : 'var(--text-muted)',
-              }}
-              onClick={() => toggleZokaPick(match)}
-            >
+            <button className="btn-sm zb" style={{ background: sel ? 'rgba(245,197,66,.15)' : 'rgba(255,255,255,.04)', border: `1px solid ${sel ? 'rgba(245,197,66,.4)' : 'var(--border)'}`, color: sel ? 'var(--gold)' : 'var(--text-muted)' }} onClick={() => toggleZokaPick(match)}>
               <Star size={14} fill={sel ? 'var(--gold)' : 'none'} />
               {sel ? 'Selected' : 'Zoka Pick'}
             </button>
@@ -752,21 +719,9 @@ export default function Admin() {
 
           {sel && isZoka && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                className={`pi ${sel.h ? 'has-val' : ''}`}
-                value={sel.h}
-                onChange={(e) => updateZokaScore(mid, 'h', e.target.value)}
-                placeholder="H"
-                maxLength={2}
-              />
+              <input className={`pi ${sel.h ? 'has-val' : ''}`} value={sel.h} onChange={(e) => updateZokaScore(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
               <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
-              <input
-                className={`pi ${sel.a ? 'has-val' : ''}`}
-                value={sel.a}
-                onChange={(e) => updateZokaScore(mid, 'a', e.target.value)}
-                placeholder="A"
-                maxLength={2}
-              />
+              <input className={`pi ${sel.a ? 'has-val' : ''}`} value={sel.a} onChange={(e) => updateZokaScore(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
             </div>
           )}
 
@@ -784,7 +739,6 @@ export default function Admin() {
             </>
           )}
 
-          {/* Result badge for published picks */}
           {isZoka && publishedPicks?.matches && (
             (() => {
               const pick = publishedPicks.matches.find(p => String(p.matchId) === mid);
@@ -797,9 +751,6 @@ export default function Admin() {
     );
   };
 
-  /* ═══════════════════════════════════════════════════════════
-     RENDER: TABS
-     ═══════════════════════════════════════════════════════════ */
   const renderTabContent = () => {
     if (tab === 'zoka') {
       const hasPicks = Object.keys(zokaSel).length > 0;
@@ -807,7 +758,6 @@ export default function Admin() {
 
       return (
         <div className="ae">
-          {/* ★ PUBLISH BAR — sticky at top, no scrolling needed */}
           {hasPicks && (
             <div className="pub-sticky">
               <div className="pub-bar">
@@ -818,83 +768,48 @@ export default function Admin() {
                   )}
                 </div>
                 <div className="pub-actions">
-                  <button
-                    className="btn-ghost"
-                    onClick={saveZokaPicks}
-                    disabled={savingZoka || zokaScored < zokaCount}
-                    style={savedFlash ? { animation: 'save-flash 1.2s ease-out' } : {}}
-                  >
-                    <Save Draft
+                  <button className="btn-ghost" onClick={saveZokaPicks} disabled={savingZoka || zokaScored < zokaCount} style={savedFlash ? { animation: 'save-flash 1.2s ease-out' } : {}}>
+                    <Save size={16} /> Save Draft {/* ★ FIX BUG 1 */}
                   </button>
                   {zokaReady && (
-                    <button
-                      className="btn-primary"
-                      onClick={publishZokaPicks}
-                      disabled={publishing || zokaPicksForPublish.length === 0}
-                      style={{ background: 'linear-gradient(135deg, rgba(245,197,66,.9), rgba(245,197,66,.7))', color: '#000', border: 'none' }}
-                    >
+                    <button className="btn-primary" onClick={publishZokaPicks} disabled={publishing || zokaPicksForPublish.length === 0} style={{ background: 'linear-gradient(135deg, rgba(245,197,66,.9), rgba(245,197,66,.7))', color: '#000', border: 'none' }}>
                       <Send size={16} /> Publish
                     </button>
                   )}
                   {hasPublished && (
-                    <button
-                      className="btn-danger"
-                      onClick={unpublishZokaPicks}
-                      disabled={publishing}
-                    >
+                    <button className="btn-danger" onClick={unpublishZokaPicks} disabled={publishing}>
                       <X size={14} /> Unpublish
                     </button>
                   )}
                 </div>
               </div>
-              {/* Published results summary */}
               {hasPublished && (
-                <div style={{
-                  display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 12px',
-                  background: 'rgba(245,197,66,.06)', borderRadius: 10, marginBottom: 4,
-                }}>
-                  <span className="result-badge" style={{ background: 'rgba(0,230,118,.15)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.3)' }}>
-                    <CheckCircle2 size={12} /> {publishedResults.exact} Exact
-                  </span>
-                  <span className="result-badge" style={{ background: 'rgba(245,197,66,.12)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.25)' }}>
-                    <TrendingUp size={12} /> {publishedResults.result} Result
-                  </span>
-                  <span className="result-badge" style={{ background: 'rgba(239,68,68,.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,.2)' }}>
-                    <XCircle size={12} /> {publishedResults.miss} Miss
-                  </span>
-                  {publishedResults.pending > 0 && (
-                    <span className="result-badge" style={{ background: 'rgba(255,255,255,.05)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                      {publishedResults.pending} Pending
-                    </span>
-                  )}
+                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: 'rgba(245,197,66,.06)', borderRadius: 10, marginBottom: 4 }}>
+                  <span className="result-badge" style={{ background: 'rgba(0,230,118,.15)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.3)' }}><CheckCircle2 size={12} /> {publishedResults.exact} Exact</span>
+                  <span className="result-badge" style={{ background: 'rgba(245,197,66,.12)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.25)' }}><TrendingUp size={12} /> {publishedResults.result} Result</span>
+                  <span className="result-badge" style={{ background: 'rgba(239,68,68,.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,.2)' }}><XCircle size={12} /> {publishedResults.miss} Miss</span>
+                  {publishedResults.pending > 0 && <span className="result-badge" style={{ background: 'rgba(255,255,255,.05)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{publishedResults.pending} Pending</span>}
                 </div>
               )}
             </div>
           )}
 
-          {/* Match list with show-more */}
           {visibleZoka.length > 0 ? (
             <div>
               {visibleZoka.map((m, i) => renderMatchRow(m, i, 'zoka'))}
               {hiddenZokaCount > 0 && !showAllZoka && (
                 <button className="show-more-btn" onClick={() => setShowAllZoka(true)}>
                   <ChevronDown size={16} />
+                  {/* ★ FIX BUG 2: Completed truncated line */}
                   Show {hiddenZokaCount} more matches
-                </button>
-              )}
-              {showAllZoka && (
-                <button className="show-more-btn" onClick={() => setShowAllZoka(false)} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                  <ChevronUp size={16} />
-                  Show less
                 </button>
               )}
             </div>
           ) : (
             <div className="empty-state">
-              <Star size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>
-                {fxLoad ? 'Loading matches...' : fx.length === 0 ? 'No matches for this day' : 'Select matches to add as Zoka Picks'}
-              </p>
+              <Star size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+              <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text-primary)', marginBottom: 4 }}>No matches available</div>
+              <div style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>No fixtures found for this day or filter.</div>
             </div>
           )}
         </div>
@@ -904,70 +819,26 @@ export default function Admin() {
     if (tab === 'matches') {
       return (
         <div className="ae">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-                Featured Matches ({preds.length}/{MAX_FEATURED})
-              </h3>
-              <p style={{ margin: '4px 0 0', fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {finCnt} finished / {fx.length} total
-              </p>
-            </div>
-            <button className="btn-ghost" onClick={handleRefresh} disabled={refreshing}>
-              <RefreshCw size={14} style={refreshing ? { animation: 'asp 1s linear infinite' } : {}} />
-            </button>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <span style={{ ...S.smallVal, color: 'var(--text-muted)' }}>{preds.length}/{MAX_FEATURED} Featured</span>
+            {syncMsg && <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--accent)' }}>{syncMsg}</span>}
           </div>
-
-          {/* League filter */}
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 16px, scrollbarWidth: 'none' }}>
-            <button
-              className={`league-pill ${lg === 'all' ? 'active' : ''}`}
-              style={lg === 'all' ? { background: 'var(--gold)', color: '#000', fontWeight: 800 } : { background: 'var(--bg-surface)', color: 'var(--text-muted)' }}
-              onClick={() => setLg('all')}
-            >
-              All ({fx.length})
-            </button>
-            {leagues.slice(0, 15).map((l) => (
-              <button
-                key={l.id}
-                className={`league-pill ${lg === l.id ? 'active' : ''}`}
-                style={lg === l.id ? { background: 'var(--gold)', color: '#000', fontWeight: 800 } : { background: 'var(--bg-surface)', color: 'var(--text-muted)' }}
-                onClick={() => setLg(l.id)}
-              >
-                {l.logo && <img src={l.logo} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'contain' }} />}
-                <span>{l.name}</span>
-              </button>
-            ))}
-            {leagues.length > 15 && (
-              <button className="league-pill" style={{ background: 'rgba(255,255,255,.03)', color: 'var(--text-muted)' }}>
-                +{leagues.length - 15} more
-              </button>
-            )}
-          </div>
-
-          {/* Match list with show-more */}
-          {shown.length > 0 ? (
+          
+          {visibleMatches.length > 0 ? (
             <div>
-              {shown.map((m, i) => renderMatchRow(m, i, 'matches'))}
-              {shown.length < shown.length && !showAllMatches && (
+              {visibleMatches.map((m, i) => renderMatchRow(m, i, 'matches'))}
+              {hiddenMatchesCount > 0 && !showAllMatches && (
                 <button className="show-more-btn" onClick={() => setShowAllMatches(true)}>
                   <ChevronDown size={16} />
-                  Show {shown.length - INITIAL_SHOW} more matches
+                  Show {hiddenMatchesCount} more matches
                 </button>
-              )}
-              {showAllMatches && (
-                <button className="show-more-btn" onClick={() => setShowAllMatches(false)} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                <ChevronUp size={16} />
-                Show less
-              </button>
               )}
             </div>
           ) : (
             <div className="empty-state">
-              <Radio size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>
-                {fxLoad ? 'Loading...' : fx.length === 0 ? 'No matches for this day' : 'Select matches to feature'}
-              </p>
+              <Radio size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+              <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text-primary)' }}>No matches</div>
+              <div style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>Change day or league filter.</div>
             </div>
           )}
         </div>
@@ -976,147 +847,25 @@ export default function Admin() {
 
     if (tab === 'results') {
       const finishedPreds = preds.filter(p => p.status === 'finished');
-      const pendingPreds = preds.filter(p => p.status !== 'finished');
-
       return (
         <div className="ae">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <div>
-              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-                Prediction Results
-              </h3>
-              <p style={{ margin: '4px 0 0', fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                {finishedPreds.length} finished / {preds.length} total
-              </p>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <button className="btn-ghost" onClick={() => setShowAllZoka(false)} disabled={rebuilding === null}>
-                <RotateCcw size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Rebuild buttons */}
-          <div className="section-card">
-            <h4 className="section-title">
-              <Database Rebuild
-              <span style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text-muted)', textTransform: 'none' }}>
-                (admin only)
-              </span>
-            </h4>
-            <div className="rebuild-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
-              {[
-                { key: 'daily', label: 'Daily Summary', desc: `For ${date}` },
-                { key: 'goat', label: 'GOAT', desc: 'All-time' },
-                { key: 'weekly', label: 'Weekly', desc: 'This week' },
-                { key: 'monthly', label: 'Monthly', desc: 'This month' },
-                { key: 'all', label: 'All', desc: 'Full rebuild' },
-              ].map(r => (
-                <button
-                  key={r.key}
-                  className="rebuild-btn"
-                  onClick={() => handleRebuild(r.key)}
-                  disabled={rebuilding !== null}
-                >
-                  <Database size={14} />
-                  <div>
-                    <div style={{ fontWeight: 800 }}>{r.label}</div>
-                    <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', fontWeight: 500 }}>{r.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-            {rebuilding && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12 }}>
-                <Loader size={16} style={{ animation: 'asp 1s linear infinite' }} />
-                <span style={{ color: 'var(--gold)', fontWeight: 700, fontSize: '.88rem' }}>
-                  Rebuilding {rebuilding}...
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Finished predictions */}
-          {finishedPreds.length > 0 ? (
-            <div>
-              <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                Finished ({finishedPreds.length})
-              </div>
-              {finishedPreds.map((p, i) => (
-                <div key={p.id} className="card-in" style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border)', marginBottom: 8, animationDelay: `${i * 20}ms` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                      {p.league?.emblem && <img src={p.league.emblem} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'contain' }} />}
-                      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.league?.name || 'Unknown'}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.08)', padding: '4px 10px', borderRadius: 6 }}>
-                      {p.homeScore ?? '-'}-{p.awayScore ?? '-'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <span style={{ flex: 1, fontSize: '.88rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.homeTeam?.name || 'TBD'}
-                    </span>
-                    <span style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>vs</span>
-                    <span style={{ flex: 1, fontSize: '.88rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.awayTeam?.name || 'TBD'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--gold)' }}>
-                      Pick: {p.homeScore ?? '?'}-{p.awayScore ?? '?'}
-                    </span>
-                    <ResultBadge pick={p} />
-                  </div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
+            {finishedPreds.map((p) => (
+              <div key={p.id} className="card-in" style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12 }}>
+                <div style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>{p.league?.name || 'Match'}</div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                  <span style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>{p.homeTeam?.name || 'Home'}</span>
+                  <span style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>{p.homeScore ?? 0} - {p.awayScore ?? 0}</span>
+                  <span style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>{p.awayTeam?.name || 'Away'}</span>
                 </div>
-              ))}
-            </div>
-          ) : (
+                <div style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>Finished at {p.finishedAt ? formatTimeAgo(p.finishedAt) : 'Unknown'}</div>
+              </div>
+            ))}
+          </div>
+          {finishedPreds.length === 0 && (
             <div className="empty-state">
-              <Trophy size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>
-                {preds.length === 0 ? 'No predictions yet' : 'No finished predictions'}
-              </p>
-            </div>
-          )}
-
-          {/* Pending predictions */}
-          {pendingPreds.length > 0 && (
-            <div>
-              <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 12, textTransform: 'uppercase', letterSpacing: '.04em' }}>
-                Pending ({pendingPreds.length})
-              </div>
-              {pendingPreds.map((p, i) => (
-                <div key={p.id} className="card-in" style={{ padding: '14px 16px', borderRadius: 12, background: 'var(--bg-surface)', border: '1px solid var(--border)', marginBottom: 8, opacity: .7, animationDelay: `${(finishedPreds.length + i) * 20}ms` }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-                      {p.league?.emblem && <img src={p.league.emblem} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'contain' }} />}
-                      <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {p.league?.name || 'Unknown'}
-                      </span>
-                    </div>
-                    <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-muted)', background: 'rgba(255,255,255,.04)', padding: '4px 10px', borderRadius: 6 }}>
-                      {p.status === 'upcoming' ? 'UPCOMING' : p.status?.toUpperCase() || 'PENDING'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <span style={{ flex: 1, fontSize: '.88rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.homeTeam?.name || 'TBD'}
-                    </span>
-                    <span style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>vs</span>
-                    <span style={{ flex: 1, fontSize: '.88rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {p.awayTeam?.name || 'TBD'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                    <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--gold)' }}>
-                      Pick: {p.homeScore ?? '?'}-{p.awayScore ?? '?'}
-                    </span>
-                  </div>
-                </div>
-              ))}
+              <Trophy size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+              <div style={{ fontWeight: 700 }}>No finished results yet</div>
             </div>
           )}
         </div>
@@ -1124,103 +873,41 @@ export default function Admin() {
     }
 
     if (tab === 'staff') {
+      if (staffLoad) return <div className="sk" style={{ height: 200, borderRadius: 16 }} />;
       return (
         <div className="ae">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-              Staff ({staffList.length})
-            </h3>
-            <button className="btn-primary" onClick={() => setShowAddStaff(!showAddStaff)} style={{ background: 'linear-gradient(135deg,rgba(0,230,118,.9),rgba(0,230,118,.7))', color: '#000', border: 'none' }}>
-              <UserPlus size={16} /> Add Staff
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <div style={{ ...S.sectionTitle, margin: 0 }}>Team ({staffList.length})</div>
+            <button className="btn-sm zb" style={{ background: 'rgba(245,197,66,.1)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' }} onClick={() => setShowAddStaff(true)}>
+              <UserPlus size={14} /> Add
             </button>
           </div>
 
           {showAddStaff && (
-            <div className="section-card" style={{ marginBottom: 16, animation: 'pop-in .3s ease-out' }}>
-              <h4 style={{ margin: '0 0 12px', fontSize: '.9rem', fontWeight: 800, color: 'var(--text-primary)' }}>Add New Staff</h4>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <input className="input-field" placeholder="Full name" value={newStaffName} onChange={e => setNewStaffName(e.target.value)} />
-                <select
-                  className="input-field"
-                  value={newStaffRole}
-                  onChange={e => setNewStaffRole(e.target.value)}
-                  style={{ cursor: 'pointer' }}
-                >
-                  <option value="analyst">Analyst</option>
-                  <option value="writer">Writer</option>
-                  <option value="lead">Lead Analyst</option>
-                  <option value="admin">Admin</option>
-                </select>
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button className="btn-ghost" onClick={() => { setShowAddStaff(false); setNewStaffName(''); setNewStaffRole('analyst'); }}>
-                    Cancel
-                  </button>
-                  <button className="btn-primary" onClick={addStaff} disabled={!newStaffName.trim()}>
-                    Add
-                  </button>
-                </div>
-              </div>
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+              <input className="input-field" style={{ flex: 2, minWidth: 150 }} placeholder="Name" value={newStaffName} onChange={e => setNewStaffName(e.target.value)} />
+              <select className="input-field" style={{ flex: 1, minWidth: 120 }} value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)}>
+                <option value="admin">Admin</option>
+                <option value="lead">Lead</option>
+                <option value="analyst">Analyst</option>
+                <option value="writer">Writer</option>
+              </select>
+              <button className="btn-primary" style={{ minWidth: 100 }} onClick={addStaff}>Save</button>
+              <button className="btn-ghost" onClick={() => setShowAddStaff(false)}>Cancel</button>
             </div>
           )}
 
-          {staffLoad ? (
-            <div style={{ padding: 40px 0 }}>
-              {[1, 2, 3].map(i => <div key={i} className="sk" style={{ height: 70, marginBottom: 10, borderRadius: 12 }} />)}
+          {staffList.map(s => (
+            <div key={s.id} className="staff-row">
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: '.95rem', color: 'var(--text-primary)' }}>{s.name}</div>
+                <span className="role-badge" style={{ background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.05)', color: s.role === 'admin' ? '#ef4444' : 'var(--text-muted)', marginTop: 6, textTransform: 'capitalize' }}>{s.role}</span>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="match-action zb" style={{ background: 'rgba(239,68,68,.08)', color: '#ef4444' }} onClick={() => deleteStaff(s.id)}><Trash2 size={16} /></button>
+              </div>
             </div>
-          ) : staffList.length > 0 ? (
-            <div>
-              {staffList.map((staff) => (
-                <div key={staff.id} className="staff-row">
-                  {staff.avatar ? (
-                    <img src={staff.avatar} alt="" style={{ width: 44, height: 44, borderRadius: 12, objectFit: 'cover', border: '2px solid var(--border)' }} />
-                  ) : (
-                    <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(245,197,66,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      {staff.name?.charAt(0)?.toUpperCase() || '?'}
-                    </div>
-                  )}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)' }}>{staff.name || 'Unknown'}</div>
-                    <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                      {staff.bio || 'No bio'}
-                    </div>
-                  </div>
-                  <span className="role-badge" style={{
-                    background: staff.role === 'admin' ? 'rgba(239,68,68,.12)' : staff.role === 'lead' ? 'rgba(245,197,66,.12)' : 'rgba(255,255,255,.06)',
-                    color: staff.role === 'admin' ? '#ef4444' : staff.role === 'lead' ? 'var(--gold)' : 'var(--text-muted)',
-                  }}>
-                    {staff.role || 'analyst'}
-                  </span>
-                  {editingStaff === staff.id ? (
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn-ghost" onClick={() => updateStaff(staff.id, { role: 'lead' })}>
-                        <ChevronUp size={14} />
-                      </button>
-                      <button className="btn-ghost" onClick={() => updateStaff(staff.id, { role: 'admin' })}>
-                        <Crown size={14} />
-                      </button>
-                      <button className="btn-ghost" onClick={() => setEditingStaff(null)}>
-                        <Check size={14} />
-                      </button>
-                    </div>
-                  ) : (
-                    <button className="btn-ghost" onClick={() => setEditingStaff(staff.id)} style={{ padding: '6px 8px', minWidth: 36 }}>
-                      <Pencil size={13} />
-                    </button>
-                  )}
-                  {editingStaff !== staff.id && (
-                    <button className="btn-danger" onClick={() => deleteStaff(staff.id)} style={{ padding: '6px 8px', minWidth: 36 }}>
-                      <Trash2 size={13} />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <UserCog size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>No staff members yet</p>
-            </div>
-          )}
+          ))}
         </div>
       );
     }
@@ -1228,113 +915,48 @@ export default function Admin() {
     if (tab === 'users') {
       return (
         <div className="ae">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-            <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-              Users ({filteredUsers.length})
-            </h3>
-            <div style={{ display: 'flex', gap: 8 }}>
-              {!usersLoaded && (
-                <button className="btn-ghost" onClick={loadUsers} disabled={usersLoad}>
-                  <Database size={14} />
-                  Load Users
-                </button>
-              )}
-            </div>
+          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+            {!usersLoaded && <button className="btn-primary" onClick={loadUsers} disabled={usersLoad}><Users size={16} /> {usersLoad ? 'Loading...' : 'Load Users'}</button>}
+            {usersLoaded && (
+              <>
+                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
+                  <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+                  <input className="input-field" style={{ paddingLeft: 40 }} placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
+                </div>
+                <select className="input-field" style={{ width: 'auto', minWidth: 120 }} value={userFilter} onChange={e => setUserFilter(e.target.value)}>
+                  <option value="all">All Roles</option>
+                  <option value="admin">Admins</option>
+                  <option value="user">Users</option>
+                </select>
+              </>
+            )}
           </div>
 
-          {/* Filters */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ position: 'relative' }}>
-                <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-                <input
-                  className="input-field"
-                  placeholder="Search users by name, email, uid..."
-                  value={userSearch}
-                  onChange={e => setUserSearch(e.target.value)}
-                  style={{ paddingLeft: 38 }}
-                />
-              </div>
-            </div>
-            <select
-              className="input-field"
-              value={userFilter}
-              onChange={e => setUserFilter(e.target.value)}
-              style={{ width: 140, cursor: 'pointer' }}
-            >
-              <option value="all">All Users</option>
-              <option value="admin">Admins</option>
-              <option value="user">Regular Users</option>
-            </select>
-          </div>
-
-          {/* User list with show-more */}
-          {filteredUsers.length > 0 ? (
-            <div>
-              <div className="user-header user-header">
+          {usersLoaded && (
+            <>
+              <div className="user-row user-header">
                 <span>User</span>
                 <span className="hide-mobile">Email</span>
-                <span className="hide-mobile">Role</span>
+                <span>Role</span>
+                <span className="hide-mobile">Joined</span>
                 <span>Actions</span>
               </div>
-              {filteredUsers.slice(0, showAllUsers ? filteredUsers.length : INITIAL_SHOW).map((u) => (
+              {filteredUsers.map(u => (
                 <div key={u.id} className="user-row">
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-                    <img
-                      src={u.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(u.displayName || 'U')}&background=var(--bg-surface)&color=var(--text-muted)`}
-                      alt=""
-                      style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover', border: '2px solid var(--border)', flexShrink: 0 }}
-                    />
-                    <div style={{ minWidth: 0 }}>
-                      <div style={{ fontSize: '.88rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                        {u.displayName || 'Unknown'}
-                      </div>
-                      <div className="hide-mobile" style={{ fontSize: '.78rem', color: 'var(--text-muted)' }}>
-                        {u.email || '—'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className="hide-mobile" style={{ justifyContent: 'center' }}>
-                    <span className="role-badge" style={{
-                      background: u.role === 'admin' ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.06)',
-                      color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)',
-                    }}>
-                      {u.role || 'user'}
-                    </span>
-                  </div>
-                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
-                    <select
-                      className="input-field"
-                      value={u.role || 'user'}
-                      onChange={e => updateUserRole(u.id, e.target.value)}
-                      style={{ width: 90, padding: '8px 10px', fontSize: '.78rem', cursor: 'pointer', minHeight: 38 }}
-                    >
+                  <span style={{ fontWeight: 700 }}>{u.displayName || u.uid}</span>
+                  <span className="hide-mobile" style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email || '-'}</span>
+                  <span className="role-badge" style={{ background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.05)', color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)', textTransform: 'capitalize' }}>{u.role || 'user'}</span>
+                  <span className="hide-mobile" style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>{u.createdAt ? formatTimeAgo(u.createdAt) : '-'}</span>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <select className="input-field" style={{ padding: '6px 8px', fontSize: '.78rem', minWidth: 'auto', height: 'auto' }} value={u.role || 'user'} onChange={e => updateUserRole(u.id, e.target.value)}>
                       <option value="user">User</option>
                       <option value="admin">Admin</option>
                     </select>
                   </div>
                 </div>
               ))}
-              {filteredUsers.length > INITIAL_SHOW && !showAllUsers && (
-                <button className="show-more-btn" onClick={() => setShowAllUsers(true)}>
-                  <ChevronDown size={16} />
-                  Show {filteredUsers.length - INITIAL_SHOW} more users
-                </button>
-              )}
-              {showAllUsers && (
-                <button className="show-more-btn" onClick={() => setShowAllUsers(false)} style={{ borderColor: 'var(--gold)', color: 'var(--gold)' }}>
-                <ChevronUp size={16} />
-                Show less
-              </button>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <Users size={40} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>
-                {userSearch ? 'No users match your search' : usersLoaded ? 'No users found' : 'Click "Load Users" to fetch from Firestore'}
-              </p>
-            </div>
+              {filteredUsers.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No users found</div>}
+            </>
           )}
         </div>
       );
@@ -1343,103 +965,91 @@ export default function Admin() {
     return null;
   };
 
-  const visibleMatches = showAllMatches ? shown : shown.slice(0, INITIAL_SHOW);
-  const hiddenMatchesCount = Math.max(0, shown.length - INITIAL_SHOW);
-
-  const toMs = (dt) => {
-    if (!dt) return 0;
-    if (typeof dt === 'number') return dt < 1e12 ? dt * 1000 : dt;
-    if (typeof dt === 'string') { const n = Date.parse(dt); return isNaN(n) ? 0 : n; }
-    if (dt.seconds != null) return dt.seconds * 1000;
-    if (typeof dt.getTime === 'function') return dt.getTime();
-    return 0;
-  };
-
-  const formatTimeAgo = (dt) => {
-    if (!dt) return 'Never';
-    const ts = toMs(dt);
-    if (!ts) return 'Unknown';
-    const s = Math.floor((Date.now() - ts) / 1000);
-    if (s < 10) return 'Just now';
-    if (s < 60) return `${s}s ago`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
-  };
-
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <div style={{ maxWidth: 860, margin: '0 auto', padding: '0 16px 100px' }}>
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 20px 100px' }}>
+        
         {/* Header */}
-        <div style={{ textAlign: 'center', padding: '24px 0 20px' }}>
-          <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-.02em' }}>
-            Admin Panel
-          </h1>
-          <p style={{ margin: '4px 0 0', fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-            {day === 'today' ? 'Today' : 'Tomorrow'} · {new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' })}
-          </p>
-        </div>
-
-        {/* Status bar */}
-        <div style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 12,
-          background: 'var(--bg-card)', border: '1px solid var(--border)', marginBottom: 16,
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {hasLive && <span className="live-dot" />}
-            <span style={{ fontSize: '.82rem', fontWeight: 700, color: hasLive ? '#ef4444' : 'var(--text-muted)' }}>
-              {hasLive ? `${liveCount} LIVE` : 'No live'}
-            </span>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShieldAlert size={24} style={{ color: 'var(--gold)' }} /> Admin Panel
+            </h1>
+            <div style={{ fontSize: '.85rem', color: 'var(--text-muted)', marginTop: 4 }}>
+              {lastUpdate ? `Updated ${formatTimeAgo(lastUpdate)}` : 'Waiting for data...'}
+              {hasLive && <span style={{ color: '#ef4444', fontWeight: 800, marginLeft: 8 }}>● {liveCount} LIVE</span>}
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ fontSize: '.82rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-              {dataSource === 'loading' ? 'Loading...' : fxErr ? `Error: ${fxErr}` : `${fx.length} matches`}
-            </span>
-            {lastUpdate && (
-              <span style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                Updated {formatTimeAgo(lastUpdate)}
-              </span>
-            )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn-ghost" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw size={16} style={{ animation: refreshing ? 'asp 1s linear infinite' : 'none' }} /> Refresh
+            </button>
+            <button className="btn-ghost" onClick={() => navigate('/')}><ArrowRight size={16} /> View App</button>
           </div>
         </div>
 
-        {/* Sync message */}
-        {syncMsg && (
-          <div style={{
-            padding: '10px 16px', borderRadius: 10, marginBottom: 12,
-            background: 'rgba(0,230,118,.08)', border: '1px solid rgba(0,230,118,.15)',
-            color: 'var(--accent)', fontSize: '.88rem', fontWeight: 700, textAlign: 'center',
-            animation: 'fade-in .3s ease-out',
-          }}>
-            {syncMsg}
+        {/* Day Toggle & Stats */}
+        <div className="section-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button className={`league-pill ${day === 'today' ? 'zb' : ''}`} style={day === 'today' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.4)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setDay('today')}>Today</button>
+            <button className={`league-pill ${day === 'tomorrow' ? 'zb' : ''}`} style={day === 'tomorrow' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.4)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setDay('tomorrow')}>Tomorrow</button>
+            <span style={{ marginLeft: 'auto', fontSize: '.85rem', color: 'var(--text-muted)', fontWeight: 700 }}>{date}</span>
+          </div>
+          
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
+            <div className="stat-mini"><span className="num">{fx.length}</span><span className="lbl">Matches</span></div>
+            <div className="stat-mini"><span className="num" style={{ color: '#ef4444' }}>{liveCount}</span><span className="lbl">Live</span></div>
+            <div className="stat-mini"><span className="num" style={{ color: 'var(--accent)' }}>{finCnt}</span><span className="lbl">Finished</span></div>
+            <div className="stat-mini"><span className="num" style={{ color: 'var(--gold)' }}>{preds.length}</span><span className="lbl">Featured</span></div>
+          </div>
+
+          {leagues.length > 1 && (
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }} className="sh">
+              <button className="league-pill zb" style={lg === 'all' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setLg('all')}>All ({fx.length})</button>
+              {leagues.map(l => (
+                <button key={l.id} className="league-pill zb" style={lg === l.id ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setLg(l.id)}>
+                  {l.logo && <img src={l.logo} alt="" style={{ width: 16, height: 16, borderRadius: 3 }} />}
+                  {l.name} ({l.n})
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Rebuild Leaderboards Section (inside Results or standalone) */}
+        {tab === 'results' && (
+          <div className="section-card">
+            <div style={{ ...S.sectionTitle }}><Hammer size={18} /> Maintenance Tools</div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }} className="rebuild-grid">
+              <button className="rebuild-btn" onClick={() => handleRebuild('daily')} disabled={!!rebuilding}><RotateCcw size={14} /> Daily Summary</button>
+              <button className="rebuild-btn" onClick={() => handleRebuild('goat')} disabled={!!rebuilding}><Crown size={14} /> GOAT Board</button>
+              <button className="rebuild-btn" onClick={() => handleRebuild('weekly')} disabled={!!rebuilding}><CalendarDays size={14} /> Weekly</button>
+              <button className="rebuild-btn" onClick={() => handleRebuild('monthly')} disabled={!!rebuilding}><CalendarDays size={14} /> Monthly</button>
+              <button className="rebuild-btn" style={{ gridColumn: '1 / -1', background: 'rgba(245,197,66,.08)', borderColor: 'rgba(245,197,66,.3)', color: 'var(--gold)' }} onClick={() => handleRebuild('all')} disabled={!!rebuilding}>
+                {rebuilding ? <Loader size={14} className="asp" /> : <Sparkles size={14} />} Rebuild All Leaderboards
+              </button>
+            </div>
           </div>
         )}
 
         {/* Tabs */}
-        <div style={{
-          display: 'flex', gap: 4, overflowX: 'auto', scrollbarWidth: 'none', WebkitOverflowScrolling: 'touch',
-          paddingBottom: 2, borderBottom: '1px solid var(--border)', marginBottom: 0,
-        }}>
-          {TABS.map((t) => (
-            <button
-              key={t.key}
-              className={`tab-btn ${tab === t.key ? 'active' : ''}`}
-              onClick={() => setTab(t.key)}
-            >
-              <t.icon size={16} />
-              <span>{t.label}</span>
+        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', overflowX: 'auto' }} className="sh">
+          {TABS.map(t => (
+            <button key={t.key} className={`tab-btn ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+              <t.icon size={16} /> {t.label}
+              {t.key === 'zoka' && zokaCount > 0 && <span style={{ background: 'var(--gold)', color: '#000', fontSize: '.65rem', fontWeight: 900, padding: '2px 6px', borderRadius: 10 }}>{zokaCount}</span>}
             </button>
           ))}
         </div>
 
-        {/* Tab content */}
-        {renderTabContent()}
+        {/* Tab Content */}
+        <div style={{ paddingTop: 20 }}>
+          {renderTabContent()}
+        </div>
+
       </div>
 
-      {/* Toast */}
-      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+      {toast && <Toast key={toast.key} message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }
