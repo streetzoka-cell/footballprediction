@@ -1,3 +1,4 @@
+// ═══════════════════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
 //
 // DATA LAYER — Reads from Node.js backend REST API (NOT Firestore directly)
@@ -20,6 +21,11 @@
 //   - User favorites/preferences (per-user, ~2 reads/day)
 //   - Auth state
 //   These are negligible on the quota.
+//
+// ★ BACKEND-DOWN RESILIENCE: When backend is unreachable, stale cached data
+//   is returned instead of empty arrays. Fixtures remain visible. Polling
+//   automatically backs off to avoid hammering a dead server.
+// ═══════════════════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
 import {
@@ -32,9 +38,6 @@ import {
 /* ═══════════════════════════════════════════════════════════════
    BACKEND API CONFIG
    ═══════════════════════════════════════════════════════════════ */
-
-// Set this in your .env or vite config
-// REACT_APP_API_URL=http://your-server-ip:3099
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3099';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -46,22 +49,36 @@ const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3099';
    Backend cache: 10-30s TTL (survives across all users)
    Frontend cache: 5-15s TTL (per-tab, instant response)
 
-   Combined: 1,000 users polling live every 10s =
-     ~100 backend requests/min (not 6,000)
-     ~1-2 Firestore reads/min (not 1,000)
+   ★ KEY CHANGE: Expired entries are NOT deleted immediately.
+   They persist as "stale" data that can be returned when the
+   backend is unreachable, preventing fixture wipeout.
+   A periodic cleanup removes entries older than 10 minutes.
    ═══════════════════════════════════════════════════════════════ */
-
 const _memCache = new Map();
-let _cacheId = 0;
 
+/**
+ * Get fresh (non-expired) cache entry.
+ * Returns `undefined` if missing or expired.
+ * Does NOT delete expired entries — they stay for stale fallback.
+ */
 function memGet(key, ttl) {
   const entry = _memCache.get(key);
-  if (!entry) return null;
-  if (Date.now() - entry.ts > entry.ttl) {
-    _memCache.delete(key);
-    return null;
+  if (!entry) return undefined;
+  if (Date.now() - entry.ts > ttl) {
+    // ★ DON'T DELETE — stale entry may be needed as fallback
+    // when backend is unreachable.
+    return undefined;
   }
   return entry.data;
+}
+
+/**
+ * Get stale cache entry regardless of TTL.
+ * Used only by apiFetch error handler as last-resort fallback.
+ */
+function memGetStale(key) {
+  const entry = _memCache.get(key);
+  return entry ? entry.data : undefined;
 }
 
 function memSet(key, data, ttl) {
@@ -79,7 +96,52 @@ function memInvalidatePrefix(prefix) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   PERIODIC CACHE CLEANUP
+   ═══════════════════════════════════════════════════════════════
+   Since we no longer delete expired entries in memGet, we need
+   periodic cleanup to prevent unbounded memory growth.
+   Removes entries older than 10 minutes (stale beyond usefulness).
+   ═══════════════════════════════════════════════════════════════ */
+const STALE_MAX_AGE = 10 * 60 * 1000; // 10 minutes
+
+if (typeof globalThis !== 'undefined') {
+  setInterval(() => {
+    const now = Date.now();
+    for (const [key, entry] of _memCache.entries()) {
+      if (now - entry.ts > STALE_MAX_AGE) {
+        _memCache.delete(key);
+      }
+    }
+  }, 60_000); // Check every minute
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   BACKEND HEALTH TRACKING
+   ═══════════════════════════════════════════════════════════════
+   Tracks whether the backend is reachable. Used by:
+   - Polling subscriptions to back off when backend is down
+   - Optional UI indicator ("offline" badge)
+   ═══════════════════════════════════════════════════════════════ */
+let _backendOk = true;
+let _backendConsecutiveFails = 0;
+const BACKEND_FAIL_THRESHOLD = 2; // After 2 fails, consider backend down
+
+/** Check if backend was recently reachable. For optional UI use. */
+export function isBackendReachable() {
+  return _backendOk;
+}
+
+/** Get count of consecutive backend failures. */
+export function getBackendFailCount() {
+  return _backendConsecutiveFails;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    API FETCH HELPER
+   ═══════════════════════════════════════════════════════════════
+   ★ KEY CHANGE: On network error, returns stale cached data
+   instead of empty fallback. This prevents fixtures from being
+   wiped when the backend is temporarily unreachable.
    ═══════════════════════════════════════════════════════════════ */
 
 async function apiFetch(path, options = {}) {
@@ -87,9 +149,9 @@ async function apiFetch(path, options = {}) {
 
   const key = cacheKey || path;
 
-  // Check frontend cache first
+  // Check fresh cache first (respects TTL)
   const cached = memGet(key, ttl);
-  if (cached !== null) return cached;
+  if (cached !== undefined) return cached;
 
   try {
     const controller = new AbortController();
@@ -111,20 +173,37 @@ async function apiFetch(path, options = {}) {
     // Store in frontend cache
     memSet(key, data, ttl);
 
+    // ★ Backend is healthy — reset fail counter
+    _backendOk = true;
+    _backendConsecutiveFails = 0;
+
     return data;
   } catch (err) {
-    // On network error, return stale cache if available
-    const staleEntry = _memCache.get(key);
-    if (staleEntry) return staleEntry.data;
+    // ★ Track backend failure
+    _backendConsecutiveFails++;
+    if (_backendConsecutiveFails >= BACKEND_FAIL_THRESHOLD) {
+      _backendOk = false;
+    }
 
-    // Return fallback (empty array usually)
+    // ★ FIRST: Try stale cache (ignores TTL — this is the key fix)
+    // If we have ANY previous data for this key, return it.
+    // This prevents fixtures from being wiped to [].
+    const stale = memGetStale(key);
+    if (stale !== undefined) {
+      console.warn(`[API] Backend unreachable for ${path}, using stale cache (${_backendConsecutiveFails} consecutive fails)`);
+      return stale;
+    }
+
+    // ★ SECOND: No stale data at all (first visit, backend never worked)
+    // Return fallback only as absolute last resort
+    console.warn(`[API] Backend unreachable for ${path}, no stale cache available`);
     if (Array.isArray(fallback)) return fallback;
     return fallback;
   }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   AUTH STATE TRACKING (unchanged — still uses Firestore)
+   AUTH STATE TRACKING (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 let isUserAuthenticated = false;
 let authReady = false;
@@ -360,11 +439,9 @@ export function isInRolloverWindow() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ★ API PATH MAP
-   Maps logical collection names to backend REST endpoints
+   API PATH MAP
    ═══════════════════════════════════════════════════════════════ */
 const API_PATHS = {
-  // Football
   LIVE: '/api/fixtures/live',
   YESTERDAY: '/api/fixtures/yesterday',
   TODAY: '/api/fixtures/today',
@@ -374,7 +451,6 @@ const API_PATHS = {
   LEAGUES: '/api/leagues',
   TEAMS: '/api/teams',
 
-  // Basketball
   BASKETBALL_LIVE: '/api/basketball/live',
   BASKETBALL_YESTERDAY: '/api/basketball/yesterday',
   BASKETBALL_TODAY: '/api/basketball/today',
@@ -384,12 +460,11 @@ const API_PATHS = {
   BASKETBALL_LEAGUES: '/api/basketball/leagues',
   BASKETBALL_TEAMS: '/api/basketball/teams',
 
-  // Meta
   HEALTH: '/health',
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   TRANSFORM: Backend doc -> Frontend match object (unchanged)
+   TRANSFORM HELPERS (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export function transformMatch(m) {
   if (!m) return null;
@@ -564,9 +639,8 @@ function _transformApiFormat(m) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ★ INTERNAL: Read from backend API (replaces Firestore reads)
+   INTERNAL: Read from backend API
    ═══════════════════════════════════════════════════════════════ */
-
 async function _readCollection(apiPath, ttl = 5000) {
   const rawDocs = await apiFetch(apiPath, { ttl, fallback: [] });
   return rawDocs.map((d) => transformMatch(d));
@@ -586,12 +660,7 @@ function _emptyResult(error = null) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ★ INTERNAL: Read fixtures for a specific date
-   ═══════════════════════════════════════════════════════════════
-   Same fallback logic as before, but reads from backend API
-   instead of Firestore. On mismatch (3 AM window), tries
-   all 3 endpoints — but each is cached, so worst case is
-   3 HTTP calls hitting backend cache = 0 Firestore reads.
+   INTERNAL: Read fixtures for a specific date
    ═══════════════════════════════════════════════════════════════ */
 async function _readDayFixtures(yesterdayPath, todayPath, tomorrowPath, date) {
   const yesterdayStr = getYesterdayStr();
@@ -601,7 +670,6 @@ async function _readDayFixtures(yesterdayPath, todayPath, tomorrowPath, date) {
   if (date === yesterdayStr) primaryPath = yesterdayPath;
   else if (date === tomorrowStr) primaryPath = tomorrowPath;
 
-  // Try primary collection first (longer cache for non-live)
   const ttl = (date === getTodayStr()) ? 5000 : 30000;
   const primary = await _readCollection(primaryPath, ttl);
   const filtered = primary.filter((m) => {
@@ -645,7 +713,7 @@ export const fetchFixtures = async (date, forceRefresh = false) => {
       matches,
       error: null,
       fromCache: true,
-      isStale: false,
+      isStale: !_backendOk,
       forceFailed: false,
       cacheSource: 'backend',
       allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
@@ -688,20 +756,10 @@ export const fetchLiveScores = async () => {
 /* ═══════════════════════════════════════════════════════════════
    ★ FOOTBALL: Real-time subscriptions (polling-based)
    ═══════════════════════════════════════════════════════════════
-   Replaces Firestore onSnapshot with smart polling.
-
-   Why not onSnapshot?
-     onSnapshot opens a persistent WebSocket to Firestore.
-     Every doc in the queried collection counts as a read
-     on every snapshot update. With 100 live docs × 100 users,
-     that's 10,000 reads per update cycle.
-
-   New approach:
-     - Polls backend REST endpoint (server-side cached)
-     - 10s interval when live matches exist
-     - 60s interval when no live matches
-     - 30s interval on error (backoff)
-     - Returns unsubscribe function (same API as onSnapshot)
+   ★ KEY CHANGE: When backend is down, uses slower polling interval
+   to avoid hammering a dead server with 8s timeout requests.
+   Stale data flows through naturally — callback receives same data,
+   React bails out of re-render since state is identical.
    ═══════════════════════════════════════════════════════════════ */
 
 export const subscribeToLiveFixtures = (callback) => {
@@ -724,6 +782,10 @@ export const subscribeToTodayFixtures = (callback) => {
  * Generic polling subscription factory.
  * Mimics onSnapshot API: calls callback immediately, then on interval.
  * Returns unsubscribe function.
+ *
+ * ★ When backend is unreachable (isBackendReachable() === false),
+ *   uses errorMs interval instead of activeMs/idleMs to reduce
+ *   wasted 8-second timeout requests.
  */
 function _createPollingSubscription(path, callback, options = {}) {
   const {
@@ -742,7 +804,6 @@ function _createPollingSubscription(path, callback, options = {}) {
     if (!active) return;
 
     try {
-      // Short TTL for live polling — we want fresh-ish data
       const ttl = isLive ? 8000 : 25000;
       const rawDocs = await apiFetch(path, { ttl, fallback: [] });
       currentMatches = rawDocs.map((d) => transformMatch(d));
@@ -760,8 +821,17 @@ function _createPollingSubscription(path, callback, options = {}) {
         error: null,
       });
 
-      // Adaptive interval: fast when live, slow when idle
-      const nextMs = hasLive ? activeMs : idleMs;
+      // ★ Adaptive interval: fast when live, slow when idle,
+      // even slower when backend is unreachable
+      let nextMs;
+      if (!_backendOk && errorCount === 0) {
+        // Backend seems down but we got stale data (no error thrown)
+        // Use error interval to back off
+        nextMs = errorMs;
+      } else {
+        nextMs = hasLive ? activeMs : idleMs;
+      }
+
       if (active) timer = setTimeout(poll, nextMs);
 
     } catch (err) {
@@ -781,11 +851,9 @@ function _createPollingSubscription(path, callback, options = {}) {
     }
   };
 
-  // Start immediately (like onSnapshot)
   active = true;
   poll();
 
-  // Return unsubscribe function (same API as onSnapshot)
   return () => {
     active = false;
     if (timer) {
@@ -812,7 +880,7 @@ export const fetchBasketballFixtures = async (date) => {
       matches,
       error: null,
       fromCache: true,
-      isStale: false,
+      isStale: !_backendOk,
       forceFailed: false,
       cacheSource: 'backend',
       allFinished: matches.length > 0 && matches.every((m) => m.isFinished),
@@ -872,21 +940,17 @@ export const subscribeToBasketballTodayFixtures = (callback) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   STANDINGS — reads from backend API
+   STANDINGS (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const fetchLeagueStandings = async (leagueId) => {
   try {
-    // Backend returns array of all standings docs
     const allStandings = await apiFetch(API_PATHS.STANDINGS, {
-      ttl: 600000, // 10 min — standings change infrequently
+      ttl: 600000,
       fallback: [],
     });
-
-    // Find the one matching this league ID
     const leagueDoc = allStandings.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
-
     return leagueDoc?.standings || [];
   } catch (err) {
     console.warn('[Data] Standings error:', err.message);
@@ -900,11 +964,9 @@ export const fetchBasketballLeagueStandings = async (leagueId) => {
       ttl: 600000,
       fallback: [],
     });
-
     const leagueDoc = allStandings.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
-
     return leagueDoc?.standings || [];
   } catch (err) {
     console.warn('[Data] Basketball standings error:', err.message);
@@ -913,15 +975,12 @@ export const fetchBasketballLeagueStandings = async (leagueId) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   LEAGUES — reads from backend API
+   LEAGUES (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const fetchLeagues = async (sport = 'football') => {
   try {
     const path = sport === 'basketball' ? API_PATHS.BASKETBALL_LEAGUES : API_PATHS.LEAGUES;
-    return await apiFetch(path, {
-      ttl: 600000, // 10 min
-      fallback: [],
-    });
+    return await apiFetch(path, { ttl: 600000, fallback: [] });
   } catch (err) {
     console.warn('[Data] Leagues error:', err.message);
     return [];
@@ -929,12 +988,7 @@ export const fetchLeagues = async (sport = 'football') => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   TEAM FIXTURES — Search across cached API responses
-   ═══════════════════════════════════════════════════════════════
-   Fetches all 5 football collections from backend (cached),
-   then filters client-side by teamId.
-   
-   Cost: 5 HTTP requests, but ALL hit backend cache = 0 Firestore reads.
+   TEAM FIXTURES (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const fetchTeamFixtures = async (teamId) => {
   try {
@@ -945,7 +999,6 @@ export const fetchTeamFixtures = async (teamId) => {
       _readCollection(API_PATHS.FINISHED, 30000),
       _readCollection(API_PATHS.LIVE, 5000),
     ]);
-
     const tid = String(teamId);
     return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
       .filter((m) => m.homeId === tid || m.awayId === tid)
@@ -965,7 +1018,6 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
       _readCollection(API_PATHS.BASKETBALL_FINISHED, 30000),
       _readCollection(API_PATHS.BASKETBALL_LIVE, 5000),
     ]);
-
     const tid = String(teamId);
     return [...yesterday, ...today, ...tomorrow, ...finished, ...live]
       .filter((m) => m.homeId === tid || m.awayId === tid)
@@ -977,10 +1029,7 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   BACKEND STATUS — reads from /health endpoint
-   ═══════════════════════════════════════════════════════════════
-   Uses the /health endpoint instead of reading Firestore meta docs.
-   0 Firestore reads.
+   BACKEND STATUS (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const fetchBackendStatus = async () => {
   try {
@@ -995,14 +1044,11 @@ export const fetchBackendStatus = async () => {
 
     const parseJobStatus = (job) => {
       if (!job) return { status: 'unknown', fetchedAt: null };
-
       const result = job.lastResult || {};
       const todayStr = getTodayStr();
-      // Check if the daily job ran successfully today
       const fetchDone = job.lastSync
         ? job.lastSync.startsWith(todayStr)
         : false;
-
       return {
         status: job.status === 'success' && fetchDone ? 'complete' : 'pending',
         fetchedAt: job.lastSync || null,
@@ -1033,11 +1079,9 @@ export const fetchBackendStatus = async () => {
 
 export const getSyncStatusMessage = (status) => {
   if (!status) return 'Unknown';
-
   if (status.status === 'pending') {
     return isInRolloverWindow() ? 'Updating...' : 'Waiting for daily sync';
   }
-
   if (status.fetchedAt) {
     try {
       const d = new Date(status.fetchedAt);
@@ -1046,19 +1090,18 @@ export const getSyncStatusMessage = (status) => {
       return 'Updated';
     }
   }
-
   return 'Updated';
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   MATCH DETAILS (stubs — not fetched on free plan)
+   MATCH DETAILS (stubs)
    ═══════════════════════════════════════════════════════════════ */
 export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'backend' });
 export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'backend' });
 export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'backend' });
 
 /* ═══════════════════════════════════════════════════════════════
-   CACHE COMPATIBILITY (same exports, different implementation)
+   CACHE COMPATIBILITY (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const loadFixturesFromAnyCache = async (date) => {
   const res = await fetchFixtures(date);
@@ -1077,7 +1120,7 @@ export const clearAllCache = () => {
 };
 
 /* ═══════════════════════════════════════════════════════════════
-   QUOTA COMPATIBILITY (no API calls from browser = no quota)
+   QUOTA COMPATIBILITY (unchanged)
    ═══════════════════════════════════════════════════════════════ */
 export const getQuotaStatus = () => ({
   used: 0, limit: 99999, remaining: 99999,
@@ -1085,13 +1128,13 @@ export const getQuotaStatus = () => ({
   blocked: false, hardBlocked: false,
 });
 
-export const LIVE_POLL_ACTIVE = 10000;  // 10s — aggressive because cached
-export const LIVE_POLL_IDLE = 60000;     // 60s — no live games
+export const LIVE_POLL_ACTIVE = 10000;
+export const LIVE_POLL_IDLE = 60000;
 export const LIVE_POLL_BLOCKED = 600000;
 export const getLivePollInterval = () => LIVE_POLL_ACTIVE;
 
 /* ═══════════════════════════════════════════════════════════════
-   SYNC COMPATIBILITY (no-ops — backend handles all syncing)
+   SYNC COMPATIBILITY (no-ops)
    ═══════════════════════════════════════════════════════════════ */
 export const dailySyncToFirestore = async () => ({ done: true, skipped: true, reason: 'BACKEND' });
 export const syncDateToFirestore = async () => false;
