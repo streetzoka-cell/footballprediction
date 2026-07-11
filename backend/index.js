@@ -88,7 +88,7 @@ const CLIENT_CACHE_TTL = {
 
 // ═══════════════════════════════════════════════════════════════
 // COLLECTION → CACHE KEY MAPPING
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 
 const ENDPOINT_CONFIG = {
   [COLLECTIONS.TODAY_FIXTURES]: {
@@ -220,7 +220,7 @@ async function cachedCollectionEndpoint(req, res, collectionName) {
 
 // ═══════════════════════════════════════════════════════════════
 // API SERVER
-// ═══════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════
 
 function startServer() {
   const app = express();
@@ -382,7 +382,7 @@ function startServer() {
   return server;
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // GRACEFUL SHUTDOWN
 // ═══════════════════════════════════════════════════════════════
 
@@ -420,16 +420,16 @@ function setupShutdownHandlers() {
   });
 }
 
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 // MAIN
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════════
 
 async function main() {
   const startTime = Date.now();
 
   logger.info("╔══════════════════════════════════════════╗");
   logger.info("║   Sports Sync — Starting                 ║");
-  logger.info("╚══════════════════════════════════════════╝");
+  logger.info("╚════════════════════════════════════════╝");
 
   // 1. Firebase
   try {
@@ -508,7 +508,7 @@ async function main() {
   const duration = Date.now() - startTime;
   const bball = isBasketballConfigured ? "✅ ON" : "⬜ OFF";
 
-  logger.info("╔══════════════════════════════════════════╗");
+  logger.info("╔════════════════════════════════════════╗");
   logger.info(
     `║  Ready in ${String(duration).padStart(4)}ms                       ║`
   );
@@ -525,7 +525,7 @@ async function main() {
   logger.info("║  Cache TTL:  24h (invalidate-only)     ║");
   logger.info("║  Herd guard: getOrSet lock active      ║");
   logger.info("║  Client reads: 0 Firestore reads       ║");
-  logger.info("╚══════════════════════════════════════════╝");
+  logger.info("╚════════════════════════════════════════╝");
 }
 
 main().catch((error) => {

@@ -337,4 +337,4 @@ class LiveFixturesService {
   }
 }
 
-module.exports = LiveFixtures;
+module.exports = LiveFixturesService;
