@@ -1,9 +1,8 @@
 // FILE: src/pages/Fixtures.jsx
 //
-// v3 NOTE: This file has NO imports from useMatchData.js.
-// It's a standalone fixture viewer using only ../utils/api.
-// No changes needed for v3 hook migration — style ID bumped for consistency.
+// v4 — Live minute interpolation for smooth ticking between backend polls.
 //
+
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   CalendarDays, RefreshCw, WifiOff, Search, X,
@@ -18,14 +17,13 @@ import {
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION — Clean, Mobile-First, Centered
+   STYLE INJECTION
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('fx-clean-v2')) return;
+  if (document.getElementById('fx-clean-v4')) return;
   const s = document.createElement('style');
-  s.id = 'fx-clean-v2';
+  s.id = 'fx-clean-v4';
   s.textContent = `
-    /* ═══ ANIMATIONS ═══ */
     @keyframes fxFadeUp {
       from { opacity: 0; transform: translateY(16px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -113,7 +111,6 @@ const injectStyles = () => {
       50%      { box-shadow: 0 4px 28px rgba(239,68,68,.4); }
     }
 
-    /* ═══ UTILITY CLASSES ═══ */
     .fx-enter     { animation: fxFadeUp .45s cubic-bezier(.22,1,.36,1) both; }
     .fx-scale-in  { animation: fxScaleIn .35s cubic-bezier(.22,1,.36,1) both; }
     .fx-row       { animation: fxSlideRow .3s cubic-bezier(.22,1,.36,1) both; }
@@ -132,7 +129,6 @@ const injectStyles = () => {
     .fx-btn:active { transform: translateY(0) scale(.97); }
     .fx-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-    /* ═══ PAGE LAYOUT ═══ */
     .fx-page {
       min-height: 100vh;
       background: var(--bg-deep);
@@ -146,7 +142,6 @@ const injectStyles = () => {
       padding: 0 16px 100px;
     }
 
-    /* ═══ HEADER ═══ */
     .fx-header {
       width: 100%;
       text-align: center;
@@ -165,7 +160,6 @@ const injectStyles = () => {
       font-weight: 500;
     }
 
-    /* ═══ DATE TABS ═══ */
     .fx-date-tabs {
       display: flex;
       gap: 4px;
@@ -202,7 +196,6 @@ const injectStyles = () => {
     }
     .fx-date-tab .day-label { font-size: .62rem; font-weight: 500; opacity: .6; }
 
-    /* ═══ ACTION BAR ═══ */
     .fx-actions {
       display: flex;
       align-items: center;
@@ -238,7 +231,6 @@ const injectStyles = () => {
       border-color: rgba(0,230,118,.2);
     }
 
-    /* ═══ SEARCH BAR ═══ */
     .fx-search-wrap {
       width: 100%;
       overflow: hidden;
@@ -272,7 +264,6 @@ const injectStyles = () => {
     }
     .fx-search-bar input::placeholder { color: var(--text-muted); opacity: .5; }
 
-    /* ═══ LIVE TICKER ═══ */
     .fx-ticker {
       display: flex;
       gap: 8px;
@@ -305,7 +296,6 @@ const injectStyles = () => {
       font-variant-numeric: tabular-nums;
     }
 
-    /* ═══ LEAGUE GROUP ═══ */
     .fx-league {
       width: 100%;
       margin-bottom: 20px;
@@ -336,7 +326,6 @@ const injectStyles = () => {
       opacity: .5;
     }
 
-    /* ═══ MATCH CARD ═══ */
     .fx-card {
       position: relative;
       overflow: hidden;
@@ -383,7 +372,6 @@ const injectStyles = () => {
       animation: fxGoalFlash 2s ease-out both;
     }
 
-    /* Left accent bar */
     .fx-left-bar {
       position: absolute;
       left: 0; top: 0; bottom: 0;
@@ -393,7 +381,6 @@ const injectStyles = () => {
       animation: fxScaleIn .4s cubic-bezier(.22,1,.36,1) both;
     }
 
-    /* Status row */
     .fx-status-row {
       display: flex;
       align-items: center;
@@ -451,6 +438,7 @@ const injectStyles = () => {
       font-weight: 700;
       color: #ef4444;
       font-family: var(--font-display);
+      font-variant-numeric: tabular-nums;
     }
     .fx-kickoff-badge {
       animation: fxKickBadge 4.5s ease-out forwards;
@@ -464,7 +452,6 @@ const injectStyles = () => {
       letter-spacing: .04em;
     }
 
-    /* Teams row */
     .fx-teams {
       display: flex;
       align-items: center;
@@ -506,7 +493,6 @@ const injectStyles = () => {
     .fx-team-col.home .fx-team-name { text-align: right; }
     .fx-team-col.away .fx-team-name { text-align: left; }
 
-    /* Score center */
     .fx-score-center {
       width: 72px;
       flex-shrink: 0;
@@ -548,7 +534,6 @@ const injectStyles = () => {
       letter-spacing: .12em;
     }
 
-    /* Fav button */
     .fx-fav {
       background: none;
       border: none;
@@ -566,7 +551,6 @@ const injectStyles = () => {
     .fx-fav.active { color: var(--gold); opacity: 1; }
     .fx-fav.pop { animation: fxFavPop .35s cubic-bezier(.22,1,.36,1) both; }
 
-    /* Progress bar */
     .fx-progress {
       height: 2px;
       border-radius: 1px;
@@ -581,7 +565,6 @@ const injectStyles = () => {
       animation: fxProgressPulse 1.5s ease-in-out infinite;
     }
 
-    /* Expanded panel */
     .fx-expanded {
       background: var(--bg-surface);
       border: 1px solid var(--border);
@@ -600,7 +583,6 @@ const injectStyles = () => {
     }
     .fx-score-row:last-child { border-bottom: none; }
 
-    /* Status overlay */
     .fx-overlay {
       position: absolute;
       inset: 0;
@@ -629,7 +611,6 @@ const injectStyles = () => {
       animation: fxStatusOverlay 3.5s cubic-bezier(.22,1,.36,1) both;
     }
 
-    /* Goal notification */
     .fx-goal-notif {
       position: fixed;
       top: 0; left: 0; right: 0;
@@ -650,7 +631,6 @@ const injectStyles = () => {
       pointer-events: none;
     }
 
-    /* Jump button */
     .fx-jump-btn {
       position: fixed;
       bottom: 24px;
@@ -682,7 +662,6 @@ const injectStyles = () => {
       transform: translateX(-50%) translateY(0) scale(.97);
     }
 
-    /* Error / Empty */
     .fx-empty {
       width: 100%;
       display: flex;
@@ -703,7 +682,6 @@ const injectStyles = () => {
       justify-content: center;
     }
 
-    /* ═══ RESPONSIVE ═══ */
     @media (min-width: 480px) {
       .fx-team-name { font-size: .88rem; }
       .fx-score-num { font-size: 1.2rem; min-width: 30px; }
@@ -736,9 +714,7 @@ const Sound = {
     if (!this.ctx) {
       try {
         this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-      } catch {
-        /* no audio */
-      }
+      } catch { /* no audio */ }
     }
     if (this.ctx?.state === 'suspended') this.ctx.resume();
     return !!this.ctx;
@@ -747,9 +723,7 @@ const Sound = {
     if (!this.on || !this._init()) return;
     try {
       navigator.vibrate?.([80, 40, 80, 40, 120]);
-    } catch {
-      /* vibrate not supported */
-    }
+    } catch { /* vibrate not supported */ }
     const t = this.ctx.currentTime;
     const w = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -794,6 +768,13 @@ const SCHED_SET = new Set(['NS', 'TBD', 'PST', 'CANC', 'SUSP', 'INT', 'POSTP']);
 const HT_SET = new Set(['HT', 'BT']);
 const FT_SET = new Set(['FT', 'AET', 'PEN', 'ABD']);
 
+// Half-maximum minutes per half for capping interpolation
+const HALF_MAX = {
+  '1H': 45, '2H': 90, 'ET': 120,
+  '1Q': 12, 'Q1': 12, '2Q': 24, 'Q2': 24,
+  '3Q': 36, 'Q3': 36, '4Q': 48, 'Q4': 48, 'OT': 53,
+};
+
 const dateLabel = (d) =>
   d === TODAY
     ? 'Today'
@@ -806,12 +787,6 @@ const dateLabel = (d) =>
         day: 'numeric',
         month: 'short',
       });
-
-const dateShort = (d) =>
-  new Date(d + 'T12:00:00').toLocaleDateString(undefined, {
-    day: 'numeric',
-    month: 'short',
-  });
 
 const safeNum = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
 const normalize = (s) =>
@@ -868,12 +843,18 @@ export default function Fixtures() {
   const [favPopId, setFavPopId] = useState(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
+  // ★ v4: tick counter forces re-render every 10s for live minute interpolation
+  const [liveTick, setLiveTick] = useState(0);
+
   /* ── Refs ── */
   const prevScores = useRef(new Map());
   const prevStatuses = useRef(new Map());
   const liveAnchor = useRef(null);
   const soundRef = useRef(true);
   const timeouts = useRef(new Map());
+
+  // ★ v4: records when each live match's minute was last updated from backend
+  const minuteUpdatedAt = useRef(new Map());
 
   useEffect(() => {
     soundRef.current = soundOn;
@@ -896,6 +877,50 @@ export default function Fixtures() {
       }, ms)
     );
   };
+
+  /* ═══════════════════════════════════════════════════════════
+     ★ v4: LIVE MINUTE INTERPOLATION
+     ═══════════════════════════════════════════════════════════
+     Backend polls every 5 min → minute jumps (e.g. 35 → 40).
+     This interpolates so it ticks 35 → 36 → 37 → ... smoothly.
+     Capped per-half so it can't show impossible minutes.
+     ═══════════════════════════════════════════════════════════ */
+  const getDisplayMinute = useCallback((m) => {
+    void liveTick;
+
+    if (!m.isLive) return m.minute || 0;
+    if (m.minute == null || m.minute <= 0) return 0;
+
+    const status = m.status || '';
+
+    if (status === 'HT' || status === 'BT') return m.minute;
+
+    const updatedAt = minuteUpdatedAt.current.get(String(m.id));
+    if (!updatedAt) return m.minute;
+
+    const additionalMinutes = Math.floor((Date.now() - updatedAt) / 60000);
+    let display = m.minute + additionalMinutes;
+
+    const cap = HALF_MAX[status];
+    if (cap) {
+      display = Math.min(display, cap);
+    } else {
+      display = Math.min(display, 90);
+    }
+
+    if (display < m.minute) display = m.minute;
+
+    return display;
+  }, [liveTick]);
+
+  /* ═══════════════════════════════════════════════════════════
+     ★ v4: 10-SECOND TICK (only on Today tab)
+     ═══════════════════════════════════════════════════════════ */
+  useEffect(() => {
+    if (date !== TODAY) return;
+    const iv = setInterval(() => setLiveTick((t) => t + 1), 10000);
+    return () => clearInterval(iv);
+  }, [date]);
 
   /* ═══════════════════════════════════════════════════════════
      GOAL DETECTION
@@ -1030,15 +1055,20 @@ export default function Fixtures() {
       setExpanded(null);
       setKickOffs(new Set());
       setStatusAnims(new Map());
+      minuteUpdatedAt.current.clear();
       try {
         const res = await fetchFixtures(d);
         const matches = res?.matches || [];
         if (matches.length > 0) {
           setFixtures(matches);
           detectGoals(matches);
-          matches.forEach((m) =>
-            prevStatuses.current.set(String(m.id), m.status || '')
-          );
+          matches.forEach((m) => {
+            prevStatuses.current.set(String(m.id), m.status || '');
+            // ★ v4: record timestamp for live matches so interpolation can begin
+            if (m.isLive && m.minute != null && m.minute > 0) {
+              minuteUpdatedAt.current.set(String(m.id), Date.now());
+            }
+          });
           setError(null);
         } else {
           setError(res?.error || 'NO_DATA');
@@ -1077,6 +1107,17 @@ export default function Fixtures() {
         const updated = prev.map((f) => {
           const l = map.get(String(f.id));
           if (!l) return f;
+          const newMinute = l.minute ?? f.minute;
+
+          // ★ v4: reset interpolation timestamp when backend reports new minute
+          if (newMinute !== f.minute && newMinute != null && newMinute > 0) {
+            minuteUpdatedAt.current.set(String(f.id), Date.now());
+          }
+          // ★ v4: also start tracking when a match goes live for the first time
+          if (!f.isLive && l.minute != null && l.minute > 0) {
+            minuteUpdatedAt.current.set(String(f.id), Date.now());
+          }
+
           return {
             ...f,
             homeScore: l.homeScore ?? f.homeScore,
@@ -1084,7 +1125,7 @@ export default function Fixtures() {
             isLive: true,
             isFinished: false,
             status: l.status || f.status,
-            minute: l.minute ?? f.minute,
+            minute: newMinute,
             score: l.score || f.score,
             referee: l.referee || f.referee,
           };
@@ -1220,7 +1261,10 @@ export default function Fixtures() {
     const isExp = expanded === String(m.id);
     const isStatusAnim = statusAnims.get(String(m.id));
     const popSide = scorePops.get(String(m.id));
-    const minute = m.minute || 0;
+
+    // ★ v4: use interpolated minute instead of raw static minute
+    const minute = getDisplayMinute(m);
+
     const progress = isLive ? Math.min(minute / 90, 1) : 0;
     const pColor = minute <= 45 ? '#ef4444' : '#f97316';
     const hFav = isFav(m.homeTeam?.id);
@@ -1294,7 +1338,7 @@ export default function Fixtures() {
             )}
             {isHT && (
               <span className="fx-minute" style={{ color: '#f97316' }}>
-                45+{minute > 45 ? minute - 45 : ''}&apos;
+                45{minute > 45 ? `+${minute - 45}` : ''}&apos;
               </span>
             )}
             {!isLive && !isHT && !isFT && m.kickoff && (
@@ -1568,28 +1612,14 @@ export default function Fixtures() {
         url="https://zokascore.com/fixtures"
       />
 
-      {/* Goal notification */}
-      {goalNotif && (
-        <div className="fx-goal-notif" key={goalNotif.key}>
-          <Zap size={16} /> {goalNotif.text}
-        </div>
-      )}
-
       <div className="fx-container">
         {/* Header */}
         <div className="fx-header fx-enter">
-          <h1>{dateLabel(date)}</h1>
-          <div className="sub">
-            {filtered.length} match{filtered.length !== 1 ? 'es' : ''}
-            {liveCount > 0 && (
-              <span style={{ color: '#ef4444', fontWeight: 700 }}>
-                {' '}· {liveCount} live
-              </span>
-            )}
-          </div>
+          <h1>Fixtures</h1>
+          <div className="sub">Live scores &amp; results</div>
         </div>
 
-        {/* Date tabs */}
+        {/* Date Tabs */}
         <div className="fx-date-tabs fx-enter" style={{ animationDelay: '50ms' }}>
           {DATES.map((d) => (
             <button
@@ -1597,49 +1627,42 @@ export default function Fixtures() {
               className={`fx-date-tab ${date === d ? 'active' : ''}`}
               onClick={() => setDate(d)}
             >
-              <span>{dateLabel(d)}</span>
-              <span className="day-label">{dateShort(d)}</span>
+              <span className="day-label">
+                {d === YESTERDAY ? 'Yesterday' : d === TODAY ? 'Today' : 'Tomorrow'}
+              </span>
+              <span>
+                {new Date(d + 'T12:00:00').getDate()}
+              </span>
             </button>
           ))}
         </div>
 
-        {/* Actions */}
-        <div className="fx-actions fx-enter" style={{ animationDelay: '80ms' }}>
+        {/* Action Bar */}
+        <div className="fx-actions fx-enter" style={{ animationDelay: '100ms' }}>
           <button
-            className={`fx-action-btn ${soundOn ? 'active' : ''}`}
-            onClick={() => {
-              setSoundOn(!soundOn);
-              Sound.on = !soundOn;
-            }}
+            className={`fx-action-btn ${favFilter ? 'active' : ''}`}
+            onClick={() => setFavFilter((f) => !f)}
           >
-            {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />}
-            Sound
+            <Star size={13} fill={favFilter ? 'var(--gold)' : 'none'} /> Favs
           </button>
-          {favs.length > 0 && (
-            <button
-              className={`fx-action-btn ${favFilter ? 'active' : ''}`}
-              onClick={() => setFavFilter(!favFilter)}
-            >
-              <Star size={13} fill={favFilter ? 'var(--accent)' : 'none'} />
-              Favs ({favs.length})
-            </button>
-          )}
           <button
-            className={`fx-action-btn ${searchOpen ? 'active' : ''}`}
-            onClick={() => {
-              setSearchOpen(!searchOpen);
-              if (searchOpen) setSearchQ('');
-            }}
+            className="fx-action-btn"
+            onClick={() => setSearchOpen((o) => !o)}
           >
             <Search size={13} /> Search
           </button>
           <button
+            className={`fx-action-btn ${soundOn ? 'active' : ''}`}
+            onClick={() => setSoundOn((s) => !s)}
+          >
+            {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />} Sound
+          </button>
+          <button
             className="fx-action-btn"
             onClick={handleRefresh}
-            style={{ opacity: isRefreshing ? 0.5 : 1 }}
+            disabled={isRefreshing}
           >
-            <RefreshCw size={13} style={isRefreshing ? { animation: 'fxShimmer .8s linear infinite' } : {}} />
-            Refresh
+            <RefreshCw size={13} style={{ animation: isRefreshing ? 'spin 1s linear infinite' : 'none' }} />
           </button>
         </div>
 
@@ -1648,15 +1671,16 @@ export default function Fixtures() {
           <div className="fx-search-bar">
             <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
             <input
-              placeholder="Search teams or leagues..."
+              type="text"
+              placeholder="Search team or league..."
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
               autoFocus={searchOpen}
             />
             {searchQ && (
               <button
-                onClick={() => { setSearchQ(''); }}
-                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
+                onClick={() => setSearchQ('')}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-muted)', padding: 2 }}
               >
                 <X size={14} />
               </button>
@@ -1664,10 +1688,10 @@ export default function Fixtures() {
           </div>
         </div>
 
-        {/* Live ticker */}
+        {/* Live Ticker */}
         {liveCount > 0 && (
-          <div className="fx-ticker fx-enter" style={{ animationDelay: '100ms' }}>
-            {liveMatches.map((m) => (
+          <div className="fx-ticker fx-enter" style={{ animationDelay: '150ms' }}>
+            {liveMatches.slice(0, 10).map((m) => (
               <div
                 key={m.id}
                 className="fx-ticker-item"
@@ -1676,48 +1700,63 @@ export default function Fixtures() {
                   if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
               >
+                <span style={{ color: 'var(--text-muted)', fontSize: '.62rem', fontWeight: 600 }}>
+                  {m.homeTeam?.shortName || m.homeTeam?.name?.substring(0, 3)}
+                </span>
                 <span className="fx-ticker-score">
                   {m.homeScore ?? 0}-{m.awayScore ?? 0}
                 </span>
-                <span style={{ color: 'rgba(255,255,255,.7)' }}>
-                  {m.homeTeam?.shortName || m.homeTeam?.name?.slice(0, 3)}
+                <span style={{ color: 'var(--text-muted)', fontSize: '.62rem', fontWeight: 600 }}>
+                  {m.awayTeam?.shortName || m.awayTeam?.name?.substring(0, 3)}
                 </span>
               </div>
             ))}
           </div>
         )}
 
-        {/* Match list by league */}
-        {filtered.length === 0 ? (
-          <div className="fx-empty fx-enter">
-            <div className="fx-empty-icon" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)' }}>
-              <Search size={22} />
-            </div>
-            <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-              No matches found
-            </div>
-            <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-              {searchQ ? 'Try a different search term' : favFilter ? 'No favourite teams in this list' : 'No fixtures for this day'}
-            </div>
-          </div>
-        ) : (
-          grouped.map((league) => (
-            <div key={league.id} className="fx-league">
+        {/* Match List */}
+        {grouped.length > 0 ? (
+          grouped.map((league, li) => (
+            <div key={league.id} className="fx-league" style={{ animationDelay: `${200 + li * 40}ms` }}>
               <div className="fx-league-header">
-                {league.logo && <img src={league.logo} alt="" />}
+                {league.logo && <img src={league.logo} alt="" loading="lazy" />}
                 <span>{league.name}</span>
                 <span className="count">{league.matches.length}</span>
               </div>
-              {league.matches.map((m, i) => renderCard(m, i))}
+              {league.matches.map((m, mi) => renderCard(m, mi))}
             </div>
           ))
+        ) : (
+          <div className="fx-empty fx-enter">
+            <div className="fx-empty-icon" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)' }}>
+              <CalendarDays size={22} />
+            </div>
+            <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+              {searchQ || favFilter ? 'No matches found' : 'No matches scheduled'}
+            </div>
+            <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 500, maxWidth: 280, lineHeight: 1.5 }}>
+              {searchQ
+                ? 'Try different search terms'
+                : favFilter
+                ? 'Add teams to favorites to see them here'
+                : `No fixtures found for ${dateLabel(date).toLowerCase()}.`}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Jump to live */}
+      {/* Goal Notification */}
+      {goalNotif && (
+        <div className="fx-goal-notif" key={goalNotif.key}>
+          <Zap size={16} />
+          <span style={{ fontWeight: 800, fontSize: '.85rem' }}>{goalNotif.text}</span>
+        </div>
+      )}
+
+      {/* Jump to Live */}
       {showJump && liveCount > 0 && (
         <button className="fx-jump-btn" onClick={jumpToLive}>
-          <Zap size={14} /> Jump to Live ({liveCount})
+          <Zap size={15} /> {liveCount} Live
         </button>
       )}
     </div>

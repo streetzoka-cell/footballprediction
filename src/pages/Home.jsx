@@ -16,7 +16,7 @@ import {
   WifiOff, LogIn, Star, CheckCircle, Clock,
   Loader, Lock, Play, Radio, Crown, Sparkles,
   Activity, Medal, BarChart3, CircleDot, ArrowUpRight,
-  Sun, Moon, CloudSun, UsersRound, Timer, Gauge, Eye,
+  Sun, Moon, CloudSun, UsersRound, Timer, Gauge, Eye, ChevronUp,
   Info, Pause, PlayCircle, XCircle, TrendingUp as TrendIcon
 } from 'lucide-react';
 
@@ -35,7 +35,7 @@ import {
 } from '../hooks/useMatchData';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs } from 'firebase/firestore';
-
+import SEO from '../components/SEO';
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════════════ */
@@ -850,7 +850,7 @@ export default function Home() {
             <div>
               <div className="stat-chip-label">Your Predicted</div>
               <div className="stat-chip-val">
-                {userScored}<span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, marginLeft: 4 }}/{featured.length}</span>
+              {userScored}<span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, marginLeft: 4 }}>/{featured.length}</span>
               </div>
             </div>
             <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(96,165,250,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
@@ -991,11 +991,11 @@ export default function Home() {
                   className={`toggle-more-btn ${showMoreZoka ? 'expanded' : ''}`}
                   onClick={() => setShowMoreZoka(!showMoreZoka)}
                 >
-                  {showMoreZoka ? (
-                    <><ChevronUp size={16} /> Show Less</>
-                  ) : (
-                    <><ChevronDown size={16} /> Show {zokaMatches.length - 3} More
-                  )}
+                 {showMoreZoka ? (
+  <><ChevronUp size={16} /> Show Less</>
+) : (
+  <><ChevronDown size={16} /> Show {zokaMatches.length - 3} More</>
+)}
                 </button>
               )}
             </div>
