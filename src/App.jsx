@@ -13,6 +13,7 @@ import {
 } from "react-router-dom";
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { AppDataProvider } from "./context/AppDataContext.jsx";
 import { initApp } from "./utils/api";
 
 import Navbar from "./components/Navbar";
@@ -163,16 +164,28 @@ function AdminRoute({ children }) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MAIN APP
+   INNER APP CONTENT
+═══════════════════════════════════════════════════════════════
+   This is inside AuthProvider so we can access currentUser
+   for the AppDataProvider, which needs userId for user-specific data.
 ═══════════════════════════════════════════════════════════════ */
 
-export default function App() {
+function AppContent() {
+  const { currentUser } = useAuth();
+
   useEffect(() => {
     initApp();
   }, []);
 
   return (
-    <AuthProvider>
+    <AppDataProvider
+      userId={currentUser?.uid || null}
+      displayName={
+        currentUser?.displayName ||
+        currentUser?.email?.split("@")[0] ||
+        null
+      }
+    >
       <div
         style={{
           display: "flex",
@@ -312,6 +325,18 @@ export default function App() {
 
         <Footer />
       </div>
+    </AppDataProvider>
+  );
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN APP
+═══════════════════════════════════════════════════════════════ */
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
     </AuthProvider>
   );
 }

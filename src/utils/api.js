@@ -29,8 +29,13 @@ import {
 /* ═══════════════════════════════════════════════════
    BACKEND API CONFIG
    ═══════════════════════════════════════════════════ */
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3099';
-
+const API_BASE = import.meta.env.VITE_API_URL;
+if (!API_BASE) {
+  console.error(
+    '[API] VITE_API_URL environment variable is required. ' +
+    'Set it in your .env file or deployment configuration.'
+  );
+}
 /* ═══════════════════════════════════════════════════
    FRONTEND IN-MEMORY CACHE
    ═══════════════════════════════════════════════════

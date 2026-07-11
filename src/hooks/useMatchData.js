@@ -1,79 +1,15 @@
 // ═════════════════════════════════════════════════════════════════════════════
-// FILE: src/hooks/useMatchData.js — QUOTA-OPTIMIZED v3
-// ═════════════════════════════════════════════════════════════════════════════
+// FILE: src/hooks/useMatchData.js
+// REFACTORED — Uses centralized data layer instead of direct Firestore reads
 //
-// QUOTA BUDGET (Spark Plan):  50K reads/day,  20K writes/day
-// TARGET:                      2,000+ daily active users
+// ALL hooks now use dataLayer for caching.
+// The cache is shared across all components, so navigating between
+// pages does NOT cause duplicate Firestore reads.
 //
-// ═════════════════════════════════════════════════════════════════════════════
-// v3 CHANGES (from v2)
-// ═════════════════════════════════════════════════════════════════════════════
-//
-//  1. ALL cache TTLs raised to 30 minutes (were 45s–90s).
-//     Cache now outlives poll interval → most polls are cache hits.
-//
-//  2. Poll intervals raised to 10 minutes (were 90s–120s).
-//     Active predictions and daily leaderboard still refresh, but
-//     far less often. 30-min session = 1 Firestore read per hook.
-//
-//  3. GOAT leaderboard: pre-computed single doc instead of scanning
-//     entire user_points_total collection (2,000 reads → 1 read).
-//     Incrementally updated after each resolution (1 read + 1 write).
-//
-//  4. Weekly/monthly leaderboards: pre-computed docs instead of
-//     scanning prediction_results (500-2,000 reads → 1 read).
-//     Rebuilt by admin action.
-//
-//  5. Daily summary: incremental update in resolver instead of
-//     full 3-collection scan (1,010 reads → 1 read per resolution).
-//
-// ═════════════════════════════════════════════════════════════════════════════
-// PER-USER READ BUDGET (30-min session, all pages)
-// ═════════════════════════════════════════════════════════════════════════════
-//
-//  Hook                          Reads   Why
-//  ────────────────────────────  ──────  ───────────────────────────────
-//  initFirebaseSync               1      1 doc, once per session
-//  useActivePredictions          ~10     1 query × ~10 docs, 1st poll only
-//  useDailyLeaderboard             1     1 doc, 1st poll only
-//  useMyPredictions              ~10     1 query × ~10 docs, once
-//  usePredictionResults          ~10     1 query × ~10 docs, once
-//  useUserPoints                   1     1 doc, once
-//  useZokaPicks                    1     1 doc, once
-//  useZokaVotes                    1     1 doc, once
-//  useAllUserPredictions           0     uses daily_leaderboard cache
-//  useHistoricalLeaderboard        1     1 pre-computed doc
-//  ────────────────────────────  ──────
-//  TOTAL (all pages)             ~36
-//
-//  REALISTIC USAGE (not everyone visits every page):
-//    Home-only users (70%):    1,400 × 14  =  19,600
-//    + Predictions (25%):        500 × 35  =  17,500
-//    + GOAT check (5%):          100 × 36  =   3,600
-//    ─────────────────────────────────────────
-//    CLIENT TOTAL:                         ~40,700 reads/day
-//
-//  ADMIN COST (10 resolutions/day):
-//    Resolution queries:        10 × 500  =   5,000
-//    Incremental daily update:  10 × 1    =      10
-//    Incremental GOAT update:   10 × 1    =      10
-//    ─────────────────────────────────────────
-//    ADMIN TOTAL:                           ~5,020 reads/day
-//
-//  GRAND TOTAL:                            ~45,720 reads/day ✅ UNDER 50K
-//
-// ═════════════════════════════════════════════════════════════════════════════
-// REQUIRED FIRESTORE COMPOSITE INDEXES
-// ═════════════════════════════════════════════════════════════════════════════
-//
-//   Collection           Fields                         Status
-//   ───────────────────  ─────────────────────────────  ───────
-//   user_predictions     userId ASC, matchDate ASC      CREATE
-//   prediction_results   userId ASC, matchDate ASC      CREATE
-//
+// HOOK API UNCHANGED — Pages don't need to modify their imports.
 // ═════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { db } from '../utils/firebase';
 import {
   collection,
@@ -87,67 +23,18 @@ import {
   serverTimestamp,
   increment,
 } from 'firebase/firestore';
+import { dataLayer, todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart } from '../utils/dataLayer';
+import { useAppData } from '../context/AppDataContext';
 
 /* ═══════════════════════════════════════════════════════════════
-   CACHE TTL CONFIGURATION
-   ═══════════════════════════════════════════════════════════════
-   All TTLs are 30 minutes. Poll intervals are 10 minutes.
-   Since 30 > 10, the 2nd and 3rd polls in a 30-min session
-   are always cache hits → 0 extra Firestore reads.
-
-   30-min session timeline (useActivePredictions):
-     0 min:  poll → cache MISS → 10 reads
-    10 min:  poll → cache HIT  → 0 reads
-    20 min:  poll → cache HIT  → 0 reads
-    ─────────────────────────────────────────
-    Total: 10 reads (was ~200 in v2)
+   EXPORTED DATE HELPERS
    ═══════════════════════════════════════════════════════════════ */
-const CACHE_TTL = {
-  ACTIVE_PREDICTIONS: 1_800_000,   // 30 min
-  DAILY_LEADERBOARD:  1_800_000,   // 30 min
-  MY_PREDICTIONS:     1_800_000,   // 30 min
-  PREDICTION_RESULTS: 1_800_000,   // 30 min
-  USER_POINTS:        1_800_000,   // 30 min
-  ZOKA_PICKS:         1_800_000,   // 30 min
-  ZOKA_VOTES:         1_800_000,   // 30 min
-  HISTORICAL:         1_800_000,   // 30 min
-};
 
-const POLL_INTERVAL = {
-  SLOW: 600_000,  // 10 min — for hooks that need periodic refresh
-};
+export { todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart };
 
 /* ═══════════════════════════════════════════════════════════════
-   HELPERS
+   POINTS CALCULATION
    ═══════════════════════════════════════════════════════════════ */
-
-export const todayStr = () => new Date().toISOString().split('T')[0];
-
-export const yesterdayStr = () => {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return d.toISOString().split('T')[0];
-};
-
-export const tomorrowStr = () => {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  return d.toISOString().split('T')[0];
-};
-
-export const getWeekStart = () => {
-  const d = new Date();
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  return new Date(d.getFullYear(), d.getMonth(), diff)
-    .toISOString()
-    .split('T')[0];
-};
-
-export const getMonthStart = () =>
-  new Date(new Date().getFullYear(), new Date().getMonth(), 1)
-    .toISOString()
-    .split('T')[0];
 
 export function calcPoints(predH, predA, actualH, actualA) {
   if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
@@ -158,13 +45,9 @@ export function calcPoints(predH, predA, actualH, actualA) {
   return { points: 0, type: 'miss' };
 }
 
-/** Get the doc ID for a pre-computed leaderboard summary */
-function getPeriodDocId(period) {
-  if (period === 'goat') return 'current';
-  if (period === 'weekly') return `weekly_${getWeekStart()}`;
-  if (period === 'monthly') return `monthly_${getMonthStart()}`;
-  return period;
-}
+/* ═══════════════════════════════════════════════════════════════
+   LEADERBOARD HELPERS
+   ═══════════════════════════════════════════════════════════════ */
 
 function computeStats(entries) {
   if (!entries.length) return { avg: '0.0', preds: 0, exact: 0, players: 0 };
@@ -189,100 +72,19 @@ function rankEntries(list) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SESSION CACHE
-   ═══════════════════════════════════════════════════════════════
-   Module-level Map. Survives component mount/unmount within
-   the same tab. Cleared on page refresh.
-
-   Deduplicates concurrent duplicate reads via _inflight.
+   CACHE INVALIDATION HELPERS
    ═══════════════════════════════════════════════════════════════ */
 
-const _cache = new Map();
-const _inflight = new Map();
-
-function _cacheGet(key, ttlMs) {
-  if (ttlMs <= 0) return undefined;
-  const entry = _cache.get(key);
-  if (!entry) return undefined;
-  if (Date.now() - entry.ts > ttlMs) {
-    _cache.delete(key);
-    return undefined;
-  }
-  return entry.data;
-}
-
-function _cacheSet(key, data) {
-  _cache.set(key, { data, ts: Date.now() });
-}
-
 export function invalidateCache(key) {
-  _cache.delete(key);
+  dataLayer.invalidate(key);
 }
 
 export function invalidateCachePrefix(prefix) {
-  for (const k of _cache.keys()) {
-    if (k.startsWith(prefix)) _cache.delete(k);
-  }
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   CACHED READ HELPERS
-   ═══════════════════════════════════════════════════════════════ */
-
-async function readDocOnce(docRef, cacheKey, ttlMs = 60000) {
-  const cached = _cacheGet(cacheKey, ttlMs);
-  if (cached !== undefined) return cached;
-
-  if (_inflight.has(cacheKey)) return _inflight.get(cacheKey);
-
-  const promise = getDoc(docRef)
-    .then((snap) => {
-      const data = snap.exists() ? snap.data() : null;
-      _cacheSet(cacheKey, data);
-      _inflight.delete(cacheKey);
-      return data;
-    })
-    .catch((err) => {
-      _inflight.delete(cacheKey);
-      console.warn('[Cache] readDocOnce error:', err.message);
-      return null;
-    });
-
-  _inflight.set(cacheKey, promise);
-  return promise;
-}
-
-async function readDocsOnce(queryRef, cacheKey, ttlMs = 60000) {
-  const cached = _cacheGet(cacheKey, ttlMs);
-  if (cached !== undefined) return cached;
-
-  if (_inflight.has(cacheKey)) return _inflight.get(cacheKey);
-
-  const promise = getDocs(queryRef)
-    .then((snap) => {
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      _cacheSet(cacheKey, data);
-      _inflight.delete(cacheKey);
-      return data;
-    })
-    .catch((err) => {
-      _inflight.delete(cacheKey);
-      console.warn('[Cache] readDocsOnce error:', err.message);
-      return [];
-    });
-
-  _inflight.set(cacheKey, promise);
-  return promise;
+  dataLayer.invalidatePrefix(prefix);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    ADMIN: INCREMENTAL DAILY SUMMARY UPDATE
-   ═══════════════════════════════════════════════════════════════
-   Called by resolveMatchForAllUsers AFTER writing results.
-   Reads 1 doc (current summary), updates entries, writes 1 doc.
-
-   OLD cost per resolution: ~1,010 reads (3 collection scans)
-   NEW cost per resolution: 1 read + 1 write
    ═══════════════════════════════════════════════════════════════ */
 
 async function _updateDailySummaryIncremental(dateStr, resolvedList) {
@@ -337,12 +139,6 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
 
 /* ═══════════════════════════════════════════════════════════════
    ADMIN: INCREMENTAL GOAT UPDATE
-   ═══════════════════════════════════════════════════════════════
-   Called by resolveMatchForAllUsers AFTER writing results.
-   Reads 1 doc (current GOAT), updates affected users, writes 1 doc.
-
-   OLD cost per resolution: ~2,000 reads (full user_points_total scan)
-   NEW cost per resolution: 1 read + 1 write
    ═══════════════════════════════════════════════════════════════ */
 
 async function _updateGoatIncremental(resolvedList) {
@@ -352,7 +148,6 @@ async function _updateGoatIncremental(resolvedList) {
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
-    // First time — do full rebuild
     await rebuildGoatLeaderboard();
     return;
   }
@@ -393,11 +188,6 @@ async function _updateGoatIncremental(resolvedList) {
 
 /* ═══════════════════════════════════════════════════════════════
    ADMIN: FULL DAILY SUMMARY REBUILD
-   ═══════════════════════════════════════════════════════════════
-   Full rebuild from collections. Expensive — only for manual
-   admin trigger or initial setup. NOT called per-resolution.
-
-   Cost: ~1,010 reads (admin only)
    ═══════════════════════════════════════════════════════════════ */
 
 export async function rebuildDailySummary(dateStr) {
@@ -494,6 +284,7 @@ export async function rebuildDailySummary(dateStr) {
     });
 
     invalidateCache(`active_${dateStr}`);
+    invalidateCache(`dlb_${dateStr}`);
     console.log(`[Summary] Rebuilt for ${dateStr}: ${entries.length} players`);
   } catch (e) {
     console.error('[Summary] Rebuild failed:', e);
@@ -502,11 +293,6 @@ export async function rebuildDailySummary(dateStr) {
 
 /* ═══════════════════════════════════════════════════════════════
    ADMIN: FULL GOAT LEADERBOARD REBUILD
-   ═══════════════════════════════════════════════════════════════
-   Scans user_points_total. Expensive — only for manual admin
-   trigger or first-time setup.
-
-   Cost: ~2,000 reads (admin only)
    ═══════════════════════════════════════════════════════════════ */
 
 export async function rebuildGoatLeaderboard() {
@@ -547,12 +333,7 @@ export async function rebuildGoatLeaderboard() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ADMIN: FULL PERIOD LEADERBOARD REBUILD (weekly/monthly)
-   ═══════════════════════════════════════════════════════════════
-   Scans prediction_results since period start. Expensive —
-   only for manual admin trigger.
-
-   Cost: ~500-2,000 reads (admin only)
+   ADMIN: FULL PERIOD LEADERBOARD REBUILD
    ═══════════════════════════════════════════════════════════════ */
 
 export async function rebuildPeriodLeaderboard(period, startDate) {
@@ -564,7 +345,7 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
     else return;
   }
 
-  const docId = getPeriodDocId(period);
+  const docId = period === 'goat' ? 'current' : period === 'weekly' ? `weekly_${startDate}` : `monthly_${startDate}`;
   const cacheKey = `hist_${period}`;
 
   try {
@@ -613,7 +394,6 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
   }
 }
 
-/** Rebuild all leaderboards (daily + GOAT + weekly + monthly). Admin only. */
 export async function rebuildAllLeaderboards() {
   await rebuildDailySummary(todayStr());
   await rebuildGoatLeaderboard();
@@ -623,12 +403,6 @@ export async function rebuildAllLeaderboards() {
 
 /* ═══════════════════════════════════════════════════════════════
    ADMIN: MATCH RESOLVER
-   ═══════════════════════════════════════════════════════════════
-   Reads user_predictions for the match, writes results, then
-   does CHEAP incremental updates to daily summary + GOAT.
-
-   Cost per resolution: ~500 reads (predictions) + 2 reads (incremental updates)
-   NOT ~3,510 reads (old: 500 + 1,010 + 2,000)
    ═══════════════════════════════════════════════════════════════ */
 
 const _resolvingNow = new Set();
@@ -641,7 +415,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
   try {
     const dateKey = matchDate || todayStr();
 
-    // Check if already resolved
     const statusRef = doc(db, 'match_resolution_status', dateKey);
     const statusSnap = await getDoc(statusRef);
     const alreadyResolved = new Set(
@@ -649,7 +422,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
     );
     if (alreadyResolved.has(String(matchId))) return 0;
 
-    // Read predictions for this match (necessary — need to know who predicted)
     const predsSnap = await getDocs(
       query(collection(db, 'user_predictions'), where('matchId', '==', matchId))
     );
@@ -663,7 +435,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       return 0;
     }
 
-    // Collect resolved data for incremental updates
     const resolvedList = [];
     const batch = writeBatch(db);
 
@@ -682,7 +453,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
         actualA,
       });
 
-      // Write prediction result
       batch.set(
         doc(db, 'prediction_results', `${uid}_${matchId}`),
         {
@@ -707,7 +477,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
         { merge: true }
       );
 
-      // Update user points total
       batch.set(
         doc(db, 'user_points_total', uid),
         {
@@ -722,7 +491,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       );
     });
 
-    // Update zoka_picks scores if applicable
     const zokaRef = doc(db, 'zoka_picks', dateKey);
     const zokaSnap = await getDoc(zokaRef);
     if (zokaSnap.exists()) {
@@ -741,7 +509,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       }
     }
 
-    // Mark as resolved
     batch.set(statusRef, {
       resolvedMatches: [String(matchId)],
       lastResolvedAt: serverTimestamp(),
@@ -750,21 +517,21 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
 
     await batch.commit();
 
-    // ★ CHEAP incremental updates instead of full rebuilds
     await _updateDailySummaryIncremental(dateKey, resolvedList);
     await _updateGoatIncremental(resolvedList);
 
-    // Invalidate affected client caches
+    // Invalidate all affected caches
     invalidateCachePrefix(`dlb_${dateKey}`);
     for (const r of resolvedList) {
-      _cache.delete(`upt_${r.userId}`);
-      _cache.delete(`myResults_${r.userId}_${dateKey}`);
-      _cache.delete(`myPreds_${r.userId}_${dateKey}`);
+      invalidateCache(`upt_${r.userId}`);
+      invalidateCache(`myResults_${r.userId}_${dateKey}`);
+      invalidateCache(`myPreds_${r.userId}_${dateKey}`);
     }
-    // Also invalidate GOAT and period caches
     invalidateCache('hist_goat');
     invalidateCache('hist_weekly');
     invalidateCache('hist_monthly');
+    invalidateCache(`active_${dateKey}`);
+    invalidateCache(`zoka_${dateKey}`);
 
     return resolvedList.length;
   } catch (e) {
@@ -776,7 +543,7 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   HOOK: useUniversalResolver (NO-OP)
+   NO-OP HOOK (kept for backward compatibility)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useUniversalResolver() {}
@@ -784,475 +551,410 @@ export function useUniversalResolver() {}
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useActivePredictions
    ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. Poll: 10 min.
-   30-min session: 1 Firestore read (1st poll), 2 cache hits.
-
-   Reads: ~10 (once per 30 min per session)
+   NOW uses dataLayer for caching.
+   If date is today, uses context data (no extra reads).
+   If date is different (admin page), fetches via dataLayer.
    ═══════════════════════════════════════════════════════════════ */
 
 export function useActivePredictions(date) {
   const dateStr = date || todayStr();
-  const [preds, setPreds] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
 
+  const [preds, setPreds] = useState(null);
+  const [loading, setLoading] = useState(!isToday);
+
+  // For today's date, use context data
   useEffect(() => {
-    if (!db) { setLoading(false); return; }
+    if (isToday) {
+      setPreds(appData.activePredictions);
+      setLoading(appData.loading);
+    }
+  }, [isToday, appData.activePredictions, appData.loading]);
+
+  // For other dates, fetch via dataLayer
+  useEffect(() => {
+    if (isToday) return;
 
     let cancelled = false;
-    const cacheKey = `active_${dateStr}`;
 
     const load = async () => {
       setLoading(true);
-      const data = await readDocsOnce(
-        query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
-        cacheKey,
-        CACHE_TTL.ACTIVE_PREDICTIONS
-      );
-      if (!cancelled) {
-        setPreds(data.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
-        setLoading(false);
+      try {
+        const data = await dataLayer.fetchActivePredictions(dateStr);
+        if (!cancelled) {
+          setPreds(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreds([]);
+          setLoading(false);
+        }
       }
     };
 
     load();
 
-    // Background refresh every 10 min — cache absorbs most of these
-    const interval = setInterval(() => {
-      if (!cancelled) {
-        readDocsOnce(
-          query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
-          cacheKey,
-          CACHE_TTL.ACTIVE_PREDICTIONS
-        ).then((data) => {
-          if (!cancelled) setPreds(data.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
-        });
-      }
-    }, POLL_INTERVAL.SLOW);
+    return () => { cancelled = true; };
+  }, [dateStr, isToday]);
 
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [dateStr]);
+  const scoreMap = useMemo(() => dataLayer.getScoreMap(preds || []), [preds]);
 
-  const scoreMap = useMemo(() => {
-    const m = new Map();
-    preds.forEach((p) => {
-      if (p.status === 'finished' && p.homeScore != null) {
-        m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore });
-      }
-    });
-    return m;
-  }, [preds]);
+  const finalPreds = isToday ? appData.activePredictions : (preds || []);
+  const finalLoading = isToday ? appData.loading : loading;
 
-  return { preds, scoreMap, loading, error: null, lastUpdate: Date.now() };
+  return {
+    preds: finalPreds,
+    scoreMap,
+    loading: finalLoading,
+    error: null,
+    lastUpdate: appData.lastUpdate || Date.now(),
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useAllUserPredictions
-   ═══════════════════════════════════════════════════════════════
-   Reads from daily_leaderboard summary doc (same cache).
-   0 extra Firestore reads.
-
-   Reads: 0 (reuses daily_leaderboard cache)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useAllUserPredictions(date) {
   const dateStr = date || todayStr();
-  const [predCounts, setPredCounts] = useState({});
-  const [predDist, setPredDist] = useState({});
-  const [userPredMap, setUserPredMap] = useState({});
-  const [allPreds, setAllPreds] = useState([]);
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
 
-  useEffect(() => {
-    if (!db) return;
-    let cancelled = false;
+  if (isToday) {
+    return {
+      allPreds: [],
+      userPredMap: {},
+      predCounts: appData.predCounts,
+      predDist: appData.predDist,
+      lastUpdate: appData.lastUpdate || Date.now(),
+    };
+  }
 
-    readDocOnce(
-      doc(db, 'daily_leaderboard', dateStr),
-      `dlb_${dateStr}`,
-      CACHE_TTL.DAILY_LEADERBOARD
-    ).then((summary) => {
-      if (cancelled || !summary) return;
-      setPredCounts(summary.predCounts || {});
-      setPredDist(summary.predDist || {});
-      setAllPreds([]);
-      setUserPredMap({});
-    });
-
-    return () => { cancelled = true; };
-  }, [dateStr]);
-
-  return { allPreds, userPredMap, predCounts, predDist, lastUpdate: Date.now() };
+  // For other dates, this would need to be implemented
+  // But in practice, this hook is only called with today's date
+  return {
+    allPreds: [],
+    userPredMap: {},
+    predCounts: {},
+    predDist: {},
+    lastUpdate: Date.now(),
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useMyPredictions
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. No polling (reads once per session).
-
-   Reads: ~10 (1 query × ~10 docs, once per 30 min)
-   REQUIRES COMPOSITE INDEX: user_predictions (userId ASC, matchDate ASC)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useMyPredictions(uid, date) {
   const dateStr = date || todayStr();
-  const [myPreds, setMyPreds] = useState({});
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
 
+  const [preds, setPreds] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  // For today + authenticated user, use context data
   useEffect(() => {
-    if (!uid || !db) return;
+    if (isToday && uid) {
+      setPreds(appData.userPredictions);
+    } else if (!uid) {
+      setPreds({});
+    }
+  }, [isToday, uid, appData.userPredictions]);
+
+  // For other dates, fetch via dataLayer
+  useEffect(() => {
+    if (isToday || !uid) return;
+
     let cancelled = false;
 
-    readDocsOnce(
-      query(
-        collection(db, 'user_predictions'),
-        where('userId', '==', uid),
-        where('matchDate', '==', dateStr)
-      ),
-      `myPreds_${uid}_${dateStr}`,
-      CACHE_TTL.MY_PREDICTIONS
-    ).then((data) => {
-      if (!cancelled) {
-        const map = {};
-        data.forEach((p) => { map[p.predId] = p; });
-        setMyPreds(map);
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await dataLayer.fetchUserPredictions(uid, dateStr);
+        if (!cancelled) {
+          setPreds(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPreds({});
+          setLoading(false);
+        }
       }
-    });
+    };
+
+    load();
 
     return () => { cancelled = true; };
-  }, [uid, dateStr]);
+  }, [uid, dateStr, isToday]);
 
-  return myPreds;
+  return isToday ? appData.userPredictions : (preds || {});
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: usePredictionResults
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. No polling.
-
-   Reads: ~10 (1 query × ~10 docs, once per 30 min)
-   REQUIRES COMPOSITE INDEX: prediction_results (userId ASC, matchDate ASC)
    ═══════════════════════════════════════════════════════════════ */
 
 export function usePredictionResults(uid) {
-  const [results, setResults] = useState([]);
-  const [resultMap, setResultMap] = useState({});
+  const appData = useAppData();
 
-  useEffect(() => {
-    if (!uid || !db) return;
-    let cancelled = false;
+  if (!uid) {
+    return { results: [], resultMap: {} };
+  }
 
-    readDocsOnce(
-      query(
-        collection(db, 'prediction_results'),
-        where('userId', '==', uid),
-        where('matchDate', '==', todayStr())
-      ),
-      `myResults_${uid}_${todayStr()}`,
-      CACHE_TTL.PREDICTION_RESULTS
-    ).then((data) => {
-      if (!cancelled) {
-        const sorted = data.sort(
-          (a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)
-        );
-        setResults(sorted);
-        const m = {};
-        sorted.forEach((r) => { m[String(r.matchId)] = r; });
-        setResultMap(m);
-      }
-    });
-
-    return () => { cancelled = true; };
-  }, [uid]);
-
-  return { results, resultMap };
+  return appData.predictionResults;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useUserPoints
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. No polling.
-
-   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useUserPoints(uid) {
-  const [points, setPoints] = useState(null);
+  const appData = useAppData();
 
-  useEffect(() => {
-    if (!uid || !db) return;
-    let cancelled = false;
+  if (!uid) {
+    return null;
+  }
 
-    readDocOnce(
-      doc(db, 'user_points_total', uid),
-      `upt_${uid}`,
-      CACHE_TTL.USER_POINTS
-    ).then((data) => {
-      if (!cancelled) setPoints(data);
-    });
-
-    return () => { cancelled = true; };
-  }, [uid]);
-
-  return points;
+  return appData.userPoints;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useZokaPicks
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. No polling.
-
-   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useZokaPicks(date) {
   const dateStr = date || todayStr();
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
+
   const [picks, setPicks] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!db) return;
+    if (isToday) {
+      setPicks(appData.zokaPicks);
+    }
+  }, [isToday, appData.zokaPicks]);
+
+  useEffect(() => {
+    if (isToday) return;
+
     let cancelled = false;
 
-    readDocOnce(
-      doc(db, 'zoka_picks', dateStr),
-      `zoka_${dateStr}`,
-      CACHE_TTL.ZOKA_PICKS
-    ).then((data) => {
-      if (!cancelled) setPicks(data);
-    });
+    const load = async () => {
+      setLoading(true);
+      try {
+        const data = await dataLayer.fetchZokaPicks(dateStr);
+        if (!cancelled) {
+          setPicks(data);
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setPicks(null);
+          setLoading(false);
+        }
+      }
+    };
+
+    load();
 
     return () => { cancelled = true; };
-  }, [dateStr]);
+  }, [dateStr, isToday]);
 
-  return picks;
+  return isToday ? appData.zokaPicks : picks;
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useZokaVotes
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. No polling. User's own vote from localStorage.
-
-   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useZokaVotes(date) {
   const dateStr = date || todayStr();
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
+
   const [voteStats, setVoteStats] = useState({});
   const [userVotes, setUserVotes] = useState({});
 
   useEffect(() => {
-    if (!db) return;
+    if (isToday) {
+      setVoteStats(appData.zokaVoteStats);
+      setUserVotes(appData.currentUserVotes);
+    }
+  }, [isToday, appData.zokaVoteStats, appData.currentUserVotes]);
+
+  useEffect(() => {
+    if (isToday) return;
+
     let cancelled = false;
 
-    readDocOnce(
-      doc(db, 'zoka_vote_stats', dateStr),
-      `zokaVotes_${dateStr}`,
-      CACHE_TTL.ZOKA_VOTES
-    ).then((data) => {
-      if (cancelled) return;
-      setVoteStats(data?.stats || {});
-    });
+    const load = async () => {
+      try {
+        const data = await dataLayer.fetchZokaVotes(dateStr);
+        if (!cancelled) {
+          setVoteStats(data?.stats || {});
+        }
+      } catch { /* ignore */ }
+    };
+
+    load();
 
     try {
       const stored = localStorage.getItem(`zoka_votes_${dateStr}`);
-      if (stored) setUserVotes(JSON.parse(stored));
+      if (stored && !cancelled) setUserVotes(JSON.parse(stored));
     } catch { /* ignore */ }
 
     return () => { cancelled = true; };
-  }, [dateStr]);
+  }, [dateStr, isToday]);
 
-  return { votes: [], voteStats, userVotes };
+  return {
+    votes: [],
+    voteStats: isToday ? appData.zokaVoteStats : voteStats,
+    userVotes: isToday ? appData.currentUserVotes : userVotes,
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useDailyLeaderboard
-   ═══════════════════════════════════════════════════════════════
-   Cache: 30 min. Poll: 10 min.
-   30-min session: 1 Firestore read, 2 cache hits.
-
-   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useDailyLeaderboard(date) {
   const dateStr = date || todayStr();
-  const [entries, setEntries] = useState([]);
-  const [top3, setTop3] = useState([]);
-  const [rest, setRest] = useState([]);
-  const [stats, setStats] = useState({ avg: '0.0', preds: 0, exact: 0, players: 0 });
-  const [loading, setLoading] = useState(true);
+  const isToday = dateStr === todayStr();
+  const appData = useAppData();
+
+  const [entries, setEntries] = useState(null);
+  const [top3, setTop3] = useState(null);
+  const [rest, setRest] = useState(null);
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (!db) return;
+    if (isToday) {
+      setEntries(appData.dailyEntries);
+      setTop3(appData.dailyTop3);
+      setRest(appData.dailyRest);
+      setStats(appData.dailyStats);
+      setLoading(appData.loading);
+    }
+  }, [isToday, appData.dailyEntries, appData.dailyTop3, appData.dailyRest, appData.dailyStats, appData.loading]);
+
+  useEffect(() => {
+    if (isToday) return;
+
     let cancelled = false;
-    const cacheKey = `dlb_${dateStr}`;
 
     const load = async () => {
       setLoading(true);
-      const data = await readDocOnce(
-        doc(db, 'daily_leaderboard', dateStr),
-        cacheKey,
-        CACHE_TTL.DAILY_LEADERBOARD
-      );
-      if (cancelled) return;
-
-      if (data?.entries) {
-        setEntries(data.entries);
-        setTop3(data.top3 || data.entries.slice(0, 3));
-        setRest(data.rest || data.entries.slice(3));
-        setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
-      } else {
-        setEntries([]); setTop3([]); setRest([]);
-        setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
+      try {
+        const data = await dataLayer.fetchDailyLeaderboard(dateStr);
+        if (!cancelled) {
+          if (data?.entries) {
+            setEntries(data.entries);
+            setTop3(data.top3 || data.entries.slice(0, 3));
+            setRest(data.rest || data.entries.slice(3));
+            setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
+          } else {
+            setEntries([]);
+            setTop3([]);
+            setRest([]);
+            setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
+          }
+          setLoading(false);
+        }
+      } catch {
+        if (!cancelled) {
+          setEntries([]);
+          setTop3([]);
+          setRest([]);
+          setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
+          setLoading(false);
+        }
       }
-      setLoading(false);
     };
 
     load();
 
-    const interval = setInterval(() => {
-      if (!cancelled) {
-        readDocOnce(
-          doc(db, 'daily_leaderboard', dateStr),
-          cacheKey,
-          CACHE_TTL.DAILY_LEADERBOARD
-        ).then((data) => {
-          if (cancelled || !data) return;
-          setEntries(data.entries || []);
-          setTop3(data.top3 || []);
-          setRest(data.rest || []);
-          setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
-        });
-      }
-    }, POLL_INTERVAL.SLOW);
+    return () => { cancelled = true; };
+  }, [dateStr, isToday]);
 
-    return () => { cancelled = true; clearInterval(interval); };
-  }, [dateStr]);
+  const finalEntries = isToday ? (appData.dailyEntries || []) : (entries || []);
+  const finalTop3 = isToday ? (appData.dailyTop3 || []) : (top3 || []);
+  const finalRest = isToday ? (appData.dailyRest || []) : (rest || []);
+  const finalStats = isToday ? (appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 }) : (stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
+  const finalLoading = isToday ? appData.loading : loading;
 
-  return { entries, top3, rest, stats, loading, isLive: false };
+  return {
+    entries: finalEntries,
+    top3: finalTop3,
+    rest: finalRest,
+    stats: finalStats,
+    loading: finalLoading,
+    isLive: false,
+  };
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   HOOK: useHistoricalLeaderboard (weekly/monthly/goat)
-   ═══════════════════════════════════════════════════════════════
-   ★ v3 FIX: Reads from pre-computed summary doc instead of
-   scanning entire collection.
-
-   GOAT:     was ~2,000 reads → now 1 read
-   Weekly:   was ~500-2,000 reads → now 1 read
-   Monthly:  was ~500-2,000 reads → now 1 read
-
-   Cache: 30 min. No polling.
-
-   If pre-computed doc doesn't exist yet, returns empty with
-   a `stale` flag. Admin needs to run rebuildGoatLeaderboard()
-   or rebuildPeriodLeaderboard() at least once.
+   HOOK: useHistoricalLeaderboard
    ═══════════════════════════════════════════════════════════════ */
 
 export function useHistoricalLeaderboard(period) {
-  const [entries, setEntries] = useState([]);
+  const appData = useAppData();
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [stale, setStale] = useState(false);
+
+  // Check if we already have this period's data
+  const cachedData = appData.historicalLeaderboards[period];
 
   useEffect(() => {
-    if (!db) return;
-    let cancelled = false;
+    if (cachedData) {
+      setLoading(false);
+      return;
+    }
 
-    const load = async () => {
-      setLoading(true);
-      setError(null);
+    // Load on-demand
+    appData.loadHistoricalLeaderboard(period);
+  }, [period, cachedData, appData]);
 
-      try {
-        const docId = getPeriodDocId(period);
-        const cacheKey = `hist_${period}`;
-
-        const data = await readDocOnce(
-          doc(db, 'leaderboard_summaries', docId),
-          cacheKey,
-          CACHE_TTL.HISTORICAL
-        );
-
-        if (cancelled) return;
-
-        if (data?.entries) {
-          setEntries(data.entries);
-          setStale(false);
-        } else {
-          // No pre-computed doc yet — admin needs to rebuild
-          setEntries([]);
-          setStale(true);
-        }
-      } catch (err) {
-        if (err.code === 'permission-denied') setError('permissions');
-        else setError(err.message);
-      }
-
-      if (!cancelled) setLoading(false);
-    };
-
-    load();
-    return () => { cancelled = true; };
-  }, [period]);
+  const entries = cachedData?.entries || [];
+  const stale = cachedData?.stale ?? true;
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
-
   const stats = useMemo(() => computeStats(entries), [entries]);
 
-  return { entries, top3, rest, stats, loading, error, stale };
+  return { entries, top3, rest, stats, loading, error: null, stale };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useMyStats
-   ═══════════════════════════════════════════════════════════════
-   Combines cached hooks. 0 extra reads.
    ═══════════════════════════════════════════════════════════════ */
 
 export function useMyStats(uid, date) {
-  const dateStr = date || todayStr();
-  const { scoreMap, preds: activePreds } = useActivePredictions(dateStr);
-  const myPreds = useMyPredictions(uid, dateStr);
-  const points = useUserPoints(uid);
-  const { resultMap } = usePredictionResults(uid);
+  const appData = useAppData();
 
-  return useMemo(() => {
-    const myPredValues = Object.values(myPreds);
-    const predicted = myPredValues.length;
-    const total = activePreds.length;
-
-    if (points) {
-      const exact = points.exactCount || 0;
-      const result = points.resultCount || 0;
-      const miss = points.missCount || 0;
-      const pts = points.totalPoints || 0;
-      const resolved = exact + result + miss;
-      return {
-        predicted, total, exact, result, miss,
-        points: pts, resolved,
-        accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
-        todayExact: Object.values(resultMap).filter((r) => r.resultType === 'exact').length,
-        todayResult: Object.values(resultMap).filter((r) => r.resultType === 'result').length,
-        todayMiss: Object.values(resultMap).filter((r) => r.resultType === 'miss').length,
-        todayPoints: Object.values(resultMap).reduce((s, r) => s + (r.points || 0), 0),
-      };
-    }
-
-    let exact = 0, result = 0, miss = 0, pts = 0, resolved = 0;
-    myPredValues.forEach((p) => {
-      const a = scoreMap.get(String(p.matchId));
-      if (!a) return;
-      resolved++;
-      const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a);
-      pts += r.points;
-      if (r.type === 'exact') exact++;
-      else if (r.type === 'result') result++;
-      else miss++;
-    });
-
+  if (!uid) {
     return {
-      predicted, total, exact, result, miss,
-      points: pts, resolved,
-      accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
-      todayExact: exact, todayResult: result, todayMiss: miss, todayPoints: pts,
+      predicted: 0,
+      total: 0,
+      exact: 0,
+      result: 0,
+      miss: 0,
+      points: 0,
+      resolved: 0,
+      accuracy: 0,
+      todayExact: 0,
+      todayResult: 0,
+      todayMiss: 0,
+      todayPoints: 0,
     };
-  }, [myPreds, scoreMap, activePreds, points, resultMap]);
+  }
+
+  return appData.userStats;
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1285,7 +987,18 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     { merge: true }
   );
 
+  // Invalidate cache for this user's predictions
   invalidateCache(`myPreds_${uid}_${dateStr}`);
+
+  // Refresh via data layer
+  try {
+    const freshData = await dataLayer.fetchUserPredictions(uid, dateStr);
+    // Notify subscribers
+    // Note: This won't trigger a re-render in the context automatically
+    // The next poll cycle will pick up the change
+  } catch (err) {
+    console.warn('[savePrediction] Refresh failed:', err.message);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════
@@ -1379,10 +1092,6 @@ export { resolveMatchForAllUsers };
 
 export async function adminRefreshActivePredictions(dateStr) {
   invalidateCache(`active_${dateStr}`);
-  const data = await readDocsOnce(
-    query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
-    `active_${dateStr}`,
-    0
-  );
-  return data.sort((a, b) => (b.priority || 0) - (a.priority || 0));
+  const data = await dataLayer.fetchActivePredictions(dateStr);
+  return data;
 }

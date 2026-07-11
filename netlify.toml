@@ -1,7 +1,19 @@
+# ═══════════════════════════════════════════════════════════════
+# FILE: netlify.toml
+# PRODUCTION DEPLOYMENT CONFIG
+# ═══════════════════════════════════════════════════════════════
+
 [build]
   command = "npm run build"
   publish = "dist"
-  functions = "netlify/functions"
+
+[build.environment]
+  NODE_VERSION = "18"
+
+# IMPORTANT: Set these in Netlify Dashboard → Site Settings → Environment Variables
+# VITE_API_URL = "https://your-backend-domain.com"
+# VITE_FIREBASE_API_KEY = "..."
+# etc.
 
 [[redirects]]
   from = "/*"
