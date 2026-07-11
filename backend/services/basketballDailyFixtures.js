@@ -4,6 +4,10 @@
  *
  * ★ BUDGET OVERHAUL: Same as football — in-memory cache,
  * diffWrite, no reads during rollover.
+ *
+ * ★ EMPTY COLLECTION RECOVERY:
+ * If yesterday/today/tomorrow collections are empty after rollover,
+ * automatically fetches from API-Basketball and saves to Firebase.
  */
 
 const {
@@ -55,6 +59,7 @@ class BasketballDailyFixturesService {
 
     const todayStr = getDateOffset(0);
     const tomorrowStr = getDateOffset(1);
+    const yesterdayStr = getDateOffset(-1);
 
     logger.info(
       `[BasketballDaily] Full run for ${tomorrowStr} (today: ${todayStr})`
@@ -75,27 +80,61 @@ class BasketballDailyFixturesService {
 
     if (fetchDone) {
       if (this._docCache.tomorrow.length > 0) {
-        logger.info(
-          `[BasketballDaily] Cache verified (${this._docCache.tomorrow.length} docs) — skipping`
+        const needsFill = 
+          this._docCache.yesterday.length === 0 || 
+          this._docCache.today.length === 0;
+        
+        if (!needsFill) {
+          logger.info(
+            `[BasketballDaily] Cache verified (${this._docCache.tomorrow.length} docs) — skipping`
+          );
+          return {
+            total: this._docCache.tomorrow.length,
+            writes: 0,
+            apiCalls: 0,
+            duration: 0,
+            deduped: true,
+          };
+        }
+        
+        logger.info(`[BasketballDaily] Some days empty — filling...`);
+        const fillResult = await this._fillEmptyDays(
+          yesterdayStr, 
+          todayStr, 
+          tomorrowStr,
+          { skipTomorrow: true }
         );
+        cache.invalidatePrefix("bb:");
         return {
           total: this._docCache.tomorrow.length,
-          writes: 0,
-          apiCalls: 0,
-          duration: 0,
+          writes: fillResult.writes,
+          apiCalls: fillResult.fetches,
+          duration: Date.now() - startTime,
           deduped: true,
+          extraFetches: fillResult.fetches,
+          extraWrites: fillResult.writes,
         };
       }
 
       logger.info(`[BasketballDaily] Cache empty — warming up...`);
       await this._warmupCache();
+      
       if (this._docCache.tomorrow.length > 0) {
+        const fillResult = await this._fillEmptyDays(
+          yesterdayStr, 
+          todayStr, 
+          tomorrowStr,
+          { skipTomorrow: true }
+        );
+        cache.invalidatePrefix("bb:");
         return {
           total: this._docCache.tomorrow.length,
-          writes: 0,
-          apiCalls: 0,
-          duration: 0,
+          writes: fillResult.writes,
+          apiCalls: fillResult.fetches,
+          duration: Date.now() - startTime,
           deduped: true,
+          extraFetches: fillResult.fetches,
+          extraWrites: fillResult.writes,
         };
       }
 
@@ -163,9 +202,22 @@ class BasketballDailyFixturesService {
       logger.error(`[BasketballDaily] Rollover failed: ${err.message}`);
     }
 
+    // ══════════════════════════════════════════════════════
+    // PHASE 1.5: FILL EMPTY COLLECTIONS FROM API
+    // ══════════════════════════════════════════════════════
+
+    const fillResult = await this._fillEmptyDays(
+      yesterdayStr, 
+      todayStr, 
+      tomorrowStr,
+      { skipTomorrow: true }
+    );
+
     // ══════════════════════════════════════════
     // PHASE 2: FETCH TOMORROW (1 API call)
     // ══════════════════════════════════════════
+
+    let tomorrowApiCall = 0;
 
     if (!isBasketballBudgetAvailable(1)) {
       logger.warn(`[BasketballDaily] Budget too low — skipping fetch`);
@@ -176,6 +228,7 @@ class BasketballDailyFixturesService {
         fetchTotal = result.total;
         fetchWrites = result.writes;
         fetchSuccess = true;
+        tomorrowApiCall = result.total > 0 ? 1 : 0;
       } catch (err) {
         logger.error(`[BasketballDaily] Tomorrow fetch failed: ${err.message}`);
         fetchSuccess = false;
@@ -186,10 +239,19 @@ class BasketballDailyFixturesService {
     // PHASE 3: UPDATE CACHE + META
     // ══════════════════════════════════════════
 
-    this._docCache.yesterday = yesterdayDocs;
-    this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
-    this._docCache.today = todayDocs;
-    this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
+    if (this._docCache.yesterday.length === 0 && yesterdayDocs.length > 0) {
+      this._docCache.yesterday = yesterdayDocs;
+    }
+    this._docCache.yesterdayIds = new Set(
+      this._docCache.yesterday.map((d) => String(d.id))
+    );
+
+    if (this._docCache.today.length === 0 && todayDocs.length > 0) {
+      this._docCache.today = todayDocs;
+    }
+    this._docCache.todayIds = new Set(
+      this._docCache.today.map((d) => String(d.id))
+    );
 
     if (fetchSuccess) {
       await setMeta(META_DOCS.BASKETBALL_SCHEDULER, {
@@ -197,6 +259,8 @@ class BasketballDailyFixturesService {
         lastTomorrowDate: tomorrowStr,
         fetchTotal,
         fetchWrites,
+        extraFetches: fillResult.fetches,
+        extraWrites: fillResult.writes,
         fetchedAt: new Date().toISOString(),
       });
     }
@@ -205,22 +269,27 @@ class BasketballDailyFixturesService {
     cache.invalidatePrefix("bb:");
 
     const duration = Date.now() - startTime;
+    const totalApiCalls = fillResult.fetches + tomorrowApiCall;
 
     logger.info(
       `[BasketballDaily] Complete — ` +
       `rollover: ${rolloverYesterday}+${rolloverToday}, ` +
       `stale: ${rolloverDeleted}, FT: ${recoveredFT}, ` +
-      `fetched: ${fetchTotal} (${fetchWrites} written), ${duration}ms`
+      `empty fills: ${fillResult.fetches} calls (${fillResult.writes} writes), ` +
+      `fetched: ${fetchTotal} (${fetchWrites} written), ` +
+      `${totalApiCalls} API calls, ${duration}ms`
     );
 
     return {
       total: fetchTotal,
-      writes: fetchWrites + rolloverYesterday + rolloverToday,
-      apiCalls: fetchSuccess && fetchTotal > 0 ? 1 : 0,
+      writes: fetchWrites + rolloverYesterday + rolloverToday + fillResult.writes,
+      apiCalls: totalApiCalls,
       duration,
       rolloverYesterday,
       rolloverToday,
       recoveredFT,
+      extraFetches: fillResult.fetches,
+      extraWrites: fillResult.writes,
       deduped: false,
     };
   }
@@ -228,6 +297,126 @@ class BasketballDailyFixturesService {
   // ==========================================================
   // PRIVATE
   // ==========================================================
+
+  /**
+   * Fill empty day collections from API-Basketball.
+   */
+  async _fillEmptyDays(yesterdayStr, todayStr, tomorrowStr, options = {}) {
+    let fetches = 0;
+    let writes = 0;
+    const filledDays = [];
+
+    const daysToCheck = [
+      { 
+        key: "yesterday", 
+        date: yesterdayStr, 
+        collection: COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES 
+      },
+      { 
+        key: "today", 
+        date: todayStr, 
+        collection: COLLECTIONS.BASKETBALL_TODAY_FIXTURES 
+      },
+      { 
+        key: "tomorrow", 
+        date: tomorrowStr, 
+        collection: COLLECTIONS.BASKETBALL_TOMORROW_FIXTURES,
+        skip: options.skipTomorrow 
+      },
+    ];
+
+    for (const day of daysToCheck) {
+      if (day.skip) continue;
+      
+      if (this._docCache[day.key].length === 0) {
+        const result = await this._fetchDayForCollection(
+          day.date,
+          day.key,
+          day.collection
+        );
+        fetches += result.fetches;
+        writes += result.writes;
+        if (result.fetches > 0) {
+          filledDays.push(day.key);
+        }
+      }
+    }
+
+    if (fetches > 0) {
+      logger.info(
+        `[BasketballDaily] Empty fill: ${filledDays.join(", ")} — ${fetches} API calls, ${writes} writes`
+      );
+    }
+
+    return { fetches, writes, filledDays };
+  }
+
+  /**
+   * Fetch a single day's fixtures from API-Basketball and save to collection.
+   */
+  async _fetchDayForCollection(dateStr, dayKey, collection) {
+    if (!isBasketballBudgetAvailable(1)) {
+      logger.warn(
+        `[BasketballDaily] Budget too low — cannot fetch ${dayKey} (${dateStr})`
+      );
+      return { fetches: 0, writes: 0 };
+    }
+
+    logger.info(
+      `[BasketballDaily] ${dayKey} is empty — fetching ${dateStr} from API-Basketball...`
+    );
+
+    try {
+      const raw = await withRetry(
+        () =>
+          basketballApi.get("/games", { params: { date: dateStr } }),
+        `BasketballDaily:${dayKey}:fill`
+      );
+
+      const errors = raw?.errors || {};
+      if (Object.keys(errors).length > 0) {
+        logger.warn(
+          `[BasketballDaily] API blocked for ${dayKey}: ${JSON.stringify(errors)}`
+        );
+        return { fetches: 1, writes: 0 };
+      }
+
+      const allFixtures = raw?.response || [];
+      const filtered = TRACK_ALL_LEAGUES
+        ? allFixtures
+        : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+
+      const docs = filtered.map((f) => this.normalize(f));
+
+      let written = 0;
+      let newIds = new Set();
+
+      if (docs.length > 0) {
+        const result = await this.repo.diffWrite(
+          collection,
+          docs,
+          this._docCache[`${dayKey}Ids`]
+        );
+        written = result.written;
+        newIds = result.newIds;
+      }
+
+      // Update cache
+      this._docCache[dayKey] = docs;
+      this._docCache[`${dayKey}Ids`] = newIds;
+
+      logger.info(
+        `[BasketballDaily] ${dayKey} (${dateStr}): ${filtered.length} tracked, ${written} written`
+      );
+
+      return { fetches: 1, writes: written };
+    } catch (err) {
+      logger.error(
+        `[BasketballDaily] Failed to fetch ${dayKey} (${dateStr}): ${err.message}`
+      );
+      return { fetches: 1, writes: 0 };
+    }
+  }
 
   async _warmupCache() {
     try {

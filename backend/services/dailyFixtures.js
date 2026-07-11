@@ -21,6 +21,11 @@
  *
  *   73% reduction in ops, 100% reduction in reads
  *
+ * ★ EMPTY COLLECTION RECOVERY:
+ * If yesterday/today/tomorrow collections are empty after rollover,
+ * automatically fetches from API-Football and saves to Firebase.
+ * This handles: first run, restart with lost cache, days with no prior data.
+ *
  * On restart (rare): one-time 200 reads to warm cache.
  */
 
@@ -69,6 +74,7 @@ class DailyFixturesService {
   async run() {
     const todayStr = getDateOffset(0);
     const tomorrowStr = getDateOffset(1);
+    const yesterdayStr = getDateOffset(-1);
 
     logger.info(
       `[DailyFixtures] Run for ${tomorrowStr} (today: ${todayStr})`
@@ -85,31 +91,65 @@ class DailyFixturesService {
     if (alreadyFetchedToday) {
       // Check in-memory cache FIRST (0 reads)
       if (this._docCache.tomorrow.length > 0) {
-        logger.info(
-          `[DailyFixtures] Cache verified (${this._docCache.tomorrow.length} tomorrow docs) — skipping`
+        // ★ Also verify yesterday and today aren't empty
+        const needsFill = 
+          this._docCache.yesterday.length === 0 || 
+          this._docCache.today.length === 0;
+        
+        if (!needsFill) {
+          logger.info(
+            `[DailyFixtures] Cache verified (${this._docCache.tomorrow.length} tomorrow docs) — skipping`
+          );
+          return {
+            total: 0,
+            writes: 0,
+            apiCalls: 0,
+            duration: 0,
+            deduped: true,
+          };
+        }
+        
+        // Some days empty — fill them but don't re-fetch tomorrow
+        logger.info(`[DailyFixtures] Some days empty — filling...`);
+        const fillResult = await this._fillEmptyDays(
+          yesterdayStr, 
+          todayStr, 
+          tomorrowStr,
+          { skipTomorrow: true } // Tomorrow is already populated
         );
+        cache.invalidatePrefix("ft:");
         return {
-          total: 0,
-          writes: 0,
-          apiCalls: 0,
-          duration: 0,
+          total: this._docCache.tomorrow.length,
+          writes: fillResult.writes,
+          apiCalls: fillResult.fetches,
+          duration: Date.now() - startTime,
           deduped: true,
+          extraFetches: fillResult.fetches,
+          extraWrites: fillResult.writes,
         };
       }
 
       // Cache empty (restart) — one-time warmup from Firestore
       logger.info(`[DailyFixtures] Cache empty after restart — warming up...`);
       await this._warmupCache();
+      
       if (this._docCache.tomorrow.length > 0) {
-        logger.info(
-          `[DailyFixtures] Warmup done (${this._docCache.tomorrow.length} docs) — skipping`
+        // Warmup got tomorrow — check if other days need filling
+        const fillResult = await this._fillEmptyDays(
+          yesterdayStr, 
+          todayStr, 
+          tomorrowStr,
+          { skipTomorrow: true }
         );
+        cache.invalidatePrefix("ft:");
         return {
-          total: 0,
-          writes: 0,
-          apiCalls: 0,
-          duration: 0,
+          total: this._docCache.tomorrow.length,
+          writes: fillResult.writes,
+          apiCalls: fillResult.fetches,
+          duration: Date.now() - startTime,
           deduped: true,
+          extraFetches: fillResult.fetches,
+          extraWrites: fillResult.writes,
         };
       }
 
@@ -192,6 +232,25 @@ class DailyFixturesService {
       logger.error(`[DailyFixtures] Rollover failed: ${err.message}`);
     }
 
+    // ══════════════════════════════════════════════════════
+    // PHASE 1.5: FILL EMPTY COLLECTIONS FROM API
+    // 
+    // If yesterday or today are empty after rollover, fetch from API.
+    // This handles:
+    //   - First run ever (no cache to rollover)
+    //   - Previous day had no fixtures (acceptable — API will return empty)
+    //   - Cache was lost (restart) and warmup found nothing
+    //
+    // Tomorrow is NOT fetched here — that's PHASE 2's job.
+    // ══════════════════════════════════════════════════════
+
+    const fillResult = await this._fillEmptyDays(
+      yesterdayStr, 
+      todayStr, 
+      tomorrowStr,
+      { skipTomorrow: true } // Let PHASE 2 handle tomorrow
+    );
+
     // ══════════════════════════════════════════
     // PHASE 2: FETCH NEW TOMORROW (1 API call)
     // ══════════════════════════════════════════
@@ -200,6 +259,7 @@ class DailyFixturesService {
     let fetchWrites = 0;
     let fetchSuccess = false;
     let tomorrowNewIds = new Set();
+    let tomorrowApiCall = 0;
 
     if (!isBudgetAvailable(1)) {
       logger.warn(
@@ -213,6 +273,7 @@ class DailyFixturesService {
         fetchWrites = result.writes;
         tomorrowNewIds = result.newIds;
         fetchSuccess = true;
+        tomorrowApiCall = result.total > 0 ? 1 : 0;
 
         if (result.raw.length > 0) {
           await this.teamsProcessor.process(result.raw);
@@ -227,16 +288,24 @@ class DailyFixturesService {
     // PHASE 3: UPDATE IN-MEMORY CACHE
     // ══════════════════════════════════════════
 
-    this._docCache.yesterday = yesterdayDocs;
-    this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
-    this._docCache.today = todayDocs;
-    this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
-    // tomorrow updated from fetch result
-    if (fetchSuccess) {
-      // Keep existing tomorrow cache if fetch didn't return new data
-      if (tomorrowNewIds.size > 0) {
-        this._docCache.tomorrowIds = tomorrowNewIds;
-      }
+    // Preserve cache updates from _fillEmptyDays if rollover didn't populate
+    if (this._docCache.yesterday.length === 0 && yesterdayDocs.length > 0) {
+      this._docCache.yesterday = yesterdayDocs;
+    }
+    this._docCache.yesterdayIds = new Set(
+      this._docCache.yesterday.map((d) => String(d.id))
+    );
+
+    if (this._docCache.today.length === 0 && todayDocs.length > 0) {
+      this._docCache.today = todayDocs;
+    }
+    this._docCache.todayIds = new Set(
+      this._docCache.today.map((d) => String(d.id))
+    );
+
+    // Tomorrow updated from fetch result
+    if (fetchSuccess && tomorrowNewIds.size > 0) {
+      this._docCache.tomorrowIds = tomorrowNewIds;
     }
 
     // ══════════════════════════════════════════
@@ -244,8 +313,6 @@ class DailyFixturesService {
     // ══════════════════════════════════════════
 
     if (fetchSuccess) {
-      // ★ Removed unnecessary getMeta() read before setMeta()
-      // setMeta uses merge:true — existing fields are preserved
       await setMeta(META_DOCS.FOOTBALL_SCHEDULER, {
         lastDailyFetchDate: todayStr,
         lastTomorrowDate: tomorrowStr,
@@ -254,6 +321,8 @@ class DailyFixturesService {
         recoveredFT,
         fetchTotal,
         fetchWrites,
+        extraFetches: fillResult.fetches,
+        extraWrites: fillResult.writes,
         verifiedAt: new Date().toISOString(),
       });
       logger.info(`[DailyFixtures] Meta updated`);
@@ -266,24 +335,28 @@ class DailyFixturesService {
     cache.invalidatePrefix("ft:");
 
     const duration = Date.now() - startTime;
+    const totalApiCalls = fillResult.fetches + tomorrowApiCall;
 
     logger.info(
       `[DailyFixtures] Complete — ` +
       `rollover: ${rolloverYesterday}+${rolloverToday}, ` +
       `stale deleted: ${rolloverDeleted}, ` +
       `FT: ${recoveredFT}, ` +
+      `empty fills: ${fillResult.fetches} calls (${fillResult.writes} writes), ` +
       `fetched: ${fetchTotal} (${fetchWrites} written), ` +
-      `${fetchSuccess && fetchTotal > 0 ? 1 : 0} API call, ${duration}ms`
+      `${totalApiCalls} API calls, ${duration}ms`
     );
 
     return {
       total: fetchTotal,
-      writes: fetchWrites + rolloverYesterday + rolloverToday,
-      apiCalls: fetchSuccess && fetchTotal > 0 ? 1 : 0,
+      writes: fetchWrites + rolloverYesterday + rolloverToday + fillResult.writes,
+      apiCalls: totalApiCalls,
       duration,
       rolloverYesterday,
       rolloverToday,
       recoveredFT,
+      extraFetches: fillResult.fetches,
+      extraWrites: fillResult.writes,
       deduped: false,
       metaUpdated: fetchSuccess,
     };
@@ -292,6 +365,137 @@ class DailyFixturesService {
   // ==========================================================
   // PRIVATE
   // ==========================================================
+
+  /**
+   * Fill empty day collections from API.
+   * Called after rollover to ensure all 3 days have data.
+   * 
+   * @param {string} yesterdayStr - Date string for yesterday
+   * @param {string} todayStr - Date string for today  
+   * @param {string} tomorrowStr - Date string for tomorrow
+   * @param {{ skipTomorrow?: boolean }} options - Options
+   * @returns {{ fetches: number, writes: number, filledDays: string[] }}
+   */
+  async _fillEmptyDays(yesterdayStr, todayStr, tomorrowStr, options = {}) {
+    let fetches = 0;
+    let writes = 0;
+    const filledDays = [];
+
+    const daysToCheck = [
+      { 
+        key: "yesterday", 
+        date: yesterdayStr, 
+        collection: COLLECTIONS.YESTERDAY_FIXTURES 
+      },
+      { 
+        key: "today", 
+        date: todayStr, 
+        collection: COLLECTIONS.TODAY_FIXTURES 
+      },
+      { 
+        key: "tomorrow", 
+        date: tomorrowStr, 
+        collection: COLLECTIONS.TOMORROW_FIXTURES,
+        skip: options.skipTomorrow 
+      },
+    ];
+
+    for (const day of daysToCheck) {
+      if (day.skip) continue;
+      
+      if (this._docCache[day.key].length === 0) {
+        const result = await this._fetchDayForCollection(
+          day.date,
+          day.key,
+          day.collection
+        );
+        fetches += result.fetches;
+        writes += result.writes;
+        if (result.fetches > 0) {
+          filledDays.push(day.key);
+        }
+      }
+    }
+
+    if (fetches > 0) {
+      logger.info(
+        `[DailyFixtures] Empty fill: ${filledDays.join(", ")} — ${fetches} API calls, ${writes} writes`
+      );
+    }
+
+    return { fetches, writes, filledDays };
+  }
+
+  /**
+   * Fetch a single day's fixtures from API-Football and save to collection.
+   * 
+   * @param {string} dateStr - Date in YYYY-MM-DD format
+   * @param {string} dayKey - "yesterday", "today", or "tomorrow"
+   * @param {string} collection - Firestore collection name
+   * @returns {{ fetches: number, writes: number }}
+   */
+  async _fetchDayForCollection(dateStr, dayKey, collection) {
+    if (!isBudgetAvailable(1)) {
+      logger.warn(
+        `[DailyFixtures] Budget too low — cannot fetch ${dayKey} (${dateStr})`
+      );
+      return { fetches: 0, writes: 0 };
+    }
+
+    logger.info(
+      `[DailyFixtures] ${dayKey} is empty — fetching ${dateStr} from API-Football...`
+    );
+
+    try {
+      const raw = await withRetry(
+        () => api.get("/fixtures", { params: { date: dateStr } }),
+        `DailyFixtures:${dayKey}:fill`
+      );
+
+      const errors = raw?.errors || {};
+      if (Object.keys(errors).length > 0) {
+        logger.warn(
+          `[DailyFixtures] API blocked for ${dayKey}: ${JSON.stringify(errors)}`
+        );
+        return { fetches: 1, writes: 0 };
+      }
+
+      const allFixtures = raw?.response || [];
+      const filtered = TRACK_ALL_LEAGUES
+        ? allFixtures
+        : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+
+      const docs = filtered.map((f) => this.normalize(f));
+
+      let written = 0;
+      let newIds = new Set();
+
+      if (docs.length > 0) {
+        const result = await this.repo.diffWrite(
+          collection,
+          docs,
+          this._docCache[`${dayKey}Ids`]
+        );
+        written = result.written;
+        newIds = result.newIds;
+      }
+
+      // Update cache
+      this._docCache[dayKey] = docs;
+      this._docCache[`${dayKey}Ids`] = newIds;
+
+      logger.info(
+        `[DailyFixtures] ${dayKey} (${dateStr}): ${filtered.length} tracked, ${written} written`
+      );
+
+      return { fetches: 1, writes: written };
+    } catch (err) {
+      logger.error(
+        `[DailyFixtures] Failed to fetch ${dayKey} (${dateStr}): ${err.message}`
+      );
+      return { fetches: 1, writes: 0 };
+    }
+  }
 
   /**
    * Warmup in-memory cache from Firestore after restart.
