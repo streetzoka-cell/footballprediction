@@ -8,6 +8,9 @@
  * ★ EMPTY COLLECTION RECOVERY:
  * If yesterday/today/tomorrow collections are empty after rollover,
  * automatically fetches from API-Basketball and saves to Firebase.
+ *
+ * On restart (rare): one-time warmup reads all 3 days.
+ * After warmup: cache is complete → no surprise API calls.
  */
 
 const {
@@ -418,21 +421,37 @@ class BasketballDailyFixturesService {
     }
   }
 
+  /**
+   * Warmup in-memory cache from Firestore after restart.
+   * Reads ALL 3 days in parallel. One-time cost.
+   * After warmup, cache is complete → no surprise API calls.
+   */
   async _warmupCache() {
     try {
-      const [todayDocs, tomorrowDocs] = await Promise.all([
+      const [yesterdayDocs, todayDocs, tomorrowDocs] = await Promise.all([
+        this.repo.getAllYesterday(),
         this.repo.getAllToday(),
         this.repo.getAllTomorrow(),
       ]);
+
+      if (yesterdayDocs.length > 0) {
+        this._docCache.yesterday = yesterdayDocs;
+        this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
+      }
 
       if (todayDocs.length > 0) {
         this._docCache.today = todayDocs;
         this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id)));
       }
+
       if (tomorrowDocs.length > 0) {
         this._docCache.tomorrow = tomorrowDocs;
         this._docCache.tomorrowIds = new Set(tomorrowDocs.map((d) => String(d.id)));
       }
+
+      logger.info(
+        `[BasketballDaily] Warmup: yesterday=${yesterdayDocs.length}, today=${todayDocs.length}, tomorrow=${tomorrowDocs.length}`
+      );
     } catch (err) {
       logger.error(`[BasketballDaily] Warmup failed: ${err.message}`);
     }

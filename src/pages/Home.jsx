@@ -1,4 +1,13 @@
-// FILE: src/pages/Home.jsx — v2 polished (cleaned for useMatchData v2)
+// FILE: src/pages/Home.jsx — v3 (cleaned for useMatchData v3)
+//
+// v3 NOTES: No hook API changes affect this page.
+// - useActivePredictions: same API, now uses 30-min cache + 10-min poll
+// - useAllUserPredictions: same API, now reads from daily_leaderboard cache (0 extra reads)
+// - useMyPredictions: same API, 30-min cache
+// - usePredictionResults: same API, 30-min cache
+// - useZokaPicks: same API, 30-min cache
+// - todayStr: unchanged
+//
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import {
@@ -141,9 +150,9 @@ function ZokaResultBadge({ pick }) {
    STYLE INJECTION
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('home-v2')) return;
+  if (document.getElementById('home-v3')) return;
   const s = document.createElement('style');
-  s.id = 'home-v2';
+  s.id = 'home-v3';
   s.textContent = `
 :root{--bg-deep:#0a0a0b;--bg-surface:#0f0f11;--bg-card:#141418;--border:rgba(255,255,255,.07);--text-primary:#f0f0f0;--text-muted:#888;--accent:#00e676;--gold:#f5c542;--font-display:'Inter','SF Pro Display',system-ui,sans-serif}
 
@@ -613,7 +622,7 @@ const ExploreCard = ({ to, icon, title, desc, color, delay, glow, badge }) => (
 
 /* ═══════════════════════════════════════════════════════════════
    MAIN HOME COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
+   ═════════════════════════════════════════════════════════════ */
 export default function Home() {
   injectStyles();
 
@@ -630,7 +639,10 @@ export default function Home() {
   const [totalUsers, setTotalUsers] = useState(null);
 
   /* ═══════════════════════════════════════════════════════════
-     DATA — From useMatchData.js (single source of truth)
+     DATA — From useMatchData v3 (same API, different cache behavior)
+     v3: 30-min cache TTLs, 10-min poll intervals.
+     useAllUserPredictions now reads from daily_leaderboard cache (0 extra reads).
+     No API surface changes — same return shapes.
      ═══════════════════════════════════════════════════════════ */
   const { preds: featured, loading: featuredLoading } = useActivePredictions();
   const { playerCount } = useAllUserPredictions();
@@ -711,170 +723,192 @@ export default function Home() {
   if (error) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center' }}>
+        <div style={{ textAlign: 'center', padding: '40px 32px', background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 20 }}>
           <WifiOff size={40} style={{ color: '#ef4444', marginBottom: 16 }} />
-          <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 8 }}>Connection lost</div>
-          <div style={{ fontSize: '.85rem', color: 'var(--text-muted)', marginBottom: 20 }}>Could not load matches. Check your internet.</div>
-          <button onClick={() => window.location.reload()} className="zbtn" style={{ padding: '12px 28px', borderRadius: 12, background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 800, fontSize: '.9rem', border: 'none' }}>Retry</button>
+          <h2 style={{ margin: '0 0 8px', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Connection lost</h2>
+          <p style={{ margin: 0, fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+            Could not load matches. Check your connection and try again.
+          </p>
+          <button
+            onClick={() => window.location.reload()}
+            className="zbtn"
+            style={{ marginTop: 16, padding: '12px 28px', borderRadius: 12, background: 'rgba(0,230,118,.08)', border: '1.5px solid rgba(0,230,118,.18)', color: 'var(--accent)', fontWeight: 800, fontSize: '.9rem' }}
+          >
+            Try Again
+          </button>
         </div>
       </div>
     );
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: 'var(--text-primary)', fontFamily: 'var(--font-display)', WebkitFontSmoothing: 'antialiased' }}>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+      <SEO
+        title="ZOKASCORE — Free Football Predictions"
+        description="Predict football scores, compete on daily leaderboards, and follow Zoka Picks. Free to play — join thousands of football fans predicting matches daily."
+        keywords="football predictions, score predictions, free prediction game, football leaderboard, ZOKASCORE, zoka picks, daily football predictions"
+        url="https://zokascore.com"
+      />
 
       {/* ── Ticker Bar ── */}
       <div className="ticker-bar z-fade-in">
         <span className="ticker-dot" />
-        {liveCount > 0 && (
-          <span style={{ color: '#ef4444', fontWeight: 900 }}>
-            <span className="live-dot" style={{ width: 5, height: 5, marginRight: 4, verticalAlign: 'middle' }} />
-            {liveCount} LIVE
-          </span>
-        )}
-        <span style={{ opacity: .5 }}>·</span>
-        <span>{todayPredictions} predictions today</span>
-        {totalUsers != null && (
-          <>
-            <span style={{ opacity: .5 }}>·</span>
-            <span>{totalUsers.toLocaleString()} players</span>
-          </>
-        )}
+        <span>
+          {liveCount > 0 && <span style={{ color: '#ef4444', fontWeight: 800 }}>{liveCount} LIVE</span>}
+          {(featured.length > 0 || liveCount > 0) && (
+            <span>{featured.length + liveCount} matches today</span>
+          )}
+          {totalUsers && <span>{totalUsers.toLocaleString()} players</span>}
+        </span>
         <div style={{ flex: 1 }} />
         <LiveClock />
       </div>
 
-      {/* ── Fixture Carousel ── */}
-      <FixtureCarousel fixtures={fixtures} loading={loading} />
-
       {/* ── Hero Section ── */}
-      <div className="hero-bg" style={{ padding: '32px 16px 28px' }}>
-        <div className="hero-center">
-
-          {/* Greeting */}
-          <div className="z-fade-up" style={{ marginBottom: 6, display: 'flex', alignItems: 'center', gap: 8 }}>
-            {greeting.icon}
-            <span style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName}` : ''}
-            </span>
+      <div className="hero-bg" style={{ padding: '40px 20px 20px' }}>
+        <div className="hero-center z-fade-up" style={{ maxWidth: 560 }}>
+          <div style={{ fontSize: '3.2rem', marginBottom: 8, lineHeight: 1.05 }}>
+            {greeting.emoji}
           </div>
-
-          {/* Heading */}
-          <h1 className="z-fade-up" style={{ margin: '0 0 4px', fontSize: 'clamp(1.6rem, 5vw, 2.2rem)', fontWeight: 900, lineHeight: 1.15, letterSpacing: '-.02em', animationDelay: '60ms' }}>
-            Predict. Compete.{' '}
-            <span style={{ background: 'linear-gradient(135deg, var(--accent), #69f0ae)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              Win.
-            </span>
+          <h1 style={{ margin: 0, fontSize: '1.55rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-.03em', lineHeight: 1.2 }}>
+            {greeting.text}, {isLoggedIn ? (userProfile?.displayName || 'Predictor') : 'Predictor'}
           </h1>
-          <p className="z-fade-up" style={{ margin: '0 0 24px', fontSize: '.92rem', fontWeight: 600, color: 'var(--text-muted)', maxWidth: 420, animationDelay: '120ms' }}>
-            Score exact results to climb the daily leaderboard
+          <p style={{ margin: '8px 0 24px', fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 500, maxWidth: 360, lineHeight: 1.5 }}>
+            Predict football scores. Climb the daily leaderboard. Follow Zoka Picks.
           </p>
 
-          {/* CTA Buttons */}
-          {isLoggedIn ? (
-            <div className="hero-buttons z-fade-up" style={{ display: 'flex', gap: 10, marginBottom: 28, animationDelay: '180ms' }}>
-              <Link to="/predictions" className="zbtn cta-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 14, background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.95rem', textDecoration: 'none' }}>
-                <Target size={18} /> Predict Now
+          <div className="hero-buttons" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Link
+              to={isLoggedIn ? '/predictions' : '/login'}
+              className="zbtn cta-primary"
+              style={{
+                padding: '14px 36px', borderRadius: 14,
+                background: 'linear-gradient(135deg,#00e676,#00c853)',
+                color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.95rem',
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                boxShadow: '0 6px 24px rgba(0,230,118,.2)',
+                textDecoration: 'none', minWidth: 180,
+              }}
+            >
+              <Target size={18} /> Predict Now
+            </Link>
+            <div className="zbtn-wrap">
+              <Link
+                to="/fixtures"
+                className="zbtn"
+                style={{
+                  padding: '14px 28px', borderRadius: 14,
+                  background: 'rgba(255,255,255,.04)', border: '1.5px solid var(--border)',
+                  color: 'var(--text-primary)', fontWeight: 800, fontSize: '.92rem',
+                  display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', minWidth: 140,
+                }}
+              >
+                <Radio size={16} /> Live Scores
               </Link>
-              <Link to="/leaderboard" className="zbtn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 24px', borderRadius: 14, background: 'var(--bg-card)', border: '1.5px solid var(--border)', color: 'var(--text-primary)', fontWeight: 800, fontSize: '.95rem', textDecoration: 'none' }}>
-                <Trophy size={18} /> Leaderboard
-              </Link>
             </div>
-          ) : (
-            <div className="hero-buttons z-fade-up" style={{ display: 'flex', gap: 10, marginBottom: 28, animationDelay: '180ms' }}>
-              <Link to="/login" className="zbtn cta-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 28px', borderRadius: 14, background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.95rem', textDecoration: 'none' }}>
-                <LogIn size={18} /> Sign In
-              </Link>
-              <Link to="/leaderboard" className="zbtn" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '14px 24px', borderRadius: 14, background: 'var(--bg-card)', border: '1.5px solid var(--border)', color: 'var(--text-primary)', fontWeight: 800, fontSize: '.95rem', textDecoration: 'none' }}>
-                <Eye size={18} /> View Board
-              </Link>
-            </div>
-          )}
-
-          {/* Live Matches Strip */}
-          {liveMatches.length > 0 && (
-            <div className="z-fade-up" style={{ width: '100%', maxWidth: 680, marginBottom: 24, animationDelay: '240ms' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
-                <Radio size={14} style={{ color: '#ef4444' }} />
-                <span style={{ fontSize: '.82rem', fontWeight: 800, color: '#ef4444' }}>LIVE NOW</span>
-              </div>
-              <div className="live-strip">
-                {liveMatches.slice(0, 8).map((m, i) => <LiveMini key={m.id} match={m} index={i} />)}
-              </div>
-            </div>
-          )}
-
-          {/* Stat Grid */}
-          <div className="stat-grid z-fade-up" style={{ animationDelay: '300ms' }}>
-            <div className="stat-chip h-stat" style={{ animationDelay: '320ms' }}>
-              <div>
-                <div className="stat-chip-label">Matches</div>
-                <div className="stat-chip-val"><AnimNum value={featured.length} /></div>
-              </div>
-              <CalendarDays size={20} style={{ color: 'var(--text-muted)', opacity: .4 }} />
-            </div>
-            <div className="stat-chip h-stat" style={{ animationDelay: '360ms' }}>
-              <div>
-                <div className="stat-chip-label">Predictions</div>
-                <div className="stat-chip-val"><AnimNum value={todayPredictions} /></div>
-              </div>
-              <Users size={20} style={{ color: 'var(--text-muted)', opacity: .4 }} />
-            </div>
-            {isLoggedIn && (
-              <div className="stat-chip h-stat" style={{ animationDelay: '400ms' }}>
-                <div>
-                  <div className="stat-chip-label">Your Score</div>
-                  <div className="stat-chip-val"><AnimNum value={userScored} />/{featured.length}</div>
-                </div>
-                <Target size={20} style={{ color: '#60a5fa', opacity: .5 }} />
-              </div>
-            )}
-            {isLoggedIn && (
-              <div className="stat-chip h-stat" style={{ animationDelay: '440ms' }}>
-                <div>
-                  <div className="stat-chip-label">Exact</div>
-                  <div className="stat-chip-val" style={{ color: userExact > 0 ? 'var(--accent)' : 'var(--text-primary)' }}><AnimNum value={userExact} /></div>
-                </div>
-                <Sparkles size={20} style={{ color: 'var(--accent)', opacity: userExact > 0 ? .7 : .3 }} />
-              </div>
-            )}
           </div>
-
-          {/* Progress bar */}
-          {isLoggedIn && featured.length > 0 && (
-            <div style={{ width: '100%', maxWidth: 680, marginTop: 14 }}>
-              <div className="progress-track">
-                <div className="progress-fill" style={{ width: `${(userScored / featured.length) * 100}%` }} />
-              </div>
-            </div>
-          )}
         </div>
       </div>
 
-      {/* ── Featured Predictions ── */}
-      {featured.length > 0 && (
-        <div className="h-section" style={{ padding: '24px 16px' }}>
-          <div className="sec-head h-fade" style={{ animationDelay: '100ms' }}>
-            <Flame size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-            <h2>Today&apos;s Matches</h2>
-            <div className="sec-head-line" />
-            <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-muted)', flexShrink: 0 }}>
-              {finishedFeatured.length}/{featured.length} done
+      {/* ── Stats Grid ── */}
+      <div style={{ padding: '0 20px 20px' }}>
+        <div className="stat-grid z-fade-up" style={{ animationDelay: '80ms' }}>
+          <div className="stat-chip h-stat" style={{ animationDelay: '100ms' }}>
+            <div>
+              <div className="stat-chip-label">Today's Matches</div>
+              <div className="stat-chip-val">
+                <AnimNum value={featured.length} />
+              </div>
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(0,230,118,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CalendarDays size={18} style={{ color: 'var(--accent)' }} />
+            </div>
+          </div>
+          <div className="stat-chip h-stat" style={{ animationDelay: '140ms' }}>
+            <div>
+              <div className="stat-chip-label">Predictions</div>
+              <div className="stat-chip-val">
+                <AnimNum value={todayPredictions} />
+              </div>
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245,197,66,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Target size={18} style={{ color: 'var(--gold)' }} />
+            </div>
+          </div>
+          <div className="stat-chip h-stat" style={{ animationDelay: '180ms' }}>
+            <div>
+              <div className="stat-chip-label">Your Score</div>
+              <div className="stat-chip-val">
+                <AnimNum value={userExact * 10 + userHit * 3} delay={100} />
+              </div>
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(168,85,247,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <Zap size={18} style={{ color: '#a855f7' }} />
+            </div>
+          </div>
+          <div className="stat-chip h-stat" style={{ animationDelay: '220ms' }}>
+            <div>
+              <div className="stat-chip-label">Your Predicted</div>
+              <div className="stat-chip-val">
+                {userScored}<span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, marginLeft: 4 }}/{featured.length}</span>
+              </div>
+            </div>
+            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(96,165,250,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <CheckCircle size={18} style={{ color: '#60a5fa' }} />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ── Live Strip ── */}
+      {liveCount > 0 && (
+        <div style={{ padding: '0 20px 8px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+            <div className="sec-head" style={{ margin: 0, flex: 1 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span className="live-dot" style={{ width: 8, height: 8 }} />
+                <h2 style={{ fontSize: '.95rem', color: '#ef4444' }}>Live Now</h2>
+              </div>
+              <div className="sec-head-line" />
+            </div>
+            <span style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
+              {liveCount} match{liveCount !== 1 ? 'es' : ''}
             </span>
+          </div>
+          <div className="live-strip z-fade-in" style={{ animationDelay: '260ms' }}>
+            {liveMatches.map((m, i) => (
+              <LiveMini key={m.id} match={m} index={i} />
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Featured Predictions ── */}
+      <div style={{ padding: '0 20px 16px' }}>
+        <div className="h-section z-enter" style={{ animationDelay: '300ms' }}>
+          <div className="sec-head">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(0,230,118,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <Target size={17} style={{ color: 'var(--accent)' }} />
+              </div>
+              <h2>Today's Predictions</h2>
+            </div>
+            <div className="sec-head-line" />
           </div>
 
           {featuredLoading ? (
-            <>
-              <SkelFeatured />
-              <SkelFeatured />
-              <SkelFeatured />
-            </>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {Array.from({ length: 4 }).map((_, i) => <SkelFeatured key={i} />)}
+            </div>
+          ) : featured.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-muted)', fontSize: '.88rem', fontWeight: 600 }}>
+              No matches featured yet. Check back later!
+            </div>
           ) : (
             <>
               {featuredVisible.map((pred, i) => (
                 <FeaturedRow
-                  key={pred.id || pred.matchId}
+                  key={pred.id}
                   pred={pred}
                   userPred={userPredMap[pred.id]}
                   userResult={resultMap[String(pred.matchId)]}
@@ -885,120 +919,170 @@ export default function Home() {
               {featured.length > 4 && (
                 <button
                   className={`toggle-more-btn ${showMoreFeatured ? 'expanded' : ''}`}
-                  onClick={() => setShowMoreFeatured(v => !v)}
+                  onClick={() => setShowMoreFeatured(!showMoreFeatured)}
                 >
-                  {showMoreFeatured ? 'Show Less' : `Show ${featured.length - 4} More`}
-                  <ChevronDown size={16} />
+                  {showMoreFeatured ? (
+                    <><ChevronUp size={16} /> Show Less</>
+                  ) : (
+                    <><ChevronDown size={16} /> Show {featured.length - 4} More</>
+                  )}
                 </button>
               )}
             </>
           )}
         </div>
-      )}
+      </div>
 
       {/* ── Zoka Picks ── */}
       {zokaMatches.length > 0 && (
-        <div style={{ padding: '0 16px 24px' }}>
-          <div className="zoka-section z-fade-up">
+        <div style={{ padding: '0 20px 16px' }}>
+          <div className="zoka-section z-enter" style={{ animationDelay: '350ms' }}>
             <div className="zoka-header">
               <div className="zoka-header-icon">
-                <Crown size={20} style={{ color: 'var(--gold)' }} className="crown-float" />
+                <Star size={18} style={{ color: 'var(--gold)' }} />
               </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '1.05rem', fontWeight: 900, color: 'var(--gold)', marginBottom: 2 }}>Zoka&apos;s Picks</div>
-                <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>Expert predictions for today</div>
+              <div>
+                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-primary)' }}>Zoka Picks</h2>
+                <p style={{ margin: '2px 0 0', fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  Expert picks for today's matches
+                </p>
               </div>
+              <Link
+                to="/predictions"
+                className="zbtn"
+                style={{
+                  marginLeft: 'auto',
+                  padding: '8px 14px', borderRadius: 10,
+                  background: 'rgba(245,197,66,.08)', border: '1.5px solid rgba(245,197,66,.18)',
+                  color: 'var(--gold)', fontWeight: 700, fontSize: '.78rem',
+                  textDecoration: 'none', flexShrink: 0,
+                }}
+              >
+                View All <ChevronRight size={12} />
+              </Link>
             </div>
 
-            {zokaVisible.map((pick, i) => (
-              <div key={pick.matchId || i} className="zoka-row" style={{ animationDelay: `${i * 60}ms` }}>
-                <div className="zoka-team">
-                  {pick.homeLogo && <img src={pick.homeLogo} alt="" loading="lazy" />}
-                  <span>{pick.homeTeam?.name || pick.homeTeam || 'Home'}</span>
-                </div>
-                <div className="zoka-predicted-score">
-                  {pick.adminPick ? `${pick.adminPick.home}-${pick.adminPick.away}` : '--'}
-                </div>
-                <div className="zoka-team away">
-                  {pick.awayLogo && <img src={pick.awayLogo} alt="" loading="lazy" />}
-                  <span>{pick.awayTeam?.name || pick.awayTeam || 'Away'}</span>
-                </div>
-                <div className="zoka-kickoff">{pick.kickoff || '--:--'}</div>
-                {pick.status === 'finished' && (
-                  <div className="zoka-actual-score">
-                    {pick.homeScore ?? '?'}-{pick.awayScore ?? '?'}
+            <div>
+              {zokaVisible.map((pick, i) => (
+                <div key={i} className="zoka-row" style={{ animationDelay: `${i * 60}ms` }}>
+                  <span className="zoka-kickoff">{pick.kickoff || '--:--'}</span>
+                  <span className="zoka-team">
+                    {pick.homeLogo && <img src={pick.homeLogo} alt="" />}
+                    {pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}
+                  </span>
+                  <span className="zoka-predicted-score">{pick.adminPick?.home ?? '?'}-{pick.adminPick?.away ?? '?'}</span>
+                  <span className="zoka-team away">
+                    {pick.awayLogo && <img src={pick.awayLogo} alt="" />}
+                    {pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}
+                  </span>
+                  <span className="zoka-actual-score">
+                    {pick.status === 'finished' && pick.homeScore != null
+                      ? `${pick.homeScore}-${pick.awayScore}`
+                      : '–'}
+                  </span>
+                  <div className="zoka-result-col">
+                    <ZokaResultBadge pick={pick} />
                   </div>
-                )}
-                <div className="zoka-result-col">
-                  <ZokaResultBadge pick={pick} />
                 </div>
-              </div>
-            ))}
+              ))}
 
-            {zokaMatches.length > 3 && (
-              <button
-                className={`toggle-more-btn ${showMoreZoka ? 'expanded' : ''}`}
-                onClick={() => setShowMoreZoka(v => !v)}
-                style={{ borderColor: 'rgba(245,197,66,.15)' }}
-              >
-                {showMoreZoka ? 'Show Less' : `Show ${zokaMatches.length - 3} More`}
-                <ChevronDown size={16} />
-              </button>
-            )}
+              {zokaMatches.length > 3 && (
+                <button
+                  className={`toggle-more-btn ${showMoreZoka ? 'expanded' : ''}`}
+                  onClick={() => setShowMoreZoka(!showMoreZoka)}
+                >
+                  {showMoreZoka ? (
+                    <><ChevronUp size={16} /> Show Less</>
+                  ) : (
+                    <><ChevronDown size={16} /> Show {zokaMatches.length - 3} More
+                  )}
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
 
       {/* ── Explore Grid ── */}
-      <div className="h-section" style={{ padding: '0 16px 32px' }}>
-        <div className="sec-head h-fade">
-          <Zap size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
-          <h2>Explore</h2>
-          <div className="sec-head-line" />
-        </div>
-        <div className="explore-grid">
-          <ExploreCard
-            to="/predictions"
-            icon={<Target size={22} />}
-            title="Predictions"
-            desc="Make your picks for today"
-            color="#00e676"
-            delay={0}
-            badge={featured.length > 0 ? `${featured.length} matches` : null}
-          />
-          <ExploreCard
-            to="/leaderboard"
-            icon={<Trophy size={22} />}
-            title="Leaderboard"
-            desc="Daily, weekly & all-time"
-            color="#f5c542"
-            delay={60}
-            glow={liveCount > 0}
-            badge={liveCount > 0 ? 'LIVE' : null}
-          />
-          <ExploreCard
-            to="/profile"
-            icon={<BarChart3 size={22} />}
-            title="My Stats"
-            desc="Track your performance"
-            color="#60a5fa"
-            delay={120}
-          />
-          {isLoggedIn && (
+      <div style={{ padding: '0 20px 40px' }}>
+        <div className="h-section z-enter" style={{ animationDelay: '400ms' }}>
+          <div className="sec-head">
+            <h2>Explore</h2>
+            <div className="sec-head-line" />
+          </div>
+
+          <div className="explore-grid">
             <ExploreCard
-              to="/profile"
-              icon={<Medal size={22} />}
-              title="Achievements"
-              desc="Badges & milestones"
-              color="#a78bfa"
+              to="/predictions"
+              icon={<Target size={22} />}
+              title="Predict"
+              desc="Make your score predictions for today's featured matches"
+              color="var(--accent)"
+              delay={0}
+              badge="LIVE"
+              glow={liveCount > 0}
+            />
+            <ExploreCard
+              to="/leaderboard"
+              icon={<Trophy size={22} />}
+              title="Leaderboard"
+              desc="See how you rank against other predictors today"
+              color="var(--gold)"
+              delay={60}
+            />
+            <ExploreCard
+              to="/fixtures"
+              icon={<Radio size={22} />}
+              title="Live Scores"
+              desc={liveCount > 0 ? `${liveCount} matches live now` : 'Live match scores and results'}
+              color="#ef4444"
+              delay={120}
+              glow={liveCount > 0}
+              badge={liveCount > 0 ? `${liveCount} LIVE` : null}
+            />
+            <ExploreCard
+              to="/fixtures"
+              icon={<CalendarDays size={22} />}
+              title="Fixtures"
+              desc="Full schedule — past, today, tomorrow"
+              color="#60a5fa"
               delay={180}
             />
-          )}
+            <ExploreCard
+              to="/leaderboard?tab=goat"
+              icon={<Crown size={22} />}
+              title="G.O.A.T"
+              desc="All-time top predictors — Hall of Fame"
+              color="var(--gold)"
+              delay={240}
+            />
+          </div>
         </div>
       </div>
 
-      {/* ── Bottom spacer ── */}
-      <div style={{ height: 80 }} />
+      {/* ── Footer ── */}
+      <div style={{ padding: '20px 20px 40px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
+          <div
+            style={{
+              width: 30, height: 30, borderRadius: 9,
+              background: 'linear-gradient(145deg,#00e676,#00c853)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 900, fontSize: '.76rem', color: 'var(--bg-deep)',
+              fontFamily: 'var(--font-display)',
+              boxShadow: '0 2px 10px rgba(0,230,118,.25)',
+            }}
+          >
+            Z
+          </div>
+          <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-muted)' }}>
+            zokascore<span style={{ color: 'var(--accent)' }}>.xyz</span>
+          </span>
+        </div>
+        <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '.02em' }}>
+          Free football prediction game · No payment required
+        </p>
+      </div>
     </div>
   );
 }

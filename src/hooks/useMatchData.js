@@ -1,47 +1,77 @@
-// ═══════════════════════════════════════════════════════════════════════════
-// FILE: src/hooks/useMatchData.js — QUOTA-OPTIMIZED v2
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// FILE: src/hooks/useMatchData.js — QUOTA-OPTIMIZED v3
+// ═════════════════════════════════════════════════════════════════════════════
 //
 // QUOTA BUDGET (Spark Plan):  50K reads/day,  20K writes/day
 // TARGET:                      2,000+ daily active users
 //
-// ═══════════════════════════════════════════════════════════════════════════
-// STRATEGY
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
+// v3 CHANGES (from v2)
+// ═════════════════════════════════════════════════════════════════════════════
 //
-//  1. ZERO onSnapshot collection listeners from non-admin clients.
-//     Every "real-time" listener is replaced with a one-time getDoc/getDocs
-//     wrapped in a module-level session cache.
+//  1. ALL cache TTLs raised to 30 minutes (were 45s–90s).
+//     Cache now outlives poll interval → most polls are cache hits.
 //
-//  2. Session cache survives component mounts/unmounts within the same tab.
-//     Navigating Home → Predictions → Leaderboard = 0 extra reads.
+//  2. Poll intervals raised to 10 minutes (were 90s–120s).
+//     Active predictions and daily leaderboard still refresh, but
+//     far less often. 30-min session = 1 Firestore read per hook.
 //
-//  3. Single-document reads replace collection scans wherever possible:
-//       - daily_leaderboard/{date}    → replaces 3 collection listeners
-//       - zoka_vote_stats/{date}      → replaces zoka_votes collection scan
-//       - user_points_total/{uid}     → was already 1 doc (unchanged)
-//       - zoka_picks/{date}           → was already 1 doc (unchanged)
+//  3. GOAT leaderboard: pre-computed single doc instead of scanning
+//     entire user_points_total collection (2,000 reads → 1 read).
+//     Incrementally updated after each resolution (1 read + 1 write).
 //
-//  4. User-specific composite queries replace full-table scans:
-//       - user_predictions WHERE userId==uid AND matchDate==date
-//       - prediction_results WHERE userId==uid AND matchDate==date
+//  4. Weekly/monthly leaderboards: pre-computed docs instead of
+//     scanning prediction_results (500-2,000 reads → 1 read).
+//     Rebuilt by admin action.
 //
-//  5. Admin is the ONLY client that reads collections for resolution.
-//     Admin writes a daily_leaderboard summary doc that all users read.
+//  5. Daily summary: incremental update in resolver instead of
+//     full 3-collection scan (1,010 reads → 1 read per resolution).
 //
-//  6. Zoka votes: individual vote docs removed; stats stored in single doc
-//     with atomic increments. User's own vote stored in localStorage.
+// ═════════════════════════════════════════════════════════════════════════════
+// PER-USER READ BUDGET (30-min session, all pages)
+// ═════════════════════════════════════════════════════════════════════════════
 //
-// ═══════════════════════════════════════════════════════════════════════════
-// REQUIRED FIRESTORE COMPOSITE INDEXES (create in Console → Indexes)
-// ═══════════════════════════════════════════════════════════════════════════
+//  Hook                          Reads   Why
+//  ────────────────────────────  ──────  ───────────────────────────────
+//  initFirebaseSync               1      1 doc, once per session
+//  useActivePredictions          ~10     1 query × ~10 docs, 1st poll only
+//  useDailyLeaderboard             1     1 doc, 1st poll only
+//  useMyPredictions              ~10     1 query × ~10 docs, once
+//  usePredictionResults          ~10     1 query × ~10 docs, once
+//  useUserPoints                   1     1 doc, once
+//  useZokaPicks                    1     1 doc, once
+//  useZokaVotes                    1     1 doc, once
+//  useAllUserPredictions           0     uses daily_leaderboard cache
+//  useHistoricalLeaderboard        1     1 pre-computed doc
+//  ────────────────────────────  ──────
+//  TOTAL (all pages)             ~36
+//
+//  REALISTIC USAGE (not everyone visits every page):
+//    Home-only users (70%):    1,400 × 14  =  19,600
+//    + Predictions (25%):        500 × 35  =  17,500
+//    + GOAT check (5%):          100 × 36  =   3,600
+//    ─────────────────────────────────────────
+//    CLIENT TOTAL:                         ~40,700 reads/day
+//
+//  ADMIN COST (10 resolutions/day):
+//    Resolution queries:        10 × 500  =   5,000
+//    Incremental daily update:  10 × 1    =      10
+//    Incremental GOAT update:   10 × 1    =      10
+//    ─────────────────────────────────────────
+//    ADMIN TOTAL:                           ~5,020 reads/day
+//
+//  GRAND TOTAL:                            ~45,720 reads/day ✅ UNDER 50K
+//
+// ═════════════════════════════════════════════════════════════════════════════
+// REQUIRED FIRESTORE COMPOSITE INDEXES
+// ═════════════════════════════════════════════════════════════════════════════
 //
 //   Collection           Fields                         Status
 //   ───────────────────  ─────────────────────────────  ───────
 //   user_predictions     userId ASC, matchDate ASC      CREATE
 //   prediction_results   userId ASC, matchDate ASC      CREATE
 //
-// ═══════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useMemo } from 'react';
 import { db } from '../utils/firebase';
@@ -57,6 +87,35 @@ import {
   serverTimestamp,
   increment,
 } from 'firebase/firestore';
+
+/* ═══════════════════════════════════════════════════════════════
+   CACHE TTL CONFIGURATION
+   ═══════════════════════════════════════════════════════════════
+   All TTLs are 30 minutes. Poll intervals are 10 minutes.
+   Since 30 > 10, the 2nd and 3rd polls in a 30-min session
+   are always cache hits → 0 extra Firestore reads.
+
+   30-min session timeline (useActivePredictions):
+     0 min:  poll → cache MISS → 10 reads
+    10 min:  poll → cache HIT  → 0 reads
+    20 min:  poll → cache HIT  → 0 reads
+    ─────────────────────────────────────────
+    Total: 10 reads (was ~200 in v2)
+   ═══════════════════════════════════════════════════════════════ */
+const CACHE_TTL = {
+  ACTIVE_PREDICTIONS: 1_800_000,   // 30 min
+  DAILY_LEADERBOARD:  1_800_000,   // 30 min
+  MY_PREDICTIONS:     1_800_000,   // 30 min
+  PREDICTION_RESULTS: 1_800_000,   // 30 min
+  USER_POINTS:        1_800_000,   // 30 min
+  ZOKA_PICKS:         1_800_000,   // 30 min
+  ZOKA_VOTES:         1_800_000,   // 30 min
+  HISTORICAL:         1_800_000,   // 30 min
+};
+
+const POLL_INTERVAL = {
+  SLOW: 600_000,  // 10 min — for hooks that need periodic refresh
+};
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS
@@ -99,14 +158,43 @@ export function calcPoints(predH, predA, actualH, actualA) {
   return { points: 0, type: 'miss' };
 }
 
+/** Get the doc ID for a pre-computed leaderboard summary */
+function getPeriodDocId(period) {
+  if (period === 'goat') return 'current';
+  if (period === 'weekly') return `weekly_${getWeekStart()}`;
+  if (period === 'monthly') return `monthly_${getMonthStart()}`;
+  return period;
+}
+
+function computeStats(entries) {
+  if (!entries.length) return { avg: '0.0', preds: 0, exact: 0, players: 0 };
+  return {
+    avg: (entries.reduce((s, u) => s + u.accuracy, 0) / entries.length).toFixed(1),
+    preds: entries.reduce((s, u) => s + u.predictions, 0),
+    exact: entries.reduce((s, u) => s + u.exact, 0),
+    players: entries.length,
+  };
+}
+
+function rankEntries(list) {
+  return list
+    .sort((a, b) => b.points - a.points || b.exact - a.exact || b.result - a.result)
+    .map((u, i) => ({
+      ...u,
+      rank: i + 1,
+      accuracy: u.resolved > 0
+        ? Math.round(((u.exact + u.result) / u.resolved) * 100)
+        : 0,
+    }));
+}
+
 /* ═══════════════════════════════════════════════════════════════
    SESSION CACHE
    ═══════════════════════════════════════════════════════════════
    Module-level Map. Survives component mount/unmount within
-   the same tab. Cleared on page refresh (natural behavior).
+   the same tab. Cleared on page refresh.
 
-   Each entry has a timestamp. On read, if expired, deleted.
-   Concurrent duplicate reads are deduplicated via _inflight.
+   Deduplicates concurrent duplicate reads via _inflight.
    ═══════════════════════════════════════════════════════════════ */
 
 const _cache = new Map();
@@ -127,12 +215,10 @@ function _cacheSet(key, data) {
   _cache.set(key, { data, ts: Date.now() });
 }
 
-/** Delete a specific cache entry (call after writes to force fresh read) */
 export function invalidateCache(key) {
   _cache.delete(key);
 }
 
-/** Delete all entries matching a prefix */
 export function invalidateCachePrefix(prefix) {
   for (const k of _cache.keys()) {
     if (k.startsWith(prefix)) _cache.delete(k);
@@ -143,10 +229,6 @@ export function invalidateCachePrefix(prefix) {
    CACHED READ HELPERS
    ═══════════════════════════════════════════════════════════════ */
 
-/**
- * Read a single document with caching.
- * Deduplicates concurrent reads for the same key.
- */
 async function readDocOnce(docRef, cacheKey, ttlMs = 60000) {
   const cached = _cacheGet(cacheKey, ttlMs);
   if (cached !== undefined) return cached;
@@ -170,10 +252,6 @@ async function readDocOnce(docRef, cacheKey, ttlMs = 60000) {
   return promise;
 }
 
-/**
- * Read a collection query with caching.
- * Deduplicates concurrent reads for the same key.
- */
 async function readDocsOnce(queryRef, cacheKey, ttlMs = 60000) {
   const cached = _cacheGet(cacheKey, ttlMs);
   if (cached !== undefined) return cached;
@@ -198,13 +276,128 @@ async function readDocsOnce(queryRef, cacheKey, ttlMs = 60000) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ADMIN-ONLY: REBUILD DAILY SUMMARY
+   ADMIN: INCREMENTAL DAILY SUMMARY UPDATE
    ═══════════════════════════════════════════════════════════════
-   Reads all data for a date and writes a single summary doc
-   that clients read instead of scanning collections.
+   Called by resolveMatchForAllUsers AFTER writing results.
+   Reads 1 doc (current summary), updates entries, writes 1 doc.
 
-   Cost: ~2,500 reads (admin only), writes 1 doc.
-   Runs only when a match is resolved (~5-10 times/day).
+   OLD cost per resolution: ~1,010 reads (3 collection scans)
+   NEW cost per resolution: 1 read + 1 write
+   ═══════════════════════════════════════════════════════════════ */
+
+async function _updateDailySummaryIncremental(dateStr, resolvedList) {
+  if (!db || !resolvedList.length) return;
+
+  const ref = doc(db, 'daily_leaderboard', dateStr);
+  const snap = await getDoc(ref);
+
+  const base = snap.exists() ? snap.data() : null;
+  const entryMap = new Map();
+  if (base?.entries) {
+    base.entries.forEach((e) => entryMap.set(e.uid, { ...e }));
+  }
+
+  const scoreMap = base?.scoreMap ? { ...base.scoreMap } : {};
+
+  for (const r of resolvedList) {
+    scoreMap[String(r.matchId)] = { h: r.actualH, a: r.actualA };
+
+    let entry = entryMap.get(r.userId);
+    if (!entry) {
+      entry = {
+        uid: r.userId,
+        displayName: r.displayName || 'Player',
+        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
+      };
+      entryMap.set(r.userId, entry);
+    }
+    entry.displayName = r.displayName || entry.displayName || 'Player';
+    entry.predictions += 1;
+    entry.resolved += 1;
+    entry.points += r.points;
+    if (r.resultType === 'exact') entry.exact += 1;
+    else if (r.resultType === 'result') entry.result += 1;
+    else entry.miss += 1;
+  }
+
+  const entries = rankEntries([...entryMap.values()].filter((u) => u.predictions > 0));
+
+  await setDoc(ref, {
+    entries,
+    top3: entries.slice(0, 3),
+    rest: entries.slice(3),
+    stats: computeStats(entries),
+    scoreMap,
+    predDist: base?.predDist || {},
+    predCounts: base?.predCounts || {},
+    date: dateStr,
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN: INCREMENTAL GOAT UPDATE
+   ═══════════════════════════════════════════════════════════════
+   Called by resolveMatchForAllUsers AFTER writing results.
+   Reads 1 doc (current GOAT), updates affected users, writes 1 doc.
+
+   OLD cost per resolution: ~2,000 reads (full user_points_total scan)
+   NEW cost per resolution: 1 read + 1 write
+   ═══════════════════════════════════════════════════════════════ */
+
+async function _updateGoatIncremental(resolvedList) {
+  if (!db || !resolvedList.length) return;
+
+  const ref = doc(db, 'leaderboard_summaries', 'current');
+  const snap = await getDoc(ref);
+
+  if (!snap.exists()) {
+    // First time — do full rebuild
+    await rebuildGoatLeaderboard();
+    return;
+  }
+
+  const data = snap.data();
+  const entryMap = new Map();
+  (data.entries || []).forEach((e) => entryMap.set(e.uid, { ...e }));
+
+  for (const r of resolvedList) {
+    let entry = entryMap.get(r.userId);
+    if (!entry) {
+      entry = {
+        uid: r.userId,
+        displayName: r.displayName || 'Player',
+        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
+      };
+      entryMap.set(r.userId, entry);
+    }
+    entry.displayName = r.displayName || entry.displayName || 'Player';
+    entry.points += r.points;
+    entry.predictions += 1;
+    entry.resolved += 1;
+    if (r.resultType === 'exact') entry.exact += 1;
+    else if (r.resultType === 'result') entry.result += 1;
+    else entry.miss += 1;
+  }
+
+  const entries = rankEntries([...entryMap.values()].filter((u) => u.predictions > 0));
+
+  await setDoc(ref, {
+    entries,
+    top3: entries.slice(0, 3),
+    rest: entries.slice(3),
+    stats: computeStats(entries),
+    updatedAt: serverTimestamp(),
+  }, { merge: true });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN: FULL DAILY SUMMARY REBUILD
+   ═══════════════════════════════════════════════════════════════
+   Full rebuild from collections. Expensive — only for manual
+   admin trigger or initial setup. NOT called per-resolution.
+
+   Cost: ~1,010 reads (admin only)
    ═══════════════════════════════════════════════════════════════ */
 
 export async function rebuildDailySummary(dateStr) {
@@ -212,31 +405,16 @@ export async function rebuildDailySummary(dateStr) {
   dateStr = dateStr || todayStr();
 
   try {
-    // Read prediction_results for this date (resolved data)
     const resultsSnap = await getDocs(
-      query(
-        collection(db, 'prediction_results'),
-        where('matchDate', '==', dateStr)
-      )
+      query(collection(db, 'prediction_results'), where('matchDate', '==', dateStr))
     );
-
-    // Read user_predictions for this date (unresolved + display names)
     const predsSnap = await getDocs(
-      query(
-        collection(db, 'user_predictions'),
-        where('matchDate', '==', dateStr)
-      )
+      query(collection(db, 'user_predictions'), where('matchDate', '==', dateStr))
     );
-
-    // Read active_predictions for score map
     const activeSnap = await getDocs(
-      query(
-        collection(db, 'active_predictions'),
-        where('matchDate', '==', dateStr)
-      )
+      query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr))
     );
 
-    // Build score map from finished matches
     const scoreMap = {};
     activeSnap.docs.forEach((d) => {
       const p = d.data();
@@ -245,64 +423,40 @@ export async function rebuildDailySummary(dateStr) {
       }
     });
 
-    // Build user stats from prediction_results (authoritative)
     const userStats = {};
     resultsSnap.docs.forEach((d) => {
       const r = d.data();
       if (!userStats[r.userId]) {
         userStats[r.userId] = {
-          uid: r.userId,
-          displayName: 'Player',
-          points: 0,
-          predictions: 0,
-          exact: 0,
-          result: 0,
-          miss: 0,
-          resolved: 0,
+          uid: r.userId, displayName: 'Player',
+          points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
         };
       }
       const u = userStats[r.userId];
-      u.predictions++;
-      u.resolved++;
+      u.predictions++; u.resolved++;
       u.points += r.points || 0;
       if (r.resultType === 'exact') u.exact++;
       else if (r.resultType === 'result') u.result++;
       else u.miss++;
     });
 
-    // Add unresolved predictions (compute on-the-fly from raw data)
-    const resolvedMatchIds = new Set(
-      resultsSnap.docs.map((d) => String(d.data().matchId))
-    );
-
+    const resolvedIds = new Set(resultsSnap.docs.map((d) => String(d.data().matchId)));
     predsSnap.docs.forEach((d) => {
       const p = d.data();
       const mid = String(p.matchId);
-
-      if (resolvedMatchIds.has(mid)) {
-        // Grab display name from raw prediction
-        if (userStats[p.userId]) {
-          userStats[p.userId].displayName = p.displayName || 'Player';
-        }
+      if (resolvedIds.has(mid)) {
+        if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || 'Player';
         return;
       }
-
       if (!userStats[p.userId]) {
         userStats[p.userId] = {
-          uid: p.userId,
-          displayName: p.displayName || 'Player',
-          points: 0,
-          predictions: 0,
-          exact: 0,
-          result: 0,
-          miss: 0,
-          resolved: 0,
+          uid: p.userId, displayName: p.displayName || 'Player',
+          points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
         };
       }
       const u = userStats[p.userId];
       u.displayName = p.displayName || 'Player';
       u.predictions++;
-
       const actual = scoreMap[mid];
       if (!actual) return;
       u.resolved++;
@@ -313,36 +467,10 @@ export async function rebuildDailySummary(dateStr) {
       else u.miss++;
     });
 
-    // Sort and rank
-    const entries = Object.values(userStats)
-      .filter((u) => u.predictions > 0)
-      .sort(
-        (a, b) =>
-          b.points - a.points || b.exact - a.exact || b.result - a.result
-      )
-      .map((u, i) => ({
-        ...u,
-        rank: i + 1,
-        accuracy:
-          u.resolved > 0
-            ? Math.round(((u.exact + u.result) / u.resolved) * 100)
-            : 0,
-      }));
+    const entries = rankEntries(
+      Object.values(userStats).filter((u) => u.predictions > 0)
+    );
 
-    // Compute stats
-    const stats = {
-      avg:
-        entries.length > 0
-          ? (
-              entries.reduce((s, u) => s + u.accuracy, 0) / entries.length
-            ).toFixed(1)
-          : '0.0',
-      preds: entries.reduce((s, u) => s + u.predictions, 0),
-      exact: entries.reduce((s, u) => s + u.exact, 0),
-      players: entries.length,
-    };
-
-    // Compute prediction distribution (for "X people predicted 2-1")
     const predDist = {};
     const predCounts = {};
     predsSnap.docs.forEach((d) => {
@@ -353,12 +481,11 @@ export async function rebuildDailySummary(dateStr) {
       predCounts[p.predId] = (predCounts[p.predId] || 0) + 1;
     });
 
-    // Write the summary doc — 1 write, read by ALL clients
     await setDoc(doc(db, 'daily_leaderboard', dateStr), {
       entries,
       top3: entries.slice(0, 3),
       rest: entries.slice(3),
-      stats,
+      stats: computeStats(entries),
       predDist,
       predCounts,
       scoreMap,
@@ -366,23 +493,142 @@ export async function rebuildDailySummary(dateStr) {
       date: dateStr,
     });
 
-    // Invalidate admin cache for active predictions
     invalidateCache(`active_${dateStr}`);
-
-    console.log(
-      `[Summary] Rebuilt for ${dateStr}: ${entries.length} players`
-    );
+    console.log(`[Summary] Rebuilt for ${dateStr}: ${entries.length} players`);
   } catch (e) {
     console.error('[Summary] Rebuild failed:', e);
   }
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   ADMIN-ONLY: RESOLVER
+   ADMIN: FULL GOAT LEADERBOARD REBUILD
    ═══════════════════════════════════════════════════════════════
-   Only called from Admin.jsx. Reads user_predictions collection
-   (necessary to find who predicted a match), writes results,
-   then rebuilds the daily summary doc.
+   Scans user_points_total. Expensive — only for manual admin
+   trigger or first-time setup.
+
+   Cost: ~2,000 reads (admin only)
+   ═══════════════════════════════════════════════════════════════ */
+
+export async function rebuildGoatLeaderboard() {
+  if (!db) return;
+
+  try {
+    const snap = await getDocs(collection(db, 'user_points_total'));
+
+    const entries = rankEntries(
+      snap.docs
+        .map((d) => ({ id: d.id, ...d.data() }))
+        .filter((u) => (u.predictionsCount || 0) > 0)
+        .map((u) => ({
+          uid: u.id,
+          displayName: u.displayName || 'Player',
+          points: u.totalPoints || 0,
+          predictions: u.predictionsCount || 0,
+          exact: u.exactCount || 0,
+          result: u.resultCount || 0,
+          miss: u.missCount || 0,
+          resolved: u.predictionsCount || 0,
+        }))
+    );
+
+    await setDoc(doc(db, 'leaderboard_summaries', 'current'), {
+      entries,
+      top3: entries.slice(0, 3),
+      rest: entries.slice(3),
+      stats: computeStats(entries),
+      updatedAt: serverTimestamp(),
+    });
+
+    invalidateCache('hist_goat');
+    console.log(`[GOAT] Rebuilt: ${entries.length} players`);
+  } catch (e) {
+    console.error('[GOAT] Rebuild failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN: FULL PERIOD LEADERBOARD REBUILD (weekly/monthly)
+   ═══════════════════════════════════════════════════════════════
+   Scans prediction_results since period start. Expensive —
+   only for manual admin trigger.
+
+   Cost: ~500-2,000 reads (admin only)
+   ═══════════════════════════════════════════════════════════════ */
+
+export async function rebuildPeriodLeaderboard(period, startDate) {
+  if (!db) return;
+
+  if (!startDate) {
+    if (period === 'weekly') startDate = getWeekStart();
+    else if (period === 'monthly') startDate = getMonthStart();
+    else return;
+  }
+
+  const docId = getPeriodDocId(period);
+  const cacheKey = `hist_${period}`;
+
+  try {
+    const snap = await getDocs(
+      query(
+        collection(db, 'prediction_results'),
+        where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))
+      )
+    );
+
+    const userMap = {};
+    snap.docs.forEach((d) => {
+      const r = d.data();
+      if (!userMap[r.userId]) {
+        userMap[r.userId] = {
+          uid: r.userId, displayName: 'Player',
+          points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
+        };
+      }
+      const u = userMap[r.userId];
+      u.predictions++; u.resolved++;
+      u.points += r.points || 0;
+      if (r.resultType === 'exact') u.exact++;
+      else if (r.resultType === 'result') u.result++;
+      else u.miss++;
+    });
+
+    const entries = rankEntries(
+      Object.values(userMap).filter((u) => u.predictions > 0)
+    );
+
+    await setDoc(doc(db, 'leaderboard_summaries', docId), {
+      entries,
+      top3: entries.slice(0, 3),
+      rest: entries.slice(3),
+      stats: computeStats(entries),
+      period,
+      startDate,
+      updatedAt: serverTimestamp(),
+    });
+
+    invalidateCache(cacheKey);
+    console.log(`[Period] Rebuilt ${period} (${startDate}): ${entries.length} players`);
+  } catch (e) {
+    console.error(`[Period] Rebuild ${period} failed:`, e);
+  }
+}
+
+/** Rebuild all leaderboards (daily + GOAT + weekly + monthly). Admin only. */
+export async function rebuildAllLeaderboards() {
+  await rebuildDailySummary(todayStr());
+  await rebuildGoatLeaderboard();
+  await rebuildPeriodLeaderboard('weekly');
+  await rebuildPeriodLeaderboard('monthly');
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADMIN: MATCH RESOLVER
+   ═══════════════════════════════════════════════════════════════
+   Reads user_predictions for the match, writes results, then
+   does CHEAP incremental updates to daily summary + GOAT.
+
+   Cost per resolution: ~500 reads (predictions) + 2 reads (incremental updates)
+   NOT ~3,510 reads (old: 500 + 1,010 + 2,000)
    ═══════════════════════════════════════════════════════════════ */
 
 const _resolvingNow = new Set();
@@ -403,34 +649,38 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
     );
     if (alreadyResolved.has(String(matchId))) return 0;
 
-    // Read all predictions for this match (admin-only collection read)
+    // Read predictions for this match (necessary — need to know who predicted)
     const predsSnap = await getDocs(
-      query(
-        collection(db, 'user_predictions'),
-        where('matchId', '==', matchId)
-      )
+      query(collection(db, 'user_predictions'), where('matchId', '==', matchId))
     );
 
     if (predsSnap.empty) {
-      await setDoc(
-        statusRef,
-        {
-          resolvedMatches: [String(matchId)],
-          lastResolvedAt: serverTimestamp(),
-          date: dateKey,
-        },
-        { merge: true }
-      );
+      await setDoc(statusRef, {
+        resolvedMatches: [String(matchId)],
+        lastResolvedAt: serverTimestamp(),
+        date: dateKey,
+      }, { merge: true });
       return 0;
     }
 
+    // Collect resolved data for incremental updates
+    const resolvedList = [];
     const batch = writeBatch(db);
-    let count = 0;
 
     predsSnap.forEach((d) => {
       const p = d.data();
       const uid = p.userId;
       const r = calcPoints(p.homeScore, p.awayScore, actualH, actualA);
+
+      resolvedList.push({
+        userId: uid,
+        displayName: p.displayName || 'Player',
+        matchId: String(matchId),
+        points: r.points,
+        resultType: r.type,
+        actualH,
+        actualA,
+      });
 
       // Write prediction result
       batch.set(
@@ -470,8 +720,6 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
         },
         { merge: true }
       );
-
-      count++;
     });
 
     // Update zoka_picks scores if applicable
@@ -484,49 +732,41 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       const updated = matches.map((m) => {
         if (String(m.matchId) === String(matchId) && m.status !== 'finished') {
           changed = true;
-          return {
-            ...m,
-            homeScore: actualH,
-            awayScore: actualA,
-            status: 'finished',
-          };
+          return { ...m, homeScore: actualH, awayScore: actualA, status: 'finished' };
         }
         return m;
       });
       if (changed) {
-        batch.set(
-          zokaRef,
-          { ...zokaData, matches: updated, updatedAt: serverTimestamp() },
-          { merge: true }
-        );
+        batch.set(zokaRef, { ...zokaData, matches: updated, updatedAt: serverTimestamp() }, { merge: true });
       }
     }
 
     // Mark as resolved
-    batch.set(
-      statusRef,
-      {
-        resolvedMatches: [String(matchId)],
-        lastResolvedAt: serverTimestamp(),
-        date: dateKey,
-      },
-      { merge: true }
-    );
+    batch.set(statusRef, {
+      resolvedMatches: [String(matchId)],
+      lastResolvedAt: serverTimestamp(),
+      date: dateKey,
+    }, { merge: true });
 
     await batch.commit();
 
-    // Rebuild the daily summary doc (so clients see updated leaderboard)
-    await rebuildDailySummary(dateKey);
+    // ★ CHEAP incremental updates instead of full rebuilds
+    await _updateDailySummaryIncremental(dateKey, resolvedList);
+    await _updateGoatIncremental(resolvedList);
 
-    // Invalidate client caches
+    // Invalidate affected client caches
     invalidateCachePrefix(`dlb_${dateKey}`);
-    predsSnap.docs.forEach((d) => {
-      const uid = d.data().userId;
-      _cache.delete(`upt_${uid}`);
-      _cache.delete(`myResults_${uid}_${dateKey}`);
-    });
+    for (const r of resolvedList) {
+      _cache.delete(`upt_${r.userId}`);
+      _cache.delete(`myResults_${r.userId}_${dateKey}`);
+      _cache.delete(`myPreds_${r.userId}_${dateKey}`);
+    }
+    // Also invalidate GOAT and period caches
+    invalidateCache('hist_goat');
+    invalidateCache('hist_weekly');
+    invalidateCache('hist_monthly');
 
-    return count;
+    return resolvedList.length;
   } catch (e) {
     console.error('[Resolver] Failed for match', matchId, e);
     return 0;
@@ -536,21 +776,18 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   HOOK: useUniversalResolver (NO-OP for non-admin)
+   HOOK: useUniversalResolver (NO-OP)
    ═══════════════════════════════════════════════════════════════ */
 
-export function useUniversalResolver() {
-  // NO-OP: Resolution is now admin-only.
-  // Admin.jsx calls resolveMatchForAllUsers() directly.
-}
+export function useUniversalResolver() {}
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useActivePredictions
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(active_predictions) — reads ~10 docs on EVERY change
-   NEW: getDocsOnce with 60s session cache
+   Cache: 30 min. Poll: 10 min.
+   30-min session: 1 Firestore read (1st poll), 2 cache hits.
 
-   Reads: ~10 (once per 60s per session, not per component mount)
+   Reads: ~10 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useActivePredictions(date) {
@@ -559,10 +796,7 @@ export function useActivePredictions(date) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!db) {
-      setLoading(false);
-      return;
-    }
+    if (!db) { setLoading(false); return; }
 
     let cancelled = false;
     const cacheKey = `active_${dateStr}`;
@@ -570,12 +804,9 @@ export function useActivePredictions(date) {
     const load = async () => {
       setLoading(true);
       const data = await readDocsOnce(
-        query(
-          collection(db, 'active_predictions'),
-          where('matchDate', '==', dateStr)
-        ),
+        query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
         cacheKey,
-        60_000
+        CACHE_TTL.ACTIVE_PREDICTIONS
       );
       if (!cancelled) {
         setPreds(data.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
@@ -585,33 +816,22 @@ export function useActivePredictions(date) {
 
     load();
 
-    // Background refresh every 90s while mounted
+    // Background refresh every 10 min — cache absorbs most of these
     const interval = setInterval(() => {
       if (!cancelled) {
         readDocsOnce(
-          query(
-            collection(db, 'active_predictions'),
-            where('matchDate', '==', dateStr)
-          ),
+          query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
           cacheKey,
-          60_000
+          CACHE_TTL.ACTIVE_PREDICTIONS
         ).then((data) => {
-          if (!cancelled) {
-            setPreds(
-              data.sort((a, b) => (b.priority || 0) - (a.priority || 0))
-            );
-          }
+          if (!cancelled) setPreds(data.sort((a, b) => (b.priority || 0) - (a.priority || 0)));
         });
       }
-    }, 90_000);
+    }, POLL_INTERVAL.SLOW);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => { cancelled = true; clearInterval(interval); };
   }, [dateStr]);
 
-  // Derive score map for finished matches
   const scoreMap = useMemo(() => {
     const m = new Map();
     preds.forEach((p) => {
@@ -626,12 +846,12 @@ export function useActivePredictions(date) {
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   HOOK: useAllUserPredictions (for distribution counts)
+   HOOK: useAllUserPredictions
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(user_predictions WHERE date) — reads ALL ~2,000 user preds
-   NEW: Read from daily_leaderboard summary doc (uses same cache)
+   Reads from daily_leaderboard summary doc (same cache).
+   0 extra Firestore reads.
 
-   Reads: 0 (uses daily_leaderboard cache)
+   Reads: 0 (reuses daily_leaderboard cache)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useAllUserPredictions(date) {
@@ -648,7 +868,7 @@ export function useAllUserPredictions(date) {
     readDocOnce(
       doc(db, 'daily_leaderboard', dateStr),
       `dlb_${dateStr}`,
-      90_000
+      CACHE_TTL.DAILY_LEADERBOARD
     ).then((summary) => {
       if (cancelled || !summary) return;
       setPredCounts(summary.predCounts || {});
@@ -657,9 +877,7 @@ export function useAllUserPredictions(date) {
       setUserPredMap({});
     });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [dateStr]);
 
   return { allPreds, userPredMap, predCounts, predDist, lastUpdate: Date.now() };
@@ -668,10 +886,9 @@ export function useAllUserPredictions(date) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useMyPredictions
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(user_predictions WHERE date) then filter by uid
-   NEW: Composite query WHERE userId==uid AND matchDate==date
+   Cache: 30 min. No polling (reads once per session).
 
-   Reads: ~10 (once per 45s per session)
+   Reads: ~10 (1 query × ~10 docs, once per 30 min)
    REQUIRES COMPOSITE INDEX: user_predictions (userId ASC, matchDate ASC)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -683,30 +900,23 @@ export function useMyPredictions(uid, date) {
     if (!uid || !db) return;
     let cancelled = false;
 
-    const load = async () => {
-      const cacheKey = `myPreds_${uid}_${dateStr}`;
-      const data = await readDocsOnce(
-        query(
-          collection(db, 'user_predictions'),
-          where('userId', '==', uid),
-          where('matchDate', '==', dateStr)
-        ),
-        cacheKey,
-        45_000
-      );
+    readDocsOnce(
+      query(
+        collection(db, 'user_predictions'),
+        where('userId', '==', uid),
+        where('matchDate', '==', dateStr)
+      ),
+      `myPreds_${uid}_${dateStr}`,
+      CACHE_TTL.MY_PREDICTIONS
+    ).then((data) => {
       if (!cancelled) {
         const map = {};
-        data.forEach((p) => {
-          map[p.predId] = p;
-        });
+        data.forEach((p) => { map[p.predId] = p; });
         setMyPreds(map);
       }
-    };
+    });
 
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [uid, dateStr]);
 
   return myPreds;
@@ -715,10 +925,9 @@ export function useMyPredictions(uid, date) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: usePredictionResults
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(prediction_results WHERE userId==uid)
-   NEW: Composite query WHERE userId==uid AND matchDate==date
+   Cache: 30 min. No polling.
 
-   Reads: ~10 (once per 90s per session)
+   Reads: ~10 (1 query × ~10 docs, once per 30 min)
    REQUIRES COMPOSITE INDEX: prediction_results (userId ASC, matchDate ASC)
    ═══════════════════════════════════════════════════════════════ */
 
@@ -730,36 +939,27 @@ export function usePredictionResults(uid) {
     if (!uid || !db) return;
     let cancelled = false;
 
-    const load = async () => {
-      const dateStr = todayStr();
-      const cacheKey = `myResults_${uid}_${dateStr}`;
-      const data = await readDocsOnce(
-        query(
-          collection(db, 'prediction_results'),
-          where('userId', '==', uid),
-          where('matchDate', '==', dateStr)
-        ),
-        cacheKey,
-        90_000
-      );
+    readDocsOnce(
+      query(
+        collection(db, 'prediction_results'),
+        where('userId', '==', uid),
+        where('matchDate', '==', todayStr())
+      ),
+      `myResults_${uid}_${todayStr()}`,
+      CACHE_TTL.PREDICTION_RESULTS
+    ).then((data) => {
       if (!cancelled) {
         const sorted = data.sort(
-          (a, b) =>
-            (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)
+          (a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)
         );
         setResults(sorted);
         const m = {};
-        sorted.forEach((r) => {
-          m[String(r.matchId)] = r;
-        });
+        sorted.forEach((r) => { m[String(r.matchId)] = r; });
         setResultMap(m);
       }
-    };
+    });
 
-    load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [uid]);
 
   return { results, resultMap };
@@ -768,10 +968,9 @@ export function usePredictionResults(uid) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useUserPoints
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(doc) — reads 1 doc, but reconnects on every mount
-   NEW: getDocOnce with 5-minute cache
+   Cache: 30 min. No polling.
 
-   Reads: 1 (once per 5min per session)
+   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useUserPoints(uid) {
@@ -781,15 +980,15 @@ export function useUserPoints(uid) {
     if (!uid || !db) return;
     let cancelled = false;
 
-    readDocOnce(doc(db, 'user_points_total', uid), `upt_${uid}`, 300_000).then(
-      (data) => {
-        if (!cancelled) setPoints(data);
-      }
-    );
+    readDocOnce(
+      doc(db, 'user_points_total', uid),
+      `upt_${uid}`,
+      CACHE_TTL.USER_POINTS
+    ).then((data) => {
+      if (!cancelled) setPoints(data);
+    });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [uid]);
 
   return points;
@@ -798,10 +997,9 @@ export function useUserPoints(uid) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useZokaPicks
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(doc) — 1 doc read, persistent connection
-   NEW: getDocOnce with 5-minute cache
+   Cache: 30 min. No polling.
 
-   Reads: 1 (once per 5min per session)
+   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useZokaPicks(date) {
@@ -812,15 +1010,15 @@ export function useZokaPicks(date) {
     if (!db) return;
     let cancelled = false;
 
-    readDocOnce(doc(db, 'zoka_picks', dateStr), `zoka_${dateStr}`, 300_000).then(
-      (data) => {
-        if (!cancelled) setPicks(data);
-      }
-    );
+    readDocOnce(
+      doc(db, 'zoka_picks', dateStr),
+      `zoka_${dateStr}`,
+      CACHE_TTL.ZOKA_PICKS
+    ).then((data) => {
+      if (!cancelled) setPicks(data);
+    });
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [dateStr]);
 
   return picks;
@@ -829,10 +1027,9 @@ export function useZokaPicks(date) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useZokaVotes
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(zoka_votes WHERE date) — reads ALL vote docs
-   NEW: Read from single summary doc + localStorage for own vote
+   Cache: 30 min. No polling. User's own vote from localStorage.
 
-   Reads: 1 (once per 2min per session)
+   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useZokaVotes(date) {
@@ -844,27 +1041,21 @@ export function useZokaVotes(date) {
     if (!db) return;
     let cancelled = false;
 
-    // Read aggregate stats from single doc
     readDocOnce(
       doc(db, 'zoka_vote_stats', dateStr),
       `zokaVotes_${dateStr}`,
-      120_000
+      CACHE_TTL.ZOKA_VOTES
     ).then((data) => {
       if (cancelled) return;
       setVoteStats(data?.stats || {});
     });
 
-    // Read user's own votes from localStorage (0 Firestore reads)
     try {
       const stored = localStorage.getItem(`zoka_votes_${dateStr}`);
       if (stored) setUserVotes(JSON.parse(stored));
-    } catch {
-      // Ignore localStorage errors
-    }
+    } catch { /* ignore */ }
 
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [dateStr]);
 
   return { votes: [], voteStats, userVotes };
@@ -873,10 +1064,10 @@ export function useZokaVotes(date) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useDailyLeaderboard
    ═══════════════════════════════════════════════════════════════
-   OLD: 3× onSnapshot (prediction_results + user_predictions + active_predictions)
-   NEW: Read single pre-computed summary doc (daily_leaderboard/{date})
+   Cache: 30 min. Poll: 10 min.
+   30-min session: 1 Firestore read, 2 cache hits.
 
-   Reads: 1 (once per 90s per session)
+   Reads: 1 (once per 30 min per session)
    ═══════════════════════════════════════════════════════════════ */
 
 export function useDailyLeaderboard(date) {
@@ -884,54 +1075,30 @@ export function useDailyLeaderboard(date) {
   const [entries, setEntries] = useState([]);
   const [top3, setTop3] = useState([]);
   const [rest, setRest] = useState([]);
-  const [stats, setStats] = useState({
-    avg: '0.0',
-    preds: 0,
-    exact: 0,
-    players: 0,
-  });
+  const [stats, setStats] = useState({ avg: '0.0', preds: 0, exact: 0, players: 0 });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!db) return;
     let cancelled = false;
+    const cacheKey = `dlb_${dateStr}`;
 
     const load = async () => {
       setLoading(true);
-
-      const cached = _cacheGet(`dlb_${dateStr}`, 90_000);
-      if (cached) {
-        if (!cancelled) {
-          setEntries(cached.entries || []);
-          setTop3(cached.top3 || []);
-          setRest(cached.rest || []);
-          setStats(
-            cached.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 }
-          );
-          setLoading(false);
-        }
-        return;
-      }
-
       const data = await readDocOnce(
         doc(db, 'daily_leaderboard', dateStr),
-        `dlb_${dateStr}`,
-        90_000
+        cacheKey,
+        CACHE_TTL.DAILY_LEADERBOARD
       );
-
       if (cancelled) return;
 
-      if (data && data.entries) {
+      if (data?.entries) {
         setEntries(data.entries);
         setTop3(data.top3 || data.entries.slice(0, 3));
         setRest(data.rest || data.entries.slice(3));
-        setStats(
-          data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 }
-        );
+        setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
       } else {
-        setEntries([]);
-        setTop3([]);
-        setRest([]);
+        setEntries([]); setTop3([]); setRest([]);
         setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
       }
       setLoading(false);
@@ -939,29 +1106,23 @@ export function useDailyLeaderboard(date) {
 
     load();
 
-    // Background refresh every 120s
     const interval = setInterval(() => {
       if (!cancelled) {
         readDocOnce(
           doc(db, 'daily_leaderboard', dateStr),
-          `dlb_${dateStr}`,
-          90_000
+          cacheKey,
+          CACHE_TTL.DAILY_LEADERBOARD
         ).then((data) => {
           if (cancelled || !data) return;
           setEntries(data.entries || []);
           setTop3(data.top3 || []);
           setRest(data.rest || []);
-          setStats(
-            data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 }
-          );
+          setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
         });
       }
-    }, 120_000);
+    }, POLL_INTERVAL.SLOW);
 
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
+    return () => { cancelled = true; clearInterval(interval); };
   }, [dateStr]);
 
   return { entries, top3, rest, stats, loading, isLive: false };
@@ -970,16 +1131,25 @@ export function useDailyLeaderboard(date) {
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useHistoricalLeaderboard (weekly/monthly/goat)
    ═══════════════════════════════════════════════════════════════
-   OLD: onSnapshot(collection) for GOAT — reads ALL user_points_total docs
-   NEW: getDocsOnce with long cache (10 min)
+   ★ v3 FIX: Reads from pre-computed summary doc instead of
+   scanning entire collection.
 
-   Reads: ~50-200 (once per 10min per session)
+   GOAT:     was ~2,000 reads → now 1 read
+   Weekly:   was ~500-2,000 reads → now 1 read
+   Monthly:  was ~500-2,000 reads → now 1 read
+
+   Cache: 30 min. No polling.
+
+   If pre-computed doc doesn't exist yet, returns empty with
+   a `stale` flag. Admin needs to run rebuildGoatLeaderboard()
+   or rebuildPeriodLeaderboard() at least once.
    ═══════════════════════════════════════════════════════════════ */
 
 export function useHistoricalLeaderboard(period) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [stale, setStale] = useState(false);
 
   useEffect(() => {
     if (!db) return;
@@ -990,93 +1160,24 @@ export function useHistoricalLeaderboard(period) {
       setError(null);
 
       try {
-        if (period === 'goat') {
-          const data = await readDocsOnce(
-            collection(db, 'user_points_total'),
-            'hist_goat',
-            600_000
-          );
-          if (cancelled) return;
+        const docId = getPeriodDocId(period);
+        const cacheKey = `hist_${period}`;
 
-          const list = data
-            .filter((u) => (u.predictionsCount || 0) > 0)
-            .sort(
-              (a, b) =>
-                (b.totalPoints || 0) - (a.totalPoints || 0) ||
-                (b.exactCount || 0) - (a.exactCount || 0) ||
-                (b.resultCount || 0) - (a.resultCount || 0)
-            )
-            .map((u, i) => ({
-              uid: u.id,
-              displayName: u.displayName || 'Player',
-              points: u.totalPoints || 0,
-              predictions: u.predictionsCount || 0,
-              exact: u.exactCount || 0,
-              result: u.resultCount || 0,
-              miss: u.missCount || 0,
-              resolved: u.predictionsCount || 0,
-              rank: i + 1,
-              accuracy:
-                (u.predictionsCount || 0) > 0
-                  ? Math.round(
-                      ((u.exactCount + u.resultCount) / u.predictionsCount) * 100
-                    )
-                  : 0,
-            }));
-          setEntries(list);
+        const data = await readDocOnce(
+          doc(db, 'leaderboard_summaries', docId),
+          cacheKey,
+          CACHE_TTL.HISTORICAL
+        );
+
+        if (cancelled) return;
+
+        if (data?.entries) {
+          setEntries(data.entries);
+          setStale(false);
         } else {
-          let startDate;
-          if (period === 'weekly') startDate = getWeekStart();
-          else startDate = getMonthStart();
-
-          const data = await readDocsOnce(
-            query(
-              collection(db, 'prediction_results'),
-              where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))
-            ),
-            `hist_${period}`,
-            600_000
-          );
-          if (cancelled) return;
-
-          const userMap = {};
-          data.forEach((r) => {
-            if (!userMap[r.userId]) {
-              userMap[r.userId] = {
-                uid: r.userId,
-                displayName: 'Player',
-                points: 0,
-                predictions: 0,
-                exact: 0,
-                result: 0,
-                miss: 0,
-                resolved: 0,
-              };
-            }
-            const u = userMap[r.userId];
-            u.predictions++;
-            u.resolved++;
-            u.points += r.points || 0;
-            if (r.resultType === 'exact') u.exact++;
-            else if (r.resultType === 'result') u.result++;
-            else u.miss++;
-          });
-
-          const list = Object.values(userMap)
-            .filter((u) => u.predictions > 0)
-            .sort(
-              (a, b) =>
-                b.points - a.points || b.exact - a.exact || b.result - a.result
-            )
-            .map((u, i) => ({
-              ...u,
-              rank: i + 1,
-              accuracy:
-                u.resolved > 0
-                  ? Math.round(((u.exact + u.result) / u.resolved) * 100)
-                  : 0,
-            }));
-          setEntries(list);
+          // No pre-computed doc yet — admin needs to rebuild
+          setEntries([]);
+          setStale(true);
         }
       } catch (err) {
         if (err.code === 'permission-denied') setError('permissions');
@@ -1087,36 +1188,21 @@ export function useHistoricalLeaderboard(period) {
     };
 
     load();
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [period]);
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
 
-  const stats = useMemo(() => {
-    if (!entries.length) {
-      return { avg: '0.0', preds: 0, exact: 0, players: 0 };
-    }
-    return {
-      avg: (
-        entries.reduce((s, u) => s + u.accuracy, 0) / entries.length
-      ).toFixed(1),
-      preds: entries.reduce((s, u) => s + u.predictions, 0),
-      exact: entries.reduce((s, u) => s + u.exact, 0),
-      players: entries.length,
-    };
-  }, [entries]);
+  const stats = useMemo(() => computeStats(entries), [entries]);
 
-  return { entries, top3, rest, stats, loading, error };
+  return { entries, top3, rest, stats, loading, error, stale };
 }
 
 /* ═══════════════════════════════════════════════════════════════
    HOOK: useMyStats
    ═══════════════════════════════════════════════════════════════
-   Combines data from multiple cached hooks.
-   Since each sub-hook is cached, this adds 0 extra reads.
+   Combines cached hooks. 0 extra reads.
    ═══════════════════════════════════════════════════════════════ */
 
 export function useMyStats(uid, date) {
@@ -1138,39 +1224,17 @@ export function useMyStats(uid, date) {
       const pts = points.totalPoints || 0;
       const resolved = exact + result + miss;
       return {
-        predicted,
-        total,
-        exact,
-        result,
-        miss,
-        points: pts,
-        resolved,
-        accuracy:
-          resolved > 0
-            ? Math.round(((exact + result) / resolved) * 100)
-            : 0,
-        todayExact: Object.values(resultMap).filter(
-          (r) => r.resultType === 'exact'
-        ).length,
-        todayResult: Object.values(resultMap).filter(
-          (r) => r.resultType === 'result'
-        ).length,
-        todayMiss: Object.values(resultMap).filter(
-          (r) => r.resultType === 'miss'
-        ).length,
-        todayPoints: Object.values(resultMap).reduce(
-          (s, r) => s + (r.points || 0),
-          0
-        ),
+        predicted, total, exact, result, miss,
+        points: pts, resolved,
+        accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
+        todayExact: Object.values(resultMap).filter((r) => r.resultType === 'exact').length,
+        todayResult: Object.values(resultMap).filter((r) => r.resultType === 'result').length,
+        todayMiss: Object.values(resultMap).filter((r) => r.resultType === 'miss').length,
+        todayPoints: Object.values(resultMap).reduce((s, r) => s + (r.points || 0), 0),
       };
     }
 
-    let exact = 0;
-    let result = 0;
-    let miss = 0;
-    let pts = 0;
-    let resolved = 0;
-
+    let exact = 0, result = 0, miss = 0, pts = 0, resolved = 0;
     myPredValues.forEach((p) => {
       const a = scoreMap.get(String(p.matchId));
       if (!a) return;
@@ -1183,19 +1247,10 @@ export function useMyStats(uid, date) {
     });
 
     return {
-      predicted,
-      total,
-      exact,
-      result,
-      miss,
-      points: pts,
-      resolved,
-      accuracy:
-        resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
-      todayExact: exact,
-      todayResult: result,
-      todayMiss: miss,
-      todayPoints: pts,
+      predicted, total, exact, result, miss,
+      points: pts, resolved,
+      accuracy: resolved > 0 ? Math.round(((exact + result) / resolved) * 100) : 0,
+      todayExact: exact, todayResult: result, todayMiss: miss, todayPoints: pts,
     };
   }, [myPreds, scoreMap, activePreds, points, resultMap]);
 }
@@ -1230,25 +1285,17 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     { merge: true }
   );
 
-  // Invalidate cache so next read picks up the new prediction
   invalidateCache(`myPreds_${uid}_${dateStr}`);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    ACTION: saveZokaVote
-   ═══════════════════════════════════════════════════════════════
-   Uses atomic increments on a single stats doc.
-   User's own vote stored in localStorage for display.
-
-   OLD: setDoc per vote doc + onSnapshot to read all votes
-   NEW: 1 write (atomic increment) + localStorage for own vote
    ═══════════════════════════════════════════════════════════════ */
 
 export async function saveZokaVote(uid, matchId, vote) {
   if (!db) return;
   const dateStr = todayStr();
 
-  // Atomic increment on single stats doc (1 write)
   await setDoc(
     doc(db, 'zoka_vote_stats', dateStr),
     {
@@ -1265,31 +1312,24 @@ export async function saveZokaVote(uid, matchId, vote) {
     { merge: true }
   );
 
-  // Store user's own vote in localStorage (0 reads)
   try {
     const key = `zoka_votes_${dateStr}`;
     const existing = JSON.parse(localStorage.getItem(key) || '{}');
     existing[matchId] = vote;
     localStorage.setItem(key, JSON.stringify(existing));
-  } catch {
-    // Ignore localStorage errors
-  }
+  } catch { /* ignore */ }
 
-  // Invalidate stats cache
   invalidateCache(`zokaVotes_${dateStr}`);
 }
 
 /* ═══════════════════════════════════════════════════════════════
    ACTION: removeZokaVote
-   ═══════════════════════════════════════════════════════════════
-   Decrements old count, increments new count (if toggling).
    ═══════════════════════════════════════════════════════════════ */
 
 export async function removeZokaVote(uid, matchId, newVote) {
   if (!db) return;
   const dateStr = todayStr();
 
-  // Read current stats to know what to decrement
   const snap = await getDoc(doc(db, 'zoka_vote_stats', dateStr));
   if (!snap.exists()) return;
 
@@ -1297,19 +1337,13 @@ export async function removeZokaVote(uid, matchId, newVote) {
   const current = data.stats?.[matchId];
   if (!current) return;
 
-  // Get old vote from localStorage
   const key = `zoka_votes_${dateStr}`;
   let existing = {};
-  try {
-    existing = JSON.parse(localStorage.getItem(key) || '{}');
-  } catch {
-    // Ignore localStorage errors
-  }
+  try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch { /* ignore */ }
 
   const oldV = existing[matchId];
   const matchStats = { ...current };
 
-  // Decrement old vote
   if (oldV === 'agree') {
     matchStats.agree = Math.max(0, (matchStats.agree || 1) - 1);
     matchStats.total = Math.max(0, (matchStats.total || 1) - 1);
@@ -1318,7 +1352,6 @@ export async function removeZokaVote(uid, matchId, newVote) {
     matchStats.total = Math.max(0, (matchStats.total || 1) - 1);
   }
 
-  // If toggling (not just removing), increment new vote
   if (newVote) {
     if (newVote === 'agree') matchStats.agree = (matchStats.agree || 0) + 1;
     else matchStats.disagree = (matchStats.disagree || 0) + 1;
@@ -1330,21 +1363,11 @@ export async function removeZokaVote(uid, matchId, newVote) {
 
   await setDoc(
     doc(db, 'zoka_vote_stats', dateStr),
-    {
-      stats: {
-        [matchId]: matchStats,
-      },
-      updatedAt: serverTimestamp(),
-    },
+    { stats: { [matchId]: matchStats }, updatedAt: serverTimestamp() },
     { merge: true }
   );
 
-  try {
-    localStorage.setItem(key, JSON.stringify(existing));
-  } catch {
-    // Ignore localStorage errors
-  }
-
+  try { localStorage.setItem(key, JSON.stringify(existing)); } catch { /* ignore */ }
   invalidateCache(`zokaVotes_${dateStr}`);
 }
 
@@ -1352,19 +1375,14 @@ export async function removeZokaVote(uid, matchId, newVote) {
    ADMIN EXPORTS
    ═══════════════════════════════════════════════════════════════ */
 
-/** Resolve a match for all users. Admin only. */
 export { resolveMatchForAllUsers };
 
-/** Force-refresh active predictions (bypass cache). Admin only. */
 export async function adminRefreshActivePredictions(dateStr) {
   invalidateCache(`active_${dateStr}`);
   const data = await readDocsOnce(
-    query(
-      collection(db, 'active_predictions'),
-      where('matchDate', '==', dateStr)
-    ),
+    query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr)),
     `active_${dateStr}`,
-    0 // force refresh
+    0
   );
   return data.sort((a, b) => (b.priority || 0) - (a.priority || 0));
 }

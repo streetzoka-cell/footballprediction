@@ -1,8 +1,14 @@
 // FILE: src/pages/Predictions.jsx
 //
-// READ-ONLY CLIENT — All scoring is handled by Admin's resolver
+// READ-ONLY CLIENT — All scoring is handled by Admin's v3 resolver
 // This file just displays results from prediction_results
 // and reads cumulative stats from user_points_total
+//
+// v3 NOTES:
+// - useUniversalResolver REMOVED (was no-op; resolution is internal to resolver)
+// - All data hooks now use 30-min cache TTLs + 10-min poll intervals
+// - useAllUserPredictions reads from daily_leaderboard cache (0 extra reads)
+// - No other API changes — same external interfaces
 //
 import { useState, useMemo, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -16,7 +22,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import {
-  useUniversalResolver,
+  // v3: useUniversalResolver REMOVED — no-op, resolution is internal
   useActivePredictions,
   useAllUserPredictions,
   useMyPredictions,
@@ -102,9 +108,9 @@ function AnimNum({ value, duration = 500, delay = 0 }) {
    STYLES — MOBILE-FIRST, BOLD, FOOTBALL VIBE
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('pred-mob-v12')) return;
+  if (document.getElementById('pred-mob-v13')) return;
   const s = document.createElement('style');
-  s.id = 'pred-mob-v12';
+  s.id = 'pred-mob-v13';
   s.textContent = `
     /* ── Keyframes ── */
     @keyframes pUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
@@ -618,10 +624,13 @@ export default function Predictions() {
     'Anonymous';
 
   /* ═══════════════════════════════════════════════════════════
-     DATA — All from useMatchData.js (cached, quota-optimized)
+     DATA — All from useMatchData v3 (cached, quota-optimized)
+     v3 changes:
+     - useUniversalResolver REMOVED (was no-op)
+     - 30-min cache TTLs, 10-min poll intervals
+     - useAllUserPredictions reads from daily_leaderboard cache (0 extra reads)
+     - All other hook APIs unchanged
      ═══════════════════════════════════════════════════════════ */
-  useUniversalResolver();
-
   const { preds: activePreds, scoreMap, loading, error } =
     useActivePredictions();
   const { predCounts, predDist } = useAllUserPredictions();
@@ -1422,267 +1431,225 @@ export default function Predictions() {
      ═══════════════════════════════════════════════════════════ */
   const renderLbRow = (u, i) => {
     const isMe = u.uid === uid;
+    const acc = u.accuracy || 0;
+    const accColor =
+      acc >= 70 ? 'var(--accent)' : acc >= 45 ? 'var(--gold)' : '#ef4444';
+    const delay = Math.min(i * 35, 350);
 
     return (
       <div
         key={u.uid}
         className={`rr p-sr ${isMe ? 'me' : ''}`}
-        style={{
-          background: isMe
-            ? 'rgba(0,230,118,.05)'
-            : i % 2 === 0
-            ? 'var(--bg-surface)'
-            : 'transparent',
-          animationDelay: `${i * 25}ms`,
-        }}
+        style={{ animationDelay: `${delay}ms` }}
       >
-        <div
+        <span
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
+            fontWeight: 900,
+            fontFamily: 'var(--font-display)',
+            color: u.rank <= 10 ? 'var(--accent)' : 'var(--text-primary)',
+            fontSize: '.88rem',
           }}
         >
-          {u.rank === 1 ? (
-            <Crown size={15} style={{ color: '#fbbf24' }} />
-          ) : u.rank <= 3 ? (
-            <Medal
-              size={14}
-              style={{
-                color: u.rank === 2 ? '#94a3b8' : '#d97706',
-              }}
-            />
-          ) : (
-            <span
-              style={{
-                fontWeight: 800,
-                color: 'var(--text-muted)',
-                fontFamily: 'var(--font-display)',
-                fontSize: '.82rem',
-              }}
-            >
-              {u.rank}
-            </span>
-          )}
-        </div>
+          #{u.rank}
+        </span>
         <div
           style={{
             display: 'flex',
             alignItems: 'center',
-            gap: 8,
+            gap: 10,
             minWidth: 0,
           }}
         >
           <div
             style={{
-              width: 28,
-              height: 28,
+              width: 32,
+              height: 32,
               borderRadius: 8,
               background: isMe
-                ? 'rgba(0,230,118,.12)'
-                : 'rgba(255,255,255,.04)',
-              border: isMe
-                ? '1.5px solid rgba(0,230,118,.2)'
-                : '1px solid var(--border)',
+                ? 'var(--accent)'
+                : `hsl(${(i * 47) % 360},55%,45%)`,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               fontSize: '.72rem',
-              fontWeight: 900,
-              color: isMe ? 'var(--accent)' : 'var(--text-muted)',
+              fontWeight: 800,
+              color: isMe ? 'var(--bg-deep)' : '#fff',
               flexShrink: 0,
             }}
           >
-            {(u.displayName || '?').charAt(0).toUpperCase()}
+            {(u.displayName || '??').slice(0, 2).toUpperCase()}
           </div>
-          <span
-            style={{
-              fontWeight: isMe ? 900 : 700,
-              color: isMe ? 'var(--accent)' : 'var(--text-primary)',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-              fontSize: '.88rem',
-            }}
-          >
-            {u.displayName}
-            {isMe && (
-              <span
-                style={{
-                  fontSize: '.65rem',
-                  color: 'var(--accent)',
-                  marginLeft: 5,
-                  fontWeight: 800,
-                }}
-              >
-                YOU
-              </span>
-            )}
-          </span>
+          <div style={{ minWidth: 0 }}>
+            <div
+              style={{
+                fontWeight: 700,
+                color: 'var(--text-primary)',
+                fontSize: '.88rem',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+              }}
+            >
+              {u.displayName}
+              {isMe && (
+                <span
+                  style={{
+                    fontSize: '.58rem',
+                    color: 'var(--bg-deep)',
+                    background: 'var(--accent)',
+                    padding: '2px 8px',
+                    borderRadius: 8,
+                    fontWeight: 800,
+                  }}
+                >
+                  YOU
+                </span>
+              )}
+            </div>
+          </div>
         </div>
         <span
           className="hm"
           style={{
-            fontWeight: 900,
-            color: '#a855f7',
+            fontSize: '.78rem',
+            fontWeight: 700,
+            color: accColor,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 6,
+          }}
+        >
+          <div
+            style={{
+              width: 40,
+              height: 4,
+              borderRadius: 2,
+              background: 'rgba(255,255,255,.06)',
+              overflow: 'hidden',
+            }}
+          >
+            <div
+              className="p-bl"
+              style={{
+                height: '100%',
+                borderRadius: 2,
+                background: accColor,
+                width: `${acc}%`,
+                animationDelay: `${delay + 100}ms`,
+              }}
+            />
+          </div>
+          {acc}%
+        </span>
+        <span
+          className="hm"
+          style={{
             fontFamily: 'var(--font-display)',
-            fontSize: '.95rem',
+            fontWeight: 800,
+            color: 'var(--text-primary)',
+            fontSize: '.88rem',
           }}
         >
           {u.points}
         </span>
         <span
+          className="hm"
           style={{
-            fontWeight: 800,
-            color: 'var(--accent)',
+            color: 'var(--text-secondary)',
+            fontWeight: 600,
+            fontSize: '.82rem',
+          }}
+        >
+          {u.predictions}
+        </span>
+        <span
+          style={{
+            textAlign: 'right',
             fontFamily: 'var(--font-display)',
+            fontWeight: 800,
+            color:
+              u.exact >= 10
+                ? 'var(--accent)'
+                : u.exact >= 5
+                ? 'var(--gold)'
+                : 'var(--text-primary)',
+            fontSize: '.88rem',
           }}
         >
           {u.exact}
         </span>
-        {/* Mobile info row */}
+        {/* Mobile detail row */}
         <div className="rr-me-info" style={{ display: 'none' }}>
           <span
             style={{
-              fontSize: '.82rem',
+              fontSize: '.78rem',
               fontWeight: 700,
-              color: 'var(--gold)',
+              color: accColor,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
             }}
           >
-            {u.result} results
+            <div
+              style={{
+                width: 40,
+                height: 4,
+                borderRadius: 2,
+                background: 'rgba(255,255,255,.06)',
+                overflow: 'hidden',
+              }}
+            >
+              <div
+                className="p-bl"
+                style={{
+                  height: '100%',
+                  borderRadius: 2,
+                  background: accColor,
+                  width: `${acc}%`,
+                  animationDelay: `${delay + 100}ms`,
+                }}
+              />
+            </div>
+            {acc}%
           </span>
           <span
             style={{
-              fontSize: '.82rem',
-              fontWeight: 700,
-              color: 'var(--text-muted)',
-            }}
-          >
-            {u.accuracy}% acc
-          </span>
-          <span
-            style={{
-              fontSize: '.82rem',
-              fontWeight: 900,
-              color: '#a855f7',
               fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              color: 'var(--text-primary)',
+              fontSize: '.85rem',
             }}
           >
             {u.points} pts
           </span>
+          <span
+            style={{
+              color: 'var(--text-secondary)',
+              fontWeight: 600,
+              fontSize: '.78rem',
+            }}
+          >
+            {u.predictions} preds
+          </span>
+          <span
+            style={{
+              fontFamily: 'var(--font-display)',
+              fontWeight: 800,
+              color:
+                u.exact >= 10
+                  ? 'var(--accent)'
+                  : u.exact >= 5
+                  ? 'var(--gold)'
+                  : 'var(--text-primary)',
+              fontSize: '.85rem',
+            }}
+          >
+            {u.exact} exact
+          </span>
         </div>
-        <span
-          className="hm"
-          style={{
-            fontWeight: 700,
-            color: 'var(--gold)',
-            fontSize: '.88rem',
-          }}
-        >
-          {u.result}
-        </span>
-        <span
-          className="hm"
-          style={{
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            fontSize: '.82rem',
-          }}
-        >
-          {u.accuracy}%
-        </span>
-      </div>
-    );
-  };
-
-  /* ═══════════════════════════════════════════════════════════
-     RENDER: HISTORY ROW
-     ═══════════════════════════════════════════════════════════ */
-  const renderHistoryRow = (r, i) => {
-    const resColor =
-      r.resultType === 'exact'
-        ? 'var(--accent)'
-        : r.resultType === 'result'
-        ? 'var(--gold)'
-        : '#ef4444';
-    const resIcon =
-      r.resultType === 'exact' ? (
-        <CircleCheck size={13} />
-      ) : r.resultType === 'result' ? (
-        <TrendingUp size={13} />
-      ) : (
-        <CircleX size={13} />
-      );
-
-    return (
-      <div
-        key={`${r.matchId}_${i}`}
-        className="p-sr"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 12,
-          padding: '12px 14px',
-          borderRadius: 12,
-          background: i % 2 === 0 ? 'var(--bg-surface)' : 'transparent',
-          marginBottom: 6,
-          animationDelay: `${i * 20}ms`,
-        }}
-      >
-        <span
-          style={{
-            fontSize: '.72rem',
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            minWidth: 28,
-            textAlign: 'center',
-          }}
-        >
-          {r.homeTeam?.slice(0, 3) || '???'}
-        </span>
-        <span
-          style={{
-            fontSize: '.88rem',
-            fontWeight: 800,
-            color: 'var(--text-muted)',
-            fontFamily: 'var(--font-display)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {r.predictedHome}-{r.predictedAway}
-        </span>
-        <span style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>
-          →
-        </span>
-        <span
-          style={{
-            fontSize: '.88rem',
-            fontWeight: 900,
-            color: 'var(--text-primary)',
-            fontFamily: 'var(--font-display)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {r.actualHome}-{r.actualAway}
-        </span>
-        <div style={{ flex: 1 }} />
-        <span
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 4,
-            fontSize: '.78rem',
-            fontWeight: 800,
-            color: resColor,
-          }}
-        >
-          {resIcon} {r.points > 0 ? `+${r.points}` : '0'}
-        </span>
-        <span
-          style={{ fontSize: '.68rem', color: 'var(--text-muted)' }}
-        >
-          {timeAgo(r.resolvedAt)}
-        </span>
       </div>
     );
   };
@@ -1690,41 +1657,22 @@ export default function Predictions() {
   /* ═══════════════════════════════════════════════════════════
      MAIN RENDER
      ═══════════════════════════════════════════════════════════ */
-  if (loading) {
-    return (
-      <div
-        style={{
-          minHeight: '100vh',
-          background: 'var(--bg-deep)',
-          padding: '80px 20px 40px',
-          maxWidth: 920,
-          margin: '0 auto',
-        }}
-      >
-        <Skeleton />
-        <Skeleton />
-        <Skeleton />
-      </div>
-    );
-  }
-
   return (
     <div
       style={{
         minHeight: '100vh',
         overflow: 'hidden',
-        minHeight: '100dvh',
         background: 'var(--bg-deep)',
       }}
     >
       <SEO
         title="Predictions"
-        description="Make your football score predictions, compete with others, and climb the ZOKASCORE leaderboard."
-        keywords="football predictions, score predictions, predict matches, ZOKASCORE predictions"
+        description="Make your football score predictions, compete on the daily leaderboard, and see how you rank against other ZOKASCORE players."
+        keywords="football predictions, score predictions, predict scores, ZOKASCORE predictions, football betting tips"
         url="https://zokascore.com/predictions"
       />
 
-      {/* Sticky Header */}
+      {/* Header */}
       <div
         style={{
           position: 'sticky',
@@ -1737,9 +1685,9 @@ export default function Predictions() {
       >
         <div
           style={{
-            maxWidth: 920,
+            maxWidth: 800,
             margin: '0 auto',
-            padding: '16px 20px',
+            padding: '14px 20px',
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -1752,7 +1700,7 @@ export default function Predictions() {
               gap: 10,
               cursor: 'pointer',
             }}
-            onClick={() => navigate('/')}
+            onClick={() => (window.location.href = '/')}
           >
             <div
               style={{
@@ -1783,461 +1731,392 @@ export default function Predictions() {
               <span style={{ color: 'var(--accent)' }}>.xyz</span>
             </span>
           </div>
+
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {globalDeadline && !isGlobalLocked && !allFinished && (
+              <div
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                  fontSize: '.78rem',
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                <Timer size={13} /> Closes in
+              </div>
+            )}
+            {globalDeadline && !isGlobalLocked && !allFinished && (
+              <Countdown deadline={globalDeadline.getTime()} />
+            )}
             {isGlobalLocked && !allFinished && (
               <span
                 style={{
-                  fontSize: '.78rem',
-                  fontWeight: 800,
-                  color: '#ef4444',
                   display: 'flex',
                   alignItems: 'center',
-                  gap: 4,
+                  gap: 5,
+                  fontSize: '.8rem',
+                  fontWeight: 800,
+                  color: '#ef4444',
                 }}
               >
-                <Lock size={12} /> Locked
+                <Lock size={13} /> Locked
               </span>
             )}
-            <button
-              onClick={() => navigate('/leaderboard')}
-              className="zb"
-              style={{
-                padding: '8px 16px',
-                borderRadius: 10,
-                background: 'rgba(245,197,66,.08)',
-                border: '1px solid rgba(245,197,66,.15)',
-                color: 'var(--gold)',
-                fontWeight: 800,
-                fontSize: '.82rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-                minHeight: 38,
-              }}
-            >
-              <Trophy size={14} /> Ranks
-            </button>
+            {allFinished && (
+              <span
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 5,
+                  fontSize: '.8rem',
+                  fontWeight: 800,
+                  color: 'var(--accent)',
+                }}
+              >
+                <CheckCircle size={13} /> All Finished
+              </span>
+            )}
           </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 920, margin: '0 auto', padding: '24px 20px 100px' }}>
-        {/* Error */}
-        {error && (
+      <div
+        style={{ maxWidth: 800, margin: '0 auto', padding: '24px 20px 100px' }}
+      >
+        {/* Stats bar */}
+        <div
+          className="p-up"
+          style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4,1fr)',
+            gap: 10,
+            marginBottom: 24,
+          }}
+        >
+          <div className="sc-card stats-grid" style={{ padding: '14px 12px', textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: 900,
+                fontFamily: 'var(--font-display)',
+                color: 'var(--accent)',
+                lineHeight: 1,
+              }}
+            >
+              <AnimNum value={userStats.predicted} />
+            </div>
+            <div
+              style={{
+                fontSize: '.65rem',
+                color: 'var(--text-muted)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.05em',
+                marginTop: 4,
+              }}
+            >
+              Predicted
+            </div>
+          </div>
+          <div className="sc-card stats-grid" style={{ padding: '14px 12px', textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: 900,
+                fontFamily: 'var(--font-display)',
+                color: 'var(--gold)',
+                lineHeight: 1,
+              }}
+            >
+              <AnimNum value={userStats.points} />
+            </div>
+            <div
+              style={{
+                fontSize: '.65rem',
+                color: 'var(--text-muted)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.05em',
+                marginTop: 4,
+              }}
+            >
+              Points
+            </div>
+          </div>
+          <div className="sc-card stats-grid" style={{ padding: '14px 12px', textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: 900,
+                fontFamily: 'var(--font-display)',
+                color: userStats.accuracy >= 50 ? 'var(--accent)' : '#ef4444',
+                lineHeight: 1,
+              }}
+            >
+              <AnimNum value={userStats.accuracy} delay={100} />%
+            </div>
+            <div
+              style={{
+                fontSize: '.65rem',
+                color: 'var(--text-muted)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.05em',
+                marginTop: 4,
+              }}
+            >
+              Accuracy
+            </div>
+          </div>
+          <div className="sc-card stats-grid" style={{ padding: '14px 12px', textAlign: 'center' }}>
+            <div
+              style={{
+                fontSize: '1.3rem',
+                fontWeight: 900,
+                fontFamily: 'var(--font-display)',
+                color: '#f97316',
+                lineHeight: 1,
+              }}
+            >
+              <AnimNum value={userStats.exact} delay={200} />
+            </div>
+            <div
+              style={{
+                fontSize: '.65rem',
+                color: 'var(--text-muted)',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '.05em',
+                marginTop: 4,
+              }}
+            >
+              Exact
+            </div>
+          </div>
+        </div>
+
+        {/* Streak + Rank row */}
+        <div
+          className="p-up"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 12,
+            marginBottom: 24,
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {streak >= 2 && (
+              <span className="streak-badge">
+                <Flame size={13} /> {streak}-streak
+              </span>
+            )}
+            {totalPoints && (
+              <span
+                style={{
+                  fontSize: '.78rem',
+                  fontWeight: 700,
+                  color: 'var(--text-muted)',
+                }}
+              >
+                Lifetime: <strong style={{ color: 'var(--text-primary)' }}>{totalPoints.totalPoints || 0} pts</strong>
+              </span>
+            )}
+          </div>
+          {myRank && (
+            <span
+              style={{
+                fontSize: '.82rem',
+                fontWeight: 800,
+                color: 'var(--gold)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 5,
+              }}
+            >
+              <Trophy size={14} /> Rank #{myRank.rank}
+            </span>
+          )}
+        </div>
+
+        {/* Filter bar */}
+        <div
+          className="filter-scroll hsb"
+          style={{
+            display: 'flex',
+            gap: 10,
+            marginBottom: 20,
+            overflowX: 'auto',
+            paddingBottom: 4,
+          }}
+        >
+          {[
+            { key: 'all', label: 'All', count: filterCounts.all },
+            { key: 'predicted', label: 'Predicted', count: filterCounts.predicted },
+            { key: 'unpredicted', label: 'Open', count: filterCounts.unpredicted },
+            { key: 'finished', label: 'Finished', count: filterCounts.finished },
+          ].map((f) => (
+            <button
+              key={f.key}
+              className={`filter-btn ${filter === f.key ? 'active' : ''}`}
+              onClick={() => setFilter(f.key)}
+            >
+              {f.label} ({f.count})
+            </button>
+          ))}
+        </div>
+
+        {/* Zoka Picks Section */}
+        <ToggleSection
+          icon={<Star size={18} />}
+          iconBg="rgba(245,197,66,.1)"
+          iconColor="var(--gold)"
+          title="Zoka Picks"
+          badge={zokaPicks?.matches?.length || 0}
+          badgeBg="rgba(245,197,66,.12)"
+          badgeColor="var(--gold)"
+          defaultOpen={true}
+          style={{ marginBottom: 20 }}
+        >
+          {zokaPicks?.matches?.length > 0 ? (
+            zokaPicks.matches.map((pick, i) => renderZokaRow(pick, i))
+          ) : (
+            <div
+              style={{
+                textAlign: 'center',
+                padding: '32px 20px',
+                color: 'var(--text-muted)',
+                fontSize: '.88rem',
+                fontWeight: 600,
+              }}
+            >
+              No Zoka Picks published yet for today.
+            </div>
+          )}
+        </ToggleSection>
+
+        {/* Match Predictions */}
+        {loading ? (
+          <div>
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} />
+            ))}
+          </div>
+        ) : filteredPreds.length === 0 ? (
           <div
             className="p-up"
             style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 12,
-              padding: 36,
+              textAlign: 'center',
+              padding: '48px 24px',
+              color: 'var(--text-muted)',
+              fontSize: '.92rem',
+              fontWeight: 600,
               background: 'var(--bg-card)',
               border: '1px solid var(--border)',
               borderRadius: 16,
-              textAlign: 'center',
               marginBottom: 24,
             }}
           >
-            <AlertTriangle size={32} style={{ color: '#f59e0b' }} />
-            <div style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-              Failed to load matches
-            </div>
-            <div
-              style={{
-                fontSize: '.84rem',
-                color: 'var(--text-muted)',
-                maxWidth: 300,
-              }}
-            >
-              {typeof error === 'string' ? error : error.message || 'Unknown error'}
-            </div>
+            {filter === 'predicted'
+              ? "You haven't predicted any matches yet."
+              : filter === 'unpredicted'
+              ? 'No open matches remaining.'
+              : filter === 'finished'
+              ? 'No finished matches yet.'
+              : 'No matches available for today.'}
           </div>
+        ) : (
+          filteredPreds.map((pred, i) => renderMatchCard(pred, i))
         )}
 
-        {!error && (
-          <>
-            {/* Stats Cards */}
+        {/* Daily Leaderboard */}
+        <ToggleSection
+          icon={<Trophy size={18} />}
+          iconBg="rgba(0,230,118,.08)"
+          iconColor="var(--accent)"
+          title="Daily Leaderboard"
+          badge={leaderboard.length}
+          badgeBg="rgba(0,230,118,.1)"
+          badgeColor="var(--accent)"
+          defaultOpen={false}
+          style={{ marginTop: 24 }}
+        >
+          {leaderboard.length === 0 ? (
             <div
-              className="stats-grid"
               style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit,minmax(170px,1fr))',
-                gap: 10,
-                marginBottom: 20,
+                textAlign: 'center',
+                padding: '32px 20px',
+                color: 'var(--text-muted)',
+                fontSize: '.88rem',
+                fontWeight: 600,
               }}
             >
-              <div
-                className="sc-card p-vpop"
-                style={{ animationDelay: '0ms' }}
-              >
-                <div
-                  style={{
-                    fontSize: '.7rem',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
-                    marginBottom: 6,
-                  }}
-                >
-                  Your Points
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 900,
-                    color: '#a855f7',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  <AnimNum value={userStats.points} />{' '}
-                  <span style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>
-                    pts
-                  </span>
-                </div>
-              </div>
-              <div
-                className="sc-card p-vpop"
-                style={{ animationDelay: '60ms' }}
-              >
-                <div
-                  style={{
-                    fontSize: '.7rem',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
-                    marginBottom: 6,
-                  }}
-                >
-                  Accuracy
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 900,
-                    color: 'var(--accent)',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  <AnimNum value={userStats.accuracy} />%
-                </div>
-              </div>
-              <div
-                className="sc-card p-vpop"
-                style={{ animationDelay: '120ms' }}
-              >
-                <div
-                  style={{
-                    fontSize: '.7rem',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
-                    marginBottom: 6,
-                  }}
-                >
-                  Predicted
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 900,
-                    color: 'var(--text-primary)',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  <AnimNum value={userStats.predicted} />{' '}
-                  <span style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>
-                    / {userStats.total}
-                  </span>
-                </div>
-              </div>
-              <div
-                className="sc-card p-vpop"
-                style={{ animationDelay: '180ms' }}
-              >
-                <div
-                  style={{
-                    fontSize: '.7rem',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                    textTransform: 'uppercase',
-                    letterSpacing: '.04em',
-                    marginBottom: 6,
-                  }}
-                >
-                  Exact Scores
-                </div>
-                <div
-                  style={{
-                    fontSize: '1.5rem',
-                    fontWeight: 900,
-                    color: 'var(--gold)',
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  <AnimNum value={userStats.exact} />
-                </div>
-              </div>
+              No entries yet. Be the first to predict!
             </div>
-
-            {/* Streak + Deadline row */}
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginBottom: 18,
-                flexWrap: 'wrap',
-                gap: 10,
-              }}
-            >
-              {streak > 1 && (
+          ) : (
+            <>
+              {topPlayer && (
                 <div
-                  className="streak-badge p-up"
-                  style={{ animationDelay: '250ms' }}
-                >
-                  <Flame size={14} /> {streak} streak
-                </div>
-              )}
-              {globalDeadline && !isGlobalLocked && (
-                <div
-                  className="p-up"
                   style={{
                     display: 'flex',
                     alignItems: 'center',
-                    gap: 8,
-                    animationDelay: '300ms',
+                    gap: 10,
+                    padding: '12px 16px',
+                    borderRadius: 12,
+                    background: 'rgba(245,197,66,.06)',
+                    border: '1px solid rgba(245,197,66,.12)',
+                    marginBottom: 12,
                   }}
                 >
-                  <Timer
-                    size={14}
-                    style={{ color: 'var(--gold)', flexShrink: 0 }}
-                  />
+                  <Crown size={16} style={{ color: 'var(--gold)' }} />
                   <span
                     style={{
-                      fontSize: '.78rem',
+                      fontSize: '.82rem',
                       fontWeight: 700,
                       color: 'var(--text-muted)',
                     }}
                   >
-                    Deadline:{' '}
+                    Leading:{' '}
+                    <strong style={{ color: 'var(--text-primary)' }}>
+                      {topPlayer.displayName}
+                    </strong>{' '}
+                    — {topPlayer.points} pts
                   </span>
-                  <Countdown deadline={globalDeadline.getTime()} />
                 </div>
               )}
-              {isGlobalLocked && !allFinished && (
+              {leaderboard.slice(0, 20).map((u, i) => renderLbRow(u, i))}
+              {leaderboard.length > 20 && (
                 <div
-                  className="p-up"
                   style={{
+                    textAlign: 'center',
+                    padding: '16px',
+                    color: 'var(--text-muted)',
                     fontSize: '.82rem',
-                    fontWeight: 800,
-                    color: '#ef4444',
-                    animationDelay: '300ms',
+                    fontWeight: 600,
                   }}
                 >
-                  ⏰ Predictions locked
+                  +{leaderboard.length - 20} more —{' '}
+                  <span
+                    style={{ color: 'var(--accent)', cursor: 'pointer' }}
+                    onClick={() => navigate('/leaderboard')}
+                  >
+                    View full leaderboard
+                  </span>
                 </div>
               )}
-            </div>
-
-            {/* Filter buttons */}
-            <div
-              className="filter-scroll hsb"
-              style={{
-                display: 'flex',
-                gap: 8,
-                marginBottom: 16,
-                overflowX: 'auto',
-                paddingBottom: 4,
-              }}
-            >
-              {[
-                { key: 'all', label: `All (${filterCounts.all})` },
-                {
-                  key: 'predicted',
-                  label: `Predicted (${filterCounts.predicted})`,
-                },
-                {
-                  key: 'unpredicted',
-                  label: `Open (${filterCounts.unpredicted})`,
-                },
-                {
-                  key: 'finished',
-                  label: `Finished (${filterCounts.finished})`,
-                },
-              ].map((f) => (
-                <button
-                  key={f.key}
-                  className={`filter-btn ${filter === f.key ? 'active' : ''}`}
-                  onClick={() => setFilter(f.key)}
-                >
-                  {f.label}
-                </button>
-              ))}
-            </div>
-
-            {/* Match Cards */}
-            {filteredPreds.length === 0 ? (
-              <div
-                className="p-up"
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'center',
-                  gap: 12,
-                  padding: 48,
-                  background: 'var(--bg-card)',
-                  border: '2px dashed var(--border)',
-                  borderRadius: 16,
-                  textAlign: 'center',
-                  marginBottom: 20,
-                }}
-              >
-                <Target
-                  size={36}
-                  style={{ color: 'var(--text-muted)' }}
-                />
-                <div
-                  style={{
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                    fontSize: '.95rem',
-                  }}
-                >
-                  {filter === 'predicted'
-                    ? 'No predictions yet'
-                    : filter === 'finished'
-                    ? 'No finished matches'
-                    : filter === 'unpredicted'
-                    ? 'All matches predicted!'
-                    : 'No matches available'}
-                </div>
-                {filter !== 'all' && (
-                  <button
-                    onClick={() => setFilter('all')}
-                    className="zb"
-                    style={{
-                      padding: '10px 20px',
-                      borderRadius: 10,
-                      background: 'rgba(0,230,118,.06)',
-                      border: '1px solid rgba(0,230,118,.15)',
-                      color: 'var(--accent)',
-                      fontWeight: 700,
-                      fontSize: '.85rem',
-                    }}
-                  >
-                    View All
-                  </button>
-                )}
-              </div>
-            ) : (
-              filteredPreds.map((pred, idx) => renderMatchCard(pred, idx))
-            )}
-
-            {/* Zoka Picks */}
-            {zokaPicks && zokaPicks.matches?.length > 0 && (
-              <div style={{ marginTop: 24 }}>
-                <ToggleSection
-                  icon={<Star size={18} />}
-                  iconBg="rgba(245,197,66,.1)"
-                  iconColor="var(--gold)"
-                  title="Zoka Picks"
-                  badge={zokaPicks.matches.length}
-                  badgeBg="rgba(245,197,66,.12)"
-                  badgeColor="var(--gold)"
-                  defaultOpen={false}
-                >
-                  {zokaPicks.matches.map((pick, i) =>
-                    renderZokaRow(pick, i)
-                  )}
-                </ToggleSection>
-              </div>
-            )}
-
-            {/* History */}
-            {userResults.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <ToggleSection
-                  icon={<History size={18} />}
-                  iconBg="rgba(168,85,247,.1)"
-                  iconColor="#a855f7"
-                  title="Your Results"
-                  badge={userResults.length}
-                  badgeBg="rgba(168,85,247,.1)"
-                  badgeColor="#a855f7"
-                  defaultOpen={false}
-                >
-                  {userResults.map((r, i) => renderHistoryRow(r, i))}
-                </ToggleSection>
-              </div>
-            )}
-
-            {/* Leaderboard */}
-            <div style={{ marginTop: 16 }}>
-              <ToggleSection
-                icon={<Trophy size={18} />}
-                iconBg="rgba(0,230,118,.1)"
-                iconColor="var(--accent)"
-                title="Daily Leaderboard"
-                badge={leaderboard.length}
-                badgeBg="rgba(0,230,118,.1)"
-                badgeColor="var(--accent)"
-                defaultOpen={true}
-              >
-                {leaderboard.length === 0 ? (
-                  <div
-                    style={{
-                      padding: 36,
-                      textAlign: 'center',
-                      color: 'var(--text-muted)',
-                      fontWeight: 700,
-                    }}
-                  >
-                    No predictions scored yet. Be the first!
-                  </div>
-                ) : (
-                  <>
-                    {/* Header row */}
-                    <div
-                      className="rr"
-                      style={{
-                        color: 'var(--text-muted)',
-                        fontWeight: 800,
-                        fontSize: '.72rem',
-                        textTransform: 'uppercase',
-                        letterSpacing: '.05em',
-                        background: 'transparent',
-                        borderBottom: '2px solid var(--border)',
-                        borderRadius: '12px 12px 0 0',
-                        marginBottom: 8,
-                      }}
-                    >
-                      <span>#</span>
-                      <span>Player</span>
-                      <span className="hm">Pts</span>
-                      <span className="hm">Exact</span>
-                      <span className="hm" />
-                      <span className="hm">Acc</span>
-                    </div>
-                    {leaderboard.map((u, i) => renderLbRow(u, i))}
-                  </>
-                )}
-              </ToggleSection>
-            </div>
-          </>
-        )}
-
-        {/* Login Modal */}
-        {showLoginModal && (
-          <LoginPromptModal onClose={() => setShowLoginModal(false)} />
-        )}
-
-        {/* Save Toast */}
-        <SaveToast show={!!toast} score={toast} />
+            </>
+          )}
+        </ToggleSection>
       </div>
+
+      {/* Toast */}
+      <SaveToast show={!!toast} score={toast} />
+
+      {/* Login Modal */}
+      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
     </div>
   );
 }

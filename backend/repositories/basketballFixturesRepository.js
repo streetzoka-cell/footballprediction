@@ -53,7 +53,15 @@ class BasketballFixturesRepository {
       .get();
     return snapshot.docs.map((doc) => doc.data());
   }
+  async getAllYesterday() {
+    const database = getDb();
+    const snapshot = await database
+      .collection(COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES)
+      .get();
+    return snapshot.docs.map((doc) => doc.data());
+  }
 
+  
   async getAllToday() {
     const database = getDb();
     const snapshot = await database

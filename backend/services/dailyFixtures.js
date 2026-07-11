@@ -26,7 +26,8 @@
  * automatically fetches from API-Football and saves to Firebase.
  * This handles: first run, restart with lost cache, days with no prior data.
  *
- * On restart (rare): one-time 200 reads to warm cache.
+ * On restart (rare): one-time warmup reads all 3 days (~1,200 reads).
+ * After warmup: cache is complete → no surprise API calls.
  */
 
 const { api, isBudgetAvailable } = require("../config/api");
@@ -82,9 +83,9 @@ class DailyFixturesService {
 
     const startTime = Date.now();
 
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════
     // META DEDUP — check cache first (0 reads)
-    // ══════════════════════════════════════════════════════
+    // ══════════════════════════════════════════
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
@@ -499,14 +500,21 @@ class DailyFixturesService {
 
   /**
    * Warmup in-memory cache from Firestore after restart.
-   * One-time cost: ~200 reads. Only happens on restart.
+   * Reads ALL 3 days in parallel. One-time cost: ~1,200 reads.
+   * After warmup, cache is complete → no surprise API calls.
    */
   async _warmupCache() {
     try {
-      const [todayDocs, tomorrowDocs] = await Promise.all([
+      const [yesterdayDocs, todayDocs, tomorrowDocs] = await Promise.all([
+        this.repo.getAllYesterday(),
         this.repo.getAllToday(),
         this.repo.getAllTomorrow(),
       ]);
+
+      if (yesterdayDocs.length > 0) {
+        this._docCache.yesterday = yesterdayDocs;
+        this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id)));
+      }
 
       if (todayDocs.length > 0) {
         this._docCache.today = todayDocs;
@@ -519,7 +527,7 @@ class DailyFixturesService {
       }
 
       logger.info(
-        `[DailyFixtures] Warmup: today=${todayDocs.length}, tomorrow=${tomorrowDocs.length}`
+        `[DailyFixtures] Warmup: yesterday=${yesterdayDocs.length}, today=${todayDocs.length}, tomorrow=${tomorrowDocs.length}`
       );
     } catch (err) {
       logger.error(`[DailyFixtures] Warmup failed: ${err.message}`);

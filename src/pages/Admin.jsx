@@ -10,7 +10,8 @@ import {
   Rocket, Monitor, Save, Ban, BadgeCheck, Database,
   ArrowRight, Timer, Hash, Users, UserCog, Search, Mail, Shield,
   ChevronRight, LayoutDashboard, StarOff, Copy, CheckCheck, FolderOpen,
-  UserPlus, UserMinus, ToggleLeft, ToggleRight, Info, Filter, SortAsc
+  UserPlus, UserMinus, ToggleLeft, ToggleRight, Info, Filter, SortAsc,
+  Hammer, RotateCcw
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
@@ -21,7 +22,7 @@ import {
 } from 'firebase/firestore';
 import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
 import {
-  useUniversalResolver,
+  // v3: useUniversalResolver removed — no-op, auto-resolution is internal to resolver
   useActivePredictions,
   useZokaPicks,
   todayStr,
@@ -29,6 +30,9 @@ import {
   calcPoints,
   resolveMatchForAllUsers,
   rebuildDailySummary,
+  rebuildGoatLeaderboard,       // v3 NEW
+  rebuildPeriodLeaderboard,     // v3 NEW
+  rebuildAllLeaderboards,       // v3 NEW
   adminRefreshActivePredictions,
   invalidateCache,
   invalidateCachePrefix,
@@ -89,9 +93,9 @@ function useInterval(cb, ms) {
    INJECT STYLES
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('adm-mob-v17')) return;
+  if (document.getElementById('adm-mob-v18')) return;
   const s = document.createElement('style');
-  s.id = 'adm-mob-v17';
+  s.id = 'adm-mob-v18';
   s.textContent = `
     @keyframes afu{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
     @keyframes asp{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
@@ -191,6 +195,11 @@ const injectStyles = () => {
     .match-action{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;transition:all .15s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
     .match-action:active{transform:scale(.9)}
 
+    .rebuild-btn{padding:10px 16px;border-radius:10px;font-size:.8rem;font-weight:800;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:42px;-webkit-tap-highlight-color:transparent}
+    .rebuild-btn:hover{background:rgba(255,255,255,.06);border-color:var(--gold);color:var(--gold)}
+    .rebuild-btn:active{transform:scale(.97)}
+    .rebuild-btn:disabled{opacity:.35;pointer-events:none}
+
     @media(max-width:768px){
       .user-row{grid-template-columns:1fr!important;gap:8px;padding:16px;border-radius:14px}
       .user-row .hide-mobile{display:none!important}
@@ -210,6 +219,7 @@ const injectStyles = () => {
       .toast{bottom:20px;font-size:.85rem;padding:12px 20px;border-radius:12px}
       .action-bar{flex-direction:column!important;align-items:stretch!important}
       .action-bar .btn-primary,.action-bar .btn-ghost{width:100%;justify-content:center}
+      .rebuild-grid{grid-template-columns:1fr 1fr!important}
     }
 
     @media(max-width:420px){
@@ -218,6 +228,7 @@ const injectStyles = () => {
       .tab-btn{padding:10px 14px;font-size:.78rem;gap:6px}
       .section-card{padding:14px}
       .pi{width:48px;height:44px;font-size:1rem}
+      .rebuild-grid{grid-template-columns:1fr!important}
     }
 
     @media(prefers-reduced-motion:reduce){
@@ -237,40 +248,13 @@ function Toast({ message, type, onDone }) {
   }, [onDone]);
 
   const cfg = {
-    success: {
-      bg: 'rgba(0,230,118,.15)',
-      border: 'rgba(0,230,118,.3)',
-      color: 'var(--accent)',
-      Icon: CheckCircle2,
-    },
-    error: {
-      bg: 'rgba(239,68,68,.15)',
-      border: 'rgba(239,68,68,.3)',
-      color: '#ef4444',
-      Icon: XCircle,
-    },
-    info: {
-      bg: 'rgba(245,197,66,.15)',
-      border: 'rgba(245,197,66,.3)',
-      color: 'var(--gold)',
-      Icon: AlertTriangle,
-    },
-  }[type] || {
-    bg: 'rgba(245,197,66,.15)',
-    border: 'rgba(245,197,66,.3)',
-    color: 'var(--gold)',
-    Icon: AlertTriangle,
-  };
+    success: { bg: 'rgba(0,230,118,.15)', border: 'rgba(0,230,118,.3)', color: 'var(--accent)', Icon: CheckCircle2 },
+    error: { bg: 'rgba(239,68,68,.15)', border: 'rgba(239,68,68,.3)', color: '#ef4444', Icon: XCircle },
+    info: { bg: 'rgba(245,197,66,.15)', border: 'rgba(245,197,66,.3)', color: 'var(--gold)', Icon: AlertTriangle },
+  }[type] || { bg: 'rgba(245,197,66,.15)', border: 'rgba(245,197,66,.3)', color: 'var(--gold)', Icon: AlertTriangle };
 
   return (
-    <div
-      className="toast"
-      style={{
-        background: cfg.bg,
-        border: `1px solid ${cfg.border}`,
-        color: cfg.color,
-      }}
-    >
+    <div className="toast" style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}>
       <cfg.Icon size={18} /> {message}
     </div>
   );
@@ -288,13 +272,7 @@ function ResultBadge({ pick }) {
 
   if (ph == null || pa == null) {
     return (
-      <span
-        className="result-badge"
-        style={{
-          background: 'rgba(255,255,255,.05)',
-          color: 'var(--text-muted)',
-        }}
-      >
+      <span className="result-badge" style={{ background: 'rgba(255,255,255,.05)', color: 'var(--text-muted)' }}>
         PENDING
       </span>
     );
@@ -302,14 +280,7 @@ function ResultBadge({ pick }) {
 
   if (h === ph && a === pa) {
     return (
-      <span
-        className="result-badge"
-        style={{
-          background: 'rgba(0,230,118,.15)',
-          color: 'var(--accent)',
-          border: '1px solid rgba(0,230,118,.3)',
-        }}
-      >
+      <span className="result-badge" style={{ background: 'rgba(0,230,118,.15)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.3)' }}>
         <CheckCircle2 size={12} /> EXACT +10
       </span>
     );
@@ -320,28 +291,14 @@ function ResultBadge({ pick }) {
 
   if (pR === aR) {
     return (
-      <span
-        className="result-badge"
-        style={{
-          background: 'rgba(245,197,66,.12)',
-          color: 'var(--gold)',
-          border: '1px solid rgba(245,197,66,.25)',
-        }}
-      >
+      <span className="result-badge" style={{ background: 'rgba(245,197,66,.12)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.25)' }}>
         <TrendingUp size={12} /> RESULT +3
       </span>
     );
   }
 
   return (
-    <span
-      className="result-badge"
-      style={{
-        background: 'rgba(239,68,68,.1)',
-        color: '#ef4444',
-        border: '1px solid rgba(239,68,68,.2)',
-      }}
-    >
+    <span className="result-badge" style={{ background: 'rgba(239,68,68,.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,.2)' }}>
       <XCircle size={12} /> MISS
     </span>
   );
@@ -351,24 +308,10 @@ function ResultBadge({ pick }) {
    STYLE SHORTCUTS
    ═══════════════════════════════════════════════════════════════ */
 const S = {
-  card: {
-    background: 'var(--bg-card)',
-    border: '1px solid var(--border)',
-    borderRadius: 16,
-  },
-  tinyLabel: {
-    fontSize: '.72rem',
-    color: 'var(--text-muted)',
-    fontWeight: 700,
-    textTransform: 'uppercase',
-    letterSpacing: '.06em',
-  },
+  card: { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16 },
+  tinyLabel: { fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' },
   smallVal: { fontSize: '.88rem', fontWeight: 700 },
-  bigNum: {
-    fontSize: '1.4rem',
-    fontWeight: 900,
-    fontFamily: 'var(--font-display)',
-  },
+  bigNum: { fontSize: '1.4rem', fontWeight: 900, fontFamily: 'var(--font-display)' },
 };
 
 /* ═══════════════════════════════════════════════════════════════
@@ -426,11 +369,15 @@ export default function Admin() {
   const [resolvedMatches, setResolvedMatches] = useState(new Set());
   const resolvedMatchesRef = useRef(new Set());
 
+  // v3: Leaderboard rebuild state
+  const [rebuilding, setRebuilding] = useState(null);
+
   /* ═══════════════════════════════════════════════════════════
-     DATA — From useMatchData.js (cached hooks)
-     Local overrides for immediate feedback after writes.
+     DATA — From useMatchData v3 (cached hooks)
+     v3 changes: 30-min cache TTLs, 10-min poll intervals.
+     useUniversalResolver REMOVED — resolution is now internal
+     to resolveMatchForAllUsers (incremental updates).
      ═══════════════════════════════════════════════════════════ */
-  useUniversalResolver();
   const { preds: hookPreds } = useActivePredictions(date);
   const hookPicks = useZokaPicks(date);
 
@@ -441,40 +388,23 @@ export default function Admin() {
   const preds = predsOverride ?? hookPreds;
   const publishedPicks = picksOverride ?? hookPicks;
 
-  // Keep a ref for the auto-resolver to use synchronously
   const predsRef = useRef(preds);
-  useEffect(() => {
-    predsRef.current = preds;
-  }, [preds]);
+  useEffect(() => { predsRef.current = preds; }, [preds]);
 
   // Sync overrides back to hook data after background refresh catches up
   useEffect(() => {
-    if (
-      predsOverride &&
-      hookPreds.length >= (predsOverride?.length || 0) &&
-      hookPreds.length > 0
-    ) {
+    if (predsOverride && hookPreds.length >= (predsOverride?.length || 0) && hookPreds.length > 0) {
       setPredsOverride(null);
     }
   }, [predsOverride, hookPreds]);
 
   useEffect(() => {
-    if (
-      picksOverride === null &&
-      hookPicks === null
-    ) {
-      return;
-    }
-    if (
-      picksOverride !== null &&
-      hookPicks !== null &&
-      hookPicks.publishedAt
-    ) {
+    if (picksOverride === null && hookPicks === null) return;
+    if (picksOverride !== null && hookPicks !== null && hookPicks.publishedAt) {
       setPicksOverride(null);
     }
   }, [picksOverride, hookPicks]);
 
-  // Derive publish state from effective data
   const publishState = publishedPicks ? 'published' : 'draft';
   const publishedAt = publishedPicks?.publishedAt || null;
 
@@ -484,9 +414,7 @@ export default function Admin() {
     setToast({ message, type: type || 'success', key: Date.now() });
   }, []);
 
-  useEffect(() => {
-    setZokaSel({});
-  }, [day]);
+  useEffect(() => { setZokaSel({}); }, [day]);
 
   useEffect(() => {
     if (currentUser && userProfile?.role === 'admin') setIsAdmin(true);
@@ -527,14 +455,15 @@ export default function Admin() {
 
   /* ═══════════════════════════════════════════════════════════
      REAL-TIME FIXTURES + AUTO-RESOLVER
-     Uses imported resolveMatchForAllUsers which handles:
+     v3: resolveMatchForAllUsers now handles internally:
        - Checking if already resolved (match_resolution_status doc)
        - Writing prediction_results
-       - Writing user_points_total
+       - Updating user_points_total
        - Updating zoka_picks scores
-       - Rebuilding daily_leaderboard summary
+       - INCREMENTAL daily_leaderboard update (was full rebuild)
+       - INCREMENTAL GOAT leaderboard update (was full rebuild)
        - Invalidating all relevant caches
-  ═══════════════════════════════════════════════════════════ */
+     ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -550,14 +479,10 @@ export default function Admin() {
       setLastUpdate(new Date());
       setFxLoad(false);
 
-      // Build map of finished match scores from API
       const finishedMap = new Map();
       matches.forEach((m) => {
         if (m.isFinished) {
-          finishedMap.set(String(m.id), {
-            h: m.homeScore,
-            a: m.awayScore,
-          });
+          finishedMap.set(String(m.id), { h: m.homeScore, a: m.awayScore });
         }
       });
       if (finishedMap.size === 0) return;
@@ -581,70 +506,51 @@ export default function Admin() {
 
       if (updatedIds.length === 0) return;
 
-      batch
-        .commit()
-        .then(async () => {
-          // Invalidate active_predictions cache so hook picks up changes
-          invalidateCache(`active_${date}`);
+      batch.commit().then(async () => {
+        // Invalidate active_predictions cache
+        invalidateCache(`active_${date}`);
 
-          // Force-refresh and update local override for immediate UI feedback
+        try {
+          const fresh = await adminRefreshActivePredictions(date);
+          setPredsOverride(fresh);
+        } catch (e) {
+          console.warn('[Admin] Force refresh failed:', e);
+        }
+
+        setFlashIds(updatedIds);
+        setTimeout(() => setFlashIds([]), 2500);
+        setSyncMsg(`Updating ${updatedIds.length} result${updatedIds.length > 1 ? 's' : ''}...`);
+
+        // v3: resolveMatchForAllUsers handles everything incrementally now
+        const todayKey = todayStr();
+        let totalResolved = 0;
+
+        for (const [matchId, scores] of finishedMap.entries()) {
+          if (resolvedMatchesRef.current.has(matchId)) continue;
           try {
-            const fresh = await adminRefreshActivePredictions(date);
-            setPredsOverride(fresh);
-          } catch (e) {
-            console.warn('[Admin] Force refresh failed:', e);
-          }
-
-          setFlashIds(updatedIds);
-          setTimeout(() => setFlashIds([]), 2500);
-          setSyncMsg(
-            `Updating ${updatedIds.length} result${updatedIds.length > 1 ? 's' : ''}...`
-          );
-
-          // Resolve predictions using imported resolver
-          // Always use todayStr() since subscribeToTodayFixtures is for today only
-          const todayKey = todayStr();
-          let totalResolved = 0;
-
-          for (const [matchId, scores] of finishedMap.entries()) {
-            if (resolvedMatchesRef.current.has(matchId)) continue;
-            try {
-              const count = await resolveMatchForAllUsers(
-                matchId,
-                scores.h,
-                scores.a,
-                todayKey
-              );
-              if (count > 0) {
-                totalResolved += count;
-                resolvedMatchesRef.current.add(matchId);
-                setResolvedMatches((prev) => new Set([...prev, matchId]));
-              }
-            } catch (e) {
-              console.error(
-                `[Admin] Failed to resolve match ${matchId}:`,
-                e
-              );
+            const count = await resolveMatchForAllUsers(matchId, scores.h, scores.a, todayKey);
+            if (count > 0) {
+              totalResolved += count;
+              resolvedMatchesRef.current.add(matchId);
+              setResolvedMatches((prev) => new Set([...prev, matchId]));
             }
+          } catch (e) {
+            console.error(`[Admin] Failed to resolve match ${matchId}:`, e);
           }
+        }
 
-          // Invalidate zoka cache since resolver may have updated it
-          invalidateCache(`zoka_${todayKey}`);
+        // v3: resolver now updates zoka_picks internally, but we still
+        // invalidate the local cache so useZokaPicks picks up the changes
+        invalidateCache(`zoka_${todayKey}`);
 
-          if (totalResolved > 0) {
-            setSyncMsg(
-              `✓ ${updatedIds.length} synced · ${totalResolved} predictions scored`
-            );
-            showToast(
-              `${totalResolved} predictions scored automatically`,
-              'success'
-            );
-          } else {
-            setSyncMsg(`✓ ${updatedIds.length} synced`);
-          }
-          setTimeout(() => setSyncMsg(''), 6000);
-        })
-        .catch((e) => console.warn('[Admin] Batch update failed:', e));
+        if (totalResolved > 0) {
+          setSyncMsg(`✓ ${updatedIds.length} synced · ${totalResolved} predictions scored`);
+          showToast(`${totalResolved} predictions scored automatically`, 'success');
+        } else {
+          setSyncMsg(`✓ ${updatedIds.length} synced`);
+        }
+        setTimeout(() => setSyncMsg(''), 6000);
+      }).catch((e) => console.warn('[Admin] Batch update failed:', e));
     });
 
     return () => unsub();
@@ -656,7 +562,7 @@ export default function Admin() {
   }, [date]);
 
   /* ═══════════════════════════════════════════════════════════
-     LISTEN TO STAFF (local — not in useMatchData)
+     LISTEN TO STAFF
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!isAdmin || !db) return;
@@ -682,17 +588,12 @@ export default function Admin() {
   /* ═══════════════════════════════════════════════════════════
      COMPUTED VALUES
   ═══════════════════════════════════════════════════════════ */
-  const predMap = useMemo(
-    () => new Map(preds.map((p) => [String(p.matchId), p])),
-    [preds]
-  );
+  const predMap = useMemo(() => new Map(preds.map((p) => [String(p.matchId), p])), [preds]);
   const isFull = preds.length >= MAX_FEATURED;
   const zokaIds = useMemo(() => new Set(Object.keys(zokaSel)), [zokaSel]);
   const zokaCount = zokaIds.size;
   const zokaFull = zokaCount >= MAX_ZOKA;
-  const zokaScored = Object.values(zokaSel).filter(
-    (s) => s.h !== '' && s.a !== ''
-  ).length;
+  const zokaScored = Object.values(zokaSel).filter((s) => s.h !== '' && s.a !== '').length;
   const zokaReady = zokaCount > 0 && zokaScored === zokaCount;
 
   const zokaPicksForPublish = useMemo(() => {
@@ -719,44 +620,19 @@ export default function Admin() {
   }, [zokaSel, fx]);
 
   const publishedResults = useMemo(() => {
-    if (!publishedPicks?.matches) {
-      return { total: 0, exact: 0, result: 0, miss: 0, pending: 0 };
-    }
-    let exact = 0;
-    let result = 0;
-    let miss = 0;
-    let pending = 0;
+    if (!publishedPicks?.matches) return { total: 0, exact: 0, result: 0, miss: 0, pending: 0 };
+    let exact = 0, result = 0, miss = 0, pending = 0;
     publishedPicks.matches.forEach((pick) => {
-      if (pick.status !== 'finished' || pick.homeScore == null) {
-        pending++;
-        return;
-      }
+      if (pick.status !== 'finished' || pick.homeScore == null) { pending++; return; }
       const h = pick.adminPick?.home;
       const a = pick.adminPick?.away;
-      if (h === pick.homeScore && a === pick.awayScore) {
-        exact++;
-        return;
-      }
+      if (h === pick.homeScore && a === pick.awayScore) { exact++; return; }
       const pR = h > a ? 'H' : h < a ? 'A' : 'D';
-      const aR =
-        pick.homeScore > pick.awayScore
-          ? 'H'
-          : pick.homeScore < pick.awayScore
-          ? 'A'
-          : 'D';
-      if (pR === aR) {
-        result++;
-        return;
-      }
+      const aR = pick.homeScore > pick.awayScore ? 'H' : pick.homeScore < pick.awayScore ? 'A' : 'D';
+      if (pR === aR) { result++; return; }
       miss++;
     });
-    return {
-      total: publishedPicks.matches.length,
-      exact,
-      result,
-      miss,
-      pending,
-    };
+    return { total: publishedPicks.matches.length, exact, result, miss, pending };
   }, [publishedPicks, tick]);
 
   const finCnt = preds.filter((p) => p.status === 'finished').length;
@@ -766,43 +642,29 @@ export default function Admin() {
   const leagues = useMemo(() => {
     const m = new Map();
     fx.forEach((f) => {
-      const id =
-        f.league && f.league.id ? String(f.league.id) : 'x';
+      const id = f.league && f.league.id ? String(f.league.id) : 'x';
       if (!m.has(id)) {
-        m.set(id, {
-          id,
-          name: f.league?.name || 'Other',
-          logo: f.league?.emblem || f.league?.logo || null,
-          n: 0,
-        });
+        m.set(id, { id, name: f.league?.name || 'Other', logo: f.league?.emblem || f.league?.logo || null, n: 0 });
       }
       m.get(id).n++;
     });
     return [...m.values()].sort((a, b) => b.n - a.n);
   }, [fx]);
 
-  const shown = useMemo(
-    () =>
-      lg === 'all'
-        ? fx
-        : fx.filter((f) => f.league && String(f.league.id) === lg),
-    [fx, lg]
-  );
+  const shown = useMemo(() => (lg === 'all' ? fx : fx.filter((f) => f.league && String(f.league.id) === lg)), [fx, lg]);
 
   const filteredUsers = useMemo(() => {
     let list = usersList;
     if (userSearch) {
       const q = userSearch.toLowerCase();
-      list = list.filter(
-        (u) =>
-          (u.displayName || '').toLowerCase().includes(q) ||
-          (u.email || '').toLowerCase().includes(q) ||
-          (u.uid || '').toLowerCase().includes(q)
+      list = list.filter((u) =>
+        (u.displayName || '').toLowerCase().includes(q) ||
+        (u.email || '').toLowerCase().includes(q) ||
+        (u.uid || '').toLowerCase().includes(q)
       );
     }
     if (userFilter === 'admin') list = list.filter((u) => u.role === 'admin');
-    else if (userFilter === 'user')
-      list = list.filter((u) => u.role !== 'admin');
+    else if (userFilter === 'user') list = list.filter((u) => u.role !== 'admin');
     return list;
   }, [usersList, userSearch, userFilter]);
 
@@ -838,11 +700,8 @@ export default function Admin() {
         awayScore: null,
         createdAt: serverTimestamp(),
       });
-
-      // Force-refresh for immediate UI update
       const fresh = await adminRefreshActivePredictions(date);
       setPredsOverride(fresh);
-
       showToast(`Featured: ${match.homeTeam?.name || 'match'}`, 'success');
     } catch {
       showToast('Failed to add', 'error');
@@ -852,26 +711,19 @@ export default function Admin() {
   const removePred = async (pred) => {
     if (!db) return;
     await deleteDoc(doc(db, 'active_predictions', pred.id));
-
-    // Force-refresh for immediate UI update
     try {
       const fresh = await adminRefreshActivePredictions(date);
       setPredsOverride(fresh);
     } catch (e) {
       console.warn('[Admin] Refresh after remove failed:', e);
     }
-
     showToast('Removed from featured', 'info');
   };
 
   const toggleZokaPick = (match) => {
     const id = String(match.id);
     if (zokaIds.has(id)) {
-      setZokaSel((prev) => {
-        const n = { ...prev };
-        delete n[id];
-        return n;
-      });
+      setZokaSel((prev) => { const n = { ...prev }; delete n[id]; return n; });
       showToast('Removed from Zoka Picks', 'info');
     } else if (!zokaFull) {
       setZokaSel((prev) => ({ ...prev, [id]: { h: '', a: '' } }));
@@ -883,10 +735,7 @@ export default function Admin() {
 
   const updateZokaScore = (matchId, field, value) => {
     const cleaned = value.replace(/[^0-9]/g, '').slice(0, 2);
-    setZokaSel((prev) => ({
-      ...prev,
-      [matchId]: { ...prev[matchId], [field]: cleaned },
-    }));
+    setZokaSel((prev) => ({ ...prev, [matchId]: { ...prev[matchId], [field]: cleaned } }));
   };
 
   const saveZokaPicks = async () => {
@@ -905,17 +754,13 @@ export default function Admin() {
             awayLogo: match.awayLogo || null,
             league: match.league,
             kickoff: match.kickoff,
-            adminPick:
-              scores.h !== '' && scores.a !== ''
-                ? { home: Number(scores.h), away: Number(scores.a) }
-                : null,
+            adminPick: scores.h !== '' && scores.a !== '' ? { home: Number(scores.h), away: Number(scores.a) } : null,
             homeScore: match.isFinished ? match.homeScore : null,
             awayScore: match.isFinished ? match.awayScore : null,
             status: match.isFinished ? 'finished' : 'upcoming',
           });
         }
       }
-
       const savedData = {
         matches: draftPicks,
         publishedAt: serverTimestamp(),
@@ -923,24 +768,12 @@ export default function Admin() {
         totalMatches: draftPicks.length,
         isDraft: !zokaReady,
       };
-
       await setDoc(doc(db, 'zoka_picks', date), savedData);
-
-      // Set local override for immediate UI update
-      setPicksOverride({
-        ...savedData,
-        publishedAt: { seconds: Math.floor(Date.now() / 1000) },
-      });
-
-      // Invalidate cache
+      setPicksOverride({ ...savedData, publishedAt: { seconds: Math.floor(Date.now() / 1000) } });
       invalidateCache(`zoka_${date}`);
-
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 1500);
-      showToast(
-        `Saved ${zokaCount} Zoka Pick${zokaCount > 1 ? 's' : ''}`,
-        'success'
-      );
+      showToast(`Saved ${zokaCount} Zoka Pick${zokaCount > 1 ? 's' : ''}`, 'success');
     } catch (e) {
       console.error('[Admin] Save failed:', e);
       showToast('Save failed', 'error');
@@ -952,12 +785,7 @@ export default function Admin() {
     if (!db || !zokaReady) return;
     setPublishing(true);
     try {
-      if (zokaPicksForPublish.length === 0) {
-        showToast('No valid picks', 'error');
-        setPublishing(false);
-        return;
-      }
-
+      if (zokaPicksForPublish.length === 0) { showToast('No valid picks', 'error'); setPublishing(false); return; }
       const publishedData = {
         matches: zokaPicksForPublish,
         publishedAt: serverTimestamp(),
@@ -965,22 +793,10 @@ export default function Admin() {
         totalMatches: zokaPicksForPublish.length,
         isDraft: false,
       };
-
       await setDoc(doc(db, 'zoka_picks', date), publishedData);
-
-      // Set local override for immediate UI update
-      setPicksOverride({
-        ...publishedData,
-        publishedAt: { seconds: Math.floor(Date.now() / 1000) },
-      });
-
-      // Invalidate cache
+      setPicksOverride({ ...publishedData, publishedAt: { seconds: Math.floor(Date.now() / 1000) } });
       invalidateCache(`zoka_${date}`);
-
-      showToast(
-        `PUBLISHED ${zokaPicksForPublish.length} Zoka Picks!`,
-        'success'
-      );
+      showToast(`PUBLISHED ${zokaPicksForPublish.length} Zoka Picks!`, 'success');
     } catch (e) {
       console.error('[Admin] Publish failed:', e);
       showToast('Publish failed', 'error');
@@ -993,13 +809,8 @@ export default function Admin() {
     setPublishing(true);
     try {
       await deleteDoc(doc(db, 'zoka_picks', date));
-
-      // Set local override to null
       setPicksOverride(null);
-
-      // Invalidate cache
       invalidateCache(`zoka_${date}`);
-
       showToast('Unpublished', 'info');
     } catch {
       showToast('Unpublish failed', 'error');
@@ -1007,24 +818,60 @@ export default function Admin() {
     setPublishing(false);
   };
 
+  /* ═══════════════════════════════════════════════════════════
+     v3: LEADERBOARD REBUILD HANDLERS
+     These trigger full rebuilds of pre-computed leaderboard
+     summary docs. Expensive (admin-only). Use sparingly —
+     the resolver does incremental updates automatically.
+     ═══════════════════════════════════════════════════════════ */
+  const handleRebuild = async (type) => {
+    setRebuilding(type);
+    try {
+      switch (type) {
+        case 'daily':
+          await rebuildDailySummary(date);
+          showToast(`Daily summary rebuilt for ${date}`, 'success');
+          break;
+        case 'goat':
+          await rebuildGoatLeaderboard();
+          showToast('GOAT leaderboard rebuilt', 'success');
+          break;
+        case 'weekly':
+          await rebuildPeriodLeaderboard('weekly');
+          showToast('Weekly leaderboard rebuilt', 'success');
+          break;
+        case 'monthly':
+          await rebuildPeriodLeaderboard('monthly');
+          showToast('Monthly leaderboard rebuilt', 'success');
+          break;
+        case 'all':
+          await rebuildAllLeaderboards();
+          showToast('All leaderboards rebuilt', 'success');
+          break;
+      }
+      // Invalidate all leaderboard caches after rebuild
+      invalidateCache(`dlb_${date}`);
+      invalidateCache('hist_goat');
+      invalidateCache('hist_weekly');
+      invalidateCache('hist_monthly');
+    } catch (e) {
+      console.error(`[Admin] Rebuild ${type} failed:`, e);
+      showToast(`Rebuild failed: ${e.message}`, 'error');
+    }
+    setRebuilding(null);
+  };
+
   const addStaff = async () => {
     if (!db || !newStaffName.trim()) return;
     try {
-      await setDoc(
-        doc(
-          db,
-          'staff',
-          newStaffName.trim().toLowerCase().replace(/\s+/g, '_')
-        ),
-        {
-          name: newStaffName.trim(),
-          role: newStaffRole,
-          bio: '',
-          avatar: null,
-          active: true,
-          createdAt: serverTimestamp(),
-        }
-      );
+      await setDoc(doc(db, 'staff', newStaffName.trim().toLowerCase().replace(/\s+/g, '_')), {
+        name: newStaffName.trim(),
+        role: newStaffRole,
+        bio: '',
+        avatar: null,
+        active: true,
+        createdAt: serverTimestamp(),
+      });
       setNewStaffName('');
       setNewStaffRole('analyst');
       setShowAddStaff(false);
@@ -1037,10 +884,7 @@ export default function Admin() {
   const updateStaff = async (id, data) => {
     if (!db) return;
     try {
-      await updateDoc(doc(db, 'staff', id), {
-        ...data,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, 'staff', id), { ...data, updatedAt: serverTimestamp() });
       showToast('Updated', 'success');
     } catch {
       showToast('Update failed', 'error');
@@ -1062,9 +906,7 @@ export default function Admin() {
     try {
       const snap = await getDocs(collection(db, 'users'));
       const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort(
-        (a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0)
-      );
+      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
       setUsersList(list);
       setUsersLoaded(true);
       showToast(`Loaded ${list.length} users`, 'success');
@@ -1078,10 +920,7 @@ export default function Admin() {
   const updateUserRole = async (uid, newRole) => {
     if (!db) return;
     try {
-      await updateDoc(doc(db, 'users', uid), {
-        role: newRole,
-        updatedAt: serverTimestamp(),
-      });
+      await updateDoc(doc(db, 'users', uid), { role: newRole, updatedAt: serverTimestamp() });
       showToast(`Role → ${newRole}`, 'success');
     } catch {
       showToast('Role update failed', 'error');
@@ -1091,10 +930,7 @@ export default function Admin() {
   const toMs = (dt) => {
     if (!dt) return 0;
     if (typeof dt === 'number') return dt < 1e12 ? dt * 1000 : dt;
-    if (typeof dt === 'string') {
-      const n = Date.parse(dt);
-      return isNaN(n) ? 0 : n;
-    }
+    if (typeof dt === 'string') { const n = Date.parse(dt); return isNaN(n) ? 0 : n; }
     if (dt.seconds != null) return dt.seconds * 1000;
     if (typeof dt.getTime === 'function') return dt.getTime();
     return 0;
@@ -1120,48 +956,11 @@ export default function Admin() {
   if (authLoad) return null;
   if (!isAdmin) {
     return (
-      <div
-        style={{
-          minHeight: '100vh',
-          overflow: 'hidden',
-          background: 'var(--bg-deep)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: 24,
-        }}
-      >
-        <div
-          style={{
-            textAlign: 'center',
-            padding: '48px 32px',
-            ...S.card,
-          }}
-        >
-          <ShieldAlert
-            size={56}
-            style={{ color: '#ef4444', marginBottom: 20 }}
-          />
-          <h2
-            style={{
-              margin: '0 0 12px',
-              color: 'var(--text-primary)',
-              fontSize: '1.3rem',
-              fontWeight: 900,
-            }}
-          >
-            Access Denied
-          </h2>
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              margin: 0,
-              fontSize: '.95rem',
-              fontWeight: 600,
-            }}
-          >
-            Admin only.
-          </p>
+      <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+        <div style={{ textAlign: 'center', padding: '48px 32px', ...S.card }}>
+          <ShieldAlert size={56} style={{ color: '#ef4444', marginBottom: 20 }} />
+          <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 900 }}>Access Denied</h2>
+          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>Admin only.</p>
         </div>
       </div>
     );
@@ -1185,420 +984,126 @@ export default function Admin() {
     return (
       <div
         key={mid}
-        className={`card-in ${sel ? 'zoka-row' : ''} ${
-          isLive ? 'match-live-border' : ''
-        } ${isFlash ? 'fl' : ''}`}
+        className={`card-in ${sel ? 'zoka-row' : ''} ${isLive ? 'match-live-border' : ''} ${isFlash ? 'fl' : ''}`}
         style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: 12,
-          padding: '16px',
-          borderRadius: 14,
-          background: isFlash
-            ? 'rgba(0,230,118,.06)'
-            : 'var(--bg-surface)',
-          border: `1px solid ${
-            isLive
-              ? 'rgba(239,68,68,.2)'
-              : sel
-              ? 'rgba(245,197,66,.25)'
-              : 'var(--border)'
-          }`,
-          marginBottom: 10,
-          animationDelay: `${idx * 30}ms`,
+          display: 'flex', flexDirection: 'column', gap: 12, padding: '16px', borderRadius: 14,
+          background: isFlash ? 'rgba(0,230,118,.06)' : 'var(--bg-surface)',
+          border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : sel ? 'rgba(245,197,66,.25)' : 'var(--border)'}`,
+          marginBottom: 10, animationDelay: `${idx * 30}ms`,
         }}
       >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              minWidth: 0,
-              flex: 1,
-            }}
-          >
+        {/* League + Status */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
             {match.league?.emblem && (
-              <img
-                src={match.league.emblem}
-                alt=""
-                style={{
-                  width: 20,
-                  height: 20,
-                  borderRadius: 4,
-                  objectFit: 'contain',
-                  flexShrink: 0,
-                }}
-              />
+              <img src={match.league.emblem} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />
             )}
-            <span
-              style={{
-                fontSize: '.78rem',
-                fontWeight: 700,
-                color: 'var(--text-muted)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {match.league?.name || 'Unknown'}
             </span>
           </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              flexShrink: 0,
-            }}
-          >
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
             {isLive && <span className="live-dot" />}
-            <span
-              style={{
-                fontSize: '.78rem',
-                fontWeight: 800,
-                color: st.c,
-                background: st.b,
-                padding: '4px 12px',
-                borderRadius: 8,
-                letterSpacing: '.04em',
-              }}
-            >
+            <span style={{ fontSize: '.78rem', fontWeight: 800, color: st.c, background: st.b, padding: '4px 12px', borderRadius: 8, letterSpacing: '.04em' }}>
               {isLive && match.minute != null ? `${match.minute}'` : st.l}
             </span>
           </div>
         </div>
 
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-          }}
-        >
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              minWidth: 0,
-            }}
-          >
+        {/* Teams + Score */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
             {match.homeLogo ? (
-              <img
-                src={match.homeLogo}
-                alt=""
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  objectFit: 'contain',
-                  flexShrink: 0,
-                }}
-              />
+              <img src={match.homeLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
             ) : (
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,.06)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  fontSize: '.7rem',
-                }}
-              >
-                ⚽
-              </div>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>
             )}
-            <span
-              style={{
-                fontSize: '.95rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-              }}
-            >
+            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}
             </span>
           </div>
 
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-              background: isLive
-                ? 'rgba(239,68,68,.1)'
-                : isFin
-                ? 'rgba(0,230,118,.06)'
-                : 'rgba(255,255,255,.03)',
-              padding: '8px 16px',
-              borderRadius: 10,
-              border: `1px solid ${
-                isLive
-                  ? 'rgba(239,68,68,.2)'
-                  : isFin
-                  ? 'rgba(0,230,118,.12)'
-                  : 'var(--border)'
-              }`,
-              minWidth: 80,
-              justifyContent: 'center',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '1.2rem',
-                fontWeight: 900,
-                fontFamily: 'var(--font-display)',
-                color: isLive
-                  ? '#ef4444'
-                  : isFin
-                  ? 'var(--accent)'
-                  : 'var(--text-primary)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, minWidth: 80, justifyContent: 'center',
+            background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)',
+            border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}`,
+          }}>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {match.homeScore ?? '-'}
             </span>
-            <span
-              style={{
-                fontSize: '.9rem',
-                fontWeight: 600,
-                color: 'var(--text-muted)',
-              }}
-            >
-              –
-            </span>
-            <span
-              style={{
-                fontSize: '1.2rem',
-                fontWeight: 900,
-                fontFamily: 'var(--font-display)',
-                color: isLive
-                  ? '#ef4444'
-                  : isFin
-                  ? 'var(--accent)'
-                  : 'var(--text-primary)',
-                fontVariantNumeric: 'tabular-nums',
-              }}
-            >
+            <span style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>–</span>
+            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>
               {match.awayScore ?? '-'}
             </span>
           </div>
 
-          <div
-            style={{
-              flex: 1,
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              minWidth: 0,
-              justifyContent: 'flex-end',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '.95rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap',
-                textAlign: 'right',
-              }}
-            >
+          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, justifyContent: 'flex-end' }}>
+            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}
             </span>
             {match.awayLogo ? (
-              <img
-                src={match.awayLogo}
-                alt=""
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  objectFit: 'contain',
-                  flexShrink: 0,
-                }}
-              />
+              <img src={match.awayLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} />
             ) : (
-              <div
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 6,
-                  background: 'rgba(255,255,255,.06)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                  fontSize: '.7rem',
-                }}
-              >
-                ⚽
-              </div>
+              <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>
             )}
           </div>
         </div>
 
-        {!isLive && !isFin && match.kickoff && (
-          <div
-            style={{
-              fontSize: '.82rem',
-              fontWeight: 600,
-              color: 'var(--text-muted)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 6,
-            }}
-          >
-            <Clock size={13} /> {match.kickoff}
-          </div>
-        )}
-
-        {isZoka && sel && (
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              paddingTop: 8,
-              borderTop: '1px solid rgba(245,197,66,.12)',
-            }}
-          >
-            <span
-              style={{
-                fontSize: '.82rem',
-                fontWeight: 800,
-                color: 'var(--gold)',
-                whiteSpace: 'nowrap',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 5,
-              }}
-            >
-              <Star size={14} fill="var(--gold)" /> Your Pick:
-            </span>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-              }}
-            >
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={2}
-                className={`pi ${sel.h !== '' ? 'has-val' : ''}`}
-                value={sel.h}
-                onChange={(e) => updateZokaScore(mid, 'h', e.target.value)}
-                placeholder="H"
-              />
-              <span
-                style={{
-                  fontSize: '1rem',
-                  fontWeight: 700,
-                  color: 'var(--text-muted)',
-                }}
-              >
-                –
-              </span>
-              <input
-                type="text"
-                inputMode="numeric"
-                maxLength={2}
-                className={`pi ${sel.a !== '' ? 'has-val' : ''}`}
-                value={sel.a}
-                onChange={(e) => updateZokaScore(mid, 'a', e.target.value)}
-                placeholder="A"
-              />
-            </div>
-          </div>
-        )}
-
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            paddingTop: 8,
-            borderTop: '1px solid var(--border)',
-          }}
-        >
+        {/* Actions */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
           {isZoka && (
             <button
-              onClick={() => toggleZokaPick(match)}
-              className="btn-sm zb"
+              className={`btn-sm zb ${sel ? '' : ''}`}
               style={{
-                background: sel
-                  ? 'rgba(245,197,66,.15)'
-                  : 'rgba(245,197,66,.06)',
-                color: 'var(--gold)',
-                border: `1px solid ${
-                  sel
-                    ? 'rgba(245,197,66,.3)'
-                    : 'rgba(245,197,66,.15)'
-                }`,
-                flex: 1,
+                background: sel ? 'rgba(245,197,66,.15)' : 'rgba(255,255,255,.04)',
+                border: `1px solid ${sel ? 'rgba(245,197,66,.4)' : 'var(--border)'}`,
+                color: sel ? 'var(--gold)' : 'var(--text-muted)',
               }}
+              onClick={() => toggleZokaPick(match)}
             >
-              <Star size={15} fill={sel ? 'var(--gold)' : 'none'} />{' '}
+              <Star size={14} fill={sel ? 'var(--gold)' : 'none'} />
               {sel ? 'Selected' : 'Zoka Pick'}
             </button>
           )}
+
+          {sel && isZoka && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                className={`pi ${sel.h ? 'has-val' : ''}`}
+                value={sel.h}
+                onChange={(e) => updateZokaScore(mid, 'h', e.target.value)}
+                placeholder="H"
+                maxLength={2}
+              />
+              <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
+              <input
+                className={`pi ${sel.a ? 'has-val' : ''}`}
+                value={sel.a}
+                onChange={(e) => updateZokaScore(mid, 'a', e.target.value)}
+                placeholder="A"
+                maxLength={2}
+              />
+            </div>
+          )}
+
           {isMatch && (
             <>
-              <button
-                onClick={() => handleAdd(match)}
-                disabled={isPred || isFull}
-                className="btn-sm zb"
-                style={{
-                  background: isPred
-                    ? 'rgba(0,230,118,.1)'
-                    : 'rgba(0,230,118,.06)',
-                  color: 'var(--accent)',
-                  border: `1px solid ${
-                    isPred
-                      ? 'rgba(0,230,118,.25)'
-                      : 'rgba(0,230,118,.15)'
-                  }`,
-                  flex: 1,
-                }}
-              >
-                {isPred ? (
-                  <>
-                    <CheckCircle2 size={15} /> Featured
-                  </>
-                ) : (
-                  <>
-                    <Plus size={15} /> Feature
-                  </>
-                )}
-              </button>
-              {isPred && (
-                <button
-                  onClick={() => removePred(pred)}
-                  className="btn-danger"
-                  style={{ flexShrink: 0 }}
-                >
-                  <Trash2 size={14} />
+              {isPred ? (
+                <button className="btn-sm zb" style={{ background: 'rgba(0,230,118,.08)', border: '1px solid rgba(0,230,118,.2)', color: 'var(--accent)' }} onClick={() => removePred(pred)}>
+                  <Check size={14} /> Featured
+                </button>
+              ) : (
+                <button className="btn-sm zb" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => handleAdd(match)} disabled={isFull}>
+                  <Plus size={14} /> Feature
                 </button>
               )}
             </>
+          )}
+
+          {isFin && match.kickoff && (
+            <span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              {new Date(match.kickoff).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
           )}
         </div>
       </div>
@@ -1606,100 +1111,290 @@ export default function Admin() {
   };
 
   /* ═══════════════════════════════════════════════════════════
-     RENDER: PUBLISHED RESULT ROW
+     RENDER: ZOKA TAB
   ═══════════════════════════════════════════════════════════ */
-  const renderPubResult = (pick, i) => (
-    <div
-      key={i}
-      className="pub-row card-in"
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        padding: '14px 16px',
-        borderRadius: 12,
-        background: 'var(--bg-surface)',
-        border: '1px solid var(--border)',
-        marginBottom: 8,
-        animationDelay: `${i * 25}ms`,
-      }}
-    >
-      <div
-        className="pub-teams"
-        style={{
-          flex: 1,
-          display: 'flex',
-          alignItems: 'center',
-          gap: 10,
-          minWidth: 0,
-        }}
-      >
-        {pick.homeLogo && (
-          <img
-            src={pick.homeLogo}
-            alt=""
-            style={{
-              width: 22,
-              height: 22,
-              borderRadius: 5,
-              objectFit: 'contain',
-              flexShrink: 0,
-            }}
-          />
+  const renderZokaTab = () => (
+    <div>
+      {/* Published picks results */}
+      {publishedPicks?.matches?.length > 0 && (
+        <div className="section-card" style={{ marginBottom: 16 }}>
+          <div className="section-title">
+            <Trophy size={18} style={{ color: 'var(--gold)' }} />
+            Published Picks — Results
+            <span style={{ marginLeft: 'auto', fontSize: '.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              {formatTimeAgo(publishedAt)}
+            </span>
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+            <div className="stat-mini">
+              <span className="num count-up" style={{ color: 'var(--accent)', animationDelay: '0ms' }}>{publishedResults.exact}</span>
+              <span className="lbl">Exact</span>
+            </div>
+            <div className="stat-mini">
+              <span className="num count-up" style={{ color: 'var(--gold)', animationDelay: '60ms' }}>{publishedResults.result}</span>
+              <span className="lbl">Result</span>
+            </div>
+            <div className="stat-mini">
+              <span className="num count-up" style={{ color: '#ef4444', animationDelay: '120ms' }}>{publishedResults.miss}</span>
+              <span className="lbl">Miss</span>
+            </div>
+            <div className="stat-mini">
+              <span className="num count-up" style={{ color: 'var(--text-muted)', animationDelay: '180ms' }}>{publishedResults.pending}</span>
+              <span className="lbl">Pending</span>
+            </div>
+          </div>
+
+          {publishedPicks.matches.map((pick, i) => (
+            <div key={i} className="card-in" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12,
+              padding: '14px 16px', borderRadius: 12, background: 'var(--bg-surface)',
+              border: '1px solid var(--border)', marginBottom: 8, animationDelay: `${i * 30}ms`,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0 }}>
+                {pick.homeLogo && <img src={pick.homeLogo} alt="" style={{ width: 24, height: 24, borderRadius: 5, objectFit: 'contain', flexShrink: 0 }} />}
+                <span style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                <span style={{ fontSize: '1rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--gold)' }}>{pick.adminPick?.home ?? '?'}</span>
+                <span style={{ color: 'var(--text-muted)', fontSize: '.8rem' }}>–</span>
+                <span style={{ fontSize: '1rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--gold)' }}>{pick.adminPick?.away ?? '?'}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1, justifyContent: 'flex-end', minWidth: 0 }}>
+                {pick.status === 'finished' && (
+                  <span style={{ fontSize: '.85rem', fontWeight: 800, color: 'var(--accent)', fontVariantNumeric: 'tabular-nums' }}>
+                    {pick.homeScore}–{pick.awayScore}
+                  </span>
+                )}
+                <ResultBadge pick={pick} />
+                <span style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  {pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}
+                </span>
+                {pick.awayLogo && <img src={pick.awayLogo} alt="" style={{ width: 24, height: 24, borderRadius: 5, objectFit: 'contain', flexShrink: 0 }} />}
+              </div>
+            </div>
+          ))}
+
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
+            <button className="btn-danger btn-sm" onClick={unpublishZokaPicks} disabled={publishing}>
+              <Trash2 size={14} /> Unpublish
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Zoka pick selector */}
+      <div className="section-card">
+        <div className="section-title">
+          <Star size={18} style={{ color: 'var(--gold)' }} />
+          Select Zoka Picks
+          <span style={{ marginLeft: 'auto', fontSize: '.82rem', color: zokaFull ? '#ef4444' : 'var(--text-muted)', fontWeight: 700 }}>
+            {zokaCount}/{MAX_ZOKA}
+          </span>
+        </div>
+
+        {fx.length === 0 && (
+          <div className="empty-state">
+            <Radio size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+            <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0 }}>No fixtures loaded</p>
+          </div>
         )}
-        <span
-          style={{
-            fontSize: '.85rem',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {pick.homeTeam?.shortName || pick.homeTeam?.name}
-        </span>
+
+        {shown.map((m, i) => renderMatchRow(m, i, 'zoka'))}
+
+        {zokaCount > 0 && (
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 16, flexWrap: 'wrap' }} className="action-bar">
+            <button className="btn-ghost" onClick={saveZokaPicks} disabled={savingZoka || zokaCount === 0}>
+              <Save size={16} /> Save Draft
+            </button>
+            <button
+              className="btn-primary"
+              style={{ background: zokaReady ? 'var(--gold)' : 'rgba(245,197,66,.2)', color: zokaReady ? '#000' : 'var(--gold)' }}
+              onClick={publishZokaPicks}
+              disabled={publishing || !zokaReady}
+            >
+              <Rocket size={16} /> Publish {zokaPicksForPublish.length} Picks
+            </button>
+          </div>
+        )}
       </div>
-      <div
-        className="pub-scores"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 8,
-          flexShrink: 0,
-        }}
-      >
-        <span
-          style={{
-            fontSize: '.95rem',
-            fontWeight: 900,
-            fontFamily: 'var(--font-display)',
-            color: 'var(--gold)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {pick.adminPick?.home ?? '?'}-{pick.adminPick?.away ?? '?'}
-        </span>
-        <span style={{ fontSize: '.8rem', color: 'var(--text-muted)' }}>
-          →
-        </span>
-        <span
-          style={{
-            fontSize: '.95rem',
-            fontWeight: 900,
-            fontFamily: 'var(--font-display)',
-            color:
-              pick.status === 'finished'
-                ? 'var(--accent)'
-                : 'var(--text-muted)',
-            fontVariantNumeric: 'tabular-nums',
-          }}
-        >
-          {pick.homeScore ?? '?'}-{pick.awayScore ?? '?'}
-        </span>
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     RENDER: MATCHES TAB
+  ═══════════════════════════════════════════════════════════ */
+  const renderMatchesTab = () => (
+    <div>
+      {/* Stats bar */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10, marginBottom: 16 }}>
+        <div className="stat-mini">
+          <span className="num">{fx.length}</span>
+          <span className="lbl">Fixtures</span>
+        </div>
+        <div className="stat-mini">
+          <span className="num" style={{ color: hasLive ? '#ef4444' : 'var(--text-primary)' }}>{liveCount}</span>
+          <span className="lbl">Live</span>
+        </div>
+        <div className="stat-mini">
+          <span className="num" style={{ color: 'var(--accent)' }}>{finCnt}</span>
+          <span className="lbl">Finished</span>
+        </div>
+        <div className="stat-mini">
+          <span className="num" style={{ color: isFull ? '#ef4444' : 'var(--gold)' }}>{preds.length}/{MAX_FEATURED}</span>
+          <span className="lbl">Featured</span>
+        </div>
       </div>
-      <div className="pub-badge" style={{ flexShrink: 0 }}>
-        <ResultBadge pick={pick} />
+
+      {/* League filter */}
+      {leagues.length > 1 && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, overflowX: 'auto', paddingBottom: 4 }} className="sh">
+          <button
+            className={`league-pill zb ${lg === 'all' ? '' : ''}`}
+            style={{ background: lg === 'all' ? 'rgba(245,197,66,.12)' : 'var(--bg-surface)', color: lg === 'all' ? 'var(--gold)' : 'var(--text-muted)', border: `1px solid ${lg === 'all' ? 'rgba(245,197,66,.3)' : 'var(--border)'}` }}
+            onClick={() => setLg('all')}
+          >
+            All ({fx.length})
+          </button>
+          {leagues.map((l) => (
+            <button
+              key={l.id}
+              className={`league-pill zb`}
+              style={{ background: lg === l.id ? 'rgba(245,197,66,.12)' : 'var(--bg-surface)', color: lg === l.id ? 'var(--gold)' : 'var(--text-muted)', border: `1px solid ${lg === l.id ? 'rgba(245,197,66,.3)' : 'var(--border)'}` }}
+              onClick={() => setLg(l.id)}
+            >
+              {l.logo && <img src={l.logo} alt="" style={{ width: 16, height: 16, borderRadius: 3, objectFit: 'contain' }} />}
+              {l.name} ({l.n})
+            </button>
+          ))}
+        </div>
+      )}
+
+      {/* Match list */}
+      {shown.length === 0 ? (
+        <div className="empty-state">
+          <Radio size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+          <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0 }}>
+            {fxErr === 'NETWORK' ? 'Network error — check connection' : fx.length === 0 ? 'No fixtures for this day' : 'No matches in this league'}
+          </p>
+        </div>
+      ) : (
+        shown.map((m, i) => renderMatchRow(m, i, 'matches'))
+      )}
+    </div>
+  );
+
+  /* ═══════════════════════════════════════════════════════════
+     RENDER: RESULTS TAB (v3: with leaderboard rebuild tools)
+  ═══════════════════════════════════════════════════════════ */
+  const renderResultsTab = () => (
+    <div>
+      {/* v3: Leaderboard Maintenance */}
+      <div className="section-card" style={{ border: '1px solid rgba(245,197,66,.15)' }}>
+        <div className="section-title">
+          <Hammer size={18} style={{ color: 'var(--gold)' }} />
+          Leaderboard Maintenance
+          <span style={{ marginLeft: 'auto', fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, textTransform: 'none', letterSpacing: 0 }}>
+            v3: Pre-computed summaries
+          </span>
+        </div>
+
+        <p style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 600, margin: '0 0 14px', lineHeight: 1.5 }}>
+          The resolver updates leaderboards incrementally after each match. Use these buttons only for manual full rebuilds (e.g., after data fixes or first-time setup). Full rebuilds are expensive (~1K-2K reads each).
+        </p>
+
+        <div className="rebuild-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <button
+            className="rebuild-btn"
+            onClick={() => handleRebuild('daily')}
+            disabled={rebuilding !== null}
+          >
+            {rebuilding === 'daily' ? <Loader size={14} className="asp" /> : <RotateCcw size={14} />}
+            Daily ({date})
+          </button>
+          <button
+            className="rebuild-btn"
+            onClick={() => handleRebuild('goat')}
+            disabled={rebuilding !== null}
+          >
+            {rebuilding === 'goat' ? <Loader size={14} className="asp" /> : <Crown size={14} />}
+            GOAT
+          </button>
+          <button
+            className="rebuild-btn"
+            onClick={() => handleRebuild('weekly')}
+            disabled={rebuilding !== null}
+          >
+            {rebuilding === 'weekly' ? <Loader size={14} className="asp" /> : <CalendarDays size={14} />}
+            Weekly
+          </button>
+          <button
+            className="rebuild-btn"
+            onClick={() => handleRebuild('monthly')}
+            disabled={rebuilding !== null}
+          >
+            {rebuilding === 'monthly' ? <Loader size={14} className="asp" /> : <BarChart3 size={14} />}
+            Monthly
+          </button>
+          <button
+            className="rebuild-btn"
+            onClick={() => handleRebuild('all')}
+            disabled={rebuilding !== null}
+            style={{ gridColumn: 'span 2', background: 'rgba(245,197,66,.06)', borderColor: 'rgba(245,197,66,.25)', color: 'var(--gold)' }}
+          >
+            {rebuilding === 'all' ? <Loader size={14} className="asp" /> : <Database size={14} />}
+            Rebuild All Leaderboards
+          </button>
+        </div>
+      </div>
+
+      {/* Auto-resolution status */}
+      <div className="section-card">
+        <div className="section-title">
+          <Zap size={18} style={{ color: 'var(--accent)' }} />
+          Auto-Resolution
+        </div>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 14 }}>
+          <div className="stat-mini">
+            <span className="num">{finCnt}</span>
+            <span className="lbl">Finished</span>
+          </div>
+          <div className="stat-mini">
+            <span className="num" style={{ color: 'var(--accent)' }}>{resolvedMatches.size}</span>
+            <span className="lbl">Resolved</span>
+          </div>
+          <div className="stat-mini">
+            <span className="num" style={{ color: hasLive ? '#ef4444' : 'var(--text-muted)' }}>{liveCount}</span>
+            <span className="lbl">Live Now</span>
+          </div>
+        </div>
+
+        {syncMsg && (
+          <div style={{
+            padding: '10px 16px', borderRadius: 10, fontSize: '.82rem', fontWeight: 700,
+            background: syncMsg.startsWith('✓') ? 'rgba(0,230,118,.08)' : 'rgba(245,197,66,.08)',
+            color: syncMsg.startsWith('✓') ? 'var(--accent)' : 'var(--gold)',
+            border: `1px solid ${syncMsg.startsWith('✓') ? 'rgba(0,230,118,.2)' : 'rgba(245,197,66,.2)'}`,
+            marginBottom: 12,
+          }}>
+            {syncMsg}
+          </div>
+        )}
+
+        <p style={{ fontSize: '.8rem', color: 'var(--text-muted)', fontWeight: 600, margin: 0, lineHeight: 1.6 }}>
+          <strong style={{ color: 'var(--text-primary)' }}>v3 behavior:</strong> When a match finishes, the system automatically:
+          scores all predictions, updates user points, incrementally updates the daily leaderboard &amp; GOAT leaderboard, and updates Zoka Pick scores.
+          No manual resolution needed.
+        </p>
+
+        {dataSource === 'backend' && lastUpdate && (
+          <p style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, margin: '10px 0 0' }}>
+            Last update: {formatTimeAgo(lastUpdate)}
+          </p>
+        )}
       </div>
     </div>
   );
@@ -1707,596 +1402,202 @@ export default function Admin() {
   /* ═══════════════════════════════════════════════════════════
      RENDER: STAFF TAB
   ═══════════════════════════════════════════════════════════ */
-  const renderStaffTab = () => (
-    <div className="section-card ae">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-        }}
-      >
-        <h3 className="section-title" style={{ margin: 0 }}>
-          <UserCog size={18} /> Staff Members
-        </h3>
-        <button
-          onClick={() => setShowAddStaff((v) => !v)}
-          className="btn-sm zb"
-          style={{
-            background: 'rgba(245,197,66,.08)',
-            color: 'var(--gold)',
-            border: '1px solid rgba(245,197,66,.2)',
-          }}
-        >
-          <Plus size={15} /> Add
-        </button>
-      </div>
+  const renderStaffTab = () => {
+    const roleColors = {
+      admin: { bg: 'rgba(239,68,68,.1)', color: '#ef4444', border: 'rgba(239,68,68,.25)' },
+      lead: { bg: 'rgba(245,197,66,.1)', color: 'var(--gold)', border: 'rgba(245,197,66,.25)' },
+      analyst: { bg: 'rgba(0,230,118,.1)', color: 'var(--accent)', border: 'rgba(0,230,118,.25)' },
+      writer: { bg: 'rgba(96,165,250,.1)', color: '#60a5fa', border: 'rgba(96,165,250,.25)' },
+    };
 
-      {showAddStaff && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 10,
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}
-          className="card-in"
-        >
-          <input
-            className="input-field"
-            style={{ flex: 2, minWidth: 150 }}
-            placeholder="Name"
-            value={newStaffName}
-            onChange={(e) => setNewStaffName(e.target.value)}
-          />
-          <select
-            className="input-field"
-            style={{ flex: 1, minWidth: 120 }}
-            value={newStaffRole}
-            onChange={(e) => setNewStaffRole(e.target.value)}
-          >
-            <option value="admin">Admin</option>
-            <option value="lead">Lead</option>
-            <option value="analyst">Analyst</option>
-            <option value="writer">Writer</option>
-          </select>
-          <button
-            onClick={addStaff}
-            className="btn-primary"
-            style={{
-              background: 'var(--gold)',
-              color: 'var(--bg-deep)',
-            }}
-          >
-            <Check size={16} /> Add
-          </button>
-        </div>
-      )}
-
-      {staffLoad ? (
-        <div
-          className="sk"
-          style={{ height: 60, borderRadius: 12, marginBottom: 10 }}
-        />
-      ) : staffList.length === 0 ? (
-        <div className="empty-state">
-          <Users
-            size={32}
-            style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-          />
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 700,
-              margin: 0,
-            }}
-          >
-            No staff members yet
-          </p>
-        </div>
-      ) : (
-        staffList.map((s) => (
-          <div key={s.id} className="staff-row">
-            <div
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: 10,
-                background: 'rgba(245,197,66,.08)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                flexShrink: 0,
-                fontWeight: 900,
-                fontSize: '.9rem',
-                color: 'var(--gold)',
-              }}
-            >
-              {(s.name || '?')[0].toUpperCase()}
+    return (
+      <div>
+        <div className="section-card">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div className="section-title" style={{ margin: 0 }}>
+              <UserCog size={18} style={{ color: 'var(--gold)' }} />
+              Staff Members ({staffList.length})
             </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div
-                style={{
-                  fontSize: '.95rem',
-                  fontWeight: 800,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                {s.name || 'Unnamed'}
-              </div>
-              <span
-                className="role-badge"
-                style={{
-                  background:
-                    s.role === 'admin'
-                      ? 'rgba(239,68,68,.1)'
-                      : s.role === 'lead'
-                      ? 'rgba(245,197,66,.1)'
-                      : 'rgba(255,255,255,.04)',
-                  color:
-                    s.role === 'admin'
-                      ? '#ef4444'
-                      : s.role === 'lead'
-                      ? 'var(--gold)'
-                      : 'var(--text-muted)',
-                }}
-              >
-                {s.role || 'analyst'}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-              <button
-                onClick={() =>
-                  updateStaff(s.id, {
-                    role:
-                      s.role === 'admin'
-                        ? 'analyst'
-                        : s.role === 'lead'
-                        ? 'admin'
-                        : 'lead',
-                  })
-                }
-                className="btn-sm zb"
-                style={{
-                  background: 'rgba(245,197,66,.06)',
-                  color: 'var(--gold)',
-                  border: '1px solid rgba(245,197,66,.15)',
-                }}
-              >
-                <RefreshCw size={13} />
-              </button>
-              <button
-                onClick={() => deleteStaff(s.id)}
-                className="btn-danger"
-              >
-                <Trash2 size={13} />
-              </button>
-            </div>
+            <button className="btn-sm zb" style={{ background: 'rgba(245,197,66,.1)', border: '1px solid rgba(245,197,66,.25)', color: 'var(--gold)' }} onClick={() => setShowAddStaff(!showAddStaff)}>
+              <UserPlus size={14} /> Add
+            </button>
           </div>
-        ))
-      )}
-    </div>
-  );
+
+          {showAddStaff && (
+            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }} className="fade-in">
+              <input
+                className="input-field"
+                style={{ flex: 2, minWidth: 150 }}
+                placeholder="Staff name"
+                value={newStaffName}
+                onChange={(e) => setNewStaffName(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && addStaff()}
+              />
+              <select
+                className="input-field"
+                style={{ flex: 1, minWidth: 120 }}
+                value={newStaffRole}
+                onChange={(e) => setNewStaffRole(e.target.value)}
+              >
+                <option value="admin">Admin</option>
+                <option value="lead">Lead</option>
+                <option value="analyst">Analyst</option>
+                <option value="writer">Writer</option>
+              </select>
+              <button className="btn-primary btn-sm" onClick={addStaff} disabled={!newStaffName.trim()}>
+                <Check size={14} /> Save
+              </button>
+            </div>
+          )}
+
+          {staffLoad ? (
+            <div className="sk" style={{ height: 60, borderRadius: 12 }} />
+          ) : staffList.length === 0 ? (
+            <div className="empty-state">
+              <UserCog size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+              <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0 }}>No staff members</p>
+            </div>
+          ) : (
+            staffList.map((s, i) => {
+              const rc = roleColors[s.role] || roleColors.analyst;
+              const isEditing = editingStaff === s.id;
+              return (
+                <div key={s.id} className="staff-row card-in" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.1rem' }}>
+                    {s.avatar ? <img src={s.avatar} alt="" style={{ width: '100%', height: '100%', borderRadius: 10, objectFit: 'cover' }} /> : '👤'}
+                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {isEditing ? (
+                      <input
+                        className="input-field"
+                        style={{ padding: '8px 12px', fontSize: '.88rem', marginBottom: 6 }}
+                        defaultValue={s.name}
+                        autoFocus
+                        onBlur={(e) => { if (e.target.value.trim() && e.target.value !== s.name) updateStaff(s.id, { name: e.target.value.trim() }); setEditingStaff(null); }}
+                        onKeyDown={(e) => { if (e.key === 'Enter') { e.target.blur(); } if (e.key === 'Escape') setEditingStaff(null); }}
+                      />
+                    ) : (
+                      <div style={{ fontSize: '.92rem', fontWeight: 800, color: 'var(--text-primary)', cursor: 'pointer' }} onClick={() => setEditingStaff(s.id)}>
+                        {s.name} <Pencil size={12} style={{ opacity: .3, verticalAlign: 'middle' }} />
+                      </div>
+                    )}
+                    <span className="role-badge" style={{ ...rc, fontSize: '.7rem', padding: '3px 10px', marginTop: 2 }}>
+                      {s.role}
+                    </span>
+                  </div>
+                  <button className="btn-danger btn-sm" style={{ padding: '8px 12px' }} onClick={() => deleteStaff(s.id)}>
+                    <Trash2 size={13} />
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+    );
+  };
 
   /* ═══════════════════════════════════════════════════════════
      RENDER: USERS TAB
   ═══════════════════════════════════════════════════════════ */
   const renderUsersTab = () => (
-    <div className="section-card ae">
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          marginBottom: 16,
-          flexWrap: 'wrap',
-          gap: 10,
-        }}
-      >
-        <h3 className="section-title" style={{ margin: 0 }}>
-          <Users size={18} /> Users ({filteredUsers.length})
-        </h3>
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-            flexWrap: 'wrap',
-          }}
-        >
-          <div
-            style={{
-              position: 'relative',
-              minWidth: 180,
-            }}
-          >
-            <Search
-              size={15}
-              style={{
-                position: 'absolute',
-                left: 12,
-                top: '50%',
-                transform: 'translateY(-50%)',
-                color: 'var(--text-muted)',
-                pointerEvents: 'none',
-              }}
-            />
+    <div>
+      <div className="section-card">
+        <div className="section-title">
+          <Users size={18} style={{ color: 'var(--gold)' }} />
+          User Management
+        </div>
+
+        <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <div style={{ flex: 2, minWidth: 150, position: 'relative' }}>
+            <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
             <input
               className="input-field"
-              style={{ paddingLeft: 36, minWidth: 180 }}
-              placeholder="Search users..."
+              style={{ paddingLeft: 40 }}
+              placeholder="Search by name, email, or UID..."
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
             />
           </div>
-          <select
-            className="input-field"
-            style={{ width: 'auto', minWidth: 120 }}
-            value={userFilter}
-            onChange={(e) => setUserFilter(e.target.value)}
-          >
+          <select className="input-field" style={{ flex: 1, minWidth: 120 }} value={userFilter} onChange={(e) => setUserFilter(e.target.value)}>
             <option value="all">All Roles</option>
             <option value="admin">Admins</option>
             <option value="user">Users</option>
           </select>
-          <button
-            onClick={loadUsers}
-            disabled={usersLoad}
-            className="btn-primary"
-            style={{
-              background: 'var(--gold)',
-              color: 'var(--bg-deep)',
-            }}
-          >
-            {usersLoad ? (
-              <Loader size={16} className="asp" />
-            ) : (
-              <Database size={16} />
-            )}{' '}
-            {usersLoaded ? 'Refresh' : 'Load'}
+          <button className="btn-primary btn-sm" onClick={loadUsers} disabled={usersLoad}>
+            {usersLoad ? <Loader size={14} className="asp" /> : <Database size={14} />}
+            {usersLoaded ? 'Refresh' : 'Load Users'}
           </button>
         </div>
-      </div>
 
-      {usersLoad ? (
-        <>
-          <div
-            className="sk"
-            style={{ height: 48, borderRadius: 10, marginBottom: 8 }}
-          />
-          <div
-            className="sk"
-            style={{ height: 48, borderRadius: 10, marginBottom: 8 }}
-          />
-          <div
-            className="sk"
-            style={{ height: 48, borderRadius: 10 }}
-          />
-        </>
-      ) : !usersLoaded ? (
-        <div className="empty-state">
-          <Database
-            size={32}
-            style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-          />
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 700,
-              margin: '0 0 12px',
-            }}
-          >
-            Load users to manage roles
-          </p>
-          <button
-            onClick={loadUsers}
-            className="btn-primary"
-            style={{
-              background: 'var(--gold)',
-              color: 'var(--bg-deep)',
-            }}
-          >
-            <Database size={16} /> Load Users
-          </button>
-        </div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="empty-state">
-          <Search
-            size={32}
-            style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-          />
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 700,
-              margin: 0,
-            }}
-          >
-            No users match your search
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="user-row user-header">
-            <span>User</span>
-            <span className="hide-mobile">Email</span>
-            <span>Role</span>
-            <span className="hide-mobile">Joined</span>
-            <span>Action</span>
+        {!usersLoaded ? (
+          <div className="empty-state">
+            <Users size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+            <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0 }}>Click "Load Users" to fetch user list</p>
           </div>
-          {filteredUsers.map((u) => (
-            <div key={u.id} className="user-row">
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 10,
-                  minWidth: 0,
-                }}
-              >
-                <div
-                  style={{
-                    width: 34,
-                    height: 34,
-                    borderRadius: 8,
-                    background:
-                      u.role === 'admin'
-                        ? 'rgba(239,68,68,.1)'
-                        : 'rgba(245,197,66,.08)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                    fontWeight: 900,
-                    fontSize: '.85rem',
-                    color:
-                      u.role === 'admin'
-                        ? '#ef4444'
-                        : 'var(--gold)',
-                  }}
-                >
-                  {(u.displayName || 'U')[0].toUpperCase()}
+        ) : filteredUsers.length === 0 ? (
+          <div className="empty-state">
+            <Search size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
+            <p style={{ color: 'var(--text-muted)', fontWeight: 700, margin: 0 }}>{userSearch || userFilter !== 'all' ? 'No users match filters' : 'No users found'}</p>
+          </div>
+        ) : (
+          <>
+            <div className="user-row user-header">
+              <span>User</span>
+              <span className="hide-mobile">Email</span>
+              <span>Role</span>
+              <span className="hide-mobile">Joined</span>
+              <span>Action</span>
+            </div>
+            {filteredUsers.map((u, i) => (
+              <div key={u.id} className="user-row card-in" style={{ animationDelay: `${i * 25}ms` }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.8rem' }}>
+                    {u.photoURL ? <img src={u.photoURL} alt="" style={{ width: '100%', height: '100%', borderRadius: 8, objectFit: 'cover' }} /> : '👤'}
+                  </div>
+                  <div style={{ minWidth: 0 }}>
+                    <div style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.displayName || 'Anonymous'}
+                    </div>
+                    <div style={{ fontSize: '.7rem', color: 'var(--text-muted)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {u.uid?.slice(0, 12)}...
+                    </div>
+                  </div>
                 </div>
-                <span
-                  style={{
-                    fontWeight: 700,
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    whiteSpace: 'nowrap',
-                  }}
-                >
-                  {u.displayName || 'Anonymous'}
+                <span className="hide-mobile" style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {u.email || '—'}
                 </span>
+                <span className="role-badge" style={{
+                  background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(0,230,118,.08)',
+                  color: u.role === 'admin' ? '#ef4444' : 'var(--accent)',
+                  border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'rgba(0,230,118,.15)'}`,
+                }}>
+                  {u.role || 'user'}
+                </span>
+                <span className="hide-mobile" style={{ fontSize: '.78rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+                  {formatTimeAgo(u.createdAt)}
+                </span>
+                <button
+                  className="btn-sm zb"
+                  style={{
+                    background: u.role === 'admin' ? 'rgba(239,68,68,.08)' : 'rgba(245,197,66,.08)',
+                    border: `1px solid ${u.role === 'admin' ? 'rgba(239,68,68,.2)' : 'rgba(245,197,66,.2)'}`,
+                    color: u.role === 'admin' ? '#ef4444' : 'var(--gold)',
+                    fontSize: '.75rem',
+                  }}
+                  onClick={() => updateUserRole(u.id, u.role === 'admin' ? 'user' : 'admin')}
+                >
+                  {u.role === 'admin' ? <UserMinus size={13} /> : <Shield size={13} />}
+                  {u.role === 'admin' ? 'Demote' : 'Admin'}
+                </button>
               </div>
-              <span
-                className="hide-mobile"
-                style={{
-                  color: 'var(--text-muted)',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {u.email || '—'}
-              </span>
-              <span
-                className="role-badge"
-                style={{
-                  background:
-                    u.role === 'admin'
-                      ? 'rgba(239,68,68,.1)'
-                      : 'rgba(255,255,255,.04)',
-                  color:
-                    u.role === 'admin'
-                      ? '#ef4444'
-                      : 'var(--text-muted)',
-                }}
-              >
-                {u.role || 'user'}
-              </span>
-              <span
-                className="hide-mobile"
-                style={{
-                  color: 'var(--text-muted)',
-                  fontSize: '.82rem',
-                }}
-              >
-                {formatTimeAgo(u.createdAt)}
-              </span>
-              <button
-                onClick={() =>
-                  updateUserRole(
-                    u.id,
-                    u.role === 'admin' ? 'user' : 'admin'
-                  )
-                }
-                className="btn-sm zb"
-                style={{
-                  background:
-                    u.role === 'admin'
-                      ? 'rgba(239,68,68,.08)'
-                      : 'rgba(0,230,118,.06)',
-                  color:
-                    u.role === 'admin'
-                      ? '#ef4444'
-                      : 'var(--accent)',
-                  border: `1px solid ${
-                    u.role === 'admin'
-                      ? 'rgba(239,68,68,.2)'
-                      : 'rgba(0,230,118,.15)'
-                  }`,
-                  justifyContent: 'center',
-                }}
-              >
-                {u.role === 'admin' ? (
-                  <UserMinus size={14} />
-                ) : (
-                  <UserPlus size={14} />
-                )}
-              </button>
-            </div>
-          ))}
-        </>
-      )}
-    </div>
-  );
-
-  /* ═══════════════════════════════════════════════════════════
-     RENDER: RESULTS TAB
-  ═══════════════════════════════════════════════════════════ */
-  const renderResultsTab = () => (
-    <div className="section-card ae">
-      <h3 className="section-title">
-        <Trophy size={18} /> Zoka Picks Results
-      </h3>
-
-      {!publishedPicks ? (
-        <div className="empty-state">
-          <StarOff
-            size={32}
-            style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-          />
-          <p
-            style={{
-              color: 'var(--text-muted)',
-              fontWeight: 700,
-              margin: 0,
-            }}
-          >
-            No picks published yet
-          </p>
-        </div>
-      ) : (
-        <>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(4, 1fr)',
-              gap: 10,
-              marginBottom: 20,
-            }}
-          >
-            <div className="stat-mini count-up">
-              <span className="num" style={{ color: 'var(--gold)' }}>
-                {publishedResults.total}
-              </span>
-              <span className="lbl">Total</span>
-            </div>
-            <div className="stat-mini count-up" style={{ animationDelay: '80ms' }}>
-              <span className="num" style={{ color: 'var(--accent)' }}>
-                {publishedResults.exact}
-              </span>
-              <span className="lbl">Exact</span>
-            </div>
-            <div className="stat-mini count-up" style={{ animationDelay: '160ms' }}>
-              <span className="num" style={{ color: 'var(--gold)' }}>
-                {publishedResults.result}
-              </span>
-              <span className="lbl">Result</span>
-            </div>
-            <div className="stat-mini count-up" style={{ animationDelay: '240ms' }}>
-              <span className="num" style={{ color: '#ef4444' }}>
-                {publishedResults.miss}
-              </span>
-              <span className="lbl">Miss</span>
-            </div>
-          </div>
-
-          {publishedPicks.matches.map((pick, i) =>
-            renderPubResult(pick, i)
-          )}
-
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginTop: 16,
-              padding: '14px 18px',
-              background: 'var(--bg-surface)',
-              borderRadius: 12,
-              border: '1px solid var(--border)',
-            }}
-          >
-            <div>
-              <div
-                style={{
-                  fontSize: '.82rem',
-                  fontWeight: 700,
-                  color: 'var(--text-muted)',
-                }}
-              >
-                Accuracy
-              </div>
-              <div
-                style={{
-                  fontSize: '1.3rem',
-                  fontWeight: 900,
-                  fontFamily: 'var(--font-display)',
-                  color: 'var(--gold)',
-                }}
-              >
-                {publishedResults.total > 0
-                  ? Math.round(
-                      ((publishedResults.exact +
-                        publishedResults.result) /
-                        publishedResults.total) *
-                        100
-                    )
-                  : 0}
-                %
-              </div>
-            </div>
-            <div style={{ textAlign: 'right' }}>
-              <div
-                style={{
-                  fontSize: '.82rem',
-                  fontWeight: 700,
-                  color: 'var(--text-muted)',
-                }}
-              >
-                Points
-              </div>
-              <div
-                style={{
-                  fontSize: '1.3rem',
-                  fontWeight: 900,
-                  fontFamily: 'var(--font-display)',
-                  color: 'var(--accent)',
-                }}
-              >
-                {publishedResults.exact * 10 +
-                  publishedResults.result * 3}
-              </div>
-            </div>
-          </div>
-
-          <div
-            style={{
-              display: 'flex',
-              gap: 10,
-              marginTop: 16,
-            }}
-          >
-            <button
-              onClick={() => rebuildDailySummary(date)}
-              className="btn-ghost"
-              style={{ flex: 1 }}
-            >
-              <RefreshCw size={15} /> Rebuild Summary
-            </button>
-            <button
-              onClick={unpublishZokaPicks}
-              disabled={publishing}
-              className="btn-danger"
-              style={{ flex: 1 }}
-            >
-              <Trash2 size={15} /> Unpublish
-            </button>
-          </div>
-        </>
-      )}
+            ))}
+            <p style={{ fontSize: '.78rem', color: 'var(--text-muted)', fontWeight: 600, margin: '12px 0 0' }}>
+              Showing {filteredUsers.length} of {usersList.length} users
+            </p>
+          </>
+        )}
+      </div>
     </div>
   );
 
@@ -2304,690 +1605,93 @@ export default function Admin() {
      MAIN RENDER
   ═══════════════════════════════════════════════════════════ */
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        background: 'var(--bg-deep)',
-        padding: '0 0 100px',
-      }}
-    >
-      {/* HEADER */}
-      <div
-        style={{
-          padding: '20px 20px 0',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: 12,
-          flexWrap: 'wrap',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <div
-            style={{
-              width: 42,
-              height: 42,
-              borderRadius: 12,
-              background: 'linear-gradient(135deg, var(--gold), #d4a017)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              flexShrink: 0,
-            }}
-          >
-            <ShieldAlert size={22} color="var(--bg-deep)" />
-          </div>
+    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', paddingBottom: 40 }}>
+      {/* Header */}
+      <div style={{ padding: '20px 20px 0', maxWidth: 960, margin: '0 auto' }}>
+        <div className="ae" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
           <div>
-            <h1
-              style={{
-                margin: 0,
-                fontSize: '1.15rem',
-                fontWeight: 900,
-                color: 'var(--text-primary)',
-                lineHeight: 1.2,
-              }}
-            >
+            <h1 style={{ margin: 0, fontSize: '1.4rem', fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
+              <ShieldAlert size={22} style={{ color: 'var(--gold)' }} />
               Admin Panel
             </h1>
-            <div
-              style={{
-                fontSize: '.78rem',
-                fontWeight: 700,
-                color: 'var(--text-muted)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6,
-              }}
-            >
-              <CircleDot
-                size={10}
-                style={{
-                  color: hasLive ? '#ef4444' : 'var(--accent)',
-                }}
-              />
-              {hasLive
-                ? `${liveCount} LIVE`
-                : dataSource === 'backend'
-                ? 'Connected'
-                : 'Connecting...'}
-              {lastUpdate && (
-                <span style={{ opacity: 0.6 }}>
-                  · {formatTimeAgo(lastUpdate)}
-                </span>
-              )}
-            </div>
+            <p style={{ margin: '4px 0 0', fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 600 }}>
+              Match day management · v3 hooks
+            </p>
           </div>
-        </div>
-
-        <div
-          style={{
-            display: 'flex',
-            gap: 8,
-            alignItems: 'center',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              background: 'var(--bg-card)',
-              borderRadius: 10,
-              border: '1px solid var(--border)',
-              overflow: 'hidden',
-            }}
-          >
-            {['today', 'tomorrow'].map((d) => (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            {/* Day toggle */}
+            <div style={{ display: 'flex', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--border)' }}>
               <button
-                key={d}
-                onClick={() => setDay(d)}
+                className="zb"
                 style={{
-                  padding: '10px 16px',
-                  fontSize: '.82rem',
-                  fontWeight: 800,
+                  padding: '10px 16px', fontSize: '.82rem', fontWeight: 800,
+                  background: day === 'today' ? 'rgba(245,197,66,.12)' : 'var(--bg-surface)',
+                  color: day === 'today' ? 'var(--gold)' : 'var(--text-muted)',
                   border: 'none',
-                  cursor: 'pointer',
-                  background:
-                    day === d
-                      ? 'rgba(245,197,66,.12)'
-                      : 'transparent',
-                  color:
-                    day === d ? 'var(--gold)' : 'var(--text-muted)',
-                  transition: 'all .15s',
                 }}
+                onClick={() => setDay('today')}
               >
-                {d === 'today' ? 'Today' : 'Tomorrow'}
-              </button>
-            ))}
-          </div>
-          <button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            className="btn-sm zb"
-            style={{
-              background: 'rgba(245,197,66,.06)',
-              color: 'var(--gold)',
-              border: '1px solid rgba(245,197,66,.15)',
-            }}
-          >
-            <RefreshCw
-              size={15}
-              className={refreshing ? 'asp' : ''}
-            />
-          </button>
-        </div>
-      </div>
-
-      {/* SYNC MESSAGE */}
-      {syncMsg && (
-        <div
-          className="fade-in"
-          style={{
-            margin: '12px 20px 0',
-            padding: '10px 16px',
-            background: 'rgba(0,230,118,.08)',
-            border: '1px solid rgba(0,230,118,.2)',
-            borderRadius: 10,
-            fontSize: '.82rem',
-            fontWeight: 700,
-            color: 'var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <Zap size={14} /> {syncMsg}
-        </div>
-      )}
-
-      {/* STATS BAR */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: 10,
-          padding: '16px 20px 0',
-        }}
-      >
-        <div className="stat-mini count-up">
-          <span className="num" style={{ color: 'var(--gold)' }}>
-            {fx.length}
-          </span>
-          <span className="lbl">Matches</span>
-        </div>
-        <div className="stat-mini count-up" style={{ animationDelay: '60ms' }}>
-          <span
-                       className="num"
-            style={{ color: hasLive ? '#ef4444' : 'var(--accent)' }}
-          >
-            {liveCount}
-          </span>
-          <span className="lbl">Live</span>
-        </div>
-        <div className="stat-mini count-up" style={{ animationDelay: '120ms' }}>
-          <span className="num" style={{ color: 'var(--accent)' }}>
-            {finCnt}
-          </span>
-          <span className="lbl">Finished</span>
-        </div>
-        <div className="stat-mini count-up" style={{ animationDelay: '180ms' }}>
-          <span className="num" style={{ color: 'var(--gold)' }}>
-            {preds.length}
-          </span>
-          <span className="lbl">Featured</span>
-        </div>
-      </div>
-
-      {/* TABS */}
-      <div
-        style={{
-          display: 'flex',
-          gap: 4,
-          padding: '16px 20px 0',
-          overflowX: 'auto',
-          className: 'sh',
-        }}
-      >
-        {TABS.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`tab-btn ${tab === t.key ? 'active' : ''}`}
-          >
-            <t.icon size={16} />
-            {t.label}
-            {t.key === 'zoka' && publishState === 'published' && (
-              <span
-                style={{
-                  width: 8,
-                  height: 8,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  flexShrink: 0,
-                }}
-              />
-            )}
-          </button>
-        ))}
-      </div>
-
-      {/* TAB CONTENT */}
-      <div style={{ padding: '0 20px' }}>
-        {/* ═══ ZOKA PICKS TAB ═══ */}
-        {tab === 'zoka' && (
-          <div className="ae">
-            {/* Zoka Actions */}
-            <div
-              style={{
-                display: 'flex',
-                gap: 10,
-                marginTop: 16,
-                marginBottom: 16,
-                flexWrap: 'wrap',
-              }}
-              className="action-bar"
-            >
-              <div
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  padding: '12px 16px',
-                  background: 'var(--bg-card)',
-                  borderRadius: 12,
-                  border: '1px solid var(--border)',
-                }}
-              >
-                <Star
-                  size={16}
-                  style={{ color: 'var(--gold)', flexShrink: 0 }}
-                />
-                <span
-                  style={{
-                    fontSize: '.88rem',
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  {zokaCount}/{MAX_ZOKA} selected
-                </span>
-                {zokaScored < zokaCount && zokaCount > 0 && (
-                  <span
-                    style={{
-                      fontSize: '.78rem',
-                      fontWeight: 600,
-                      color: 'var(--text-muted)',
-                    }}
-                  >
-                    ({zokaScored} scored)
-                  </span>
-                )}
-              </div>
-              <button
-                onClick={saveZokaPicks}
-                disabled={zokaCount === 0 || savingZoka}
-                className={`btn-ghost ${savedFlash ? 'save-flash' : ''}`}
-                style={{ minWidth: 120 }}
-              >
-                {savingZoka ? (
-                  <Loader size={15} className="asp" />
-                ) : (
-                  <Save size={15} />
-                )}{' '}
-                Save Draft
+                Today
               </button>
               <button
-                onClick={publishZokaPicks}
-                disabled={!zokaReady || publishing}
-                className="btn-primary"
+                className="zb"
                 style={{
-                  background: 'var(--gold)',
-                  color: 'var(--bg-deep)',
-                  minWidth: 140,
+                  padding: '10px 16px', fontSize: '.82rem', fontWeight: 800,
+                  background: day === 'tomorrow' ? 'rgba(245,197,66,.12)' : 'var(--bg-surface)',
+                  color: day === 'tomorrow' ? 'var(--gold)' : 'var(--text-muted)',
+                  border: 'none', borderLeft: '1px solid var(--border)',
                 }}
+                onClick={() => setDay('tomorrow')}
               >
-                {publishing ? (
-                  <Loader size={15} className="asp" />
-                ) : (
-                  <Rocket size={15} />
-                )}{' '}
-                Publish
+                Tomorrow
               </button>
             </div>
-
-            {/* Published Banner */}
-            {publishState === 'published' && (
-              <div
-                className="card-in"
-                style={{
-                  padding: '14px 18px',
-                  background: 'rgba(0,230,118,.06)',
-                  border: '1px solid rgba(0,230,118,.2)',
-                  borderRadius: 12,
-                  marginBottom: 16,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  gap: 12,
-                }}
-              >
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 10,
-                  }}
-                >
-                  <BadgeCheck
-                    size={18}
-                    style={{ color: 'var(--accent)', flexShrink: 0 }}
-                  />
-                  <div>
-                    <div
-                      style={{
-                        fontSize: '.88rem',
-                        fontWeight: 800,
-                        color: 'var(--accent)',
-                      }}
-                    >
-                      Published · {publishedPicks?.matches?.length || 0} picks
-                    </div>
-                    {publishedAt && (
-                      <div
-                        style={{
-                          fontSize: '.75rem',
-                          fontWeight: 600,
-                          color: 'var(--text-muted)',
-                        }}
-                      >
-                        {formatTimeAgo(publishedAt)}
-                      </div>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={unpublishZokaPicks}
-                  disabled={publishing}
-                  className="btn-sm"
-                  style={{
-                    background: 'rgba(239,68,68,.08)',
-                    color: '#ef4444',
-                    border: '1px solid rgba(239,68,68,.2)',
-                  }}
-                >
-                  <X size={14} />
-                </button>
-              </div>
-            )}
-
-            {/* League Filter */}
-            {leagues.length > 1 && (
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginBottom: 14,
-                  overflowX: 'auto',
-                  className: 'sh',
-                  paddingBottom: 4,
-                }}
-              >
-                <button
-                  onClick={() => setLg('all')}
-                  className="league-pill zb"
-                  style={{
-                    background:
-                      lg === 'all'
-                        ? 'rgba(245,197,66,.12)'
-                        : 'var(--bg-surface)',
-                    color:
-                      lg === 'all' ? 'var(--gold)' : 'var(--text-muted)',
-                    border: `1px solid ${
-                      lg === 'all'
-                        ? 'rgba(245,197,66,.25)'
-                        : 'var(--border)'
-                    }`,
-                  }}
-                >
-                  All ({fx.length})
-                </button>
-                {leagues.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => setLg(l.id)}
-                    className="league-pill zb"
-                    style={{
-                      background:
-                        lg === l.id
-                          ? 'rgba(245,197,66,.12)'
-                          : 'var(--bg-surface)',
-                      color:
-                        lg === l.id
-                          ? 'var(--gold)'
-                          : 'var(--text-muted)',
-                      border: `1px solid ${
-                        lg === l.id
-                          ? 'rgba(245,197,66,.25)'
-                          : 'var(--border)'
-                      }`,
-                    }}
-                  >
-                    {l.logo && (
-                      <img
-                        src={l.logo}
-                        alt=""
-                        style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: 3,
-                          objectFit: 'contain',
-                        }}
-                      />
-                    )}
-                    {l.name} ({l.n})
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {/* Match List */}
-            {fxLoad ? (
-              <>
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="sk"
-                    style={{
-                      height: 120,
-                      borderRadius: 14,
-                      marginBottom: 10,
-                    }}
-                  />
-                ))}
-              </>
-            ) : fxErr ? (
-              <div className="empty-state">
-                <AlertTriangle
-                  size={32}
-                  style={{ color: '#ef4444', marginBottom: 12 }}
-                />
-                <p
-                  style={{
-                    color: 'var(--text-muted)',
-                    fontWeight: 700,
-                    margin: '0 0 12px',
-                  }}
-                >
-                  {fxErr === 'NETWORK'
-                    ? 'Network error — check connection'
-                    : 'Failed to load fixtures'}
-                </p>
-                <button
-                  onClick={handleRefresh}
-                  className="btn-ghost"
-                >
-                  <RefreshCw size={15} /> Retry
-                </button>
-              </div>
-            ) : shown.length === 0 ? (
-              <div className="empty-state">
-                <CalendarDays
-                  size={32}
-                  style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-                />
-                <p
-                  style={{
-                    color: 'var(--text-muted)',
-                    fontWeight: 700,
-                    margin: 0,
-                  }}
-                >
-                  No matches found for this day
-                </p>
-              </div>
-            ) : (
-              shown.map((match, idx) =>
-                renderMatchRow(match, idx, 'zoka')
-              )
-            )}
+            <button className="btn-ghost btn-sm" onClick={handleRefresh} disabled={refreshing}>
+              {refreshing ? <Loader size={14} className="asp" /> : <RefreshCw size={14} />}
+              Refresh
+            </button>
           </div>
-        )}
+        </div>
 
-        {/* ═══ MATCHES TAB ═══ */}
-        {tab === 'matches' && (
-          <div className="ae">
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                marginTop: 16,
-                marginBottom: 16,
-                flexWrap: 'wrap',
-                gap: 10,
-              }}
-            >
-              <div
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                }}
-              >
-                <Target
-                  size={16}
-                  style={{ color: 'var(--accent)' }}
-                />
-                <span
-                  style={{
-                    fontSize: '.95rem',
-                    fontWeight: 800,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  Featured Matches
-                </span>
-                <span
-                  style={{
-                    fontSize: '.82rem',
-                    fontWeight: 700,
-                    color: 'var(--text-muted)',
-                  }}
-                >
-                  ({preds.length}/{MAX_FEATURED})
-                </span>
-              </div>
-            </div>
+        {/* Data source indicator */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginBottom: 16,
+          padding: '8px 14px', borderRadius: 10, fontSize: '.78rem', fontWeight: 700,
+          background: dataSource === 'backend' ? 'rgba(0,230,118,.06)' : dataSource === 'error' ? 'rgba(239,68,68,.06)' : 'rgba(255,255,255,.03)',
+          color: dataSource === 'backend' ? 'var(--accent)' : dataSource === 'error' ? '#ef4444' : 'var(--text-muted)',
+          border: `1px solid ${dataSource === 'backend' ? 'rgba(0,230,118,.15)' : dataSource === 'error' ? 'rgba(239,68,68,.15)' : 'var(--border)'}`,
+        }}>
+          <CircleDot size={12} />
+          {dataSource === 'backend' ? 'Live connected' : dataSource === 'error' ? 'Connection error' : 'Connecting...'}
+          {lastUpdate && dataSource === 'backend' && (
+            <span style={{ marginLeft: 'auto', fontWeight: 600 }}>Updated {formatTimeAgo(lastUpdate)}</span>
+          )}
+        </div>
+      </div>
 
-            {/* League Filter */}
-            {leagues.length > 1 && (
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  marginBottom: 14,
-                  overflowX: 'auto',
-                  className: 'sh',
-                  paddingBottom: 4,
-                }}
-              >
-                <button
-                  onClick={() => setLg('all')}
-                  className="league-pill zb"
-                  style={{
-                    background:
-                      lg === 'all'
-                        ? 'rgba(245,197,66,.12)'
-                        : 'var(--bg-surface)',
-                    color:
-                      lg === 'all'
-                        ? 'var(--gold)'
-                        : 'var(--text-muted)',
-                    border: `1px solid ${
-                      lg === 'all'
-                        ? 'rgba(245,197,66,.25)'
-                        : 'var(--border)'
-                    }`,
-                  }}
-                >
-                  All ({fx.length})
-                </button>
-                {leagues.map((l) => (
-                  <button
-                    key={l.id}
-                    onClick={() => setLg(l.id)}
-                    className="league-pill zb"
-                    style={{
-                      background:
-                        lg === l.id
-                          ? 'rgba(245,197,66,.12)'
-                          : 'var(--bg-surface)',
-                      color:
-                        lg === l.id
-                          ? 'var(--gold)'
-                          : 'var(--text-muted)',
-                      border: `1px solid ${
-                        lg === l.id
-                          ? 'rgba(245,197,66,.25)'
-                          : 'var(--border)'
-                      }`,
-                    }}
-                  >
-                    {l.logo && (
-                      <img
-                        src={l.logo}
-                        alt=""
-                        style={{
-                          width: 16,
-                          height: 16,
-                          borderRadius: 3,
-                          objectFit: 'contain',
-                        }}
-                      />
-                    )}
-                    {l.name} ({l.n})
-                  </button>
-                ))}
-              </div>
-            )}
+      {/* Tab bar */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '0 20px' }}>
+        <div style={{ display: 'flex', gap: 4, overflowX: 'auto', borderBottom: '1px solid var(--border)' }} className="sh">
+          {TABS.map((t) => (
+            <button key={t.key} className={`tab-btn ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+              <t.icon size={16} />
+              {t.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
-            {fxLoad ? (
-              <>
-                {[1, 2, 3].map((i) => (
-                  <div
-                    key={i}
-                    className="sk"
-                    style={{
-                      height: 100,
-                      borderRadius: 14,
-                      marginBottom: 10,
-                    }}
-                  />
-                ))}
-              </>
-            ) : shown.length === 0 ? (
-              <div className="empty-state">
-                <CalendarDays
-                  size={32}
-                  style={{ color: 'var(--text-muted)', marginBottom: 12 }}
-                />
-                <p
-                  style={{
-                    color: 'var(--text-muted)',
-                    fontWeight: 700,
-                    margin: 0,
-                  }}
-                >
-                  No matches available
-                </p>
-              </div>
-            ) : (
-              shown.map((match, idx) =>
-                renderMatchRow(match, idx, 'matches')
-              )
-            )}
-          </div>
-        )}
-
-        {/* ═══ RESULTS TAB ═══ */}
+      {/* Tab content */}
+      <div style={{ maxWidth: 960, margin: '0 auto', padding: '20px' }}>
+        {tab === 'zoka' && renderZokaTab()}
+        {tab === 'matches' && renderMatchesTab()}
         {tab === 'results' && renderResultsTab()}
-
-        {/* ═══ STAFF TAB ═══ */}
         {tab === 'staff' && renderStaffTab()}
-
-        {/* ═══ USERS TAB ═══ */}
         {tab === 'users' && renderUsersTab()}
       </div>
 
-      {/* TOAST */}
-      {toast && (
-        <Toast
-          key={toast.key}
-          message={toast.message}
-          type={toast.type}
-          onDone={() => setToast(null)}
-        />
-      )}
+      {/* Toast */}
+      {toast && <Toast key={toast.key} message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
     </div>
   );
 }

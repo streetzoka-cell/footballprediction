@@ -1,4 +1,9 @@
 // FILE: src/pages/Fixtures.jsx
+//
+// v3 NOTE: This file has NO imports from useMatchData.js.
+// It's a standalone fixture viewer using only ../utils/api.
+// No changes needed for v3 hook migration — style ID bumped for consistency.
+//
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   CalendarDays, RefreshCw, WifiOff, Search, X,
@@ -16,9 +21,9 @@ import SEO from '../components/SEO';
    STYLE INJECTION — Clean, Mobile-First, Centered
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('fx-clean-v1')) return;
+  if (document.getElementById('fx-clean-v2')) return;
   const s = document.createElement('style');
-  s.id = 'fx-clean-v1';
+  s.id = 'fx-clean-v2';
   s.textContent = `
     /* ═══ ANIMATIONS ═══ */
     @keyframes fxFadeUp {
@@ -812,7 +817,7 @@ const safeNum = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
 const normalize = (s) =>
   (s || '')
     .toLowerCase()
-    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
 const matchQ = (m, terms) =>
@@ -1264,13 +1269,7 @@ export default function Fixtures() {
               </span>
             )}
             {isLive && auto.auto && (
-              <span
-                style={{
-                  fontSize: '.5rem',
-                  opacity: 0.5,
-                  fontWeight: 600,
-                }}
-              >
+              <span style={{ fontSize: '.5rem', opacity: 0.5, fontWeight: 600 }}>
                 AUTO
               </span>
             )}
@@ -1283,32 +1282,19 @@ export default function Fixtures() {
               <span className="fx-badge fx-badge-ft">
                 FT{' '}
                 {auto.auto && (
-                  <span
-                    style={{
-                      fontSize: '.5rem',
-                      opacity: 0.5,
-                      fontWeight: 600,
-                    }}
-                  >
+                  <span style={{ fontSize: '.5rem', opacity: 0.5, fontWeight: 600 }}>
                     (EST)
                   </span>
                 )}
               </span>
             )}
-            {isKO && (
-              <span className="fx-kickoff-badge">KICK OFF</span>
-            )}
+            {isKO && <span className="fx-kickoff-badge">KICK OFF</span>}
             {isLive && minute > 0 && (
               <span className="fx-minute">{minute}&apos;</span>
             )}
             {isHT && (
-              <span
-                className="fx-minute"
-                style={{ color: '#f97316' }}
-              >
-                45+
-                {minute > 45 ? minute - 45 : ''}
-                &apos;
+              <span className="fx-minute" style={{ color: '#f97316' }}>
+                45+{minute > 45 ? minute - 45 : ''}&apos;
               </span>
             )}
             {!isLive && !isHT && !isFT && m.kickoff && (
@@ -1322,55 +1308,28 @@ export default function Fixtures() {
             <div className="fx-team-col home">
               <div className="fx-team-info">
                 {m.homeLogo && (
-                  <img
-                    className="fx-team-logo"
-                    src={m.homeLogo}
-                    alt=""
-                    loading="lazy"
-                  />
+                  <img className="fx-team-logo" src={m.homeLogo} alt="" loading="lazy" />
                 )}
                 <span className="fx-team-name">
-                  {m.homeTeam?.shortName ||
-                    m.homeTeam?.name ||
-                    'TBD'}
+                  {m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}
                 </span>
               </div>
               <button
-                className={`fx-fav ${hFav ? 'active' : ''} ${
-                  favPopId === String(m.homeTeam?.id) ? 'pop' : ''
-                }`}
-                onClick={(e) =>
-                  toggleFav(e, m.homeTeam?.id, {
-                    name: m.homeTeam?.name,
-                    logo: m.homeTeam?.logo,
-                  })
-                }
+                className={`fx-fav ${hFav ? 'active' : ''} ${favPopId === String(m.homeTeam?.id) ? 'pop' : ''}`}
+                onClick={(e) => toggleFav(e, m.homeTeam?.id, { name: m.homeTeam?.name, logo: m.homeTeam?.logo })}
               >
-                <Star
-                  size={11}
-                  fill={hFav ? 'var(--gold)' : 'none'}
-                />
+                <Star size={11} fill={hFav ? 'var(--gold)' : 'none'} />
               </button>
             </div>
 
             <div className="fx-score-center">
               {auto.showScore ? (
                 <div className="fx-score-pair">
-                  <span
-                    className={`fx-score-num ${
-                      isLive ? 'live' : ''
-                    } ${popSide === 'home' ? 'pop' : ''}`}
-                    key={`h-${m.homeScore}-${popSide}`}
-                  >
+                  <span className={`fx-score-num ${isLive ? 'live' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.homeScore}-${popSide}`}>
                     {m.homeScore ?? 0}
                   </span>
                   <span className="fx-score-sep">-</span>
-                  <span
-                    className={`fx-score-num ${
-                      isLive ? 'live' : ''
-                    } ${popSide === 'away' ? 'pop' : ''}`}
-                    key={`a-${m.awayScore}-${popSide}`}
-                  >
+                  <span className={`fx-score-num ${isLive ? 'live' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.awayScore}-${popSide}`}>
                     {m.awayScore ?? 0}
                   </span>
                 </div>
@@ -1382,34 +1341,17 @@ export default function Fixtures() {
             <div className="fx-team-col away">
               <div className="fx-team-info">
                 {m.awayLogo && (
-                  <img
-                    className="fx-team-logo"
-                    src={m.awayLogo}
-                    alt=""
-                    loading="lazy"
-                  />
+                  <img className="fx-team-logo" src={m.awayLogo} alt="" loading="lazy" />
                 )}
                 <span className="fx-team-name">
-                  {m.awayTeam?.shortName ||
-                    m.awayTeam?.name ||
-                    'TBD'}
+                  {m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}
                 </span>
               </div>
               <button
-                className={`fx-fav ${aFav ? 'active' : ''} ${
-                  favPopId === String(m.awayTeam?.id) ? 'pop' : ''
-                }`}
-                onClick={(e) =>
-                  toggleFav(e, m.awayTeam?.id, {
-                    name: m.awayTeam?.name,
-                    logo: m.awayTeam?.logo,
-                  })
-                }
+                className={`fx-fav ${aFav ? 'active' : ''} ${favPopId === String(m.awayTeam?.id) ? 'pop' : ''}`}
+                onClick={(e) => toggleFav(e, m.awayTeam?.id, { name: m.awayTeam?.name, logo: m.awayTeam?.logo })}
               >
-                <Star
-                  size={11}
-                  fill={aFav ? 'var(--gold)' : 'none'}
-                />
+                <Star size={11} fill={aFav ? 'var(--gold)' : 'none'} />
               </button>
             </div>
           </div>
@@ -1446,21 +1388,9 @@ export default function Fixtures() {
                   }`,
                 }}
               >
-                {isStatusAnim.type === 'ht' && (
-                  <>
-                    <Pause size={16} /> HALF TIME
-                  </>
-                )}
-                {isStatusAnim.type === 'ft' && (
-                  <>
-                    <Flag size={16} /> FULL TIME
-                  </>
-                )}
-                {isStatusAnim.type === 'live' && (
-                  <>
-                    <Zap size={16} /> KICK OFF
-                  </>
-                )}
+                {isStatusAnim.type === 'ht' && <><Pause size={16} /> HALF TIME</>}
+                {isStatusAnim.type === 'ft' && <><Flag size={16} /> FULL TIME</>}
+                {isStatusAnim.type === 'live' && <><Zap size={16} /> KICK OFF</>}
               </div>
             </div>
           )}
@@ -1489,81 +1419,33 @@ export default function Fixtures() {
     const has = periods.some((p) => p.h != null || p.a != null);
     if (!has) {
       return (
-        <div
-          style={{
-            padding: 18,
-            textAlign: 'center',
-            color: 'var(--text-muted)',
-            fontSize: '.78rem',
-          }}
-        >
+        <div style={{ padding: 18, textAlign: 'center', color: 'var(--text-muted)', fontSize: '.78rem' }}>
           Score details appear once the match begins
         </div>
       );
     }
     return (
       <div style={{ padding: '10px 0 4px' }}>
-        <div
-          style={{
-            fontSize: '.62rem',
-            fontWeight: 700,
-            color: 'var(--text-muted)',
-            textTransform: 'uppercase',
-            letterSpacing: '.05em',
-            padding: '0 18px 8px',
-          }}
-        >
+        <div style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em', padding: '0 18px 8px' }}>
           Score Details
         </div>
         {periods.map((p) =>
           p.h != null || p.a != null ? (
             <div key={p.l} className="fx-score-row">
-              <span
-                style={{
-                  width: 40,
-                  fontWeight: 700,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-display)',
-                  textAlign: 'right',
-                }}
-              >
+              <span style={{ width: 40, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', textAlign: 'right' }}>
                 {p.h ?? '-'}
               </span>
-              <span
-                style={{
-                  flex: 1,
-                  textAlign: 'center',
-                  color: 'var(--text-muted)',
-                  fontWeight: 600,
-                  fontSize: '.68rem',
-                }}
-              >
+              <span style={{ flex: 1, textAlign: 'center', color: 'var(--text-muted)', fontWeight: 600, fontSize: '.68rem' }}>
                 {p.l}
               </span>
-              <span
-                style={{
-                  width: 40,
-                  fontWeight: 700,
-                  color: 'var(--text-primary)',
-                  fontFamily: 'var(--font-display)',
-                  textAlign: 'left',
-                }}
-              >
+              <span style={{ width: 40, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'var(--font-display)', textAlign: 'left' }}>
                 {p.a ?? '-'}
               </span>
             </div>
           ) : null
         )}
         {match.referee && (
-          <div
-            style={{
-              padding: '8px 18px 4px',
-              fontSize: '.68rem',
-              color: 'var(--text-muted)',
-              borderTop: '1px solid rgba(255,255,255,.04)',
-              marginTop: 4,
-            }}
-          >
+          <div style={{ padding: '8px 18px 4px', fontSize: '.68rem', color: 'var(--text-muted)', borderTop: '1px solid rgba(255,255,255,.04)', marginTop: 4 }}>
             ⚽ {match.referee}
           </div>
         )}
@@ -1577,35 +1459,13 @@ export default function Fixtures() {
   const Skeleton = () => (
     <div className="fx-container" style={{ paddingTop: 20 }}>
       <div style={{ display: 'flex', gap: 4, marginBottom: 16 }}>
-        <div
-          className="fx-sk"
-          style={{ height: 52, flex: 1, borderRadius: 12 }}
-        />
-        <div
-          className="fx-sk"
-          style={{ height: 52, flex: 1, borderRadius: 12 }}
-        />
-        <div
-          className="fx-sk"
-          style={{ height: 52, flex: 1, borderRadius: 12 }}
-        />
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="fx-sk" style={{ height: 52, flex: 1, borderRadius: 12 }} />
+        ))}
       </div>
-      <div
-        className="fx-sk"
-        style={{ height: 88, borderRadius: 12, marginBottom: 6 }}
-      />
-      <div
-        className="fx-sk"
-        style={{ height: 88, borderRadius: 12, marginBottom: 6 }}
-      />
-      <div
-        className="fx-sk"
-        style={{ height: 88, borderRadius: 12, marginBottom: 6 }}
-      />
-      <div
-        className="fx-sk"
-        style={{ height: 88, borderRadius: 12, marginBottom: 6 }}
-      />
+      {[1, 2, 3, 4].map((i) => (
+        <div key={i} className="fx-sk" style={{ height: 88, borderRadius: 12, marginBottom: 6 }} />
+      ))}
     </div>
   );
 
@@ -1623,381 +1483,243 @@ export default function Fixtures() {
       },
       NO_DATA: {
         icon: <CalendarDays size={22} />,
-        bg: 'rgba(59,130,246,.08)',
-        color: '#3b82f6',
-        t: 'No matches found',
-        d: 'There are no fixtures scheduled for this date.',
+        bg: 'rgba(245,197,66,.08)',
+        color: 'var(--gold)',
+        t: 'No matches scheduled',
+        d: `No fixtures found for ${dateLabel(date).toLowerCase()}. Try another day.`,
       },
+    }[error] || {
+      icon: <WifiOff size={22} />,
+      bg: 'rgba(239,68,68,.08)',
+      color: '#ef4444',
+      t: 'Something went wrong',
+      d: 'Failed to load fixtures. Please try again.',
     };
-    const c = cfg[error] || cfg.NETWORK;
+
     return (
       <div className="fx-empty fx-enter">
-        <div
-          className="fx-empty-icon fx-float"
-          style={{ background: c.bg, color: c.color }}
-        >
-          {c.icon}
+        <div className="fx-empty-icon" style={{ background: cfg.bg, color: cfg.color }}>
+          {cfg.icon}
         </div>
-        <div
-          style={{
-            fontSize: '.95rem',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-          }}
-        >
-          {c.t}
+        <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>
+          {cfg.t}
         </div>
-        <div
-          style={{
-            fontSize: '.78rem',
-            color: 'var(--text-muted)',
-            maxWidth: 300,
-            lineHeight: 1.5,
-          }}
-        >
-          {c.d}
+        <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 500, maxWidth: 280, lineHeight: 1.5 }}>
+          {cfg.d}
         </div>
         <button
           className="fx-btn"
+          onClick={handleRefresh}
           style={{
-            display: 'inline-flex',
+            marginTop: 8,
+            padding: '10px 24px',
+            borderRadius: 10,
+            background: 'rgba(255,255,255,.04)',
+            border: '1px solid var(--border)',
+            color: 'var(--text-primary)',
+            fontSize: '.82rem',
+            fontWeight: 700,
+            display: 'flex',
             alignItems: 'center',
             gap: 6,
-            padding: '10px 22px',
-            borderRadius: 10,
-            background: 'var(--accent)',
-            color: 'var(--bg-deep)',
-            fontWeight: 700,
-            fontSize: '.82rem',
-            border: 'none',
           }}
-          onClick={handleRefresh}
         >
-          <RefreshCw
-            size={14}
-            style={isRefreshing ? { animation: 'spin 1s linear infinite' } : {}}
-          />{' '}
-          Try Again
+          <RefreshCw size={14} /> Try Again
         </button>
       </div>
     );
   };
 
   /* ═══════════════════════════════════════════════════════════
-     FILTERED EMPTY STATE
+     MAIN RENDER
      ═══════════════════════════════════════════════════════════ */
-  const FilteredEmpty = () => (
-    <div className="fx-empty fx-enter">
-      <div
-        className="fx-empty-icon fx-float"
-        style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)' }}
-      >
-        <Search size={22} />
-      </div>
-      <div
-        style={{
-          fontSize: '.95rem',
-          fontWeight: 700,
-          color: 'var(--text-primary)',
-        }}
-      >
-        No matches match your search
-      </div>
-      <div
-        style={{
-          fontSize: '.78rem',
-          color: 'var(--text-muted)',
-          maxWidth: 300,
-          lineHeight: 1.5,
-        }}
-      >
-        {searchQ
-          ? `No results for "${searchQ}"`
-          : 'No favorite teams playing today'}
-      </div>
-      <button
-        className="fx-btn"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          padding: '10px 22px',
-          borderRadius: 10,
-          background: 'rgba(255,255,255,.06)',
-          color: 'var(--text-primary)',
-          fontWeight: 700,
-          fontSize: '.82rem',
-          border: '1px solid var(--border)',
-        }}
-        onClick={() => {
-          setSearchQ('');
-          setSearchOpen(false);
-          setFavFilter(false);
-        }}
-      >
-        <X size={14} /> Clear Filters
-      </button>
+  if (loading) return (
+    <div className="fx-page">
+      <SEO
+        title="Fixtures"
+        description="Live football scores, fixtures, and results on ZOKASCORE."
+        keywords="football fixtures, live scores, football results, ZOKASCORE fixtures"
+        url="https://zokascore.com/fixtures"
+      />
+      <Skeleton />
     </div>
   );
 
-  /* ═══════════════════════════════════════════════════════════
-     RENDER
-     ═══════════════════════════════════════════════════════════ */
-  if (loading) {
-    return (
-      <div className="fx-page">
-        <Skeleton />
+  if (error) return (
+    <div className="fx-page">
+      <SEO
+        title="Fixtures"
+        description="Live football scores, fixtures, and results on ZOKASCORE."
+        keywords="football fixtures, live scores, football results, ZOKASCORE fixtures"
+        url="https://zokascore.com/fixtures"
+      />
+      <div className="fx-container">
+        <ErrorView />
       </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="fx-page">
-        <div className="fx-container fx-enter">
-          <div className="fx-header">
-            <h1>⚽ Fixtures</h1>
-          </div>
-          <ErrorView />
-        </div>
-      </div>
-    );
-  }
+    </div>
+  );
 
   return (
     <div className="fx-page">
       <SEO
-        title={
-          liveCount > 0
-            ? `${liveCount} LIVE Matches`
-            : 'Football Fixtures & Live Scores'
-        }
-        description={
-          liveCount > 0
-            ? `${liveCount} live football matches right now.`
-            : "Today's football fixtures with live scores."
-        }
+        title="Fixtures"
+        description="Live football scores, fixtures, and results on ZOKASCORE."
+        keywords="football fixtures, live scores, football results, ZOKASCORE fixtures"
+        url="https://zokascore.com/fixtures"
       />
 
+      {/* Goal notification */}
       {goalNotif && (
         <div className="fx-goal-notif" key={goalNotif.key}>
-          <span style={{ fontSize: '1.1rem' }}>⚽</span>
-          <span
-            style={{
-              fontSize: '.95rem',
-              fontWeight: 900,
-              letterSpacing: '.04em',
-            }}
-          >
-            GOAL!
-          </span>
-          <span
-            style={{
-              width: 1,
-              height: 14,
-              background: 'rgba(255,255,255,.25)',
-              borderRadius: 1,
-            }}
-          />
-          <span
-            style={{
-              fontSize: '.78rem',
-              fontWeight: 600,
-              opacity: 0.95,
-            }}
-          >
-            {goalNotif.text}
-          </span>
+          <Zap size={16} /> {goalNotif.text}
         </div>
       )}
 
-      <div className="fx-container fx-enter">
-        <div className="fx-header">
-          <h1>⚽ Fixtures</h1>
-          <span className="sub">
-            {dateLabel(date)}
+      <div className="fx-container">
+        {/* Header */}
+        <div className="fx-header fx-enter">
+          <h1>{dateLabel(date)}</h1>
+          <div className="sub">
+            {filtered.length} match{filtered.length !== 1 ? 'es' : ''}
             {liveCount > 0 && (
-              <span
-                style={{
-                  color: '#ef4444',
-                  fontWeight: 700,
-                  marginLeft: 6,
-                }}
-              >
-                · {liveCount} LIVE
+              <span style={{ color: '#ef4444', fontWeight: 700 }}>
+                {' '}· {liveCount} live
               </span>
             )}
-          </span>
+          </div>
         </div>
 
-        <div className="fx-date-tabs">
+        {/* Date tabs */}
+        <div className="fx-date-tabs fx-enter" style={{ animationDelay: '50ms' }}>
           {DATES.map((d) => (
             <button
               key={d}
               className={`fx-date-tab ${date === d ? 'active' : ''}`}
               onClick={() => setDate(d)}
             >
-              <span>{dateLabel(d).split(' ')[0]}</span>
+              <span>{dateLabel(d)}</span>
               <span className="day-label">{dateShort(d)}</span>
             </button>
           ))}
         </div>
 
-        <div className="fx-actions">
-          <button
-            className={`fx-action-btn ${searchOpen ? 'active' : ''}`}
-            onClick={() => {
-              setSearchOpen((p) => !p);
-              if (searchOpen) setSearchQ('');
-            }}
-          >
-            {searchOpen ? <X size={13} /> : <Search size={13} />}
-            {searchOpen ? 'Close' : 'Search'}
-          </button>
-          <button
-            className={`fx-action-btn ${favFilter ? 'active' : ''}`}
-            onClick={() => setFavFilter((p) => !p)}
-          >
-            <Star
-              size={13}
-              fill={favFilter ? 'var(--gold)' : 'none'}
-            />
-            Favs
-          </button>
+        {/* Actions */}
+        <div className="fx-actions fx-enter" style={{ animationDelay: '80ms' }}>
           <button
             className={`fx-action-btn ${soundOn ? 'active' : ''}`}
             onClick={() => {
-              setSoundOn((p) => !p);
+              setSoundOn(!soundOn);
               Sound.on = !soundOn;
             }}
           >
             {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />}
-            {soundOn ? 'On' : 'Off'}
+            Sound
+          </button>
+          {favs.length > 0 && (
+            <button
+              className={`fx-action-btn ${favFilter ? 'active' : ''}`}
+              onClick={() => setFavFilter(!favFilter)}
+            >
+              <Star size={13} fill={favFilter ? 'var(--accent)' : 'none'} />
+              Favs ({favs.length})
+            </button>
+          )}
+          <button
+            className={`fx-action-btn ${searchOpen ? 'active' : ''}`}
+            onClick={() => {
+              setSearchOpen(!searchOpen);
+              if (searchOpen) setSearchQ('');
+            }}
+          >
+            <Search size={13} /> Search
           </button>
           <button
             className="fx-action-btn"
             onClick={handleRefresh}
-            disabled={isRefreshing}
+            style={{ opacity: isRefreshing ? 0.5 : 1 }}
           >
-            <RefreshCw
-              size={13}
-              style={isRefreshing ? { animation: 'spin 1s linear infinite' } : {}}
-            />
+            <RefreshCw size={13} style={isRefreshing ? { animation: 'fxShimmer .8s linear infinite' } : {}} />
+            Refresh
           </button>
         </div>
 
-        <div
-          className={`fx-search-wrap ${searchOpen ? 'open' : 'closed'}`}
-        >
+        {/* Search */}
+        <div className={`fx-search-wrap ${searchOpen ? 'open' : 'closed'}`}>
           <div className="fx-search-bar">
-            <Search
-              size={14}
-              style={{ color: 'var(--text-muted)', flexShrink: 0 }}
-            />
+            <Search size={15} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
             <input
+              placeholder="Search teams or leagues..."
               value={searchQ}
               onChange={(e) => setSearchQ(e.target.value)}
-              placeholder="Search teams, leagues..."
               autoFocus={searchOpen}
             />
             {searchQ && (
               <button
-                onClick={() => setSearchQ('')}
-                style={{
-                  background: 'rgba(255,255,255,.06)',
-                  border: 'none',
-                  borderRadius: 6,
-                  width: 22,
-                  height: 22,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  color: 'var(--text-muted)',
-                  cursor: 'pointer',
-                  fontSize: '.7rem',
-                  flexShrink: 0,
-                }}
+                onClick={() => { setSearchQ(''); }}
+                style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 2, display: 'flex' }}
               >
-                ✕
+                <X size={14} />
               </button>
             )}
           </div>
         </div>
 
-        {liveMatches.length > 0 && (
-          <div className="fx-ticker">
+        {/* Live ticker */}
+        {liveCount > 0 && (
+          <div className="fx-ticker fx-enter" style={{ animationDelay: '100ms' }}>
             {liveMatches.map((m) => (
               <div
                 key={m.id}
                 className="fx-ticker-item"
                 onClick={() => {
-                  setExpanded(String(m.id));
-                  document
-                    .getElementById(`fx-card-${m.id}`)
-                    ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                  const el = document.getElementById(`fx-card-${m.id}`);
+                  if (el) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }}
               >
-                <span
-                  className="fx-live-dot"
-                  style={{ width: 4, height: 4 }}
-                />
-                <span
-                  style={{
-                    color: 'rgba(255,255,255,.7)',
-                    fontWeight: 600,
-                    fontSize: '.64rem',
-                  }}
-                >
-                  {m.homeTeam?.shortName || m.homeTeam?.name}
-                </span>
                 <span className="fx-ticker-score">
                   {m.homeScore ?? 0}-{m.awayScore ?? 0}
                 </span>
-                <span
-                  style={{
-                    color: 'rgba(255,255,255,.7)',
-                    fontWeight: 600,
-                    fontSize: '.64rem',
-                  }}
-                >
-                  {m.awayTeam?.shortName || m.awayTeam?.name}
+                <span style={{ color: 'rgba(255,255,255,.7)' }}>
+                  {m.homeTeam?.shortName || m.homeTeam?.name?.slice(0, 3)}
                 </span>
               </div>
             ))}
           </div>
         )}
 
-        {grouped.map((league, i) => (
-          <div
-            key={league.id}
-            className="fx-league"
-            style={{ animationDelay: `${i * 40}ms` }}
-          >
-            <div className="fx-league-header">
-              {league.logo && (
-                <img src={league.logo} alt="" loading="lazy" />
-              )}
-              <span>{league.name}</span>
-              <span className="count">{league.matches.length}</span>
+        {/* Match list by league */}
+        {filtered.length === 0 ? (
+          <div className="fx-empty fx-enter">
+            <div className="fx-empty-icon" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)' }}>
+              <Search size={22} />
             </div>
-            {league.matches.map((m, idx) => renderCard(m, idx))}
+            <div style={{ fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+              No matches found
+            </div>
+            <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', fontWeight: 500 }}>
+              {searchQ ? 'Try a different search term' : favFilter ? 'No favourite teams in this list' : 'No fixtures for this day'}
+            </div>
           </div>
-        ))}
-
-        {filtered.length === 0 && !loading && !error && (
-          <FilteredEmpty />
-        )}
-
-        {showJump && (
-          <button className="fx-jump-btn" onClick={jumpToLive}>
-            <span
-              className="fx-live-dot"
-              style={{ width: 6, height: 6 }}
-            />
-            Jump to Live
-          </button>
+        ) : (
+          grouped.map((league) => (
+            <div key={league.id} className="fx-league">
+              <div className="fx-league-header">
+                {league.logo && <img src={league.logo} alt="" />}
+                <span>{league.name}</span>
+                <span className="count">{league.matches.length}</span>
+              </div>
+              {league.matches.map((m, i) => renderCard(m, i))}
+            </div>
+          ))
         )}
       </div>
+
+      {/* Jump to live */}
+      {showJump && liveCount > 0 && (
+        <button className="fx-jump-btn" onClick={jumpToLive}>
+          <Zap size={14} /> Jump to Live ({liveCount})
+        </button>
+      )}
     </div>
   );
 }
