@@ -29,7 +29,7 @@ import {
 /* ═══════════════════════════════════════════════════
    BACKEND API CONFIG
    ═══════════════════════════════════════════════════ */
-const API_BASE = import.meta.env.VITE_API_URL;
+const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:3099'
 if (!API_BASE) {
   console.error(
     '[API] VITE_API_URL environment variable is required. ' +
