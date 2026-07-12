@@ -346,7 +346,7 @@ function AppContent() {
    MAIN APP
 ═══════════════════════════════════════════════════════════════ */
 
-export default function App() {
+export default  function App() {
   return (
     <AuthProvider>
       <AppContent />
