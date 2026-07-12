@@ -129,7 +129,7 @@ const injectStyles = () => {
     .mg-tbl .gdp{color:var(--accent,#00e676)}.mg-tbl .gdn{color:#ef4444}
     .mg-tbl .zu{border-left:3px solid #3b82f6}.mg-tbl .ze{border-left:3px solid #f97316}.mg-tbl .zc{border-left:3px solid #22c55e}.mg-tbl .zr{border-left:3px solid #ef4444}
     .mg-zb{display:flex;gap:0;margin-bottom:8px;padding:0 4px}
-    .mg-zi{flex:1;padding:3px 6px;border-radius:3px 3px 0 0;font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:center}
+    .mg-zi{flex:1;padding:3.1px 6px;border-radius:3px 3px 0 0;font-size:.5rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;text-align:center}
     .mg-slbl{padding:10px 12px 4px;font-size:.64rem;font-weight:700;color:var(--text-muted,#4a5568);text-transform:uppercase;letter-spacing:.05em}
     .mg-tg{display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:7px}
     .mg-tcard{background:var(--bg-card,#0c1420);border:1px solid var(--border,#1a2233);border-radius:11px;padding:14px 10px;text-align:center;transition:all .18s ease}
