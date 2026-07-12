@@ -1,4 +1,4 @@
-﻿import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { collection, getDocs, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 import { footballDb } from '../config/footballFirebase';
 
@@ -29,7 +29,7 @@ export function FootballDataProvider({ children }) {
   // Check connection
   useEffect(() => {
     if (!footballDb) {
-      console.error('[FootballData] footballDb is NULL — check VITE_FOOTBALL_FB_* env vars in your .env file');
+      console.error('[FootballData] footballDb is NULL � check VITE_FOOTBALL_FB_* env vars in your .env file');
       setLoading(false);
       return;
     }

@@ -1,47 +1,34 @@
-// FILE: src/pages/Home.jsx — v3 (cleaned for useMatchData v3)
-//
-// v3 NOTES: No hook API changes affect this page.
-// - useActivePredictions: same API, now uses 30-min cache + 10-min poll
-// - useAllUserPredictions: same API, now reads from daily_leaderboard cache (0 extra reads)
-// - useMyPredictions: same API, 30-min cache
-// - usePredictionResults: same API, 30-min cache
-// - useZokaPicks: same API, 30-min cache
-// - todayStr: unchanged
-//
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+// ═══════════════════════════════════════════════════════════════
+// FILE: src/pages/Home.jsx
+// v20.0 — COMPLETE — Multi-date featured/zoka + Admin-aligned cards
+// ═══════════════════════════════════════════════════════════════
+
+import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Zap, Users, Target,
   Trophy, CalendarDays, Flame, ChevronRight, ChevronDown,
-  WifiOff, LogIn, Star, CheckCircle, Clock,
+  WifiOff, LogIn, Star, CheckCircle, CheckCircle2, Clock,
   Loader, Lock, Play, Radio, Crown, Sparkles,
   Activity, Medal, BarChart3, CircleDot, ArrowUpRight,
-  Sun, Moon, CloudSun, UsersRound, Timer, Gauge, Eye, ChevronUp,
+  Sun, Moon, CloudSun, Timer, Gauge, Eye, ChevronUp,
   Info, Pause, PlayCircle, XCircle, TrendingUp as TrendIcon
 } from 'lucide-react';
-
-import {
-  fetchFixtures,
-  subscribeToTodayFixtures,
-} from '../utils/api';
+import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
 import { useAuth } from '../context/AuthContext';
-import {
-  useActivePredictions,
-  useAllUserPredictions,
-  useMyPredictions,
-  usePredictionResults,
-  useZokaPicks,
-  todayStr,
-} from '../hooks/useMatchData';
+import { dataLayer, todayStr } from '../utils/dataLayer';
+import { eventBus, EVENT } from '../utils/eventBus';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs } from 'firebase/firestore';
 import SEO from '../components/SEO';
-/* ═══════════════════════════════════════════════════════════════
+
+/* ═══════════════════════════════════════
    HELPERS
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 const Sunset = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
-    <path d="M12 10V2"/><path d="m4.93 10.93 1.41 1.41"/><path d="M2 18h2"/><path d="M20 18h2"/><path d="m19.07 10.93-1.41 1.41"/><path d="M22 22H2"/><path d="m16 6-4 4-4-4"/><path d="M16 18a4 4 0 0 0-8 0"/>
+    <path d="M12 10V2" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" />
+    <path d="m16 6-4 4-4-4" /><path d="M16 18a4 4 0 0 0-8 0" />
   </svg>
 );
 
@@ -54,12 +41,23 @@ const getGreeting = () => {
   return { text: 'Night owl?', icon: <Moon size={18} />, emoji: '🦉' };
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   STATUS ESTIMATOR
-   ═══════════════════════════════════════════════════════════════ */
-const LIVE_SET = new Set(['1H', '2H', 'ET', 'BT', 'P', '1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'OT']);
+const dateOffset = (o = 0) => {
+  const d = new Date(); d.setDate(d.getDate() + o);
+  return d.toISOString().split('T')[0];
+};
+const dateLabel = (d) => {
+  const t = todayStr(), tm = dateOffset(1), ys = dateOffset(-1);
+  if (d === t) return 'Today';
+  if (d === tm) return 'Tomorrow';
+  if (d === ys) return 'Yesterday';
+  const dt = new Date(d + 'T12:00:00');
+  const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  return `${days[dt.getDay()]} ${d.slice(5)}`;
+};
+
+const LIVE_SET = new Set(['1H', '2H', 'ET', 'BT', 'P', 'IN_PLAY']);
 const HT_SET = new Set(['HT', 'BT']);
-const FINISHED_SET = new Set(['FT', 'AET', 'PEN', 'finished', 'PST']);
+const FINISHED_SET = new Set(['FT', 'AET', 'PEN', 'FINISHED', 'PST']);
 
 function estimateMatchStatus(fix) {
   if (fix.isLive || LIVE_SET.has(fix.status)) return 'live';
@@ -68,23 +66,24 @@ function estimateMatchStatus(fix) {
   if (fix.kickoff && fix.kickoff !== '--:--' && fix.kickoff !== 'TBD') {
     const parts = fix.kickoff.split(':');
     if (parts.length === 2) {
-      const h = parseInt(parts[0], 10);
-      const m = parseInt(parts[1], 10);
+      const h = parseInt(parts[0], 10), m = parseInt(parts[1], 10);
       if (!isNaN(h) && !isNaN(m)) {
-        const now = new Date();
-        const kickoffTime = new Date();
-        kickoffTime.setHours(h, m, 0, 0);
-        if ((now - kickoffTime) / 60000 > 110) return 'ft-estimated';
+        const now = new Date(), kt = new Date();
+        kt.setHours(h, m, 0, 0);
+        if ((now - kt) / 60000 > 110) return 'ft-estimated';
       }
     }
   }
   return 'upcoming';
 }
 
-/* ═══════════════════════════════════════════════════════════════
+const FUTURE_DAYS = 3;
+const FETCH_DATES = Array.from({ length: FUTURE_DAYS + 1 }, (_, i) => dateOffset(i));
+
+/* ═══════════════════════════════════════
    ANIMATED NUMBER
-   ═══════════════════════════════════════════════════════════════ */
-function AnimNum({ value, duration = 700, delay = 0 }) {
+   ═══════════════════════════════════════ */
+function AnimNum({ value, duration = 700, delay = 0, suffix = '' }) {
   const [display, setDisplay] = useState(0);
   const raf = useRef(null);
   useEffect(() => {
@@ -93,20 +92,19 @@ function AnimNum({ value, duration = 700, delay = 0 }) {
     const start = performance.now() + delay;
     const animate = (now) => {
       if (now < start) { raf.current = requestAnimationFrame(animate); return; }
-      const elapsed = now - start;
-      const progress = Math.min(elapsed / duration, 1);
+      const progress = Math.min((now - start) / duration, 1);
       setDisplay(Math.round((1 - Math.pow(1 - progress, 3)) * target));
       if (progress < 1) raf.current = requestAnimationFrame(animate);
     };
     raf.current = requestAnimationFrame(animate);
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
   }, [value, duration, delay]);
-  return <>{display.toLocaleString()}</>;
+  return <>{display.toLocaleString()}{suffix}</>;
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    LIVE CLOCK
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 function LiveClock() {
   const [time, setTime] = useState('');
   useEffect(() => {
@@ -117,45 +115,47 @@ function LiveClock() {
   }, []);
   if (!time) return null;
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 10, background: 'rgba(255,255,255,.03)', border: '1.5px solid var(--border)', fontFamily: 'var(--font-display)', fontSize: '.88rem', fontWeight: 800, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', letterSpacing: '.03em', flexShrink: 0 }}>
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 10, background: 'rgba(255,255,255,.03)', border: '1.5px solid var(--border)', fontFamily: 'var(--font-display,monospace)', fontSize: '.88rem', fontWeight: 800, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', letterSpacing: '.03em', flexShrink: 0 }}>
       <Timer size={13} style={{ opacity: .6 }} />{time}
     </span>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    ZOKA RESULT BADGE
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 function ZokaResultBadge({ pick }) {
-  if (!pick.adminPick || pick.status !== 'finished') return null;
+  if (!pick?.adminPick || pick.status !== 'finished') return null;
   const h = pick.adminPick.home, a = pick.adminPick.away;
   const ph = pick.homeScore, pa = pick.awayScore;
-  if (ph == null || pa == null) return (
-    <span className="zoka-badge-pending">PENDING</span>
-  );
-  if (h === ph && a === pa) return (
-    <span className="zoka-badge-exact"><CheckCircle size={12} /> EXACT</span>
-  );
-  const pR = h > a ? 'H' : h < a ? 'A' : 'D';
-  const aR = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
-  if (pR === aR) return (
-    <span className="zoka-badge-result"><TrendIcon size={12} /> RESULT</span>
-  );
+  if (ph == null || pa == null) return <span className="abdg pn">PENDING</span>;
+  if (h === ph && a === pa) return <span className="abdg ex"><CheckCircle2 size={9} /> EXACT +10</span>;
+  if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="abdg rs"><TrendIcon size={9} /> RESULT +3</span>;
+  return <span className="abdg ms"><XCircle size={9} /> MISS</span>;
+}
+
+/* ═══════════════════════════════════════
+   DATE DIVIDER
+   ═══════════════════════════════════════ */
+function DateDivider({ date, accent }) {
   return (
-    <span className="zoka-badge-miss"><XCircle size={12} /> MISS</span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 10px', fontSize: '.72rem', fontWeight: 800, color: accent || 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
+      <CalendarDays size={12} style={{ opacity: .7 }} />
+      <span>{dateLabel(date)}</span>
+      <span style={{ opacity: .4, fontWeight: 600, fontSize: '.65rem' }}>{date}</span>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
+    </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    STYLE INJECTION
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('home-v3')) return;
+  if (document.getElementById('home-v20-css')) return;
   const s = document.createElement('style');
-  s.id = 'home-v3';
+  s.id = 'home-v20-css';
   s.textContent = `
-:root{--bg-deep:#0a0a0b;--bg-surface:#0f0f11;--bg-card:#141418;--border:rgba(255,255,255,.07);--text-primary:#f0f0f0;--text-muted:#888;--accent:#00e676;--gold:#f5c542;--font-display:'Inter','SF Pro Display',system-ui,sans-serif}
-
 @keyframes zFadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
 @keyframes zFadeIn{from{opacity:0}to{opacity:1}}
 @keyframes zScale{from{opacity:0;transform:scale(.93)}to{opacity:1;transform:scale(1)}}
@@ -167,12 +167,10 @@ const injectStyles = () => {
 @keyframes hCtaPulse{0%,100%{box-shadow:0 6px 24px rgba(0,230,118,.18)}50%{box-shadow:0 6px 36px rgba(0,230,118,.35)}}
 @keyframes crownFloat{0%,100%{transform:translateY(0) rotate(0deg)}25%{transform:translateY(-3px) rotate(2deg)}75%{transform:translateY(-1px) rotate(-1deg)}}
 @keyframes progressGrow{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes carouselScroll{0%{transform:translateX(0)}100%{transform:translateX(calc(-50% - var(--cg,10px)/2))}}
-@keyframes carouselCardIn{from{opacity:0;transform:translateY(12px) scale(.96)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes carouselShine{0%{left:-100%}100%{left:200%}}
-@keyframes carouselDotBounce{0%,80%,100%{transform:translateY(0)}40%{transform:translateY(-4px)}}
-@keyframes scoreGlow{0%,100%{text-shadow:0 0 4px rgba(239,68,68,.15)}50%{text-shadow:0 0 14px rgba(239,68,68,.4)}}
-@keyframes zokaRowIn{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes liveStripIn{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
+@keyframes live-glow{0%,100%{border-color:rgba(239,68,68,.12);box-shadow:0 0 3px rgba(239,68,68,.01)}50%{border-color:rgba(239,68,68,.35);box-shadow:0 0 14px rgba(239,68,68,.06)}}
+@keyframes card-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes zoka-glow{0%,100%{border-color:rgba(245,197,66,.18);box-shadow:0 0 3px rgba(245,197,66,.01)}50%{border-color:rgba(245,197,66,.35);box-shadow:0 0 12px rgba(245,197,66,.06)}}
 
 .z-fade-up{animation:zFadeUp .55s cubic-bezier(.22,1,.36,1) both;will-change:transform,opacity}
 .z-fade-in{animation:zFadeIn .4s ease-out both}
@@ -184,17 +182,12 @@ const injectStyles = () => {
 .h-pop{animation:zScale .4s cubic-bezier(.22,1,.36,1) both}
 .h-enter{animation:zFadeUp .5s cubic-bezier(.22,1,.36,1) both}
 .h-stat{animation:zScale .4s cubic-bezier(.22,1,.36,1) both}
-.h-shimmer{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:zShimmer 1.4s ease-in-out infinite;border-radius:10px}
-.score-glow{animation:zGlow 2.5s ease-in-out infinite}
+.h-shimmer{background:linear-gradient(90deg,var(--bg-surface,#0f0f11) 25%,var(--bg-card) 50%,var(--bg-surface,#0f0f11) 75%);background-size:200% 100%;animation:zShimmer 1.4s ease-in-out infinite;border-radius:10px}
 .crown-float{animation:crownFloat 3s ease-in-out infinite}
 
 .ripple-effect{position:relative;overflow:hidden}
 .ripple-effect::after{content:'';position:absolute;inset:0;pointer-events:none;background:radial-gradient(circle,rgba(255,255,255,.12) 0%,transparent 70%);opacity:0;transition:opacity .3s}
 .ripple-effect:active::after{opacity:1}
-
-.ticker-bar{display:flex;align-items:center;gap:10px;padding:10px 16px;font-size:.85rem;font-weight:700;color:var(--text-muted);background:rgba(255,255,255,.02);border-bottom:1.5px solid var(--border);overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-.ticker-bar::-webkit-scrollbar{display:none}
-.ticker-dot{width:7px;height:7px;border-radius:50%;background:var(--accent);flex-shrink:0;box-shadow:0 0 6px rgba(0,230,118,.4)}
 
 .hero-bg{background:linear-gradient(180deg,rgba(0,230,118,.03) 0%,transparent 100%);overflow:hidden}
 .hero-center{display:flex;flex-direction:column;align-items:center;text-align:center;width:100%;max-width:100%;overflow:hidden}
@@ -211,26 +204,19 @@ const injectStyles = () => {
 .sec-head-line{flex:1;min-width:20px;height:1.5px;background:var(--border);border-radius:1px}
 
 .explore-grid{display:grid;grid-template-columns:1fr;gap:10px}
-.explore-card{display:flex;align-items:center;gap:16px;padding:18px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:16px;text-decoration:none;position:relative;overflow:hidden;transition:all .25s cubic-bezier(.22,1,.36,1);width:100%;min-height:68px;min-width:0;-webkit-tap-highlight-color:transparent;outline:none}
+.explore-card{display:flex;align-items:center;gap:16px;padding:18px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:16px;text-decoration:none;position:relative;overflow:hidden;transition:all .25s cubic-bezier(.22,1,.36,1);width:100%;min-height:68px;min-width:0;-webkit-tap-highlight-color:transparent;outline:none;color:inherit}
 .explore-card:hover{border-color:rgba(255,255,255,.14);transform:translateX(4px);box-shadow:0 4px 20px rgba(0,0,0,.1)}
 .explore-card:active{transform:scale(.98)}
 .explore-card:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-
-.feat-row{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;margin-bottom:8px;transition:all .2s cubic-bezier(.22,1,.36,1);overflow:hidden;min-width:0}
-.feat-row:hover{border-color:rgba(255,255,255,.1);background:rgba(255,255,255,.02);transform:translateX(2px)}
 
 .live-strip{display:flex;gap:12px;overflow-x:auto;padding-bottom:8px;scroll-snap-type:x mandatory;-webkit-overflow-scrolling:touch;scrollbar-width:thin;scrollbar-color:rgba(239,68,68,.25) transparent}
 .live-strip::-webkit-scrollbar{height:4px}
 .live-strip::-webkit-scrollbar-track{background:transparent}
 .live-strip::-webkit-scrollbar-thumb{background:rgba(239,68,68,.25);border-radius:4px}
-.live-match-mini{min-width:200px;max-width:260px;flex-shrink:0;padding:14px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:14px;scroll-snap-align:start;transition:border-color .2s,transform .2s;overflow:hidden}
+.live-match-mini{min-width:200px;max-width:260px;flex-shrink:0;padding:14px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:14px;scroll-snap-align:start;transition:border-color .2s,transform .2s;overflow:hidden;animation:liveStripIn .4s cubic-bezier(.22,1,.36,1) both}
 .live-match-mini:hover{border-color:rgba(239,68,68,.3);transform:translateY(-1px)}
 .live-dot{width:7px;height:7px;border-radius:50%;background:#ef4444;display:inline-block;animation:zPulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5)}
-
-.gold-card{display:flex;flex-direction:column;padding:20px;background:linear-gradient(135deg,rgba(245,197,66,.04) 0%,rgba(245,197,66,.01) 100%);border:1.5px solid rgba(245,197,66,.15);border-radius:16px;width:100%;overflow:hidden}
-
-.progress-track{height:5px;border-radius:3px;background:rgba(255,255,255,.04);overflow:hidden;width:100%}
-.progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--accent),#69f0ae);transform-origin:left;animation:progressGrow .8s cubic-bezier(.22,1,.36,1) both;animation-delay:.3s}
+.ld{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:zPulse 1.2s ease-in-out infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
 
 .zbtn{transition:all .25s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;position:relative;overflow:hidden}
 .zbtn:hover{transform:translateY(-2px)}
@@ -238,144 +224,113 @@ const injectStyles = () => {
 .zbtn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .cta-primary{animation:hCtaPulse 3s ease-in-out infinite}
 
-.zoka-section{background:linear-gradient(135deg,rgba(245,197,66,.04) 0%,transparent 60%);border:1.5px solid rgba(245,197,66,.12);border-radius:16px;padding:18px;margin-bottom:18px;overflow:hidden}
-.zoka-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;overflow:hidden}
-.zoka-header-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,rgba(245,197,66,.15),rgba(245,197,66,.05));border:1.5px solid rgba(245,197,66,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.zoka-row{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:12px;background:linear-gradient(90deg,rgba(245,197,66,.04) 0%,rgba(245,197,66,.01) 100%);border:1px solid rgba(245,197,66,.12);margin-bottom:8px;animation:zokaRowIn .4s cubic-bezier(.22,1,.36,1) both;transition:all .2s cubic-bezier(.22,1,.36,1);overflow:hidden;min-width:0}
-.zoka-row:hover{border-color:rgba(245,197,66,.22);background:linear-gradient(90deg,rgba(245,197,66,.06) 0%,rgba(245,197,66,.02) 100%);transform:translateX(2px)}
-.zoka-predicted-score{font-size:.95rem;font-weight:900;font-family:var(--font-display);color:var(--gold);background:rgba(245,197,66,.08);padding:5px 14px;border-radius:10px;border:1.5px solid rgba(245,197,66,.2);font-variant-numeric:tabular-nums;flex-shrink:0;min-width:56px;text-align:center}
-.zoka-actual-score{font-size:.85rem;font-weight:800;font-family:var(--font-display);color:var(--text-primary);font-variant-numeric:tabular-nums;flex-shrink:0;min-width:44px;text-align:center}
-.zoka-team{flex:1;font-size:.85rem;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:8px;min-width:0}
-.zoka-team img{width:20px;height:20px;border-radius:5px;object-fit:contain;flex-shrink:0}
-.zoka-team.away{justify-content:flex-end;text-align:right}
-.zoka-kickoff{font-size:.73rem;font-weight:800;color:var(--text-muted);font-family:var(--font-display);flex-shrink:0;width:40px;text-align:center}
-.zoka-result-col{width:100%;flex-shrink:0;display:flex;justify-content:flex-start;margin-top:4px}
-.zoka-badge-pending{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:900;background:rgba(255,255,255,.04);color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em}
-.zoka-badge-exact{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:900;background:rgba(0,230,118,.12);color:var(--accent);text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(0,230,118,.25)}
-.zoka-badge-result{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:900;background:rgba(245,197,66,.1);color:var(--gold);text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(245,197,66,.2)}
-.zoka-badge-miss{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:900;background:rgba(239,68,68,.08);color:#ef4444;text-transform:uppercase;letter-spacing:.04em;border:1.5px solid rgba(239,68,68,.15)}
-
-.toggle-more-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 18px;margin-top:10px;border-radius:12px;font-size:.85rem;font-weight:800;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .25s cubic-bezier(.22,1,.36,1);min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.toggle-more-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:12px 18px;margin-top:10px;border-radius:12px;font-size:.85rem;font-weight:800;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .25s cubic-bezier(.22,1,.36,1);min-height:48px;-webkit-tap-highlight-color:transparent;touch-action:manipulation;font-family:inherit}
 .toggle-more-btn:hover{background:rgba(255,255,255,.05);border-color:rgba(255,255,255,.12);color:var(--text-primary)}
 .toggle-more-btn:active{transform:scale(.98)}
 .toggle-more-btn svg{transition:transform .3s cubic-bezier(.22,1,.36,1)}
 .toggle-more-btn.expanded svg{transform:rotate(180deg)}
-.toggle-hidden-items{overflow:hidden;transition:max-height .4s cubic-bezier(.22,1,.36,1),opacity .3s ease}
-.toggle-hidden-items.collapsed{max-height:0;opacity:0;pointer-events:none}
-.toggle-hidden-items.expanded{max-height:3000px;opacity:1}
 
-.carousel-wrapper{position:relative;overflow:hidden;margin:0 -16px;padding:0 16px}
-.carousel-track{display:flex;gap:var(--cg,12px);width:max-content;animation:carouselScroll var(--cd,40s) linear infinite;will-change:transform;padding:6px 0}
-.carousel-track.paused{animation-play-state:paused}
-.carousel-fade{position:absolute;top:0;bottom:0;width:48px;z-index:3;pointer-events:none}
-.carousel-fade-left{left:16px;background:linear-gradient(to right,var(--bg-deep) 0%,transparent 100%)}
-.carousel-fade-right{right:16px;background:linear-gradient(to left,var(--bg-deep) 0%,transparent 100%)}
-.carousel-card{flex-shrink:0;width:190px;padding:16px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;position:relative;overflow:hidden;transition:all .28s cubic-bezier(.22,1,.36,1);cursor:pointer;animation:carouselCardIn .5s cubic-bezier(.22,1,.36,1) both;-webkit-tap-highlight-color:transparent;text-decoration:none;display:block}
-.carousel-card:hover{border-color:rgba(255,255,255,.16);transform:translateY(-3px);box-shadow:0 8px 24px rgba(0,0,0,.25)}
-.carousel-card:active{transform:translateY(-1px) scale(.98)}
-.carousel-card::after{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);pointer-events:none}
-.carousel-card:hover::after{animation:carouselShine .6s ease-out}
-.carousel-league{display:flex;align-items:center;gap:6px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid rgba(255,255,255,.04);overflow:hidden}
-.carousel-league img{width:15px;height:15px;border-radius:3px;object-fit:contain;flex-shrink:0}
-.carousel-league span{font-size:.7rem;font-weight:800;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-transform:uppercase;letter-spacing:.04em}
-.carousel-team-row{display:flex;align-items:center;gap:8px;padding:4px 0;overflow:hidden}
-.carousel-team-row.away{flex-direction:row-reverse;text-align:right}
-.carousel-team-row img{width:24px;height:24px;object-fit:contain;flex-shrink:0;border-radius:5px}
-.carousel-team-row span{font-size:.85rem;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;line-height:1.2}
-.carousel-time-divider{display:flex;align-items:center;justify-content:center;padding:6px 0;gap:8px}
-.carousel-time-divider .line{flex:1;height:1px;background:rgba(255,255,255,.06)}
-.carousel-time-badge{font-size:.76rem;font-weight:900;font-family:var(--font-display);color:var(--accent);background:rgba(0,230,118,.08);padding:4px 12px;border-radius:8px;letter-spacing:.03em;flex-shrink:0;white-space:nowrap}
-.carousel-pause-indicator{position:absolute;bottom:14px;left:50%;transform:translateX(-50%);z-index:5;display:flex;align-items:center;gap:6px;padding:6px 14px;background:rgba(0,0,0,.6);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,.1);border-radius:20px;animation:zFadeIn .25s ease-out both;pointer-events:none}
-.carousel-pause-indicator span{font-size:.68rem;font-weight:800;color:rgba(255,255,255,.7);text-transform:uppercase;letter-spacing:.06em}
-.carousel-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;overflow:hidden}
-.carousel-header-left{display:flex;align-items:center;gap:10px;overflow:hidden}
-.carousel-header-dots{display:flex;gap:4px;align-items:center;flex-shrink:0}
-.carousel-header-dots span{width:5px;height:5px;border-radius:50%;background:var(--accent)}
-.carousel-header-dots span:nth-child(1){animation:carouselDotBounce 1.2s ease-in-out infinite}
-.carousel-header-dots span:nth-child(2){animation:carouselDotBounce 1.2s ease-in-out infinite .15s}
-.carousel-header-dots span:nth-child(3){animation:carouselDotBounce 1.2s ease-in-out infinite .3s}
+.am{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:14px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:8px;transition:all .15s;animation:card-in .3s cubic-bezier(.22,1,.36,1) both}
+.am:hover{background:rgba(255,255,255,.015)}
+.am.zs{background:linear-gradient(135deg,rgba(245,197,66,.05),rgba(245,197,66,.012));border-color:rgba(245,197,66,.22)}
+.am.zs:hover{background:linear-gradient(135deg,rgba(245,197,66,.07),rgba(245,197,66,.02));border-color:rgba(245,197,66,.32)}
+.am.lg{animation:live-glow 2s ease-in-out infinite}
+.am.ok{border-color:rgba(0,230,118,.22)}
+.am.zglow{animation:zoka-glow 2.5s ease-in-out infinite}
+.am.card-in{animation:card-in .3s cubic-bezier(.22,1,.36,1) both}
 
-.carousel-card.is-live{border-color:rgba(239,68,68,.22);background:linear-gradient(180deg,rgba(239,68,68,.04) 0%,var(--bg-card) 50%)}
-.carousel-card.is-live:hover{border-color:rgba(239,68,68,.35);box-shadow:0 8px 28px rgba(239,68,68,.12)}
-.carousel-live-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:6px;background:rgba(239,68,68,.1);font-size:.7rem;font-weight:900;color:#ef4444;letter-spacing:.04em;text-transform:uppercase}
-.carousel-live-dot{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:zPulse 1.2s ease-in-out infinite}
-.carousel-score-center{display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-display)}
-.carousel-score-num{font-size:1.15rem;font-weight:900;color:#ef4444;line-height:1;min-width:20px;text-align:center;animation:scoreGlow 2s ease-in-out infinite}
-.carousel-score-sep{font-size:.85rem;font-weight:700;color:rgba(239,68,68,.35)}
-.carousel-team-score{font-size:.88rem;font-weight:900;font-family:var(--font-display);color:#ef4444;flex-shrink:0;margin-left:auto}
-.carousel-team-row.away .carousel-team-score{margin-left:0;margin-right:auto}
-.carousel-progress{height:3px;border-radius:2px;background:rgba(239,68,68,.06);overflow:hidden;margin-top:12px}
-.carousel-progress-fill{height:100%;border-radius:2px;background:linear-gradient(90deg,#ef4444,#f97316);transition:width 1s linear}
-.carousel-minute{font-size:.68rem;font-weight:800;color:rgba(239,68,68,.7);font-family:var(--font-display)}
+.amh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.aml{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.aml img{width:18px;height:18px;border-radius:4px;object-fit:contain;flex-shrink:0}
+.aml span{font-size:.72rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.carousel-card.is-ft-est{border-color:rgba(0,230,118,.18);background:linear-gradient(180deg,rgba(0,230,118,.03) 0%,var(--bg-card) 60%)}
-.carousel-ft-est-badge{display:inline-flex;align-items:center;gap:5px;padding:4px 12px;border-radius:6px;background:rgba(0,230,118,.08);font-size:.7rem;font-weight:900;color:var(--accent);letter-spacing:.04em;text-transform:uppercase}
-.carousel-ft-score-num{font-size:1.15rem;font-weight:900;color:var(--text-primary);line-height:1;min-width:20px;text-align:center;font-family:var(--font-display);font-variant-numeric:tabular-nums}
-.carousel-ft-score-sep{font-size:.85rem;font-weight:700;color:rgba(255,255,255,.18)}
+.as{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.63rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
 
-.carousel-card.is-ht{border-color:rgba(249,115,22,.18);background:linear-gradient(180deg,rgba(249,115,22,.04) 0%,var(--bg-card) 50%)}
-.carousel-ht-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:6px;background:rgba(249,115,22,.1);font-size:.7rem;font-weight:900;color:#f97316;letter-spacing:.04em;text-transform:uppercase}
+.atm{display:flex;align-items:center;gap:8px}
+.ate{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.ate.aw{flex-direction:row-reverse;text-align:right}
+.ate img{width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0}
+.ate span{font-size:.86rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-@media(min-width:480px){
-  .explore-grid{grid-template-columns:repeat(2,1fr)}
-  .carousel-card{width:210px}
-}
+.asb{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;min-width:80px;justify-content:center;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.asb.lv{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.18)}
+.asb.ft{background:rgba(0,230,118,.05);border-color:rgba(0,230,118,.12)}
+.asn{font-size:1.1rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.asn.r{color:#ef4444}.asn.g{color:var(--accent)}.asn.gd{color:var(--gold,#f5c542)}
+.asep{color:var(--text-muted);font-size:.8rem;font-weight:700;opacity:.3}
+.avs{font-size:.68rem;font-weight:800;color:var(--text-muted);opacity:.2;letter-spacing:.08em}
+
+.aa{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+
+.ab{padding:9px 14px;border-radius:9px;font-size:.78rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:40px;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.ab:active{transform:scale(.97)}.ab:disabled{opacity:.28;pointer-events:none;transform:none}
+.ab-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.18)}
+.ab-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.ab-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-primary)}
+.ab-gh:hover{background:rgba(255,255,255,.05);border-color:var(--border-hover)}
+.ab-sm{padding:7px 11px;font-size:.7rem;min-height:34px;border-radius:8px}
+.ab-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+.ab-ol:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
+.ab-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.06)}
+
+.abdg{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:.68rem;font-weight:800;white-space:nowrap}
+.abdg.ex{background:rgba(0,230,118,.1);color:var(--accent);border:1px solid rgba(0,230,118,.22)}
+.abdg.rs{background:rgba(245,197,66,.08);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.18)}
+.abdg.ms{background:rgba(239,68,68,.07);color:#ef4444;border:1px solid rgba(239,68,68,.15)}
+.abdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
+.abdg.gd{background:rgba(245,197,66,.08);color:var(--gold);border:1px solid rgba(245,197,66,.2)}
+
+.toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;animation:zSlide .3s cubic-bezier(.22,1,.36,1) both;pointer-events:none}
+.toast-inner{display:flex;align-items:center;gap:10px;padding:14px 24px;border-radius:14px;background:rgba(0,230,118,.12);border:1.5px solid rgba(0,230,118,.3);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 6px 24px rgba(0,0,0,.5)}
+.toast-inner span{font-size:.92rem;font-weight:800;color:var(--accent)}
+
+.zoka-section{background:linear-gradient(135deg,rgba(245,197,66,.04) 0%,transparent 60%);border:1.5px solid rgba(245,197,66,.12);border-radius:16px;padding:18px;margin-bottom:18px;overflow:hidden}
+.zoka-header{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap;overflow:hidden}
+.zoka-header-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,rgba(245,197,66,.15),rgba(245,197,66,.05));border:1.5px solid rgba(245,197,66,.25);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+
+@media(min-width:480px){.explore-grid{grid-template-columns:repeat(2,1fr)}}
 @media(min-width:640px){
   .explore-grid{grid-template-columns:repeat(2,1fr);gap:12px}
   .stat-grid{grid-template-columns:repeat(4,1fr);gap:12px}
   .live-match-mini{min-width:220px}
-  .carousel-card{width:230px;padding:18px}
-  .carousel-team-row span{font-size:.92rem}
 }
-@media(min-width:768px){
-  .explore-grid{grid-template-columns:repeat(3,1fr)}
-  .carousel-card{width:240px}
-}
+@media(min-width:768px){.explore-grid{grid-template-columns:repeat(3,1fr)}}
 @media(max-width:639px){
-  .hero-buttons{flex-direction:column;width:100%;max-width:340px}
-  .hero-buttons a,.hero-buttons .zbtn-wrap{width:100%;justify-content:center;min-height:52px}
   .stat-grid{grid-template-columns:repeat(2,1fr);gap:10px}
   .stat-chip{padding:14px 12px;gap:8px}
   .sec-head-line{max-width:60px}
-  .carousel-fade{width:36px}
-  .zoka-row{flex-wrap:wrap;gap:8px;padding:12px}
-  .zoka-result-col{width:100%;justify-content:flex-start;margin-top:4px}
-  .feat-row{flex-wrap:wrap;gap:10px;padding:12px 14px}
+  .am{padding:12px 14px}
+  .ate span{font-size:.78rem}.asn{font-size:.95rem}
+  .asb{min-width:68px;padding:6px 10px}
+  .aa{flex-wrap:wrap}
 }
 @media(max-width:380px){
   .stat-grid{gap:8px}
   .stat-chip{padding:12px 10px;gap:6px}
   .stat-chip-label{font-size:.68rem}
   .stat-chip-val{font-size:.95rem}
-  .carousel-card{width:175px;padding:14px}
-  .zoka-team{font-size:.8rem}
-  .zoka-predicted-score{font-size:.85rem;padding:4px 10px}
+  .ate img{width:22px;height:22px}
 }
 @media(prefers-reduced-motion:reduce){
-  .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-  .toggle-hidden-items{transition:none!important}
-  *{animation-duration:.01ms!important}
+  *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
 }
-`;
+  `;
   document.head.appendChild(s);
 };
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    SKELETONS
-   ═══════════════════════════════════════════════════════════════ */
-const SkelFeatured = () => <div className="h-shimmer" style={{ height: 72, borderRadius: 14, marginBottom: 8 }} />;
-const SkelLive = () => <div className="h-shimmer" style={{ minWidth: 190, height: 90, borderRadius: 14, flexShrink: 0 }} />;
-const SkelCarousel = () => <div className="h-shimmer" style={{ width: 195, height: 150, borderRadius: 14, flexShrink: 0 }} />;
-const SkelZoka = () => <div className="h-shimmer" style={{ height: 62, borderRadius: 12, marginBottom: 8 }} />;
+   ═══════════════════════════════════════ */
+const SkelCard = () => <div className="h-shimmer" style={{ height: 80, borderRadius: 14, marginBottom: 8 }} />;
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    LIVE MINI CARD
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 const LiveMini = ({ match, index }) => {
   const minute = match.elapsed || match.minute || '';
   const minuteStr = minute ? `${minute}'` : '';
   return (
-    <div className="live-match-mini h-pop" style={{ animationDelay: `${index * 80}ms` }}>
+    <div className="live-match-mini" style={{ animationDelay: `${index * 80}ms` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8, paddingLeft: 4 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, flex: 1, overflow: 'hidden' }}>
           {match.league?.logo && <img src={match.league.logo} alt="" style={{ width: 14, height: 14, borderRadius: 3, objectFit: 'contain', flexShrink: 0 }} />}
@@ -410,142 +365,17 @@ const LiveMini = ({ match, index }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   FIXTURE CAROUSEL
-   ═══════════════════════════════════════════════════════════════ */
-function FixtureCarousel({ fixtures, loading }) {
-  const trackRef = useRef(null);
-  const [isPaused, setIsPaused] = useState(false);
-  const resumeTimer = useRef(null);
-  const duration = useMemo(() => Math.max(20, fixtures.length * 4.2), [fixtures.length]);
-  const items = useMemo(() => fixtures.length === 0 ? [] : [...fixtures, ...fixtures], [fixtures]);
-  const liveCount = useMemo(() => fixtures.filter(m => { const s = estimateMatchStatus(m); return s === 'live' || s === 'ht'; }).length, [fixtures]);
-
-  const handleMouseEnter = useCallback(() => { if (resumeTimer.current) { clearTimeout(resumeTimer.current); resumeTimer.current = null; } setIsPaused(true); }, []);
-  const handleMouseLeave = useCallback(() => { setIsPaused(false); }, []);
-  const handleTouchStart = useCallback(() => { if (resumeTimer.current) { clearTimeout(resumeTimer.current); resumeTimer.current = null; } setIsPaused(true); }, []);
-  const handleTouchEnd = useCallback(() => { resumeTimer.current = setTimeout(() => { setIsPaused(false); resumeTimer.current = null; }, 3000); }, []);
-  useEffect(() => { return () => { if (resumeTimer.current) clearTimeout(resumeTimer.current); }; }, []);
-
-  if (loading) {
-    return (
-      <div style={{ background: 'linear-gradient(180deg,rgba(0,230,118,.03) 0%,transparent 100%)', borderBottom: '1.5px solid var(--border)', padding: '12px 16px 16px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div className="h-shimmer" style={{ width: 110, height: 16, borderRadius: 5 }} />
-          <div className="h-shimmer" style={{ width: 70, height: 16, borderRadius: 5 }} />
-        </div>
-        <div style={{ display: 'flex', gap: 12, overflow: 'hidden' }}>{Array.from({ length: 5 }).map((_, i) => <SkelCarousel key={i} />)}</div>
-      </div>
-    );
-  }
-  if (fixtures.length < 2) return null;
-
-  return (
-    <div className="z-fade-up" style={{ background: 'linear-gradient(180deg,rgba(0,230,118,.03) 0%,transparent 100%)', borderBottom: '1.5px solid var(--border)', padding: '12px 0 16px', overflow: 'hidden' }}>
-      <div className="carousel-header" style={{ padding: '0 16px' }}>
-        <div className="carousel-header-left">
-          <div className="carousel-header-dots"><span /><span /><span /></div>
-          <span style={{ fontSize: '.9rem', fontWeight: 900, color: 'var(--accent)', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-            {fixtures.length} Matches{liveCount > 0 && <span style={{ color: '#ef4444', marginLeft: 8 }}>{liveCount} LIVE</span>}
-          </span>
-        </div>
-        <Link to="/fixtures" className="zbtn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 14px', borderRadius: 9, background: 'rgba(0,230,118,.06)', border: '1.5px solid rgba(0,230,118,.18)', color: 'var(--accent)', fontWeight: 700, fontSize: '.8rem', textDecoration: 'none', flexShrink: 0 }}>
-          All <ChevronRight size={12} />
-        </Link>
-      </div>
-      <div className="carousel-wrapper">
-        <div className="carousel-fade carousel-fade-left" />
-        <div className="carousel-fade carousel-fade-right" />
-        <div ref={trackRef} className={`carousel-track ${isPaused ? 'paused' : ''}`} style={{ '--cd': `${duration}s`, '--cg': '12px' }} onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave} onTouchStart={handleTouchStart} onTouchEnd={handleTouchEnd}>
-          {items.map((fix, i) => {
-            const homeLogo = fix.homeLogo || fix.homeTeam?.logo;
-            const awayLogo = fix.awayLogo || fix.awayTeam?.logo;
-            const leagueLogo = fix.league?.logo || fix.league?.emblem;
-            const realIndex = i % fixtures.length;
-            const status = estimateMatchStatus(fix);
-            const isLive = status === 'live';
-            const isHT = status === 'ht';
-            const isFtEstimated = status === 'ft-estimated';
-            const minute = fix.minute || fix.elapsed || 0;
-            const progress = isLive ? Math.min(minute / 90, 1) : 0;
-            const progressColor = minute <= 45 ? '#ef4444' : '#f97316';
-            let cardClass = 'carousel-card';
-            if (isLive) cardClass = 'carousel-card is-live';
-            else if (isHT) cardClass = 'carousel-card is-ht';
-            else if (isFtEstimated) cardClass = 'carousel-card is-ft-est';
-
-            return (
-              <Link to={`/fixtures?match=${fix.id}`} key={`${fix.id || fix.matchId}-dup${i}`} className={cardClass} style={{ animationDelay: `${realIndex * 60}ms` }}>
-                <div className="carousel-league">
-                  {leagueLogo && <img src={leagueLogo} alt="" loading="lazy" />}
-                  <span>{fix.league?.name || 'League'}</span>
-                </div>
-                {isLive && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                    <span className="carousel-live-badge"><span className="carousel-live-dot" /> LIVE</span>
-                    {minute > 0 && <span className="carousel-minute">{minute}&apos;</span>}
-                  </div>
-                )}
-                {isHT && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><span className="carousel-ht-badge"><Pause size={9} /> HT</span></div>}
-                {isFtEstimated && <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}><span className="carousel-ft-est-badge"><CheckCircle size={9} /> FT</span></div>}
-                <div className="carousel-team-row">
-                  {homeLogo && <img src={homeLogo} alt="" loading="lazy" />}
-                  <span>{fix.homeTeam?.shortName || fix.homeTeam?.name || 'TBD'}</span>
-                  {isLive && <span className="carousel-team-score">{fix.homeScore ?? 0}</span>}
-                </div>
-                <div className="carousel-time-divider">
-                  <div className="line" />
-                  {isLive ? (
-                    <span className="carousel-score-center">
-                      <span className="carousel-score-num">{fix.homeScore ?? 0}</span>
-                      <span className="carousel-score-sep">-</span>
-                      <span className="carousel-score-num">{fix.awayScore ?? 0}</span>
-                    </span>
-                  ) : isFtEstimated ? (
-                    <span className="carousel-score-center">
-                      <span className="carousel-ft-score-num">{fix.homeScore ?? 0}</span>
-                      <span className="carousel-ft-score-sep">-</span>
-                      <span className="carousel-ft-score-num">{fix.awayScore ?? 0}</span>
-                    </span>
-                  ) : (
-                    <span className="carousel-time-badge">
-                      <Clock size={10} style={{ marginRight: 4, verticalAlign: 'middle', opacity: .7 }} />
-                      {fix.kickoff || '--:--'}
-                    </span>
-                  )}
-                  <div className="line" />
-                </div>
-                <div className="carousel-team-row away">
-                  {awayLogo && <img src={awayLogo} alt="" loading="lazy" />}
-                  <span>{fix.awayTeam?.shortName || fix.awayTeam?.name || 'TBD'}</span>
-                  {isLive && <span className="carousel-team-score">{fix.awayScore ?? 0}</span>}
-                </div>
-                {isLive && minute > 0 && (
-                  <div className="carousel-progress">
-                    <div className="carousel-progress-fill" style={{ width: `${progress * 100}%`, background: `linear-gradient(90deg,${progressColor},${progressColor}88)` }} />
-                  </div>
-                )}
-              </Link>
-            );
-          })}
-        </div>
-        {isPaused && (
-          <div className="carousel-pause-indicator">
-            <PlayCircle size={12} /><span>Auto-scroll paused</span>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    FEATURED ROW
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
-  const isFinished = pred.status === 'finished';
+  const isFinished = pred.status === 'finished' || !!pred.isFinished;
+  const isLive = pred.status === 'live' || !!pred.isLive;
+  const isHT = pred.status === 'ht' || pred.status === 'HT';
+  const hasScore = pred.homeScore != null && pred.awayScore != null;
+
   const isPredicted = !!userPred;
-  const isResolved = !!userResult && userResult.resultType && userResult.resultType !== 'pending';
+  const isResolved = !!userResult?.resultType && userResult.resultType !== 'pending';
   const isExact = isResolved && userResult.resultType === 'exact';
   const isHit = isResolved && userResult.resultType === 'result';
 
@@ -553,62 +383,167 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
   if (isExact) leftBorder = 'var(--accent)';
   else if (isHit) leftBorder = 'var(--gold)';
   else if (isResolved && !isExact && !isHit) leftBorder = '#ef4444';
+  else if (isLive || isHT) leftBorder = '#ef4444';
   else if (isFinished) leftBorder = 'rgba(0,230,118,.3)';
   else if (isPredicted) leftBorder = '#60a5fa';
 
+  const matchId = pred.id || pred.matchId;
+  const homeLogo = pred.homeLogo || pred.homeTeam?.logo || pred.homeTeam?.crest;
+  const awayLogo = pred.awayLogo || pred.awayTeam?.logo || pred.awayTeam?.crest;
+  const league = pred.league;
+  const kickoff = pred.kickoff || 'TBD';
+  const homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
+  const awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
+  const homeScore = pred.homeScore;
+  const awayScore = pred.awayScore;
+
+  let statusLabel = kickoff;
+  let statusColor = 'var(--text-muted)';
+  let statusBg = 'rgba(255,255,255,.04)';
+  if (isLive) { statusLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,.1)'; }
+  else if (isHT) { statusLabel = 'HT'; statusColor = '#f97316'; statusBg = 'rgba(249,115,22,.1)'; }
+  else if (isFinished) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(0,230,118,.08)'; }
+
+  const cardCls = `am card-in${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}`;
+
   return (
-    <div className="feat-row h-enter" style={{ borderLeft: `4px solid ${leftBorder}`, animationDelay: `${index * 35}ms`, opacity: isFinished && !isResolved ? .5 : 1 }}>
-      <div style={{ width: 44, textAlign: 'center', flexShrink: 0 }}>
-        <div style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums' }}>{pred.kickoff || 'TBD'}</div>
-      </div>
-      <div style={{ width: '1.5px', height: 28, background: 'var(--border)', borderRadius: 1, flexShrink: 0 }} />
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0, overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-          {pred.homeTeam?.logo && <img src={pred.homeTeam.logo} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />}
-          <span style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{pred.homeTeam?.name || 'Home'}</span>
-          {isFinished && <span style={{ fontSize: '.92rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', flexShrink: 0 }}>{pred.homeScore}</span>}
+    <div className={cardCls} style={{ borderLeft: `3px solid ${leftBorder}`, animationDelay: `${index * 20}ms`, opacity: isFinished && !isResolved ? .5 : 1 }}>
+      <div className="amh">
+        <div className="aml">
+          {league?.emblem && <img src={league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{league?.name || 'Featured'}</span>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
-          {pred.awayTeam?.logo && <img src={pred.awayTeam.logo} alt="" style={{ width: 18, height: 18, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />}
-          <span style={{ fontSize: '.9rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{pred.awayTeam?.name || 'Away'}</span>
-          {isFinished && <span style={{ fontSize: '.92rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--text-primary)', flexShrink: 0 }}>{pred.awayScore}</span>}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {isLive && <span className="ld" />}
+          <span className="as" style={{ color: statusColor, background: statusBg }}>{statusLabel}</span>
         </div>
       </div>
-      <div style={{ flexShrink: 0, textAlign: 'right' }}>
+      <div className="atm">
+        <div className="ate">
+          {homeLogo && <img src={homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{homeName}</span>
+        </div>
+        <div className={`asb${isLive ? ' lv' : ''}${isFinished ? ' ft' : ''}`}>
+          {hasScore ? (
+            <><span className={`asn${isLive ? ' r' : ' g'}`}>{homeScore}</span><span className="asep">–</span><span className={`asn${isLive ? ' r' : ' g'}`}>{awayScore}</span></>
+          ) : <span className="avs">VS</span>}
+        </div>
+        <div className="ate aw">
+          {awayLogo && <img src={awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{awayName}</span>
+        </div>
+      </div>
+      <div className="aa">
         {isResolved ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 3 }}>
-            <span style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.76rem', fontWeight: 900, background: isExact ? 'rgba(0,230,118,.12)' : isHit ? 'rgba(245,197,66,.1)' : 'rgba(239,68,68,.08)', color: isExact ? 'var(--accent)' : isHit ? 'var(--gold)' : '#ef4444', textTransform: 'uppercase', letterSpacing: '.04em' }}>
-              {isExact ? '+10' : isHit ? '+3' : 'Miss'}
+            <span className={`abdg ${isExact ? 'ex' : isHit ? 'rs' : 'ms'}`}>
+              {isExact ? <CheckCircle2 size={9} /> : isHit ? <TrendIcon size={9} /> : <XCircle size={9} />}
+              {isExact ? ' EXACT +10' : isHit ? ' RESULT +3' : ' MISS'}
             </span>
             {isPredicted && <span style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>You: {userPred.homeScore}–{userPred.awayScore}</span>}
           </div>
+        ) : isLive || isHT ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            {isPredicted ? (
+              <Link to="/predictions" className="ab ab-sm ab-ol on" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}><CheckCircle size={12} /> Locked</Link>
+            ) : (
+              <span className="as" style={{ color: isLive ? '#ef4444' : '#f97316', background: isLive ? 'rgba(239,68,68,.1)' : 'rgba(249,115,22,.1)' }}>{isLive ? '● LIVE' : '⏸ HT'}</span>
+            )}
+          </div>
         ) : isFinished ? (
-          <span style={{ padding: '5px 12px', borderRadius: 8, fontSize: '.76rem', fontWeight: 800, background: 'rgba(255,255,255,.04)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>FT</span>
+          <span className="as" style={{ background: 'rgba(255,255,255,.04)', color: 'var(--text-muted)' }}>FT</span>
         ) : isPredicted ? (
-          <Link to="/predictions" className="zbtn" style={{ padding: '8px 14px', borderRadius: 10, fontSize: '.8rem', fontWeight: 800, textDecoration: 'none', background: 'rgba(59,130,246,.08)', border: '1.5px solid rgba(59,130,246,.18)', color: '#60a5fa', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}>
-            <CheckCircle size={12} /> Locked
-          </Link>
+          <Link to="/predictions" className="ab ab-sm ab-ol on" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}><CheckCircle size={12} /> Locked</Link>
         ) : isLoggedIn ? (
-          <Link to="/predictions" className="zbtn" style={{ padding: '8px 14px', borderRadius: 10, fontSize: '.8rem', fontWeight: 800, textDecoration: 'none', background: 'rgba(0,230,118,.08)', border: '1.5px solid rgba(0,230,118,.15)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}>
-            <Target size={12} /> Predict
-          </Link>
+          <Link to={`/predictions?match=${matchId}`} className="ab ab-sm ab-p" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}><Target size={12} /> Predict</Link>
         ) : (
-          <Link to="/login" className="zbtn" style={{ padding: '8px 14px', borderRadius: 10, fontSize: '.8rem', fontWeight: 800, textDecoration: 'none', background: 'rgba(255,255,255,.03)', border: '1.5px solid var(--border)', color: 'var(--text-muted)', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}>
-            <Lock size={12} /> Login
-          </Link>
+          <Link to="/login" className="ab ab-sm ab-gh" style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 5, minHeight: 38, whiteSpace: 'nowrap' }}><Lock size={12} /> Login</Link>
         )}
       </div>
     </div>
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
+   ZOKA ROW
+   ═══════════════════════════════════════ */
+const ZokaRow = ({ pick, index }) => {
+  const isFin = pick.status === 'finished';
+  const homeLogo = pick.homeLogo || pick.homeTeam?.logo || pick.homeTeam?.crest;
+  const awayLogo = pick.awayLogo || pick.awayTeam?.logo || pick.awayTeam?.crest;
+  const league = pick.league;
+  const kickoffRaw = pick.kickoff || '';
+  const kickoff = kickoffRaw.includes('T')
+    ? kickoffRaw.split('T')[1]?.split(':').slice(0, 2).join(':') || '--:--'
+    : kickoffRaw.split(':').slice(0, 2).join(':') || '--:--';
+  const homeName = pick.homeTeam?.shortName || pick.homeTeam?.name || '?';
+  const awayName = pick.awayTeam?.shortName || pick.awayTeam?.name || '?';
+  const predH = pick.adminPick?.home;
+  const predA = pick.adminPick?.away;
+
+  const cardCls = `am zs card-in${!isFin ? ' zglow' : ''}`;
+
+  return (
+    <div className={cardCls} style={{ animationDelay: `${index * 30}ms` }}>
+      <div className="amh">
+        <div className="aml">
+          {league?.emblem && <img src={league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{league?.name || 'Zoka Pick'}</span>
+        </div>
+        <span className="as" style={{
+          color: isFin ? 'var(--accent)' : 'var(--text-muted)',
+          background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)',
+        }}>
+          {isFin ? 'FT' : kickoff}
+        </span>
+      </div>
+      <div className="atm">
+        <div className="ate">
+          {homeLogo && <img src={homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{homeName}</span>
+        </div>
+        <div className={`asb${isFin ? ' ft' : ''}`} style={!isFin ? {
+          borderColor: 'rgba(245,197,66,.28)',
+          background: 'rgba(245,197,66,.08)',
+        } : {}}>
+          {isFin && pick.homeScore != null ? (
+            <><span className="asn g">{pick.homeScore}</span><span className="asep">–</span><span className="asn g">{pick.awayScore}</span></>
+          ) : (
+            <span className="asn gd">{predH ?? '?'}–{predA ?? '?'}</span>
+          )}
+        </div>
+        <div className="ate aw">
+          {awayLogo && <img src={awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{awayName}</span>
+        </div>
+      </div>
+      <div className="aa">
+        {isFin ? (
+          <>
+            <ZokaResultBadge pick={pick} />
+            {(predH != null || predA != null) && (
+              <span style={{ fontSize: '.68rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                Pred: {predH ?? '?'}–{predA ?? '?'}
+              </span>
+            )}
+          </>
+        ) : (
+          <span className="abdg gd">
+            <Star size={9} fill="currentColor" /> Prediction
+          </span>
+        )}
+      </div>
+    </div>
+  );
+};
+
+/* ═══════════════════════════════════════
    EXPLORE CARD
-   ═══════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 const ExploreCard = ({ to, icon, title, desc, color, delay, glow, badge }) => (
-  <Link to={to} className={`explore-card h-pop ripple-effect ${glow ? 'score-glow' : ''}`} style={{ animationDelay: `${delay || 0}ms` }}>
+  <Link to={to} className={`explore-card h-pop ripple-effect ${glow ? ' score-glow' : ''}`} style={{ animationDelay: `${delay || 0}ms` }}>
     <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: color, borderRadius: '0 3px 3px 0' }} />
-    <div style={{ width: 48, height: 48, borderRadius: 14, background: `${color}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0, fontSize: '1.3rem' }}>{icon}</div>
+    <div style={{ width: 48, height: 48, borderRadius: 14, background: `${color}14`, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.3rem' }}>{icon}</div>
     <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
       <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 3, display: 'flex', alignItems: 'center', gap: 8, overflow: 'hidden' }}>
         <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{title}</span>
@@ -620,469 +555,481 @@ const ExploreCard = ({ to, icon, title, desc, color, delay, glow, badge }) => (
   </Link>
 );
 
-/* ═══════════════════════════════════════════════════════════════
+/* ═══════════════════════════════════════
    MAIN HOME COMPONENT
-   ═════════════════════════════════════════════════════════════ */
+   ═══════════════════════════════════════ */
 export default function Home() {
   injectStyles();
-
   const { currentUser, userProfile } = useAuth();
   const isLoggedIn = !!currentUser;
   const uid = currentUser?.uid;
+  const mounted = useRef(true);
 
-  /* ═══════════════════════════════════════════════════════════
-     DATA — External API (unchanged)
-     ═══════════════════════════════════════════════════════════ */
+  const greeting = useMemo(() => getGreeting(), []);
+
+  /* ── State ── */
   const [fixtures, setFixtures] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(false);
+  const [fixturesLoading, setFixturesLoading] = useState(true);
+  const [allFeatured, setAllFeatured] = useState([]);
+  const [allZoka, setAllZoka] = useState([]);
+  const [featuredLoading, setFeaturedLoading] = useState(true);
+  const [zokaLoading, setZokaLoading] = useState(true);
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [lbLoading, setLbLoading] = useState(true);
+  const [userPredictions, setUserPredictions] = useState({});
+  const [userResults, setUserResults] = useState({});
+  const [stats, setStats] = useState({ users: 0, predictions: 0, accuracy: 0 });
   const [totalUsers, setTotalUsers] = useState(null);
-
-  /* ═══════════════════════════════════════════════════════════
-     DATA — From useMatchData v3 (same API, different cache behavior)
-     v3: 30-min cache TTLs, 10-min poll intervals.
-     useAllUserPredictions now reads from daily_leaderboard cache (0 extra reads).
-     No API surface changes — same return shapes.
-     ═══════════════════════════════════════════════════════════ */
-  const { preds: featured, loading: featuredLoading } = useActivePredictions();
-  const { playerCount } = useAllUserPredictions();
-  const userPredMap = useMyPredictions(uid);
-  const { resultMap } = usePredictionResults(uid);
-  const zokaPicks = useZokaPicks();
-
-  /* ── Local UI state ── */
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [toast, setToast] = useState(null);
   const [showMoreFeatured, setShowMoreFeatured] = useState(false);
   const [showMoreZoka, setShowMoreZoka] = useState(false);
 
-  /* ── 1. Initial fixture fetch (external API) ── */
+  /* ── Offline detection ── */
   useEffect(() => {
-    let cancelled = false;
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
+
+  /* ── Toast ── */
+  const showToast = useCallback((msg) => {
+    setToast(msg);
+    setTimeout(() => { if (mounted.current) setToast(null); }, 3000);
+  }, []);
+
+  /* ── 1. Fixtures (today only, for live data) ── */
+  useEffect(() => {
+    let mnt = true;
+    const load = async () => {
+      try {
+        const data = await fetchFixtures(todayStr());
+        if (mnt && data) {
+          const list = Array.isArray(data) ? data : Array.isArray(data?.matches) ? data.matches : [];
+          setFixtures(list);
+        }
+      } catch (e) {
+        console.warn('[Home] Fixture fetch error:', e);
+      } finally {
+        if (mnt) setFixturesLoading(false);
+      }
+    };
+    load();
+
+    const unsub = subscribeToTodayFixtures((updated) => {
+      if (!mnt) return;
+      const list = Array.isArray(updated?.matches) ? updated.matches : (Array.isArray(updated) ? updated : []);
+      setFixtures(prev => prev.length === 0 ? list : prev.map(f => {
+        const live = list.find(m => String(m.id) === String(f.id));
+        return live
+          ? { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, minute: live.minute ?? f.minute, status: live.status || f.status }
+          : f;
+      }));
+      setFixturesLoading(false);
+    });
+
+    return () => { mnt = false; if (unsub) unsub(); };
+  }, []);
+
+  /* ── 2. Featured + Zoka + Leaderboard (MULTI-DATE) ── */
+  useEffect(() => {
+    let mnt = true;
     (async () => {
       try {
-        const res = await fetchFixtures(todayStr());
-        if (!cancelled && res?.matches?.length > 0) setFixtures(res.matches);
-      } catch { if (!cancelled) setError(true); }
-      if (!cancelled) setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, []);
+        const [predsResults, zokaResults, lbData] = await Promise.allSettled([
+          Promise.all(FETCH_DATES.map(d => dataLayer.fetchActivePredictions(d).catch(() => null))),
+          Promise.all(FETCH_DATES.map(d => dataLayer.fetchZokaPicks(d).catch(() => null))),
+          dataLayer.fetchDailyLeaderboard(todayStr()),
+        ]);
+        if (!mnt) return;
 
-  /* ── 2. Real-time fixture subscription (external API) ── */
-  useEffect(() => {
-    const unsub = subscribeToTodayFixtures(({ matches }) => {
-      if (matches.length > 0) {
-        setFixtures(prev =>
-          prev.length === 0
-            ? matches
-            : prev.map(f => {
-                const live = matches.find(m => String(m.id) === String(f.id));
-                return live
-                  ? { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, minute: live.minute ?? f.minute, status: live.status || f.status }
-                  : f;
-              })
-        );
+        if (predsResults.status === 'fulfilled') {
+          const groups = [];
+          predsResults.value.forEach((data, i) => {
+            if (!data) return;
+            const list = Array.isArray(data) ? data : [];
+            if (list.length > 0) groups.push({ date: FETCH_DATES[i], matches: list.slice(0, 12) });
+          });
+          groups.sort((a, b) => a.date.localeCompare(b.date));
+          setAllFeatured(groups);
+        }
+
+        if (zokaResults.status === 'fulfilled') {
+          const groups = [];
+          zokaResults.value.forEach((data, i) => {
+            if (!data) return;
+            const matches = Array.isArray(data?.matches) ? data.matches : (Array.isArray(data) ? data : []);
+            if (matches.length > 0) groups.push({ date: FETCH_DATES[i], matches });
+          });
+          groups.sort((a, b) => a.date.localeCompare(b.date));
+          setAllZoka(groups);
+        }
+
+        if (lbData.status === 'fulfilled' && lbData.value?.entries) {
+          setLeaderboard(lbData.value.entries.slice(0, 10));
+          const entries = lbData.value.entries;
+          if (entries.length > 0) {
+            setStats({
+              users: entries.length,
+              predictions: entries.reduce((s, e) => s + (e.predictions || 0), 0),
+              accuracy: entries.reduce((s, e) => s + (e.accuracy || 0), 0) / entries.length,
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('[Home] dataLayer error:', e);
+      } finally {
+        if (mnt) {
+          setFeaturedLoading(false);
+          setZokaLoading(false);
+          setLbLoading(false);
+        }
       }
-      setLoading(false);
-      setError(false);
-    });
-    return () => unsub();
+    })();
+    return () => { mnt = false; };
   }, []);
 
-  /* ── 3. Total user count (not in useMatchData — keep local) ── */
+  /* ── 3. User predictions & results (today only) ── */
+  useEffect(() => {
+    if (!isLoggedIn || !uid) return;
+    let mnt = true;
+    (async () => {
+      try {
+        const [predsData, resultsData] = await Promise.all([
+          dataLayer.fetchUserPredictions(uid, todayStr()).catch(() => ({})),
+          dataLayer.fetchPredictionResults(uid, todayStr()).catch(() => ({ results: [], resultMap: {} })),
+        ]);
+        if (!mnt) return;
+        if (predsData) {
+          const map = {};
+          Object.values(predsData).forEach(p => { map[p.predId || p.matchId] = p; });
+          setUserPredictions(map);
+        }
+        if (resultsData?.resultMap) setUserResults(resultsData.resultMap);
+      } catch (e) {
+        console.warn('[Home] User data error:', e);
+      }
+    })();
+    return () => { mnt = false; };
+  }, [isLoggedIn, uid]);
+
+  /* ── 4. Total users (Firestore) ── */
   useEffect(() => {
     if (!db) return;
     getDocs(query(collection(db, 'users'), limit(1))).then(snap => {
-      if (!snap.empty) { const d = snap.docs[0].data(); setTotalUsers(d.totalUsers || snap.size); }
+      if (!snap.empty && mounted.current) {
+        const d = snap.docs[0].data();
+        setTotalUsers(d.totalUsers || null);
+      }
     }).catch(() => {});
   }, []);
 
-  /* ── Derived state ── */
-  const greeting = useMemo(() => getGreeting(), []);
+  /* ── 5. Event bus subscriptions ── */
+  useEffect(() => {
+    const unsubZoka = eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (payload) => {
+      const d = payload.dateStr;
+      if (!FETCH_DATES.includes(d) || !payload.picks?.matches) return;
+      setAllZoka(prev => {
+        const updated = [...prev];
+        const idx = updated.findIndex(g => g.date === d);
+        const matches = payload.picks.matches;
+        if (idx >= 0) {
+          updated[idx] = { ...updated[idx], matches };
+        } else if (matches.length > 0) {
+          updated.push({ date: d, matches });
+          updated.sort((a, b) => a.date.localeCompare(b.date));
+        }
+        return updated;
+      });
+    });
+
+    const unsubPreds = eventBus.on(EVENT.PREDICTIONS_UPDATED, (payload) => {
+      const d = payload.dateStr;
+      if (!FETCH_DATES.includes(d) || !payload.predictions) return;
+      const list = Array.isArray(payload.predictions) ? payload.predictions : [];
+      setAllFeatured(prev => {
+        const updated = [...prev];
+        const idx = updated.findIndex(g => g.date === d);
+        if (idx >= 0) {
+          updated[idx] = { ...updated[idx], matches: list.slice(0, 12) };
+        } else if (list.length > 0) {
+          updated.push({ date: d, matches: list.slice(0, 12) });
+          updated.sort((a, b) => a.date.localeCompare(b.date));
+        }
+        return updated;
+      });
+    });
+
+    const unsubLB = eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
+      if (payload.dateStr === todayStr() && payload.leaderboard?.entries) {
+        setLeaderboard(payload.leaderboard.entries.slice(0, 10));
+        const entries = payload.leaderboard.entries;
+        if (entries.length > 0) {
+          setStats(prev => ({
+            users: entries.length,
+            predictions: entries.reduce((s, e) => s + (e.predictions || 0), 0),
+            accuracy: entries.reduce((s, e) => s + (e.accuracy || 0), 0) / entries.length,
+          }));
+        }
+      }
+    });
+
+    const unsubResolved = eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
+      if (isLoggedIn && uid && payload.affectedUsers?.includes(uid)) {
+        Promise.all([
+          dataLayer.fetchPredictionResults(uid, todayStr()),
+          dataLayer.fetchDailyLeaderboard(todayStr()),
+        ]).then(([results, lb]) => {
+          if (!mounted.current) return;
+          if (results?.resultMap) setUserResults(prev => ({ ...prev, ...results.resultMap }));
+          if (lb?.entries) {
+            setLeaderboard(lb.entries.slice(0, 10));
+            const entries = lb.entries;
+            if (entries.length > 0) {
+              setStats(prev => ({
+                users: entries.length,
+                predictions: entries.reduce((s, e) => s + (e.predictions || 0), 0),
+                accuracy: entries.reduce((s, e) => s + (e.accuracy || 0), 0) / entries.length,
+              }));
+            }
+          }
+        });
+      }
+    });
+
+    return () => { unsubZoka(); unsubPreds(); unsubLB(); unsubResolved(); };
+  }, [isLoggedIn, uid]);
+
+  /* ═══════════════════════════════════════
+     DERIVED STATE
+     ═══════════════════════════════════════ */
+
   const liveMatches = useMemo(() => fixtures.filter(f => { const s = estimateMatchStatus(f); return s === 'live' || s === 'ht'; }), [fixtures]);
   const liveCount = liveMatches.length;
-  const finishedFeatured = useMemo(() => featured.filter(p => p.status === 'finished'), [featured]);
 
-  const todayPredictions = playerCount;
-  const userScored = useMemo(() => featured.filter(p => userPredMap[p.id]).length, [featured, userPredMap]);
-  const userExact = useMemo(() => finishedFeatured.filter(p => {
-    const r = resultMap[String(p.matchId)];
-    return r && r.resultType === 'exact';
-  }).length, [finishedFeatured, resultMap]);
-  const userHit = useMemo(() => finishedFeatured.filter(p => {
-    const r = resultMap[String(p.matchId)];
-    return r && r.resultType === 'result';
-  }).length, [finishedFeatured, resultMap]);
+  const allFeaturedFlat = useMemo(() => allFeatured.flatMap(g => g.matches.map(m => ({ ...m, _dateStr: g.date }))), [allFeatured]);
+  const featuredVisible = showMoreFeatured ? allFeaturedFlat : allFeaturedFlat.slice(0, 6);
+  const featuredHiddenCount = Math.max(0, allFeaturedFlat.length - 6);
 
-  const featuredVisible = showMoreFeatured ? featured : featured.slice(0, 4);
-  const zokaMatches = zokaPicks?.matches || [];
-  const zokaVisible = showMoreZoka ? zokaMatches : zokaMatches.slice(0, 3);
+  const allZokaFlat = useMemo(() => allZoka.flatMap(g => g.matches.map(m => ({ ...m, _dateStr: g.date }))), [allZoka]);
+  const zokaVisible = showMoreZoka ? allZokaFlat : allZokaFlat.slice(0, 6);
+  const zokaHiddenCount = Math.max(0, allZokaFlat.length - 6);
 
-  /* ═══════════════════════════════════════════════════════════
+  const todayFeatured = useMemo(() => allFeatured.find(g => g.date === todayStr())?.matches || [], [allFeatured]);
+  const userScored = useMemo(() => todayFeatured.filter(p => userPredictions[p.id || p.matchId]).length, [todayFeatured, userPredictions]);
+  const finishedToday = useMemo(() => todayFeatured.filter(p => p.status === 'finished'), [todayFeatured]);
+  const userExact = useMemo(() => finishedToday.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r && r.resultType === 'exact'; }).length, [finishedToday, userResults]);
+  const userHit = useMemo(() => finishedToday.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r && r.resultType === 'result'; }).length, [finishedToday, userResults]);
+
+  useEffect(() => { return () => { mounted.current = false; }; }, []);
+
+  /* ═════════════════════════════════════════════════════════════
      RENDER
-     ═══════════════════════════════════════════════════════════ */
-  if (error) {
-    return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center', padding: '40px 32px', background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 20 }}>
-          <WifiOff size={40} style={{ color: '#ef4444', marginBottom: 16 }} />
-          <h2 style={{ margin: '0 0 8px', fontSize: '1.15rem', fontWeight: 800, color: 'var(--text-primary)' }}>Connection lost</h2>
-          <p style={{ margin: 0, fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-            Could not load matches. Check your connection and try again.
-          </p>
-          <button
-            onClick={() => window.location.reload()}
-            className="zbtn"
-            style={{ marginTop: 16, padding: '12px 28px', borderRadius: 12, background: 'rgba(0,230,118,.08)', border: '1.5px solid rgba(0,230,118,.18)', color: 'var(--accent)', fontWeight: 800, fontSize: '.9rem' }}
-          >
-            Try Again
-          </button>
-        </div>
-      </div>
-    );
-  }
-
+     ═════════════════════════════════════════════════════════════ */
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <SEO
-        title="ZOKASCORE — Free Football Predictions"
-        description="Predict football scores, compete on daily leaderboards, and follow Zoka Picks. Free to play — join thousands of football fans predicting matches daily."
-        keywords="football predictions, score predictions, free prediction game, football leaderboard, ZOKASCORE, zoka picks, daily football predictions"
-        url="https://zokascore.com"
-      />
+    <div style={{ minHeight: '100vh', background: 'var(--bg-primary, #0a0a0b)' }}>
+      <SEO title="ZokaPredict — Football Predictions" description="AI-powered football match predictions. Predict scores, climb the leaderboard, win." />
 
-      {/* ── Ticker Bar ── */}
-      <div className="ticker-bar z-fade-in">
-        <span className="ticker-dot" />
-        <span>
-          {liveCount > 0 && <span style={{ color: '#ef4444', fontWeight: 800 }}>{liveCount} LIVE</span>}
-          {(featured.length > 0 || liveCount > 0) && (
-            <span>{featured.length + liveCount} matches today</span>
-          )}
-          {totalUsers && <span>{totalUsers.toLocaleString()} players</span>}
-        </span>
-        <div style={{ flex: 1 }} />
-        <LiveClock />
-      </div>
-
-      {/* ── Hero Section ── */}
-      <div className="hero-bg" style={{ padding: '40px 20px 20px' }}>
-        <div className="hero-center z-fade-up" style={{ maxWidth: 560 }}>
-          <div style={{ fontSize: '3.2rem', marginBottom: 8, lineHeight: 1.05 }}>
-            {greeting.emoji}
-          </div>
-          <h1 style={{ margin: 0, fontSize: '1.55rem', fontWeight: 900, color: 'var(--text-primary)', letterSpacing: '-.03em', lineHeight: 1.2 }}>
-            {greeting.text}, {isLoggedIn ? (userProfile?.displayName || 'Predictor') : 'Predictor'}
-          </h1>
-          <p style={{ margin: '8px 0 24px', fontSize: '.88rem', color: 'var(--text-muted)', fontWeight: 500, maxWidth: 360, lineHeight: 1.5 }}>
-            Predict football scores. Climb the daily leaderboard. Follow Zoka Picks.
-          </p>
-
-          <div className="hero-buttons" style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link
-              to={isLoggedIn ? '/predictions' : '/login'}
-              className="zbtn cta-primary"
-              style={{
-                padding: '14px 36px', borderRadius: 14,
-                background: 'linear-gradient(135deg,#00e676,#00c853)',
-                color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.95rem',
-                display: 'inline-flex', alignItems: 'center', gap: 8,
-                boxShadow: '0 6px 24px rgba(0,230,118,.2)',
-                textDecoration: 'none', minWidth: 180,
-              }}
-            >
-              <Target size={18} /> Predict Now
-            </Link>
-            <div className="zbtn-wrap">
-              <Link
-                to="/fixtures"
-                className="zbtn"
-                style={{
-                  padding: '14px 28px', borderRadius: 14,
-                  background: 'rgba(255,255,255,.04)', border: '1.5px solid var(--border)',
-                  color: 'var(--text-primary)', fontWeight: 800, fontSize: '.92rem',
-                  display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none', minWidth: 140,
-                }}
-              >
-                <Radio size={16} /> Live Scores
-              </Link>
-            </div>
-          </div>
+      {offline && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', background: 'rgba(239,68,68,.08)', borderBottom: '1.5px solid rgba(239,68,68,.2)', fontSize: '.82rem', fontWeight: 700, color: '#ef4444' }}>
+          <WifiOff size={14} /> You're offline — showing cached data
         </div>
-      </div>
+      )}
 
-      {/* ── Stats Grid ── */}
-      <div style={{ padding: '0 20px 20px' }}>
-        <div className="stat-grid z-fade-up" style={{ animationDelay: '80ms' }}>
-          <div className="stat-chip h-stat" style={{ animationDelay: '100ms' }}>
-            <div>
-              <div className="stat-chip-label">Today's Matches</div>
-              <div className="stat-chip-val">
-                <AnimNum value={featured.length} />
+      {/* ── HERO ── */}
+      <section className="hero-bg" style={{ padding: '28px 16px 24px', maxWidth: 680, margin: '0 auto' }}>
+        <div className="hero-center z-fade-up" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.4rem' }}>{greeting.emoji}</span>
+              <div>
+                <h1 style={{ fontSize: '1.25rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
+                  {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName.split(' ')[0]}` : ''} {greeting.icon}
+                </h1>
+                <p style={{ fontSize: '.78rem', fontWeight: 600, color: 'var(--text-muted)', margin: '2px 0 0' }}>{todayStr()}</p>
               </div>
             </div>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(0,230,118,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <CalendarDays size={18} style={{ color: 'var(--accent)' }} />
+            <LiveClock />
+          </div>
+        </div>
+
+        {liveCount > 0 && (
+          <div className="z-fade-up" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span className="ld" />
+              <span style={{ fontSize: '.82rem', fontWeight: 900, color: '#ef4444' }}>{liveCount} LIVE</span>
+              <div style={{ flex: 1, height: 1.5, background: 'rgba(239,68,68,.15)', borderRadius: 1 }} />
+            </div>
+            <div className="live-strip">
+              {liveMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}
             </div>
           </div>
-          <div className="stat-chip h-stat" style={{ animationDelay: '140ms' }}>
+        )}
+
+        {/* ── STATS ── */}
+        <div className="stat-grid z-fade-up" style={{ animationDelay: '120ms' }}>
+          <div className="stat-chip">
+            <div>
+              <div className="stat-chip-label">Users</div>
+              <div className="stat-chip-val"><AnimNum value={totalUsers || stats.users} delay={200} /></div>
+            </div>
+            <Users size={20} style={{ color: 'var(--text-muted)', opacity: .4 }} />
+          </div>
+          <div className="stat-chip">
             <div>
               <div className="stat-chip-label">Predictions</div>
-              <div className="stat-chip-val">
-                <AnimNum value={todayPredictions} />
-              </div>
+              <div className="stat-chip-val"><AnimNum value={stats.predictions} delay={300} /></div>
             </div>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(245,197,66,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Target size={18} style={{ color: 'var(--gold)' }} />
-            </div>
+            <Target size={20} style={{ color: 'var(--text-muted)', opacity: .4 }} />
           </div>
-          <div className="stat-chip h-stat" style={{ animationDelay: '180ms' }}>
+          <div className="stat-chip">
             <div>
-              <div className="stat-chip-label">Your Score</div>
-              <div className="stat-chip-val">
-                <AnimNum value={userExact * 10 + userHit * 3} delay={100} />
-              </div>
+              <div className="stat-chip-label">Accuracy</div>
+              <div className="stat-chip-val"><AnimNum value={stats.accuracy} delay={400} suffix="%" /></div>
             </div>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(168,85,247,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <Zap size={18} style={{ color: '#a855f7' }} />
-            </div>
+            <BarChart3 size={20} style={{ color: 'var(--text-muted)', opacity: .4 }} />
           </div>
-          <div className="stat-chip h-stat" style={{ animationDelay: '220ms' }}>
+          <div className="stat-chip">
             <div>
-              <div className="stat-chip-label">Your Predicted</div>
-              <div className="stat-chip-val">
-              {userScored}<span style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, marginLeft: 4 }}>/{featured.length}</span>
+              <div className="stat-chip-label">My Score</div>
+              <div className="stat-chip-val" style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-muted)' }}>
+                {isLoggedIn ? <><AnimNum value={(userExact * 10) + (userHit * 3)} delay={500} />pts</> : '—'}
               </div>
             </div>
-            <div style={{ width: 40, height: 40, borderRadius: 10, background: 'rgba(96,165,250,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-              <CheckCircle size={18} style={{ color: '#60a5fa' }} />
-            </div>
+            <Trophy size={20} style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-muted)', opacity: isLoggedIn ? .7 : .3 }} />
           </div>
         </div>
-      </div>
 
-      {/* ── Live Strip ── */}
-      {liveCount > 0 && (
-        <div style={{ padding: '0 20px 8px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-            <div className="sec-head" style={{ margin: 0, flex: 1 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span className="live-dot" style={{ width: 8, height: 8 }} />
-                <h2 style={{ fontSize: '.95rem', color: '#ef4444' }}>Live Now</h2>
-              </div>
-              <div className="sec-head-line" />
-            </div>
-            <span style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--text-muted)', flexShrink: 0 }}>
-              {liveCount} match{liveCount !== 1 ? 'es' : ''}
-            </span>
-          </div>
-          <div className="live-strip z-fade-in" style={{ animationDelay: '260ms' }}>
-            {liveMatches.map((m, i) => (
-              <LiveMini key={m.id} match={m} index={i} />
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* ── Featured Predictions ── */}
-      <div style={{ padding: '0 20px 16px' }}>
-        <div className="h-section z-enter" style={{ animationDelay: '300ms' }}>
-          <div className="sec-head">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(0,230,118,.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Target size={17} style={{ color: 'var(--accent)' }} />
-              </div>
-              <h2>Today's Predictions</h2>
-            </div>
-            <div className="sec-head-line" />
-          </div>
-
-          {featuredLoading ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {Array.from({ length: 4 }).map((_, i) => <SkelFeatured key={i} />)}
-            </div>
-          ) : featured.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '32px 20px', color: 'var(--text-muted)', fontSize: '.88rem', fontWeight: 600 }}>
-              No matches featured yet. Check back later!
-            </div>
-          ) : (
-            <>
-              {featuredVisible.map((pred, i) => (
-                <FeaturedRow
-                  key={pred.id}
-                  pred={pred}
-                  userPred={userPredMap[pred.id]}
-                  userResult={resultMap[String(pred.matchId)]}
-                  index={i}
-                  isLoggedIn={isLoggedIn}
-                />
-              ))}
-              {featured.length > 4 && (
-                <button
-                  className={`toggle-more-btn ${showMoreFeatured ? 'expanded' : ''}`}
-                  onClick={() => setShowMoreFeatured(!showMoreFeatured)}
-                >
-                  {showMoreFeatured ? (
-                    <><ChevronUp size={16} /> Show Less</>
-                  ) : (
-                    <><ChevronDown size={16} /> Show {featured.length - 4} More</>
-                  )}
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </div>
-
-      {/* ── Zoka Picks ── */}
-      {zokaMatches.length > 0 && (
-        <div style={{ padding: '0 20px 16px' }}>
-          <div className="zoka-section z-enter" style={{ animationDelay: '350ms' }}>
-            <div className="zoka-header">
-              <div className="zoka-header-icon">
-                <Star size={18} style={{ color: 'var(--gold)' }} />
-              </div>
-              <div>
-                <h2 style={{ margin: 0, fontSize: '1.05rem', fontWeight: 900, color: 'var(--text-primary)' }}>Zoka Picks</h2>
-                <p style={{ margin: '2px 0 0', fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>
-                  Expert picks for today's matches
-                </p>
-              </div>
-              <Link
-                to="/predictions"
-                className="zbtn"
-                style={{
-                  marginLeft: 'auto',
-                  padding: '8px 14px', borderRadius: 10,
-                  background: 'rgba(245,197,66,.08)', border: '1.5px solid rgba(245,197,66,.18)',
-                  color: 'var(--gold)', fontWeight: 700, fontSize: '.78rem',
-                  textDecoration: 'none', flexShrink: 0,
-                }}
-              >
-                View All <ChevronRight size={12} />
-              </Link>
-            </div>
-
-            <div>
-              {zokaVisible.map((pick, i) => (
-                <div key={i} className="zoka-row" style={{ animationDelay: `${i * 60}ms` }}>
-                  <span className="zoka-kickoff">{pick.kickoff || '--:--'}</span>
-                  <span className="zoka-team">
-                    {pick.homeLogo && <img src={pick.homeLogo} alt="" />}
-                    {pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}
-                  </span>
-                  <span className="zoka-predicted-score">{pick.adminPick?.home ?? '?'}-{pick.adminPick?.away ?? '?'}</span>
-                  <span className="zoka-team away">
-                    {pick.awayLogo && <img src={pick.awayLogo} alt="" />}
-                    {pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}
-                  </span>
-                  <span className="zoka-actual-score">
-                    {pick.status === 'finished' && pick.homeScore != null
-                      ? `${pick.homeScore}-${pick.awayScore}`
-                      : '–'}
-                  </span>
-                  <div className="zoka-result-col">
-                    <ZokaResultBadge pick={pick} />
-                  </div>
-                </div>
-              ))}
-
-              {zokaMatches.length > 3 && (
-                <button
-                  className={`toggle-more-btn ${showMoreZoka ? 'expanded' : ''}`}
-                  onClick={() => setShowMoreZoka(!showMoreZoka)}
-                >
-                 {showMoreZoka ? (
-  <><ChevronUp size={16} /> Show Less</>
-) : (
-  <><ChevronDown size={16} /> Show {zokaMatches.length - 3} More</>
-)}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Explore Grid ── */}
-      <div style={{ padding: '0 20px 40px' }}>
-        <div className="h-section z-enter" style={{ animationDelay: '400ms' }}>
-          <div className="sec-head">
-            <h2>Explore</h2>
-            <div className="sec-head-line" />
-          </div>
-
-          <div className="explore-grid">
-            <ExploreCard
-              to="/predictions"
-              icon={<Target size={22} />}
-              title="Predict"
-              desc="Make your score predictions for today's featured matches"
-              color="var(--accent)"
-              delay={0}
-              badge="LIVE"
-              glow={liveCount > 0}
-            />
-            <ExploreCard
-              to="/leaderboard"
-              icon={<Trophy size={22} />}
-              title="Leaderboard"
-              desc="See how you rank against other predictors today"
-              color="var(--gold)"
-              delay={60}
-            />
-            <ExploreCard
-              to="/fixtures"
-              icon={<Radio size={22} />}
-              title="Live Scores"
-              desc={liveCount > 0 ? `${liveCount} matches live now` : 'Live match scores and results'}
-              color="#ef4444"
-              delay={120}
-              glow={liveCount > 0}
-              badge={liveCount > 0 ? `${liveCount} LIVE` : null}
-            />
-            <ExploreCard
-              to="/fixtures"
-              icon={<CalendarDays size={22} />}
-              title="Fixtures"
-              desc="Full schedule — past, today, tomorrow"
-              color="#60a5fa"
-              delay={180}
-            />
-            <ExploreCard
-              to="/leaderboard?tab=goat"
-              icon={<Crown size={22} />}
-              title="G.O.A.T"
-              desc="All-time top predictors — Hall of Fame"
-              color="var(--gold)"
-              delay={240}
-            />
-          </div>
-        </div>
-      </div>
-
-      {/* ── Footer ── */}
-      <div style={{ padding: '20px 20px 40px', textAlign: 'center' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 12 }}>
-          <div
+        {/* ── CTA BUTTON ── */}
+        <div className="z-fade-up" style={{ animationDelay: '200ms', marginTop: 24, width: '100%' }}>
+          <Link
+            to={isLoggedIn ? '/predictions' : '/login'}
+            className="zbtn cta-primary"
             style={{
-              width: 30, height: 30, borderRadius: 9,
-              background: 'linear-gradient(145deg,#00e676,#00c853)',
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontWeight: 900, fontSize: '.76rem', color: 'var(--bg-deep)',
-              fontFamily: 'var(--font-display)',
-              boxShadow: '0 2px 10px rgba(0,230,118,.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
+              width: '100%', maxWidth: 400, margin: '0 auto', padding: '16px 28px',
+              borderRadius: 14, fontSize: '1rem', fontWeight: 900,
+              background: 'var(--accent)', color: '#fff', textDecoration: 'none',
+              border: 'none', fontFamily: 'inherit',
             }}
           >
-            Z
-          </div>
-          <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-muted)' }}>
-            zokascore<span style={{ color: 'var(--accent)' }}>.xyz</span>
-          </span>
+            {isLoggedIn ? (
+              userScored > 0
+                ? <><CheckCircle size={18} /> View My Predictions</>
+                : <><Target size={18} /> Start Predicting</>
+            ) : (
+              <><LogIn size={18} /> Sign In to Predict</>
+            )}
+            <ArrowRight size={16} />
+          </Link>
         </div>
-        <p style={{ margin: 0, fontSize: '.7rem', color: 'var(--text-muted)', fontWeight: 500, letterSpacing: '.02em' }}>
-          Free football prediction game · No payment required
-        </p>
-      </div>
+      </section>
+
+      {/* ── ZOKA PICKS ── */}
+      {zokaLoading ? (
+        <section style={{ padding: '0 16px', maxWidth: 680, margin: '0 auto' }}>
+          <div className="sec-head"><h2>⭐ Zoka Picks</h2><div className="sec-head-line" /></div>
+          {Array.from({ length: 2 }).map((_, i) => <SkelCard key={i} />)}
+        </section>
+      ) : allZokaFlat.length > 0 ? (
+        <section className="h-section" style={{ padding: '0 16px', maxWidth: 680, margin: '0 auto' }}>
+          <div className="sec-head h-enter" style={{ animationDelay: '250ms' }}>
+            <h2>⭐ Zoka Picks</h2>
+            <span style={{ fontSize: '.72rem', fontWeight: 800, color: 'var(--gold)', background: 'rgba(245,197,66,.08)', padding: '3px 10px', borderRadius: 6 }}>{allZokaFlat.length}</span>
+            <div className="sec-head-line" />
+          </div>
+          <div className="zoka-section">
+            <div className="zoka-header">
+              <div className="zoka-header-icon"><Crown size={18} style={{ color: 'var(--gold)' }} /></div>
+              <div>
+                <div style={{ fontSize: '.88rem', fontWeight: 900, color: 'var(--gold)' }}>Expert Predictions</div>
+                <div style={{ fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600 }}>Curated by Zoka</div>
+              </div>
+            </div>
+            {allZoka.map((group) => (
+              <Fragment key={group.date}>
+                {allZoka.length > 1 && <DateDivider date={group.date} accent="var(--gold)" />}
+                {zokaVisible
+                  .filter(m => m._dateStr === group.date)
+                  .map((pick, pi) => <ZokaRow key={pick.matchId || pi} pick={pick} index={pi} />)}
+              </Fragment>
+            ))}
+            {zokaHiddenCount > 0 && (
+              <button className={`toggle-more-btn${showMoreZoka ? ' expanded' : ''}`} onClick={() => setShowMoreZoka(v => !v)}>
+                {showMoreZoka ? 'Show less' : `Show ${zokaHiddenCount} more`}
+                <ChevronDown size={16} />
+              </button>
+            )}
+          </div>
+        </section>
+      ) : null}
+
+      {/* ── FEATURED MATCHES ── */}
+      {featuredLoading ? (
+        <section style={{ padding: '0 16px', maxWidth: 680, margin: '0 auto' }}>
+          <div className="sec-head"><h2>🔥 Featured Matches</h2><div className="sec-head-line" /></div>
+          {Array.from({ length: 3 }).map((_, i) => <SkelCard key={i} />)}
+        </section>
+      ) : allFeaturedFlat.length > 0 ? (
+        <section className="h-section" style={{ padding: '0 16px', maxWidth: 680, margin: '0 auto' }}>
+          <div className="sec-head h-enter" style={{ animationDelay: '300ms' }}>
+            <h2>🔥 Featured Matches</h2>
+            <span style={{ fontSize: '.72rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.08)', padding: '3px 10px', borderRadius: 6 }}>{allFeaturedFlat.length}</span>
+            <div className="sec-head-line" />
+          </div>
+          {allFeatured.map((group) => (
+            <Fragment key={group.date}>
+              {allFeatured.length > 1 && <DateDivider date={group.date} />}
+              {featuredVisible
+                .filter(m => m._dateStr === group.date)
+                .map((pred, pi) => (
+                  <FeaturedRow
+                    key={pred.id || pred.matchId || pi}
+                    pred={pred}
+                    userPred={userPredictions[pred.id || pred.matchId]}
+                    userResult={userResults[String(pred.matchId || pred.id)]}
+                    index={pi}
+                    isLoggedIn={isLoggedIn}
+                  />
+                ))}
+            </Fragment>
+          ))}
+          {featuredHiddenCount > 0 && (
+            <button className={`toggle-more-btn${showMoreFeatured ? ' expanded' : ''}`} onClick={() => setShowMoreFeatured(v => !v)}>
+              {showMoreFeatured ? 'Show less' : `Show ${featuredHiddenCount} more`}
+              <ChevronDown size={16} />
+            </button>
+          )}
+        </section>
+      ) : null}
+
+      {/* ── EXPLORE ── */}
+      <section className="h-section" style={{ padding: '0 16px', maxWidth: 680, margin: '24px auto 0' }}>
+        <div className="sec-head h-enter" style={{ animationDelay: '350ms' }}>
+          <h2>🧭 Explore</h2>
+          <div className="sec-head-line" />
+        </div>
+        <div className="explore-grid">
+          <ExploreCard to="/predictions" icon="⚽" title="All Predictions" desc="Predict scores for today's matches" color="#10b981" delay={360} badge={allFeaturedFlat.length > 0 ? `${allFeaturedFlat.length} matches` : null} />
+          <ExploreCard to="/leaderboard" icon="🏆" title="Leaderboard" desc="See who's topping the charts" color="#f5c542" delay={380} badge={liveCount > 0 ? `${liveCount} live` : null} glow={liveCount > 0} />
+          <ExploreCard to="/profile" icon="👤" title="My Profile" desc="Track your prediction stats" color="#60a5fa" delay={400} />
+          <ExploreCard to="/competitions" icon="🏟️" title="Competitions" desc="Browse leagues & cups" color="#a855f7" delay={420} />
+          <ExploreCard to="/results" icon="📊" title="Results" desc="Check past match results" color="#f97316" delay={440} />
+          <ExploreCard to="/how-it-works" icon="📖" title="How It Works" desc="Learn the scoring system" color="#06b6d4" delay={460} />
+        </div>
+      </section>
+
+      {/* ── BOTTOM SPACER ── */}
+      <div style={{ height: 100 }} />
+
+      {/* ── TOAST ── */}
+      {toast && (
+        <div className="toast">
+          <div className="toast-inner"><Zap size={16} /><span>{toast}</span></div>
+        </div>
+      )}
     </div>
   );
 }

@@ -114,12 +114,12 @@ const LEAGUES = [
 export default function Footer() {
   injectStyles();
 
-  const { currentUser, logout } = useAuth();
+  const { currentUser, signOut } = useAuth();
   const navigate = useNavigate();
   const d = (i) => `${i * 60 + 100}ms`;
 
   const handleSignOut = async () => {
-    try { await logout(); } catch {}
+    try { await signOut(); } catch {}
     navigate('/');
   };
 

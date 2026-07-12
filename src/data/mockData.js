@@ -1,4 +1,3 @@
-
 const LEAGUES = {
   PL: { name: 'Premier League', color: '#3d195b' },
   LL: { name: 'La Liga', color: '#ee8707' },

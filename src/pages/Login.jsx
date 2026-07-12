@@ -12,8 +12,8 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'auth-mob-v2';
   s.textContent = `
-    @keyframes auth_fadeUp{from{opacity:0;transform:translateY(28px)}
-body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
+    body{overflow-x:hidden;width:100%;max-width:100vw}
+    @keyframes auth_fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
     @keyframes auth_pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.015)}100%{transform:scale(1);opacity:1}}
     @keyframes auth_spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
     @keyframes auth_glow{0%,100%{box-shadow:0 0 20px rgba(0,230,118,.12)}50%{box-shadow:0 0 44px rgba(0,230,118,.22)}}
@@ -264,8 +264,7 @@ export default function Login() {
 
   return (
     <div style={{
-      minHeight: '100vh',overflow:'hidden',
-      minHeight: '100dvh',overflow:'hidden',
+      minHeight: '100vh',
       background: 'var(--bg-deep)',
       display: 'flex',
       alignItems: 'center',

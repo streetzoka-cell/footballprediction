@@ -1,14 +1,12 @@
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/hooks/useMatchData.js
-// Updated for lazy user data loading
 //
-// ★ KEY CHANGE: Hooks that need user data now call
-//   `ensureUserData(uid)` before returning data.
-//   This triggers exactly ONE batch of Firestore reads
-//   per user session, not on every app load.
-// ═════════════════════════════════════════════════════════════════════════════
+// ★ ENHANCED: Uses event bus for reactive updates
+// ★ ENHANCED: Uses shared constants
+// ★ ENHANCED: Proper cleanup of all event subscriptions
+// ═══════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../utils/firebase';
 import {
   collection,
@@ -24,24 +22,34 @@ import {
 } from 'firebase/firestore';
 import { dataLayer, todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart } from '../utils/dataLayer';
 import { useAppData } from '../context/AppDataContext';
+import { eventBus, EVENT } from '../utils/eventBus';
+
+// ★ Import shared constants instead of redefining
+import {
+  SPORT,
+  TIMEOUT,
+  CACHE_KEY,
+  PATHS,
+  calcPoints,
+  RESULT_TYPE,
+  POINTS,
+} from '../utils/constants';
 
 /* ═══════════════════════════════════════════════════
    EXPORTED DATE HELPERS
    ═══════════════════════════════════════════════════ */
-
 export { todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart };
 
 /* ═══════════════════════════════════════════════════
-   POINTS CALCULATION
+   SAFETY TIMEOUT
    ═══════════════════════════════════════════════════ */
 
-export function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
+function safeEnsureUser(appData, uid) {
+  if (!uid || !appData?.ensureUserData) return Promise.resolve();
+  return Promise.race([
+    appData.ensureUserData(uid),
+    new Promise((resolve) => setTimeout(resolve, TIMEOUT.USER_LOAD_SAFETY)),
+  ]);
 }
 
 /* ═══════════════════════════════════════════════════
@@ -71,7 +79,7 @@ function rankEntries(list) {
 }
 
 /* ═══════════════════════════════════════════════════
-   CACHE INVALIDATION HELPERS
+   CACHE INVALIDATION HELPERS — Now emit events
    ═══════════════════════════════════════════════════ */
 
 export function invalidateCache(key) {
@@ -89,7 +97,7 @@ export function invalidateCachePrefix(prefix) {
 async function _updateDailySummaryIncremental(dateStr, resolvedList) {
   if (!db || !resolvedList.length) return;
 
-  const ref = doc(db, 'daily_leaderboard', dateStr);
+  const ref = doc(db, PATHS.DAILY_LEADERBOARD, dateStr);
   const snap = await getDoc(ref);
 
   const base = snap.exists() ? snap.data() : null;
@@ -116,8 +124,8 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
     entry.predictions += 1;
     entry.resolved += 1;
     entry.points += r.points;
-    if (r.resultType === 'exact') entry.exact += 1;
-    else if (r.resultType === 'result') entry.result += 1;
+    if (r.resultType === RESULT_TYPE.EXACT) entry.exact += 1;
+    else if (r.resultType === RESULT_TYPE.RESULT) entry.result += 1;
     else entry.miss += 1;
   }
 
@@ -134,6 +142,9 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
     date: dateStr,
     updatedAt: serverTimestamp(),
   }, { merge: true });
+
+  // ★ Emit leaderboard update event
+  eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries });
 }
 
 /* ═══════════════════════════════════════════════════
@@ -143,7 +154,7 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
 async function _updateGoatIncremental(resolvedList) {
   if (!db || !resolvedList.length) return;
 
-  const ref = doc(db, 'leaderboard_summaries', 'current');
+  const ref = doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current');
   const snap = await getDoc(ref);
 
   if (!snap.exists()) {
@@ -169,8 +180,8 @@ async function _updateGoatIncremental(resolvedList) {
     entry.points += r.points;
     entry.predictions += 1;
     entry.resolved += 1;
-    if (r.resultType === 'exact') entry.exact += 1;
-    else if (r.resultType === 'result') entry.result += 1;
+    if (r.resultType === RESULT_TYPE.EXACT) entry.exact += 1;
+    else if (r.resultType === RESULT_TYPE.RESULT) entry.result += 1;
     else entry.miss += 1;
   }
 
@@ -183,6 +194,9 @@ async function _updateGoatIncremental(resolvedList) {
     stats: computeStats(entries),
     updatedAt: serverTimestamp(),
   }, { merge: true });
+
+  // ★ Emit GOAT leaderboard update event
+  eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries });
 }
 
 /* ═══════════════════════════════════════════════════
@@ -195,13 +209,13 @@ export async function rebuildDailySummary(dateStr) {
 
   try {
     const resultsSnap = await getDocs(
-      query(collection(db, 'prediction_results'), where('matchDate', '==', dateStr))
+      query(collection(db, PATHS.PREDICTION_RESULTS), where('matchDate', '==', dateStr))
     );
     const predsSnap = await getDocs(
-      query(collection(db, 'user_predictions'), where('matchDate', '==', dateStr))
+      query(collection(db, PATHS.USER_PREDICTIONS), where('matchDate', '==', dateStr))
     );
     const activeSnap = await getDocs(
-      query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr))
+      query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr))
     );
 
     const scoreMap = {};
@@ -224,8 +238,8 @@ export async function rebuildDailySummary(dateStr) {
       const u = userStats[r.userId];
       u.predictions++; u.resolved++;
       u.points += r.points || 0;
-      if (r.resultType === 'exact') u.exact++;
-      else if (r.resultType === 'result') u.result++;
+      if (r.resultType === RESULT_TYPE.EXACT) u.exact++;
+      else if (r.resultType === RESULT_TYPE.RESULT) u.result++;
       else u.miss++;
     });
 
@@ -251,8 +265,8 @@ export async function rebuildDailySummary(dateStr) {
       u.resolved++;
       const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
       u.points += r.points;
-      if (r.type === 'exact') u.exact++;
-      else if (r.type === 'result') u.result++;
+      if (r.type === RESULT_TYPE.EXACT) u.exact++;
+      else if (r.type === RESULT_TYPE.RESULT) u.result++;
       else u.miss++;
     });
 
@@ -270,7 +284,7 @@ export async function rebuildDailySummary(dateStr) {
       predCounts[p.predId] = (predCounts[p.predId] || 0) + 1;
     });
 
-    await setDoc(doc(db, 'daily_leaderboard', dateStr), {
+    await setDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr), {
       entries,
       top3: entries.slice(0, 3),
       rest: entries.slice(3),
@@ -282,8 +296,12 @@ export async function rebuildDailySummary(dateStr) {
       date: dateStr,
     });
 
-    invalidateCache(`active:${dateStr}`);
-    invalidateCache(`dlb:${dateStr}`);
+    // ★ Invalidate caches and emit events
+    dataLayer.invalidate(CACHE_KEY.activePredictions(dateStr));
+    dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(dateStr));
+    eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries });
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr });
+    
     console.log(`[Summary] Rebuilt for ${dateStr}: ${entries.length} players`);
   } catch (e) {
     console.error('[Summary] Rebuild failed:', e);
@@ -298,7 +316,7 @@ export async function rebuildGoatLeaderboard() {
   if (!db) return;
 
   try {
-    const snap = await getDocs(collection(db, 'user_points_total'));
+    const snap = await getDocs(collection(db, PATHS.USER_POINTS_TOTAL));
 
     const entries = rankEntries(
       snap.docs
@@ -316,7 +334,7 @@ export async function rebuildGoatLeaderboard() {
         }))
     );
 
-    await setDoc(doc(db, 'leaderboard_summaries', 'current'), {
+    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'), {
       entries,
       top3: entries.slice(0, 3),
       rest: entries.slice(3),
@@ -324,7 +342,9 @@ export async function rebuildGoatLeaderboard() {
       updatedAt: serverTimestamp(),
     });
 
-    invalidateCache('hist:goat');
+    dataLayer.invalidate(CACHE_KEY.historical('goat'));
+    eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries });
+    
     console.log(`[GOAT] Rebuilt: ${entries.length} players`);
   } catch (e) {
     console.error('[GOAT] Rebuild failed:', e);
@@ -345,12 +365,12 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
   }
 
   const docId = period === 'goat' ? 'current' : period === 'weekly' ? `weekly_${startDate}` : `monthly_${startDate}`;
-  const cacheKey = `hist:${period}`;
+  const cacheKey = CACHE_KEY.historical(period);
 
   try {
     const snap = await getDocs(
       query(
-        collection(db, 'prediction_results'),
+        collection(db, PATHS.PREDICTION_RESULTS),
         where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))
       )
     );
@@ -367,8 +387,8 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
       const u = userMap[r.userId];
       u.predictions++; u.resolved++;
       u.points += r.points || 0;
-      if (r.resultType === 'exact') u.exact++;
-      else if (r.resultType === 'result') u.result++;
+      if (r.resultType === RESULT_TYPE.EXACT) u.exact++;
+      else if (r.resultType === RESULT_TYPE.RESULT) u.result++;
       else u.miss++;
     });
 
@@ -376,7 +396,7 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
       Object.values(userMap).filter((u) => u.predictions > 0)
     );
 
-    await setDoc(doc(db, 'leaderboard_summaries', docId), {
+    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId), {
       entries,
       top3: entries.slice(0, 3),
       rest: entries.slice(3),
@@ -386,7 +406,9 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
       updatedAt: serverTimestamp(),
     });
 
-    invalidateCache(cacheKey);
+    dataLayer.invalidate(cacheKey);
+    eventBus.emit(EVENT.LEADERBOARD_UPDATED, { period, entries });
+    
     console.log(`[Period] Rebuilt ${period} (${startDate}): ${entries.length} players`);
   } catch (e) {
     console.error(`[Period] Rebuild ${period} failed:`, e);
@@ -401,7 +423,7 @@ export async function rebuildAllLeaderboards() {
 }
 
 /* ═══════════════════════════════════════════════════
-   ADMIN: MATCH RESOLVER
+   ADMIN: MATCH RESOLVER — Emits events
    ═══════════════════════════════════════════════════ */
 
 const _resolvingNow = new Set();
@@ -414,7 +436,7 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
   try {
     const dateKey = matchDate || todayStr();
 
-    const statusRef = doc(db, 'match_resolution_status', dateKey);
+    const statusRef = doc(db, PATHS.MATCH_RESOLUTION_STATUS, dateKey);
     const statusSnap = await getDoc(statusRef);
     const alreadyResolved = new Set(
       statusSnap.exists() ? statusSnap.data().resolvedMatches || [] : []
@@ -422,7 +444,7 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
     if (alreadyResolved.has(String(matchId))) return 0;
 
     const predsSnap = await getDocs(
-      query(collection(db, 'user_predictions'), where('matchId', '==', matchId))
+      query(collection(db, PATHS.USER_PREDICTIONS), where('matchId', '==', matchId))
     );
 
     if (predsSnap.empty) {
@@ -434,63 +456,107 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       return 0;
     }
 
-    const resolvedList = [];
-    const batch = writeBatch(db);
+   const resolvedList = [];
+const batch = writeBatch(db);
+let hasError = false;
 
-    predsSnap.forEach((d) => {
-      const p = d.data();
-      const uid = p.userId;
+predsSnap.forEach((d) => {
+  if (hasError) return;
+  try {
+    const p = d.data();
+    const uid = p.userId;
+    const actualH = Number(actualH);
+    const actualA = Number(actualA);
+    
+    // ★ Validate actual scores are valid numbers
+    if (isNaN(actualH) || isNaN(actualA)) {
+      console.warn(`[Resolver] Invalid scores for match ${matchId}:`, { actualH, actualA });
+      return;
+    }
+
+    // ★ Defensive calcPoints call - handle any edge case
+    let points = 0;
+    let resultType = 'pending';
+    
+    try {
       const r = calcPoints(p.homeScore, p.awayScore, actualH, actualA);
+      points = r.points ?? 0;
+      resultType = r.type ?? 'pending';
+    } catch (err) {
+      console.error('[Resolver] calcPoints error for match', matchId, err);
+      points = 0;
+      resultType = 'miss';
+    }
 
-      resolvedList.push({
-        userId: uid,
-        displayName: p.displayName || 'Player',
-        matchId: String(matchId),
-        points: r.points,
-        resultType: r.type,
-        actualH,
-        actualA,
-      });
+    if (points === undefined || resultType === undefined) {
+      console.warn(`[Resolver] Unexpected calcPoints result for match ${matchId}`);
+      points = 0;
+      resultType = 'miss';
+    }
 
-      batch.set(
-        doc(db, 'prediction_results', `${uid}_${matchId}`),
-        {
-          userId: uid,
-          matchId: String(matchId),
-          predId: p.predId,
-          matchDate: p.matchDate || matchDate || todayStr(),
-          homeTeam: p.homeTeam || 'Home',
-          awayTeam: p.awayTeam || 'Away',
-          homeLogo: p.homeLogo || null,
-          awayLogo: p.awayLogo || null,
-          league: p.league || '',
-          kickoff: p.kickoff || null,
-          predictedHome: p.homeScore,
-          predictedAway: p.awayScore,
-          actualHome: actualH,
-          actualAway: actualA,
-          points: r.points,
-          resultType: r.type,
-          resolvedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      batch.set(
-        doc(db, 'user_points_total', uid),
-        {
-          totalPoints: increment(r.points),
-          exactCount: increment(r.type === 'exact' ? 1 : 0),
-          resultCount: increment(r.type === 'result' ? 1 : 0),
-          missCount: increment(r.type === 'miss' ? 1 : 0),
-          predictionsCount: increment(1),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
+    resolvedList.push({
+      userId: uid,
+      displayName: p.displayName || 'Player',
+      matchId: String(matchId),
+      points,
+      resultType,
+      actualH,
+      actualA,
     });
 
-    const zokaRef = doc(db, 'zoka_picks', dateKey);
+    batch.set(
+      doc(db, 'prediction_results', `${uid}_${matchId}`),
+      {
+        userId: uid,
+        matchId: String(matchId),
+        predId: p.predId,
+        matchDate: p.matchDate || matchDate || todayStr(),
+        homeTeam: p.homeTeam || 'Home',
+        awayTeam: p.awayTeam || 'Away',
+        homeLogo: p.homeLogo || null,
+        awayLogo: p.awayLogo || null,
+        league: p.league || '',
+        kickoff: p.kickoff || null,
+        predictedHome: p.homeScore,
+        predictedAway: p.awayScore,
+        actualHome: actualH,
+        actualAway: actualA,
+        points,  // ★ Always a valid number now
+        resultType,  // ★ Always a valid string now
+        resolvedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    batch.set(
+      doc(db, 'user_points_total', uid),
+      {
+        totalPoints: increment(points),  // ★ Use local variable, not r.points
+        exactCount: increment(resultType === 'exact' ? 1 : 0),
+        resultCount: increment(resultType === 'result' ? 1 : 0),
+        missCount: increment(resultType === 'miss' ? 1 : 0),
+        predictionsCount: increment(1),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
+  } catch (err) {
+    console.error('[Resolver] Error processing prediction for match', matchId, err);
+    hasError = true;
+  }
+});
+
+if (hasError) {
+  console.error('[Resolver] Batch commit aborted due to processing errors');
+} else {
+  try {
+    await batch.commit();
+  } catch (err) {
+    console.error('[Resolver] Batch commit failed:', err);
+  }
+}
+
+const zokaRef = doc(db, PATHS.ZOKA_PICKS, dateKey);
     const zokaSnap = await getDoc(zokaRef);
     if (zokaSnap.exists()) {
       const zokaData = zokaSnap.data();
@@ -519,18 +585,28 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
     await _updateDailySummaryIncremental(dateKey, resolvedList);
     await _updateGoatIncremental(resolvedList);
 
-    // Invalidate ALL affected caches (memory + localStorage)
-    invalidateCachePrefix(`dlb:${dateKey}`);
+    // Invalidate ALL affected caches
+    dataLayer.invalidatePrefix(`dlb:${dateKey}`);
     for (const r of resolvedList) {
-      invalidateCache(`upt:${r.userId}`);
-      invalidateCache(`myResults:${r.userId}:${dateKey}`);
-      invalidateCache(`myPreds:${r.userId}:${dateKey}`);
+      dataLayer.invalidate(CACHE_KEY.userPoints(r.userId));
+      dataLayer.invalidate(CACHE_KEY.predictionResults(r.userId, dateKey));
+      dataLayer.invalidate(CACHE_KEY.userPredictions(r.userId, dateKey));
     }
-    invalidateCache('hist:goat');
-    invalidateCache('hist:weekly');
-    invalidateCache('hist:monthly');
-    invalidateCache(`active:${dateKey}`);
-    invalidateCache(`zoka:${dateKey}`);
+    dataLayer.invalidate(CACHE_KEY.historical('goat'));
+    dataLayer.invalidate(CACHE_KEY.historical('weekly'));
+    dataLayer.invalidate(CACHE_KEY.historical('monthly'));
+    dataLayer.invalidate(CACHE_KEY.activePredictions(dateKey));
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(dateKey));
+
+    // ★ Emit match resolved event for reactive UI updates
+    eventBus.emit(EVENT.MATCH_RESOLVED, {
+      matchId: String(matchId),
+      dateStr: dateKey,
+      actualH,
+      actualA,
+      results: resolvedList,
+      affectedUsers: resolvedList.map(r => r.userId),
+    });
 
     return resolvedList.length;
   } catch (e) {
@@ -548,16 +624,30 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
 export function useUniversalResolver() {}
 
 /* ═══════════════════════════════════════════════════
-   HOOK: useActivePredictions
+   HOOK: useActivePredictions — Now reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useActivePredictions(date) {
   const dateStr = date || todayStr();
   const isToday = dateStr === todayStr();
   const appData = useAppData();
+  const cancelledRef = useRef(false);
 
   const [preds, setPreds] = useState(null);
   const [loading, setLoading] = useState(!isToday);
+
+  // ★ Subscribe to prediction updates for reactive refresh
+  useEffect(() => {
+    if (!isToday) return;
+    
+    const unsub = eventBus.on(EVENT.PREDICTIONS_UPDATED, (payload) => {
+      if (payload.dateStr === dateStr && appData.activePredictions) {
+        setPreds(appData.activePredictions);
+      }
+    });
+    
+    return unsub;
+  }, [isToday, dateStr]);
 
   useEffect(() => {
     if (isToday) {
@@ -568,19 +658,18 @@ export function useActivePredictions(date) {
 
   useEffect(() => {
     if (isToday) return;
-
-    let cancelled = false;
+    cancelledRef.current = false;
 
     const load = async () => {
       setLoading(true);
       try {
         const data = await dataLayer.fetchActivePredictions(dateStr);
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPreds(data);
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPreds([]);
           setLoading(false);
         }
@@ -589,7 +678,7 @@ export function useActivePredictions(date) {
 
     load();
 
-    return () => { cancelled = true; };
+    return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
 
   const scoreMap = useMemo(() => dataLayer.getScoreMap(preds || []), [preds]);
@@ -635,58 +724,67 @@ export function useAllUserPredictions(date) {
 }
 
 /* ═══════════════════════════════════════════════════
-   ★ HOOK: useMyPredictions — LAZY LOADING
-   ═══════════════════════════════════════════════════
-   Calls ensureUserData() on first access.
-   Subsequent accesses use cached data (0 reads).
+   ★ HOOK: useMyPredictions — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useMyPredictions(uid, date) {
   const dateStr = date || todayStr();
   const isToday = dateStr === todayStr();
   const appData = useAppData();
+  const cancelledRef = useRef(false);
 
   const [preds, setPreds] = useState(null);
   const [loading, setLoading] = useState(false);
   const [triggered, setTriggered] = useState(false);
 
-  // ★ For today + authenticated user: trigger lazy load
+  // ★ Subscribe to prediction save events for this user
+  useEffect(() => {
+    if (!uid || !isToday) return;
+    
+    const unsub = eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
+      if (payload.uid === uid && payload.dateStr === dateStr) {
+        // Refresh from appData
+        setPreds(appData.userPredictions);
+      }
+    });
+    
+    return unsub;
+  }, [uid, isToday, dateStr]);
+
   useEffect(() => {
     if (isToday && uid && !triggered) {
       setTriggered(true);
       setLoading(true);
-      appData.ensureUserData(uid).then(() => {
-        setLoading(false);
+      safeEnsureUser(appData, uid).finally(() => {
+        if (!cancelledRef.current) setLoading(false);
       });
     }
   }, [isToday, uid, triggered, appData]);
 
-  // Sync from context after load
   useEffect(() => {
     if (isToday && uid && appData._userDataLoaded !== false) {
       setPreds(appData.userPredictions);
       setLoading(false);
     } else if (!uid) {
       setPreds({});
+      setLoading(false);
     }
   }, [isToday, uid, appData.userPredictions, appData._userDataLoaded]);
 
-  // For other dates, fetch via dataLayer
   useEffect(() => {
     if (isToday || !uid) return;
-
-    let cancelled = false;
+    cancelledRef.current = false;
 
     const load = async () => {
       setLoading(true);
       try {
         const data = await dataLayer.fetchUserPredictions(uid, dateStr);
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPreds(data);
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPreds({});
           setLoading(false);
         }
@@ -695,25 +793,38 @@ export function useMyPredictions(uid, date) {
 
     load();
 
-    return () => { cancelled = true; };
+    return () => { cancelledRef.current = true; };
   }, [uid, dateStr, isToday]);
 
   return isToday ? (appData.userPredictions || {}) : (preds || {});
 }
 
 /* ═══════════════════════════════════════════════════
-   ★ HOOK: usePredictionResults — LAZY LOADING
+   ★ HOOK: usePredictionResults — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function usePredictionResults(uid) {
   const appData = useAppData();
   const [triggered, setTriggered] = useState(false);
 
-  // Trigger lazy load
+  // ★ Subscribe to match resolved events for this user
+  useEffect(() => {
+    if (!uid) return;
+    
+    const unsub = eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
+      if (payload.affectedUsers?.includes(uid)) {
+        // Force refresh from appData on next render
+        setTriggered(t => !t); // Trigger re-read
+      }
+    });
+    
+    return unsub;
+  }, [uid]);
+
   useEffect(() => {
     if (uid && !triggered) {
       setTriggered(true);
-      appData.ensureUserData(uid);
+      safeEnsureUser(appData, uid);
     }
   }, [uid, triggered, appData]);
 
@@ -725,17 +836,30 @@ export function usePredictionResults(uid) {
 }
 
 /* ═══════════════════════════════════════════════════
-   ★ HOOK: useUserPoints — LAZY LOADING
+   ★ HOOK: useUserPoints — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useUserPoints(uid) {
   const appData = useAppData();
   const [triggered, setTriggered] = useState(false);
 
+  // ★ Subscribe to match resolved events for this user
+  useEffect(() => {
+    if (!uid) return;
+    
+    const unsub = eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
+      if (payload.affectedUsers?.includes(uid)) {
+        setTriggered(t => !t); // Trigger re-read
+      }
+    });
+    
+    return unsub;
+  }, [uid]);
+
   useEffect(() => {
     if (uid && !triggered) {
       setTriggered(true);
-      appData.ensureUserData(uid);
+      safeEnsureUser(appData, uid);
     }
   }, [uid, triggered, appData]);
 
@@ -744,16 +868,30 @@ export function useUserPoints(uid) {
 }
 
 /* ═══════════════════════════════════════════════════
-   HOOK: useZokaPicks
+   HOOK: useZokaPicks — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useZokaPicks(date) {
   const dateStr = date || todayStr();
   const isToday = dateStr === todayStr();
   const appData = useAppData();
+  const cancelledRef = useRef(false);
 
   const [picks, setPicks] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // ★ Subscribe to zoka picks updates
+  useEffect(() => {
+    if (!isToday) return;
+    
+    const unsub = eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (payload) => {
+      if (payload.dateStr === dateStr && appData.zokaPicks) {
+        setPicks(appData.zokaPicks);
+      }
+    });
+    
+    return unsub;
+  }, [isToday, dateStr]);
 
   useEffect(() => {
     if (isToday) {
@@ -763,19 +901,18 @@ export function useZokaPicks(date) {
 
   useEffect(() => {
     if (isToday) return;
-
-    let cancelled = false;
+    cancelledRef.current = false;
 
     const load = async () => {
       setLoading(true);
       try {
         const data = await dataLayer.fetchZokaPicks(dateStr);
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPicks(data);
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setPicks(null);
           setLoading(false);
         }
@@ -784,14 +921,14 @@ export function useZokaPicks(date) {
 
     load();
 
-    return () => { cancelled = true; };
+    return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
 
   return isToday ? appData.zokaPicks : picks;
 }
 
 /* ═══════════════════════════════════════════════════
-   HOOK: useZokaVotes
+   HOOK: useZokaVotes — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useZokaVotes(date) {
@@ -801,6 +938,17 @@ export function useZokaVotes(date) {
 
   const [voteStats, setVoteStats] = useState({});
   const [userVotes, setUserVotes] = useState({});
+
+  // ★ Subscribe to vote cast events
+  useEffect(() => {
+    if (!isToday) return;
+    
+    const unsub = eventBus.on(EVENT.ZOKA_VOTE_CAST, () => {
+      setVoteStats(appData.zokaVoteStats);
+    });
+    
+    return unsub;
+  }, [isToday]);
 
   useEffect(() => {
     if (isToday) {
@@ -817,7 +965,7 @@ export function useZokaVotes(date) {
     const load = async () => {
       try {
         const data = await dataLayer.fetchZokaVotes(dateStr);
-        if (!cancelled) {
+        if (cancelled) {
           setVoteStats(data?.stats || {});
         }
       } catch { /* ignore */ }
@@ -841,19 +989,42 @@ export function useZokaVotes(date) {
 }
 
 /* ═══════════════════════════════════════════════════
-   HOOK: useDailyLeaderboard
+   HOOK: useDailyLeaderboard — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useDailyLeaderboard(date) {
   const dateStr = date || todayStr();
   const isToday = dateStr === todayStr();
   const appData = useAppData();
+  const cancelledRef = useRef(false);
 
   const [entries, setEntries] = useState(null);
   const [top3, setTop3] = useState(null);
   const [rest, setRest] = useState(null);
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // ★ Subscribe to daily leaderboard updates
+  useEffect(() => {
+    const unsub = eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
+      if (payload.dateStr === dateStr) {
+        if (isToday) {
+          setEntries(appData.dailyEntries);
+          setTop3(appData.dailyTop3);
+          setRest(appData.dailyRest);
+          setStats(appData.dailyStats);
+        } else if (payload.entries) {
+          setEntries(payload.entries);
+          setTop3(payload.entries.slice(0, 3));
+          setRest(payload.entries.slice(3));
+          setStats(computeStats(payload.entries));
+        }
+        setLoading(false);
+      }
+    });
+    
+    return unsub;
+  }, [isToday, dateStr]);
 
   useEffect(() => {
     if (isToday) {
@@ -867,33 +1038,32 @@ export function useDailyLeaderboard(date) {
 
   useEffect(() => {
     if (isToday) return;
-
-    let cancelled = false;
+    cancelledRef.current = false;
 
     const load = async () => {
       setLoading(true);
       try {
         const data = await dataLayer.fetchDailyLeaderboard(dateStr);
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           if (data?.entries) {
             setEntries(data.entries);
             setTop3(data.top3 || data.entries.slice(0, 3));
             setRest(data.rest || data.entries.slice(3));
-            setStats(data.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
+            setStats(data.stats || computeStats(data.entries));
           } else {
             setEntries([]);
             setTop3([]);
             setRest([]);
-            setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
+            setStats(computeStats([]));
           }
           setLoading(false);
         }
       } catch {
-        if (!cancelled) {
+        if (!cancelledRef.current) {
           setEntries([]);
           setTop3([]);
           setRest([]);
-          setStats({ avg: '0.0', preds: 0, exact: 0, players: 0 });
+          setStats(computeStats([]));
           setLoading(false);
         }
       }
@@ -901,13 +1071,13 @@ export function useDailyLeaderboard(date) {
 
     load();
 
-    return () => { cancelled = true; };
+    return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
 
   const finalEntries = isToday ? (appData.dailyEntries || []) : (entries || []);
   const finalTop3 = isToday ? (appData.dailyTop3 || []) : (top3 || []);
   const finalRest = isToday ? (appData.dailyRest || []) : (rest || []);
-  const finalStats = isToday ? (appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 }) : (stats || { avg: '0.0', preds: 0, exact: 0, players: 0 });
+  const finalStats = isToday ? (appData.dailyStats || computeStats([])) : (stats || computeStats([]));
   const finalLoading = isToday ? appData.loading : loading;
 
   return {
@@ -921,47 +1091,113 @@ export function useDailyLeaderboard(date) {
 }
 
 /* ═══════════════════════════════════════════════════
-   HOOK: useHistoricalLeaderboard
+   ★ HOOK: useHistoricalLeaderboard — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useHistoricalLeaderboard(period) {
   const appData = useAppData();
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  const cachedData = appData.historicalLeaderboards[period];
+  const cachedData = appData.historicalLeaderboards?.[period];
+
+  // ★ Subscribe to leaderboard updates for this period
+  useEffect(() => {
+    const unsub = eventBus.on(EVENT.LEADERBOARD_UPDATED, (payload) => {
+      if (payload.period === period) {
+        setLoading(false);
+        setError(null);
+      }
+    });
+    
+    // Also listen for GOAT-specific events
+    const unsub2 = period === 'goat' 
+      ? eventBus.on(EVENT.GOAT_LEADERBOARD_UPDATED, () => {
+          setLoading(false);
+          setError(null);
+        })
+      : () => {};
+    
+    return () => {
+      unsub();
+      unsub2();
+    };
+  }, [period]);
 
   useEffect(() => {
     if (cachedData) {
       setLoading(false);
+      setError(null);
       return;
     }
 
-    appData.loadHistoricalLeaderboard(period);
-  }, [period, cachedData, appData]);
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
 
-  const entries = cachedData?.entries || [];
-  const stale = cachedData?.stale ?? true;
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled) {
+        console.warn(`[useHistoricalLeaderboard] Timeout for "${period}" — showing stale/empty`);
+        setLoading(false);
+        setError('timeout');
+      }
+    }, TIMEOUT.HIST_LOAD_SAFETY);
+
+    if (appData.loadHistoricalLeaderboard) {
+      appData.loadHistoricalLeaderboard(period).catch((err) => {
+        if (!cancelled) {
+          console.warn(`[useHistoricalLeaderboard] Load failed for "${period}":`, err?.message);
+          setLoading(false);
+          setError('load_failed');
+        }
+      });
+    } else {
+      setLoading(false);
+      setError('no_loader');
+    }
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+    };
+  }, [period]);
+
+  const data = appData.historicalLeaderboards?.[period] || cachedData;
+  const entries = data?.entries || [];
+  const stale = data?.stale ?? true;
 
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
   const rest = useMemo(() => entries.slice(3), [entries]);
   const stats = useMemo(() => computeStats(entries), [entries]);
 
-  return { entries, top3, rest, stats, loading, error: null, stale };
+  return { entries, top3, rest, stats, loading, error, stale };
 }
 
 /* ═══════════════════════════════════════════════════
-   ★ HOOK: useMyStats — LAZY LOADING
+   ★ HOOK: useMyStats — Reactive via events
    ═══════════════════════════════════════════════════ */
 
 export function useMyStats(uid, date) {
   const appData = useAppData();
   const [triggered, setTriggered] = useState(false);
 
-  // Trigger lazy load when this hook is called
+  // ★ Subscribe to match resolved events for this user
+  useEffect(() => {
+    if (!uid) return;
+    
+    const unsub = eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
+      if (payload.affectedUsers?.includes(uid)) {
+        setTriggered(t => !t);
+      }
+    });
+    
+    return unsub;
+  }, [uid]);
+
   useEffect(() => {
     if (uid && !triggered) {
       setTriggered(true);
-      appData.ensureUserData(uid);
+      safeEnsureUser(appData, uid);
     }
   }, [uid, triggered, appData]);
 
@@ -987,7 +1223,7 @@ export function useMyStats(uid, date) {
 }
 
 /* ═══════════════════════════════════════════════════
-   ACTION: savePrediction
+   ACTION: savePrediction — Emits events
    ═══════════════════════════════════════════════════ */
 
 export async function savePrediction(uid, displayName, pred, h, a) {
@@ -995,7 +1231,7 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   const dateStr = pred.matchDate || todayStr();
 
   await setDoc(
-    doc(db, 'user_predictions', `${uid}_${pred.id}`),
+    doc(db, PATHS.USER_PREDICTIONS, `${uid}_${pred.id}`),
     {
       userId: uid,
       displayName: displayName || 'Anonymous',
@@ -1016,8 +1252,8 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     { merge: true }
   );
 
-  // Invalidate this user's prediction cache
-  invalidateCache(`myPreds:${uid}:${dateStr}`);
+  // Invalidate cache
+  dataLayer.invalidate(CACHE_KEY.userPredictions(uid, dateStr));
 
   // Refresh via data layer
   try {
@@ -1025,10 +1261,20 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   } catch (err) {
     console.warn('[savePrediction] Refresh failed:', err.message);
   }
+
+  // ★ Emit event for reactive UI updates
+  eventBus.emit(EVENT.USER_PREDICTION_SAVED, {
+    uid,
+    matchId: pred.matchId,
+    predId: pred.id,
+    dateStr,
+    homeScore: h,
+    awayScore: a,
+  });
 }
 
 /* ═══════════════════════════════════════════════════
-   ACTION: saveZokaVote
+   ACTION: saveZokaVote — Emits events
    ═══════════════════════════════════════════════════ */
 
 export async function saveZokaVote(uid, matchId, vote) {
@@ -1036,7 +1282,7 @@ export async function saveZokaVote(uid, matchId, vote) {
   const dateStr = todayStr();
 
   await setDoc(
-    doc(db, 'zoka_vote_stats', dateStr),
+    doc(db, PATHS.ZOKA_VOTE_STATS, dateStr),
     {
       stats: {
         [matchId]: {
@@ -1058,7 +1304,10 @@ export async function saveZokaVote(uid, matchId, vote) {
     localStorage.setItem(key, JSON.stringify(existing));
   } catch { /* ignore */ }
 
-  invalidateCache(`zokaVotes:${dateStr}`);
+  dataLayer.invalidate(CACHE_KEY.zokaVotes(dateStr));
+
+  // ★ Emit vote event
+  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr });
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1069,7 +1318,7 @@ export async function removeZokaVote(uid, matchId, newVote) {
   if (!db) return;
   const dateStr = todayStr();
 
-  const snap = await getDoc(doc(db, 'zoka_vote_stats', dateStr));
+  const snap = await getDoc(doc(db, PATHS.ZOKA_VOTE_STATS, dateStr));
   if (!snap.exists()) return;
 
   const data = snap.data();
@@ -1101,13 +1350,16 @@ export async function removeZokaVote(uid, matchId, newVote) {
   }
 
   await setDoc(
-    doc(db, 'zoka_vote_stats', dateStr),
+    doc(db, PATHS.ZOKA_VOTE_STATS, dateStr),
     { stats: { [matchId]: matchStats }, updatedAt: serverTimestamp() },
     { merge: true }
   );
 
   try { localStorage.setItem(key, JSON.stringify(existing)); } catch { /* ignore */ }
-  invalidateCache(`zokaVotes:${dateStr}`);
+  dataLayer.invalidate(CACHE_KEY.zokaVotes(dateStr));
+
+  // ★ Emit vote event
+  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote: newVote, dateStr });
 }
 
 /* ═══════════════════════════════════════════════════
@@ -1117,7 +1369,10 @@ export async function removeZokaVote(uid, matchId, newVote) {
 export { resolveMatchForAllUsers };
 
 export async function adminRefreshActivePredictions(dateStr) {
-  invalidateCache(`active:${dateStr}`);
+  dataLayer.invalidate(CACHE_KEY.activePredictions(dateStr));
   const data = await dataLayer.fetchActivePredictions(dateStr);
   return data;
 }
+
+// ★ Re-export event bus and events for use in components
+export { eventBus, EVENT };

@@ -1,5 +1,5 @@
-﻿// FILE: src/pages/MasterGames.jsx
-// v8 — Clean, professional, mobile-first. Favourites, notifications, smart date nav.
+// FILE: src/pages/MasterGames.jsx
+// v8 � Clean, professional, mobile-first. Favourites, notifications, smart date nav.
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
@@ -10,9 +10,9 @@ import {
 import { useFootballData } from '../context/FootballDataContext';
 import SEO from '../components/SEO';
 
-/* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Master v8 Clean
-   ═══════════════════════════════════════════════════════════════════════ */
+/* -----------------------------------------------------------------------
+   STYLE INJECTION � Master v8 Clean
+   ----------------------------------------------------------------------- */
 const injectStyles = () => {
   if (document.getElementById('mg8-css')) return;
   const s = document.createElement('style');
@@ -237,9 +237,9 @@ const injectStyles = () => {
   document.head.appendChild(s);
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    SOUND
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 const Sound = {
   ctx: null, on: true, _lg: 0, _lc: 0, _lw: 0,
   _init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return false; } } if (this.ctx.state === 'suspended') this.ctx.resume(); return !!this.ctx; },
@@ -275,22 +275,22 @@ const Sound = {
   },
 };
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    COMMENTARY
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 const CMT = {
   goal:["GOOOAL! The stadium erupts!","What a strike! Net ripped!","Pure football magic!","The ball is in the back of the net!","Somebody call the fire department!"],
   card:["Yellow card shown!","Into the book!","Walking on thin ice now!"],
   redCard:["RED CARD! Early shower!","Straight red! Game changer!"],
   ft:["Full Time! What a match!","Final whistle!"],
-  ht:["Half Time! Regrouping...","HT — Manager's talk incoming!"],
+  ht:["Half Time! Regrouping...","HT � Manager's talk incoming!"],
   kickoff:["Kick Off! We're underway!","And we're off! Game on!"],
 };
 const pick = (a) => a[Math.floor(Math.random()*a.length)];
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    TOAST SYSTEM
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const idRef = useRef(0);
@@ -319,12 +319,12 @@ function ToastContainer({ toasts, onDismiss }) {
       {toasts.map(t => {
         const isGoal = t.type === 'goal', isCard = t.type === 'card';
         let bg, icon;
-        if (isGoal) { bg = 'linear-gradient(135deg,rgba(239,68,68,.92),rgba(185,28,28,.9))'; icon = '⚽'; }
-        else if (isCard) { bg = t.cardType === 'RED_CARD' ? 'linear-gradient(135deg,rgba(220,38,38,.92),rgba(153,27,27,.9))' : 'linear-gradient(135deg,rgba(202,138,4,.92),rgba(146,100,4,.9))'; icon = t.cardType === 'RED_CARD' ? '🟥' : '🟨'; }
+        if (isGoal) { bg = 'linear-gradient(135deg,rgba(239,68,68,.92),rgba(185,28,28,.9))'; icon = '?'; }
+        else if (isCard) { bg = t.cardType === 'RED_CARD' ? 'linear-gradient(135deg,rgba(220,38,38,.92),rgba(153,27,27,.9))' : 'linear-gradient(135deg,rgba(202,138,4,.92),rgba(146,100,4,.9))'; icon = t.cardType === 'RED_CARD' ? '??' : '??'; }
         else {
           const m = { ft: ['rgba(16,185,129,.92)','rgba(5,150,105,.9)'], ht: ['rgba(249,115,22,.92)','rgba(217,90,12,.9)'], live: ['rgba(239,68,68,.92)','rgba(220,38,38,.9)'] };
           const c = m[t.st] || m.live; bg = `linear-gradient(135deg,${c[0]},${c[1]})`;
-          icon = t.st === 'ft' ? '🏁' : t.st === 'ht' ? '⏸️' : '⚡';
+          icon = t.st === 'ft' ? '??' : t.st === 'ht' ? '??' : '?';
         }
         return (
           <div key={t.id} className="mg8-toast" style={{ background: bg }} onClick={() => onDismiss(t.id)}>
@@ -344,9 +344,9 @@ function ToastContainer({ toasts, onDismiss }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    CONFETTI
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function Confetti({ active }) {
   if (!active) return null;
   const colors = ['#ef4444','#10b981','#f59e0b','#3b82f6','#a855f7','#ec4899'];
@@ -358,18 +358,18 @@ function Confetti({ active }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    HELPERS
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function getDateStr(off) { const d = new Date(); d.setDate(d.getDate() + off); return d.toISOString().split('T')[0]; }
 function formatDateShort(d) { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
 function zoneCls(pos, total) { if (total <= 0) return ''; const r = pos / total; if (r <= .25) return 'z-ucl'; if (r <= .4) return 'z-uel'; if (r <= .5) return 'z-uecl'; if (r >= .85) return 'z-rel'; return ''; }
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeTeam?.name, m.awayTeam?.name, m.competition?.name].map(norm).some(x => terms.every(t => x.includes(t)));
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    FAVOURITES PERSISTENCE
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function useFavourites() {
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_favs') || '[]')); } catch { return new Set(); } });
   const toggle = useCallback(id => { setFavs(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); try { localStorage.setItem('mg8_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
@@ -377,9 +377,9 @@ function useFavourites() {
   return { favs, toggle, isFav };
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    NOTIFICATIONS PERSISTENCE
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function useNotifications() {
   const [notifs, setNotifs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_notifs') || '[]')); } catch { return new Set(); } });
   const [globalEnabled, setGlobalEnabled] = useState(() => { try { return localStorage.getItem('mg8_notif_global') === 'true'; } catch { return false; } });
@@ -389,9 +389,9 @@ function useNotifications() {
   return { notifs, toggle, isOn, globalEnabled, toggleGlobal };
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    NOTIFICATION PERMISSION + PUSH
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 async function requestNotifPermission() {
   if (!('Notification' in window)) return false;
   if (Notification.permission === 'granted') return true;
@@ -407,9 +407,9 @@ function sendBrowserNotif(title, body, icon) {
   } catch {}
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    SCORE BREAKDOWN PANEL
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function ScoreBreakdown({ match }) {
   const s = match.score || {};
   const periods = [
@@ -426,7 +426,7 @@ function ScoreBreakdown({ match }) {
       {periods.some(p => p.h != null || p.a != null) && <>
         <div className="mg8-exp-section">Score Breakdown</div>
         {periods.filter(p => p.h != null || p.a != null).map(p => (
-          <div key={p.l} className="mg8-exp-row"><span className="mg8-exp-label">{p.l}</span><span className="mg8-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
+          <div key={p.l} className="mg8-exp-row"><span className="mg8-exp-label">{p.l}</span><span className="mg8-exp-val">{p.h ?? '-'} � {p.a ?? '-'}</span></div>
         ))}
       </>}
       {goals.length > 0 && <>
@@ -434,7 +434,7 @@ function ScoreBreakdown({ match }) {
         {goals.map((g, i) => (
           <div key={i} className="mg8-goal-row">
             <span className="mg8-goal-min">{g.minute != null ? g.minute + "'" : ''}</span>
-            <span className="mg8-goal-icon">⚽</span>
+            <span className="mg8-goal-icon">?</span>
             <span className="mg8-goal-scorer">{g.scorer?.name || 'Unknown'}</span>
             {g.assist?.name && <span className="mg8-goal-assist">(ast. {g.assist.name})</span>}
           </div>
@@ -444,7 +444,7 @@ function ScoreBreakdown({ match }) {
         <div className="mg8-exp-section">Cards ({cards.length})</div>
         {cards.map((c, i) => (
           <div key={i} className="mg8-card-row">
-            <span>{c.type === 'YELLOW_CARD' ? '🟨' : c.type === 'RED_CARD' ? '🟥' : '⚪'}</span>
+            <span>{c.type === 'YELLOW_CARD' ? '??' : c.type === 'RED_CARD' ? '??' : '?'}</span>
             <span className="mg8-card-player">{c.player?.name || 'Unknown'}</span>
             <span className="mg8-card-min">{c.minute != null ? c.minute + "'" : ''}</span>
           </div>
@@ -461,16 +461,16 @@ function ScoreBreakdown({ match }) {
       {refs.length > 0 && <>
         <div className="mg8-exp-section">Officials</div>
         {refs.map((r, i) => (
-          <div key={i} className="mg8-ref-row"><span className="mg8-ref-role">{r.role || 'Referee'}</span><span className="mg8-ref-name">{r.name || '—'}</span>{r.nationality && <span className="mg8-ref-nat">{r.nationality}</span>}</div>
+          <div key={i} className="mg8-ref-row"><span className="mg8-ref-role">{r.role || 'Referee'}</span><span className="mg8-ref-name">{r.name || '�'}</span>{r.nationality && <span className="mg8-ref-nat">{r.nationality}</span>}</div>
         ))}
       </>}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    MATCH CARD
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav, isNotif, onNotif }) {
   const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
   const isFt = m.status === 'FINISHED';
@@ -523,7 +523,7 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
             {(isLive || isFt) ? (
               <div className="mg8-scores">
                 <span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${sh?.home}-${popSide}`}>{sh?.home ?? 0}</span>
-                <span className="mg8-sep">–</span>
+                <span className="mg8-sep">�</span>
                 <span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${sh?.away}-${popSide}`}>{sh?.away ?? 0}</span>
               </div>
             ) : <span className="mg8-vs">VS</span>}
@@ -554,9 +554,9 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    STANDINGS TABLE
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function StandingsTable({ standings }) {
   if (!standings?.length) return null;
   return (
@@ -570,7 +570,7 @@ function StandingsTable({ standings }) {
             <div className="mg8-tbl-wrap">
               <table className="mg8-tbl">
                 <thead><tr><th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="c">GD</th><th className="pts">Pts</th></tr></thead>
-                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '—'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
+                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '�'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
               </table>
             </div>
           </div>
@@ -580,9 +580,9 @@ function StandingsTable({ standings }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    TEAMS GRID
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 function TeamsGrid({ teams }) {
   if (!teams?.length) return null;
   return (
@@ -598,9 +598,9 @@ function TeamsGrid({ teams }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
+/* -----------------------------------------------------------------------
    MAIN COMPONENT
-   ═══════════════════════════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------- */
 export default function MasterGames() {
   injectStyles();
 
@@ -609,7 +609,7 @@ export default function MasterGames() {
   const { favs, toggle: toggleFav, isFav } = useFavourites();
   const { isOn: isNotif, toggle: toggleNotif, globalEnabled, toggleGlobal } = useNotifications();
 
-  /* ── State ── */
+  /* -- State -- */
   const [tab, setTab] = useState('fixtures');
   const [compFilter, setCompFilter] = useState('ALL');
   const [selectedDate, setSelectedDate] = useState(getDateStr(0));
@@ -629,7 +629,7 @@ export default function MasterGames() {
   const [flashGoals, setFlashGoals] = useState(new Set());
   const [statusAnims, setStatusAnims] = useState(new Map());
 
-  /* ── Refs ── */
+  /* -- Refs -- */
   const prevScores = useRef(new Map());
   const prevStatuses = useRef(new Map());
   const prevCardData = useRef(new Map());
@@ -647,7 +647,7 @@ export default function MasterGames() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  /* ── Dates ── */
+  /* -- Dates -- */
   const todayStr = getDateStr(0);
   const yesterdayStr = getDateStr(-1);
   const tomorrowStr = getDateStr(1);
@@ -660,7 +660,7 @@ export default function MasterGames() {
     return arr;
   }, []);
 
-  /* ── Filtered fixtures ── */
+  /* -- Filtered fixtures -- */
   const filteredFixtures = useMemo(() => {
     let list = (fixtures || []).filter(m => {
       const mDate = m.utcDate ? m.utcDate.split('T')[0] : '';
@@ -674,7 +674,7 @@ export default function MasterGames() {
     return list;
   }, [fixtures, selectedDate, compFilter, searchQ]);
 
-  /* ── Grouped by competition ── */
+  /* -- Grouped by competition -- */
   const grouped = useMemo(() => {
     const map = new Map();
     filteredFixtures.forEach(m => {
@@ -686,20 +686,20 @@ export default function MasterGames() {
     return [...map.values()];
   }, [filteredFixtures]);
 
-  /* ── Competitions for filter ── */
+  /* -- Competitions for filter -- */
   const compList = useMemo(() => {
     const map = new Map();
     (fixtures || []).forEach(m => { if (m.competition) map.set(String(m.competition.id), m.competition); });
     return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [fixtures]);
 
-  /* ── Live count for selected date ── */
+  /* -- Live count for selected date -- */
   const liveCount = useMemo(() => filteredFixtures.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [filteredFixtures]);
 
-  /* ── Favourites for selected date ── */
+  /* -- Favourites for selected date -- */
   const favMatches = useMemo(() => filteredFixtures.filter(m => favs.has(m.id)), [filteredFixtures, favs]);
 
-  /* ── Load standings/teams ── */
+  /* -- Load standings/teams -- */
   const handleTabChange = useCallback(async (t) => {
     setTab(t);
     if (t === 'standings' && !standingsData && !standingsLoading) {
@@ -714,9 +714,9 @@ export default function MasterGames() {
     }
   }, [standingsData, standingsLoading, teamsData, teamsLoading, getStandings, getTeams]);
 
-  /* ═══════════════════════════════════════════════════════════════
+  /* ---------------------------------------------------------------
      LIVE CHANGE DETECTION
-     ═══════════════════════════════════════════════════════════════ */
+     --------------------------------------------------------------- */
   useEffect(() => {
     const live = liveMatches || [];
     const liveMap = new Map(live.map(m => [String(m.id), m]));
@@ -728,7 +728,7 @@ export default function MasterGames() {
       if (prev) {
         if (h != null && prev.h != null && h > prev.h) {
           const team = m.homeTeam?.name || 'Home';
-          const score = `${h}–${a}`;
+          const score = `${h}�${a}`;
           addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
           if (Sound.on) Sound.goal();
           setConfettiKey(k => k + 1);
@@ -737,12 +737,12 @@ export default function MasterGames() {
           setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
           if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('⚽ GOAL!', `${team} scored! ${score}`, m.homeTeam?.crest);
+            sendBrowserNotif('? GOAL!', `${team} scored! ${score}`, m.homeTeam?.crest);
           }
         }
         if (a != null && prev.a != null && a > prev.a) {
           const team = m.awayTeam?.name || 'Away';
-          const score = `${h}–${a}`;
+          const score = `${h}�${a}`;
           addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
           if (Sound.on) Sound.goal();
           setConfettiKey(k => k + 1);
@@ -751,7 +751,7 @@ export default function MasterGames() {
           setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
           if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('⚽ GOAL!', `${team} scored! ${score}`, m.awayTeam?.crest);
+            sendBrowserNotif('? GOAL!', `${team} scored! ${score}`, m.awayTeam?.crest);
           }
         }
       }
@@ -769,17 +769,17 @@ export default function MasterGames() {
           setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
           if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('⚡ Kick Off!', `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, m.competition?.emblem);
+            sendBrowserNotif('? Kick Off!', `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, m.competition?.emblem);
           }
         }
         if ((prev === 'IN_PLAY' || prev === 'PAUSED') && curr === 'FINISHED') {
-          const score = `${m.score?.fullTime?.home ?? 0}–${m.score?.fullTime?.away ?? 0}`;
+          const score = `${m.score?.fullTime?.home ?? 0}�${m.score?.fullTime?.away ?? 0}`;
           addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, score, dur: 4000 });
           if (Sound.on) Sound.whistle('ft');
           setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
           if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('🏁 Full Time', `${m.homeTeam?.name} ${score} ${m.awayTeam?.name}`, m.competition?.emblem);
+            sendBrowserNotif('?? Full Time', `${m.homeTeam?.name} ${score} ${m.awayTeam?.name}`, m.competition?.emblem);
           }
         }
         if (curr === 'HALF_TIME' && prev !== 'HALF_TIME') {
@@ -813,7 +813,7 @@ export default function MasterGames() {
     });
   }, [liveMatches, addToast, isNotif, globalEnabled]);
 
-  /* ── Handle global notif toggle ── */
+  /* -- Handle global notif toggle -- */
   const handleGlobalNotif = useCallback(async () => {
     if (!globalEnabled) {
       const granted = await requestNotifPermission();
@@ -825,7 +825,7 @@ export default function MasterGames() {
     toggleGlobal();
   }, [globalEnabled, toggleGlobal, addToast]);
 
-  /* ── Handle notif per match ── */
+  /* -- Handle notif per match -- */
   const handleNotifToggle = useCallback(async (id) => {
     const willEnable = !isNotif(id);
     if (willEnable && !globalEnabled) {
@@ -839,18 +839,18 @@ export default function MasterGames() {
     toggleNotif(id);
   }, [isNotif, toggleNotif, globalEnabled, toggleGlobal, addToast]);
 
-  /* ── Dismiss notif banner ── */
+  /* -- Dismiss notif banner -- */
   const dismissBanner = useCallback(() => {
     setNotifBannerDismissed(true);
     try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {}
   }, []);
 
-  /* ═══════════════════════════════════════════════════════════════
+  /* ---------------------------------------------------------------
      RENDER
-     ═══════════════════════════════════════════════════════════════ */
+     --------------------------------------------------------------- */
   return (
     <div className="mg8-page">
-      <SEO title="Master Games — Live Scores, Fixtures & Standings" description="Track live football scores, fixtures, standings and more." />
+      <SEO title="Master Games � Live Scores, Fixtures & Standings" description="Track live football scores, fixtures, standings and more." />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -858,7 +858,7 @@ export default function MasterGames() {
         {/* Header */}
         <div className="mg8-header">
           <h1>Master Games</h1>
-          <div className="sub">Live scores · Fixtures · Standings</div>
+          <div className="sub">Live scores � Fixtures � Standings</div>
         </div>
 
         {/* Stats */}

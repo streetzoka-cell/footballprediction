@@ -1,1055 +1,1599 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+// ═════════════════════════════════════════════════════════════════════════════════
+// FILE: src/pages/Admin.jsx
+// PRODUCTION-READY ADMIN v14.0 — COMPLETE
+// ═════════════════════════════════════════════════════════════════════════════════
+
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  ShieldAlert, RefreshCw, Trash2, CheckCircle2, XCircle, Zap, Trophy, Target,
-  CalendarDays, BarChart3, Eye, EyeOff, Crown, Pencil, Check, Radio,
-  AlertTriangle, Loader, Plus, ChevronDown, Send, Globe, CircleDot,
-  ArrowUpToLine, Unplug, Clock, TrendingUp, Star, Sparkles, X,
-  Rocket, Monitor, Save, Ban, BadgeCheck, Database,
-  ArrowRight, Timer, Hash, Users, UserCog, Search, Mail, Shield,
-  ChevronRight, LayoutDashboard, StarOff, Copy, CheckCheck, FolderOpen,
-  UserPlus, UserMinus, ToggleLeft, ToggleRight, Info, Filter, SortAsc,
-  Hammer, RotateCcw, ChevronUp
+  ShieldAlert, Trash2, CheckCircle2, XCircle, Zap, Trophy,
+  CalendarDays, BarChart3, Crown, Pencil, Check, Radio,
+  AlertTriangle, Loader2, Plus, ChevronDown, Send,
+  Clock, TrendingUp, Star, Sparkles, X,
+  Save, Timer, Users, UserCog, Search,
+  LayoutDashboard, Copy, History,
+  ChevronUp, RotateCcw, Activity,
+  Eye, ChevronRight, Ban, ArrowLeft
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useFootballData } from '../context/FootballDataContext';
 import { db } from '../utils/firebase';
+import { dataLayer, todayStr } from '../utils/dataLayer';
+import { eventBus, EVENT } from '../utils/eventBus';
 import {
   collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
-  updateDoc, writeBatch, serverTimestamp, getDoc, getDocs, increment
+  updateDoc, serverTimestamp, getDoc, getDocs,
+  orderBy, limit as limitQ, startAfter, writeBatch
 } from 'firebase/firestore';
-import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
 import {
-  useActivePredictions, useZokaPicks, todayStr, tomorrowStr, calcPoints,
   resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard,
-  rebuildPeriodLeaderboard, rebuildAllLeaderboards, adminRefreshActivePredictions,
-  invalidateCache, invalidateCachePrefix
+  rebuildPeriodLeaderboard, rebuildAllLeaderboards,
+  invalidateCache
 } from '../hooks/useMatchData';
+import { PATHS, CACHE_KEY } from '../utils/constants';
 
-function safeMatches(res) {
-  if (!res) return [];
-  if (Array.isArray(res)) return res;
-  if (res && Array.isArray(res.matches)) return res.matches;
-  return [];
-}
-
-const ST = {
-  NS: { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: 'Upcoming' },
-  TBD: { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: 'Upcoming' },
-  SUSP: { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: 'Suspended' },
-  '1H': { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' },
-  '2H': { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' },
-  HT: { c: '#f97316', b: 'rgba(249,115,22,.1)', l: 'HT' },
-  ET: { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'ET' },
-  P: { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Pens' },
-  FT: { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' },
-  AET: { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' },
-  PEN: { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' },
-  PST: { c: '#f59e0b', b: 'rgba(245,158,11,.1)', l: 'PST' },
-  upcoming: { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: 'Upcoming' },
-  finished: { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' },
+/* ═════════════════════════════════════════════════════════════════════════════════
+   MEMORY LAYER
+   ═════════════════════════════════════════════════════════════════════════════════ */
+const _mem = {};
+const mem = {
+  get(k, d) { return k in _mem ? _mem[k] : (typeof d === 'function' ? d() : d); },
+  set(k, v) { _mem[k] = v; },
+};
+const memUpdate = (key, v) => {
+  mem.set(key, typeof v === 'function' ? v(mem.get(key)) : v);
 };
 
+/* ═════════════════════════════════════════════════════════════════════════════════
+   CONSTANTS & HELPERS
+   ═════════════════════════════════════════════════════════════════════════════════ */
 const MAX_FEATURED = 10;
 const MAX_ZOKA = 10;
-const INITIAL_SHOW = 10;
+const SHOW_INIT = 8;
+
+const dateOffset = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().split('T')[0]; };
+const dateLabel = (d) => {
+  const t = todayStr(), tm = dateOffset(1), ys = dateOffset(-1);
+  if (d === t) return 'Today'; if (d === tm) return 'Tomorrow'; if (d === ys) return 'Yesterday';
+  const dt = new Date(d + 'T12:00:00'), days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  return `${days[dt.getDay()]} ${d.slice(5)}`;
+};
+
+const ST_MAP = {
+  SCHEDULED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
+  TIMED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
+  NS:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
+  TBD:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'TBD'},
+  IN_PLAY:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
+  PAUSED:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'HT'},
+  '1H':{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
+  '2H':{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
+  HT:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'HT'},
+  BT:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'BT'},
+  ET:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'ET'},
+  P:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Pens'},
+  FT:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
+  FINISHED:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
+  AET:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
+  PEN:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
+  PST:{c:'#f59e0b',b:'rgba(245,158,11,.1)',l:'PST'},
+};
+const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
+
+const extractDate = m => {
+  if (!m) return '';
+  if (m.utcDate) { const d = m.utcDate.split('T')[0]; if (d?.length >= 10) return d; }
+  if (m.date) { const d = String(m.date).split('T')[0]; if (d?.length >= 10) return d; }
+  if (m.kickoff?.includes?.('T')) return m.kickoff.split('T')[0];
+  const ts = m.timestamp || m.kickOffTimestamp;
+  if (typeof ts === 'number' && ts > 1e12) return new Date(ts).toISOString().split('T')[0];
+  return '';
+};
+
+const isLive = m => { const s = m?.status; return s==='IN_PLAY'||s==='PAUSED'||s==='1H'||s==='2H'||s==='ET'||s==='BT'||m?.isLive; };
+const isFin = m => { const s = m?.status; return s==='FINISHED'||s==='FT'||s==='AET'||s==='PEN'||m?.isFinished; };
+const getScore = m => m?.score?.fullTime ? {h:m.score.fullTime.home,a:m.score.fullTime.away} : m?.homeScore!=null ? {h:m.homeScore,a:m.awayScore} : {h:null,a:null};
+
+const fmtTimeAgo = dt => {
+  if (!dt) return 'Never';
+  let ts;
+  if (typeof dt==='number') ts = dt<1e12?dt*1000:dt;
+  else if (typeof dt==='string') { ts=Date.parse(dt); if(isNaN(ts)) return 'Unknown'; }
+  else if (dt.seconds!=null) ts=dt.seconds*1000;
+  else if (dt?.getTime) ts=dt.getTime();
+  else return 'Unknown';
+  const s=Math.floor((Date.now()-ts)/1000);
+  if(s<10) return 'Just now'; if(s<60) return `${s}s ago`;
+  const m=Math.floor(s/60); if(m<60) return `${m}m ago`;
+  const h=Math.floor(m/60); if(h<24) return `${h}h ago`;
+  return `${Math.floor(h/24)}d ago`;
+};
+
 const TABS = [
-  { key: 'zoka', label: 'Zoka Picks', icon: Star },
-  { key: 'matches', label: 'Matches', icon: Radio },
-  { key: 'results', label: 'Results', icon: Trophy },
-  { key: 'staff', label: 'Staff', icon: UserCog },
-  { key: 'users', label: 'Users', icon: Users },
+  {key:'dashboard',label:'Dashboard',icon:LayoutDashboard},
+  {key:'zoka',label:'Zoka Picks',icon:Star},
+  {key:'featured',label:'Featured',icon:Radio},
+  {key:'results',label:'Results',icon:Trophy},
+  {key:'staff',label:'Staff',icon:UserCog},
+  {key:'users',label:'Users',icon:Users},
 ];
 
-function useInterval(cb, ms) {
-  const saved = useRef(cb);
-  useEffect(() => { saved.current = cb; }, [cb]);
-  useEffect(() => {
-    if (ms <= 0) return;
-    const id = setInterval(() => saved.current(), ms);
-    return () => clearInterval(id);
-  }, [ms]);
-}
-
-const injectStyles = () => {
-  if (document.getElementById('adm-mob-v19')) return;
+/* ═════════════════════════════════════════════════════════════════════════════════
+   STYLE INJECTION
+   ═════════════════════════════════════════════════════════════════════════════════ */
+const injectCSS = () => {
+  if (document.getElementById('adm-v14-css')) return;
   const s = document.createElement('style');
-  s.id = 'adm-mob-v19';
+  s.id = 'adm-v14-css';
   s.textContent = `
-@keyframes afu{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
-@keyframes asp{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-@keyframes afl{0%{background:rgba(0,230,118,.18)}100%{background:transparent}}
-@keyframes pulse-live{0%,100%{opacity:1}50%{opacity:.4}}
-@keyframes slide-in{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-@keyframes glow-gold{0%,100%{box-shadow:0 0 8px rgba(245,197,66,.12)}50%{box-shadow:0 0 20px rgba(245,197,66,.25)}}
-@keyframes pop-in{from{opacity:0;transform:scale(.92)}to{opacity:1;transform:scale(1)}}
+@keyframes afu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@keyframes asp{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+@keyframes afl{0%{background:rgba(0,230,118,.16)}100%{background:transparent}}
+@keyframes pulse-live{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.7)}}
+@keyframes slide-in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
 @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes live-border-glow{0%,100%{border-color:rgba(239,68,68,.1);box-shadow:0 0 4px rgba(239,68,68,.02)}50%{border-color:rgba(239,68,68,.35);box-shadow:0 0 14px rgba(239,68,68,.06)}}
-@keyframes score-pop{0%{transform:scale(1)}50%{transform:scale(1.15)}100%{transform:scale(1)}}
-@keyframes save-flash{0%{background:linear-gradient(135deg,rgba(0,230,118,.2),rgba(0,230,118,.05))}100%{background:var(--bg-card)}}
-@keyframes tab-indicator{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes fade-in{from{opacity:0}to{opacity:1}}
-@keyframes count-up{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
-@keyframes card-in{from{opacity:0;transform:translateY(10px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-.ae{animation:afu .45s cubic-bezier(.22,1,.36,1) both}
+@keyframes live-glow{0%,100%{border-color:rgba(239,68,68,.12);box-shadow:0 0 3px rgba(239,68,68,.01)}50%{border-color:rgba(239,68,68,.35);box-shadow:0 0 14px rgba(239,68,68,.06)}}
+@keyframes save-flash{0%{background:linear-gradient(135deg,rgba(0,230,118,.18),rgba(0,230,118,.04))}100%{background:var(--bg-card)}}
+@keyframes tab-ind{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes card-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes pop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
+@keyframes edit-pulse{0%,100%{border-color:rgba(0,230,118,.25)}50%{border-color:rgba(0,230,118,.5)}}
+
+.ae{animation:afu .4s cubic-bezier(.22,1,.36,1) both}
 .fl{animation:afl 2s ease-out}
-.si{animation:slide-in .35s cubic-bezier(.22,1,.36,1) both}
-.pi-pop{animation:pop-in .3s cubic-bezier(.22,1,.36,1) both}
-.score-pop{animation:score-pop .35s ease-out}
+.card-in{animation:card-in .3s cubic-bezier(.22,1,.36,1) both}
 .save-flash{animation:save-flash 1.2s ease-out}
-.fade-in{animation:fade-in .3s ease-out}
-.count-up{animation:count-up .4s cubic-bezier(.22,1,.36,1) both}
-.card-in{animation:card-in .4s cubic-bezier(.22,1,.36,1) both}
-.zb{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent}
-.zb:hover{transform:translateY(-1px);filter:brightness(1.08)}
-.zb:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
-.sh::-webkit-scrollbar{display:none}.sh{scrollbar-width:none}
-.sk{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite}
-.live-dot{width:10px;height:10px;border-radius:50%;background:#ef4444;animation:pulse-live 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(239,68,68,.6);flex-shrink:0}
-.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:14px 24px;border-radius:14px;font-size:.9rem;font-weight:700;z-index:9999;animation:slide-in .3s ease-out;box-shadow:0 8px 30px rgba(0,0,0,.5);display:flex;align-items:center;gap:10px;max-width:90vw;white-space:nowrap}
-.zoka-row{background:linear-gradient(90deg,rgba(245,197,66,.06) 0%,rgba(245,197,66,.02) 100%)!important;border-color:rgba(245,197,66,.3)!important}
-.match-live-border{animation:live-border-glow 2s ease-in-out infinite}
-.result-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border-radius:8px;font-size:.78rem;font-weight:800;letter-spacing:.02em;font-family:var(--font-display,monospace);white-space:nowrap}
-.pi{width:54px;height:48px;padding:0;border-radius:10px;background:var(--bg-surface);border:2px solid rgba(245,197,66,.25);color:var(--gold);text-align:center;font-weight:900;font-size:1.15rem;outline:none;font-variant-numeric:tabular-nums;transition:border-color .2s,box-shadow .2s;-webkit-appearance:none;appearance:none}
-.pi:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.2)}
-.pi::placeholder{color:var(--text-muted);opacity:.35;font-weight:700;font-size:.9rem}
-.pi.has-val{border-color:var(--gold);background:rgba(245,197,66,.06)}
-.tab-btn{position:relative;display:flex;align-items:center;gap:8px;padding:14px 20px;font-weight:800;font-size:.88rem;color:var(--text-muted);background:transparent;border:none;cursor:pointer;transition:color .2s,background .2s;border-radius:12px 12px 0 0;white-space:nowrap;-webkit-tap-highlight-color:transparent;min-height:50px}
-.tab-btn:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
-.tab-btn.active{color:var(--gold);background:rgba(245,197,66,.06)}
-.tab-btn.active::after{content:'';position:absolute;bottom:0;left:14px;right:14px;height:3px;background:var(--gold);border-radius:3px 3px 0 0;animation:tab-indicator .25s ease-out;box-shadow:0 0 10px rgba(245,197,66,.4)}
-.section-card{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:20px;margin-bottom:16px}
-.section-title{font-size:1.05rem;font-weight:900;color:var(--text-primary);margin:0 0 16px;display:flex;align-items:center;gap:10px;letter-spacing:.01em}
-.stat-mini{display:flex;flex-direction:column;align-items:center;padding:14px 10px;background:var(--bg-surface);border:1px solid var(--border);border-radius:12px;min-width:0}
-.stat-mini .num{font-size:1.5rem;font-weight:900;font-family:var(--font-display);line-height:1}
-.stat-mini .lbl{font-size:.72rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:6px}
-.staff-row{display:flex;align-items:center;gap:14px;padding:16px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:10px;transition:background .15s}
-.staff-row:hover{background:rgba(255,255,255,.03)}
-.user-row{display:grid;grid-template-columns:2fr 1.5fr 1fr 1fr 90px;align-items:center;gap:12px;padding:14px 18px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:8px;font-size:.88rem;font-weight:600;transition:background .15s}
-.user-row:hover{background:rgba(255,255,255,.03)}
-.user-header{color:var(--text-muted);font-weight:800;font-size:.78rem;text-transform:uppercase;letter-spacing:.06em;background:transparent;border-bottom:2px solid var(--border);border-radius:12px 12px 0 0;margin-bottom:10px}
-.user-header:hover{background:transparent}
-.input-field{padding:12px 16px;border-radius:12px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);font-size:.95rem;font-weight:600;outline:none;transition:border-color .2s,box-shadow .2s;width:100%;min-height:50px;-webkit-appearance:none;appearance:none}
-.input-field:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.12)}
-.input-field::placeholder{color:var(--text-muted);opacity:.5}
-.btn-primary{padding:14px 24px;border-radius:12px;font-size:.9rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:10px;transition:all .18s;min-height:50px;-webkit-tap-highlight-color:transparent}
-.btn-primary:hover{transform:translateY(-1px);filter:brightness(1.08)}
-.btn-primary:active{transform:translateY(0) scale(.97)}
-.btn-primary:disabled{opacity:.35;pointer-events:none;filter:none;transform:none}
-.btn-ghost{padding:12px 18px;border-radius:12px;font-size:.88rem;font-weight:700;background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;min-height:48px;-webkit-tap-highlight-color:transparent}
-.btn-ghost:hover{background:rgba(255,255,255,.06);transform:translateY(-1px)}
-.btn-ghost:active{transform:translateY(0) scale(.97)}
-.btn-ghost:disabled{opacity:.35;pointer-events:none;transform:none}
-.btn-danger{padding:10px 16px;border-radius:10px;font-size:.82rem;font-weight:800;background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:44px;-webkit-tap-highlight-color:transparent}
-.btn-danger:hover{background:rgba(239,68,68,.15);transform:translateY(-1px)}
-.btn-danger:active{transform:translateY(0) scale(.97)}
-.btn-sm{padding:10px 14px;border-radius:10px;font-size:.82rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:44px;-webkit-tap-highlight-color:transparent}
-.role-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 14px;border-radius:8px;font-size:.78rem;font-weight:800;text-transform:uppercase;letter-spacing:.04em}
-.empty-state{padding:48px 24px;text-align:center;border:2px dashed var(--border);border-radius:16px;background:var(--bg-surface)}
-.league-pill{padding:8px 16px;border-radius:10px;font-size:.82rem;font-weight:700;border:none;white-space:nowrap;-webkit-tap-highlight-color:transparent;min-height:40px;display:inline-flex;align-items:center;gap:6px}
-.match-action{width:44px;height:44px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:none;cursor:pointer;transition:all .15s;flex-shrink:0;-webkit-tap-highlight-color:transparent}
-.match-action:active{transform:scale(.9)}
-.rebuild-btn{padding:10px 16px;border-radius:10px;font-size:.8rem;font-weight:800;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:42px;-webkit-tap-highlight-color:transparent}
-.rebuild-btn:hover{background:rgba(255,255,255,.06);border-color:var(--gold);color:var(--gold)}
-.rebuild-btn:active{transform:scale(.97)}
-.rebuild-btn:disabled{opacity:.35;pointer-events:none}
-.pub-sticky{position:sticky;top:0;z-index:50;background:var(--bg-deep);padding:12px 0 16px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid var(--border);margin:0 -20px;padding-left:20px;padding-right:20px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-.pub-bar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
-.pub-stats{display:flex;align-items:center;gap:12px;font-size:.82rem;font-weight:700;color:var(--text-muted)}
-.pub-stats .num{font-weight:900;font-family:var(--font-display);color:var(--text-primary)}
-.pub-actions{display:flex;gap:8px;flex-wrap:wrap}
-.show-more-btn{width:100%;padding:14px;border-radius:12px;background:var(--bg-card);border:2px dashed var(--border);color:var(--text-muted);font-size:.88rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;-webkit-tap-highlight-color:transparent}
-.show-more-btn:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.06)}
-.show-more-btn:active{transform:scale(.98)}
-@media(max-width:768px){
-.user-row{grid-template-columns:1fr!important;gap:8px;padding:16px;border-radius:14px}
-.user-row .hide-mobile{display:none!important}
-.user-header{grid-template-columns:1fr!important;gap:4px;padding:12px 16px;font-size:.72rem}
-.user-header .hide-mobile{display:none!important}
-.stat-mini{padding:12px 6px;border-radius:10px}
-.stat-mini .num{font-size:1.3rem}
-.stat-mini .lbl{font-size:.65rem}
-.tab-btn{padding:12px 16px;font-size:.82rem;min-height:46px}
-.section-card{padding:16px;border-radius:14px}
-.section-title{font-size:.95rem;margin-bottom:14px}
-.pub-bar{flex-direction:column;align-items:stretch!important;gap:8px}
-.pub-actions .btn-primary,.pub-actions .btn-ghost{width:100%;justify-content:center}
-.rebuild-grid{grid-template-columns:1fr 1fr!important}
+.pop{animation:pop .25s cubic-bezier(.22,1,.36,1) both}
+
+.ap{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding-bottom:80px}
+.aw{max-width:860px;margin:0 auto;padding:0 16px}
+.ah{text-align:center;padding:20px 0 0}
+.ah h1{margin:0 0 2px;font-size:1.15rem;font-weight:900;color:var(--text-primary);letter-spacing:-.01em}
+.ah .sub{font-size:.62rem;color:var(--text-muted);font-weight:600}
+
+.at{display:flex;gap:2px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:3px;margin:14px 0;overflow-x:auto;scrollbar-width:none}
+.at::-webkit-scrollbar{display:none}
+.atb{flex:1;position:relative;display:flex;align-items:center;justify-content:center;gap:5px;padding:11px 6px;border:none;border-radius:11px;background:transparent;color:var(--text-muted);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.atb:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
+.atb.on{color:var(--gold,#f5c542);background:rgba(245,197,66,.06)}
+.atb.on::after{content:'';position:absolute;bottom:1px;left:18%;right:18%;height:2.5px;background:var(--gold,#f5c542);border-radius:2px;animation:tab-ind .2s ease-out;box-shadow:0 0 8px rgba(245,197,66,.35)}
+
+.ask{position:sticky;top:0;z-index:50;background:var(--bg-deep);padding:12px 0 14px;border-bottom:1px solid var(--border);margin:0 -16px;padding-left:16px;padding-right:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+
+.adb{display:flex;gap:4px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none;flex-wrap:wrap}
+.adb::-webkit-scrollbar{display:none}
+.adp{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.adp:hover{color:var(--text-primary);border-color:var(--border-hover)}
+.adp.on{background:rgba(0,230,118,.07);color:var(--accent);border-color:rgba(0,230,118,.22)}
+.adp.past{opacity:.6}
+.more-dates-btn{flex-shrink:0;padding:7px 12px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);font-size:.68rem;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
+.more-dates-btn:hover{border-color:var(--accent);color:var(--accent)}
+
+.alb{display:flex;gap:4px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
+.alb::-webkit-scrollbar{display:none}
+.alp{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
+.alp:hover{color:var(--text-primary);border-color:var(--border-hover)}
+.alp.on{background:rgba(16,185,129,.07);color:var(--accent);border-color:rgba(16,185,129,.22)}
+.alp img{width:13px;height:13px;object-fit:contain;border-radius:2px}
+
+.am{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:14px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:8px;transition:all .15s}
+.am:hover{background:rgba(255,255,255,.015)}
+.am.zs{background:linear-gradient(135deg,rgba(245,197,66,.05),rgba(245,197,66,.015));border-color:rgba(245,197,66,.28)}
+.am.lg{animation:live-glow 2s ease-in-out infinite}
+.am.ok{border-color:rgba(0,230,118,.22)}
+.am.editing{border-color:rgba(0,230,118,.35);animation:edit-pulse 2s ease-in-out infinite}
+.am.resolved{opacity:.55}
+
+.amh{display:flex;align-items:center;justify-content:space-between;gap:8px}
+.aml{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
+.aml img{width:18px;height:18px;border-radius:4px;object-fit:contain;flex-shrink:0}
+.aml span{font-size:.72rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.as{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.63rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
+.ld{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:pulse-live 1.2s ease-in-out infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
+
+.atm{display:flex;align-items:center;gap:8px}
+.ate{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
+.ate.aw{flex-direction:row-reverse;text-align:right}
+.ate img{width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0}
+.ate span{font-size:.86rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.asb{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;min-width:80px;justify-content:center;background:rgba(255,255,255,.03);border:1px solid var(--border)}
+.asb.lv{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.18)}
+.asb.ft{background:rgba(0,230,118,.05);border-color:rgba(0,230,118,.12)}
+.asn{font-size:1.1rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.asn.r{color:#ef4444}.asn.g{color:var(--accent)}
+.asep{color:var(--text-muted);font-size:.8rem;font-weight:700;opacity:.3}
+.avs{font-size:.68rem;font-weight:800;color:var(--text-muted);opacity:.2;letter-spacing:.08em}
+
+.aa{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
+
+.ab{padding:9px 14px;border-radius:9px;font-size:.78rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:40px;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.ab:active{transform:scale(.97)}.ab:disabled{opacity:.28;pointer-events:none;transform:none}
+.ab-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.18)}
+.ab-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.ab-gd{background:linear-gradient(135deg,rgba(245,197,66,.92),rgba(245,197,66,.78));color:#000;box-shadow:0 2px 12px rgba(245,197,66,.22)}
+.ab-gd:hover{filter:brightness(1.04);transform:translateY(-1px)}
+.ab-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-primary)}
+.ab-gh:hover{background:rgba(255,255,255,.05);border-color:var(--border-hover)}
+.ab-dg{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.16);color:#ef4444}
+.ab-dg:hover{background:rgba(239,68,68,.1)}
+.ab-sm{padding:7px 11px;font-size:.7rem;min-height:34px;border-radius:8px}
+.ab-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+.ab-ol:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
+.ab-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.06)}
+.ab-sc{background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);color:var(--accent)}
+.ab-er{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444}
+.ab-bl{background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.2);color:#60a5fa}
+.ab-bl:hover{background:rgba(96,165,250,.1)}
+.ab-olive{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);color:#f59e0b}
+
+.api{width:48px;height:42px;padding:0;border-radius:8px;background:var(--bg-surface);border:2px solid rgba(245,197,66,.18);color:var(--gold,#f5c542);text-align:center;font-weight:900;font-size:1rem;outline:none;font-variant-numeric:tabular-nums;transition:all .2s;-webkit-appearance:none;appearance:none;font-family:var(--font-display,monospace)}
+.api:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.12)}
+.api::placeholder{color:var(--text-muted);opacity:.28;font-weight:700}
+.api.hv{border-color:var(--gold);background:rgba(245,197,66,.04)}
+
+.ari{width:42px;height:36px;padding:0;border-radius:7px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);text-align:center;font-weight:900;font-size:.95rem;outline:none;font-variant-numeric:tabular-nums;font-family:var(--font-display,monospace);-webkit-appearance:none;appearance:none;transition:border-color .2s}
+.ari:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(16,185,129,.12)}
+.ari.hv{border-color:var(--accent);background:rgba(0,230,118,.04)}
+
+.asec{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
+.ast{font-size:.92rem;font-weight:900;color:var(--text-primary);margin:0 0 12px;display:flex;align-items:center;gap:8px}
+
+.asg{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin-bottom:12px}
+.astat{display:flex;flex-direction:column;align-items:center;padding:12px 6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:11px}
+.astat .n{font-size:1.3rem;font-weight:900;font-family:var(--font-display);line-height:1}
+.astat .n.gd{color:var(--gold,#f5c542)}.astat .n.gn{color:var(--accent)}.astat .n.rd{color:#ef4444}.astat .n.bl{color:#3b82f6}
+.astat .l{font-size:.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
+
+.abdg{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:.68rem;font-weight:800;white-space:nowrap}
+.abdg.ex{background:rgba(0,230,118,.1);color:var(--accent);border:1px solid rgba(0,230,118,.22)}
+.abdg.rs{background:rgba(245,197,66,.08);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.18)}
+.abdg.ms{background:rgba(239,68,68,.07);color:#ef4444;border:1px solid rgba(239,68,68,.15)}
+.abdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
+
+.aem{padding:36px 20px;text-align:center;border:2px dashed var(--border);border-radius:14px;background:var(--bg-surface)}
+.aem p{color:var(--text-muted);font-size:.82rem;margin:0;font-weight:600}
+.aem .h{font-size:.7rem;color:var(--text-muted);opacity:.45;margin-top:3px}
+
+.askel{height:48px;border-radius:10px;background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;margin-bottom:8px}
+
+.azs{display:flex;gap:5px;flex-wrap:wrap;padding:8px 12px;background:rgba(245,197,66,.03);border:1px solid rgba(245,197,66,.1);border-radius:9px;margin-bottom:10px}
+
+.arg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.arb{padding:9px 12px;border-radius:9px;font-size:.75rem;font-weight:800;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;font-family:inherit;min-height:40px}
+.arb:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
+.arb:active{transform:scale(.97)}
+.arb:disabled{opacity:.28;pointer-events:none}
+
+.asm{width:100%;padding:11px;border-radius:11px;background:var(--bg-card);border:2px dashed var(--border);color:var(--text-muted);font-size:.8rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;font-family:inherit}
+.asm:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
+.asm:active{transform:scale(.98)}
+
+.ahc{background:var(--bg-surface);border:1px solid var(--border);border-radius:11px;padding:13px;margin-bottom:7px;cursor:pointer;transition:all .15s}
+.ahc:hover{border-color:var(--border-hover);background:rgba(255,255,255,.015)}
+.ahc.op{border-color:rgba(245,197,66,.25);background:rgba(245,197,66,.02)}
+
+.aip{padding:9px 14px;border-radius:9px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);font-size:.85rem;font-weight:600;outline:none;transition:border-color .2s;width:100%;font-family:inherit;-webkit-appearance:none;appearance:none;box-sizing:border-box}
+.aip:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.08)}
+.aip::placeholder{color:var(--text-muted);opacity:.35}
+
+.atst{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:13px;font-size:.82rem;font-weight:700;z-index:9999;animation:slide-in .3s ease-out;box-shadow:0 6px 22px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;max-width:90vw;white-space:nowrap}
+.atst.ok{background:rgba(0,230,118,.14);border:1px solid rgba(0,230,118,.28);color:var(--accent)}
+.atst.er{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.28);color:#ef4444}
+.atst.in{background:rgba(245,197,66,.14);border:1px solid rgba(245,197,66,.28);color:var(--gold,#f5c542)}
+
+.aov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:afu .2s ease}
+.abox{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:380px;width:100%;text-align:center}
+.abox h3{font-size:.95rem;font-weight:900;color:var(--text-primary);margin:0 0 8px}
+.abox p{font-size:.82rem;color:var(--text-muted);margin:0 0 18px;font-weight:600;line-height:1.4}
+.abbtns{display:flex;gap:8px;justify-content:center}
+
+.aur{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:7px;transition:background .15s}
+.aur:hover{background:rgba(255,255,255,.015)}
+.aur.me{border-color:rgba(0,230,118,.2);background:rgba(0,230,118,.03)}
+
+.ausr-input{display:flex;gap:8px;margin-bottom:14px}
+.ausr-input .aip{flex:1}
+
+.abatch-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:11px;margin-bottom:12px;font-size:.78rem;color:var(--text-muted);font-weight:700}
+.abatch-bar .ab{margin-left:auto}
+
+.aedit-hint{font-size:.65rem;color:var(--gold,#f5c542);font-weight:700;opacity:.7;margin-top:2px;display:flex;align-items:center;gap:3px}
+
+@media(max-width:640px){
+  .atb{padding:10px 5px;font-size:.68rem;gap:4px}
+  .atb span.lb{display:none}
+  .asg{grid-template-columns:repeat(3,1fr)}
+  .astat .n{font-size:1.15rem}.astat .l{font-size:.55rem}
+  .arg{grid-template-columns:1fr 1fr}
+  .ate span{font-size:.78rem}.asn{font-size:.95rem}
+  .asb{min-width:68px;padding:6px 10px}
+  .api{width:42px;height:38px;font-size:.9rem}
+  .alp{padding:5px 9px;font-size:.64rem}
+  .ausr-input{flex-direction:column}.ausr-input .ab{width:100%}
 }
-@media(max-width:420px){
-.stat-mini .num{font-size:1.15rem}
-.stat-mini .lbl{font-size:.6rem}
-.tab-btn{padding:10px 14px;font-size:.78rem;gap:6px}
-.section-card{padding:14px}
-.pi{width:48px;height:44px;font-size:1rem}
-.rebuild-grid{grid-template-columns:1fr!important}
+@media(max-width:380px){
+  .asg{grid-template-columns:repeat(2,1fr)}
+  .arg{grid-template-columns:1fr}
+  .am{padding:11px 12px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `;
   document.head.appendChild(s);
 };
 
+/* ═════════════════════════════════════════════════════════════════════════════════
+   HOOKS & SMALL COMPONENTS
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function useMounted() { const r = useRef(true); useEffect(() => () => { r.current = false; }, []); return r; }
+
 function Toast({ message, type, onDone }) {
-  useEffect(() => { const t = setTimeout(onDone, 3500); return () => clearTimeout(t); }, [onDone]);
-  const cfg = {
-    success: { bg: 'rgba(0,230,118,.15)', border: 'rgba(0,230,118,.3)', color: 'var(--accent)', Icon: CheckCircle2 },
-    error: { bg: 'rgba(239,68,68,.15)', border: 'rgba(239,68,68,.3)', color: '#ef4444', Icon: XCircle },
-    info: { bg: 'rgba(245,197,66,.15)', border: 'rgba(245,197,66,.3)', color: 'var(--gold)', Icon: AlertTriangle },
-  }[type] || { bg: 'rgba(245,197,66,.15)', border: 'rgba(245,197,66,.3)', color: 'var(--gold)', Icon: AlertTriangle };
+  useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
+  const Ic = type === 'ok' ? CheckCircle2 : type === 'er' ? XCircle : AlertTriangle;
+  return <div className={`atst ${type}`}><Ic size={15} /> {message}</div>;
+}
+
+function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false }) {
   return (
-    <div className="toast" style={{ background: cfg.bg, border: `1px solid ${cfg.border}`, color: cfg.color }}>
-      <cfg.Icon size={18} /> {message}
+    <div className="aov" onClick={onNo}>
+      <div className="abox" onClick={e => e.stopPropagation()}>
+        <h3>{title}</h3><p>{msg}</p>
+        <div className="abbtns">
+          <button className="ab ab-gh" onClick={onNo}>Cancel</button>
+          <button className={`ab ${danger ? 'ab-dg' : 'ab-p'}`} onClick={onYes}>{yesText}</button>
+        </div>
+      </div>
     </div>
   );
 }
 
-function ResultBadge({ pick }) {
-  if (!pick.adminPick || pick.status !== 'finished') return null;
-  const h = pick.adminPick.home;
-  const a = pick.adminPick.away;
-  const ph = pick.homeScore;
-  const pa = pick.awayScore;
-  if (ph == null || pa == null) return <span className="result-badge" style={{ background:'rgba(255,255,255,.05)',color:'var(--text-muted)'}}>PENDING</span>;
-  if (h === ph && a === pa) return <span className="result-badge" style={{ background:'rgba(0,230,118,.15)',color:'var(--accent)',border:'1px solid rgba(0,230,118,.3)'}}><CheckCircle2 size={12}/> EXACT +10</span>;
-  const pR = h > a ? 'H' : h < a ? 'A' : 'D';
-  const aR = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
-  if (pR === aR) return <span className="result-badge" style={{ background:'rgba(245,197,66,.12)',color:'var(--gold)',border:'1px solid rgba(245,197,66,.25)'}}><TrendingUp size={12}/> RESULT +3</span>;
-  return <span className="result-badge" style={{ background:'rgba(239,68,68,.1)',color:'#ef4444',border:'1px solid rgba(239,68,68,.2)'}}><XCircle size={12}/> MISS</span>;
+function Skel({ n = 3 }) {
+  return <div>{Array.from({ length: n }).map((_, i) => <div key={i} className="askel" style={{ animationDelay: `${i * 80}ms` }} />)}</div>;
 }
 
-const S = {
-  card: { background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16 },
-  tinyLabel: { fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' },
-  smallVal: { fontSize: '.88rem', fontWeight: 700 },
-  bigNum: { fontSize: '1.4rem', fontWeight: 900, fontFamily: 'var(--font-display)' },
-};
+function Empty({ icon: Ic, title, hint }) {
+  return (
+    <div className="aem">
+      {Ic && <Ic size={26} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 6px' }} />}
+      <p>{title}</p>{hint && <p className="h">{hint}</p>}
+    </div>
+  );
+}
 
-export default function Admin() {
-  injectStyles();
-  const { currentUser, userProfile } = useAuth();
-  const navigate = useNavigate();
+function ShowMore({ count, show, onToggle }) {
+  if (count <= 0) return null;
+  return (
+    <button className="asm" onClick={onToggle} style={{ marginTop: 8 }}>
+      {show ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+      {show ? 'Show less' : `Show ${count} more`}
+    </button>
+  );
+}
 
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [authLoad, setAuthLoad] = useState(true);
-  const [day, setDay] = useState('today');
-  const date = day === 'today' ? todayStr() : tomorrowStr();
-  const [tab, setTab] = useState('zoka');
-  const [fx, setFx] = useState([]);
-  const [fxLoad, setFxLoad] = useState(false);
-  const [fxErr, setFxErr] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [lg, setLg] = useState('all');
-  const [dataSource, setDataSource] = useState('idle');
-  const [lastUpdate, setLastUpdate] = useState(null);
-  const [tick, setTick] = useState(0);
-  const [flashIds, setFlashIds] = useState([]);
-  const [zokaSel, setZokaSel] = useState({});
-  const [savingZoka, setSavingZoka] = useState(false);
-  const [savedFlash, setSavedFlash] = useState(false);
-  const [syncMsg, setSyncMsg] = useState('');
+function RBadge({ pick }) {
+  if (!pick?.adminPick || pick.status !== 'finished') return null;
+  const h = pick.adminPick.home, a = pick.adminPick.away, ph = pick.homeScore, pa = pick.awayScore;
+  if (ph == null || pa == null) return <span className="abdg pn">PENDING</span>;
+  if (h === ph && a === pa) return <span className="abdg ex"><CheckCircle2 size={9} /> EXACT +10</span>;
+  if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="abdg rs"><TrendingUp size={9} /> RESULT +3</span>;
+  return <span className="abdg ms"><XCircle size={9} /> MISS</span>;
+}
+
+function MatchRow({ m, idx, mode, sel, onToggleSel, scoreInput, onScoreInput, onAction, pubPick, extraBadge }) {
+  const mid = String(m.id);
+  const live = isLive(m), fin = isFin(m), sc = getScore(m), st = gst(m.status);
+  const comp = m.competition || m.league;
+  const cls = `am card-in${sel ? ' zs' : ''}${live ? ' lg' : ''}`;
+  return (
+    <div className={cls} style={{ animationDelay: `${idx * 20}ms` }}>
+      <div className="amh">
+        <div className="aml">
+          {comp?.emblem && <img src={comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{comp?.name || 'Unknown'}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+          {live && <span className="ld" />}
+          <span className="as" style={{ color: st.c, background: st.b }}>
+            {live && m.minute != null ? `${m.minute}'` : st.l}
+          </span>
+        </div>
+      </div>
+      <div className="atm">
+        <div className="ate">
+          {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
+        </div>
+        <div className={`asb${live ? ' lv' : ''}${fin ? ' ft' : ''}`}>
+          {(live || fin) ? (
+            <><span className={`asn${live ? ' r' : ' g'}`}>{sc.h ?? 0}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a ?? 0}</span></>
+          ) : <span className="avs">VS</span>}
+        </div>
+        <div className="ate aw">
+          {m.awayTeam?.crest && <img src={m.awayTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
+        </div>
+      </div>
+      <div className="aa">
+        {mode === 'zoka' && onToggleSel && (
+          <button className={`ab ab-sm ${sel ? 'ab-gd' : 'ab-ol'}`} onClick={() => onToggleSel(m)}>
+            <Star size={11} fill={sel ? 'currentColor' : 'none'} />{sel ? 'Selected' : 'Zoka Pick'}
+          </button>
+        )}
+        {mode === 'zoka' && sel && scoreInput && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input className={`api${scoreInput.h ? ' hv' : ''}`} value={scoreInput.h} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
+            <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
+            <input className={`api${scoreInput.a ? ' hv' : ''}`} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
+          </div>
+        )}
+        {mode === 'featured' && typeof onAction === 'function' && onAction(m, idx)}
+        {mode === 'results' && scoreInput && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            <input className="ari" type="number" min="0" max="99" value={scoreInput.h ?? ''} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="-" />
+            <span style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '.8rem' }}>–</span>
+            <input className="ari" type="number" min="0" max="99" value={scoreInput.a ?? ''} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="-" />
+          </div>
+        )}
+        {pubPick && <RBadge pick={pubPick} />}
+        {extraBadge}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   DASHBOARD TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function DashTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuild, rebuilding }) {
+  const pr = pubPicks?.matches || [];
+  let zE = 0, zR = 0, zM = 0, zP = 0;
+  pr.forEach(p => {
+    if (p.status !== 'finished' || p.homeScore == null) { zP++; return; }
+    const h = p.adminPick?.home, a = p.adminPick?.away;
+    if (h === p.homeScore && a === p.awayScore) { zE++; return; }
+    if ((h > a ? 'H' : h < a ? 'A' : 'D') === (p.homeScore > p.awayScore ? 'H' : p.homeScore < p.awayScore ? 'A' : 'D')) { zR++; return; }
+    zM++;
+  });
+  const zT = pr.length, res = Math.max(zT - zP, 1);
+  const zAcc = zT > 0 ? Math.round(((zE + zR) / res) * 100) : 0;
+
+  return (
+    <div className="ae">
+      <div className="asec">
+        <h3 className="ast"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
+        <div className="asg">
+          <div className="astat"><span className="n bl">{fxCount}</span><span className="l">Fixtures</span></div>
+          <div className="astat"><span className="n rd">{liveCount}</span><span className="l">Live</span></div>
+          <div className="astat"><span className="n gn">{finCount}</span><span className="l">Finished</span></div>
+          <div className="astat"><span className="n gd">{preds.length}</span><span className="l">Featured</span></div>
+          <div className="astat"><span className="n gd">{zT}</span><span className="l">Zoka</span></div>
+          <div className="astat"><span className="n gn">{zAcc}%</span><span className="l">Zoka Acc</span></div>
+        </div>
+        {zT > 0 && (
+          <div className="azs">
+            <span className="abdg ex"><CheckCircle2 size={9} /> {zE} Exact</span>
+            <span className="abdg rs"><TrendingUp size={9} /> {zR} Result</span>
+            <span className="abdg ms"><XCircle size={9} /> {zM} Miss</span>
+            {zP > 0 && <span className="abdg pn">{zP} Pending</span>}
+          </div>
+        )}
+      </div>
+      <div className="asec">
+        <h3 className="ast"><RotateCcw size={15} /> Rebuild Leaderboards</h3>
+        <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: '0 0 12px', fontWeight: 600, lineHeight: 1.4 }}>
+          Run after scoring matches to update all user rankings.
+          <br /><span style={{ fontSize: '.68rem', opacity: 0.7 }}>Other pages auto-update via events</span>
+        </p>
+        <div className="arg">
+          {[['daily','Daily ('+dateLabel(date)+')',CalendarDays],['goat','GOAT',Crown],['weekly','Weekly',Timer],['monthly','Monthly',BarChart3]].map(([k,l,Ic]) => (
+            <button key={k} className="arb" onClick={() => onRebuild(k)} disabled={rebuilding === k}>
+              {rebuilding === k ? <Loader2 size={13} className="asp" /> : <Ic size={13} />}{l}
+            </button>
+          ))}
+          <button className="arb" onClick={() => onRebuild('all')} disabled={rebuilding === 'all'} style={{ gridColumn: '1 / -1' }}>
+            {rebuilding === 'all' ? <Loader2 size={13} className="asp" /> : <Sparkles size={13} />}Rebuild All
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   ZOKA PICKS TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, onSaveDraft, toast }) {
+  const mounted = useMounted();
+  const [, refresh] = useState(0);
+  const mk = `zoka_${date}`;
+
+  const setSel = (v) => { memUpdate(`${mk}_sel`, v); refresh(n => n + 1); };
+  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
+  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
+
+  const sel = mem.get(`${mk}_sel`, {});
+  const lg = mem.get(`${mk}_lg`, 'ALL');
+  const showAll = mem.get(`${mk}_show`, false);
+  const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
-  const [toast, setToast] = useState(null);
-  const [staffList, setStaffList] = useState([]);
-  const [staffLoad, setStaffLoad] = useState(true);
-  const [editingStaff, setEditingStaff] = useState(null);
-  const [newStaffName, setNewStaffName] = useState('');
-  const [newStaffRole, setNewStaffRole] = useState('analyst');
-  const [showAddStaff, setShowAddStaff] = useState(false);
-  const [usersList, setUsersList] = useState([]);
-  const [usersLoad, setUsersLoad] = useState(false);
-  const [usersLoaded, setUsersLoaded] = useState(false);
-  const [userSearch, setUserSearch] = useState('');
-  const [userFilter, setUserFilter] = useState('all');
-  const [resolvedMatches, setResolvedMatches] = useState(new Set());
-  const resolvedMatchesRef = useRef(new Set());
-  const [rebuilding, setRebuilding] = useState(null);
+  const [flash, setFlash] = useState(false);
+  const [showHist, setShowHist] = useState(false);
+  const [hist, setHist] = useState([]);
+  const [histLoad, setHistLoad] = useState(false);
+  const [openDay, setOpenDay] = useState(null);
 
-  // ★ NEW: Show-more state for Zoka tab
-  const [showAllZoka, setShowAllZoka] = useState(false);
-  // ★ NEW: Show-more state for Matches tab
-  const [showAllMatches, setShowAllMatches] = useState(false);
-
-  const { preds: hookPreds } = useActivePredictions(date);
-  const hookPicks = useZokaPicks(date);
-  const [predsOverride, setPredsOverride] = useState(null);
-  const [picksOverride, setPicksOverride] = useState(null);
-  const preds = predsOverride ?? hookPreds;
-  const publishedPicks = picksOverride ?? hookPicks;
-  const predsRef = useRef(preds);
-  useEffect(() => { predsRef.current = preds; }, [preds]);
-
-  useEffect(() => {
-    if (predsOverride && hookPreds.length >= (predsOverride?.length || 0) && hookPreds.length > 0) setPredsOverride(null);
-  }, [predsOverride, hookPreds]);
-  useEffect(() => {
-    if (picksOverride === null && hookPicks === null) return;
-    if (picksOverride !== null && hookPicks !== null && hookPicks.publishedAt) setPicksOverride(null);
-  }, [picksOverride, hookPicks]);
-
-  const publishState = publishedPicks ? 'published' : 'draft';
-  const publishedAt = publishedPicks?.publishedAt || null;
-
-  useInterval(() => setTick((t) => t + 1), 10000);
-  const showToast = useCallback((message, type) => { setToast({ message, type: type || 'success', key: Date.now() }); }, []);
-
-  useEffect(() => { setZokaSel({}); }, [day]);
-  useEffect(() => {
-    if (currentUser && userProfile?.role === 'admin') setIsAdmin(true);
-    setAuthLoad(false);
-  }, [currentUser, userProfile]);
-  useEffect(() => { setPredsOverride(null); setPicksOverride(null); }, [date]);
-
-  // ★ FIX: Reset show-more when date or filters change
-  useEffect(() => { setShowAllZoka(false); }, [date, lg]);
-  useEffect(() => { setShowAllMatches(false); }, [date, lg]);
-
-  const loadFx = useCallback(async (d) => {
-    setFxLoad(true); setFxErr(null); setDataSource('loading');
-    try {
-      const res = await fetchFixtures(d);
-      const m = safeMatches(res);
-      setDataSource('backend'); setLastUpdate(new Date());
-      if (m.length === 0) { if (res.error && res.error !== 'NO_DATA') setFxErr(res.error); }
-      else setFx(m);
-    } catch (e) {
-      console.error('[Admin] Load error:', e);
-      setFxErr('NETWORK'); setDataSource('error'); setFx([]);
-    }
-    setFxLoad(false);
-  }, []);
-
-  // ★ FIX: Added mountedRef guard to prevent dead callbacks
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => { mountedRef.current = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!isAdmin) return;
-    const unsub = subscribeToTodayFixtures(({ matches, error }) => {
-      if (!mountedRef.current) return;
-      if (error) { console.warn('[Admin] Today fixtures error:', error); if (dataSource !== 'backend') setDataSource('error'); return; }
-      setFx(matches); setDataSource('backend'); setLastUpdate(new Date()); setFxLoad(false);
-      const finishedMap = new Map();
-      matches.forEach((m) => { if (m.isFinished) finishedMap.set(String(m.id), { h: m.homeScore, a: m.awayScore }); });
-      if (finishedMap.size === 0) return;
-      const currentPreds = predsRef.current;
-      const batch = writeBatch(db);
-      const updatedIds = [];
-      currentPreds.forEach((p) => {
-        const r = finishedMap.get(String(p.matchId));
-        if (!r || p.status === 'finished') return;
-        batch.update(doc(db, 'active_predictions', p.id), { status: 'finished', homeScore: r.h, awayScore: r.a, finishedAt: serverTimestamp() });
-        updatedIds.push(p.id);
-      });
-      if (updatedIds.length === 0) return;
-      batch.commit().then(async () => {
-        if (!mountedRef.current) return;
-        invalidateCache(`active_${date}`);
-        try {
-          const fresh = await adminRefreshActivePredictions(date);
-          setPredsOverride(fresh);
-        } catch (e) { console.warn('[Admin] Force refresh failed:', e); }
-        setFlashIds(updatedIds);
-        setTimeout(() => { if (mountedRef.current) setFlashIds([]); }, 2500);
-        setSyncMsg(`Updating ${updatedIds.length} result${updatedIds.length > 1 ? 's' : ''}...`);
-        const todayKey = todayStr();
-        let totalResolved = 0;
-        for (const [matchId, scores] of finishedMap.entries()) {
-          if (resolvedMatchesRef.current.has(matchId)) continue;
-          try {
-            const count = await resolveMatchForAllUsers(matchId, scores.h, scores.a, todayKey);
-            if (count > 0) { totalResolved += count; resolvedMatchesRef.current.add(matchId); setResolvedMatches((prev) => new Set([...prev, matchId])); }
-          } catch (e) { console.error(`[Admin] Failed to resolve match ${matchId}:`, e); }
-        }
-        invalidateCache(`zoka_${todayKey}`);
-        if (totalResolved > 0) { setSyncMsg(`✓ ${updatedIds.length} synced · ${totalResolved} predictions scored`); showToast(`${totalResolved} predictions scored automatically`, 'success'); }
-        else { setSyncMsg(`✓ ${updatedIds.length} synced`); }
-        setTimeout(() => { if (mountedRef.current) setSyncMsg(''); }, 6000);
-      }).catch((e) => console.warn('[Admin] Batch update failed:', e));
-    });
-    return () => unsub();
-  }, [isAdmin, date, showToast, dataSource]);
-
-  useEffect(() => { resolvedMatchesRef.current = new Set(); setResolvedMatches(new Set()); }, [date]);
-
-  useEffect(() => {
-    if (!isAdmin || !db) return;
-    const unsub = onSnapshot(collection(db, 'staff'), (snap) => {
-      if (!mountedRef.current) return;
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => { const o = { admin: 0, lead: 1, analyst: 2, writer: 3 }; return (o[a.role] || 9) - (o[b.role] || 9); });
-      setStaffList(list); setStaffLoad(false);
-    }, (err) => { console.error('[Admin] Staff snapshot:', err); if (mountedRef.current) setStaffLoad(false); });
-    return () => unsub();
-  }, [isAdmin]);
-
-  const predMap = useMemo(() => new Map(preds.map((p) => [String(p.matchId), p])), [preds]);
-  const isFull = preds.length >= MAX_FEATURED;
-  const zokaIds = useMemo(() => new Set(Object.keys(zokaSel)), [zokaSel]);
-  const zokaCount = zokaIds.size;
-  const zokaFull = zokaCount >= MAX_ZOKA;
-  const zokaScored = Object.values(zokaSel).filter((s) => s.h !== '' && s.a !== '').length;
-  const zokaReady = zokaCount > 0 && zokaScored === zokaCount;
-
-  const zokaPicksForPublish = useMemo(() => {
-    const picks = [];
-    for (const [matchId, scores] of Object.entries(zokaSel)) {
-      const match = fx.find((m) => String(m.id) === matchId);
-      if (match && scores.h !== '' && scores.a !== '') {
-        picks.push({
-          matchId: match.id, homeTeam: match.homeTeam, awayTeam: match.awayTeam,
-          homeLogo: match.homeLogo || null, awayLogo: match.awayLogo || null,
-          league: match.league, kickoff: match.kickoff,
-          adminPick: { home: Number(scores.h), away: Number(scores.a) },
-          homeScore: match.isFinished ? match.homeScore : null,
-          awayScore: match.isFinished ? match.awayScore : null,
-          status: match.isFinished ? 'finished' : 'upcoming',
-        });
-      }
-    }
-    return picks;
-  }, [zokaSel, fx]);
-
-  const publishedResults = useMemo(() => {
-    if (!publishedPicks?.matches) return { total: 0, exact: 0, result: 0, miss: 0, pending: 0 };
-    let exact = 0, result = 0, miss = 0, pending = 0;
-    publishedPicks.matches.forEach((pick) => {
-      if (pick.status !== 'finished' || pick.homeScore == null) { pending++; return; }
-      const h = pick.adminPick?.home; const a = pick.adminPick?.away;
-      if (h === pick.homeScore && a === pick.awayScore) { exact++; return; }
-      const pR = h > a ? 'H' : h < a ? 'A' : 'D';
-      const aR = pick.homeScore > pick.awayScore ? 'H' : pick.homeScore < pick.awayScore ? 'A' : 'D';
-      if (pR === aR) { result++; return; }
-      miss++;
-    });
-    return { total: publishedPicks.matches.length, exact, result, miss, pending };
-  }, [publishedPicks, tick]);
-
-  const finCnt = preds.filter((p) => p.status === 'finished').length;
-  const hasLive = fx.some((m) => m.isLive);
-  const liveCount = fx.filter((m) => m.isLive).length;
+  const dayFx = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
+  const selectableFx = useMemo(() => dayFx.filter(m => !isFin(m)), [dayFx]);
 
   const leagues = useMemo(() => {
-    const m = new Map();
-    fx.forEach((f) => {
-      const id = f.league && f.league.id ? String(f.league.id) : 'x';
-      if (!m.has(id)) m.set(id, { id, name: f.league?.name || 'Other', logo: f.league?.emblem || f.league?.logo || null, n: 0 });
-      m.get(id).n++;
+    const map = new Map();
+    selectableFx.forEach(f => {
+      const c = f.competition || f.league; if (!c) return;
+      const id = String(c.id || c.code || 'x');
+      if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
+      map.get(id).n++;
     });
-    return [...m.values()].sort((a, b) => b.n - a.n);
-  }, [fx]);
+    return [...map.values()].sort((a, b) => b.n - a.n);
+  }, [selectableFx]);
 
-  const shown = useMemo(() => (lg === 'all' ? fx : fx.filter((f) => f.league && String(f.league.id) === lg)), [fx, lg]);
+  const filtered = useMemo(() => {
+    let l = selectableFx;
+    if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
+    return l;
+  }, [selectableFx, lg]);
 
-  // ★ NEW: Visible matches with show-more
-  const visibleZoka = useMemo(() => showAllZoka ? shown : shown.slice(0, INITIAL_SHOW), [shown, showAllZoka]);
-  const hiddenZokaCount = Math.max(0, shown.length - INITIAL_SHOW);
-  
-  // ★ FIX BUG 6: Added visibleMatches for Matches tab
-  const visibleMatches = useMemo(() => showAllMatches ? shown : shown.slice(0, INITIAL_SHOW), [shown, showAllMatches]);
-  const hiddenMatchesCount = Math.max(0, shown.length - INITIAL_SHOW);
+  const vis = useMemo(() => showAll ? filtered : filtered.slice(0, SHOW_INIT), [filtered, showAll]);
+  const hidden = Math.max(0, filtered.length - SHOW_INIT);
+  const ids = useMemo(() => new Set(Object.keys(sel)), [sel]);
+  const cnt = ids.size;
+  const full = cnt >= MAX_ZOKA;
+  const scored = Object.values(sel).filter(s => s.h !== '' && s.a !== '').length;
+  const ready = cnt > 0 && scored === cnt;
 
-  const filteredUsers = useMemo(() => {
-    let list = usersList;
-    if (userSearch) { const q = userSearch.toLowerCase(); list = list.filter((u) => (u.displayName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || (u.uid || '').toLowerCase().includes(q)); }
-    if (userFilter === 'admin') list = list.filter((u) => u.role === 'admin');
-    else if (userFilter === 'user') list = list.filter((u) => u.role !== 'admin');
-    return list;
-  }, [usersList, userSearch, userFilter]);
+  const pubMap = useMemo(() => {
+    if (!pubPicks?.matches) return new Map();
+    return new Map(pubPicks.matches.map(p => [String(p.matchId), p]));
+  }, [pubPicks]);
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    try { await loadFx(date); showToast('Data refreshed', 'success'); }
-    catch { showToast('Refresh failed', 'error'); }
-    setRefreshing(false);
-  };
-
-  const handleAdd = async (match) => {
-    if (!db || isFull) return;
-    try {
-      await setDoc(doc(db, 'active_predictions', `${date}_${match.id}`), {
-        matchId: match.id, homeTeam: match.homeTeam, awayTeam: match.awayTeam,
-        homeLogo: match.homeLogo || null, awayLogo: match.awayLogo || null,
-        league: match.league, matchDate: date, kickoff: match.kickoff,
-        status: 'upcoming', priority: MAX_FEATURED - preds.length,
-        homeScore: null, awayScore: null, createdAt: serverTimestamp(),
-      });
-      const fresh = await adminRefreshActivePredictions(date);
-      setPredsOverride(fresh);
-      showToast(`Featured: ${match.homeTeam?.name || 'match'}`, 'success');
-    } catch { showToast('Failed to add', 'error'); }
-  };
-
-  const removePred = async (pred) => {
-    if (!db) return;
-    await deleteDoc(doc(db, 'active_predictions', pred.id));
-    try { const fresh = await adminRefreshActivePredictions(date); setPredsOverride(fresh); }
-    catch (e) { console.warn('[Admin] Refresh after remove failed:', e); }
-    showToast('Removed from featured', 'info');
-  };
-
-  const toggleZokaPick = (match) => {
-    const id = String(match.id);
-    if (zokaIds.has(id)) { setZokaSel((prev) => { const n = { ...prev }; delete n[id]; return n; }); showToast('Removed from Zoka Picks', 'info'); }
-    else if (!zokaFull) { setZokaSel((prev) => ({ ...prev, [id]: { h: '', a: '' } })); showToast('Pick selected — enter score', 'success'); }
-    else showToast(`Max ${MAX_ZOKA} Zoka Picks`, 'error');
-  };
-
-  const updateZokaScore = (matchId, field, value) => {
-    const cleaned = value.replace(/[^0-9]/g, '').slice(0, 2);
-    setZokaSel((prev) => ({ ...prev, [matchId]: { ...prev[matchId], [field]: cleaned } }));
-  };
-
-  const saveZokaPicks = async () => {
-    if (!db || zokaCount === 0) return;
-    setSavingZoka(true);
-    try {
-      const draftPicks = [];
-      for (const [matchId, scores] of Object.entries(zokaSel)) {
-        const match = fx.find((m) => String(m.id) === matchId);
-        if (match) {
-          draftPicks.push({
-            matchId: match.id, homeTeam: match.homeTeam, awayTeam: match.awayTeam, // ★ FIX BUG 4: Fixed awawayTeam typo
-            homeLogo: match.homeLogo || null, awayLogo: match.awayLogo || null,
-            league: match.league, kickoff: match.kickoff,
-            adminPick: scores.h !== '' && scores.a !== '' ? { home: Number(scores.h), away: Number(scores.a) } : null,
-            homeScore: match.isFinished ? match.homeScore : null, awayScore: match.isFinished ? match.awayScore : null,
-            status: match.isFinished ? 'finished' : 'upcoming',
-          });
-        }
-      }
-      const savedData = { matches: draftPicks, publishedAt: serverTimestamp(), date, totalMatches: draftPicks.length, isDraft: !zokaReady };
-      await setDoc(doc(db, 'zoka_picks', date), savedData);
-      setPicksOverride({ ...savedData, publishedAt: { seconds: Math.floor(Date.now() / 1000) } });
-      invalidateCache(`zoka_${date}`);
-      setSavedFlash(true);
-      setTimeout(() => { if (mountedRef.current) setSavedFlash(false); }, 1500);
-      showToast(`Saved ${zokaCount} Zoka Pick${zokaCount > 1 ? 's' : ''}`, 'success');
-    } catch (e) { console.error('[Admin] Save failed:', e); showToast('Save failed', 'error'); }
-    setSavingZoka(false);
-  };
-
-  const publishZokaPicks = async () => {
-    if (!db || !zokaReady) return;
-    setPublishing(true);
-    try {
-      if (zokaPicksForPublish.length === 0) { showToast('No valid picks', 'error'); setPublishing(false); return; }
-      const publishedData = { matches: zokaPicksForPublish, publishedAt: serverTimestamp(), date, totalMatches: zokaPicksForPublish.length, isDraft: false };
-      // ★ FIX BUG 5: Fixed collection name mismatch
-      await setDoc(doc(db, 'zoka_picks', date), publishedData); 
-      setPicksOverride({ ...publishedData, publishedAt: { seconds: Math.floor(Date.now() / 1000) } });
-      invalidateCache(`zoka_${date}`);
-      showToast(`PUBLISHED ${zokaPicksForPublish.length} Zoka Picks!`, 'success');
-    } catch (e) { console.error('[Admin] Publish failed:', e); showToast('Publish failed', 'error'); }
-    setPublishing(false);
-  };
-
-  const unpublishZokaPicks = async () => {
-    if (!db) return;
-    setPublishing(true);
-    try { await deleteDoc(doc(db, 'zoka_picks', date)); setPicksOverride(null); invalidateCache(`zoka_${date}`); showToast('Unpublished', 'info'); }
-    catch { showToast('Unpublish failed', 'error'); }
-    setPublishing(false);
-  };
-
-  const handleRebuild = async (type) => {
-    setRebuilding(type);
-    try {
-      switch (type) {
-        case 'daily': await rebuildDailySummary(date); showToast(`Daily summary rebuilt for ${date}`, 'success'); break;
-        case 'goat': await rebuildGoatLeaderboard(); showToast('GOAT leaderboard rebuilt', 'success'); break;
-        case 'weekly': await rebuildPeriodLeaderboard('weekly'); showToast('Weekly leaderboard rebuilt', 'success'); break;
-        case 'monthly': await rebuildPeriodLeaderboard('monthly'); showToast('Monthly leaderboard rebuilt', 'success'); break;
-        case 'all': await rebuildAllLeaderboards(); showToast('All leaderboards rebuilt', 'success'); break;
-      }
-      invalidateCache(`dlb_${date}`); invalidateCache('hist_goat'); invalidateCache('hist_weekly'); invalidateCache('hist_monthly');
-    } catch (e) { console.error(`[Admin] Rebuild ${type} failed:`, e); showToast(`Rebuild failed: ${e.message}`, 'error'); }
-    setRebuilding(null);
-  };
-
-  const addStaff = async () => {
-    if (!db || !newStaffName.trim()) return;
-    try {
-      await setDoc(doc(db, 'staff', newStaffName.trim().toLowerCase().replace(/\s+/g, '_')), {
-        name: newStaffName.trim(), role: newStaffRole, bio: '', avatar: null, active: true, createdAt: serverTimestamp(),
-      });
-      setNewStaffName(''); setNewStaffRole('analyst'); setShowAddStaff(false);
-      showToast('Staff added', 'success');
-      } catch { showToast('Failed', 'error'); }
-  };
-
-  const updateStaff = async (id, data) => {
-    if (!db) return;
-    try {
-      await updateDoc(doc(db, 'staff', id), { ...data, updatedAt: serverTimestamp() });
-      showToast('Updated', 'success');
-    } catch { showToast('Update failed', 'error'); }
-  };
-
-  const deleteStaff = async (id) => {
-    if (!db) return;
-    try {
-      await deleteDoc(doc(db, 'staff', id));
-      showToast('Removed', 'info');
-    } catch { showToast('Delete failed', 'error'); }
-  };
-
-  const loadUsers = async () => {
-    setUsersLoad(true);
-    try {
-      const snap = await getDocs(collection(db, 'users'));
-      const list = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-      list.sort((a, b) => (b.createdAt?.seconds || 0) - (a.createdAt?.seconds || 0));
-      setUsersList(list);
-      setUsersLoaded(true);
-      showToast(`Loaded ${list.length} users`, 'success');
-    } catch (e) {
-      console.error('[Admin] Load users:', e);
-      showToast('Failed to load users', 'error');
+  const toggle = (m) => {
+    if (isFin(m)) { toast('Cannot select finished matches', 'in'); return; }
+    const id = String(m.id);
+    if (ids.has(id)) {
+      setSel(prev => { const n = { ...prev }; delete n[id]; return n; });
+    } else if (!full) {
+      const existing = pubMap.get(id);
+      setSel(prev => ({
+        ...prev,
+        [id]: existing
+          ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') }
+          : { h: '', a: '' }
+      }));
+    } else {
+      toast(`Max ${MAX_ZOKA} Zoka Picks`, 'in');
     }
-    setUsersLoad(false);
   };
 
-  const updateUserRole = async (uid, newRole) => {
-    if (!db) return;
+  const updScore = (mid, f, v) => {
+    const c = v.replace(/[^0-9]/g, '').slice(0, 2);
+    setSel(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
+  };
+
+  const buildNewPicks = () => {
+    const picks = [];
+    for (const [mid, sc] of Object.entries(sel)) {
+      const m = dayFx.find(x => String(x.id) === mid);
+      if (!m || sc.h === '' || sc.a === '') continue;
+      const s = getScore(m);
+      picks.push({
+        matchId: m.id, homeTeam: m.homeTeam, awayTeam: m.awayTeam,
+        homeLogo: m.homeTeam?.crest || null, awayLogo: m.awayTeam?.crest || null,
+        league: m.competition || m.league, kickoff: m.utcDate || m.kickoff,
+        adminPick: { home: Number(sc.h), away: Number(sc.a) },
+        homeScore: isFin(m) ? s.h : null, awayScore: isFin(m) ? s.a : null,
+        status: isFin(m) ? 'finished' : 'upcoming',
+      });
+    }
+    return picks;
+  };
+
+  const mergeWithExisting = (newPicks) => {
+    const existing = pubPicks?.matches || [];
+    const merged = [...existing];
+    for (const np of newPicks) {
+      const idx = merged.findIndex(p => String(p.matchId) === String(np.matchId));
+      if (idx >= 0) merged[idx] = np;
+      else merged.push(np);
+    }
+    return merged;
+  };
+
+  const handleSave = async () => {
+    if (!db || cnt === 0) return;
+    setSaving(true);
     try {
-      await updateDoc(doc(db, 'users', uid), { role: newRole, updatedAt: serverTimestamp() });
-      showToast(`Role → ${newRole}`, 'success');
-    } catch { showToast('Role update failed', 'error'); }
+      const newPicks = buildNewPicks();
+      if (!newPicks.length) { setSaving(false); return; }
+      const merged = mergeWithExisting(newPicks);
+      await onSaveDraft({ matches: merged, date, totalMatches: merged.length, isDraft: !ready, publishedAt: serverTimestamp() });
+      setSel({});
+      setFlash(true);
+      setTimeout(() => { if (mounted.current) setFlash(false); }, 1400);
+      toast(`Saved ${newPicks.length} pick${newPicks.length > 1 ? 's' : ''} (${merged.length} total)`, 'ok');
+    } catch (e) { console.error('[Zoka] Save err:', e); toast('Save failed', 'er'); }
+    setSaving(false);
   };
 
-  const toMs = (dt) => {
-    if (!dt) return 0;
-    if (typeof dt === 'number') return dt < 1e12 ? dt * 1000 : dt;
-    if (typeof dt === 'string') { const n = Date.parse(dt); return isNaN(n) ? 0 : n; }
-    if (dt.seconds != null) return dt.seconds * 1000;
-    if (typeof dt.getTime === 'function') return dt.getTime();
-    return 0;
+  const handlePublish = async () => {
+    if (!db || !ready) return;
+    setPublishing(true);
+    try {
+      const newPicks = buildNewPicks();
+      if (!newPicks.length) { setPublishing(false); return; }
+      const merged = mergeWithExisting(newPicks);
+      await onPublish({ matches: merged, date, totalMatches: merged.length, isDraft: false, publishedAt: serverTimestamp() });
+      setSel({});
+      toast(`Published ${newPicks.length} pick${newPicks.length > 1 ? 's' : ''} (${merged.length} total)!`, 'ok');
+    } catch (e) { console.error('[Zoka] Pub err:', e); toast('Publish failed', 'er'); }
+    setPublishing(false);
   };
 
-  const formatTimeAgo = (dt) => {
-    if (!dt) return 'Never';
-    const ts = toMs(dt);
-    if (!ts) return 'Unknown';
-    const s = Math.floor((Date.now() - ts) / 1000);
-    if (s < 10) return 'Just now';
-    if (s < 60) return `${s}s ago`;
-    const m = Math.floor(s / 60);
-    if (m < 60) return `${m}m ago`;
-    const h = Math.floor(m / 60);
-    if (h < 24) return `${h}h ago`;
-    return `${Math.floor(h / 24)}d ago`;
+  const loadHist = async () => {
+    if (hist.length > 0 || histLoad) return;
+    setHistLoad(true);
+    try {
+      const days = [];
+      for (let i = 1; i <= 7; i++) {
+        const d = dateOffset(-i);
+        try {
+          const snap = await getDoc(doc(db, PATHS.ZOKA_PICKS, d));
+          if (snap.exists()) {
+            const data = snap.data(); const matches = data.matches || [];
+            let e = 0, r = 0, mi = 0, p = 0;
+            matches.forEach(pk => {
+              if (pk.status !== 'finished' || pk.homeScore == null) { p++; return; }
+              const h = pk.adminPick?.home, a = pk.adminPick?.away;
+              if (h === pk.homeScore && a === pk.awayScore) { e++; return; }
+              if ((h > a ? 'H' : h < a ? 'A' : 'D') === (pk.homeScore > pk.awayScore ? 'H' : pk.homeScore < pk.awayScore ? 'A' : 'D')) { r++; return; }
+              mi++;
+            });
+            days.push({ date: d, matches, e, r, mi, p, total: matches.length });
+          }
+        } catch { /* skip */ }
+      }
+      if (mounted.current) setHist(days);
+    } catch (e) { console.error('[Zoka] Hist err:', e); }
+    setHistLoad(false);
   };
 
-  if (authLoad) return null;
-  if (!isAdmin) {
-    return (
-      <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-        <div style={{ textAlign: 'center', padding: '48px 32px', ...S.card }}>
-          <ShieldAlert size={56} style={{ color: '#ef4444', marginBottom: 20 }} />
-          <h2 style={{ margin: '0 0 12px', color: 'var(--text-primary)', fontSize: '1.3rem', fontWeight: 900 }}>Access Denied</h2>
-          <p style={{ color: 'var(--text-muted)', margin: 0, fontSize: '.95rem', fontWeight: 600 }}>Admin only.</p>
-        </div>
-      </div>
-    );
-  }
+  const pubRes = useMemo(() => {
+    if (!pubPicks?.matches) return { e: 0, r: 0, mi: 0, p: 0 };
+    let e = 0, r = 0, mi = 0, p = 0;
+    pubPicks.matches.forEach(pk => {
+      if (pk.status !== 'finished' || pk.homeScore == null) { p++; return; }
+      const h = pk.adminPick?.home, a = pk.adminPick?.away;
+      if (h === pk.homeScore && a === pk.awayScore) { e++; return; }
+      if ((h > a ? 'H' : h < a ? 'A' : 'D') === (pk.homeScore > pk.awayScore ? 'H' : pk.homeScore < pk.awayScore ? 'A' : 'D')) { r++; return; }
+      mi++;
+    });
+    return { e, r, mi, p };
+  }, [pubPicks]);
 
-  const renderMatchRow = (match, idx, mode) => {
-    const mid = String(match.id);
-    const isZoka = mode === 'zoka';
-    const isMatch = mode === 'matches';
-    const sel = zokaSel[mid];
-    const isPred = predMap.has(mid);
-    const pred = predMap.get(mid);
-    const isLive = match.isLive;
-    const isFin = match.isFinished;
-    const st = ST[match.status] || ST.upcoming;
-    const isFlash = flashIds.includes(pred?.id);
-
-    return (
-      <div
-        key={mid}
-        className={`card-in ${sel ? 'zoka-row' : ''} ${isLive ? 'match-live-border' : ''} ${isFlash ? 'fl' : ''}`}
-        style={{
-          display: 'flex', flexDirection: 'column', gap: 12, padding: '16px', borderRadius: 14,
-          background: isFlash ? 'rgba(0,230,118,.06)' : 'var(--bg-surface)',
-          border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : sel ? 'rgba(245,197,66,.25)' : 'var(--border)'}`,
-          marginBottom: 10, animationDelay: `${idx * 30}ms`,
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flex: 1 }}>
-            {match.league?.emblem && <img src={match.league.emblem} alt="" style={{ width: 20, height: 20, borderRadius: 4, objectFit: 'contain', flexShrink: 0 }} />}
-            <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.league?.name || 'Unknown'}</span>
+  return (
+    <div className="ae">
+      {cnt > 0 && (
+        <div className="ask pop">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+            <div>
+              <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                {cnt}/{MAX_ZOKA} selected
+                {scored === cnt && cnt > 0 && <span style={{ color: 'var(--accent)', marginLeft: 6 }}>✓ All scored</span>}
+              </span>
+              {Object.keys(sel).some(mid => pubMap.has(mid)) && (
+                <div className="aedit-hint"><Pencil size={9} /> Editing {Object.keys(sel).filter(mid => pubMap.has(mid)).length} existing</div>
+              )}
+            </div>
+            <div style={{ display: 'flex', gap: 5 }}>
+              <button className="ab ab-gh ab-sm" onClick={handleSave} disabled={saving || cnt === 0 || scored === 0}>
+                <Save size={12} /> Save
+              </button>
+              {ready && (
+                <button className="ab ab-gd ab-sm" onClick={handlePublish} disabled={publishing}>
+                  <Send size={12} /> Publish
+                </button>
+              )}
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-            {isLive && <span className="live-dot" />}
-            <span style={{ fontSize: '.78rem', fontWeight: 800, color: st.c, background: st.b, padding: '4px 12px', borderRadius: 8, letterSpacing: '.04em' }}>
-              {isLive && match.minute != null ? `${match.minute}'` : st.l}
+        </div>
+      )}
+
+      {pubPicks?.matches && cnt === 0 && (
+        <div className="azs pop" style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 6 }}>
+            <span style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+              {pubPicks.matches.length} published · Tap a match to edit
             </span>
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
-            {match.homeLogo ? <img src={match.homeLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} /> : <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>}
-            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name || 'TBD'}</span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 16px', borderRadius: 10, minWidth: 80, justifyContent: 'center', background: isLive ? 'rgba(239,68,68,.1)' : isFin ? 'rgba(0,230,118,.06)' : 'rgba(255,255,255,.03)', border: `1px solid ${isLive ? 'rgba(239,68,68,.2)' : isFin ? 'rgba(0,230,118,.12)' : 'var(--border)'}` }}>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{match.homeScore ?? '-'}</span>
-            <span style={{ fontSize: '.9rem', fontWeight: 600, color: 'var(--text-muted)' }}>–</span>
-            <span style={{ fontSize: '1.2rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{match.awayScore ?? '-'}</span>
-          </div>
-
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, justifyContent: 'flex-end' }}>
-            <span style={{ fontSize: '.95rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name || 'TBD'}</span>
-            {match.awayLogo ? <img src={match.awayLogo} alt="" style={{ width: 28, height: 28, borderRadius: 6, objectFit: 'contain', flexShrink: 0 }} /> : <div style={{ width: 28, height: 28, borderRadius: 6, background: 'rgba(255,255,255,.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '.7rem' }}>⚽</div>}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-          {isZoka && (
-            <button className="btn-sm zb" style={{ background: sel ? 'rgba(245,197,66,.15)' : 'rgba(255,255,255,.04)', border: `1px solid ${sel ? 'rgba(245,197,66,.4)' : 'var(--border)'}`, color: sel ? 'var(--gold)' : 'var(--text-muted)' }} onClick={() => toggleZokaPick(match)}>
-              <Star size={14} fill={sel ? 'var(--gold)' : 'none'} />
-              {sel ? 'Selected' : 'Zoka Pick'}
-            </button>
-          )}
-
-          {sel && isZoka && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input className={`pi ${sel.h ? 'has-val' : ''}`} value={sel.h} onChange={(e) => updateZokaScore(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
-              <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
-              <input className={`pi ${sel.a ? 'has-val' : ''}`} value={sel.a} onChange={(e) => updateZokaScore(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
+            <div style={{ display: 'flex', gap: 4 }}>
+              <span className="abdg ex"><CheckCircle2 size={9} /> {pubRes.e}</span>
+              <span className="abdg rs"><TrendingUp size={9} /> {pubRes.r}</span>
+              <span className="abdg ms"><XCircle size={9} /> {pubRes.mi}</span>
+              {pubRes.p > 0 && <span className="abdg pn">{pubRes.p}</span>}
             </div>
-          )}
-
-          {isMatch && (
-            <>
-              {isPred ? (
-                <button className="btn-sm zb" style={{ background: 'rgba(0,230,118,.08)', border: '1px solid rgba(0,230,118,.2)', color: 'var(--accent)' }} onClick={() => removePred(pred)}>
-                  <Check size={14} /> Featured
-                </button>
-              ) : (
-                <button className="btn-sm zb" style={{ background: 'rgba(255,255,255,.04)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => handleAdd(match)} disabled={isFull}>
-                  <Plus size={14} /> Feature
-                </button>
-              )}
-            </>
-          )}
-
-          {isZoka && publishedPicks?.matches && (
-            (() => {
-              const pick = publishedPicks.matches.find(p => String(p.matchId) === mid);
-              if (!pick) return null;
-              return <ResultBadge pick={pick} />;
-            })()
-          )}
-        </div>
-      </div>
-    );
-  };
-
-  const renderTabContent = () => {
-    if (tab === 'zoka') {
-      const hasPicks = Object.keys(zokaSel).length > 0;
-      const hasPublished = publishedPicks && publishedPicks.matches && publishedPicks.matches.length > 0;
-
-      return (
-        <div className="ae">
-          {hasPicks && (
-            <div className="pub-sticky">
-              <div className="pub-bar">
-                <div className="pub-stats">
-                  <span>{zokaCount}/{MAX_ZOKA} selected</span>
-                  {zokaScored === zokaCount && zokaCount > 0 && (
-                    <span className="count-up" style={{ color: 'var(--accent)' }}>✓ All scored</span>
-                  )}
-                </div>
-                <div className="pub-actions">
-                  <button className="btn-ghost" onClick={saveZokaPicks} disabled={savingZoka || zokaScored < zokaCount} style={savedFlash ? { animation: 'save-flash 1.2s ease-out' } : {}}>
-                    <Save size={16} /> Save Draft {/* ★ FIX BUG 1 */}
-                  </button>
-                  {zokaReady && (
-                    <button className="btn-primary" onClick={publishZokaPicks} disabled={publishing || zokaPicksForPublish.length === 0} style={{ background: 'linear-gradient(135deg, rgba(245,197,66,.9), rgba(245,197,66,.7))', color: '#000', border: 'none' }}>
-                      <Send size={16} /> Publish
-                    </button>
-                  )}
-                  {hasPublished && (
-                    <button className="btn-danger" onClick={unpublishZokaPicks} disabled={publishing}>
-                      <X size={14} /> Unpublish
-                    </button>
-                  )}
-                </div>
-              </div>
-              {hasPublished && (
-                <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', padding: '8px 12px', background: 'rgba(245,197,66,.06)', borderRadius: 10, marginBottom: 4 }}>
-                  <span className="result-badge" style={{ background: 'rgba(0,230,118,.15)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.3)' }}><CheckCircle2 size={12} /> {publishedResults.exact} Exact</span>
-                  <span className="result-badge" style={{ background: 'rgba(245,197,66,.12)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.25)' }}><TrendingUp size={12} /> {publishedResults.result} Result</span>
-                  <span className="result-badge" style={{ background: 'rgba(239,68,68,.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,.2)' }}><XCircle size={12} /> {publishedResults.miss} Miss</span>
-                  {publishedResults.pending > 0 && <span className="result-badge" style={{ background: 'rgba(255,255,255,.05)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>{publishedResults.pending} Pending</span>}
-                </div>
-              )}
-            </div>
-          )}
-
-          {visibleZoka.length > 0 ? (
-            <div>
-              {visibleZoka.map((m, i) => renderMatchRow(m, i, 'zoka'))}
-              {hiddenZokaCount > 0 && !showAllZoka && (
-                <button className="show-more-btn" onClick={() => setShowAllZoka(true)}>
-                  <ChevronDown size={16} />
-                  {/* ★ FIX BUG 2: Completed truncated line */}
-                  Show {hiddenZokaCount} more matches
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <Star size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text-primary)', marginBottom: 4 }}>No matches available</div>
-              <div style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>No fixtures found for this day or filter.</div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (tab === 'matches') {
-      return (
-        <div className="ae">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <span style={{ ...S.smallVal, color: 'var(--text-muted)' }}>{preds.length}/{MAX_FEATURED} Featured</span>
-            {syncMsg && <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--accent)' }}>{syncMsg}</span>}
-          </div>
-          
-          {visibleMatches.length > 0 ? (
-            <div>
-              {visibleMatches.map((m, i) => renderMatchRow(m, i, 'matches'))}
-              {hiddenMatchesCount > 0 && !showAllMatches && (
-                <button className="show-more-btn" onClick={() => setShowAllMatches(true)}>
-                  <ChevronDown size={16} />
-                  Show {hiddenMatchesCount} more matches
-                </button>
-              )}
-            </div>
-          ) : (
-            <div className="empty-state">
-              <Radio size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <div style={{ fontWeight: 700, fontSize: '.95rem', color: 'var(--text-primary)' }}>No matches</div>
-              <div style={{ fontSize: '.85rem', color: 'var(--text-muted)' }}>Change day or league filter.</div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (tab === 'results') {
-      const finishedPreds = preds.filter(p => p.status === 'finished');
-      return (
-        <div className="ae">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 10 }}>
-            {finishedPreds.map((p) => (
-              <div key={p.id} className="card-in" style={{ padding: 16, background: 'var(--bg-surface)', border: '1px solid var(--border)', borderRadius: 12 }}>
-                <div style={{ fontSize: '.75rem', color: 'var(--text-muted)', marginBottom: 8, fontWeight: 700 }}>{p.league?.name || 'Match'}</div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                  <span style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>{p.homeTeam?.name || 'Home'}</span>
-                  <span style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: 'var(--accent)' }}>{p.homeScore ?? 0} - {p.awayScore ?? 0}</span>
-                  <span style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>{p.awayTeam?.name || 'Away'}</span>
-                </div>
-                <div style={{ fontSize: '.7rem', color: 'var(--text-muted)' }}>Finished at {p.finishedAt ? formatTimeAgo(p.finishedAt) : 'Unknown'}</div>
-              </div>
-            ))}
-          </div>
-          {finishedPreds.length === 0 && (
-            <div className="empty-state">
-              <Trophy size={32} style={{ color: 'var(--text-muted)', marginBottom: 12 }} />
-              <div style={{ fontWeight: 700 }}>No finished results yet</div>
-            </div>
-          )}
-        </div>
-      );
-    }
-
-    if (tab === 'staff') {
-      if (staffLoad) return <div className="sk" style={{ height: 200, borderRadius: 16 }} />;
-      return (
-        <div className="ae">
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <div style={{ ...S.sectionTitle, margin: 0 }}>Team ({staffList.length})</div>
-            <button className="btn-sm zb" style={{ background: 'rgba(245,197,66,.1)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' }} onClick={() => setShowAddStaff(true)}>
-              <UserPlus size={14} /> Add
+            <button className="ab ab-dg ab-sm" onClick={onUnpublish} style={{ marginLeft: 'auto' }}>
+              <X size={11} /> Unpublish All
             </button>
           </div>
+        </div>
+      )}
 
-          {showAddStaff && (
-            <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-              <input className="input-field" style={{ flex: 2, minWidth: 150 }} placeholder="Name" value={newStaffName} onChange={e => setNewStaffName(e.target.value)} />
-              <select className="input-field" style={{ flex: 1, minWidth: 120 }} value={newStaffRole} onChange={e => setNewStaffRole(e.target.value)}>
-                <option value="admin">Admin</option>
-                <option value="lead">Lead</option>
-                <option value="analyst">Analyst</option>
-                <option value="writer">Writer</option>
-              </select>
-              <button className="btn-primary" style={{ minWidth: 100 }} onClick={addStaff}>Save</button>
-              <button className="btn-ghost" onClick={() => setShowAddStaff(false)}>Cancel</button>
-            </div>
-          )}
-
-          {staffList.map(s => (
-            <div key={s.id} className="staff-row">
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 800, fontSize: '.95rem', color: 'var(--text-primary)' }}>{s.name}</div>
-                <span className="role-badge" style={{ background: s.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.05)', color: s.role === 'admin' ? '#ef4444' : 'var(--text-muted)', marginTop: 6, textTransform: 'capitalize' }}>{s.role}</span>
-              </div>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button className="match-action zb" style={{ background: 'rgba(239,68,68,.08)', color: '#ef4444' }} onClick={() => deleteStaff(s.id)}><Trash2 size={16} /></button>
-              </div>
-            </div>
+      {leagues.length > 1 && (
+        <div className="alb" style={{ marginTop: 10 }}>
+          <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All ({selectableFx.length})</button>
+          {leagues.map(l => (
+            <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
+              {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+              {l.name} ({l.n})
+            </button>
           ))}
         </div>
-      );
-    }
+      )}
 
-    if (tab === 'users') {
-      return (
-        <div className="ae">
-          <div style={{ display: 'flex', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-            {!usersLoaded && <button className="btn-primary" onClick={loadUsers} disabled={usersLoad}><Users size={16} /> {usersLoad ? 'Loading...' : 'Load Users'}</button>}
-            {usersLoaded && (
-              <>
-                <div style={{ position: 'relative', flex: 1, minWidth: 200 }}>
-                  <Search size={16} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                  <input className="input-field" style={{ paddingLeft: 40 }} placeholder="Search users..." value={userSearch} onChange={e => setUserSearch(e.target.value)} />
-                </div>
-                <select className="input-field" style={{ width: 'auto', minWidth: 120 }} value={userFilter} onChange={e => setUserFilter(e.target.value)}>
-                  <option value="all">All Roles</option>
-                  <option value="admin">Admins</option>
-                  <option value="user">Users</option>
-                </select>
-              </>
-            )}
-          </div>
-
-          {usersLoaded && (
-            <>
-              <div className="user-row user-header">
-                <span>User</span>
-                <span className="hide-mobile">Email</span>
-                <span>Role</span>
-                <span className="hide-mobile">Joined</span>
-                <span>Actions</span>
-              </div>
-              {filteredUsers.map(u => (
-                <div key={u.id} className="user-row">
-                  <span style={{ fontWeight: 700 }}>{u.displayName || u.uid}</span>
-                  <span className="hide-mobile" style={{ color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.email || '-'}</span>
-                  <span className="role-badge" style={{ background: u.role === 'admin' ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.05)', color: u.role === 'admin' ? '#ef4444' : 'var(--text-muted)', textTransform: 'capitalize' }}>{u.role || 'user'}</span>
-                  <span className="hide-mobile" style={{ color: 'var(--text-muted)', fontSize: '.82rem' }}>{u.createdAt ? formatTimeAgo(u.createdAt) : '-'}</span>
-                  <div style={{ display: 'flex', gap: 6 }}>
-                    <select className="input-field" style={{ padding: '6px 8px', fontSize: '.78rem', minWidth: 'auto', height: 'auto' }} value={u.role || 'user'} onChange={e => updateUserRole(u.id, e.target.value)}>
-                      <option value="user">User</option>
-                      <option value="admin">Admin</option>
-                    </select>
+      {fxLoading ? <Skel n={4} /> : vis.length > 0 ? (
+        <div className={flash ? 'sf' : ''}>
+          {vis.map((m, i) => {
+            const mid = String(m.id);
+            const isPublished = pubMap.has(mid);
+            return (
+              <div key={mid}>
+                <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
+                  scoreInput={sel[mid] || null} onScoreInput={updScore} pubPick={pubMap.get(mid)} />
+                {isPublished && !sel[mid] && (
+                  <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
+                    <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
                   </div>
-                </div>
-              ))}
-              {filteredUsers.length === 0 && <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>No users found</div>}
-            </>
-          )}
+                )}
+              </div>
+            );
+          })}
+          <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
-      );
-    }
+      ) : (
+        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'All fixtures are finished'}
+          hint={dayFx.length === 0 ? 'Try a different day' : 'Finished games cannot be selected'} />
+      )}
 
-    return null;
+      <div className="asec" style={{ marginTop: 18 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', cursor: 'pointer' }}
+          onClick={() => { setShowHist(p => !p); if (!showHist) loadHist(); }}>
+          <h3 className="ast" style={{ margin: 0 }}><History size={15} /> Zoka Picks History</h3>
+          {showHist ? <ChevronUp size={16} style={{ color: 'var(--text-muted)' }} /> : <ChevronDown size={16} style={{ color: 'var(--text-muted)' }} />}
+        </div>
+        {showHist && (
+          <div style={{ marginTop: 10 }}>
+            {histLoad ? <Skel n={2} /> : hist.length > 0 ? hist.map(day => {
+              const isOpen = openDay === day.date;
+              const res = day.total - day.p;
+              const acc = res > 0 ? Math.round(((day.e + day.r) / res) * 100) : 0;
+              return (
+                <div key={day.date} className={`ahc${isOpen ? ' op' : ''}`} onClick={() => setOpenDay(isOpen ? null : day.date)}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <div>
+                      <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>{dateLabel(day.date)}</div>
+                      <div style={{ fontSize: '.67rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{day.total} picks · {acc}% accuracy</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 3 }}>
+                      <span className="abdg ex" style={{ fontSize: '.6rem' }}>{day.e}E</span>
+                      <span className="abdg rs" style={{ fontSize: '.6rem' }}>{day.r}R</span>
+                      <span className="abdg ms" style={{ fontSize: '.6rem' }}>{day.mi}M</span>
+                    </div>
+                  </div>
+                  {isOpen && day.matches.map((pk, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderTop: '1px solid var(--border)', marginTop: 6, fontSize: '.75rem', gap: 6 }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{pk.homeTeam?.shortName || pk.homeTeam?.name || '?'}</span>
+                        <span style={{ color: 'var(--text-muted)', margin: '0 5px' }}>vs</span>
+                        <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{pk.awayTeam?.shortName || pk.awayTeam?.name || '?'}</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
+                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--gold,#f5c542)', fontSize: '.82rem' }}>{pk.adminPick?.home}-{pk.adminPick?.away}</span>
+                        {pk.status === 'finished' && pk.homeScore != null && <><span style={{ color: 'var(--text-muted)' }}>→</span><span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-primary)', fontSize: '.82rem' }}>{pk.homeScore}-{pk.awayScore}</span></>}
+                        <RBadge pick={pk} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              );
+            }) : <p style={{ fontSize: '.78rem', color: 'var(--text-muted)', textAlign: 'center', padding: 14, fontWeight: 600 }}>No previous Zoka Picks found</p>}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   FEATURED TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
+  const [, refresh] = useState(0);
+  const mk = `feat_${date}`;
+  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
+  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
+  const lg = mem.get(`${mk}_lg`, 'ALL');
+  const showAll = mem.get(`${mk}_show`, false);
+  const [addingId, setAddingId] = useState(null);
+  const [removingId, setRemovingId] = useState(null);
+  const isFull = preds.length >= MAX_FEATURED;
+
+  const avail = useMemo(() => {
+    if (!fixtures?.length) return [];
+    const pids = new Set(preds.map(p => String(p.matchId)));
+    let l = fixtures.filter(m => extractDate(m) === date && !pids.has(String(m.id)) && !isFin(m));
+    if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
+    return l;
+  }, [fixtures, date, preds, lg]);
+
+  const leagues = useMemo(() => {
+    const map = new Map();
+    (fixtures?.filter(m => extractDate(m) === date && !isFin(m)) || []).forEach(f => {
+      const c = f.competition || f.league; if (!c) return;
+      const id = String(c.id || c.code || 'x');
+      if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
+      map.get(id).n++;
+    });
+    return [...map.values()].sort((a, b) => b.n - a.n);
+  }, [fixtures, date]);
+
+  const vis = useMemo(() => showAll ? avail : avail.slice(0, SHOW_INIT), [avail, showAll]);
+  const hidden = Math.max(0, avail.length - SHOW_INIT);
+
+  const handleAddClick = async (m) => {
+    if (isFull) return;
+    const mid = String(m.id);
+    setAddingId(mid);
+    try { await onAdd(m); } catch (e) { toast('Add failed: ' + e.message, 'er'); }
+    finally { setAddingId(null); }
+  };
+
+  const handleRemoveClick = async (p) => {
+    setRemovingId(String(p.matchId));
+    try { await onRemove(p); } catch (e) { toast('Remove failed: ' + e.message, 'er'); }
+    finally { setRemovingId(null); }
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '20px 20px 100px' }}>
-        
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
+    <div className="ae">
+      <div className="asec">
+        <h3 className="ast"><Radio size={15} /> Featured Matches ({preds.length}/{MAX_FEATURED})</h3>
+        {preds.length > 0 ? (
           <div>
-            <h1 style={{ margin: 0, fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 10 }}>
-              <ShieldAlert size={24} style={{ color: 'var(--gold)' }} /> Admin Panel
-            </h1>
-            <div style={{ fontSize: '.85rem', color: 'var(--text-muted)', marginTop: 4 }}>
-              {lastUpdate ? `Updated ${formatTimeAgo(lastUpdate)}` : 'Waiting for data...'}
-              {hasLive && <span style={{ color: '#ef4444', fontWeight: 800, marginLeft: 8 }}>● {liveCount} LIVE</span>}
-            </div>
+            {preds.map((p, i) => {
+              const mid = String(p.matchId);
+              const isRemoving = removingId === mid;
+              const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
+              const isLive = p.status === 'live' || !!p.isLive;
+              const isFinished = p.status === 'finished' || !!p.isFinished;
+              const st = isFinished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' }
+                        : isLive ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' }
+                        : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
+              return (
+                <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
+                  <div className="amh">
+                    <div className="aml">
+                      {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      <span>{p.league?.name || 'Featured'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                      {isLive && <span className="ld" />}
+                      <span className="as" style={{ color: st.c, background: st.b }}>{st.l}</span>
+                    </div>
+                  </div>
+                  <div className="atm">
+                    <div className="ate">
+                      {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
+                    </div>
+                    <div className={`asb${isLive ? ' lv' : ''}${isFinished ? ' ft' : ''}`}>
+                      {sc ? (
+                        <><span className={`asn${isLive ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${isLive ? ' r' : ' g'}`}>{sc.a}</span></>
+                      ) : <span className="avs">VS</span>}
+                    </div>
+                    <div className="ate aw">
+                      {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                    </div>
+                  </div>
+                  <div className="aa">
+                    <span className="abdg pn">#{i + 1}</span>
+                    <button className="ab ab-sm ab-dg" onClick={() => handleRemoveClick(p)} disabled={isRemoving}>
+                      {isRemoving ? <Loader2 size={11} className="asp" /> : <Trash2 size={11} />} Remove
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn-ghost" onClick={handleRefresh} disabled={refreshing}>
-              <RefreshCw size={16} style={{ animation: refreshing ? 'asp 1s linear infinite' : 'none' }} /> Refresh
-            </button>
-            <button className="btn-ghost" onClick={() => navigate('/')}><ArrowRight size={16} /> View App</button>
-          </div>
-        </div>
+        ) : (
+          <Empty icon={Radio} title="No featured matches yet" hint="Add matches below for users to predict" />
+        )}
+      </div>
 
-        {/* Day Toggle & Stats */}
-        <div className="section-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div style={{ display: 'flex', gap: 10 }}>
-            <button className={`league-pill ${day === 'today' ? 'zb' : ''}`} style={day === 'today' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.4)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setDay('today')}>Today</button>
-            <button className={`league-pill ${day === 'tomorrow' ? 'zb' : ''}`} style={day === 'tomorrow' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.4)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setDay('tomorrow')}>Tomorrow</button>
-            <span style={{ marginLeft: 'auto', fontSize: '.85rem', color: 'var(--text-muted)', fontWeight: 700 }}>{date}</span>
-          </div>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))', gap: 10 }}>
-            <div className="stat-mini"><span className="num">{fx.length}</span><span className="lbl">Matches</span></div>
-            <div className="stat-mini"><span className="num" style={{ color: '#ef4444' }}>{liveCount}</span><span className="lbl">Live</span></div>
-            <div className="stat-mini"><span className="num" style={{ color: 'var(--accent)' }}>{finCnt}</span><span className="lbl">Finished</span></div>
-            <div className="stat-mini"><span className="num" style={{ color: 'var(--gold)' }}>{preds.length}</span><span className="lbl">Featured</span></div>
-          </div>
-
-          {leagues.length > 1 && (
-            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 4 }} className="sh">
-              <button className="league-pill zb" style={lg === 'all' ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setLg('all')}>All ({fx.length})</button>
-              {leagues.map(l => (
-                <button key={l.id} className="league-pill zb" style={lg === l.id ? { background: 'rgba(245,197,66,.15)', border: '1px solid rgba(245,197,66,.3)', color: 'var(--gold)' } : { background: 'var(--bg-surface)', border: '1px solid var(--border)', color: 'var(--text-muted)' }} onClick={() => setLg(l.id)}>
-                  {l.logo && <img src={l.logo} alt="" style={{ width: 16, height: 16, borderRadius: 3 }} />}
-                  {l.name} ({l.n})
-                </button>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Rebuild Leaderboards Section (inside Results or standalone) */}
-        {tab === 'results' && (
-          <div className="section-card">
-            <div style={{ ...S.sectionTitle }}><Hammer size={18} /> Maintenance Tools</div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 10 }} className="rebuild-grid">
-              <button className="rebuild-btn" onClick={() => handleRebuild('daily')} disabled={!!rebuilding}><RotateCcw size={14} /> Daily Summary</button>
-              <button className="rebuild-btn" onClick={() => handleRebuild('goat')} disabled={!!rebuilding}><Crown size={14} /> GOAT Board</button>
-              <button className="rebuild-btn" onClick={() => handleRebuild('weekly')} disabled={!!rebuilding}><CalendarDays size={14} /> Weekly</button>
-              <button className="rebuild-btn" onClick={() => handleRebuild('monthly')} disabled={!!rebuilding}><CalendarDays size={14} /> Monthly</button>
-              <button className="rebuild-btn" style={{ gridColumn: '1 / -1', background: 'rgba(245,197,66,.08)', borderColor: 'rgba(245,197,66,.3)', color: 'var(--gold)' }} onClick={() => handleRebuild('all')} disabled={!!rebuilding}>
-                {rebuilding ? <Loader size={14} className="asp" /> : <Sparkles size={14} />} Rebuild All Leaderboards
+      <div className="asec">
+        <h3 className="ast"><Plus size={15} /> Available Matches {isFull && <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '.75rem' }}>(FULL)</span>}</h3>
+        {leagues.length > 1 && (
+          <div className="alb" style={{ marginBottom: 10 }}>
+            <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All</button>
+            {leagues.map(l => (
+              <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
+                {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                {l.name} ({l.n})
               </button>
-            </div>
+            ))}
           </div>
         )}
+        {fxLoading ? <Skel n={3} /> : vis.length > 0 ? (
+          <div>
+            {vis.map((m, i) => {
+              const mid = String(m.id);
+              const isAdding = addingId === mid;
+              return (
+                <MatchRow key={mid} m={m} idx={i} mode="featured"
+                  onAction={(match) => (
+                    <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(match)} disabled={isAdding || isFull}>
+                      {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
+                      {isFull ? 'Full' : 'Add'}
+                    </button>
+                  )}
+                />
+              );
+            })}
+            <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
+          </div>
+        ) : (
+          <Empty icon={CalendarDays} title="No available matches" hint="All matches are finished or already featured" />
+        )}
+      </div>
+    </div>
+  );
+}
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: 4, borderBottom: '1px solid var(--border)', overflowX: 'auto' }} className="sh">
+/* ═════════════════════════════════════════════════════════════════════════════════
+   RESULTS TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
+  const mounted = useMounted();
+  const [scores, setScores] = useState({});
+  const [resolving, setResolving] = useState({});
+  const [overriding, setOverriding] = useState({});
+
+  const unresolved = useMemo(() =>
+    preds.filter(p => {
+      const mid = String(p.matchId || p.id);
+      const s = scores[mid];
+      const hasNewScore = s && s.h !== '' && s.a !== '';
+      const hasExistingScore = p.homeScore != null && p.awayScore != null;
+      return !p.isFinished && p.status !== 'finished' || hasNewScore || !hasExistingScore;
+    }),
+    [preds, scores]
+  );
+
+  const resolved = useMemo(() =>
+    preds.filter(p => p.isFinished || p.status === 'finished'),
+    [preds]
+  );
+
+  const updScore = (mid, f, v) => {
+    const c = v.replace(/[^0-9]/g, '').slice(0, 2);
+    setScores(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
+  };
+
+  const handleResolve = async (pred) => {
+    const mid = String(pred.matchId || pred.id);
+    const s = scores[mid];
+    const h = s?.h != '' ? Number(s.h) : (pred.homeScore ?? null);
+    const a = s?.a != '' ? Number(s.a) : (pred.awayScore ?? null);
+
+    if (h == null || a == null) { toast('Enter both scores', 'in'); return; }
+
+    setResolving(prev => ({ ...prev, [mid]: true }));
+    try {
+      await onResolve(pred, h, a);
+      setScores(prev => { const n = { ...prev }; delete n[mid]; return n; });
+      toast(`Resolved: ${pred.homeTeam?.shortName || pred.homeTeam?.name} ${h}-${a} ${pred.awayTeam?.shortName || pred.awayTeam?.name}`, 'ok');
+    } catch (e) {
+      toast('Resolve failed: ' + e.message, 'er');
+    }
+    setResolving(prev => ({ ...prev, [mid]: false }));
+  };
+
+  const handleOverride = async (pred) => {
+    const mid = String(pred.matchId || pred.id);
+    const s = scores[mid];
+    const h = s?.h != '' ? Number(s.h) : null;
+    const a = s?.a != '' ? Number(s.a) : null;
+
+    if (h == null || a == null) { toast('Enter new scores to override', 'in'); return; }
+
+    setOverriding(prev => ({ ...prev, [mid]: true }));
+    try {
+      await onOverride(pred, h, a);
+      setScores(prev => { const n = { ...prev }; delete n[mid]; return n; });
+      toast(`Override: ${pred.homeTeam?.shortName || pred.homeTeam?.name} → ${h}-${a}`, 'ok');
+    } catch (e) {
+      toast('Override failed: ' + e.message, 'er');
+    }
+    setOverriding(prev => ({ ...prev, [mid]: false }));
+  };
+
+  const handleResolveAll = async () => {
+    const toResolve = unresolved.filter(p => {
+      const mid = String(p.matchId || p.id);
+      const s = scores[mid];
+      return s?.h !== '' && s?.a !== '';
+    });
+    if (toResolve.length === 0) { toast('No scored matches to resolve', 'in'); return; }
+
+    setResolving(prev => {
+      const n = { ...prev };
+      toResolve.forEach(p => { n[String(p.matchId || p.id)] = true; });
+      return n;
+    });
+
+    let ok = 0, fail = 0;
+    for (const p of toResolve) {
+      const mid = String(p.matchId || p.id);
+      const s = scores[mid];
+      try {
+        await onResolve(p, Number(s.h), Number(s.a));
+        ok++;
+      } catch { fail++; }
+    }
+
+    setScores({});
+    setResolving({});
+    toast(`Resolved ${ok} match${ok !== 1 ? 'es' : ''}${fail > 0 ? ', ' + fail + ' failed' : ''}`, fail > 0 ? 'er' : 'ok');
+  };
+
+  return (
+    <div className="ae">
+      {unresolved.length > 0 && (
+        <div className="asec">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+            <h3 className="ast" style={{ margin: 0 }}><Zap size={15} /> Score & Resolve ({unresolved.length})</h3>
+            <button className="ab ab-sm ab-p" onClick={handleResolveAll}
+              disabled={Object.values(resolving).some(Boolean)}>
+              <Zap size={11} /> Resolve All Scored
+            </button>
+          </div>
+          {unresolved.map((p, i) => {
+            const mid = String(p.matchId || p.id);
+            const s = scores[mid] || {};
+            const isResolving = resolving[mid];
+            const hasExisting = p.homeScore != null;
+            return (
+              <div key={mid} className={`am card-in${hasExisting ? ' editing' : ''}`} style={{ animationDelay: `${i * 20}ms` }}>
+                <div className="amh">
+                  <div className="aml">
+                    {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.league?.name || 'Match'}</span>
+                  </div>
+                  {hasExisting && <span className="as" style={{ color: 'var(--gold)', background: 'rgba(245,158,11,.1)' }}>OVERRIDE</span>}
+                </div>
+                <div className="atm">
+                  <div className="ate">
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
+                  </div>
+                  <div className="asb" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
+                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99"
+                      value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
+                    <span className="asep">–</span>
+                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99"
+                      value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
+                  </div>
+                  <div className="ate aw">
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                  </div>
+                </div>
+                <div className="aa">
+                  {hasExisting ? (
+                    <button className="ab ab-sm ab-olive" onClick={() => handleOverride(p)} disabled={overriding[mid] || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                      {overriding[mid] ? <Loader2 size={11} className="asp" /> : <Copy size={11} />} Override
+                    </button>
+                  ) : (
+                    <button className="ab ab-sm ab-p" onClick={() => handleResolve(p)} disabled={isResolving || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                      {isResolving ? <Loader2 size={11} className="asp" /> : <Check size={11} />} Resolve
+                    </button>
+                  )}
+                  {p.homeScore != null && <span className="abdg pn">Was: {p.homeScore}-{p.awayScore}</span>}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {resolved.length > 0 && (
+        <div className="asec">
+          <h3 className="ast"><CheckCircle2 size={15} /> Resolved ({resolved.length})</h3>
+          {resolved.map((p, i) => {
+            const mid = String(p.matchId || p.id);
+            const s = scores[mid] || {};
+            const isOverriding = overriding[mid];
+            return (
+              <div key={mid} className="am card-in ok resolved" style={{ animationDelay: `${i * 15}ms` }}>
+                <div className="amh">
+                  <div className="aml">
+                    {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.league?.name || 'Match'}</span>
+                  </div>
+                  <span className="as" style={{ color: 'var(--accent)', background: 'rgba(0,230,118,.08)' }}>FT</span>
+                </div>
+                <div className="atm">
+                  <div className="ate">
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
+                  </div>
+                  <div className="asb ft" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
+                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99"
+                      value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
+                    <span className="asep">–</span>
+                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99"
+                      value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
+                  </div>
+                  <div className="ate aw">
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                  </div>
+                </div>
+                <div className="aa">
+                  <span className="abdg ex"><CheckCircle2 size={9} /> {p.homeScore}-{p.awayScore}</span>
+                  <button className="ab ab-sm ab-olive" onClick={() => handleOverride(p)} disabled={isOverriding || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                    {isOverriding ? <Loader2 size={11} className="asp" /> : <Copy size={11} />} Override
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {preds.length === 0 && (
+        <Empty icon={Trophy} title="No featured matches for this date" hint="Add featured matches first, then score them here" />
+      )}
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   STAFF TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function StaffTab({ toast }) {
+  const mounted = useMounted();
+  const [staff, setStaff] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [email, setEmail] = useState('');
+  const [adding, setAdding] = useState(false);
+
+  const loadStaff = async () => {
+    if (!db) return;
+    setLoading(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('role', 'in', ['admin', 'staff'])));
+      if (mounted.current) {
+        setStaff(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.role === 'admin' ? 0 : 1) - (b.role === 'admin' ? 0 : 1)));
+      }
+    } catch (e) { toast('Load failed: ' + e.message, 'er'); }
+    setLoading(false);
+  };
+
+  const addStaff = async () => {
+    if (!db || !email.trim()) return;
+    setAdding(true);
+    try {
+      const snap = await getDocs(query(collection(db, 'users'), where('email', '==', email.trim().toLowerCase())));
+      if (snap.empty) { toast('User not found', 'er'); setAdding(false); return; }
+      const uid = snap.docs[0].id;
+      await setDoc(doc(db, 'users', uid), { role: 'staff', updatedAt: serverTimestamp() }, { merge: true });
+      toast(`Added ${email} as staff`, 'ok');
+      setEmail('');
+      loadStaff();
+    } catch (e) { toast('Add failed: ' + e.message, 'er'); }
+    setAdding(false);
+  };
+
+  const removeRole = async (uid) => {
+    if (!db) return;
+    try {
+      await setDoc(doc(db, 'users', uid), { role: 'user', updatedAt: serverTimestamp() }, { merge: true });
+      toast('Role removed', 'ok');
+      setStaff(prev => prev.filter(s => s.id !== uid));
+    } catch (e) { toast('Remove failed: ' + e.message, 'er'); }
+  };
+
+  return (
+    <div className="ae">
+      <div className="asec">
+        <h3 className="ast"><UserCog size={15} /> Staff Members</h3>
+        <div className="ausr-input">
+          <input className="aip" placeholder="Enter email to add as staff..." value={email}
+            onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addStaff()} />
+          <button className="ab ab-p ab-sm" onClick={addStaff} disabled={adding || !email.trim()}>
+            {adding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />} Add
+          </button>
+        </div>
+        <button className="ab ab-gh ab-sm" onClick={loadStaff} disabled={loading} style={{ marginBottom: 12 }}>
+          {loading ? <Loader2 size={11} className="asp" /> : <Users size={11} />} {staff.length > 0 ? 'Refresh' : 'Load Staff from Firebase'}
+        </button>
+        {staff.length > 0 ? staff.map(s => (
+          <div key={s.id} className="aur">
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: s.role === 'admin' ? 'rgba(245,197,66,.12)' : 'rgba(96,165,250,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: s.role === 'admin' ? 'var(--gold)' : 'var(--blue)', fontWeight: 900, fontSize: '.85rem', flexShrink: 0 }}>
+              {(s.displayName || s.email || '??').slice(0, 2).toUpperCase()}
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '.84rem', fontWeight: 700, color: 'var(--text-primary)' }}>{s.displayName || 'Unknown'}</div>
+              <div style={{ fontSize: '.68rem', color: 'var(--text-muted)', fontWeight: 600 }}>{s.email}</div>
+            </div>
+            <span className={`abdg ${s.role === 'admin' ? 'gd' : 'bl'}`}>{s.role?.toUpperCase()}</span>
+            <button className="ab ab-sm ab-dg" onClick={() => removeRole(s.id)}><Ban size={11} /></button>
+          </div>
+        )) : !loading && <Empty icon={UserCog} title="No staff loaded" hint="Click the button above to load from Firebase" />}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   USERS TAB
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function UsersTab({ toast }) {
+  const mounted = useMounted();
+  const [users, setUsers] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [search, setSearch] = useState('');
+  const [lastKey, setLastKey] = useState(null);
+  const [hasMore, setHasMore] = useState(false);
+
+  const loadUsers = async (more = false) => {
+    if (!db) return;
+    setLoading(true);
+    try {
+      let q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limitQ(50));
+      if (more && lastKey) q = query(q, startAfter(lastKey));
+      const snap = await getDocs(q);
+      if (mounted.current) {
+        const newUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        setUsers(prev => more ? [...prev, ...newUsers] : newUsers);
+        setLastKey(snap.docs[snap.docs.length - 1] || null);
+        setHasMore(snap.docs.length === 50);
+      }
+    } catch (e) { toast('Load failed: ' + e.message, 'er'); }
+    setLoading(false);
+  };
+
+  const filtered = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase();
+    return users.filter(u =>
+      (u.displayName || '').toLowerCase().includes(q) ||
+      (u.email || '').toLowerCase().includes(q)
+    );
+  }, [users, search]);
+
+  return (
+    <div className="ae">
+      <div className="asec">
+        <h3 className="ast"><Users size={15} /> Users</h3>
+        <button className="ab ab-p" onClick={() => loadUsers(false)} disabled={loading}
+          style={{ marginBottom: 14, width: '100%', justifyContent: 'center' }}>
+          {loading ? <Loader2 size={14} className="asp" /> : <Users size={14} />}
+          {users.length > 0 ? 'Reload Users' : 'Load Users from Firebase'}
+        </button>
+        {users.length > 0 && (
+          <div style={{ position: 'relative', marginBottom: 12 }}>
+            <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
+            <input className="aip" style={{ paddingLeft: 36 }} placeholder="Search by name or email..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+        )}
+        {filtered.length > 0 ? filtered.map((u, i) => (
+          <div key={u.id} className="aur">
+            <div style={{ width: 38, height: 38, borderRadius: 10, background: `hsl(${(i * 37) % 360}, 50%, 25%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: '.78rem', flexShrink: 0 }}>
+              {(u.displayName || u.email || '??').slice(0, 2).toUpperCase()
+              }</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName || 'Anonymous'}</div>
+              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.email}</div>
+            </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: '.68rem', fontWeight: 700, color: u.role === 'admin' ? 'var(--gold)' : u.role === 'staff' ? 'var(--blue)' : 'var(--text-muted)' }}>{(u.role || 'user').toUpperCase()}</div>
+              <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.createdAt ? fmtTimeAgo(u.createdAt) : ''}</div>
+            </div>
+          </div>
+        )) : !loading && users.length > 0 && <p style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '.82rem', padding: 20, fontWeight: 600 }}>No users match "{search}"</p>}
+        {hasMore && (
+          <button className="asm" onClick={() => loadUsers(true)} disabled={loading} style={{ marginTop: 8 }}>
+            {loading ? <Loader2 size={13} className="asp" /> : <ChevronDown size={13} />} Load more
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   MAIN ADMIN COMPONENT
+   ═════════════════════════════════════════════════════════════════════════════════ */
+export default function Admin() {
+  injectCSS();
+  const nav = useNavigate();
+  const { userProfile } = useAuth();
+  const { fixtures, loading: fxLoading, liveMatches } = useFootballData();
+  const mounted = useMounted();
+
+  const [tab, setTab] = useState('dashboard');
+  const [date, setDate] = useState(todayStr());
+  const [showMoreDates, setShowMoreDates] = useState(false);
+
+  const [preds, setPreds] = useState([]);
+  const [pubPicks, setPubPicks] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [rebuilding, setRebuilding] = useState(null);
+
+  const defaultDates = useMemo(() => [dateOffset(-1), todayStr(), dateOffset(1)], []);
+  const extraDates = useMemo(() => {
+    const dates = [];
+    for (let i = -14; i <= 14; i++) {
+      const d = dateOffset(i);
+      if (!defaultDates.includes(d)) dates.push(d);
+    }
+    return dates.sort();
+  }, []);
+
+  const dayFixtures = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
+  const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
+  const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(
+      doc(db, PATHS.PREDICTION_SNAPSHOTS, date),
+      (snap) => {
+        if (!mounted.current) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          setPreds(Array.isArray(data.predictions) ? data.predictions : []);
+        } else {
+          getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', date)))
+            .then(qs => {
+              if (mounted.current) setPreds(qs.docs.map(d => d.data()).sort((a, b) => (b.priority || 0) - (a.priority || 0)));
+            })
+            .catch(() => {});
+        }
+      },
+      () => {}
+    );
+    return unsub;
+  }, [date]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(
+      doc(db, PATHS.ZOKA_PICKS, date),
+      (snap) => {
+        if (!mounted.current) return;
+        setPubPicks(snap.exists() ? snap.data() : null);
+      },
+      () => {}
+    );
+    return unsub;
+  }, [date]);
+
+  const handleZokaSaveDraft = async (data) => {
+    if (!db) return;
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+  };
+
+  const handleZokaPublish = async (data) => {
+    if (!db) return;
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+  };
+
+  const handleZokaUnpublish = async () => {
+    if (!db || !pubPicks) return;
+    setConfirm({
+      title: 'Unpublish All Zoka Picks?',
+      msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
+      onYes: async () => {
+        await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
+        setPubPicks(null);
+        dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+        eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
+        setConfirm(null);
+      },
+    });
+  };
+
+  const handleFeaturedAdd = async (m) => {
+    if (!db) return;
+    const matchDate = date;
+    const predId = `feat_${date}_${m.id}`;
+    const pred = {
+      id: predId,
+      matchId: String(m.id),
+      matchDate,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      homeLogo: m.homeTeam?.crest || null,
+      awayLogo: m.awayTeam?.crest || null,
+      league: m.competition || m.league,
+      kickoff: m.utcDate || m.kickoff,
+      status: m.status || 'NS',
+      homeScore: null,
+      awayScore: null,
+      priority: preds.length + 1,
+    };
+
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      ...pred,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: [...preds, pred],
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: [...preds, pred] });
+  };
+
+  const handleFeaturedRemove = async (p) => {
+    if (!db) return;
+    const predId = p.id || `feat_${date}_${p.matchId}`;
+
+    await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
+
+    const updated = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updated,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+  };
+
+  const handleResolve = async (pred, h, a) => {
+    const matchId = String(pred.matchId || pred.id);
+    await resolveMatchForAllUsers(matchId, h, a, date);
+
+    const predId = pred.id || `feat_${date}_${matchId}`;
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    const updated = preds.map(p => {
+      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true };
+      return p;
+    });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updated, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+  };
+
+  const handleOverride = async (pred, h, a) => {
+    const matchId = String(pred.matchId || pred.id);
+    const predId = pred.id || `feat_${date}_${matchId}`;
+
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      homeScore: h, awayScore: a, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    const updated = preds.map(p => {
+      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a };
+      return p;
+    });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updated, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    await resolveMatchForAllUsers(matchId, h, a, date);
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+  };
+
+  const handleRebuild = async (period) => {
+    setRebuilding(period);
+    try {
+      if (period === 'daily') await rebuildDailySummary(date);
+      else if (period === 'goat') await rebuildGoatLeaderboard();
+      else if (period === 'weekly') await rebuildPeriodLeaderboard('weekly');
+      else if (period === 'monthly') await rebuildPeriodLeaderboard('monthly');
+      else if (period === 'all') await rebuildAllLeaderboards();
+    } catch (e) { console.error('[Admin] Rebuild err:', e); }
+    setRebuilding(null);
+  };
+
+  return (
+    <div className="ap">
+      <div className="aw">
+        <div className="ah">
+          <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>
+            <ArrowLeft size={14} />
+          </button>
+          <h1><ShieldAlert size={14} style={{ color: 'var(--gold)', verticalAlign: 'middle', marginRight: 6 }} /> Admin Control Room</h1>
+          <div className="sub">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
+        </div>
+
+        <div className="at">
           {TABS.map(t => (
-            <button key={t.key} className={`tab-btn ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-              <t.icon size={16} /> {t.label}
-              {t.key === 'zoka' && zokaCount > 0 && <span style={{ background: 'var(--gold)', color: '#000', fontSize: '.65rem', fontWeight: 900, padding: '2px 6px', borderRadius: 10 }}>{zokaCount}</span>}
+            <button key={t.key} className={`atb${tab === t.key ? ' on' : ''}`} onClick={() => setTab(t.key)}>
+              <t.icon size={13} /><span className="lb">{t.label}</span>
             </button>
           ))}
         </div>
 
-        {/* Tab Content */}
-        <div style={{ paddingTop: 20 }}>
-          {renderTabContent()}
+        <div className="ask" style={{ top: 108 }}>
+          <div className="adb">
+            {defaultDates.map(d => (
+              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
+                {dateLabel(d)}
+              </button>
+            ))}
+            <button className="more-dates-btn" onClick={() => setShowMoreDates(p => !p)}>
+              {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showMoreDates ? 'Less' : 'More dates'}
+            </button>
+            {showMoreDates && extraDates.map(d => (
+              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
+                {dateLabel(d)}
+              </button>
+            ))}
+          </div>
         </div>
 
+        {tab === 'dashboard' && (
+          <DashTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length}
+            liveCount={liveCount} finCount={finCount} date={date}
+            onRebuild={handleRebuild} rebuilding={rebuilding} />
+        )}
+
+        {tab === 'zoka' && (
+          <ZokaTab date={date} fixtures={fixtures} fxLoading={fxLoading} pubPicks={pubPicks}
+            onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish}
+            onSaveDraft={handleZokaSaveDraft} toast={setToast} />
+        )}
+
+        {tab === 'featured' && (
+          <FeaturedTab date={date} preds={preds} fixtures={fixtures}
+            onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove}
+            fxLoading={fxLoading} toast={setToast} />
+        )}
+
+        {tab === 'results' && (
+          <ResultsTab date={date} preds={preds}
+            onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
+        )}
+
+        {tab === 'staff' && <StaffTab toast={setToast} />}
+        {tab === 'users' && <UsersTab toast={setToast} />}
       </div>
 
-      {toast && <Toast key={toast.key} message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
+      {toast && <Toast message={typeof toast === 'string' ? toast : toast} type={typeof toast === 'string' ? 'ok' : toast} onDone={() => setToast(null)} />}
+      {confirm && <Confirm title={confirm.title} msg={confirm.msg} onYes={confirm.onYes} onNo={() => setConfirm(null)} danger={confirm.danger} />}
     </div>
   );
 }

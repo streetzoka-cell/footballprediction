@@ -1,135 +1,27 @@
+// ═══════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
+// v16.0 — Event-driven reactive updates
+//
+// ★ Uses dataLayer directly (0 extra reads from useMatchData hooks)
+// ★ Never crashes — graceful fallbacks for every data source
+// ★ FPL-style ranking with podium, stats, search, user highlight
+// ★ Reactive: auto-refreshes when predictions are submitted or leaderboards rebuilt
+// ═══════════════════════════════════════════════════════════════════════════════
+
 import { useState, useRef, useMemo, useCallback, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
   Calendar, Medal, Star, Loader, ChevronDown, Award,
-  Database, Clock
+  Database, Clock, ArrowLeft, Eye, Zap, Percent,
+  ChevronRight, Activity, RotateCcw, CheckCircle,
+  CircleDot, Home, Hash
 } from 'lucide-react';
-
-import {
-  // v3: useUniversalResolver REMOVED — no-op, resolution is internal
-  useDailyLeaderboard,
-  useHistoricalLeaderboard,
-} from '../hooks/useMatchData';
 import { useAuth } from '../context/AuthContext';
+import { dataLayer, todayStr, getWeekStart, getMonthStart } from '../utils/dataLayer';
+import { eventBus, EVENT } from '../utils/eventBus';
 import SEO from '../components/SEO';
-
-/* ═══════════════════════════════════════════════════════════════
-   STYLES — Unified zoka_ prefix, mobile-first, bold
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('lb-zoka-v7')) return;
-  const s = document.createElement('style');
-  s.id = 'lb-zoka-v7';
-  s.textContent = `
-    /* ── Keyframes (zoka_ prefix) ── */
-    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes zoka_slideRow{from{opacity:0;transform:translateX(-16px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes zoka_popIn{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
-    @keyframes zoka_crownFloat{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-6px) rotate(5deg)}}
-    @keyframes zoka_barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-    @keyframes zoka_glow{0%,100%{box-shadow:0 0 12px rgba(0,230,118,.15)}50%{box-shadow:0 0 24px rgba(0,230,118,.3)}}
-    @keyframes zoka_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes zoka_podiumGrow{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
-    @keyframes zoka_fadeIn{from{opacity:0}to{opacity:1}}
-    @keyframes zoka_goldPulse{0%,100%{text-shadow:0 0 8px rgba(245,197,66,.3)}50%{text-shadow:0 0 20px rgba(245,197,66,.6)}}
-
-    /* ── Utility classes ── */
-    .lb-up{animation:zoka_fadeUp .5s cubic-bezier(.22,1,.36,1) both}
-    .lb-sr{animation:zoka_slideRow .4s cubic-bezier(.22,1,.36,1) both}
-    .lb-pop{animation:zoka_popIn .4s cubic-bezier(.22,1,.36,1) both}
-    .lb-crown{animation:zoka_crownFloat 3s ease-in-out infinite}
-    .lb-bar{transform-origin:left center;animation:zoka_barFill .8s cubic-bezier(.22,1,.36,1) both}
-    .lb-glow{animation:zoka_glow 2s ease-in-out infinite}
-    .lb-shim{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:zoka_shimmer 1.5s ease-in-out infinite;border-radius:10px}
-    .lb-fade{animation:zoka_fadeIn .3s ease-out both}
-    .lb-gold{animation:zoka_goldPulse 2s ease-in-out infinite}
-
-    /* ── Button system ── */
-    .zoka-btn{
-      transition:all .18s cubic-bezier(.22,1,.36,1);
-      cursor:pointer;outline:none;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
-    .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
-    .zoka-btn:disabled{opacity:.35;pointer-events:none;filter:none;transform:none}
-
-    /* ── Card hover ── */
-    .zoka-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
-    .zoka-card:hover{transform:translateY(-2px);box-shadow:0 8px 30px rgba(0,0,0,.2)}
-
-    /* ── Tabs ── */
-    .lb-tab{
-      position:relative;padding:13px 22px;font-weight:700;font-size:.84rem;
-      color:var(--text-muted);background:transparent;border:none;cursor:pointer;
-      transition:all .2s;border-radius:12px 12px 0 0;white-space:nowrap;
-      display:flex;align-items:center;gap:7px;min-height:50px;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .lb-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
-    .lb-tab.act{color:var(--gold);background:rgba(245,197,66,.06)}
-    .lb-tab.act::after{
-      content:'';position:absolute;bottom:0;left:18px;right:18px;
-      height:3px;background:var(--gold);border-radius:3px 3px 0 0;
-      box-shadow:0 0 10px rgba(245,197,66,.4);
-    }
-    .lb-tab.goat.act{
-      color:#000;background:linear-gradient(135deg,#fbbf24,#f59e0b);font-weight:800;
-    }
-    .lb-tab.goat.act::after{background:rgba(0,0,0,.2);box-shadow:none}
-
-    /* ── Search input ── */
-    .lb-search{
-      width:100%;padding:14px 44px 14px 46px;border-radius:14px;
-      background:var(--bg-card);border:2px solid var(--border);
-      color:var(--text-primary);font-size:.88rem;font-weight:600;
-      outline:none;transition:all .2s;min-height:54px;
-      -webkit-appearance:none;appearance:none;
-    }
-    .lb-search:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(0,230,118,.1)}
-    .lb-search::placeholder{color:var(--text-muted);opacity:.45}
-
-    .lb-search:-webkit-autofill,
-    .lb-search:-webkit-autofill:hover,
-    .lb-search:-webkit-autofill:focus{
-      -webkit-box-shadow:0 0 0 1000px var(--bg-card) inset;
-      -webkit-text-fill-color:var(--text-primary);
-      transition:background-color 5000s ease-in-out 0s;
-    }
-
-    /* ── Scrollbar hide ── */
-    .lb-scroll::-webkit-scrollbar{display:none}
-    .lb-scroll{scrollbar-width:none}
-
-    /* ═══════════════════════════════════════════════════════════
-       MOBILE BREAKPOINTS
-       ═══════════════════════════════════════════════════════════ */
-    @media(max-width:768px){
-      .lb-table-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
-      .lb-table{min-width:560px}
-      .lb-podium{gap:8px!important;padding:0 8px!important}
-      .lb-podium-user{max-width:120px!important}
-      .lb-stats-grid{grid-template-columns:repeat(2,1fr)!important}
-      .lb-tab{padding:12px 18px;font-size:.82rem;min-height:48px}
-      .stale-card{margin:0 -8px!important;padding:32px 20px!important}
-    }
-
-    @media(max-width:420px){
-      .lb-tab{padding:11px 14px;font-size:.78rem;gap:6px;min-height:46px}
-      .lb-search{padding:12px 40px 12px 42px;font-size:.84rem;min-height:50px}
-      .lb-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
-      .lb-podium-user{max-width:100px!important}
-      .stale-card{padding:28px 16px!important}
-    }
-
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-    }
-  `;
-  document.head.appendChild(s);
-};
 
 /* ═══════════════════════════════════════════════════════════════
    CONFIG
@@ -140,36 +32,9 @@ const AVATAR_COLORS = [
 ];
 
 const PODIUM_CFG = [
-  {
-    h: 140,
-    border: 'var(--gold)',
-    bg: 'linear-gradient(180deg,rgba(245,197,66,.18) 0%,rgba(245,197,66,.04) 100%)',
-    text: 'var(--gold)',
-    avatar: 80,
-    font: '1.4rem',
-    shadow: '0 0 30px rgba(245,197,66,.2)',
-    order: 2,
-  },
-  {
-    h: 100,
-    border: '#94a3b8',
-    bg: 'linear-gradient(180deg,rgba(148,163,184,.12) 0%,rgba(148,163,184,.03) 100%)',
-    text: '#94a3b8',
-    avatar: 64,
-    font: '1.1rem',
-    shadow: '0 0 20px rgba(148,163,184,.1)',
-    order: 1,
-  },
-  {
-    h: 80,
-    border: '#b45309',
-    bg: 'linear-gradient(180deg,rgba(180,83,9,.12) 0%,rgba(180,83,9,.03) 100%)',
-    text: '#d97706',
-    avatar: 56,
-    font: '.95rem',
-    shadow: '0 0 16px rgba(180,83,9,.1)',
-    order: 3,
-  },
+  { h: 140, border: 'var(--gold)', bg: 'linear-gradient(180deg,rgba(245,197,66,.16) 0%,rgba(245,197,66,.03) 100%)', text: 'var(--gold)', avatar: 78, font: '1.35rem', shadow: '0 0 28px rgba(245,197,66,.18)', order: 2 },
+  { h: 100, border: '#94a3b8', bg: 'linear-gradient(180deg,rgba(148,163,184,.1) 0%,rgba(148,163,184,.02) 100%)', text: '#94a3b8', avatar: 62, font: '1.05rem', shadow: '0 0 18px rgba(148,163,184,.08)', order: 1 },
+  { h: 80, border: '#b45309', bg: 'linear-gradient(180deg,rgba(180,83,9,.1) 0%,rgba(180,83,9,.02) 100%)', text: '#d97706', avatar: 54, font: '.9rem', shadow: '0 0 14px rgba(180,83,9,.08)', order: 3 },
 ];
 
 const TABS = [
@@ -180,997 +45,409 @@ const TABS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
+   STYLES
+   ═══════════════════════════════════════════════════════════════ */
+const injectCSS = () => {
+  if (document.getElementById('lb-v16')) return;
+  const s = document.createElement('style');
+  s.id = 'lb-v16';
+  s.textContent = `
+@keyframes lbFu{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes lbSr{from{opacity:0;transform:translateX(-14px)}to{opacity:1;transform:translateX(0)}}
+@keyframes lbPop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.04)}100%{transform:scale(1);opacity:1}}
+@keyframes lbCrown{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-5px) rotate(5deg)}}
+@keyframes lbBar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes lbGlow{0%,100%{box-shadow:0 0 10px rgba(0,230,118,.12)}50%{box-shadow:0 0 22px rgba(0,230,118,.25)}}
+@keyframes lbShim{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes lbPodium{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
+@keyframes lbFi{from{opacity:0}to{opacity:1}}
+@keyframes lbGold{0%,100%{text-shadow:0 0 6px rgba(245,197,66,.25)}50%{text-shadow:0 0 16px rgba(245,197,66,.5)}}
+@keyframes lbPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.5)}}
+@keyframes lbShine{0%{left:-100%}100%{left:200%}}
+
+.lb-up{animation:lbFu .45s cubic-bezier(.22,1,.36,1) both}
+.lb-sr{animation:lbSr .35s cubic-bezier(.22,1,.36,1) both}
+.lb-pop{animation:lbPop .35s cubic-bezier(.22,1,.36,1) both}
+.lb-crown{animation:lbCrown 3s ease-in-out infinite}
+.lb-bar{transform-origin:left center;animation:lbBar .7s cubic-bezier(.22,1,.36,1) both}
+.lb-glow{animation:lbGlow 2s ease-in-out infinite}
+.lb-shim{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:lbShim 1.5s ease-in-out infinite;border-radius:10px}
+.lb-fi{animation:lbFi .3s ease-out both}
+.lb-gold{animation:lbGold 2s ease-in-out infinite}
+
+.zb{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none;-webkit-tap-highlight-color:transparent}
+.zb:hover{transform:translateY(-1px);filter:brightness(1.06)}
+.zb:active{transform:translateY(0) scale(.97)}
+.zb:disabled{opacity:.3;pointer-events:none;filter:none;transform:none}
+
+.lb-tab{position:relative;padding:12px 20px;font-weight:700;font-size:.82rem;color:var(--text-muted);background:transparent;border:none;cursor:pointer;transition:all .2s;border-radius:12px 12px 0 0;white-space:nowrap;display:flex;align-items:center;gap:6px;min-height:48px;-webkit-tap-highlight-color:transparent;font-family:inherit}
+.lb-tab:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
+.lb-tab.on{color:var(--gold);background:rgba(245,197,66,.05)}
+.lb-tab.on::after{content:'';position:absolute;bottom:0;left:16px;right:16px;height:3px;background:var(--gold);border-radius:3px 3px 0 0;box-shadow:0 0 8px rgba(245,197,66,.35)}
+.lb-tab.goat.on{color:#000;background:linear-gradient(135deg,#fbbf24,#f59e0b);font-weight:800}
+.lb-tab.goat.on::after{background:rgba(0,0,0,.15);box-shadow:none}
+
+.lb-search{width:100%;padding:13px 42px 13px 44px;border-radius:13px;background:var(--bg-card);border:2px solid var(--border);color:var(--text-primary);font-size:.86rem;font-weight:600;outline:none;transition:all .2s;min-height:52px;-webkit-appearance:none;appearance:none;font-family:inherit}
+.lb-search:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(0,230,118,.08)}
+.lb-search::placeholder{color:var(--text-muted);opacity:.4}
+.lb-search:-webkit-autofill,.lb-search:-webkit-autofill:hover,.lb-search:-webkit-autofill:focus{-webkit-box-shadow:0 0 0 1000px var(--bg-card) inset;-webkit-text-fill-color:var(--text-primary);transition:background-color 5000s ease-in-out 0s}
+
+.lb-scroll::-webkit-scrollbar{display:none}.lb-scroll{scrollbar-width:none}
+
+.sc{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+.sc-head{background:rgba(255,255,255,.02);border-bottom:1px solid var(--border)}
+.sc-head th{padding:13px 16px;font-size:.68rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;text-align:left}
+.sc-head th.r{text-align:right}
+.sc-row{transition:background .15s;border-bottom:1px solid rgba(255,255,255,.02)}
+.sc-row:hover{background:rgba(255,255,255,.015)}
+.sc-row.me{background:rgba(0,230,118,.04)!important}
+.sc-row.me:hover{background:rgba(0,230,118,.06)!important}
+.sc-td{padding:13px 16px;vertical-align:middle;font-size:.84rem;font-weight:600}
+
+.acc-bar{height:5px;border-radius:3px;background:rgba(255,255,255,.04);overflow:hidden;flex:1}
+.acc-fill{height:100%;border-radius:3px;transition:width .4s cubic-bezier(.22,1,.36,1)}
+
+.stat-c{background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:16px 18px;display:flex;align-items:center;gap:12px}
+.stat-icon{width:42px;height:42px;border-radius:11px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.stat-val{font-size:1.3rem;font-weight:900;font-family:var(--font-display);line-height:1;color:var(--text-primary)}
+.stat-lbl{font-size:.62rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+
+.rank-card{background:linear-gradient(135deg,rgba(168,85,247,.05),rgba(0,230,118,.03));border:1.5px solid rgba(168,85,247,.1);border-radius:16px;padding:16px 20px;display:flex;align-items:center;gap:14px}
+.rank-card.top{border-color:rgba(245,197,66,.18);background:linear-gradient(135deg,rgba(245,197,66,.06),rgba(168,85,247,.03))}
+
+.stale-card{display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px 28px;background:var(--bg-card);border:2px dashed rgba(245,197,66,.15);border-radius:16px;text-align:center;margin-bottom:24px}
+
+.show-more{width:100%;padding:13px;border-radius:12px;background:var(--bg-card);border:1.5px dashed var(--border);color:var(--text-muted);font-size:.84rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.show-more:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
+.show-more:active{transform:scale(.98)}
+
+.back-btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:9px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:.78rem;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.back-btn:hover{color:var(--text-primary);border-color:var(--border-hover,#334155)}
+
+@media(max-width:768px){
+  .sc-wrap{overflow-x:auto;-webkit-overflow-scrolling:touch}
+  .sc-table{min-width:520px}
+  .lb-podium{gap:8px!important;padding:0 8px!important}
+  .lb-podium-u{max-width:115px!important}
+  .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:8px!important}
+  .lb-tab{padding:11px 16px;font-size:.78rem;min-height:46px}
+  .rank-card{padding:14px 16px}
+}
+@media(max-width:420px){
+  .lb-tab{padding:10px 13px;font-size:.74rem;gap:5px;min-height:44px}
+  .lb-search{padding:11px 38px 11px 40px;font-size:.82rem;min-height:48px}
+  .stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:6px!important}
+  .lb-podium-u{max-width:95px!important}
+  .stat-c{padding:12px 14px;gap:10px}
+  .stat-val{font-size:1.15rem}
+  .stat-icon{width:36px;height:36px}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  `;
+  document.head.appendChild(s);
+};
+
+/* ═══════════════════════════════════════════════════════════════
    SMALL COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
-function AccuracyBar({ value, delay }) {
-  const fill =
-    value >= 70 ? 'var(--accent)' : value >= 45 ? 'var(--gold)' : '#ef4444';
+function AccBar({ value, delay }) {
+  const fill = value >= 70 ? 'var(--accent)' : value >= 45 ? 'var(--gold)' : '#ef4444';
   return (
-    <div
-      style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 110 }}
-    >
-      <div
-        style={{
-          flex: 1,
-          height: 5,
-          borderRadius: 3,
-          background: 'rgba(255,255,255,.04)',
-          overflow: 'hidden',
-        }}
-      >
-        <div
-          className="lb-bar"
-          style={{
-            height: '100%',
-            borderRadius: 3,
-            background: `linear-gradient(90deg,${fill},${fill}88)`,
-            width: `${value}%`,
-            animationDelay: `${delay || 0}ms`,
-          }}
-        />
-      </div>
-      <span
-        style={{
-          fontSize: '.72rem',
-          fontWeight: 700,
-          color: fill,
-          minWidth: 32,
-          textAlign: 'right',
-          fontFamily: 'var(--font-display)',
-        }}
-      >
-        {value}%
-      </span>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 100 }}>
+      <div className="acc-bar"><div className="acc-fill" style={{ width: `${value}%`, background: `linear-gradient(90deg,${fill},${fill}88)`, animationDelay: `${delay || 0}ms` }} /></div>
+      <span style={{ fontSize: '.7rem', fontWeight: 700, color: fill, minWidth: 30, textAlign: 'right', fontFamily: 'var(--font-display)' }}>{value}%</span>
     </div>
   );
 }
 
-function StatCard({ icon, label, value, color, bgColor, delay }) {
+function StatCard({ icon, label, value, color, bg, delay }) {
   return (
-    <div
-      className="zoka-card lb-pop"
-      style={{
-        padding: '18px 20px',
-        background: 'var(--bg-card)',
-        border: '1px solid var(--border)',
-        borderRadius: 16,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 14,
-        animationDelay: `${delay || 0}ms`,
-      }}
-    >
-      <div
-        style={{
-          width: 44,
-          height: 44,
-          borderRadius: 12,
-          background: bgColor,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color,
-          flexShrink: 0,
-        }}
-      >
-        {icon}
-      </div>
-      <div>
-        <div
-          style={{
-            fontFamily: 'var(--font-display)',
-            fontSize: '1.35rem',
-            fontWeight: 900,
-            lineHeight: 1,
-            color: 'var(--text-primary)',
-          }}
-        >
-          {value}
-        </div>
-        <div
-          style={{
-            fontSize: '.7rem',
-            color: 'var(--text-muted)',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '.04em',
-            marginTop: 3,
-          }}
-        >
-          {label}
-        </div>
-      </div>
+    <div className="stat-c lb-pop" style={{ animationDelay: `${delay || 0}ms` }}>
+      <div className="stat-icon" style={{ background: bg, color }}>{icon}</div>
+      <div><div className="stat-val">{value}</div><div className="stat-lbl">{label}</div></div>
     </div>
   );
 }
 
 function PodiumUser({ user, position, delay }) {
-  const cfg = PODIUM_CFG[position];
-
+  const c = PODIUM_CFG[position];
   return (
-    <div
-      className="lb-pop lb-podium-user"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        order: cfg.order,
-        animationDelay: `${(delay || 0) + 200}ms`,
-        flex: 1,
-        maxWidth: 160,
-      }}
-    >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          marginBottom: 10,
-          position: 'relative',
-        }}
-      >
-        {position === 0 && (
-          <div
-            className="lb-crown"
-            style={{
-              color: 'var(--gold)',
-              marginBottom: -4,
-              filter: 'drop-shadow(0 0 8px rgba(245,197,66,.4))',
-            }}
-          >
-            <Crown size={24} />
-          </div>
-        )}
-        <div
-          style={{
-            width: cfg.avatar,
-            height: cfg.avatar,
-            borderRadius: '50%',
-            background: `linear-gradient(135deg,${cfg.border}33,${cfg.border}11)`,
-            border: `3px solid ${cfg.border}`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: cfg.font,
-            fontWeight: 900,
-            color: cfg.text,
-            boxShadow: cfg.shadow,
-            fontFamily: 'var(--font-display)',
-          }}
-        >
+    <div className="lb-pop lb-podium-u" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', order: c.order, animationDelay: `${(delay || 0) + 200}ms`, flex: 1, maxWidth: 155 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 8, position: 'relative' }}>
+        {position === 0 && <div className="lb-crown" style={{ color: 'var(--gold)', marginBottom: -3, filter: 'drop-shadow(0 0 6px rgba(245,197,66,.35))' }}><Crown size={22} /></div>}
+        <div style={{ width: c.avatar, height: c.avatar, borderRadius: '50%', background: `linear-gradient(135deg,${c.border}30,${c.border}10)`, border: `3px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: c.font, fontWeight: 900, color: c.text, boxShadow: c.shadow, fontFamily: 'var(--font-display)' }}>
           {(user.displayName || '??').slice(0, 2).toUpperCase()}
         </div>
-        <div
-          style={{
-            marginTop: 8,
-            fontSize: '.84rem',
-            fontWeight: 700,
-            color: 'var(--text-primary)',
-            textAlign: 'center',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-            maxWidth: 140,
-          }}
-        >
-          {user.displayName}
-        </div>
-        <div
-          style={{
-            fontSize: '.7rem',
-            color: 'var(--text-muted)',
-            fontWeight: 600,
-          }}
-        >
-          {user.points} pts · {user.accuracy}%
-        </div>
+        <div style={{ marginTop: 7, fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)', textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 130 }}>{user.displayName}</div>
+        <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600 }}>{user.points} pts · {user.accuracy}%</div>
       </div>
-      <div
-        style={{
-          width: '100%',
-          height: cfg.h,
-          background: cfg.bg,
-          borderRadius: '14px 14px 0 0',
-          border: '1px solid rgba(255,255,255,.04)',
-          borderBottom: 'none',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'flex-end',
-          paddingBottom: 12,
-          position: 'relative',
-          overflow: 'hidden',
-          animation: `zoka_podiumGrow .6s cubic-bezier(.22,1,.36,1) ${
-            (delay || 0) + 400
-          }ms both`,
-        }}
-      >
-        <div
-          style={{
-            fontSize: '1.8rem',
-            fontWeight: 900,
-            fontFamily: 'var(--font-display)',
-            color: cfg.text,
-            lineHeight: 1,
-          }}
-        >
-          #{position + 1}
-        </div>
+      <div style={{ width: '100%', height: c.h, background: c.bg, borderRadius: '12px 12px 0 0', border: '1px solid rgba(255,255,255,.03)', borderBottom: 'none', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'flex-end', paddingBottom: 10, position: 'relative', overflow: 'hidden', animation: `lbPodium .55s cubic-bezier(.22,1,.36,1) ${(delay || 0) + 400}ms both` }}>
+        <div style={{ fontSize: '1.7rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: c.text, lineHeight: 1 }}>#{position + 1}</div>
       </div>
     </div>
   );
 }
 
-function SkeletonRow() {
+function StaleState({ period }) {
+  const label = { weekly: 'Weekly', monthly: 'Monthly', goat: 'G.O.A.T (All-Time)' }[period] || period;
+  const desc = { weekly: 'Covers Monday through Sunday. An admin needs to rebuild it after matches finish.', monthly: 'Covers the current calendar month. An admin needs to rebuild it.', goat: 'Ranks every player by lifetime points. An admin needs to rebuild it.' }[period] || '';
   return (
-    <tr>
-      <td
-        colSpan={6}
-        style={{ padding: 0, borderBottom: '1px solid var(--border)' }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 16,
-            padding: '16px 18px',
-          }}
-        >
-          <div
-            className="lb-shim"
-            style={{ width: 30, height: 14, borderRadius: 4 }}
-          />
-          <div
-            style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}
-          >
-            <div
-              className="lb-shim"
-              style={{ width: 36, height: 36, borderRadius: 10 }}
-            />
-            <div
-              className="lb-shim"
-              style={{ width: 100, height: 14, borderRadius: 4 }}
-            />
-          </div>
-          <div
-            className="lb-shim"
-            style={{ width: 80, height: 10, borderRadius: 4 }}
-          />
-        </div>
-      </td>
-    </tr>
+    <div className="stale-card lb-up">
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(245,197,66,.06)', border: '1px solid rgba(245,197,66,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}><Database size={22} /></div>
+      <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '1.05rem' }}>{label} Leaderboard Not Ready</div>
+      <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', maxWidth: 360, lineHeight: 1.6, fontWeight: 600 }}>{desc}</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 600, opacity: .65 }}><Clock size={11} /> Requires admin rebuild — check back later</div>
+    </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   v3: STALE STATE — Pre-computed doc not yet built
-   ═══════════════════════════════════════════════════════════════ */
-function StaleLeaderboard({ period }) {
-  const periodLabel = {
-    weekly: 'Weekly',
-    monthly: 'Monthly',
-    goat: 'G.O.A.T (All-Time)',
-  }[period] || period;
-
-  const description = {
-    weekly: 'This weekly leaderboard will be available once an admin rebuilds it. It covers predictions from Monday to Sunday.',
-    monthly: 'This monthly leaderboard will be available once an admin rebuilds it. It covers all predictions within the current calendar month.',
-    goat: 'The all-time G.O.A.T leaderboard will be available once an admin rebuilds it. It ranks every player by their lifetime points total.',
-  }[period] || '';
-
+function ErrorState({ error }) {
   return (
-    <div
-      className="lb-up stale-card"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
-        gap: 16,
-        padding: '44px 32px',
-        background: 'var(--bg-card)',
-        border: '1px dashed rgba(245,197,66,.2)',
-        borderRadius: 16,
-        textAlign: 'center',
-        marginBottom: 26,
-      }}
-    >
-      <div
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: 16,
-          background: 'rgba(245,197,66,.08)',
-          border: '1px solid rgba(245,197,66,.15)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          color: 'var(--gold)',
-        }}
-      >
-        <Database size={24} />
-      </div>
-      <div
-        style={{
-          fontWeight: 800,
-          color: 'var(--text-primary)',
-          fontSize: '1.1rem',
-        }}
-      >
-        {periodLabel} Leaderboard Not Ready
-      </div>
-      <div
-        style={{
-          fontSize: '.86rem',
-          color: 'var(--text-muted)',
-          maxWidth: 380,
-          lineHeight: 1.65,
-          fontWeight: 600,
-        }}
-      >
-        {description}
-      </div>
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontSize: '.76rem',
-          color: 'var(--text-muted)',
-          fontWeight: 600,
-          opacity: .7,
-        }}
-      >
-        <Clock size={12} />
-        Requires admin rebuild — check back later
-      </div>
+    <div className="lb-up" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: 40, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, textAlign: 'center', marginBottom: 24 }}>
+      <div style={{ width: 52, height: 52, borderRadius: 14, background: 'rgba(239,68,68,.06)', border: '1px solid rgba(239,68,68,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#ef4444' }}>{error === 'permissions' ? <ShieldAlert size={22} /> : <AlertCircle size={22} />}</div>
+      <div style={{ fontWeight: 700, color: 'var(--text-primary)', fontSize: '1.05rem' }}>{error === 'permissions' ? 'Permissions Required' : 'Failed to Load'}</div>
+      <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', maxWidth: 380, lineHeight: 1.5, fontWeight: 600 }}>{error === 'permissions' ? 'Allow read access to leaderboard_summaries and daily_leaderboard collections.' : error}</div>
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   MAIN COMPONENT
+   MAIN COMPONENT — Now reactive via events
    ═══════════════════════════════════════════════════════════════ */
 export default function Leaderboard() {
-  injectStyles();
+  injectCSS();
   const { currentUser } = useAuth();
+  const nav = useNavigate();
   const searchRef = useRef(null);
+  const mounted = useRef(true);
 
   const [tab, setTab] = useState('daily');
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
-  const [shownCount, setShownCount] = useState(10);
+  const [showCount, setShowCount] = useState(15);
+  const [retryKey, setRetryKey] = useState(0);
 
-  /* ── Data from useMatchData v3 (cached, quota-optimized) ──
-     v3 changes:
-     - useUniversalResolver REMOVED (was no-op anyway)
-     - useHistoricalLeaderboard now reads from pre-computed
-       leaderboard_summaries doc (1 read) instead of scanning
-       entire prediction_results collection (500-2000 reads)
-     - useHistoricalLeaderboard returns new `stale` flag when
-       the pre-computed doc doesn't exist yet
-     - 30-min cache TTLs, 10-min poll intervals
-  ═══════════════════════════════════════════════════════════ */
-  const daily = useDailyLeaderboard();
-  const historical = useHistoricalLeaderboard(
-    tab === 'daily' ? 'weekly' : tab
-  );
+  // ── Data state ──
+  const [dailyData, setDailyData] = useState(null);
+  const [histData, setHistData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [isStale, setIsStale] = useState(false);
 
-  /* ── Select active data based on tab ── */
-  const activeLB = tab === 'daily' ? daily.entries : historical.entries;
-  const loading = tab === 'daily' ? daily.loading : historical.loading;
-  const error = tab === 'daily' ? null : historical.error;
-  const isLive = tab === 'daily' ? daily.isLive : false;
-  const stats = tab === 'daily' ? daily.stats : historical.stats;
-  // v3: stale flag — pre-computed doc hasn't been built by admin yet
-  const isStale = tab === 'daily' ? false : historical.stale;
+  // ── Load data based on tab ──
+  const loadData = useCallback(async (currentTab) => {
+    if (!mounted.current) return;
+    setLoading(true);
+    setError(null);
+    setIsStale(false);
 
-  const top3 = useMemo(() => activeLB.slice(0, 3), [activeLB]);
-  const rest = useMemo(() => activeLB.slice(3), [activeLB]);
+    try {
+      if (currentTab === 'daily') {
+        const data = await dataLayer.fetchDailyLeaderboard(todayStr());
+        if (!mounted.current) return;
+        if (!data) {
+          setDailyData(null);
+          setIsStale(false);
+        } else {
+          setDailyData(data);
+        }
+      } else {
+        const data = await dataLayer.fetchHistoricalLeaderboard(currentTab);
+        if (!mounted.current) return;
+        if (!data || data.stale) {
+          setHistData(null);
+          setIsStale(true);
+        } else {
+          setHistData(data);
+        }
+      }
+    } catch (e) {
+      console.error('[LB] Load err:', e);
+      if (mounted.current) setError(e.message || 'Unknown error');
+    }
+    if (mounted.current) setLoading(false);
+  }, []);
+
+  // Initial load and tab change
+  useEffect(() => { loadData(tab); }, [tab, retryKey]);
+
+  // ★ REACTIVE: Subscribe to leaderboard update events
+  useEffect(() => {
+    // Daily leaderboard updates — fired after prediction submit triggers rebuild
+    const unsubDaily = eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
+      if (tab === 'daily' && payload.dateStr === todayStr()) {
+        loadData('daily');
+      }
+    });
+
+    // Historical leaderboard updates (weekly, monthly) — fired after admin rebuild
+    const unsubHist = eventBus.on(EVENT.LEADERBOARD_UPDATED, (payload) => {
+      if (payload.period === tab) {
+        loadData(tab);
+      }
+    });
+
+    // GOAT-specific events — fired after admin rebuild
+    const unsubGoat = eventBus.on(EVENT.GOAT_LEADERBOARD_UPDATED, () => {
+      if (tab === 'goat') {
+        loadData('goat');
+      }
+    });
+
+    return () => {
+      unsubDaily();
+      unsubHist();
+      unsubGoat();
+    };
+  }, [tab, loadData]);
+
+  // Cleanup
+  useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
+
+  // ── Derived ──
+  const activeData = tab === 'daily' ? dailyData : histData;
+  const entries = useMemo(() => activeData?.entries || [], [activeData]);
+  const stats = useMemo(() => activeData?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 }, [activeData]);
+
+  const top3 = useMemo(() => entries.slice(0, 3), [entries]);
+  const rest = useMemo(() => entries.slice(3), [entries]);
 
   const myEntry = useMemo(() => {
     if (!currentUser?.uid) return null;
-    return activeLB.find((u) => u.uid === currentUser.uid) || null;
-  }, [activeLB, currentUser]);
+    return entries.find(u => u.uid === currentUser.uid) || null;
+  }, [entries, currentUser]);
 
   const filtered = useMemo(() => {
-    if (!search.trim()) return activeLB;
+    if (!search.trim()) return entries;
     const q = search.toLowerCase();
-    return activeLB.filter((u) =>
-      u.displayName.toLowerCase().includes(q)
-    );
-  }, [activeLB, search]);
+    return entries.filter(u => (u.displayName || '').toLowerCase().includes(q));
+  }, [entries, search]);
 
   const filteredTop3 = useMemo(() => filtered.slice(0, 3), [filtered]);
   const filteredRest = useMemo(() => filtered.slice(3), [filtered]);
+  const visibleRest = useMemo(() => filteredRest.slice(0, showCount - 3), [filteredRest, showCount]);
+  const hasMore = filteredRest.length > showCount - 3;
 
-  const handleClear = useCallback(() => {
-    setSearch('');
-    searchRef.current?.focus();
-  }, []);
+  const handleClear = useCallback(() => { setSearch(''); searchRef.current?.focus(); }, []);
+  const handleRetry = () => { setRetryKey(k => k + 1); };
 
-  const handleLoadMore = () =>
-    setShownCount((prev) => Math.min(prev + 15, 100));
+  useEffect(() => { setShowCount(15); setSearch(''); }, [tab]);
 
-  /* Reset on tab switch */
-  useEffect(() => {
-    setShownCount(10);
-    setSearch('');
-  }, [tab]);
+  // ── Tab description ──
+  const tabDesc = {
+    daily: 'Today\'s top predictors',
+    weekly: 'Monday – Sunday rankings',
+    monthly: 'This month\'s top predictors',
+    goat: 'Greatest of All Time — Historical Top 100',
+  }[tab] || '';
 
   /* ═══════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════ */
   return (
-    <div
-      style={{
-        minHeight: '100vh',
-        overflow: 'hidden',
-        background: 'var(--bg-deep)',
-      }}
-    >
-      <SEO
-        title="Leaderboard"
-        description="ZOKASCORE prediction leaderboard. See top predictors ranked by daily, weekly, monthly, and all-time performance."
-        keywords="football prediction leaderboard, top predictors, prediction rankings, ZOKASCORE rankings"
-        url="https://zokascore.com/leaderboard"
-      />
+    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', paddingBottom: 80 }}>
+      <SEO title="Leaderboard — Zoka" description="See top predictors ranked by daily, weekly, monthly, and all-time performance." />
 
       {/* Sticky Header */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          background: 'rgba(10,10,10,.9)',
-          backdropFilter: 'blur(20px)',
-          borderBottom: '1px solid var(--border)',
-        }}
-      >
-        <div
-          style={{
-            maxWidth: 920,
-            margin: '0 auto',
-            padding: '16px 20px',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10,
-              cursor: 'pointer',
-            }}
-            onClick={() => (window.location.href = '/')}
-          >
-            <div
-              style={{
-                width: 30,
-                height: 30,
-                borderRadius: 9,
-                background:
-                  'linear-gradient(145deg,#00e676,#00c853)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontWeight: 900,
-                fontSize: '.76rem',
-                color: 'var(--bg-deep)',
-                fontFamily: 'var(--font-display)',
-                boxShadow: '0 2px 10px rgba(0,230,118,.25)',
-              }}
-            >
-              Z
-            </div>
-            <span
-              style={{
-                fontSize: '.9rem',
-                fontWeight: 800,
-                color: 'var(--text-primary)',
-              }}
-            >
-              zokascore
-              <span style={{ color: 'var(--accent)' }}>.xyz</span>
-            </span>
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 8,
-              fontSize: '.84rem',
-              fontWeight: 700,
-              color: 'var(--gold)',
-            }}
-          >
-            <Trophy size={16} /> Ranks
-            {isLive && !error && (
-              <span
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  display: 'inline-block',
-                }}
-                className="lb-glow"
-              />
-            )}
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,15,26,.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)' }}>
+        <div style={{ maxWidth: 900, margin: '0 auto', padding: '14px 18px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <button className="back-btn" onClick={() => nav('/predictions')}>
+            <ArrowLeft size={14} /> Predictions
+          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.84rem', fontWeight: 700, color: 'var(--gold)' }}>
+            <Trophy size={15} /> Leaderboard
+            {!loading && !error && entries.length > 0 && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--accent)', display: 'inline-block' }} className="lb-glow" />}
           </div>
         </div>
       </div>
 
-      <div
-        style={{ maxWidth: 920, margin: '0 auto', padding: '28px 20px 100px' }}
-      >
+      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 18px' }}>
         {/* Title */}
-        <div
-          className="lb-up"
-          style={{ marginBottom: 30, textAlign: 'center' }}
-        >
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              width: 56,
-              height: 56,
-              borderRadius: 16,
-              background: 'rgba(245,197,66,.1)',
-              border: '1px solid rgba(245,197,66,.15)',
-              marginBottom: 14,
-            }}
-          >
-            <Trophy size={28} style={{ color: 'var(--gold)' }} />
+        <div className="lb-up" style={{ marginBottom: 24, textAlign: 'center' }}>
+          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 52, height: 52, borderRadius: 14, background: 'rgba(245,197,66,.08)', border: '1px solid rgba(245,197,66,.12)', marginBottom: 12 }}>
+            <Trophy size={26} style={{ color: 'var(--gold)' }} />
           </div>
-          <h1
-            style={{
-              fontSize: '1.85rem',
-              fontWeight: 900,
-              color: 'var(--text-primary)',
-              margin: 0,
-              letterSpacing: '-.02em',
-            }}
-          >
-            Leaderboard
-          </h1>
-          <p
-            style={{
-              fontSize: '.9rem',
-              color: 'var(--text-muted)',
-              marginTop: 6,
-              fontWeight: 600,
-            }}
-          >
-            {tab === 'goat'
-              ? 'Greatest of All Time — Historical Top 100'
-              : `${tab.charAt(0).toUpperCase() + tab.slice(1)} top predictors`}
-          </p>
+          <h1 style={{ fontSize: '1.75rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-.02em' }}>Leaderboard</h1>
+          <p style={{ fontSize: '.85rem', color: 'var(--text-muted)', marginTop: 4, fontWeight: 600 }}>{tabDesc}</p>
         </div>
 
         {/* My Rank Card */}
-        {myEntry && (
-          <div
-            className="lb-up"
-            style={{
-              marginBottom: 26,
-              padding: '18px 22px',
-              borderRadius: 16,
-              background:
-                'linear-gradient(135deg,rgba(168,85,247,.06),rgba(0,230,118,.04))',
-              border:
-                myEntry.rank <= 3
-                  ? '1.5px solid rgba(245,197,66,.2)'
-                  : '1.5px solid rgba(168,85,247,.12)',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 16,
-            }}
-          >
-            <div
-              style={{
-                width: 52,
-                height: 52,
-                borderRadius: 14,
-                background:
-                  myEntry.rank <= 3
-                    ? 'rgba(245,197,66,.12)'
-                    : 'rgba(168,85,247,.1)',
-                border:
-                  myEntry.rank <= 3
-                    ? '1.5px solid rgba(245,197,66,.2)'
-                    : '1.5px solid rgba(168,85,247,.15)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                color: myEntry.rank <= 3 ? 'var(--gold)' : '#a855f7',
-              }}
-            >
-              {myEntry.rank <= 3 ? (
-                <Crown size={24} />
-              ) : (
-                <span
-                  style={{
-                    fontSize: '1.15rem',
-                    fontWeight: 900,
-                    fontFamily: 'var(--font-display)',
-                  }}
-                >
-                  #{myEntry.rank}
-                </span>
-              )}
+        {myEntry && !loading && (
+          <div className={`rank-card lb-up ${myEntry.rank <= 3 ? 'top' : ''}`} style={{ marginBottom: 22 }}>
+            <div style={{ width: 48, height: 48, borderRadius: 13, background: myEntry.rank <= 3 ? 'rgba(245,197,66,.1)' : 'rgba(168,85,247,.08)', border: myEntry.rank <= 3 ? '1.5px solid rgba(245,197,66,.18)' : '1.5px solid rgba(168,85,247,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: myEntry.rank <= 3 ? 'var(--gold)' : '#a855f7', flexShrink: 0 }}>
+              {myEntry.rank <= 3 ? <Crown size={22} /> : <span style={{ fontSize: '1.1rem', fontWeight: 900, fontFamily: 'var(--font-display)' }}>#{myEntry.rank}</span>}
             </div>
-            <div style={{ flex: 1 }}>
-              <div
-                style={{
-                  fontSize: '.88rem',
-                  fontWeight: 700,
-                  color: 'var(--text-primary)',
-                }}
-              >
-                Your{' '}
-                {tab.charAt(0).toUpperCase() + tab.slice(1)} Rank
-              </div>
-              <div
-                style={{
-                  fontSize: '.7rem',
-                  color: 'var(--text-muted)',
-                  marginTop: 3,
-                }}
-              >
-                {myEntry.points} pts · {myEntry.exact} exact ·{' '}
-                {myEntry.accuracy}%
-              </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '.85rem', fontWeight: 700, color: 'var(--text-primary)' }}>Your {tab.charAt(0).toUpperCase() + tab.slice(1)} Rank</div>
+              <div style={{ fontSize: '.68rem', color: 'var(--text-muted)', marginTop: 2 }}>{myEntry.points} pts · {myEntry.exact || 0} exact · {myEntry.accuracy || 0}%</div>
             </div>
-            <div style={{ textAlign: 'right' }}>
-              <div
-                style={{
-                  fontSize: '1.6rem',
-                  fontWeight: 900,
-                  color: '#a855f7',
-                  fontFamily: 'var(--font-display)',
-                }}
-              >
-                {myEntry.points}
-              </div>
-              <div
-                style={{
-                  fontSize: '.58rem',
-                  color: 'var(--text-muted)',
-                  textTransform: 'uppercase',
-                  fontWeight: 600,
-                  letterSpacing: '.04em',
-                }}
-              >
-                Points
-              </div>
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <div style={{ fontSize: '1.5rem', fontWeight: 900, color: '#a855f7', fontFamily: 'var(--font-display)', lineHeight: 1 }}>{myEntry.points}</div>
+              <div style={{ fontSize: '.56rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em' }}>Points</div>
             </div>
           </div>
         )}
 
         {/* Error */}
-        {error && (
-          <div
-            className="lb-up"
-            style={{
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              gap: 16,
-              padding: 44,
-              background: 'var(--bg-card)',
-              border: '1px solid var(--border)',
-              borderRadius: 16,
-              textAlign: 'center',
-              marginBottom: 26,
-            }}
-          >
-            {error === 'permissions' ? (
-              <>
-                <ShieldAlert size={38} style={{ color: '#f59e0b' }} />
-                <div
-                  style={{
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                    fontSize: '1.08rem',
-                  }}
-                >
-                  Permissions Required
-                </div>
-                <div
-                  style={{
-                    fontSize: '.86rem',
-                    color: 'var(--text-muted)',
-                    maxWidth: 420,
-                    lineHeight: 1.6,
-                  }}
-                >
-                  Allow read access to{' '}
-                  <code
-                    style={{
-                      background: 'rgba(255,255,255,.06)',
-                      padding: '3px 8px',
-                      borderRadius: 6,
-                      fontSize: '.82rem',
-                    }}
-                  >
-                    leaderboard_summaries
-                  </code>
-                  {' '}and{' '}
-                  <code
-                    style={{
-                      background: 'rgba(255,255,255,.06)',
-                      padding: '3px 8px',
-                      borderRadius: 6,
-                      fontSize: '.82rem',
-                    }}
-                  >
-                    daily_leaderboard
-                  </code>
-                  .
-                </div>
-              </>
-            ) : (
-              <>
-                <AlertCircle size={38} style={{ color: '#ef4444' }} />
-                <div
-                  style={{
-                    fontWeight: 700,
-                    color: 'var(--text-primary)',
-                  }}
-                >
-                  Failed to load
-                </div>
-                <div
-                  style={{
-                    fontSize: '.84rem',
-                    color: 'var(--text-muted)',
-                    maxWidth: 300,
-                  }}
-                >
-                  {error}
-                </div>
-              </>
-            )}
-          </div>
-        )}
+        {error && <ErrorState error={error} />}
 
         {!error && (
           <>
             {/* Tabs */}
-            <div
-              className="lb-scroll lb-fade"
-              key={`tabs-${tab}`}
-              style={{
-                display: 'flex',
-                gap: 4,
-                borderBottom: '1px solid var(--border)',
-                marginBottom: 34,
-                overflowX: 'auto',
-                WebkitOverflowScrolling: 'touch',
-              }}
-            >
-              {TABS.map((t) => (
-                <button
-                  key={t.key}
-                  onClick={() => setTab(t.key)}
-                  className={`lb-tab ${tab === t.key ? 'act' : ''} ${
-                    t.isGoat ? 'goat' : ''
-                  }`}
-                >
-                  <t.Icon size={15} /> {t.label}
-                  {t.key === 'daily' && isLive && (
-                    <span
-                      style={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        background: 'var(--accent)',
-                        display: 'inline-block',
-                      }}
-                      className="lb-glow"
-                    />
-                  )}
+            <div className="lb-scroll lb-fi" style={{ display: 'flex', gap: 3, borderBottom: '1px solid var(--border)', marginBottom: 30, overflowX: 'auto' }}>
+              {TABS.map(t => (
+                <button key={t.key} onClick={() => setTab(t.key)} className={`lb-tab ${tab === t.key ? 'on' : ''} ${t.isGoat ? 'goat' : ''}`}>
+                  <t.Icon size={14} /> {t.label}
                 </button>
               ))}
             </div>
 
-            {/* v3: Show stale state when pre-computed doc doesn't exist */}
-            {isStale && !loading ? (
-              <StaleLeaderboard period={tab} />
-            ) : (
+            {/* Stale */}
+            {isStale && !loading ? <StaleState period={tab} /> : (
               <>
                 {/* Stats Grid */}
-                <div
-                  className="lb-stats-grid"
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns:
-                      'repeat(auto-fit,minmax(190px,1fr))',
-                    gap: 12,
-                    marginBottom: 44,
-                  }}
-                >
-                  <StatCard
-                    icon={<Flame size={20} />}
-                    label="Top Score"
-                    value={
-                      activeLB[0] ? `${activeLB[0].points} pts` : '–'
-                    }
-                    color="var(--gold)"
-                    bgColor="rgba(245,197,66,.08)"
-                    delay={0}
-                  />
-                  <StatCard
-                    icon={<Users size={20} />}
-                    label="Players"
-                    value={stats.players}
-                    color="#60a5fa"
-                    bgColor="rgba(59,130,246,.08)"
-                    delay={80}
-                  />
-                  <StatCard
-                    icon={<BarChart3 size={20} />}
-                    label="Avg Accuracy"
-                    value={`${stats.avg}%`}
-                    color="var(--accent)"
-                    bgColor="rgba(0,230,118,.06)"
-                    delay={160}
-                  />
-                  <StatCard
-                    icon={<Target size={20} />}
-                    label="Exact Scores"
-                    value={stats.exact}
-                    color="#f97316"
-                    bgColor="rgba(249,115,22,.08)"
-                    delay={240}
-                  />
+                <div className="stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 10, marginBottom: 38 }}>
+                  <StatCard icon={<Flame size={18} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(245,197,66,.06)" delay={0} />
+                  <StatCard icon={<Users size={18} />} label="Players" value={stats.players || 0} color="#60a5fa" bg="rgba(59,130,246,.06)" delay={60} />
+                  <StatCard icon={<Target size={18} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--accent)" bg="rgba(0,230,118,.05)" delay={120} />
+                  <StatCard icon={<Award size={18} />} label="Exact Scores" value={stats.exact || 0} color="#f97316" bg="rgba(249,115,22,.06)" delay={180} />
                 </div>
 
-                {/* Podium (Daily Only) */}
-                {tab === 'daily' &&
-                  (loading ? (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        gap: 16,
-                        marginBottom: 52,
-                        padding: '40px 0',
-                      }}
-                    >
-                      {[1, 2, 3].map((i) => (
-                        <div
-                          key={i}
-                          className="lb-shim"
-                          style={{
-                            width: 140,
-                            height: 200,
-                            borderRadius: 16,
-                          }}
-                        />
-                      ))}
+                {/* Podium — Daily */}
+                {tab === 'daily' && (
+                  loading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 48, padding: '36px 0' }}>
+                      {[0, 1, 2].map(i => <div key={i} className="lb-shim" style={{ width: 130, height: 190, borderRadius: 14 }} />)}
                     </div>
                   ) : filteredTop3.length >= 3 ? (
-                    <div
-                      className="lb-podium"
-                      style={{
-                        display: 'flex',
-                        alignItems: 'flex-end',
-                        justifyContent: 'center',
-                        gap: 12,
-                        marginBottom: 52,
-                        padding: '0 20px',
-                      }}
-                    >
-                      {filteredTop3.map((user, i) => (
-                        <PodiumUser
-                          key={user.uid}
-                          user={user}
-                          position={i}
-                          delay={i * 120}
-                        />
-                      ))}
+                    <div className="lb-podium" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 10, marginBottom: 48, padding: '0 16px' }}>
+                      {filteredTop3.map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 100} />)}
                     </div>
                   ) : (
-                    <div
-                      style={{
-                        textAlign: 'center',
-                        padding: 44,
-                        color: 'var(--text-muted)',
-                        marginBottom: 52,
-                        fontSize: '.9rem',
-                        fontWeight: 600,
-                      }}
-                    >
-                      {activeLB.length === 0
-                        ? 'No predictions yet.'
-                        : 'Need at least 3 players.'}
+                    <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', marginBottom: 48, fontSize: '.88rem', fontWeight: 600 }}>
+                      {entries.length === 0 ? 'No predictions yet — be the first!' : 'Need at least 3 players for podium'}
                     </div>
-                  ))}
+                  )
+                )}
 
-                {/* G.O.A.T Top 3 Badges */}
+                {/* Non-daily top 3 badges */}
                 {tab !== 'daily' && filteredTop3.length >= 1 && (
-                  <div
-                    className="lb-up"
-                    style={{
-                      display: 'flex',
-                      justifyContent: 'center',
-                      gap: 16,
-                      marginBottom: 34,
-                    }}
-                  >
+                  <div className="lb-up" style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 30 }}>
                     {filteredTop3.slice(0, 3).map((u, i) => {
-                      const colors = [
-                        'var(--gold)',
-                        '#94a3b8',
-                        '#d97706',
-                      ];
+                      const colors = ['var(--gold)', '#94a3b8', '#d97706'];
                       return (
-                        <div
-                          key={u.uid}
-                          className="lb-pop"
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 8,
-                            animationDelay: `${i * 100}ms`,
-                          }}
-                        >
+                        <div key={u.uid} className="lb-pop" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, animationDelay: `${i * 80}ms` }}>
                           <div style={{ position: 'relative' }}>
-                            {i === 0 && (
-                              <Crown
-                                size={20}
-                                style={{
-                                  color: 'var(--gold)',
-                                  position: 'absolute',
-                                  top: -18,
-                                  left: '50%',
-                                  transform: 'translateX(-50%)',
-                                }}
-                              />
-                            )}
-                            <div
-                              style={{
-                                width: 58,
-                                height: 58,
-                                borderRadius: '50%',
-                                background: `linear-gradient(135deg,${colors[i]}33,${colors[i]}11)`,
-                                border: `2px solid ${colors[i]}`,
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontSize: '1.15rem',
-                                fontWeight: 900,
-                                color: colors[i],
-                                boxShadow: `0 0 22px ${colors[i]}22`,
-                              }}
-                            >
-                              {u.displayName.slice(0, 2).toUpperCase()}
+                            {i === 0 && <Crown size={18} style={{ color: 'var(--gold)', position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)' }} />}
+                            <div style={{ width: 54, height: 54, borderRadius: '50%', background: `linear-gradient(135deg,${colors[i]}28,${colors[i]}08)`, border: `2px solid ${colors[i]}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', fontWeight: 900, color: colors[i], boxShadow: `0 0 18px ${colors[i]}18` }}>
+                              {(u.displayName || '??').slice(0, 2).toUpperCase()}
                             </div>
                           </div>
-                          <span
-                            style={{
-                              fontSize: '.84rem',
-                              fontWeight: 700,
-                              color: 'var(--text-primary)',
-                            }}
-                          >
-                            {u.displayName}
-                          </span>
-                          <span
-                            style={{
-                              fontSize: '.74rem',
-                              fontWeight: 800,
-                              color: colors[i],
-                              fontFamily: 'var(--font-display)',
-                            }}
-                          >
-                            {u.points} pts
-                          </span>
+                          <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName}</span>
+                          <span style={{ fontSize: '.7rem', fontWeight: 800, color: colors[i], fontFamily: 'var(--font-display)' }}>{u.points} pts</span>
                         </div>
                       );
                     })}
@@ -1178,363 +455,96 @@ export default function Leaderboard() {
                 )}
 
                 {/* Search */}
-                <div
-                  style={{
-                    maxWidth: 440,
-                    margin: '0 auto 26px',
-                    position: 'relative',
-                  }}
-                >
-                  <Search
-                    size={18}
-                    style={{
-                      position: 'absolute',
-                      left: 16,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: searchFocused
-                        ? 'var(--accent)'
-                        : 'var(--text-muted)',
-                      transition: 'color .2s',
-                      pointerEvents: 'none',
-                      zIndex: 1,
-                    }}
-                  />
-                  <input
-                    ref={searchRef}
-                    type="text"
-                    placeholder="Search players..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    onFocus={() => setSearchFocused(true)}
-                    onBlur={() => setSearchFocused(false)}
-                    className="lb-search"
-                  />
-                  {search && (
-                    <button
-                      className="zoka-btn"
-                      onClick={handleClear}
-                      style={{
-                        position: 'absolute',
-                        right: 12,
-                        top: '50%',
-                        transform: 'translateY(-50%)',
-                        background: 'rgba(255,255,255,.06)',
-                        border: 'none',
-                        borderRadius: 8,
-                        width: 30,
-                        height: 30,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        color: 'var(--text-muted)',
-                      }}
-                    >
-                      <X size={14} />
-                    </button>
-                  )}
+                <div style={{ maxWidth: 420, margin: '0 auto 22px', position: 'relative' }}>
+                  <Search size={17} style={{ position: 'absolute', left: 15, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--accent)' : 'var(--text-muted)', transition: 'color .2s', pointerEvents: 'none', zIndex: 1 }} />
+                  <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" />
+                  {search && <button className="zb" onClick={handleClear} style={{ position: 'absolute', right: 11, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,.05)', border: 'none', borderRadius: 7, width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)' }}><X size={13} /></button>}
                 </div>
 
                 {search.trim() && (
-                  <div
-                    style={{
-                      marginBottom: 18,
-                      fontSize: '.84rem',
-                      color: 'var(--text-muted)',
-                      textAlign: 'center',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {filtered.length} result
-                    {filtered.length !== 1 ? 's' : ''} found
-                  </div>
+                  <div style={{ marginBottom: 14, fontSize: '.82rem', color: 'var(--text-muted)', textAlign: 'center', fontWeight: 600 }}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>
                 )}
 
                 {/* Table */}
-                <div
-                  className="lb-table-wrap"
-                  style={{
-                    borderRadius: 16,
-                    border: '1px solid var(--border)',
-                    background: 'var(--bg-card)',
-                  }}
-                >
-                  <table
-                    className="lb-table"
-                    style={{
-                      width: '100%',
-                      borderCollapse: 'collapse',
-                      fontSize: '.86rem',
-                    }}
-                  >
+                <div className="sc-wrap sc">
+                  <table className="sc-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
-                      <tr
-                        style={{ borderBottom: '1px solid var(--border)' }}
-                      >
-                        {[
-                          'Rank',
-                          'Player',
-                          'Accuracy',
-                          'Points',
-                          'Predictions',
-                          'Exact',
-                        ].map((h) => (
-                          <th
-                            key={h}
-                            style={{
-                              padding: '14px 18px',
-                              textAlign:
-                                h === 'Exact' ? 'right' : 'left',
-                              fontWeight: 700,
-                              color: 'var(--text-muted)',
-                              fontSize: '.7rem',
-                              textTransform: 'uppercase',
-                              letterSpacing: '.06em',
-                              background: 'rgba(255,255,255,.02)',
-                            }}
-                          >
-                            {h}
-                          </th>
+                      <tr>
+                        {['Rank', 'Player', 'Accuracy', 'Points', 'Predicted', 'Exact'].map(h => (
+                          <th key={h} className={`sc-head${h === 'Exact' ? ' r' : ''}`}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
                       {loading ? (
                         Array.from({ length: 10 }).map((_, i) => (
-                          <SkeletonRow key={i} />
+                          <tr key={i}><td colSpan={6} style={{ padding: 0, borderBottom: '1px solid var(--border)' }}><div style={{ display: 'flex', alignItems: 'center', gap: 14, padding: '14px 16px' }}><div className="lb-shim" style={{ width: 28, height: 12, borderRadius: 4 }} /><div style={{ display: 'flex', alignItems: 'center', gap: 10, flex: 1 }}><div className="lb-shim" style={{ width: 34, height: 34, borderRadius: 8 }} /><div className="lb-shim" style={{ width: 90, height: 12, borderRadius: 4 }} /></div><div className="lb-shim" style={{ width: 70, height: 10, borderRadius: 4 }} /></div></td></tr>
                         ))
-                      ) : filteredRest.length === 0 && search.trim() ? (
-                        <tr>
-                          <td
-                            colSpan={6}
-                            style={{
-                              textAlign: 'center',
-                              padding: 44,
-                              color: 'var(--text-muted)',
-                              fontSize: '.9rem',
-                              fontWeight: 600,
-                            }}
-                          >
-                            No players found matching &quot;{search}&quot;
-                          </td>
-                        </tr>
-                      ) : filteredRest.length === 0 && !search.trim() ? (
-                        <tr>
-                          <td
-                            colSpan={6}
-                            style={{
-                              textAlign: 'center',
-                              padding: 44,
-                              color: 'var(--text-muted)',
-                              fontSize: '.9rem',
-                              fontWeight: 600,
-                            }}
-                          >
-                            {activeLB.length === 0
-                              ? 'No predictions yet.'
-                              : 'Top players shown above.'}
-                          </td>
-                        </tr>
+                      ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: '.88rem', fontWeight: 600 }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</td></tr>
+                      ) : visibleRest.length === 0 && search.trim() ? (
+                        <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)', fontSize: '.88rem', fontWeight: 600 }}>No players found matching "{search}"</td></tr>
                       ) : (
-                        filteredRest
-                          .slice(0, shownCount - 3)
-                          .map((user, i) => {
-                            const rank = i + 4;
-                            const isMe = currentUser?.uid === user.uid;
-                            const exactColor =
-                              user.exact >= 15
-                                ? 'var(--accent)'
-                                : user.exact >= 10
-                                ? 'var(--gold)'
-                                : 'var(--text-primary)';
-                            const avColor =
-                              AVATAR_COLORS[(i + 3) % AVATAR_COLORS.length];
-                            const delay = Math.min(i * 40, 400);
+                        visibleRest.map((user, i) => {
+                          const rank = i + 4;
+                          const isMe = currentUser?.uid === user.uid;
+                          const delay = Math.min(i * 35, 350);
+                          const avColor = AVATAR_COLORS[(i + 3) % AVATAR_COLORS.length];
+                          const exactColor = (user.exact || 0) >= 15 ? 'var(--accent)' : (user.exact || 0) >= 10 ? 'var(--gold)' : 'var(--text-primary)';
 
-                            return (
-                              <tr
-                                key={user.uid}
-                                className="lb-sr"
-                                style={{
-                                  animationDelay: `${delay}ms`,
-                                  background: isMe
-                                    ? 'rgba(0,230,118,.04)'
-                                    : 'transparent',
-                                  borderBottom: '1px solid var(--border)',
-                                  transition: 'background .2s',
-                                }}
-                                onMouseEnter={(e) => {
-                                  if (!isMe)
-                                    e.currentTarget.style.background =
-                                      'rgba(255,255,255,.02)';
-                                }}
-                                onMouseLeave={(e) => {
-                                  if (!isMe)
-                                    e.currentTarget.style.background = 'transparent';
-                                }}
-                              >
-                                <td
-                                  style={{
-                                    padding: '14px 18px',
-                                    fontWeight: 800,
-                                    fontFamily: 'var(--font-display)',
-                                    color:
-                                      rank <= 10
-                                        ? 'var(--accent)'
-                                        : 'var(--text-primary)',
-                                  }}
-                                >
-                                  #{rank}
-                                </td>
-                                <td style={{ padding: '14px 18px' }}>
-                                  <div
-                                    style={{
-                                      display: 'flex',
-                                      alignItems: 'center',
-                                      gap: 10,
-                                    }}
-                                  >
-                                    <div
-                                      style={{
-                                        width: 36,
-                                        height: 36,
-                                        borderRadius: 10,
-                                        background: avColor,
-                                        display: 'flex',
-                                        alignItems: 'center',
-                                        justifyContent: 'center',
-                                        fontSize: '.74rem',
-                                        fontWeight: 800,
-                                        color: '#fff',
-                                        flexShrink: 0,
-                                        boxShadow: isMe
-                                          ? '0 0 0 2px var(--accent)'
-                                          : 'none',
-                                      }}
-                                    >
-                                      {(user.displayName || '??')
-                                        .slice(0, 2)
-                                        .toUpperCase()}
-                                    </div>
-                                    <div>
-                                      <div
-                                        style={{
-                                          fontWeight: 700,
-                                          color: 'var(--text-primary)',
-                                          display: 'flex',
-                                          alignItems: 'center',
-                                          gap: 8,
-                                          fontSize: '.88rem',
-                                        }}
-                                      >
-                                        {user.displayName}
-                                        {isMe && (
-                                          <span
-                                            style={{
-                                              fontSize: '.62rem',
-                                              color: 'var(--bg-deep)',
-                                              background: 'var(--accent)',
-                                              padding: '3px 10px',
-                                              borderRadius: 10,
-                                              fontWeight: 800,
-                                            }}
-                                          >
-                                            YOU
-                                          </span>
-                                        )}
-                                      </div>
-                                      <div
-                                        style={{
-                                          fontSize: '.72rem',
-                                          color: 'var(--text-muted)',
-                                          marginTop: 2,
-                                        }}
-                                      >
-                                        {user.exact} exact ·{' '}
-                                        {user.result} result
-                                      </div>
-                                    </div>
+                          return (
+                            <tr key={user.uid} className={`sc-row lb-sr${isMe ? ' me' : ''}`} style={{ animationDelay: `${delay}ms` }}>
+                              <td className="sc-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', width: 50 }}>#{rank}</td>
+                              <td className="sc-td">
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                                  <div style={{ width: 34, height: 34, borderRadius: 9, background: avColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 800, color: '#fff', flexShrink: 0, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
+                                    {(user.displayName || '??').slice(0, 2).toUpperCase()}
                                   </div>
-                                </td>
-                                <td style={{ padding: '14px 18px' }}>
-                                  <AccuracyBar
-                                    value={user.accuracy}
-                                    delay={delay}
-                                  />
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '14px 18px',
-                                    fontFamily: 'var(--font-display)',
-                                    fontWeight: 800,
-                                    fontSize: '1.05rem',
-                                    color: 'var(--text-primary)',
-                                  }}
-                                >
-                                  {user.points}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '14px 18px',
-                                    color: 'var(--text-secondary)',
-                                    fontWeight: 600,
-                                  }}
-                                >
-                                  {user.predictions}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: '14px 18px',
-                                    textAlign: 'right',
-                                    fontFamily: 'var(--font-display)',
-                                    fontWeight: 800,
-                                    color: exactColor,
-                                  }}
-                                >
-                                  {user.exact}
-                                </td>
-                              </tr>
-                            );
-                          })
+                                  <div style={{ minWidth: 0 }}>
+                                    <div style={{ fontSize: '.84rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                      {user.displayName || 'Anonymous'}
+                                      {isMe && <span style={{ marginLeft: 5, fontSize: '.6rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.08)', padding: '2px 7px', borderRadius: 5 }}>YOU</span>}
+                                    </div>
+                                    <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{user.totalPredictions || user.predictions || 0} predictions</div>
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="sc-td" style={{ minWidth: 100 }}><AccBar value={user.accuracy || 0} delay={delay + 100} /></td>
+                              <td className="sc-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#a855f7', fontSize: '.92rem', width: 65 }}>{user.points || 0}</td>
+                              <td className="sc-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-muted)', fontSize: '.82rem', width: 60 }}>{user.totalPredictions || user.predictions || 0}</td>
+                              <td className="sc-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: exactColor, fontSize: '.82rem', width: 50 }}>{user.exact || 0}</td>
+                            </tr>
+                          );
+                        })
                       )}
                     </tbody>
                   </table>
                 </div>
 
-                {/* Load More */}
-                {!loading &&
-                  filteredRest.length > shownCount - 3 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'center',
-                        marginTop: 22,
-                      }}
-                    >
-                      <button
-                        onClick={handleLoadMore}
-                        disabled={shownCount >= 100}
-                        className="zoka-btn"
-                        style={{
-                          padding: '12px 30px',
-                          borderRadius: 12,
-                          background: 'rgba(255,255,255,.04)',
-                          border: '1px solid var(--border)',
-                          color: 'var(--text-primary)',
-                          fontWeight: 700,
-                          fontSize: '.86rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 8,
-                          minHeight: 50,
-                        }}
-                      >
-                        <ChevronDown size={16} /> Show More (
-                        {Math.min(100, filteredRest.length) - (shownCount - 3)}{' '}
-                        remaining)
-                      </button>
-                    </div>
-                  )}
+                {/* Show More */}
+                {hasMore && !loading && (
+                  <button className="show-more" onClick={() => setShowCount(p => Math.min(p + 15, 200))} style={{ marginTop: 12 }}>
+                    <ChevronDown size={14} /> Show more ({filteredRest.length - visibleRest.length} remaining)
+                  </button>
+                )}
+
+                {/* Empty state with retry when no data at all */}
+                {entries.length === 0 && !loading && !isStale && !error && (
+                  <div style={{ textAlign: 'center', padding: '30px 0 10' }}>
+                    <button className="zb" onClick={handleRetry} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '10px 18px', borderRadius: 10, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontWeight: 700, fontSize: '.82rem' }}>
+                      <RotateCcw size={13} /> Refresh
+                    </button>
+                  </div>
+                )}
+
+                {/* Back to predictions CTA */}
+                {entries.length > 0 && (
+                  <div style={{ textAlign: 'center', marginTop: 24, padding: '20px 0' }}>
+                    <button className="zb" onClick={() => nav('/predictions')} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '12px 24px', borderRadius: 12, background: 'var(--accent)', color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.85rem', border: 'none', boxShadow: '0 4px 14px rgba(0,230,118,.18)' }}>
+                      <Target size={15} /> Make Predictions <ChevronRight size={14} />
+                    </button>
+                  </div>
+                )}
               </>
             )}
           </>

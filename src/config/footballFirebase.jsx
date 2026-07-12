@@ -1,4 +1,4 @@
-﻿import { initializeApp } from 'firebase/app';
+import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 const config = {
@@ -26,7 +26,7 @@ if (missing.length === 0) {
   try {
     const app = initializeApp(config, 'football-data');
     db = getFirestore(app);
-    console.log('[FootballFirebase] Connected — project:', config.projectId);
+    console.log('[FootballFirebase] Connected � project:', config.projectId);
   } catch (e) {
     console.error('[FootballFirebase] Init failed:', e.message);
   }

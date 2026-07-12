@@ -143,7 +143,7 @@ export default function Navbar() {
   const [allPreds, setAllPreds] = useState([]);
 
   /* ── Context ── */
-  const { currentUser, userProfile, logout } = useAuth();
+  const { currentUser, userProfile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const uid = currentUser?.uid;
@@ -345,9 +345,9 @@ export default function Navbar() {
      ═══════════════════════════════════════════════════════════ */
   const handleLogout = useCallback(async () => {
     setMobileOpen(false);
-    try { await logout(); } catch { /* */ }
+    try { await signOut(); } catch { /* */ }
     navigate('/');
-  }, [logout, navigate]);
+  }, [signOut, navigate]);
 
   const handleSearch = useCallback((e) => {
     e.preventDefault();

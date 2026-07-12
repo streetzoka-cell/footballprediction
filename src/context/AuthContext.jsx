@@ -3,6 +3,10 @@ import {
   onAuthStateChanged,
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  signInWithPopup,
+  GoogleAuthProvider,
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -60,6 +64,41 @@ export function AuthProvider({ children }) {
   }, []);
 
   // ─── Actions ─────────────────────────────────────────────
+  const login = useCallback(async (email, password) => {
+    const cred = await signInWithEmailAndPassword(auth, email, password);
+    // Profile is loaded by onAuthStateChanged listener above
+    return cred.user;
+  }, []);
+
+  const register = useCallback(async (email, password, displayName) => {
+    const cred = await createUserWithEmailAndPassword(auth, email, password);
+    // Update display name in Firebase Auth
+    if (displayName) {
+      await fbUpdateProfile(cred.user, { displayName });
+    }
+    // Profile creation is handled by onAuthStateChanged listener above,
+    // but we set displayName here so the listener picks it up
+    const profile = {
+      uid: cred.user.uid,
+      email: cred.user.email,
+      displayName: displayName || cred.user.email?.split('@')[0] || 'Player',
+      photoURL: cred.user.photoURL || null,
+      role: 'user',
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    };
+    await setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true });
+    setUserProfile(profile);
+    return cred.user;
+  }, []);
+
+  const loginWithGoogle = useCallback(async () => {
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    // Profile is loaded/created by onAuthStateChanged listener above
+    return cred.user;
+  }, []);
+
   const signOut = useCallback(async () => {
     try {
       await fbSignOut(auth);
@@ -102,6 +141,9 @@ export function AuthProvider({ children }) {
     currentUser,
     userProfile,
     authLoading,
+    login,
+    register,
+    loginWithGoogle,
     signOut,
     updateProfile,
   };

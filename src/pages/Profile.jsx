@@ -268,7 +268,7 @@ const ProfileSkeleton = () => (
    ═══════════════════════════════════════════════════════════════ */
 export default function Profile() {
   injectStyles();
-  const { currentUser, userProfile, logout, loading: authLoading } = useAuth();
+  const { currentUser, userProfile, signOut, authLoading } = useAuth();
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
@@ -299,9 +299,9 @@ export default function Profile() {
   const hasData = total > 0;
 
   const handleLogout = useCallback(async () => {
-    try { await logout(); } catch {}
+    try { await signOut(); } catch {}
     navigate('/');
-  }, [logout, navigate]);
+  }, [signOut, navigate]);
 
   return (
     <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>

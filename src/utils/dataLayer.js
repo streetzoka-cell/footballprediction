@@ -1,38 +1,10 @@
-// ═════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/utils/dataLayer.js
 // DIRECT FIRESTORE DATA LAYER — Zero-Backend Architecture
 //
-// ★ STRATEGY: Three-layer cache + single-document reads
-//
-// Cache layers (checked in order):
-//   1. In-memory cache     → Same tab, instant (~0ms)
-//   2. localStorage cache  → Same browser, fast (~1ms), survives reloads
-//   3. Firestore read      → Last resort, single-document only (~50ms)
-//
-// Thundering herd protection:
-//   If 100 concurrent requests arrive after cache expiry,
-//   only request #1 reads from Firestore. Requests #2-100 wait and share.
-//   (Works within same browser — different users have independent caches)
-//
-// Stale-while-revalidate:
-//   When localStorage data is expired but within grace period,
-//   return stale data immediately and trigger background refresh.
-//
-// ★ BUDGET MATH (2,000 users/day):
-//   Fixture snapshots:    1 doc × ~3,000 cold visits  =  3,000 reads
-//   Reference data:       1 doc × ~200 new devices    =    800 reads
-//   Daily leaderboard:    1 doc × ~3,000 cold visits  =  3,000 reads
-//   Zoka picks/votes:     2 docs × ~3,000             =  6,000 reads
-//   Active predictions:   1 doc × ~1,200 (lazy load)  =  1,200 reads
-//   User predictions:     ~10 docs × ~600 (lazy)      =  6,000 reads
-//   User results:         ~10 docs × ~600 (lazy)      =  6,000 reads
-//   User points:          1 doc × ~600 (lazy)         =    600 reads
-//   Historical boards:    1 doc × ~400 (lazy)         =    400 reads
-//   ─────────────────────────────────────────────────────────────────
-//   TOTAL:                                          ≈ 27,000 reads/day
-//   Budget:                                          50,000 reads/day
-//   Headroom:                                         46% remaining
-//
+// ★ ENHANCED: Now integrates with EventBus for reactive updates
+// ★ ENHANCED: Uses shared constants from constants.js
+// ★ ENHANCED: Emits events on every cache update
 // ═══════════════════════════════════════════════════════════════════════════════
 
 import { db } from './firebase';
@@ -45,42 +17,30 @@ import {
   getDocs,
 } from 'firebase/firestore';
 
+import {
+  SPORT,
+  SPORT_PREFIX,
+  TTL,
+  TIMEOUT,
+  PATHS,
+  CACHE_KEY,
+  getSnapshotDocId,
+  getRefDocId,
+} from './constants';
+
+import { eventBus, EVENT } from './eventBus';  // ★ EVENT comes from here, not constants
+
 // ═══════════════════════════════════════════════════════════════
-// TTL CONFIGURATION
-//
-// These control how long data stays "fresh" before a Firestore
-// read is triggered. Longer TTLs = fewer reads = more budget.
-//
-// Trade-off: Longer TTLs = slightly stale data.
-// Current values are tuned for a football prediction app where
-// scores change every few minutes during matches.
+// TIMEOUT UTILITY
 // ═══════════════════════════════════════════════════════════════
 
-const TTL = {
-  // Snapshot data (single-doc reads from fixture_snapshots/)
-  FIXTURE_SNAPSHOT:       5 * 60 * 1000,    // 5 min — live scores change during matches
-  FIXTURE_SNAPSHOT_IDLE:  30 * 60 * 1000,   // 30 min — when no live matches
-
-  // Reference data (single-doc reads from reference_data/)
-  REFERENCE:              24 * 60 * 60 * 1000, // 24 hours — leagues/teams/standings rarely change
-
-  // Prediction data
-  ACTIVE_PREDICTIONS:     10 * 60 * 1000,   // 10 min — admin updates these occasionally
-  DAILY_LEADERBOARD:      10 * 60 * 1000,   // 10 min — updates as matches finish
-  ZOKA_PICKS:             30 * 60 * 1000,   // 30 min
-  ZOKA_VOTES:             10 * 60 * 1000,   // 10 min — vote counts change
-
-  // User-specific data (per-user queries)
-  USER_DATA:              10 * 60 * 1000,   // 10 min
-
-  // Historical leaderboards
-  HISTORICAL:             60 * 60 * 1000,   // 1 hour
-
-  // localStorage grace period
-  // After TTL expires, still return stale data for this long
-  // while triggering a background refresh
-  STALE_GRACE:            30 * 60 * 1000,   // 30 min grace
-};
+function withTimeout(promise, ms, fallback) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => resolve(fallback), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
 
 // ═══════════════════════════════════════════════════════════════
 // DATE HELPERS
@@ -116,12 +76,6 @@ export const getMonthStart = () =>
 
 // ═══════════════════════════════════════════════════════════════
 // LOCAL STORAGE CACHE
-//
-// Persists data across page reloads and browser tabs.
-// Each entry stores: { data, ts (timestamp), ttl }
-//
-// Stale data is kept for STALE_GRACE period and returned
-// immediately while a background refresh fetches fresh data.
 // ═══════════════════════════════════════════════════════════════
 
 class LocalCache {
@@ -134,10 +88,6 @@ class LocalCache {
     return `${this._prefix}:${key}`;
   }
 
-  /**
-   * Get fresh data from localStorage.
-   * Returns undefined if expired or missing.
-   */
   get(key, ttlMs) {
     try {
       const raw = localStorage.getItem(this._key(key));
@@ -147,7 +97,7 @@ class LocalCache {
       const effectiveTtl = ttlMs ?? entry.ttl;
 
       if (Date.now() - entry.ts > effectiveTtl) {
-        return undefined; // Expired
+        return undefined;
       }
 
       return entry.data;
@@ -156,10 +106,6 @@ class LocalCache {
     }
   }
 
-  /**
-   * Get data from localStorage, even if expired (within grace period).
-   * Returns { data, stale: boolean } or undefined if too old.
-   */
   getWithGrace(key, ttlMs, graceMs) {
     try {
       const raw = localStorage.getItem(this._key(key));
@@ -171,7 +117,6 @@ class LocalCache {
       const maxAge = effectiveTtl + (graceMs ?? TTL.STALE_GRACE);
 
       if (age > maxAge) {
-        // Too old even for stale — delete it
         localStorage.removeItem(this._key(key));
         return undefined;
       }
@@ -186,9 +131,6 @@ class LocalCache {
     }
   }
 
-  /**
-   * Store data in localStorage with TTL metadata.
-   */
   set(key, data, ttlMs) {
     try {
       localStorage.setItem(this._key(key), JSON.stringify({
@@ -197,7 +139,6 @@ class LocalCache {
         ttl: ttlMs,
       }));
     } catch (err) {
-      // Storage full — cleanup and retry
       this._cleanup();
       try {
         localStorage.setItem(this._key(key), JSON.stringify({
@@ -206,23 +147,17 @@ class LocalCache {
           ttl: ttlMs,
         }));
       } catch {
-        // Still full — give up (cache won't persist, but in-memory still works)
+        // Storage full — give up
       }
     }
   }
 
-  /**
-   * Delete a specific key.
-   */
   delete(key) {
     try {
       localStorage.removeItem(this._key(key));
     } catch { /* ignore */ }
   }
 
-  /**
-   * Delete all keys with a given prefix.
-   */
   deletePrefix(prefix) {
     const fullPrefix = this._key(prefix);
     const toDelete = [];
@@ -239,9 +174,6 @@ class LocalCache {
     });
   }
 
-  /**
-   * Remove entries that are more than 2× their TTL old.
-   */
   _cleanup() {
     const now = Date.now();
     const prefix = this._prefix + ':';
@@ -256,7 +188,7 @@ class LocalCache {
             toDelete.push(k);
           }
         } catch {
-          toDelete.push(k); // Corrupted entry
+          toDelete.push(k);
         }
       }
     }
@@ -266,17 +198,11 @@ class LocalCache {
     });
   }
 
-  /**
-   * Start periodic cleanup (call once at app init).
-   */
   startPeriodicCleanup(intervalMs = 60_000) {
     if (this._cleanupInterval) return;
     this._cleanupInterval = setInterval(() => this._cleanup(), intervalMs);
   }
 
-  /**
-   * Stop periodic cleanup.
-   */
   stopPeriodicCleanup() {
     if (this._cleanupInterval) {
       clearInterval(this._cleanupInterval);
@@ -286,28 +212,25 @@ class LocalCache {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DATA LAYER CLASS
+// DATA LAYER CLASS — ENHANCED WITH EVENT BUS
 // ═══════════════════════════════════════════════════════════════
 
 class DataLayer {
   constructor() {
-    /** @type {Map<string, {data: *, ts: number, ttl: number}>} */
     this._memory = new Map();
-    /** @type {Map<string, Promise<*>>} */
     this._locks = new Map();
-    /** @type {Map<string, Set<Function>>} */
     this._subscribers = new Map();
-    /** @type {LocalCache} */
     this._local = new LocalCache();
-    /** @type {Set<string>} */
     this._backgroundRefreshInProgress = new Set();
 
-    // Start localStorage cleanup
+    // Track which keys map to which events for automatic emission
+    this._keyEventMap = new Map();
+
     this._local.startPeriodicCleanup();
   }
 
   // ─────────────────────────────────────────────────────────
-  // MEMORY CACHE (Layer 1 — fastest)
+  // MEMORY CACHE
   // ─────────────────────────────────────────────────────────
 
   _memGet(key, ttlMs) {
@@ -325,31 +248,25 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
-  // MAIN GET OR SET — Three-Layer Cache + Thundering Herd
-  //
-  // Resolution order:
-  //   1. Memory cache (fresh)     → return immediately
-  //   2. localStorage (fresh)     → promote to memory, return
-  //   3. localStorage (stale+grace)→ promote to memory, return + background refresh
-  //   4. Lock exists              → wait for lock, return cached result
-  //   5. No cache at all          → acquire lock, fetch from Firestore
-  //
-  // Result: 1 Firestore read per cache-key per TTL period,
-  //         regardless of how many tabs/users request it (per browser).
+  // MAIN GET OR SET — Now emits events
   // ─────────────────────────────────────────────────────────
 
   async getOrSet(key, fetchFn, ttlMs, options = {}) {
-    const { graceMs = TTL.STALE_GRACE, skipLocal = false } = options;
+    const { 
+      graceMs = TTL.STALE_GRACE, 
+      skipLocal = false,
+      event,  // ★ NEW: Event to emit on update
+      eventPayload, // ★ NEW: Payload builder or static payload
+    } = options;
 
     // Layer 1: Memory cache
     const memData = this._memGet(key, ttlMs);
     if (memData !== undefined) return memData;
 
-    // Layer 2: localStorage cache (if not skipped)
+    // Layer 2: localStorage cache
     if (!skipLocal) {
       const localData = this._local.get(key, ttlMs);
       if (localData !== undefined) {
-        // Promote to memory
         this._memSet(key, localData, ttlMs);
         return localData;
       }
@@ -357,25 +274,23 @@ class DataLayer {
       // Layer 2.5: Stale-while-revalidate
       const staleEntry = this._local.getWithGrace(key, ttlMs, graceMs);
       if (staleEntry) {
-        // Promote stale data to memory
         this._memSet(key, staleEntry.data, ttlMs);
 
-        // Trigger background refresh (non-blocking)
         if (staleEntry.stale) {
-          this._backgroundRefresh(key, fetchFn, ttlMs);
+          this._backgroundRefresh(key, fetchFn, ttlMs, { event, eventPayload });
         }
 
         return staleEntry.data;
       }
     }
 
-    // Layer 3: Thundering herd — check for in-flight request
+    // Layer 3: Thundering herd protection
     const existingLock = this._locks.get(key);
     if (existingLock) {
       try {
         return await existingLock;
       } catch {
-        // Lock failed, fall through to try ourselves
+        // Lock failed, fall through
       }
     }
 
@@ -387,6 +302,15 @@ class DataLayer {
           this._local.set(key, data, ttlMs);
         }
         this._notifySubscribers(key, data);
+        
+        // ★ Emit event if configured
+        if (event) {
+          const payload = typeof eventPayload === 'function' 
+            ? eventPayload(data) 
+            : (eventPayload || { key });
+          eventBus.emit(event, payload);
+        }
+        
         return data;
       })
       .catch((err) => {
@@ -403,24 +327,29 @@ class DataLayer {
   }
 
   /**
-   * Background refresh — fetches fresh data without blocking the caller.
-   * Updates memory + localStorage when complete. Notifies subscribers.
+   * Background refresh with event emission
    */
-  _backgroundRefresh(key, fetchFn, ttlMs) {
+  _backgroundRefresh(key, fetchFn, ttlMs, options = {}) {
     if (this._backgroundRefreshInProgress.has(key)) return;
-    if (this._locks.has(key)) return; // Already fetching
+    if (this._locks.has(key)) return;
 
     this._backgroundRefreshInProgress.add(key);
 
-    // Use microtask so we don't block the current execution
     queueMicrotask(async () => {
       try {
         const data = await fetchFn();
         this._memSet(key, data, ttlMs);
         this._local.set(key, data, ttlMs);
         this._notifySubscribers(key, data);
+        
+        // ★ Emit event on background refresh too
+        if (options.event) {
+          const payload = typeof options.eventPayload === 'function' 
+            ? options.eventPayload(data) 
+            : (options.eventPayload || { key, background: true });
+          eventBus.emit(options.event, payload);
+        }
       } catch (err) {
-        // Silent fail — stale data is still better than no data
         console.debug(`[DataLayer] Background refresh failed for ${key}:`, err.message);
       } finally {
         this._backgroundRefreshInProgress.delete(key);
@@ -461,25 +390,38 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
-  // CACHE INVALIDATION
+  // CACHE INVALIDATION — Now emits events
   // ─────────────────────────────────────────────────────────
 
   invalidate(key) {
     this._memory.delete(key);
     this._local.delete(key);
+    
+    // ★ Emit cache invalidation event
+    eventBus.emit(EVENT.CACHE_INVALIDATED, { key });
   }
 
   invalidatePrefix(prefix) {
+    const invalidatedKeys = [];
+    
     for (const key of this._memory.keys()) {
-      if (key.startsWith(prefix)) this._memory.delete(key);
+      if (key.startsWith(prefix)) {
+        this._memory.delete(key);
+        invalidatedKeys.push(key);
+      }
     }
     this._local.deletePrefix(prefix);
+    
+    // ★ Emit cache invalidation event
+    eventBus.emit(EVENT.CACHE_INVALIDATED, { prefix, keys: invalidatedKeys });
   }
 
   clear() {
     this._memory.clear();
     this._locks.clear();
     this._local.deletePrefix('');
+    
+    eventBus.emit(EVENT.CACHE_INVALIDATED, { cleared: true });
   }
 
   // ─────────────────────────────────────────────────────────
@@ -497,46 +439,39 @@ class DataLayer {
 
   // ═════════════════════════════════════════════════════════
   // DATA FETCHERS
-  //
-  // ★ All fixture/reference fetchers read SINGLE DOCUMENTS.
-  //   This is the key to staying under 50K reads.
-  //
-  // ★ User-specific fetchers use queries (unavoidable for
-  //   per-user data), but are LAZY-LOADED and heavily cached.
   // ═════════════════════════════════════════════════════════
 
   // ─────────────────────────────────────────────────────────
-  // FOOTBALL FIXTURES — 1 DOC READ
-  //
-  // Reads: 1 document (contains all fixtures for the day)
-  // Cache: 5 min (live) / 30 min (idle)
-  // localStorage: yes
+  // FOOTBALL FIXTURES — 1 DOC READ + EVENT EMISSION
   // ─────────────────────────────────────────────────────────
 
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `snap:ft:${dateStr}`;
+    const key = CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr);
 
-    // Use shorter TTL when there might be live matches
     const now = new Date();
     const hour = now.getUTCHours();
-    const isMatchHours = hour >= 12 && hour <= 23; // Rough heuristic
+    const isMatchHours = hour >= 12 && hour <= 23;
     const ttl = isMatchHours ? TTL.FIXTURE_SNAPSHOT : TTL.FIXTURE_SNAPSHOT_IDLE;
 
     return this.getOrSet(key, async () => {
       if (!db) return null;
 
-      const snap = await getDoc(doc(db, 'fixture_snapshots', dateStr));
-      if (!snap.exists()) return null;
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return null;
 
       return snap.data();
-    }, ttl);
+    }, ttl, {
+      event: EVENT.FOOTBALL_UPDATED,
+      eventPayload: (data) => ({ sport: SPORT.FOOTBALL, dateStr, snapshot: data }),
+    });
   }
 
-  /**
-   * Get specific fixture arrays from the snapshot.
-   * Returns { today, tomorrow, yesterday, live, finished }.
-   */
   async fetchFootballFixtures(dateStr) {
     const snapshot = await this.fetchFootballSnapshot(dateStr);
     if (!snapshot) {
@@ -561,26 +496,35 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
-  // BASKETBALL FIXTURES — 1 DOC READ
+  // BASKETBALL FIXTURES — 1 DOC READ + EVENT EMISSION
   // ─────────────────────────────────────────────────────────
 
   async fetchBasketballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `snap:bb:${dateStr}`;
+    const key = CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr);
+    const docId = getSnapshotDocId(SPORT.BASKETBALL, dateStr);
 
     const now = new Date();
     const hour = now.getUTCHours();
-    const isMatchHours = hour >= 0 && hour <= 10; // Basketball often at night US time
+    const isMatchHours = hour >= 0 && hour <= 10;
     const ttl = isMatchHours ? TTL.FIXTURE_SNAPSHOT : TTL.FIXTURE_SNAPSHOT_IDLE;
 
     return this.getOrSet(key, async () => {
       if (!db) return null;
 
-      const snap = await getDoc(doc(db, 'fixture_snapshots', `basketball_${dateStr}`));
-      if (!snap.exists()) return null;
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, docId)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return null;
 
       return snap.data();
-    }, ttl);
+    }, ttl, {
+      event: EVENT.BASKETBALL_UPDATED,
+      eventPayload: (data) => ({ sport: SPORT.BASKETBALL, dateStr, snapshot: data }),
+    });
   }
 
   async fetchBasketballFixtures(dateStr) {
@@ -607,113 +551,155 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
+  // GENERIC SNAPSHOT FETCH (for any sport)
+  // ─────────────────────────────────────────────────────────
+
+  async fetchSnapshot(sport, dateStr) {
+    if (sport === SPORT.BASKETBALL) {
+      return this.fetchBasketballSnapshot(dateStr);
+    }
+    return this.fetchFootballSnapshot(dateStr);
+  }
+
+  async fetchFixtures(sport, dateStr) {
+    if (sport === SPORT.BASKETBALL) {
+      return this.fetchBasketballFixtures(dateStr);
+    }
+    return this.fetchFootballFixtures(dateStr);
+  }
+
+  // ─────────────────────────────────────────────────────────
   // REFERENCE DATA — 1 DOC READ EACH
-  //
-  // Reads: 1 document per type
-  // Cache: 24 hours
-  // localStorage: yes (persists across days)
   // ─────────────────────────────────────────────────────────
 
-  async fetchLeagues(sport = 'football') {
-    const docId = sport === 'basketball' ? 'bb_leagues' : 'leagues';
-    const key = `snap:ref:${docId}`;
+  async fetchLeagues(sport = SPORT.FOOTBALL) {
+    const docId = getRefDocId('leagues', sport);
+    const key = CACHE_KEY.reference(docId);
 
     return this.getOrSet(key, async () => {
       if (!db) return [];
 
-      const snap = await getDoc(doc(db, 'reference_data', docId));
-      if (!snap.exists()) return [];
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.REFERENCE_DATA, docId)),
+        TIMEOUT.REFERENCE,
+        null
+      );
+
+      if (!snap || !snap.exists()) return [];
 
       return snap.data().data || [];
     }, TTL.REFERENCE);
   }
 
-  async fetchTeams(sport = 'football') {
-    const docId = sport === 'basketball' ? 'bb_teams' : 'teams';
-    const key = `snap:ref:${docId}`;
+  async fetchTeams(sport = SPORT.FOOTBALL) {
+    const docId = getRefDocId('teams', sport);
+    const key = CACHE_KEY.reference(docId);
 
     return this.getOrSet(key, async () => {
       if (!db) return [];
 
-      const snap = await getDoc(doc(db, 'reference_data', docId));
-      if (!snap.exists()) return [];
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.REFERENCE_DATA, docId)),
+        TIMEOUT.REFERENCE,
+        null
+      );
+
+      if (!snap || !snap.exists()) return [];
 
       return snap.data().data || [];
     }, TTL.REFERENCE);
   }
 
-  async fetchStandings(sport = 'football') {
-    const docId = sport === 'basketball' ? 'bb_standings' : 'standings';
-    const key = `snap:ref:${docId}`;
+  async fetchStandings(sport = SPORT.FOOTBALL) {
+    const docId = getRefDocId('standings', sport);
+    const key = CACHE_KEY.reference(docId);
 
     return this.getOrSet(key, async () => {
       if (!db) return [];
 
-      const snap = await getDoc(doc(db, 'reference_data', docId));
-      if (!snap.exists()) return [];
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.REFERENCE_DATA, docId)),
+        TIMEOUT.REFERENCE,
+        null
+      );
+
+      if (!snap || !snap.exists()) return [];
 
       return snap.data().data || [];
     }, TTL.REFERENCE);
   }
 
   // ─────────────────────────────────────────────────────────
-  // ACTIVE PREDICTIONS — 1 DOC READ (snapshot)
-  //
-  // If snapshot exists: 1 read
-  // If no snapshot (fallback): query collection (~10 docs)
-  //
-  // ★ Recommended: Set up snapshot writer in admin/backend
-  //   to keep this at 1 read. Without snapshot, it's ~10 reads.
+  // ACTIVE PREDICTIONS — 1 DOC READ (with fallback query)
   // ─────────────────────────────────────────────────────────
 
   async fetchActivePredictions(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `active:${dateStr}`;
+    const key = CACHE_KEY.activePredictions(dateStr);
 
     return this.getOrSet(key, async () => {
       if (!db) return [];
 
-      // Try snapshot first (1 read)
-      const snap = await getDoc(doc(db, 'prediction_snapshots', dateStr));
-      if (snap.exists()) {
+      // Try snapshot first
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (snap && snap.exists()) {
         return snap.data().predictions || [];
       }
 
-      // Fallback: query collection (~10 reads)
-      // This path should be rare once snapshots are set up
-      console.warn('[DataLayer] No prediction snapshot — falling back to collection query');
-      const querySnap = await getDocs(
-        query(
-          collection(db, 'active_predictions'),
-          where('matchDate', '==', dateStr)
-        )
+      // Fallback: query collection
+      console.debug('[DataLayer] No prediction snapshot — falling back to collection query');
+
+      const querySnap = await withTimeout(
+        getDocs(
+          query(
+            collection(db, PATHS.ACTIVE_PREDICTIONS),
+            where('matchDate', '==', dateStr)
+          )
+        ),
+        TIMEOUT.COLLECTION_QUERY,
+        { docs: [] }
       );
+
+      if (!querySnap || !querySnap.docs) return [];
 
       return querySnap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
         .sort((a, b) => (b.priority || 0) - (a.priority || 0));
-    }, TTL.ACTIVE_PREDICTIONS);
+    }, TTL.ACTIVE_PREDICTIONS, {
+      event: EVENT.PREDICTIONS_UPDATED,
+      eventPayload: (data) => ({ dateStr, predictions: data }),
+    });
   }
 
   // ─────────────────────────────────────────────────────────
   // DAILY LEADERBOARD — 1 DOC READ
-  //
-  // Reads: 1 (pre-computed summary doc)
-  // Cache: 10 min
   // ─────────────────────────────────────────────────────────
 
   async fetchDailyLeaderboard(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `dlb:${dateStr}`;
+    const key = CACHE_KEY.dailyLeaderboard(dateStr);
 
     return this.getOrSet(key, async () => {
       if (!db) return null;
 
-      const snap = await getDoc(doc(db, 'daily_leaderboard', dateStr));
-      if (!snap.exists()) return null;
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return null;
 
       return snap.data();
-    }, TTL.DAILY_LEADERBOARD);
+    }, TTL.DAILY_LEADERBOARD, {
+      event: EVENT.DAILY_LEADERBOARD_UPDATED,
+      eventPayload: (data) => ({ dateStr, leaderboard: data }),
+    });
   }
 
   // ─────────────────────────────────────────────────────────
@@ -722,16 +708,24 @@ class DataLayer {
 
   async fetchZokaPicks(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `zoka:${dateStr}`;
+    const key = CACHE_KEY.zokaPicks(dateStr);
 
     return this.getOrSet(key, async () => {
       if (!db) return null;
 
-      const snap = await getDoc(doc(db, 'zoka_picks', dateStr));
-      if (!snap.exists()) return null;
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.ZOKA_PICKS, dateStr)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return null;
 
       return snap.data();
-    }, TTL.ZOKA_PICKS);
+    }, TTL.ZOKA_PICKS, {
+      event: EVENT.ZOKA_PICKS_UPDATED,
+      eventPayload: (data) => ({ dateStr, picks: data }),
+    });
   }
 
   // ─────────────────────────────────────────────────────────
@@ -740,42 +734,46 @@ class DataLayer {
 
   async fetchZokaVotes(dateStr) {
     dateStr = dateStr || todayStr();
-    const key = `zokaVotes:${dateStr}`;
+    const key = CACHE_KEY.zokaVotes(dateStr);
 
     return this.getOrSet(key, async () => {
       if (!db) return { stats: {} };
 
-      const snap = await getDoc(doc(db, 'zoka_vote_stats', dateStr));
-      if (!snap.exists()) return { stats: {} };
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.ZOKA_VOTE_STATS, dateStr)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return { stats: {} };
 
       return { stats: snap.data()?.stats || {} };
     }, TTL.ZOKA_VOTES);
   }
 
   // ─────────────────────────────────────────────────────────
-  // USER PREDICTIONS — QUERY READ (~10 docs)
-  //
-  // ★ LAZY-LOADED: Only called when user visits Predictions/Profile page.
-  //   NOT called on app startup.
-  //
-  // Reads: ~10 (1 query × ~10 docs)
-  // Cache: 10 min + localStorage
-  // REQUIRES COMPOSITE INDEX: user_predictions (userId ASC, matchDate ASC)
+  // USER PREDICTIONS — QUERY READ
   // ─────────────────────────────────────────────────────────
 
   async fetchUserPredictions(uid, dateStr) {
     if (!uid || !db) return {};
     dateStr = dateStr || todayStr();
-    const key = `myPreds:${uid}:${dateStr}`;
+    const key = CACHE_KEY.userPredictions(uid, dateStr);
 
     return this.getOrSet(key, async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, 'user_predictions'),
-          where('userId', '==', uid),
-          where('matchDate', '==', dateStr)
-        )
+      const snap = await withTimeout(
+        getDocs(
+          query(
+            collection(db, PATHS.USER_PREDICTIONS),
+            where('userId', '==', uid),
+            where('matchDate', '==', dateStr)
+          )
+        ),
+        TIMEOUT.USER_QUERY,
+        { docs: [] }
       );
+
+      if (!snap || !snap.docs) return {};
 
       const map = {};
       snap.docs.forEach((d) => {
@@ -788,25 +786,28 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
-  // PREDICTION RESULTS — QUERY READ (~10 docs)
-  //
-  // ★ LAZY-LOADED
-  // REQUIRES COMPOSITE INDEX: prediction_results (userId ASC, matchDate ASC)
+  // PREDICTION RESULTS — QUERY READ
   // ─────────────────────────────────────────────────────────
 
   async fetchPredictionResults(uid, dateStr) {
     if (!uid || !db) return { results: [], resultMap: {} };
     dateStr = dateStr || todayStr();
-    const key = `myResults:${uid}:${dateStr}`;
+    const key = CACHE_KEY.predictionResults(uid, dateStr);
 
     return this.getOrSet(key, async () => {
-      const snap = await getDocs(
-        query(
-          collection(db, 'prediction_results'),
-          where('userId', '==', uid),
-          where('matchDate', '==', dateStr)
-        )
+      const snap = await withTimeout(
+        getDocs(
+          query(
+            collection(db, PATHS.PREDICTION_RESULTS),
+            where('userId', '==', uid),
+            where('matchDate', '==', dateStr)
+          )
+        ),
+        TIMEOUT.USER_QUERY,
+        { docs: [] }
       );
+
+      if (!snap || !snap.docs) return { results: [], resultMap: {} };
 
       const results = snap.docs
         .map((d) => ({ id: d.id, ...d.data() }))
@@ -823,17 +824,20 @@ class DataLayer {
 
   // ─────────────────────────────────────────────────────────
   // USER POINTS — 1 DOC READ
-  //
-  // ★ LAZY-LOADED
   // ─────────────────────────────────────────────────────────
 
   async fetchUserPoints(uid) {
     if (!uid || !db) return null;
-    const key = `upt:${uid}`;
+    const key = CACHE_KEY.userPoints(uid);
 
     return this.getOrSet(key, async () => {
-      const snap = await getDoc(doc(db, 'user_points_total', uid));
-      if (!snap.exists()) return null;
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.USER_POINTS_TOTAL, uid)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return null;
 
       return snap.data();
     }, TTL.USER_DATA);
@@ -841,23 +845,29 @@ class DataLayer {
 
   // ─────────────────────────────────────────────────────────
   // HISTORICAL LEADERBOARD — 1 DOC READ
-  //
-  // ★ LAZY-LOADED: Only called when user switches to GOAT/Weekly/Monthly tab
   // ─────────────────────────────────────────────────────────
 
   async fetchHistoricalLeaderboard(period) {
     const docId = this._getPeriodDocId(period);
-    const key = `hist:${period}`;
+    const key = CACHE_KEY.historical(period);
 
     return this.getOrSet(key, async () => {
       if (!db) return { entries: [], stale: true };
 
-      const snap = await getDoc(doc(db, 'leaderboard_summaries', docId));
-      if (!snap.exists()) return { entries: [], stale: true };
+      const snap = await withTimeout(
+        getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId)),
+        TIMEOUT.SNAPSHOT_READ,
+        null
+      );
+
+      if (!snap || !snap.exists()) return { entries: [], stale: true };
 
       const data = snap.data();
       return { entries: data.entries || [], stale: false };
-    }, TTL.HISTORICAL);
+    }, TTL.HISTORICAL, {
+      event: EVENT.LEADERBOARD_UPDATED,
+      eventPayload: (data) => ({ period, leaderboard: data }),
+    });
   }
 
   // ─────────────────────────────────────────────────────────
@@ -884,10 +894,55 @@ class DataLayer {
   }
 
   // ─────────────────────────────────────────────────────────
-  // BUDGET TRACKING (development only)
+  // REACTIVE SUBSCRIPTIONS
   //
-  // Tracks actual Firestore reads to verify budget estimates.
-  // Disable in production (set to false).
+  // Subscribe to data updates via event bus.
+  // Returns unsubscribe function.
+  // ─────────────────────────────────────────────────────────
+
+  /**
+   * Subscribe to fixture updates for a sport.
+   * @param {string} sport - 'football' or 'basketball'
+   * @param {Function} callback - Called with { sport, dateStr, snapshot }
+   * @returns {Function} Unsubscribe
+   */
+  onFixturesUpdated(sport, callback) {
+    const event = sport === SPORT.BASKETBALL 
+      ? EVENT.BASKETBALL_UPDATED 
+      : EVENT.FOOTBALL_UPDATED;
+    return eventBus.on(event, callback);
+  }
+
+  /**
+   * Subscribe to prediction updates.
+   * @param {Function} callback - Called with { dateStr, predictions }
+   * @returns {Function} Unsubscribe
+   */
+  onPredictionsUpdated(callback) {
+    return eventBus.on(EVENT.PREDICTIONS_UPDATED, callback);
+  }
+
+  /**
+   * Subscribe to leaderboard updates.
+   * @param {Function} callback - Called with { period, leaderboard }
+   * @returns {Function} Unsubscribe
+   */
+  onLeaderboardUpdated(callback) {
+    return eventBus.on(EVENT.LEADERBOARD_UPDATED, callback);
+  }
+
+  /**
+   * Subscribe to cache invalidation events.
+   * Useful for debugging or cross-component coordination.
+   * @param {Function} callback - Called with { key?, prefix?, cleared? }
+   * @returns {Function} Unsubscribe
+   */
+  onCacheInvalidated(callback) {
+    return eventBus.on(EVENT.CACHE_INVALIDATED, callback);
+  }
+
+  // ─────────────────────────────────────────────────────────
+  // BUDGET TRACKING (development only)
   // ─────────────────────────────────────────────────────────
 
   _trackRead(count = 1) {

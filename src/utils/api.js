@@ -1,17 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
 //
-// ★ REFACTORED: All data reads now go through dataLayer
-//   (direct Firestore single-document reads with 3-layer cache).
+// ★ REFACTORED: Pure facade over dataLayer + constants
+//   - No duplicated constants or logic
+//   - Uses shared constants from constants.js
+//   - Uses event bus for reactive updates
+//   - Minimal code — just transforms and delegates
 //
-// This file now only contains:
-// - Transform helpers (transformMatch, formatTime, etc.)
-// - Favorites/preferences (localStorage + Firestore sync)
-// - League colors, status constants
-// - Live polling subscriptions (read from dataLayer, not REST API)
-//
-// The backend REST API is NO LONGER needed for reads.
-// It still runs for the scheduler (writing data from external APIs).
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
@@ -23,7 +18,23 @@ import {
 } from 'firebase/firestore';
 
 import { dataLayer, todayStr, yesterdayStr, tomorrowStr } from './dataLayer';
+import { eventBus, EVENT } from './eventBus';
 
+import {
+  SPORT,
+  STATUS,
+  isLiveStatus,
+  isFinishedStatus,
+  isScheduledStatus,
+  getLeagueColor,
+  TTL,
+  TIMEOUT,
+  POLL_INTERVAL,
+  CACHE_KEY,
+  calcPoints,
+  RESULT_TYPE,
+  POINTS,
+} from './constants';
 /* ═══════════════════════════════════════════════════
    AUTH STATE TRACKING
    ═══════════════════════════════════════════════════ */
@@ -33,19 +44,30 @@ const authWaiters = [];
 
 if (auth) {
   auth.onAuthStateChanged((user) => {
+    const wasAuthenticated = isUserAuthenticated;
     isUserAuthenticated = !!user;
     authReady = true;
     authWaiters.forEach((resolve) => resolve());
     authWaiters.length = 0;
+
+    // ★ Emit auth events
+    if (user && !wasAuthenticated) {
+      eventBus.emit(EVENT.USER_SIGNIN, { uid: user.uid });
+    } else if (!user && wasAuthenticated) {
+      eventBus.emit(EVENT.USER_SIGNOUT, {});
+    }
   });
 } else {
   authReady = true;
 }
 
-const waitForAuth = () => {
+export const waitForAuth = () => {
   if (authReady) return Promise.resolve();
   return new Promise((resolve) => authWaiters.push(resolve));
 };
+
+/** Check if user is currently authenticated */
+export const isAuthenticated = () => isUserAuthenticated;
 
 /* ═══════════════════════════════════════════════════
    DEVICE ID & LOCAL STORAGE
@@ -143,53 +165,6 @@ export const initFirebaseSync = async () => {
 };
 
 /* ═══════════════════════════════════════════════════
-   LEAGUE COLORS
-   ═══════════════════════════════════════════════════ */
-const LEAGUE_COLORS = {
-  39: '#3d195b', 140: '#ee8707', 135: '#024494', 78: '#d20515',
-  61: '#091c3e', 2: '#001838', 3: '#ff6b00', 848: '#2d6a4f',
-  1: '#1a3c6e', 4: '#003366', 5: '#004d99', 40: '#5c2d91',
-  44: '#2d4a22', 45: '#1a1a2e', 143: '#c60b1e', 137: '#024494',
-  81: '#d20515', 66: '#091c3e', 94: '#006600', 88: '#e63e21',
-  203: '#c8102e', 50: '#003087', 253: '#0047AB', 262: '#006341',
-  71: '#009C3B', 128: '#75AADB', 12: '#1D428A', 13: '#003399',
-  14: '#cc0000', 34: '#008c45', 32: '#000000', 36: '#002395',
-  49: '#00843d', 115: '#002868', 116: '#DD0000', 114: '#003DA5',
-  119: '#00205B', 132: '#CE1126', 766: '#7B2D8B', 891: '#FF6600',
-  33: '#00843D', 35: '#FEBE10', 37: '#003DA5', 38: '#00205B',
-  41: '#009B3A', 42: '#FFD700', 43: '#006233', 60: '#7B2D8B',
-  62: '#002868',
-};
-
-const getLeagueColor = (id) => LEAGUE_COLORS[id] || '#1e293b';
-
-/* ═══════════════════════════════════════════════════
-   STATUS CONSTANTS
-   ═══════════════════════════════════════════════════ */
-const FB_LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P'];
-const FB_FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO'];
-const FB_SCHEDULED_STATUSES = ['TBD', 'NS', 'SUSP', 'PST', 'CANC', 'INT'];
-
-const BASKETBALL_LIVE_STATUSES = ['1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT'];
-const BASKETBALL_FINISHED_STATUSES = ['FT', 'AOT', 'ABD'];
-const BASKETBALL_SCHEDULED_STATUSES = ['NS', 'POST', 'CANC', 'SUSP'];
-
-/* ═══════════════════════════════════════════════════
-   BASKETBALL LEAGUE PRIORITY
-   ═══════════════════════════════════════════════════ */
-export const BASKETBALL_LEAGUE_PRIORITY = {
-  12: 100, 13: 95, 44: 85, 34: 82, 36: 80, 32: 78, 33: 76,
-  14: 72, 119: 70, 116: 68, 114: 66, 37: 64, 35: 62,
-  132: 58, 49: 56, 115: 54, 766: 52, 891: 50,
-  38: 45, 42: 43, 43: 41, 41: 40, 45: 38, 40: 36,
-  62: 30, 60: 28, 61: 26,
-};
-
-export const getBasketballLeaguePriority = (leagueId) => {
-  return BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
-};
-
-/* ═══════════════════════════════════════════════════
    DATE / TIME HELPERS
    ═══════════════════════════════════════════════════ */
 export const formatTime = (dateStr) => {
@@ -225,9 +200,7 @@ export function getDateRange(days = 7, startOffset = 0) {
   return dates;
 }
 
-export function getTodayStr() { return todayStr(); }
-export function getYesterdayStr() { return yesterdayStr(); }
-export function getTomorrowStr() { return tomorrowStr(); }
+export { todayStr as getTodayStr, yesterdayStr as getYesterdayStr, tomorrowStr as getTomorrowStr };
 
 function isInWindow(date) {
   return [yesterdayStr(), todayStr(), tomorrowStr()].includes(date);
@@ -241,12 +214,12 @@ export function isInRolloverWindow() {
 }
 
 /* ═══════════════════════════════════════════════════
-   TRANSFORM HELPERS
+   TRANSFORM HELPERS — Uses shared status functions
    ═══════════════════════════════════════════════════ */
 export function transformMatch(m) {
   if (!m) return null;
   if (m.fixture) return _transformApiFormat(m);
-  if (m.sport === 'basketball' || m.pointsHome !== undefined || m.q1Home !== undefined) {
+  if (m.sport === SPORT.BASKETBALL || m.pointsHome !== undefined || m.q1Home !== undefined) {
     return _transformBasketballFormat(m);
   }
   return _transformFootballFormat(m);
@@ -257,7 +230,7 @@ function _transformFootballFormat(m) {
   const s = m.status || '';
   return {
     id,
-    sport: 'football',
+    sport: SPORT.FOOTBALL,
     date: m.date || null,
     kickoff: formatTime(m.date),
     timestamp: m.timestamp || null,
@@ -293,9 +266,9 @@ function _transformFootballFormat(m) {
       extraTime: { home: m.scoreExtratimeHome ?? null, away: m.scoreExtratimeAway ?? null },
       penalties: { home: m.scorePenaltyHome ?? null, away: m.scorePenaltyAway ?? null },
     },
-    isLive: FB_LIVE_STATUSES.includes(s),
-    isFinished: FB_FINISHED_STATUSES.includes(s),
-    isScheduled: FB_SCHEDULED_STATUSES.includes(s),
+    isLive: isLiveStatus(s, SPORT.FOOTBALL),
+    isFinished: isFinishedStatus(s, SPORT.FOOTBALL),
+    isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
     minute: m.elapsed ?? null,
     venue: null,
     referee: m.referee || null,
@@ -309,7 +282,7 @@ function _transformBasketballFormat(m) {
   const minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
   return {
     id,
-    sport: 'basketball',
+    sport: SPORT.BASKETBALL,
     date: m.date || null,
     kickoff: formatTime(m.date),
     timestamp: m.timestamp || null,
@@ -350,9 +323,9 @@ function _transformBasketballFormat(m) {
       q4: { home: m.q4Home ?? null, away: m.q4Away ?? null },
       ot: { home: m.otHome ?? null, away: m.otAway ?? null },
     },
-    isLive: BASKETBALL_LIVE_STATUSES.includes(s),
-    isFinished: BASKETBALL_FINISHED_STATUSES.includes(s),
-    isScheduled: BASKETBALL_SCHEDULED_STATUSES.includes(s),
+    isLive: isLiveStatus(s, SPORT.BASKETBALL),
+    isFinished: isFinishedStatus(s, SPORT.BASKETBALL),
+    isScheduled: isScheduledStatus(s, SPORT.BASKETBALL),
     minute,
     venue: null,
     referee: null,
@@ -373,7 +346,7 @@ function _transformApiFormat(m) {
     date: fixture.date,
     kickoff: formatTime(fixture.date),
     timestamp: fixture.timestamp || null,
-    sport: 'football',
+    sport: SPORT.FOOTBALL,
     homeTeam: { id: homeId, name: teams.home?.name || 'TBD', abbr: teams.home?.code || '', color: '#333' },
     awayTeam: { id: awayId, name: teams.away?.name || 'TBD', abbr: teams.away?.code || '', color: '#333' },
     homeId,
@@ -406,9 +379,9 @@ function _transformApiFormat(m) {
       extraTime: { home: score.extratime?.home ?? null, away: score.extratime?.away ?? null },
       penalties: { home: score.penalty?.home ?? null, away: score.penalty?.away ?? null },
     },
-    isLive: FB_LIVE_STATUSES.includes(s),
-    isFinished: FB_FINISHED_STATUSES.includes(s),
-    isScheduled: FB_SCHEDULED_STATUSES.includes(s),
+    isLive: isLiveStatus(s, SPORT.FOOTBALL),
+    isFinished: isFinishedStatus(s, SPORT.FOOTBALL),
+    isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
     minute: fixture.status?.elapsed || null,
     venue: fixture.venue?.name || null,
     referee: fixture.referee || null,
@@ -416,14 +389,14 @@ function _transformApiFormat(m) {
 }
 
 /* ═══════════════════════════════════════════════════
-   ★ FOOTBALL: Fetch fixtures via dataLayer (direct Firestore)
+   ★ FOOTBALL: Fetch fixtures via dataLayer
    ═══════════════════════════════════════════════════ */
 
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (!isInWindow(date)) return _emptyResult(null);
 
   if (forceRefresh) {
-    dataLayer.invalidatePrefix('snap:ft:');
+    dataLayer.invalidatePrefix(`snap:ft:`);
   }
 
   try {
@@ -463,7 +436,6 @@ function _getMatchesForDate(snapshot, date) {
   else if (date === tm) raw.push(...(snapshot.tomorrow || []));
   else raw.push(...(snapshot.today || []));
 
-  // Also include live and finished that match the date
   (snapshot.live || []).forEach((m) => {
     const md = m.date ? m.date.split('T')[0] : '';
     if (md === date) raw.push(m);
@@ -501,38 +473,33 @@ export const fetchLiveScores = async () => {
 };
 
 /* ═══════════════════════════════════════════════════
-   ★ FOOTBALL: Live polling — reads from dataLayer cache
-   ═══════════════════════════════════════════════════
-   ★ No backend REST calls. Reads from dataLayer's
-     in-memory/localStorage cache. Only hits Firestore
-     when cache is expired (1 read per 5-30 min per browser).
+   ★ LIVE POLLING — Uses shared constants + event bus
    ═══════════════════════════════════════════════════ */
 
 export const subscribeToLiveFixtures = (callback) => {
   return _createDataLayerPollingSubscription(
-    'football',
+    SPORT.FOOTBALL,
     callback,
-    { activeMs: 30000, idleMs: 300000 }
+    { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE }
   );
 };
 
 export const subscribeToTodayFixtures = (callback) => {
   return _createDataLayerPollingSubscription(
-    'football',
+    SPORT.FOOTBALL,
     callback,
-    { activeMs: 60000, idleMs: 300000, includeToday: true }
+    { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true }
   );
 };
 
 /**
- * Polling subscription that reads from dataLayer (not REST API).
- * dataLayer's cache means most polls are 0-cost (memory or localStorage hit).
- * Only 1 Firestore read per cache expiry per browser.
+ * Polling subscription that reads from dataLayer.
+ * Emits events via eventBus for other modules to react.
  */
 function _createDataLayerPollingSubscription(sport, callback, options = {}) {
   const {
-    activeMs = 30000,
-    idleMs = 300000,
+    activeMs = POLL_INTERVAL.LIVE_ACTIVE,
+    idleMs = POLL_INTERVAL.LIVE_IDLE,
     includeToday = false,
   } = options;
 
@@ -558,17 +525,11 @@ function _createDataLayerPollingSubscription(sport, callback, options = {}) {
     }
 
     try {
-      // Invalidate memory cache to force a fresh check
-      // (localStorage still serves as fallback if Firestore is slow)
       const dateStr = todayStr();
-      dataLayer.invalidate(`snap:${sport === 'basketball' ? 'bb' : 'ft'}:${dateStr}`);
+      const prefix = sport === SPORT.BASKETBALL ? 'snap:bb:' : 'snap:ft:';
+      dataLayer.invalidate(`${prefix}${dateStr}`);
 
-      let snapshot;
-      if (sport === 'basketball') {
-        snapshot = await dataLayer.fetchBasketballSnapshot(dateStr);
-      } else {
-        snapshot = await dataLayer.fetchFootballSnapshot(dateStr);
-      }
+      const snapshot = await dataLayer.fetchSnapshot(sport, dateStr);
 
       errorCount = 0;
 
@@ -605,7 +566,7 @@ function _createDataLayerPollingSubscription(sport, callback, options = {}) {
         error: err.message,
       });
 
-      const backoffMs = idleMs * Math.min(errorCount, 5);
+      const backoffMs = Math.min(idleMs * errorCount, POLL_INTERVAL.BACKOFF_MAX);
       if (active) timer = setTimeout(poll, backoffMs);
     }
   };
@@ -701,27 +662,41 @@ export const fetchBasketballLiveScores = async () => {
 };
 
 export const subscribeToBasketballLiveFixtures = (callback) => {
-  return _createDataLayerPollingSubscription('basketball', callback, {
-    activeMs: 30000,
-    idleMs: 300000,
+  return _createDataLayerPollingSubscription(SPORT.BASKETBALL, callback, {
+    activeMs: POLL_INTERVAL.LIVE_ACTIVE,
+    idleMs: POLL_INTERVAL.LIVE_IDLE,
   });
 };
 
 export const subscribeToBasketballTodayFixtures = (callback) => {
-  return _createDataLayerPollingSubscription('basketball', callback, {
-    activeMs: 60000,
-    idleMs: 300000,
+  return _createDataLayerPollingSubscription(SPORT.BASKETBALL, callback, {
+    activeMs: POLL_INTERVAL.TODAY_ACTIVE,
+    idleMs: POLL_INTERVAL.LIVE_IDLE,
     includeToday: true,
   });
 };
 
+export function getBasketballLeaguePriority(leagueId) {
+  const map = {
+    'default': 999,
+    'nba': 1,
+    'wnba': 2,
+    'ncaa': 3,
+    'euroleague': 10,
+    'acb': 11,
+    'nba_g_league': 12,
+    'nbl': 15,
+    'nba_cup': 20,
+  };
+  return map[String(leagueId)] ?? map[leagueId] ?? 999;
+}
 /* ═══════════════════════════════════════════════════
-   STANDINGS (via dataLayer single-doc reads)
+   STANDINGS, LEAGUES, TEAM FIXTURES
    ═══════════════════════════════════════════════════ */
 
 export const fetchLeagueStandings = async (leagueId) => {
   try {
-    const allData = await dataLayer.fetchStandings('football');
+    const allData = await dataLayer.fetchStandings(SPORT.FOOTBALL);
     const leagueDoc = allData.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
@@ -733,7 +708,7 @@ export const fetchLeagueStandings = async (leagueId) => {
 
 export const fetchBasketballLeagueStandings = async (leagueId) => {
   try {
-    const allData = await dataLayer.fetchStandings('basketball');
+    const allData = await dataLayer.fetchStandings(SPORT.BASKETBALL);
     const leagueDoc = allData.find(
       (doc) => String(doc.leagueId || doc.id) === String(leagueId)
     );
@@ -743,21 +718,13 @@ export const fetchBasketballLeagueStandings = async (leagueId) => {
   }
 };
 
-/* ═══════════════════════════════════════════════════
-   LEAGUES (via dataLayer single-doc reads)
-   ═══════════════════════════════════════════════════ */
-
-export const fetchLeagues = async (sport = 'football') => {
+export const fetchLeagues = async (sport = SPORT.FOOTBALL) => {
   try {
     return await dataLayer.fetchLeagues(sport);
   } catch {
     return [];
   }
 };
-
-/* ═══════════════════════════════════════════════════
-   TEAM FIXTURES (from cached snapshot)
-   ═══════════════════════════════════════════════════ */
 
 export const fetchTeamFixtures = async (teamId) => {
   try {
@@ -814,7 +781,7 @@ export const fetchBasketballTeamFixtures = async (teamId) => {
 };
 
 /* ═══════════════════════════════════════════════════
-   BACKEND STATUS (now reads from snapshot metadata)
+   BACKEND STATUS
    ═══════════════════════════════════════════════════ */
 
 export const fetchBackendStatus = async () => {
@@ -832,11 +799,11 @@ export const fetchBackendStatus = async () => {
         fetchDone,
         lastDailyFetchDate: updatedAt ? updatedAt.split('T')[0] : null,
       },
-      basketball: null, // Would need basketball snapshot check too
+      basketball: null,
       _raw: snap,
       fetchedAt: new Date().toISOString(),
       isRolloverWindow: isInRolloverWindow(),
-      budget: null, // No longer tracking API budget on frontend
+      budget: null,
     };
   } catch {
     return null;
@@ -891,10 +858,13 @@ export const getQuotaStatus = () => ({
   blocked: false, hardBlocked: false,
 });
 
-export const LIVE_POLL_ACTIVE = 30000;
-export const LIVE_POLL_IDLE = 300000;
-export const LIVE_POLL_BLOCKED = 600000;
-export const getLivePollInterval = () => LIVE_POLL_ACTIVE;
+// ★ Export shared constants for external use
+export { 
+  POLL_INTERVAL as LIVE_POLL_ACTIVE, 
+  POLL_INTERVAL as LIVE_POLL_IDLE, 
+  POLL_INTERVAL as LIVE_POLL_BLOCKED 
+};
+export const getLivePollInterval = () => POLL_INTERVAL.LIVE_ACTIVE;
 
 export const dailySyncToFirestore = async () => ({ done: true, skipped: true, reason: 'SNAPSHOTS' });
 export const syncDateToFirestore = async () => false;
@@ -906,6 +876,23 @@ export const getBackendFailCount = () => 0;
 export const initApp = async () => {
   await waitForAuth();
   initFirebaseSync();
+};
+
+// ★ Re-export event bus for components that need it
+export { eventBus, EVENT };
+
+// ★ Re-export key constants
+export { 
+  SPORT, 
+  STATUS, 
+  isLiveStatus, 
+  isFinishedStatus, 
+  isScheduledStatus,
+  getLeagueColor,
+  CACHE_KEY,
+  calcPoints,
+  RESULT_TYPE,
+  POINTS,
 };
 
 /* ═══════════════════════════════════════════════════
