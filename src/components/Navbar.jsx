@@ -114,6 +114,7 @@ const StatusDot = ({ status, size = 6 }) => {
 const LINKS = [
   { to: '/', label: 'Home', icon: Home, emoji: '🏠' },
   { to: '/fixtures', label: 'Fixtures', icon: null, emoji: '⚽' },
+  { to: '/mastergames', label: 'Master Games', icon: null, emoji: '🎮' },
   { to: '/predictions', label: 'Predictions', icon: Target, emoji: '🎯', badge: 'NEW' },
   { to: '/leaderboard', label: 'Leaderboard', icon: Trophy, emoji: '🏆' },
   { to: '/highlights', label: 'Highlights', icon: null, emoji: '🎬' },

@@ -14,6 +14,7 @@ import {
 
 import { AuthProvider, useAuth } from "./context/AuthContext";
 import { AppDataProvider } from "./context/AppDataContext.jsx";
+import { FootballDataProvider } from "./context/FootballDataContext.jsx";
 import { initApp } from "./utils/api";
 
 import Navbar from "./components/Navbar";
@@ -29,6 +30,7 @@ import { EASE_OUT, NORMAL } from "./styles/common";
 const Home = lazy(() => import("./pages/Home"));
 const Predictions = lazy(() => import("./pages/Predictions"));
 const Fixtures = lazy(() => import("./pages/Fixtures"));
+const MasterGames = lazy(() => import("./pages/MasterGames"));
 const Basketball = lazy(() => import("./pages/Basketball"));
 const Highlights = lazy(() => import("./pages/Highlights"));
 const LiveStream = lazy(() => import("./pages/LiveStream"));
@@ -186,145 +188,156 @@ function AppContent() {
         null
       }
     >
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          minHeight: "100vh",
-          background:
-            "linear-gradient(180deg,#07141f 0%,#06121b 100%)",
-        }}
-      >
-        <Navbar />
-
-        <main
+      <FootballDataProvider>
+        <div
           style={{
-            flex: 1,
-            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            minHeight: "100vh",
+            background:
+              "linear-gradient(180deg,#07141f 0%,#06121b 100%)",
           }}
         >
-          <ScrollToTop />
+          <Navbar />
 
-          <Suspense fallback={<AppLoader />}>
-            <Routes>
+          <main
+            style={{
+              flex: 1,
+              position: "relative",
+            }}
+          >
+            <ScrollToTop />
 
-              {/* Public */}
+            <Suspense fallback={<AppLoader />}>
+              <Routes>
 
-              <Route
-                path="/"
-                element={
-                  <AnimatedRoute>
-                    <Home />
-                  </AnimatedRoute>
-                }
-              />
+                {/* Public */}
 
-              <Route
-                path="/predictions"
-                element={
-                  <AnimatedRoute>
-                    <Predictions />
-                  </AnimatedRoute>
-                }
-              />
-
-              <Route
-                path="/fixtures"
-                element={
-                  <AnimatedRoute>
-                    <Fixtures />
-                  </AnimatedRoute>
-                }
-              />
-
-              <Route
-                path="/basketball"
-                element={
-                  <AnimatedRoute>
-                    <Basketball />
-                  </AnimatedRoute>
-                }
-              />
-
-              <Route
-                path="/highlights"
-                element={
-                  <AnimatedRoute>
-                    <Highlights />
-                  </AnimatedRoute>
-                }
-              />
-
-              <Route
-                path="/livestream"
-                element={
-                  <AnimatedRoute>
-                    <LiveStream />
-                  </AnimatedRoute>
-                }
-              />
-
-              <Route
-                path="/leaderboard"
-                element={
-                  <AnimatedRoute>
-                    <Leaderboard />
-                  </AnimatedRoute>
-                }
-              />
-
-              {/* Guest */}
-
-              <Route
-                path="/login"
-                element={
-                  <GuestRoute>
+                <Route
+                  path="/"
+                  element={
                     <AnimatedRoute>
-                      <Login />
+                      <Home />
                     </AnimatedRoute>
-                  </GuestRoute>
-                }
-              />
+                  }
+                />
 
-              {/* Protected */}
-
-              <Route
-                path="/profile"
-                element={
-                  <ProtectedRoute>
+                <Route
+                  path="/predictions"
+                  element={
                     <AnimatedRoute>
-                      <Profile />
+                      <Predictions />
                     </AnimatedRoute>
-                  </ProtectedRoute>
-                }
-              />
+                  }
+                />
 
-              {/* Admin */}
-
-              <Route
-                path="/zks-admin-8f9x2-control-panel"
-                element={
-                  <AdminRoute>
+                <Route
+                  path="/fixtures"
+                  element={
                     <AnimatedRoute>
-                      <Admin />
+                      <Fixtures />
                     </AnimatedRoute>
-                  </AdminRoute>
-                }
-              />
+                  }
+                />
 
-              {/* 404 */}
+                <Route
+                  path="/mastergames"
+                  element={
+                    <AnimatedRoute>
+                      <MasterGames />
+                    </AnimatedRoute>
+                  }
+                />
 
-              <Route
-                path="*"
-                element={<Navigate to="/" replace />}
-              />
+                <Route
+                  path="/basketball"
+                  element={
+                    <AnimatedRoute>
+                      <Basketball />
+                    </AnimatedRoute>
+                  }
+                />
 
-            </Routes>
-          </Suspense>
-        </main>
+                <Route
+                  path="/highlights"
+                  element={
+                    <AnimatedRoute>
+                      <Highlights />
+                    </AnimatedRoute>
+                  }
+                />
 
-        <Footer />
-      </div>
+                <Route
+                  path="/livestream"
+                  element={
+                    <AnimatedRoute>
+                      <LiveStream />
+                    </AnimatedRoute>
+                  }
+                />
+
+                <Route
+                  path="/leaderboard"
+                  element={
+                    <AnimatedRoute>
+                      <Leaderboard />
+                    </AnimatedRoute>
+                  }
+                />
+
+                {/* Guest */}
+
+                <Route
+                  path="/login"
+                  element={
+                    <GuestRoute>
+                      <AnimatedRoute>
+                        <Login />
+                      </AnimatedRoute>
+                    </GuestRoute>
+                  }
+                />
+
+                {/* Protected */}
+
+                <Route
+                  path="/profile"
+                  element={
+                    <ProtectedRoute>
+                      <AnimatedRoute>
+                        <Profile />
+                      </AnimatedRoute>
+                    </ProtectedRoute>
+                  }
+                />
+
+                {/* Admin */}
+
+                <Route
+                  path="/zks-admin-8f9x2-control-panel"
+                  element={
+                    <AdminRoute>
+                      <AnimatedRoute>
+                        <Admin />
+                      </AnimatedRoute>
+                    </AdminRoute>
+                  }
+                />
+
+                {/* 404 */}
+
+                <Route
+                  path="*"
+                  element={<Navigate to="/" replace />}
+                />
+
+              </Routes>
+            </Suspense>
+          </main>
+
+          <Footer />
+        </div>
+      </FootballDataProvider>
     </AppDataProvider>
   );
 }
