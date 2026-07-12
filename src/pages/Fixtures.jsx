@@ -1467,11 +1467,6 @@ export default function Fixtures() {
                         </button>
                       ))}
                     </div>
-// ═══════════════════════════════════════════════════════════════
-// CONTINUATION — Paste this to replace from the cut-off point
-// Start copying from the Competition Filter comment below
-// ═══════════════════════════════════════════════════════════════
-
                     {/* Competition Filter (not on comps tab) */}
                     {masterTab !== 'competitions' && (
                       <div className="fh-comp-bar">
