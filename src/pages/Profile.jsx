@@ -309,7 +309,7 @@ export default function Profile() {
         title="My Profile"
         description="View your prediction stats, accuracy, badges, and leaderboard rank on ZOKASCORE."
         keywords="profile, prediction stats, accuracy, badges, leaderboard rank"
-        url="https://zokascore.com/profile"
+        url="https://zokascore.xyz/profile"
       />
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 20px 100px' }}>

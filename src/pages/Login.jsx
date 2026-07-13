@@ -277,7 +277,7 @@ export default function Login() {
         title="Sign In"
         description="Sign in to ZOKASCORE to track your football predictions, earn badges, and climb the leaderboard."
         keywords="login, sign in, ZOKASCORE account, football predictions"
-        url="https://zokascore.com/login"
+        url="https://zokascore.xyz/login"
       />
 
       {/* ── Background Decorations ── */}
