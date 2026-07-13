@@ -17,10 +17,9 @@ function hashData(data) {
     return crypto.createHash('md5').update(JSON.stringify(data)).digest('hex');
   } catch { return String(Date.now()); }
 }
-
 /**
  * Write fixtures grouped by date.
- * Each date = ONE document: fd_fixtures/{YYYY-MM-DD} = { matches: [...], updatedAt, _hash }
+ * Only writes to Firestore if the matches for that date actually changed (hash check).
  */
 async function syncFixturesByDate(matches) {
   if (!db || !Array.isArray(matches)) return;
@@ -34,22 +33,38 @@ async function syncFixturesByDate(matches) {
     byDate[dateStr].push(m);
   }
 
+  let datesUpdated = 0;
   const promises = [];
+  
   for (const [dateStr, dateMatches] of Object.entries(byDate)) {
     const h = hashData(dateMatches);
-    promises.push(
-      db.collection(COL.FIXTURES).doc(dateStr).set({
+    
+    const checkAndWrite = async () => {
+      try {
+        // Check if data changed before writing (SAVES QUOTA!)
+        const current = await db.collection(COL.FIXTURES).doc(dateStr).get();
+        if (current.exists && current.data()._hash === h) {
+          return; // No change — skip write!
+        }
+      } catch { /* proceed with write */ }
+
+      await db.collection(COL.FIXTURES).doc(dateStr).set({
         matches: dateMatches,
         _hash: h,
         updatedAt: FieldValue.serverTimestamp(),
-      }, { merge: true })
-    );
+      }, { merge: true });
+      
+      datesUpdated++;
+    };
+    
+    promises.push(checkAndWrite());
   }
 
   await Promise.all(promises);
-  logger.info('[FrontendSync] Fixtures: ' + Object.keys(byDate).length + ' dates, ' + matches.length + ' matches');
+  if (datesUpdated > 0) {
+    logger.info('[FrontendSync] Fixtures updated: ' + datesUpdated + ' dates, ' + matches.length + ' matches checked');
+  }
 }
-
 /**
  * Write live matches as ONE document: fd_live/current
  * CRITICAL: Only writes if data actually changed — saves Firestore writes

@@ -1,6 +1,6 @@
 // src/context/FootballDataContext.jsx
 import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
-import * as ffs from "../services/frontendSync";
+import * as ffs from "../services/footballFirestore";
 import { getLocalDateFromUtc, getLocalDateStr } from "../utils/dates";
 
 const FootballDataContext = createContext(null);
@@ -30,11 +30,7 @@ export function FootballDataProvider({ children }) {
       const res = await ffs.getFixtures(dateStr, { force });
       if (mountedRef.current) {
         setFixtures(prev => {
-          // Replace matches for this date only
-          const without = prev.filter(m => {
-            const mDate = getLocalDateFromUtc(m.utcDate);
-            return mDate !== dateStr;
-          });
+          const without = prev.filter(m => getLocalDateFromUtc(m.utcDate) !== dateStr);
           return [...without, ...(res.data || [])];
         });
         if (res.lastUpdated) setLastUpdated(res.lastUpdated);
@@ -47,10 +43,10 @@ export function FootballDataProvider({ children }) {
     }
   }, []);
 
-  // ─── Initial load: today +/- 3 days ───
+  // ─── Initial load: today +/- 7 days ───
   const fetchInitialFixtures = useCallback(async () => {
     const dates = [];
-    for (let i = -3; i <= 3; i++) dates.push(getLocalDateStr(i));
+    for (let i = -7; i <= 7; i++) dates.push(getLocalDateStr(i));
 
     try {
       const results = await ffs.getFixturesForDates(dates);
@@ -72,7 +68,7 @@ export function FootballDataProvider({ children }) {
     }
   }, []);
 
-  // ─── Refresh today's fixtures (periodic + manual) ───
+  // ─── Refresh today's fixtures ───
   const refreshTodayFixtures = useCallback(async () => {
     const todayStr = getLocalDateStr(0);
     ffs.clearEntry('fx_' + todayStr);
@@ -117,21 +113,17 @@ export function FootballDataProvider({ children }) {
     let cancelled = false;
     async function init() {
       await Promise.all([fetchInitialFixtures(), fetchCompetitions()]);
-      // Live is handled by onSnapshot — no manual fetch needed
       if (!cancelled) setLoading(false);
     }
     init();
     return () => { cancelled = true; };
   }, [fetchInitialFixtures, fetchCompetitions]);
 
-  // ─── Periodic refresh: fixtures every 5 min (today only = 1 read) ───
+  // ─── Periodic refresh: fixtures every 5 min ───
   useEffect(() => {
     const timer = setInterval(refreshTodayFixtures, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [refreshTodayFixtures]);
-
-  // ─── Auto-load when selected date changes ───
-  // Components call loadDateFixtures when they change the date
 
   // ─── Standings (on demand, cached) ───
   const getStandings = useCallback(async (code) => {
@@ -165,7 +157,6 @@ export function FootballDataProvider({ children }) {
     return null;
   }, [teams]);
 
-  // ─── Group fixtures by date ───
   const fixturesByDate = useCallback(() => {
     const groups = {};
     for (const f of fixtures) {
@@ -190,7 +181,7 @@ export function FootballDataProvider({ children }) {
     getTeams,
     fixturesByDate,
     refreshFixtures: refreshTodayFixtures,
-    refreshLive: () => {}, // No-op: onSnapshot handles live automatically
+    refreshLive: () => {},
     loadDateFixtures,
   };
 

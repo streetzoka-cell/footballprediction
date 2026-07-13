@@ -5,15 +5,20 @@ const logger = require('../utils/logger');
 const cache = require('../utils/cache');
 const frontendSync = require('../services/frontendSync');
 
+// ─── RATE LIMIT HELPER ───────────────────────────────────────────────
+// Football-data.org allows 10 requests per minute.
+// We pause 7 seconds between requests to stay safely under the limit.
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
+const API_PAUSE = 7000; // 7 seconds
+
 // ─── API FETCHER ────────────────────────────────────────────────────────
-// Now correctly using env.footballData.baseUrl and env.footballData.apiKey
 const API_BASE = env.footballData.baseUrl;
 
 async function fetchAPI(endpoint) {
   const url = `${API_BASE}${endpoint}`;
   try {
     const res = await fetch(url, {
-      headers: { 'X-Auth-Token': env.footballData.apiKey }, // <-- FIXED: was env.apiKey
+      headers: { 'X-Auth-Token': env.footballData.apiKey },
     });
     if (!res.ok) {
       const text = await res.text();
@@ -36,43 +41,43 @@ function getDateStr(offsetDays) {
 // ─── SEED FUNCTIONS (Run on boot) ───────────────────────────────────────
 
 async function seedFixtures() {
-  logger.info('[SEED] Fetching fixtures for dates -3 to +3...');
+  logger.info('[SEED] Fetching fixtures for dates -7 to +7...');
   const dates = [];
-  for (let i = -3; i <= 3; i++) dates.push(getDateStr(i));
+  for (let i = -7; i <= 7; i++) dates.push(getDateStr(i));
 
   let totalMatches = 0;
+  const allMatches = []; // <-- COLLECT matches here instead of a second API call
 
   for (const dateStr of dates) {
     try {
       const data = await fetchAPI(`/matches?dateFrom=${dateStr}&dateTo=${dateStr}`);
       const matches = data.matches || [];
       totalMatches += matches.length;
+      
+      allMatches.push(...matches); // <-- ADD to our master list
 
-      // 1. Write to existing cache (for Express API routes)
       const cacheDocs = matches.map(m => ({ id: String(m.id), data: m }));
       await cache.replaceCollection('fixtures_date_' + dateStr, cacheDocs);
-
-      // 2. Write to frontend-synced Firestore (fd_fixtures/{date})
       await frontendSync.syncFixturesByDate(matches);
       
     } catch (err) {
       logger.error(`[SEED] Failed fixtures for ${dateStr}: ${err.message}`);
     }
+    await sleep(API_PAUSE);
   }
   
-  // Also populate the general fixtures cache
+  // Write to general cache using the data we ALREADY fetched (no extra API call needed!)
   try {
-    const allData = await fetchAPI(`/matches?dateFrom=${dates[0]}&dateTo=${dates[dates.length - 1]}`);
-    const allMatches = allData.matches || [];
     const cacheDocs = allMatches.map(m => ({ id: String(m.id), data: m }));
     await cache.replaceCollection('fixtures', cacheDocs);
     await cache.setLastUpdated('fixtures', { count: allMatches.length });
   } catch (err) {
-    logger.error(`[SEED] Failed general fixtures cache: ${err.message}`);
+    logger.error(`[SEED] Failed writing general fixtures cache: ${err.message}`);
   }
 
   logger.info(`[SEED] Fixtures done: ${totalMatches} matches across ${dates.length} dates`);
 }
+
 
 async function seedCompetitions() {
   logger.info('[SEED] Fetching competitions...');
@@ -82,12 +87,10 @@ async function seedCompetitions() {
       env.competitions.includes(c.code)
     );
 
-    // 1. Cache
     const cacheDocs = competitions.map(c => ({ id: String(c.id), data: c }));
     await cache.replaceCollection('competitions', cacheDocs);
     await cache.setLastUpdated('competitions', { count: competitions.length });
 
-    // 2. Frontend Sync
     await frontendSync.syncCompetitions(competitions);
 
     logger.info(`[SEED] Competitions done: ${competitions.length}`);
@@ -108,6 +111,8 @@ async function seedStandingsAndTeams() {
       await cache.setDocument('standings', code, { standings });
       await frontendSync.syncStandings(code, standings);
 
+      await sleep(API_PAUSE); // PAUSE between standings and teams fetch
+
       // Teams
       const teamData = await fetchAPI(`/competitions/${code}/teams`);
       const teams = teamData.teams || [];
@@ -120,25 +125,28 @@ async function seedStandingsAndTeams() {
     } catch (err) {
       logger.error(`[SEED] Failed ${code} standings/teams: ${err.message}`);
     }
+    await sleep(API_PAUSE); // PAUSE before the next competition
   }
   await cache.setLastUpdated('standings', {});
   await cache.setLastUpdated('teams', {});
 }
 
 // ─── PERIODIC SYNC FUNCTIONS ────────────────────────────────────────────
-
 async function syncFixtures() {
   logger.info('[SYNC] Fixtures sync started');
-  const todayStr = getDateStr(0);
-  const tomorrowStr = getDateStr(1);
+  const dates = [];
+  for (let i = -7; i <= 7; i++) dates.push(getDateStr(i));
   
   let totalMatches = 0;
+  const allMatches = []; // <-- COLLECT matches here instead of a second API call
   
-  for (const dateStr of [todayStr, tomorrowStr]) {
+  for (const dateStr of dates) {
     try {
       const data = await fetchAPI(`/matches?dateFrom=${dateStr}&dateTo=${dateStr}`);
       const matches = data.matches || [];
       totalMatches += matches.length;
+      
+      allMatches.push(...matches); // <-- ADD to our master list
 
       const cacheDocs = matches.map(m => ({ id: String(m.id), data: m }));
       await cache.replaceCollection('fixtures_date_' + dateStr, cacheDocs);
@@ -147,26 +155,30 @@ async function syncFixtures() {
     } catch (err) {
       logger.error(`[SYNC] Fixtures failed for ${dateStr}: ${err.message}`);
     }
+    await sleep(API_PAUSE);
   }
 
-  // Update general cache
+  // Write to general cache using the data we ALREADY fetched (no extra API call needed!)
   try {
-    const allData = await fetchAPI(`/matches?dateFrom=${todayStr}&dateTo=${tomorrowStr}`);
-    const allMatches = allData.matches || [];
     const cacheDocs = allMatches.map(m => ({ id: String(m.id), data: m }));
     await cache.replaceCollection('fixtures', cacheDocs);
     await cache.setLastUpdated('fixtures', { count: allMatches.length });
-  } catch {}
+  } catch (err) {
+    logger.error(`[SYNC] Failed writing general fixtures cache: ${err.message}`);
+  }
 
-  // Cleanup old dates from Firestore (keep last 3 days)
-  await frontendSync.cleanupOldFixtures(3);
+  // Keep 8 days of history in Firestore (7 past + today)
+  await frontendSync.cleanupOldFixtures(8);
   
   logger.info(`[SYNC] Fixtures sync done: ${totalMatches} matches updated`);
 }
 
+
+
 async function syncLive() {
   try {
-    const data = await fetchAPI('/matches?status=LIVE,IN_PLAY,PAUSED,HALFTIME');
+    // FIX: Removed "HALFTIME" as it is not a valid football-data.org status enum
+    const data = await fetchAPI('/matches?status=LIVE,IN_PLAY,PAUSED');
     const matches = data.matches || [];
 
     const cacheDocs = matches.map(m => ({ id: String(m.id), data: m }));
@@ -191,6 +203,8 @@ async function syncStandingsAndTeams() {
       await cache.setDocument('standings', code, { standings });
       await frontendSync.syncStandings(code, standings);
 
+      await sleep(API_PAUSE);
+
       const teamData = await fetchAPI(`/competitions/${code}/teams`);
       const teams = teamData.teams || [];
       const cacheDocs = teams.map(t => ({ id: String(t.id), data: t }));
@@ -200,6 +214,7 @@ async function syncStandingsAndTeams() {
     } catch (err) {
       logger.error(`[SYNC] ${code} standings/teams failed: ${err.message}`);
     }
+    await sleep(API_PAUSE);
   }
   await cache.setLastUpdated('standings', {});
   await cache.setLastUpdated('teams', {});
@@ -285,7 +300,6 @@ module.exports = {
   initialSeed,
   start,
   stop,
-  // Expose for manual triggers if needed
   syncFixtures,
   syncLive,
   syncStandingsAndTeams,

@@ -1,4 +1,4 @@
-﻿{
+{
   "name": "football-data-backend",
   "version": "1.0.0",
   "description": "Standalone football data service powered by Football-Data.org",
@@ -12,6 +12,7 @@
     "cors": "^2.8.5",
     "dotenv": "^16.4.0",
     "express": "^4.21.0",
+    "firebase": "^12.16.0",
     "firebase-admin": "^12.6.0",
     "node-cron": "^3.0.3"
   }

@@ -660,16 +660,15 @@ export default function MasterGames() {
   const todayStr = getLocalDateStr(0);
   const yesterdayStr = getLocalDateStr(-1);
   const tomorrowStr = getLocalDateStr(1);
-  const otherDates = useMemo(() => {
+    const otherDates = useMemo(() => {
     const arr = [];
     for (let i = -7; i <= 7; i++) {
-      if (i >= -1 && i <= 1) continue;
+      if (i >= -1 && i <= 1) continue; // Skip Yesterday/Today/Tomorrow (they have their own buttons)
       const str = getLocalDateStr(i);
       arr.push({ str, label: formatDateShort(str) });
     }
     return arr;
   }, []);
-
   /* -- Filtered fixtures -- */
   const filteredFixtures = useMemo(() => {
     let list = (fixtures || []).filter(m => {
@@ -685,16 +684,35 @@ export default function MasterGames() {
   }, [fixtures, selectedDate, compFilter, searchQ]);
 
   /* -- Grouped by competition -- */
-  const grouped = useMemo(() => {
+    const grouped = useMemo(() => {
     const map = new Map();
     filteredFixtures.forEach(m => {
       const key = m.competition?.name || 'Other';
       if (!map.has(key)) map.set(key, { comp: m.competition, matches: [] });
       map.get(key).matches.push(m);
     });
-    map.forEach(g => { g.matches.sort((a, b) => { const o = s => s === 'IN_PLAY' || s === 'PAUSED' ? 0 : s === 'SCHEDULED' || s === 'TIMED' ? 1 : 2; return o(a.status) - o(b.status); }); });
+    
+    // Sort matches within each competition: Live first, then Scheduled, then Finished pushed to bottom
+    const statusOrder = (s) => {
+      if (s === 'IN_PLAY' || s === 'PAUSED') return 0;   // Live — top
+      if (s === 'SCHEDULED' || s === 'TIMED') return 1;   // Upcoming — middle
+      if (s === 'FINISHED') return 2;                      // Finished — pushed back
+      if (s === 'POSTPONED' || s === 'CANCELLED' || s === 'SUSPENDED') return 3;
+      return 4;
+    };
+    
+    map.forEach(g => {
+      g.matches.sort((a, b) => {
+        const so = statusOrder(a.status) - statusOrder(b.status);
+        // Within same status, sort by date/time
+        if (so !== 0) return so;
+        return (a.utcDate || '').localeCompare(b.utcDate || '');
+      });
+    });
+    
     return [...map.values()];
   }, [filteredFixtures]);
+
 
   /* -- Competitions for filter -- */
   const compList = useMemo(() => {
