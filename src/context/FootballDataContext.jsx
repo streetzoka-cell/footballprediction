@@ -44,10 +44,10 @@ export function FootballDataProvider({ children }) {
   }, []);
 
   // ─── Initial load: today +/- 7 days ───
-  const fetchInitialFixtures = useCallback(async () => {
+    const fetchInitialFixtures = useCallback(async () => {
     const dates = [];
-    for (let i = -7; i <= 7; i++) dates.push(getLocalDateStr(i));
-
+    for (let i = -14; i <= 14; i++) dates.push(getLocalDateStr(i)); // Changed to -14 / +14
+  
     try {
       const results = await ffs.getFixturesForDates(dates);
       if (mountedRef.current) {

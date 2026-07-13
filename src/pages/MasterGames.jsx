@@ -660,15 +660,16 @@ export default function MasterGames() {
   const todayStr = getLocalDateStr(0);
   const yesterdayStr = getLocalDateStr(-1);
   const tomorrowStr = getLocalDateStr(1);
-    const otherDates = useMemo(() => {
+      const otherDates = useMemo(() => {
     const arr = [];
-    for (let i = -7; i <= 7; i++) {
-      if (i >= -1 && i <= 1) continue; // Skip Yesterday/Today/Tomorrow (they have their own buttons)
+    for (let i = -14; i <= 14; i++) { // Changed from -7 / +7 to -14 / +14
+      if (i >= -1 && i <= 1) continue; 
       const str = getLocalDateStr(i);
       arr.push({ str, label: formatDateShort(str) });
     }
     return arr;
   }, []);
+  
   /* -- Filtered fixtures -- */
   const filteredFixtures = useMemo(() => {
     let list = (fixtures || []).filter(m => {
