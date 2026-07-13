@@ -33,11 +33,11 @@ async function fetchAPI(endpoint) {
 
 // ─── DATE HELPERS ───────────────────────────────────────────────────────
 function getDateStr(offsetDays) {
-  const d = new Date();
+  // TEMPORARY: Hardcoded to a busy football weekend in 2024 to test the pipeline
+  const d = new Date('2024-05-15T12:00:00Z'); 
   d.setDate(d.getDate() + offsetDays);
-  return d.toISOString().split('T')[0]; // "YYYY-MM-DD"
+  return d.toISOString().split('T')[0];
 }
-
 // ─── SEED FUNCTIONS (Run on boot) ───────────────────────────────────────
 
 async function seedFixtures() {
