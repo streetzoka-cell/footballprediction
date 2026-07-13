@@ -830,7 +830,12 @@ export default function Home() {
      ═════════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-primary, #0a0a0b)' }}>
-      <SEO title="ZokaPredict — Football Predictions" description="AI-powered football match predictions. Predict scores, climb the leaderboard, win." />
+      <SEO
+  title="Football Predictions, Fixtures & Live Scores"
+  description="Get football predictions, match analysis, fixtures, live scores, team form insights and football statistics from leagues around the world with ZOKASCORE."
+  keywords="football predictions, football fixtures, live football scores, soccer predictions, match analysis, football statistics, football tips, ZOKASCORE"
+  path="/"
+/>
 
       {offline && (
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, padding: '10px 16px', background: 'rgba(239,68,68,.08)', borderBottom: '1.5px solid rgba(239,68,68,.2)', fontSize: '.82rem', fontWeight: 700, color: '#ef4444' }}>

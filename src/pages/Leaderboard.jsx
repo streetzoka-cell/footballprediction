@@ -349,7 +349,12 @@ export default function Leaderboard() {
      ═══════════════════════════════════════════════════════════ */
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', paddingBottom: 80 }}>
-      <SEO title="Leaderboard — Zoka" description="See top predictors ranked by daily, weekly, monthly, and all-time performance." />
+      <SEO
+  title="Football Prediction Leaderboard"
+  description="View the ZOKASCORE football prediction leaderboard. See top predictors ranked by accuracy, points, daily, weekly, monthly and all-time performance."
+  keywords="football prediction leaderboard, football rankings, top football predictors, prediction accuracy, football tips leaderboard"
+  path="/leaderboard"
+/>
 
       {/* Sticky Header */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,15,26,.92)', backdropFilter: 'blur(16px)', WebkitBackdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)' }}>

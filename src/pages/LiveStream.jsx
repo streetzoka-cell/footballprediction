@@ -263,12 +263,12 @@ export default function LiveStream() {
    return (
     <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)' }}>
 
-      <SEO
-        title="Where to Watch Live Football"
-        description="Find official broadcasters and legal streaming platforms for live football worldwide."
-        keywords="live football stream, watch football online, FIFA+, UEFA.tv, beIN SPORTS, DAZN, ESPN+"
-        url="https://zokascore.com/live-stream"
-      />
+   <SEO
+  title="Live Football Streams & Official Broadcasters"
+  description="Find where to watch live football matches through official broadcasters and legal streaming platforms worldwide with ZOKASCORE."
+  keywords="watch live football, football streams, live soccer, football broadcasters, FIFA+, UEFA.tv, DAZN, ESPN+, beIN SPORTS"
+  path="/live-stream"
+/>
 
       {/* ── HEADER ── */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,10,10,.9)', backdropFilter: 'blur(18px)', borderBottom: '1px solid var(--border)' }}>

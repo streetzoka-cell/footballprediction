@@ -917,7 +917,12 @@ export default function MasterGames() {
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="mg8-page">
-      <SEO title="Master Games — Live Scores, Fixtures & Standings" description="Track live football scores, fixtures, standings and more." />
+     <SEO
+  title="Today's Football Fixtures & Match Schedule"
+  description="Check today's football fixtures, upcoming matches, kick-off times, leagues and match details from around the world with ZOKASCORE."
+  keywords="football fixtures today, soccer fixtures, football match schedule, upcoming football matches, live football scores, football leagues"
+  path="/fixtures"
+/>
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
