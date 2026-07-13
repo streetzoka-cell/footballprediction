@@ -1,31 +1,36 @@
-﻿const express = require('express');
+const express = require("express");
 const router = express.Router();
-const competitionsService = require('../services/competitions');
-const cache = require('../utils/cache');
-const logger = require('../utils/logger');
+const competitionsService = require("../services/competitions");
+const cache = require("../utils/cache");
+const memCache = require("../utils/memoryCache");
+const logger = require("../utils/logger");
 
-router.get('/', async (req, res) => {
+router.get("/", async (req, res) => {
   try {
-    const force = req.query.force === 'true';
-
+    var force = req.query.force === "true";
     if (force) {
-      logger.info('[ROUTE] /api/competitions - force refresh');
-      const data = await competitionsService.fetchAndCache();
-      return res.json({ data: data, cached: false, lastUpdated: new Date().toISOString(), source: 'api' });
+      memCache.del("competitions");
+      logger.info("[ROUTE] /api/competitions - force refresh");
+      var data = await competitionsService.fetchAndCache();
+      memCache.set("competitions", data);
+      return res.json({ data: data, cached: false, lastUpdated: new Date().toISOString(), source: "api" });
     }
-
-    const data = await competitionsService.getCached();
-    const meta = await cache.getLastUpdated('competitions');
-
+    var data = memCache.get("competitions", 3600000);
+    if (!data) {
+      data = await competitionsService.getCached();
+      memCache.set("competitions", data);
+    }
+    var meta = memCache.get("meta:competitions", 60000) || await cache.getLastUpdated("competitions");
+    memCache.set("meta:competitions", meta);
     res.json({
       data: data,
       cached: true,
       lastUpdated: meta ? meta.timestamp : null,
-      source: 'cache',
+      source: "cache",
     });
   } catch (err) {
-    logger.error(`[ROUTE] /api/competitions error: ${err.message}`);
-    res.status(500).json({ error: 'Failed to fetch competitions' });
+    logger.error("[ROUTE] /api/competitions error: " + err.message);
+    res.status(500).json({ error: "Failed to fetch competitions" });
   }
 });
 

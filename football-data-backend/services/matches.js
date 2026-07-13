@@ -1,10 +1,10 @@
-﻿const api = require('../config/api');
-const cache = require('../utils/cache');
-const retry = require('../utils/retry');
-const logger = require('../utils/logger');
+const api = require("../config/api");
+const cache = require("../utils/cache");
+const retry = require("../utils/retry");
+const logger = require("../utils/logger");
 
-const FIXTURES_COL = 'fixtures';
-const LIVE_COL = 'liveMatches';
+const FIXTURES_COL = "fixtures";
+const LIVE_COL = "liveMatches";
 
 function v(x) { return (x !== undefined && x !== null) ? x : null; }
 
@@ -35,9 +35,9 @@ function normaliseMatch(m) {
 
   return {
     id: String(m.id),
-    date: m.utcDate ? m.utcDate.split('T')[0] : null,
+    date: m.utcDate ? m.utcDate.split("T")[0] : null,
     utcDate: v(m.utcDate),
-    status: m.status || 'SCHEDULED',
+    status: m.status || "SCHEDULED",
     matchday: v(m.matchday),
     competition: m.competition ? {
       id: m.competition.id, name: m.competition.name,
@@ -70,44 +70,49 @@ function normaliseMatch(m) {
 
 function getDateStr(offset) {
   var d = new Date(); d.setDate(d.getDate() + offset);
-  return d.toISOString().split('T')[0];
+  return d.toISOString().split("T")[0];
 }
 
 async function fetchTodayFromApi() {
-  logger.debug('[MATCHES] Fetching today ...');
-  var r = await retry(function() { return api.get('/matches'); }, { label: 'matches-today' });
+  logger.debug("[MATCHES] Fetching today ...");
+  var r = await retry(function() { return api.get("/matches"); }, { label: "matches-today" });
   return (r.data.matches || []).map(normaliseMatch);
 }
 
 async function fetchRangeFromApi(dateFrom, dateTo) {
-  logger.info('[MATCHES] Range ' + dateFrom + ' to ' + dateTo + ' ...');
-  var r = await retry(function() { return api.get('/matches', { params: { dateFrom: dateFrom, dateTo: dateTo } }); }, { label: 'range-' + dateFrom });
+  logger.info("[MATCHES] Range " + dateFrom + " to " + dateTo + " ...");
+  var r = await retry(function() { return api.get("/matches", { params: { dateFrom: dateFrom, dateTo: dateTo } }); }, { label: "range-" + dateFrom });
   return (r.data.matches || []).map(normaliseMatch);
 }
 
 async function cacheTodayMatches() {
   var matches = await fetchTodayFromApi();
-  var live = matches.filter(function(m) { return m.status === 'IN_PLAY' || m.status === 'PAUSED'; });
+  var live = matches.filter(function(m) { return m.status === "IN_PLAY" || m.status === "PAUSED"; });
   if (matches.length) await cache.batchSet(FIXTURES_COL, matches.map(function(m) { return { id: m.id, data: m }; }));
   await cache.replaceCollection(LIVE_COL, live.map(function(m) { return { id: m.id, data: m }; }));
-  await cache.setLastUpdated('liveMatches', { count: live.length });
-  logger.info('[MATCHES] Today: ' + matches.length + ' total, ' + live.length + ' live');
+  await cache.setLastUpdated("liveMatches", { count: live.length });
+  logger.info("[MATCHES] Today: " + matches.length + " total, " + live.length + " live");
   return { matches: matches, live: live };
 }
 
 async function cacheDateRange() {
-  var fp = getDateStr(-7), td = getDateStr(0), ff = getDateStr(1), tf = getDateStr(7);
-  logger.info('[MATCHES] 14-day range (two batches) ...');
+  var fp = getDateStr(-8), td = getDateStr(0), ff = getDateStr(1), tf = getDateStr(8);
+  logger.info("[MATCHES] 16-day range (two batches) ...");
   var past = await fetchRangeFromApi(fp, td);
-  logger.info('[MATCHES] Past 7: ' + past.length);
+  logger.info("[MATCHES] Past 8: " + past.length);
   if (past.length) await cache.batchSet(FIXTURES_COL, past.map(function(m) { return { id: m.id, data: m }; }));
   var future = await fetchRangeFromApi(ff, tf);
-  logger.info('[MATCHES] Next 7: ' + future.length);
+  logger.info("[MATCHES] Next 8: " + future.length);
   if (future.length) await cache.batchSet(FIXTURES_COL, future.map(function(m) { return { id: m.id, data: m }; }));
   var total = past.length + future.length;
-  await cache.setLastUpdated('fixturesRange', { count: total });
-  logger.info('[MATCHES] Range: ' + total + ' total');
+  await cache.setLastUpdated("fixturesRange", { count: total });
+  logger.info("[MATCHES] Range: " + total + " total");
   return total;
+}
+
+async function getCachedAll() {
+  var all = await cache.getCollection(FIXTURES_COL);
+  return all.map(function(r) { return r.data; });
 }
 
 async function getCachedByDateRange(dateFrom, dateTo) {
@@ -116,6 +121,17 @@ async function getCachedByDateRange(dateFrom, dateTo) {
 }
 async function getCachedToday() { var t = getDateStr(0); return getCachedByDateRange(t, t); }
 async function getCachedLive() { var r = await cache.getCollection(LIVE_COL); return r.map(function(r) { return r.data; }); }
-async function getCachedFinished() { var a = await cache.getCollection(FIXTURES_COL); return a.map(function(r) { return r.data; }).filter(function(m) { return m.status === 'FINISHED'; }); }
+async function getCachedFinished() { var a = await cache.getCollection(FIXTURES_COL); return a.map(function(r) { return r.data; }).filter(function(m) { return m.status === "FINISHED"; }); }
 
-module.exports = { cacheTodayMatches: cacheTodayMatches, cacheDateRange: cacheDateRange, getCachedByDateRange: getCachedByDateRange, getCachedToday: getCachedToday, getCachedLive: getCachedLive, getCachedFinished: getCachedFinished, fetchTodayFromApi: fetchTodayFromApi, normaliseMatch: normaliseMatch, getDateStr: getDateStr };
+module.exports = {
+  cacheTodayMatches: cacheTodayMatches,
+  cacheDateRange: cacheDateRange,
+  getCachedAll: getCachedAll,
+  getCachedByDateRange: getCachedByDateRange,
+  getCachedToday: getCachedToday,
+  getCachedLive: getCachedLive,
+  getCachedFinished: getCachedFinished,
+  fetchTodayFromApi: fetchTodayFromApi,
+  normaliseMatch: normaliseMatch,
+  getDateStr: getDateStr
+};

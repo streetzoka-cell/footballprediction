@@ -421,7 +421,6 @@ export async function rebuildAllLeaderboards() {
   await rebuildPeriodLeaderboard('weekly');
   await rebuildPeriodLeaderboard('monthly');
 }
-
 /* ═══════════════════════════════════════════════════
    ADMIN: MATCH RESOLVER — Emits events
    ═══════════════════════════════════════════════════ */
@@ -435,6 +434,16 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
 
   try {
     const dateKey = matchDate || todayStr();
+
+    // ★ Convert scores ONCE at the function level, not inside the loop
+    const numActualH = Number(actualH);
+    const numActualA = Number(actualA);
+
+    // ★ Validate scores early
+    if (isNaN(numActualH) || isNaN(numActualA)) {
+      console.error(`[Resolver] Invalid scores for match ${matchId}:`, { actualH, actualA });
+      return 0;
+    }
 
     const statusRef = doc(db, PATHS.MATCH_RESOLUTION_STATUS, dateKey);
     const statusSnap = await getDoc(statusRef);
@@ -456,107 +465,100 @@ async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
       return 0;
     }
 
-   const resolvedList = [];
-const batch = writeBatch(db);
-let hasError = false;
+    const resolvedList = [];
+    // ★ First batch: for predictions and user points
+    const predBatch = writeBatch(db);
+    let hasError = false;
 
-predsSnap.forEach((d) => {
-  if (hasError) return;
-  try {
-    const p = d.data();
-    const uid = p.userId;
-    const actualH = Number(actualH);
-    const actualA = Number(actualA);
-    
-    // ★ Validate actual scores are valid numbers
-    if (isNaN(actualH) || isNaN(actualA)) {
-      console.warn(`[Resolver] Invalid scores for match ${matchId}:`, { actualH, actualA });
-      return;
-    }
+    predsSnap.forEach((d) => {
+      if (hasError) return;
+      try {
+        const p = d.data();
+        const uid = p.userId;
 
-    // ★ Defensive calcPoints call - handle any edge case
-    let points = 0;
-    let resultType = 'pending';
-    
-    try {
-      const r = calcPoints(p.homeScore, p.awayScore, actualH, actualA);
-      points = r.points ?? 0;
-      resultType = r.type ?? 'pending';
-    } catch (err) {
-      console.error('[Resolver] calcPoints error for match', matchId, err);
-      points = 0;
-      resultType = 'miss';
-    }
+        // ★ Use the pre-converted values (no shadowing!)
+        let points = 0;
+        let resultType = 'miss';
 
-    if (points === undefined || resultType === undefined) {
-      console.warn(`[Resolver] Unexpected calcPoints result for match ${matchId}`);
-      points = 0;
-      resultType = 'miss';
-    }
+        try {
+          const r = calcPoints(p.homeScore, p.awayScore, numActualH, numActualA);
+          points = r.points ?? 0;
+          resultType = r.type ?? 'miss';
+        } catch (calcErr) {
+          console.error('[Resolver] calcPoints error for match', matchId, calcErr);
+          points = 0;
+          resultType = 'miss';
+        }
 
-    resolvedList.push({
-      userId: uid,
-      displayName: p.displayName || 'Player',
-      matchId: String(matchId),
-      points,
-      resultType,
-      actualH,
-      actualA,
+        resolvedList.push({
+          userId: uid,
+          displayName: p.displayName || 'Player',
+          matchId: String(matchId),
+          points,
+          resultType,
+          actualH: numActualH,
+          actualA: numActualA,
+        });
+
+        predBatch.set(
+          doc(db, 'prediction_results', `${uid}_${matchId}`),
+          {
+            userId: uid,
+            matchId: String(matchId),
+            predId: p.predId,
+            matchDate: p.matchDate || dateKey,
+            homeTeam: p.homeTeam || 'Home',
+            awayTeam: p.awayTeam || 'Away',
+            homeLogo: p.homeLogo || null,
+            awayLogo: p.awayLogo || null,
+            league: p.league || '',
+            kickoff: p.kickoff || null,
+            predictedHome: p.homeScore,
+            predictedAway: p.awayScore,
+            actualHome: numActualH,
+            actualAway: numActualA,
+            points,
+            resultType,
+            resolvedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+
+        predBatch.set(
+          doc(db, 'user_points_total', uid),
+          {
+            totalPoints: increment(points),
+            exactCount: increment(resultType === 'exact' ? 1 : 0),
+            resultCount: increment(resultType === 'result' ? 1 : 0),
+            missCount: increment(resultType === 'miss' ? 1 : 0),
+            predictionsCount: increment(1),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error('[Resolver] Error processing prediction for match', matchId, err);
+        hasError = true;
+      }
     });
 
-    batch.set(
-      doc(db, 'prediction_results', `${uid}_${matchId}`),
-      {
-        userId: uid,
-        matchId: String(matchId),
-        predId: p.predId,
-        matchDate: p.matchDate || matchDate || todayStr(),
-        homeTeam: p.homeTeam || 'Home',
-        awayTeam: p.awayTeam || 'Away',
-        homeLogo: p.homeLogo || null,
-        awayLogo: p.awayLogo || null,
-        league: p.league || '',
-        kickoff: p.kickoff || null,
-        predictedHome: p.homeScore,
-        predictedAway: p.awayScore,
-        actualHome: actualH,
-        actualAway: actualA,
-        points,  // ★ Always a valid number now
-        resultType,  // ★ Always a valid string now
-        resolvedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    if (hasError) {
+      console.error('[Resolver] Batch commit aborted due to processing errors');
+      return 0;
+    }
 
-    batch.set(
-      doc(db, 'user_points_total', uid),
-      {
-        totalPoints: increment(points),  // ★ Use local variable, not r.points
-        exactCount: increment(resultType === 'exact' ? 1 : 0),
-        resultCount: increment(resultType === 'result' ? 1 : 0),
-        missCount: increment(resultType === 'miss' ? 1 : 0),
-        predictionsCount: increment(1),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
-  } catch (err) {
-    console.error('[Resolver] Error processing prediction for match', matchId, err);
-    hasError = true;
-  }
-});
+    // ★ Commit prediction batch
+    try {
+      await predBatch.commit();
+    } catch (err) {
+      console.error('[Resolver] Prediction batch commit failed:', err);
+      return 0;
+    }
 
-if (hasError) {
-  console.error('[Resolver] Batch commit aborted due to processing errors');
-} else {
-  try {
-    await batch.commit();
-  } catch (err) {
-    console.error('[Resolver] Batch commit failed:', err);
-  }
-}
+    // ★ Second batch: for zoka picks and status (separate batch!)
+    const metaBatch = writeBatch(db);
 
-const zokaRef = doc(db, PATHS.ZOKA_PICKS, dateKey);
+    const zokaRef = doc(db, PATHS.ZOKA_PICKS, dateKey);
     const zokaSnap = await getDoc(zokaRef);
     if (zokaSnap.exists()) {
       const zokaData = zokaSnap.data();
@@ -565,23 +567,31 @@ const zokaRef = doc(db, PATHS.ZOKA_PICKS, dateKey);
       const updated = matches.map((m) => {
         if (String(m.matchId) === String(matchId) && m.status !== 'finished') {
           changed = true;
-          return { ...m, homeScore: actualH, awayScore: actualA, status: 'finished' };
+          return { ...m, homeScore: numActualH, awayScore: numActualA, status: 'finished' };
         }
         return m;
       });
       if (changed) {
-        batch.set(zokaRef, { ...zokaData, matches: updated, updatedAt: serverTimestamp() }, { merge: true });
+        metaBatch.set(zokaRef, { ...zokaData, matches: updated, updatedAt: serverTimestamp() }, { merge: true });
       }
     }
 
-    batch.set(statusRef, {
+    metaBatch.set(statusRef, {
       resolvedMatches: [String(matchId)],
       lastResolvedAt: serverTimestamp(),
       date: dateKey,
     }, { merge: true });
 
-    await batch.commit();
+    // ★ Only commit meta batch if it has operations
+    if (metaBatch._mutations && metaBatch._mutations.length > 0) {
+      try {
+        await metaBatch.commit();
+      } catch (err) {
+        console.error('[Resolver] Meta batch commit failed:', err);
+      }
+    }
 
+    // Update leaderboards incrementally
     await _updateDailySummaryIncremental(dateKey, resolvedList);
     await _updateGoatIncremental(resolvedList);
 
@@ -602,8 +612,8 @@ const zokaRef = doc(db, PATHS.ZOKA_PICKS, dateKey);
     eventBus.emit(EVENT.MATCH_RESOLVED, {
       matchId: String(matchId),
       dateStr: dateKey,
-      actualH,
-      actualA,
+      actualH: numActualH,
+      actualA: numActualA,
       results: resolvedList,
       affectedUsers: resolvedList.map(r => r.userId),
     });

@@ -8,6 +8,7 @@ import {
   RefreshCw, Calendar, Heart, Filter
 } from 'lucide-react';
 import { useFootballData } from '../context/FootballDataContext';
+import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, relativeDateLabel } from '../utils/dates';
 import SEO from '../components/SEO';
 
 /* -----------------------------------------------------------------------
@@ -361,21 +362,7 @@ function Confetti({ active }) {
 /* -----------------------------------------------------------------------
    HELPERS
    ----------------------------------------------------------------------- */
-function getDateStr(off) { const d = new Date(); d.setDate(d.getDate() + off); return d.toISOString().split('T')[0]; }
-function formatDateShort(d) { return new Date(d + 'T12:00:00').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
-function zoneCls(pos, total) { if (total <= 0) return ''; const r = pos / total; if (r <= .25) return 'z-ucl'; if (r <= .4) return 'z-uel'; if (r <= .5) return 'z-uecl'; if (r >= .85) return 'z-rel'; return ''; }
-const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-const matchQ = (m, terms) => [m.homeTeam?.name, m.awayTeam?.name, m.competition?.name].map(norm).some(x => terms.every(t => x.includes(t)));
 
-/* -----------------------------------------------------------------------
-   FAVOURITES PERSISTENCE
-   ----------------------------------------------------------------------- */
-function useFavourites() {
-  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_favs') || '[]')); } catch { return new Set(); } });
-  const toggle = useCallback(id => { setFavs(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); try { localStorage.setItem('mg8_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
-  const isFav = useCallback(id => favs.has(id), [favs]);
-  return { favs, toggle, isFav };
-}
 
 /* -----------------------------------------------------------------------
    NOTIFICATIONS PERSISTENCE
@@ -612,7 +599,7 @@ export default function MasterGames() {
   /* -- State -- */
   const [tab, setTab] = useState('fixtures');
   const [compFilter, setCompFilter] = useState('ALL');
-  const [selectedDate, setSelectedDate] = useState(getDateStr(0));
+  const [selectedDate, setSelectedDate] = useState(getLocalDateStr(0));
   const [expanded, setExpanded] = useState(null);
   const [searchQ, setSearchQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -648,14 +635,15 @@ export default function MasterGames() {
   }, []);
 
   /* -- Dates -- */
-  const todayStr = getDateStr(0);
-  const yesterdayStr = getDateStr(-1);
-  const tomorrowStr = getDateStr(1);
+  const todayStr = getLocalDateStr(0);
+  const yesterdayStr = getLocalDateStr(-1);
+  const tomorrowStr = getLocalDateStr(1);
   const otherDates = useMemo(() => {
     const arr = [];
     for (let i = -7; i <= 7; i++) {
       if (i >= -1 && i <= 1) continue;
-      arr.push({ str: getDateStr(i), label: formatDateShort(getDateStr(i)) });
+      const str = getLocalDateStr(i);
+      arr.push({ str: str, label: formatDateShort(str) });
     }
     return arr;
   }, []);
@@ -663,8 +651,8 @@ export default function MasterGames() {
   /* -- Filtered fixtures -- */
   const filteredFixtures = useMemo(() => {
     let list = (fixtures || []).filter(m => {
-      const mDate = m.utcDate ? m.utcDate.split('T')[0] : '';
-      return mDate === selectedDate;
+      const mLocalDate = getLocalDateFromUtc(m.utcDate);
+      return mLocalDate === selectedDate;
     });
     if (compFilter !== 'ALL') list = list.filter(m => String(m.competition?.id) === compFilter);
     if (searchQ.trim()) {

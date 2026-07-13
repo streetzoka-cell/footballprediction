@@ -1,39 +1,44 @@
-﻿const express = require('express');
+const express = require("express");
 const router = express.Router();
-const standingsService = require('../services/standings');
-const cache = require('../utils/cache');
-const logger = require('../utils/logger');
+const standingsService = require("../services/standings");
+const cache = require("../utils/cache");
+const memCache = require("../utils/memoryCache");
+const logger = require("../utils/logger");
 
-router.get('/:competition', async (req, res) => {
+router.get("/:competition", async (req, res) => {
   try {
-    const competition = req.params.competition;
-    const force = req.query.force === 'true';
-
+    var competition = req.params.competition;
+    var force = req.query.force === "true";
+    var cacheKey = "standings:" + competition;
     if (force) {
-      logger.info(`[ROUTE] /api/standings/${competition} - force refresh`);
-      const data = await standingsService.fetchAndCacheAll();
-      const result = data[competition];
-      if (!result) return res.status(404).json({ error: `No standings found for ${competition}` });
-      return res.json({ data: result, cached: false, lastUpdated: new Date().toISOString(), source: 'api' });
+      memCache.del(cacheKey);
+      logger.info("[ROUTE] /api/standings/" + competition + " - force refresh");
+      var all = await standingsService.fetchAndCacheAll();
+      var result = all[competition];
+      if (!result) return res.status(404).json({ error: "No standings found for " + competition });
+      memCache.set(cacheKey, result);
+      return res.json({ data: result, cached: false, lastUpdated: new Date().toISOString(), source: "api" });
     }
-
-    const data = await standingsService.getCached(competition);
-    const meta = await cache.getLastUpdated('standings');
-
+    var data = memCache.get(cacheKey, 600000);
     if (!data) {
-      return res.status(404).json({ error: `No cached standings for "${competition}". It may not be a supported competition.` });
+      data = await standingsService.getCached(competition);
+      if (data) memCache.set(cacheKey, data);
     }
-
+    if (!data) {
+      return res.status(404).json({ error: "No cached standings for " + competition + "." });
+    }
+    var meta = memCache.get("meta:standings", 60000) || await cache.getLastUpdated("standings");
+    memCache.set("meta:standings", meta);
     res.json({
       data: data.standings,
       competitionCode: data.competitionCode,
       cached: true,
       lastUpdated: data.fetchedAt || (meta ? meta.timestamp : null),
-      source: 'cache',
+      source: "cache",
     });
   } catch (err) {
-    logger.error(`[ROUTE] /api/standings/${req.params.competition} error: ${err.message}`);
-    res.status(500).json({ error: 'Failed to fetch standings' });
+    logger.error("[ROUTE] /api/standings/" + req.params.competition + " error: " + err.message);
+    res.status(500).json({ error: "Failed to fetch standings" });
   }
 });
 
