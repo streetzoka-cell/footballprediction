@@ -1,4 +1,5 @@
-﻿const admin = require('firebase-admin');
+﻿// backend/config/firebase.js
+const admin = require('firebase-admin');
 const env = require('./env');
 const logger = require('../utils/logger');
 
@@ -12,13 +13,21 @@ try {
   process.exit(1);
 }
 
-admin.initializeApp({
-  credential: admin.credential.cert(serviceAccount),
-});
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
 
-const db = admin.firestore();
-db.settings({ ignoreUndefinedProperties: true });
+  const db = admin.firestore();
+  db.settings({ ignoreUndefinedProperties: true });
 
-logger.info(`[FIREBASE] Initialised - project: ${serviceAccount.project_id}`);
+  const FieldValue = admin.firestore.FieldValue;
 
-module.exports = { admin, db };
+  logger.info(`[FIREBASE] Initialised - project: ${serviceAccount.project_id}`);
+
+  module.exports = { admin, db, FieldValue };
+
+} catch (err) {
+  logger.error('[FIREBASE] Initialization failed: ' + err.message);
+  process.exit(1);
+}

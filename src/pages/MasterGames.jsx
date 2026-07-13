@@ -1,5 +1,6 @@
 ﻿// FILE: src/pages/MasterGames.jsx
-// v8 � Clean, professional, mobile-first. Favourites, notifications, smart date nav.
+// v8 — Clean, professional, mobile-first. Favourites, notifications, smart date nav.
+// INTEGRATED: Firestore direct reads + lazy date loading
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
@@ -12,7 +13,7 @@ import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, relativeDateLabe
 import SEO from '../components/SEO';
 
 /* -----------------------------------------------------------------------
-   STYLE INJECTION � Master v8 Clean
+   STYLE INJECTION — Master v8 Clean
    ----------------------------------------------------------------------- */
 const injectStyles = () => {
   if (document.getElementById('mg8-css')) return;
@@ -284,7 +285,7 @@ const CMT = {
   card:["Yellow card shown!","Into the book!","Walking on thin ice now!"],
   redCard:["RED CARD! Early shower!","Straight red! Game changer!"],
   ft:["Full Time! What a match!","Final whistle!"],
-  ht:["Half Time! Regrouping...","HT � Manager's talk incoming!"],
+  ht:["Half Time! Regrouping...","HT — Manager's talk incoming!"],
   kickoff:["Kick Off! We're underway!","And we're off! Game on!"],
 };
 const pick = (a) => a[Math.floor(Math.random()*a.length)];
@@ -320,12 +321,12 @@ function ToastContainer({ toasts, onDismiss }) {
       {toasts.map(t => {
         const isGoal = t.type === 'goal', isCard = t.type === 'card';
         let bg, icon;
-        if (isGoal) { bg = 'linear-gradient(135deg,rgba(239,68,68,.92),rgba(185,28,28,.9))'; icon = '?'; }
-        else if (isCard) { bg = t.cardType === 'RED_CARD' ? 'linear-gradient(135deg,rgba(220,38,38,.92),rgba(153,27,27,.9))' : 'linear-gradient(135deg,rgba(202,138,4,.92),rgba(146,100,4,.9))'; icon = t.cardType === 'RED_CARD' ? '??' : '??'; }
+        if (isGoal) { bg = 'linear-gradient(135deg,rgba(239,68,68,.92),rgba(185,28,28,.9))'; icon = '⚽'; }
+        else if (isCard) { bg = t.cardType === 'RED_CARD' ? 'linear-gradient(135deg,rgba(220,38,38,.92),rgba(153,27,27,.9))' : 'linear-gradient(135deg,rgba(202,138,4,.92),rgba(146,100,4,.9))'; icon = t.cardType === 'RED_CARD' ? '🟥' : '🟨'; }
         else {
           const m = { ft: ['rgba(16,185,129,.92)','rgba(5,150,105,.9)'], ht: ['rgba(249,115,22,.92)','rgba(217,90,12,.9)'], live: ['rgba(239,68,68,.92)','rgba(220,38,38,.9)'] };
           const c = m[t.st] || m.live; bg = `linear-gradient(135deg,${c[0]},${c[1]})`;
-          icon = t.st === 'ft' ? '??' : t.st === 'ht' ? '??' : '?';
+          icon = t.st === 'ft' ? '🏁' : t.st === 'ht' ? '⏸' : '⚡';
         }
         return (
           <div key={t.id} className="mg8-toast" style={{ background: bg }} onClick={() => onDismiss(t.id)}>
@@ -362,10 +363,21 @@ function Confetti({ active }) {
 /* -----------------------------------------------------------------------
    HELPERS
    ----------------------------------------------------------------------- */
+function matchQ(m, terms) {
+  const str = ((m.homeTeam?.shortName || m.homeTeam?.name || '') + ' ' + (m.awayTeam?.shortName || m.awayTeam?.name || '') + ' ' + (m.competition?.name || '')).toLowerCase();
+  return terms.every(t => str.includes(t));
+}
 
+function zoneCls(pos, total) {
+  if (pos <= 4) return 'z-ucl';
+  if (pos <= 6) return 'z-uel';
+  if (pos === 7) return 'z-uecl';
+  if (pos > total - 3) return 'z-rel';
+  return '';
+}
 
 /* -----------------------------------------------------------------------
-   NOTIFICATIONS PERSISTENCE
+   NOTIFICATIONS & FAVOURITES PERSISTENCE
    ----------------------------------------------------------------------- */
 function useNotifications() {
   const [notifs, setNotifs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_notifs') || '[]')); } catch { return new Set(); } });
@@ -376,38 +388,13 @@ function useNotifications() {
   return { notifs, toggle, isOn, globalEnabled, toggleGlobal };
 }
 
-/* -----------------------------------------------------------------------
-   FAVOURITES PERSISTENCE
-   ----------------------------------------------------------------------- */
 function useFavourites() {
-  const [favs, setFavs] = useState(() => {
-    try {
-      return new Set(JSON.parse(localStorage.getItem('mg8_favs') || '[]'));
-    } catch {
-      return new Set();
-    }
-  });
-
-  const toggle = useCallback(id => {
-    setFavs(prev => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      try {
-        localStorage.setItem('mg8_favs', JSON.stringify([...next]));
-      } catch {}
-      return next;
-    });
-  }, []);
-
+  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_favs') || '[]')); } catch { return new Set(); } });
+  const toggle = useCallback(id => { setFavs(prev => { const next = new Set(prev); if (next.has(id)) next.delete(id); else next.add(id); try { localStorage.setItem('mg8_favs', JSON.stringify([...next])); } catch {} return next; }); }, []);
   const isFav = useCallback(id => favs.has(id), [favs]);
-
   return { favs, toggle, isFav };
 }
 
-/* -----------------------------------------------------------------------
-   NOTIFICATION PERMISSION + PUSH
-   ----------------------------------------------------------------------- */
 async function requestNotifPermission() {
   if (!('Notification' in window)) return false;
   if (Notification.permission === 'granted') return true;
@@ -418,9 +405,7 @@ async function requestNotifPermission() {
 
 function sendBrowserNotif(title, body, icon) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try {
-    new Notification(title, { body, icon: icon || '', badge: icon || '', vibrate: [80, 40, 80], tag: 'mg8-' + Date.now() });
-  } catch {}
+  try { new Notification(title, { body, icon: icon || '', badge: icon || '', vibrate: [80, 40, 80], tag: 'mg8-' + Date.now() }); } catch {}
 }
 
 /* -----------------------------------------------------------------------
@@ -439,47 +424,12 @@ function ScoreBreakdown({ match }) {
   if (!hasData) return <div className="mg8-no-data">Details appear once the match begins</div>;
   return (
     <div style={{ padding: '6px 0 2px' }}>
-      {periods.some(p => p.h != null || p.a != null) && <>
-        <div className="mg8-exp-section">Score Breakdown</div>
-        {periods.filter(p => p.h != null || p.a != null).map(p => (
-          <div key={p.l} className="mg8-exp-row"><span className="mg8-exp-label">{p.l}</span><span className="mg8-exp-val">{p.h ?? '-'} � {p.a ?? '-'}</span></div>
-        ))}
-      </>}
-      {goals.length > 0 && <>
-        <div className="mg8-exp-section">Goals ({goals.length})</div>
-        {goals.map((g, i) => (
-          <div key={i} className="mg8-goal-row">
-            <span className="mg8-goal-min">{g.minute != null ? g.minute + "'" : ''}</span>
-            <span className="mg8-goal-icon">?</span>
-            <span className="mg8-goal-scorer">{g.scorer?.name || 'Unknown'}</span>
-            {g.assist?.name && <span className="mg8-goal-assist">(ast. {g.assist.name})</span>}
-          </div>
-        ))}
-      </>}
-      {cards.length > 0 && <>
-        <div className="mg8-exp-section">Cards ({cards.length})</div>
-        {cards.map((c, i) => (
-          <div key={i} className="mg8-card-row">
-            <span>{c.type === 'YELLOW_CARD' ? '??' : c.type === 'RED_CARD' ? '??' : '?'}</span>
-            <span className="mg8-card-player">{c.player?.name || 'Unknown'}</span>
-            <span className="mg8-card-min">{c.minute != null ? c.minute + "'" : ''}</span>
-          </div>
-        ))}
-      </>}
-      {corners && (corners.home != null || corners.away != null) && <>
-        <div className="mg8-exp-section">Corners</div>
-        <div className="mg8-corner-row">
-          <div className="mg8-corner-side">{match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-corner-num">{corners.home ?? 0}</span></div>
-          <span style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>vs</span>
-          <div className="mg8-corner-side"><span className="mg8-corner-num">{corners.away ?? 0}</span>{match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}</div>
-        </div>
-      </>}
-      {refs.length > 0 && <>
-        <div className="mg8-exp-section">Officials</div>
-        {refs.map((r, i) => (
-          <div key={i} className="mg8-ref-row"><span className="mg8-ref-role">{r.role || 'Referee'}</span><span className="mg8-ref-name">{r.name || '�'}</span>{r.nationality && <span className="mg8-ref-nat">{r.nationality}</span>}</div>
-        ))}
-      </>}
+      {periods.some(p => p.h != null || p.a != null) && <><div className="mg8-exp-section">Score Breakdown</div>
+      {periods.filter(p => p.h != null || p.a != null).map(p => (<div key={p.l} className="mg8-exp-row"><span className="mg8-exp-label">{p.l}</span><span className="mg8-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>))}</>}
+      {goals.length > 0 && <><div className="mg8-exp-section">Goals ({goals.length})</div>{goals.map((g, i) => (<div key={i} className="mg8-goal-row"><span className="mg8-goal-min">{g.minute != null ? g.minute + "'" : ''}</span><span className="mg8-goal-icon">⚽</span><span className="mg8-goal-scorer">{g.scorer?.name || 'Unknown'}</span>{g.assist?.name && <span className="mg8-goal-assist">(ast. {g.assist.name})</span>}</div>))}</>}
+      {cards.length > 0 && <><div className="mg8-exp-section">Cards ({cards.length})</div>{cards.map((c, i) => (<div key={i} className="mg8-card-row"><span>{c.type === 'YELLOW_CARD' ? '🟨' : c.type === 'RED_CARD' ? '🟥' : '⚠️'}</span><span className="mg8-card-player">{c.player?.name || 'Unknown'}</span><span className="mg8-card-min">{c.minute != null ? c.minute + "'" : ''}</span></div>))}</>}
+      {corners && (corners.home != null || corners.away != null) && <><div className="mg8-exp-section">Corners</div><div className="mg8-corner-row"><div className="mg8-corner-side">{match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-corner-num">{corners.home ?? 0}</span></div><span style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>vs</span><div className="mg8-corner-side"><span className="mg8-corner-num">{corners.away ?? 0}</span>{match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}</div></div></>}
+      {refs.length > 0 && <><div className="mg8-exp-section">Officials</div>{refs.map((r, i) => (<div key={i} className="mg8-ref-row"><span className="mg8-ref-role">{r.role || 'Referee'}</span><span className="mg8-ref-name">{r.name || '–'}</span>{r.nationality && <span className="mg8-ref-nat">{r.nationality}</span>}</div>))}</>}
     </div>
   );
 }
@@ -520,50 +470,19 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
             {!isLive && !isFt && <span className="mg8-status time-s">{time}</span>}
           </div>
           <div className="mg8-card-actions" onClick={e => e.stopPropagation()}>
-            <button className={`mg8-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
-              <Star size={14} fill={isFav ? '#f59e0b' : 'none'} />
-            </button>
-            <button className={`mg8-icon-btn notif ${isNotif ? 'active' : ''}`} onClick={() => onNotif(m.id)} title="Notifications" aria-label="Toggle notifications">
-              {isNotif ? <Bell size={14} /> : <BellOff size={14} />}
-            </button>
+            <button className={`mg8-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite"><Star size={14} fill={isFav ? '#f59e0b' : 'none'} /></button>
+            <button className={`mg8-icon-btn notif ${isNotif ? 'active' : ''}`} onClick={() => onNotif(m.id)} title="Notifications" aria-label="Toggle notifications">{isNotif ? <Bell size={14} /> : <BellOff size={14} />}</button>
           </div>
         </div>
         <div className="mg8-teams">
-          <div className="mg8-team-col home">
-            <div className="mg8-team-row">
-              {m.homeTeam?.crest && <img className="mg8-crest" src={m.homeTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg8-team-name">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
-            </div>
-          </div>
+          <div className="mg8-team-col home"><div className="mg8-team-row">{m.homeTeam?.crest && <img className="mg8-crest" src={m.homeTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-team-name">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span></div></div>
           <div className="mg8-score-box">
-            {(isLive || isFt) ? (
-              <div className="mg8-scores">
-                <span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${sh?.home}-${popSide}`}>{sh?.home ?? 0}</span>
-                <span className="mg8-sep">�</span>
-                <span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${sh?.away}-${popSide}`}>{sh?.away ?? 0}</span>
-              </div>
-            ) : <span className="mg8-vs">VS</span>}
+            {(isLive || isFt) ? (<div className="mg8-scores"><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${sh?.home}-${popSide}`}>{sh?.home ?? 0}</span><span className="mg8-sep">–</span><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${sh?.away}-${popSide}`}>{sh?.away ?? 0}</span></div>) : <span className="mg8-vs">VS</span>}
           </div>
-          <div className="mg8-team-col away">
-            <div className="mg8-team-row">
-              {m.awayTeam?.crest && <img className="mg8-crest" src={m.awayTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg8-team-name">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
-            </div>
-          </div>
+          <div className="mg8-team-col away"><div className="mg8-team-row">{m.awayTeam?.crest && <img className="mg8-crest" src={m.awayTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-team-name">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span></div></div>
         </div>
-        <div className="mg8-comp-row">
-          {m.competition?.emblem && <img src={m.competition.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{m.competition?.name || ''}</span>
-        </div>
-        {sa && (
-          <div className="mg8-overlay">
-            <div className="mg8-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>
-              {sa.type === 'ht' && <><Pause size={15} /> HALF TIME</>}
-              {sa.type === 'ft' && <><Flag size={15} /> FULL TIME</>}
-              {sa.type === 'live' && <><Zap size={15} /> KICK OFF</>}
-            </div>
-          </div>
-        )}
+        <div className="mg8-comp-row">{m.competition?.emblem && <img src={m.competition.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}<span>{m.competition?.name || ''}</span></div>
+        {sa && (<div className="mg8-overlay"><div className="mg8-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>{sa.type === 'ht' && <><Pause size={15} /> HALF TIME</>}{sa.type === 'ft' && <><Flag size={15} /> FULL TIME</>}{sa.type === 'live' && <><Zap size={15} /> KICK OFF</>}</div></div>)}
       </div>
       {isExp && <div className="mg8-expanded"><ScoreBreakdown match={m} /></div>}
     </div>
@@ -586,7 +505,7 @@ function StandingsTable({ standings }) {
             <div className="mg8-tbl-wrap">
               <table className="mg8-tbl">
                 <thead><tr><th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="c">GD</th><th className="pts">Pts</th></tr></thead>
-                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '�'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
+                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '–'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
               </table>
             </div>
           </div>
@@ -603,13 +522,7 @@ function TeamsGrid({ teams }) {
   if (!teams?.length) return null;
   return (
     <div className="mg8-teams-grid">
-      {teams.map(t => (
-        <div key={t.id} className="mg8-team-card">
-          {t.crest && <img src={t.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-          <div className="name">{t.shortName || t.name}</div>
-          {t.tla && <div className="tla">{t.tla}</div>}
-        </div>
-      ))}
+      {teams.map(t => (<div key={t.id} className="mg8-team-card">{t.crest && <img src={t.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<div className="name">{t.shortName || t.name}</div>{t.tla && <div className="tla">{t.tla}</div>}</div>))}
     </div>
   );
 }
@@ -620,7 +533,7 @@ function TeamsGrid({ teams }) {
 export default function MasterGames() {
   injectStyles();
 
-  const { fixtures, liveMatches, competitions, loading, lastUpdated, getStandings, getTeams } = useFootballData();
+  const { fixtures, liveMatches, competitions, loading, lastUpdated, getStandings, getTeams, refreshFixtures, loadDateFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   const { favs, toggle: toggleFav, isFav } = useFavourites();
   const { isOn: isNotif, toggle: toggleNotif, globalEnabled, toggleGlobal } = useNotifications();
@@ -640,6 +553,7 @@ export default function MasterGames() {
   const [confettiKey, setConfettiKey] = useState(0);
   const [moreDatesOpen, setMoreDatesOpen] = useState(false);
   const [notifBannerDismissed, setNotifBannerDismissed] = useState(() => { try { return localStorage.getItem('mg8_notif_banner_dismissed') === 'true'; } catch { return false; } });
+  const [selectedCompCode, setSelectedCompCode] = useState(null);
 
   const [scorePops, setScorePops] = useState(new Map());
   const [flashGoals, setFlashGoals] = useState(new Set());
@@ -648,7 +562,6 @@ export default function MasterGames() {
   /* -- Refs -- */
   const prevScores = useRef(new Map());
   const prevStatuses = useRef(new Map());
-  const prevCardData = useRef(new Map());
   const timeouts = useRef(new Map());
   const moreRef = useRef(null);
 
@@ -656,12 +569,92 @@ export default function MasterGames() {
   const clearTO = (k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } };
   const setTO = (k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); };
 
+  /* ── FIRESTORE INTEGRATION: Load fixtures for the selected date on demand ── */
+  useEffect(() => {
+    if (selectedDate) {
+      loadDateFixtures(selectedDate);
+    }
+  }, [selectedDate, loadDateFixtures]);
+
   /* Close more-dates dropdown on outside click */
   useEffect(() => {
     const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreDatesOpen(false); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  /* ── LIVE & SCORE CHANGE DETECTION ── */
+  useEffect(() => {
+    const allMatches = [...fixtures, ...liveMatches];
+    const newPops = new Map();
+    const newFlashes = new Set();
+    const newAnims = new Map();
+
+    allMatches.forEach(m => {
+      const id = String(m.id);
+      const ft = m.score?.fullTime;
+      const curScore = ft ? `${ft.home}-${ft.away}` : '-';
+      const curStatus = m.status;
+
+      // Score change detection
+      if (prevScores.current.has(id) && prevScores.current.get(id) !== curScore && curScore !== '-') {
+        const prev = prevScores.current.get(id);
+        const [ph, pa] = prev.split('-').map(Number);
+        const [ch, ca] = curScore.split('-').map(Number);
+        if (ch > ph) newPops.set(id, 'home');
+        if (ca > pa) newPops.set(id, 'away');
+
+        if (ch > ph || ca > pa) {
+          newFlashes.add(id);
+          Sound.goal();
+          const team = ch > ph ? m.homeTeam : m.awayTeam;
+          addToast({
+            type: 'goal',
+            msg: `${team?.shortName || team?.name} scores!`,
+            detail: pick(CMT.goal),
+            score: curScore,
+            dur: 4000,
+          });
+          if (isNotif(id)) sendBrowserNotif('⚽ GOAL!', `${team?.shortName || team?.name} scored! ${curScore}`, team?.crest);
+          setConfettiKey(k => k + 1);
+          setTO('flash-' + id, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 2500);
+        }
+      }
+
+      // Status change detection
+      if (prevStatuses.current.has(id) && prevStatuses.current.get(id) !== curStatus) {
+        const prevSt = prevStatuses.current.get(id);
+        if ((prevSt === 'SCHEDULED' || prevSt === 'TIMED') && (curStatus === 'IN_PLAY')) {
+          newAnims.set(id, { type: 'live' });
+          Sound.kickoff();
+          addToast({ type: 'status', st: 'live', msg: `${m.homeTeam?.shortName} vs ${m.awayTeam?.shortName}`, detail: pick(CMT.kickoff), dur: 3000 });
+        }
+        if (curStatus === 'PAUSED' && prevSt === 'IN_PLAY') {
+          newAnims.set(id, { type: 'ht' });
+          Sound.whistle('ht');
+          addToast({ type: 'status', st: 'ht', msg: `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, detail: pick(CMT.ht), dur: 3500 });
+        }
+        if (curStatus === 'FINISHED' && prevSt !== 'FINISHED') {
+          newAnims.set(id, { type: 'ft' });
+          Sound.whistle('ft');
+          addToast({ type: 'status', st: 'ft', msg: `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, detail: pick(CMT.ft), dur: 4000 });
+          if (isNotif(id)) sendBrowserNotif('🏁 Full Time', `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, m.homeTeam?.crest);
+        }
+      }
+
+      prevScores.current.set(id, curScore);
+      prevStatuses.current.set(id, curStatus);
+    });
+
+    if (newPops.size) setScorePops(newPops);
+    if (newFlashes.size) setFlashGoals(newFlashes);
+    if (newAnims.size) {
+      setStatusAnims(newAnims);
+      newAnims.forEach((_, id) => {
+        setTO('anim-' + id, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
+      });
+    }
+  }, [fixtures, liveMatches, addToast, isNotif]);
 
   /* -- Dates -- */
   const todayStr = getLocalDateStr(0);
@@ -672,7 +665,7 @@ export default function MasterGames() {
     for (let i = -7; i <= 7; i++) {
       if (i >= -1 && i <= 1) continue;
       const str = getLocalDateStr(i);
-      arr.push({ str: str, label: formatDateShort(str) });
+      arr.push({ str, label: formatDateShort(str) });
     }
     return arr;
   }, []);
@@ -710,405 +703,274 @@ export default function MasterGames() {
     return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [fixtures]);
 
-  /* -- Live count for selected date -- */
-  const liveCount = useMemo(() => filteredFixtures.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [filteredFixtures]);
+  /* -- Live count -- */
+  const liveCount = useMemo(() => liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [liveMatches]);
 
   /* -- Favourites for selected date -- */
-  const favMatches = useMemo(() => filteredFixtures.filter(m => favs.has(m.id)), [filteredFixtures, favs]);
+  const favMatches = useMemo(() => filteredFixtures.filter(m => isFav(String(m.id))), [filteredFixtures, isFav]);
 
-  /* -- Load standings/teams -- */
-  const handleTabChange = useCallback(async (t) => {
-    setTab(t);
-    if (t === 'standings' && !standingsData && !standingsLoading) {
-      setStandingsLoading(true);
-      try { const data = await getStandings(); setStandingsData(data); } catch {}
-      setStandingsLoading(false);
-    }
-    if (t === 'teams' && !teamsData && !teamsLoading) {
-      setTeamsLoading(true);
-      try { const data = await getTeams(); setTeamsData(data); } catch {}
-      setTeamsLoading(false);
-    }
-  }, [standingsData, standingsLoading, teamsData, teamsLoading, getStandings, getTeams]);
+  /* -- Standings & Teams fetch -- */
+  const loadStandings = useCallback(async (code) => {
+    setStandingsLoading(true);
+    const data = await getStandings(code);
+    setStandingsData(data);
+    setStandingsLoading(false);
+  }, [getStandings]);
 
-  /* ---------------------------------------------------------------
-     LIVE CHANGE DETECTION
-     --------------------------------------------------------------- */
+  const loadTeams = useCallback(async (code) => {
+    setTeamsLoading(true);
+    const data = await getTeams(code);
+    setTeamsData(data);
+    setTeamsLoading(false);
+  }, [getTeams]);
+
   useEffect(() => {
-    const live = liveMatches || [];
-    const liveMap = new Map(live.map(m => [String(m.id), m]));
-
-    live.forEach(m => {
-      const id = String(m.id);
-      const prev = prevScores.current.get(id);
-      const h = m.score?.fullTime?.home, a = m.score?.fullTime?.away;
-      if (prev) {
-        if (h != null && prev.h != null && h > prev.h) {
-          const team = m.homeTeam?.name || 'Home';
-          const score = `${h}�${a}`;
-          addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
-          if (Sound.on) Sound.goal();
-          setConfettiKey(k => k + 1);
-          setFlashGoals(p => new Set([...p, id]));
-          setScorePops(p => new Map([...p, [id, 'home']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
-          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-          if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('? GOAL!', `${team} scored! ${score}`, m.homeTeam?.crest);
-          }
-        }
-        if (a != null && prev.a != null && a > prev.a) {
-          const team = m.awayTeam?.name || 'Away';
-          const score = `${h}�${a}`;
-          addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
-          if (Sound.on) Sound.goal();
-          setConfettiKey(k => k + 1);
-          setFlashGoals(p => new Set([...p, id]));
-          setScorePops(p => new Map([...p, [id, 'away']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
-          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-          if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('? GOAL!', `${team} scored! ${score}`, m.awayTeam?.crest);
-          }
-        }
-      }
-      prevScores.current.set(id, { h, a });
-    });
-
-    live.forEach(m => {
-      const id = String(m.id);
-      const prev = prevStatuses.current.get(id);
-      const curr = m.status || '';
-      if (prev && prev !== curr) {
-        if ((prev === 'SCHEDULED' || prev === 'TIMED') && (curr === 'IN_PLAY' || curr === 'PAUSED')) {
-          addToast({ type: 'status', st: 'live', msg: pick(CMT.kickoff), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, dur: 3000 });
-          if (Sound.on) Sound.kickoff();
-          setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-          if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('? Kick Off!', `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, m.competition?.emblem);
-          }
-        }
-        if ((prev === 'IN_PLAY' || prev === 'PAUSED') && curr === 'FINISHED') {
-          const score = `${m.score?.fullTime?.home ?? 0}�${m.score?.fullTime?.away ?? 0}`;
-          addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, score, dur: 4000 });
-          if (Sound.on) Sound.whistle('ft');
-          setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-          if (isNotif(id) && globalEnabled) {
-            sendBrowserNotif('?? Full Time', `${m.homeTeam?.name} ${score} ${m.awayTeam?.name}`, m.competition?.emblem);
-          }
-        }
-        if (curr === 'HALF_TIME' && prev !== 'HALF_TIME') {
-          addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, dur: 3000 });
-          if (Sound.on) Sound.whistle('ht');
-          setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-        }
-      }
-      prevStatuses.current.set(id, curr);
-    });
-
-    // Card detection
-    live.forEach(m => {
-      const id = String(m.id);
-      const cards = m.score?.cards || [];
-      const prev = prevCardData.current.get(id) || [];
-      if (prev.length > 0 && cards.length > prev.length) {
-        const newCards = cards.slice(prev.length);
-        newCards.forEach(c => {
-          if (c.type === 'RED_CARD') {
-            addToast({ type: 'card', cardType: 'RED_CARD', msg: pick(CMT.redCard), detail: c.player?.name || '', dur: 3000 });
-            if (Sound.on) Sound.card();
-          } else if (c.type === 'YELLOW_CARD') {
-            addToast({ type: 'card', cardType: 'YELLOW_CARD', msg: pick(CMT.card), detail: c.player?.name || '', dur: 2500 });
-            if (Sound.on) Sound.card();
-          }
-        });
-      }
-      prevCardData.current.set(id, cards);
-    });
-  }, [liveMatches, addToast, isNotif, globalEnabled]);
-
-  /* -- Handle global notif toggle -- */
-  const handleGlobalNotif = useCallback(async () => {
-    if (!globalEnabled) {
-      const granted = await requestNotifPermission();
-      if (!granted) {
-        addToast({ type: 'status', st: 'live', msg: 'Notifications blocked by browser. Please enable in settings.', dur: 3000 });
-        return;
-      }
+    if (tab === 'standings' && compList.length > 0 && !selectedCompCode) {
+      setSelectedCompCode(compList[0].code || compList[0].id);
     }
-    toggleGlobal();
-  }, [globalEnabled, toggleGlobal, addToast]);
+  }, [tab, compList, selectedCompCode]);
 
-  /* -- Handle notif per match -- */
-  const handleNotifToggle = useCallback(async (id) => {
-    const willEnable = !isNotif(id);
-    if (willEnable && !globalEnabled) {
-      const granted = await requestNotifPermission();
-      if (!granted) {
-        addToast({ type: 'status', st: 'live', msg: 'Enable notifications in browser settings first.', dur: 3000 });
-        return;
-      }
-      toggleGlobal();
+  useEffect(() => {
+    if (selectedCompCode && (tab === 'standings' || tab === 'teams')) {
+      if (tab === 'standings') loadStandings(selectedCompCode);
+      if (tab === 'teams') loadTeams(selectedCompCode);
     }
-    toggleNotif(id);
-  }, [isNotif, toggleNotif, globalEnabled, toggleGlobal, addToast]);
+  }, [selectedCompCode, tab, loadStandings, loadTeams]);
 
-  /* -- Dismiss notif banner -- */
-  const dismissBanner = useCallback(() => {
-    setNotifBannerDismissed(true);
-    try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {}
-  }, []);
+  /* ── RENDER ── */
+  const totalFixtures = filteredFixtures.length;
 
-  /* ---------------------------------------------------------------
-     RENDER
-     --------------------------------------------------------------- */
   return (
     <div className="mg8-page">
-      <SEO title="Master Games � Live Scores, Fixtures & Standings" description="Track live football scores, fixtures, standings and more." />
-      <Confetti active={confettiKey > 0} key={confettiKey} />
-      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <SEO title="Live Football Scores & Fixtures" description="Real-time football scores, fixtures, standings and teams." />
 
       <div className="mg8-wrap">
-        {/* Header */}
-        <div className="mg8-header">
-          <h1>Master Games</h1>
-          <div className="sub">Live scores � Fixtures � Standings</div>
-        </div>
+        <header className="mg8-header">
+          <h1>Football Live</h1>
+          <div className="sub">{relativeDateLabel(selectedDate)} {lastUpdated ? `· Updated ${new Date(lastUpdated).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}` : ''}</div>
+        </header>
 
-        {/* Stats */}
         <div className="mg8-stats">
           <div style={{ textAlign: 'center' }}>
             <div className="mg8-stat-val live-c">{liveCount}</div>
             <div className="mg8-stat-label">Live</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div className="mg8-stat-val total-c">{filteredFixtures.length}</div>
-            <div className="mg8-stat-label">Matches</div>
+            <div className="mg8-stat-val total-c">{totalFixtures}</div>
+            <div className="mg8-stat-label">Fixtures</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div className="mg8-stat-val">{favs.size}</div>
-            <div className="mg8-stat-label">Favourites</div>
+            <div className="mg8-stat-val" style={{ color: '#f59e0b' }}>{favs.size}</div>
+            <div className="mg8-stat-label">Favs</div>
           </div>
         </div>
 
-        {/* Date Navigation */}
+        {/* Date Nav */}
         <div className="mg8-datenav">
+          <button className={`mg8-date-btn ${selectedDate === yesterdayStr ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr)}>Yesterday</button>
+          <button className={`mg8-date-btn mg8-date-today ${selectedDate === todayStr ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr)}>Today</button>
+          <button className={`mg8-date-btn ${selectedDate === tomorrowStr ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr)}>Tomorrow</button>
           <div className="mg8-more-wrap" ref={moreRef}>
-            <button className="mg8-more-btn" onClick={() => setMoreDatesOpen(p => !p)}>
-              <Calendar size={13} />
-              <span>More</span>
-              <ChevronDown size={12} style={{ transition: 'transform .2s', transform: moreDatesOpen ? 'rotate(180deg)' : 'rotate(0)' }} />
+            <button className={`mg8-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(!moreDatesOpen)}>
+              <Calendar size={13} /> More <ChevronDown size={12} />
             </button>
             {moreDatesOpen && (
               <div className="mg8-more-dropdown">
                 {otherDates.map(d => (
-                  <button key={d.str} className={`mg8-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); setExpanded(null); }}>
+                  <button key={d.str} className={`mg8-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
                     {d.label}
                   </button>
                 ))}
               </div>
             )}
           </div>
-          <button className={`mg8-date-btn ${selectedDate === yesterdayStr ? 'active' : ''}`} onClick={() => { setSelectedDate(yesterdayStr); setExpanded(null); }}>Yesterday</button>
-          <button className={`mg8-date-btn mg8-date-today ${selectedDate === todayStr ? 'active' : ''}`} onClick={() => { setSelectedDate(todayStr); setExpanded(null); }}>Today</button>
-          <button className={`mg8-date-btn ${selectedDate === tomorrowStr ? 'active' : ''}`} onClick={() => { setSelectedDate(tomorrowStr); setExpanded(null); }}>Tomorrow</button>
         </div>
 
         {/* Tabs */}
         <div className="mg8-tabs">
-          {['fixtures', 'favourites', 'standings', 'teams', 'competitions'].map(t => (
-            <button key={t} className={`mg8-tab ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
-              {t === 'fixtures' ? 'Fixtures' : t === 'favourites' ? 'Favourites' : t === 'standings' ? 'Standings' : t === 'teams' ? 'Teams' : 'Leagues'}
+          {['fixtures', 'live', 'favourites', 'standings', 'teams'].map(t => (
+            <button key={t} className={`mg8-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
+              {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
           ))}
         </div>
 
-        {/* Fixtures Tab */}
-        {tab === 'fixtures' && <>
-          {compList.length > 1 && (
-            <div className="mg8-filters">
-              <button className={`mg8-filter ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCompFilter('ALL')}>All</button>
-              {compList.map(c => (
-                <button key={c.id} className={`mg8-filter ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => setCompFilter(String(c.id))}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
-
-          <div className="mg8-actions">
-            <button className={`mg8-act ${searchOpen ? 'on' : ''}`} onClick={() => setSearchOpen(p => !p)}>
-              {searchOpen ? <X size={13} /> : <Search size={13} />}
-              Search
-            </button>
-            <button className={`mg8-act ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(p => !p)}>
-              {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />}
-              Sound
-            </button>
-            <button className={`mg8-act ${globalEnabled ? 'on' : ''}`} onClick={handleGlobalNotif}>
-              {globalEnabled ? <Bell size={13} /> : <BellOff size={13} />}
-              Alerts
-            </button>
-          </div>
-
-          <div className={`mg8-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
-            <div className="mg8-search">
-              <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-              <input type="text" placeholder="Search teams or leagues..." value={searchQ} onChange={e => setSearchQ(e.target.value)} autoFocus={searchOpen} />
-              {searchQ && <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }} onClick={() => setSearchQ('')}><X size={14} /></button>}
-            </div>
-          </div>
-
-          {loading ? (
-            <div>{[1,2,3,4,5].map(i => <div key={i} className="mg8-sk" style={{ animationDelay: i * 80 + 'ms' }} />)}</div>
-          ) : filteredFixtures.length === 0 ? (
-            <div className="mg8-empty">
-              <div className="mg8-empty-icon"><Calendar size={22} /></div>
-              <p>No matches found</p>
-              <div className="hint">Try a different date or filter</div>
-            </div>
+        {/* Actions */}
+        <div className="mg8-actions">
+          <button className={`mg8-act ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(!soundOn)}>
+            {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />} Sound
+          </button>
+          <button className="mg8-act" onClick={refreshFixtures}>
+            <RefreshCw size={13} /> Refresh
+          </button>
+          <button className={`mg8-act ${searchOpen ? 'on' : ''}`} onClick={() => setSearchOpen(!searchOpen)}>
+            <Search size={13} /> Search
+          </button>
+          {globalEnabled ? (
+            <button className="mg8-act on" onClick={toggleGlobal}><Bell size={13} /> On</button>
           ) : (
-            <>
-              {liveCount > 0 && (
-                <div className="mg8-section">
+            <button className="mg8-act" onClick={async () => { const ok = await requestNotifPermission(); if (ok) toggleGlobal(); }}><BellOff size={13} /> Off</button>
+          )}
+        </div>
+
+        {/* Search */}
+        <div className={`mg8-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
+          <div className="mg8-search">
+            <Search size={15} style={{ opacity: .4, flexShrink: 0 }} />
+            <input type="text" placeholder="Search team or competition..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
+            {searchQ && <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }} onClick={() => setSearchQ('')}><X size={14} /></button>}
+          </div>
+        </div>
+
+        {/* Competition Filters (Fixtures tab only) */}
+        {tab === 'fixtures' && compList.length > 1 && (
+          <div className="mg8-filters">
+            <button className={`mg8-filter ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCompFilter('ALL')}>All</button>
+            {compList.map(c => (
+              <button key={c.id} className={`mg8-filter ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => setCompFilter(String(c.id))}>
+                {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Competition Picker (Standings/Teams tabs) */}
+        {(tab === 'standings' || tab === 'teams') && compList.length > 0 && (
+          <div className="mg8-filters">
+            {compList.map(c => (
+              <button key={c.id} className={`mg8-filter ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code || String(c.id))}>
+                {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* ── CONTENT ── */}
+        {loading && !fixtures.length ? (
+          <div style={{ marginTop: 20 }}>
+            {[1,2,3,4,5].map(i => <div key={i} className="mg8-sk" />)}
+          </div>
+        ) : (
+          <>
+            {/* FIXTURES TAB */}
+            {tab === 'fixtures' && (
+              grouped.length === 0 ? (
+                <div className="mg8-empty">
+                  <div className="mg8-empty-icon"><Calendar size={22} /></div>
+                  <p>No fixtures found</p>
+                  <div className="hint">Try a different date or filter</div>
+                </div>
+              ) : (
+                grouped.map(g => (
+                  <div key={g.comp?.id || g.comp?.name} className="mg8-section">
+                    <div className="mg8-league-hd">
+                      {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      <span>{g.comp?.name || 'Other'}</span>
+                      <span className="cnt">{g.matches.length}</span>
+                    </div>
+                    {g.matches.map((m, i) => (
+                      <MatchCard
+                        key={m.id} m={m} idx={i}
+                        expanded={expanded} onToggle={setExpanded}
+                        scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
+                        isFav={isFav(String(m.id))} onFav={toggleFav}
+                        isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
+                      />
+                    ))}
+                  </div>
+                ))
+              )
+            )}
+
+            {/* LIVE TAB */}
+            {tab === 'live' && (
+              <>
+                {liveCount > 0 && (
                   <div className="mg8-live-hd">
                     <span className="mg8-live-dot" />
                     <span className="mg8-live-txt">Live Now</span>
-                    <span className="mg8-live-cnt">{liveCount} match{liveCount > 1 ? 'es' : ''}</span>
+                    <span className="mg8-live-cnt">{liveCount} matches</span>
                   </div>
-                  {grouped.filter(g => g.matches.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED')).map(g => (
-                    <div key={g.comp?.id || g.comp?.name}>
-                      {g.matches.some(m => m.status !== 'IN_PLAY' && m.status !== 'PAUSED') && (
-                        <div className="mg8-league-hd">
-                          {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                          <span>{g.comp?.name || ''}</span>
-                        </div>
-                      )}
-                      {g.matches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').map((m, i) => (
-                        <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav} onFav={toggleFav} isNotif={isNotif} onNotif={handleNotifToggle} />
-                      ))}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {grouped.filter(g => g.matches.some(m => m.status !== 'IN_PLAY' && m.status !== 'PAUSED')).map(g => (
-                <div key={g.comp?.id || g.comp?.name + '-rest'} className="mg8-section">
-                  <div className="mg8-league-hd">
-                    {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{g.comp?.name || ''}</span>
-                    <span className="cnt">{g.matches.filter(m => m.status !== 'IN_PLAY' && m.status !== 'PAUSED').length}</span>
+                )}
+                {liveMatches.length === 0 ? (
+                  <div className="mg8-empty">
+                    <div className="mg8-empty-icon"><Zap size={22} /></div>
+                    <p>No live matches</p>
+                    <div className="hint">Check back when matches kick off</div>
                   </div>
-                  {g.matches.filter(m => m.status !== 'IN_PLAY' && m.status !== 'PAUSED').map((m, i) => (
-                    <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav} onFav={toggleFav} isNotif={isNotif} onNotif={handleNotifToggle} />
-                  ))}
-                </div>
-              ))}
-            </>
-          )}
-        </>}
+                ) : (
+                  liveMatches.map((m, i) => (
+                    <MatchCard
+                      key={m.id} m={m} idx={i}
+                      expanded={expanded} onToggle={setExpanded}
+                      scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
+                      isFav={isFav(String(m.id))} onFav={toggleFav}
+                      isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
+                    />
+                  ))
+                )}
+              </>
+            )}
 
-        {/* Favourites Tab */}
-        {tab === 'favourites' && <>
-          {favMatches.length === 0 ? (
-            <div className="mg8-empty">
-              <div className="mg8-empty-icon"><Star size={22} /></div>
-              <p>No favourites yet</p>
-              <div className="hint">Tap the star icon on any match to add it here</div>
-            </div>
-          ) : (
-            <>
-              {liveCount > 0 && (
-                <div className="mg8-live-hd" style={{ marginBottom: 10 }}>
-                  <span className="mg8-live-dot" />
-                  <span className="mg8-live-txt">Live</span>
-                  <span className="mg8-live-cnt">{favMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length}</span>
-                </div>
-              )}
-              {favMatches.map((m, i) => (
-                <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav} onFav={toggleFav} isNotif={isNotif} onNotif={handleNotifToggle} />
-              ))}
-            </>
-          )}
-        </>}
-
-        {/* Standings Tab */}
-        {tab === 'standings' && <>
-          {standingsLoading ? (
-            <div>{[1,2,3].map(i => <div key={i} className="mg8-sk" style={{ height: 200, animationDelay: i * 100 + 'ms' }} />)}</div>
-          ) : !standingsData ? (
-            <div className="mg8-empty">
-              <div className="mg8-empty-icon"><Trophy size={22} /></div>
-              <p>No standings data</p>
-              <div className="hint">Select a competition to view standings</div>
-            </div>
-          ) : (
-            <StandingsTable standings={standingsData} />
-          )}
-        </>}
-
-        {/* Teams Tab */}
-        {tab === 'teams' && <>
-          {teamsLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>{[1,2,3,4,5,6].map(i => <div key={i} className="mg8-sk" style={{ height: 90, animationDelay: i * 60 + 'ms' }} />)}</div>
-          ) : !teamsData?.length ? (
-            <div className="mg8-empty">
-              <div className="mg8-empty-icon"><Users size={22} /></div>
-              <p>No teams data</p>
-              <div className="hint">Select a competition to view teams</div>
-            </div>
-          ) : (
-            <TeamsGrid teams={teamsData} />
-          )}
-        </>}
-
-        {/* Competitions Tab */}
-        {tab === 'competitions' && <>
-          {(!competitions || competitions.length === 0) ? (
-            <div className="mg8-empty">
-              <div className="mg8-empty-icon"><Trophy size={22} /></div>
-              <p>No competitions</p>
-              <div className="hint">Competitions will appear once data loads</div>
-            </div>
-          ) : (
-            <div className="mg8-comp-grid">
-              {competitions.map(c => (
-                <div key={c.id} className="mg8-comp-card" onClick={() => { setCompFilter(String(c.id)); setTab('fixtures'); }}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  <div className="info">
-                    <div className="cname">{c.name}</div>
-                    {c.area?.name && <div className="carea">{c.area.name}</div>}
+            {/* FAVOURITES TAB */}
+            {tab === 'favourites' && (
+              <>
+                <div className="mg8-fav-header"><Star size={16} fill="#f59e0b" /><span>Your Favourites</span></div>
+                {favMatches.length === 0 ? (
+                  <div className="mg8-empty">
+                    <div className="mg8-empty-icon"><Heart size={22} /></div>
+                    <p>No favourited matches</p>
+                    <div className="hint">Star a match to track it here</div>
                   </div>
-                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
-                </div>
-              ))}
-            </div>
-          )}
-        </>}
+                ) : (
+                  favMatches.map((m, i) => (
+                    <MatchCard
+                      key={m.id} m={m} idx={i}
+                      expanded={expanded} onToggle={setExpanded}
+                      scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
+                      isFav={isFav(String(m.id))} onFav={toggleFav}
+                      isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
+                    />
+                  ))
+                )}
+              </>
+            )}
 
-        {lastUpdated && (
-          <div style={{ textAlign: 'center', padding: '16px 0 0', fontSize: '.58rem', color: 'var(--text-muted)', opacity: .35 }}>
-            Updated {new Date(lastUpdated).toLocaleTimeString()}
-          </div>
+            {/* STANDINGS TAB */}
+            {tab === 'standings' && (
+              standingsLoading ? <div className="mg8-sk" /> :
+              standingsData ? <StandingsTable standings={standingsData.standings} /> :
+              <div className="mg8-empty"><div className="mg8-empty-icon"><Trophy size={22} /></div><p>Select a competition above</p></div>
+            )}
+
+            {/* TEAMS TAB */}
+            {tab === 'teams' && (
+              teamsLoading ? <div className="mg8-sk" /> :
+              teamsData ? <TeamsGrid teams={teamsData.teams} /> :
+              <div className="mg8-empty"><div className="mg8-empty-icon"><Users size={22} /></div><p>Select a competition above</p></div>
+            )}
+          </>
         )}
+
       </div>
 
       {/* Notification Banner */}
-      {!globalEnabled && !notifBannerDismissed && (
+      {!notifBannerDismissed && !globalEnabled && (
         <div className="mg8-notif-banner">
-          <button className="mg8-notif-btn" onClick={handleGlobalNotif}>
-            <Bell size={15} />
-            Enable Live Notifications
+          <button className="mg8-notif-btn" onClick={async () => {
+            const ok = await requestNotifPermission();
+            if (ok) { toggleGlobal(); setNotifBannerDismissed(true); try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {} }
+          }}>
+            <Bell size={16} /> Enable Goal Notifications
           </button>
-          <div style={{ marginTop: 6 }}>
-            <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.6rem', cursor: 'pointer', opacity: .5, fontFamily: 'inherit' }} onClick={dismissBanner}>Dismiss</button>
-          </div>
+          <button style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.68rem', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { setNotifBannerDismissed(true); try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {} }}>
+            Not now
+          </button>
         </div>
       )}
+
+      <ToastContainer toasts={toasts} onDismiss={dismissToast} />
+      <Confetti active={confettiKey > 0} key={confettiKey} />
     </div>
   );
 }
