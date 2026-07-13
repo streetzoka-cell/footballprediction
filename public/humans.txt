@@ -1,0 +1,31 @@
+/* TEAM */
+
+Founder & Lead Developer:
+Kimutai Gibson
+
+Website:
+https://www.zokascore.xyz
+
+Project:
+ZOKASCORE
+
+Description:
+Modern football and basketball platform providing live scores,
+fixtures, predictions, standings and sports statistics.
+
+/* TECHNOLOGY */
+
+Frontend:
+React 19
+Vite
+React Router
+Firebase
+
+Hosting:
+Netlify
+
+Language:
+JavaScript
+
+Location:
+Kenya

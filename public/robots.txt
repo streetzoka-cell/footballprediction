@@ -2,4 +2,8 @@ User-agent: *
 
 Allow: /
 
-Sitemap: https://zokascore.com/sitemap.xml
+Disallow: /login
+Disallow: /profile
+Disallow: /zks-admin-8f9x2-control-panel
+
+Sitemap: https://www.zokascore.xyz/sitemap.xml

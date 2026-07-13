@@ -1,4 +1,4 @@
-// FILE: src/pages/MasterGames.jsx
+﻿// FILE: src/pages/MasterGames.jsx
 // v8 � Clean, professional, mobile-first. Favourites, notifications, smart date nav.
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -374,6 +374,35 @@ function useNotifications() {
   const isOn = useCallback(id => notifs.has(id), [notifs]);
   const toggleGlobal = useCallback(() => { setGlobalEnabled(p => { const n = !p; try { localStorage.setItem('mg8_notif_global', String(n)); } catch {} return n; }); }, []);
   return { notifs, toggle, isOn, globalEnabled, toggleGlobal };
+}
+
+/* -----------------------------------------------------------------------
+   FAVOURITES PERSISTENCE
+   ----------------------------------------------------------------------- */
+function useFavourites() {
+  const [favs, setFavs] = useState(() => {
+    try {
+      return new Set(JSON.parse(localStorage.getItem('mg8_favs') || '[]'));
+    } catch {
+      return new Set();
+    }
+  });
+
+  const toggle = useCallback(id => {
+    setFavs(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      try {
+        localStorage.setItem('mg8_favs', JSON.stringify([...next]));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  const isFav = useCallback(id => favs.has(id), [favs]);
+
+  return { favs, toggle, isFav };
 }
 
 /* -----------------------------------------------------------------------
