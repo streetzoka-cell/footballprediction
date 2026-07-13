@@ -4,90 +4,67 @@ import { createWriteStream } from "fs";
 const hostname = "https://zokascore.xyz";
 
 const pages = [
-
-  // Main pages
+  // Home
   {
     url: "/",
     changefreq: "hourly",
     priority: 1.0,
   },
 
-
-  // Football SEO pages
+  // Football
   {
     url: "/fixtures",
     changefreq: "hourly",
     priority: 0.95,
   },
-
   {
     url: "/predictions",
     changefreq: "hourly",
     priority: 0.95,
   },
 
-  {
-    url: "/live-scores",
-    changefreq: "hourly",
-    priority: 0.95,
-  },
-
-  {
-    url: "/football-results",
-    changefreq: "hourly",
-    priority: 0.90,
-  },
-
-
-  // Competition features
+  // Features
   {
     url: "/mastergames",
     changefreq: "daily",
-    priority: 0.90,
+    priority: 0.9,
   },
-
   {
     url: "/leaderboard",
     changefreq: "daily",
     priority: 0.85,
   },
 
-
-  // Other sports
+  // Other Sports
   {
     url: "/basketball",
     changefreq: "hourly",
     priority: 0.85,
   },
 
-
   // Media
   {
     url: "/highlights",
     changefreq: "daily",
-    priority: 0.80,
+    priority: 0.8,
   },
-
   {
     url: "/livestream",
     changefreq: "daily",
     priority: 0.75,
   },
 
-
-  // Brand pages
+  // Company
   {
     url: "/about",
     changefreq: "monthly",
-    priority: 0.60,
+    priority: 0.6,
   },
-
   {
     url: "/contact",
     changefreq: "monthly",
-    priority: 0.60,
+    priority: 0.6,
   },
-
 
   // Support
   {
@@ -95,76 +72,57 @@ const pages = [
     changefreq: "monthly",
     priority: 0.55,
   },
-
   {
     url: "/help",
     changefreq: "monthly",
     priority: 0.55,
   },
 
-
-  // System pages
+  // System
   {
     url: "/status",
     changefreq: "daily",
-    priority: 0.50,
+    priority: 0.5,
   },
-
   {
     url: "/changelog",
     changefreq: "weekly",
     priority: 0.45,
   },
 
-
   // Legal
   {
     url: "/privacy",
     changefreq: "yearly",
-    priority: 0.30,
+    priority: 0.3,
   },
-
   {
     url: "/terms",
     changefreq: "yearly",
-    priority: 0.30,
+    priority: 0.3,
   },
-
   {
     url: "/cookies",
     changefreq: "yearly",
-    priority: 0.20,
+    priority: 0.2,
   },
-
   {
     url: "/disclaimer",
     changefreq: "yearly",
-    priority: 0.20,
+    priority: 0.2,
   },
-
 ];
 
-
-const sitemap = new SitemapStream({
-  hostname,
-});
-
+const sitemap = new SitemapStream({ hostname });
 
 const write = createWriteStream("./public/sitemap.xml");
 
-
 sitemap.pipe(write);
 
-
-pages.forEach((page) => {
-  sitemap.write(page);
-});
-
+pages.forEach((page) => sitemap.write(page));
 
 sitemap.end();
 
-
-streamToPromise(sitemap)
-.then(() => {
+streamToPromise(sitemap).then(() => {
   console.log("✅ sitemap.xml generated");
 });
