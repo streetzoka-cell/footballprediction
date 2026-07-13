@@ -5,47 +5,81 @@ import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
 
-  plugins:[
+  plugins: [
 
     react(),
 
     VitePWA({
 
-      registerType:"autoUpdate",
+      registerType: "autoUpdate",
 
-      includeAssets:[
+      includeAssets: [
         "favicon.ico",
         "icons/icon-192.png",
-        "icons/icon-512.png"
+        "icons/icon-512.png",
+        "og-image.jpg"
       ],
 
 
-      manifest:{
-        name:"ZOKASCORE Football Predictions",
-        short_name:"ZOKASCORE",
+      manifest: {
+
+        id: "/",
+
+        name: "ZOKASCORE Football Predictions",
+
+        short_name: "ZOKASCORE",
+
         description:
-        "Live football scores, fixtures, predictions and sports updates.",
+          "Live football scores, fixtures, predictions, standings and sports updates.",
 
-        theme_color:"#07141f",
+        start_url: "/",
 
-        background_color:"#07141f",
+        scope: "/",
 
-        display:"standalone",
+        display: "standalone",
 
-        start_url:"/",
+        orientation: "portrait",
 
-        icons:[
+        theme_color: "#07141f",
+
+        background_color: "#07141f",
+
+
+        icons: [
+
           {
-            src:"/icons/icon-192.png",
-            sizes:"192x192",
-            type:"image/png"
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any maskable"
           },
 
           {
-            src:"/icons/icon-512.png",
-            sizes:"512x512",
-            type:"image/png"
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any maskable"
           }
+
+        ]
+
+      },
+
+
+      workbox: {
+
+        navigateFallback: "/index.html",
+
+        runtimeCaching: [
+
+          {
+            urlPattern: /^https:\/\/zokascore\.xyz\/.*/,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "zokascore-pages"
+            }
+          }
+
         ]
 
       }
