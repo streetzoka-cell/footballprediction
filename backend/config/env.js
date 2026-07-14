@@ -1,32 +1,25 @@
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getFirestore } from "firebase/firestore";
-import { getAuth } from "firebase/auth";
+// backend/config/env.js
+const dotenv = require('dotenv');
+const path = require('path');
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+// Explicitly tell dotenv to load the .env file from the backend root folder
+dotenv.config({ path: path.join(__dirname, '..', '.env') });
+
+const env = {
+  // API Keys
+  API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY,
+  API_FOOTBALL_BASE_URL: process.env.API_FOOTBALL_BASE_URL,
+  API_BASKETBALL_KEY: process.env.API_BASKETBALL_KEY,
+  API_BASKETBALL_BASE_URL: process.env.API_BASKETBALL_BASE_URL,
+  
+  // Firebase Admin SDK
+  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
+  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
+  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
+
+  // Server
+  PORT: process.env.PORT || 5000,
+  LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 };
 
-// ★ FIX: Check for the DEFAULT app specifically, not just any app
-let app;
-try {
-  app = getApp(); // Gets DEFAULT app if it exists
-} catch {
-  // DEFAULT app doesn't exist yet — create it
-  app = initializeApp(firebaseConfig);
-}
-
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-// ★ Debug: Verify which project auth is connected to
-if (app.options.projectId) {
-  console.log('[Firebase:Main] Connected to project:', app.options.projectId);
-}
-
-export { app, db, auth };
-export default app;
+module.exports = env;
