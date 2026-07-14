@@ -1,5 +1,3 @@
-import PropTypes from "prop-types";
-
 export default function Section({
   title,
   children,
@@ -15,7 +13,6 @@ export default function Section({
       >
         {title}
       </h2>
-
       <div
         style={{
           color: "#c8d3df",
@@ -28,8 +25,3 @@ export default function Section({
     </section>
   );
 }
-
-Section.propTypes = {
-  title: PropTypes.string.isRequired,
-  children: PropTypes.node,
-};

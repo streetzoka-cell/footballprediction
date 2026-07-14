@@ -3,21 +3,15 @@ import React from "react";
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
-
-    this.state = {
-      hasError: false,
-    };
+    this.state = { hasError: false };
   }
 
   static getDerivedStateFromError() {
-    return {
-      hasError: true,
-    };
+    return { hasError: true };
   }
 
   componentDidCatch(error, info) {
-    console.error(error);
-    console.error(info);
+    console.error("ErrorBoundary caught:", error, info);
   }
 
   render() {
@@ -35,21 +29,37 @@ export default class ErrorBoundary extends React.Component {
           }}
         >
           <div>
-            <h1>Something went wrong.</h1>
-
-            <p>
-              An unexpected error occurred while loading
-              ZOKASCORE.
-            </p>
-
-            <button
-              onClick={() => window.location.reload()}
+            <p style={{ fontSize: "3rem" }}>⚠️</p>
+            <h1
               style={{
-                marginTop: 20,
-                padding: "12px 20px",
+                fontSize: "1.5rem",
+                marginBottom: 12,
+              }}
+            >
+              Something went wrong
+            </h1>
+            <p
+              style={{
+                color: "#b8c4d6",
+                marginBottom: 24,
+              }}
+            >
+              An unexpected error occurred while
+              loading ZOKASCORE.
+            </p>
+            <button
+              onClick={() =>
+                window.location.reload()
+              }
+              style={{
+                padding: "12px 28px",
                 borderRadius: 10,
                 border: "none",
                 cursor: "pointer",
+                background: "#00ff88",
+                color: "#07141f",
+                fontWeight: 700,
+                fontSize: "1rem",
               }}
             >
               Reload Page

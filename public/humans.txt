@@ -1,31 +1,17 @@
-/* TEAM */
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILE: public/humans.txt
+# ═══════════════════════════════════════════════════════════════════════════════
 
-Founder & Lead Developer:
-Kimutai Gibson
+# TEAM
+Founder & Lead Developer: Kimutai Gibson
+Contact: streetzoka@gmail.com
+Location: Nairobi, Kenya
 
-Website:
-https://www.zokascore.xyz
+# THANKS
+Football-Data.org for match data
+Firebase / Google for infrastructure
+Vercel for hosting
+All our amazing users and community members
 
-Project:
-ZOKASCORE
-
-Description:
-Modern football and basketball platform providing live scores,
-fixtures, predictions, standings and sports statistics.
-
-/* TECHNOLOGY */
-
-Frontend:
-React 19
-Vite
-React Router
-Firebase
-
-Hosting:
-Netlify
-
-Language:
-JavaScript
-
-Location:
-Kenya
+# SITE
+Last update: 2025

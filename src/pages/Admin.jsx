@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// PRODUCTION-READY ADMIN v14.0 — COMPLETE
+// PRODUCTION-READY ADMIN v14.0 — ALIGNED WITH NEW ARCHITECTURE
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -18,8 +18,10 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useFootballData } from '../context/FootballDataContext';
 import { db } from '../utils/firebase';
-import { dataLayer, todayStr } from '../utils/dataLayer';
+import { dataLayer } from '../utils/dataLayer';
+import { todayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; // ★ Using single source dates
 import { eventBus, EVENT } from '../utils/eventBus';
+import { isLiveStatus, isFinishedStatus } from '../utils/constants'; // ★ Using single source statuses
 import {
   collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
   updateDoc, serverTimestamp, getDoc, getDocs,
@@ -51,9 +53,10 @@ const MAX_FEATURED = 10;
 const MAX_ZOKA = 10;
 const SHOW_INIT = 8;
 
-const dateOffset = (o = 0) => { const d = new Date(); d.setDate(d.getDate() + o); return d.toISOString().split('T')[0]; };
+// ★ Aligned with dates.js single source of truth
+const dateOffset = (o = 0) => getLocalDateStr(o); 
 const dateLabel = (d) => {
-  const t = todayStr(), tm = dateOffset(1), ys = dateOffset(-1);
+  const t = todayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
   if (d === t) return 'Today'; if (d === tm) return 'Tomorrow'; if (d === ys) return 'Yesterday';
   const dt = new Date(d + 'T12:00:00'), days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return `${days[dt.getDay()]} ${d.slice(5)}`;
@@ -80,18 +83,15 @@ const ST_MAP = {
 };
 const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
 
+// ★ Aligned with dates.js for UTC parsing
 const extractDate = m => {
   if (!m) return '';
-  if (m.utcDate) { const d = m.utcDate.split('T')[0]; if (d?.length >= 10) return d; }
-  if (m.date) { const d = String(m.date).split('T')[0]; if (d?.length >= 10) return d; }
-  if (m.kickoff?.includes?.('T')) return m.kickoff.split('T')[0];
-  const ts = m.timestamp || m.kickOffTimestamp;
-  if (typeof ts === 'number' && ts > 1e12) return new Date(ts).toISOString().split('T')[0];
-  return '';
+  return getLocalDateFromUtc(m.utcDate || m.date || m.kickoff) || '';
 };
 
-const isLive = m => { const s = m?.status; return s==='IN_PLAY'||s==='PAUSED'||s==='1H'||s==='2H'||s==='ET'||s==='BT'||m?.isLive; };
-const isFin = m => { const s = m?.status; return s==='FINISHED'||s==='FT'||s==='AET'||s==='PEN'||m?.isFinished; };
+// ★ Aligned with constants.js status checks
+const isLive = m => isLiveStatus(m?.status, m?.sport || 'football') || m?.isLive;
+const isFin = m => isFinishedStatus(m?.status, m?.sport || 'football') || m?.isFinished;
 const getScore = m => m?.score?.fullTime ? {h:m.score.fullTime.home,a:m.score.fullTime.away} : m?.homeScore!=null ? {h:m.homeScore,a:m.awayScore} : {h:null,a:null};
 
 const fmtTimeAgo = dt => {
@@ -638,6 +638,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
     setPublishing(false);
   };
 
+  // ★ Aligned with DataLayer for fetching Zoka history
   const loadHist = async () => {
     if (hist.length > 0 || histLoad) return;
     setHistLoad(true);
@@ -646,9 +647,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       for (let i = 1; i <= 7; i++) {
         const d = dateOffset(-i);
         try {
-          const snap = await getDoc(doc(db, PATHS.ZOKA_PICKS, d));
-          if (snap.exists()) {
-            const data = snap.data(); const matches = data.matches || [];
+          const data = await dataLayer.fetchZokaPicks(d);
+          if (data && data.matches) {
+            const matches = data.matches || [];
             let e = 0, r = 0, mi = 0, p = 0;
             matches.forEach(pk => {
               if (pk.status !== 'finished' || pk.homeScore == null) { p++; return; }
@@ -746,7 +747,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
             return (
               <div key={mid}>
                 <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
-                  scoreInput={sel[mid] || null} onScoreInput={updScore} pubPick={pubMap.get(mid)} />
+                  scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null} />
                 {isPublished && !sel[mid] && (
                   <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
                     <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
@@ -871,10 +872,10 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
               const mid = String(p.matchId);
               const isRemoving = removingId === mid;
               const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
-              const isLive = p.status === 'live' || !!p.isLive;
-              const isFinished = p.status === 'finished' || !!p.isFinished;
-              const st = isFinished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' }
-                        : isLive ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' }
+              const live = isLive(p);
+              const finished = isFin(p);
+              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' }
+                        : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' }
                         : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
               return (
                 <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
@@ -884,7 +885,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                       <span>{p.league?.name || 'Featured'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {isLive && <span className="ld" />}
+                      {live && <span className="ld" />}
                       <span className="as" style={{ color: st.c, background: st.b }}>{st.l}</span>
                     </div>
                   </div>
@@ -893,9 +894,9 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                       {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                       <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                     </div>
-                    <div className={`asb${isLive ? ' lv' : ''}${isFinished ? ' ft' : ''}`}>
+                    <div className={`asb${live ? ' lv' : ''}${finished ? ' ft' : ''}`}>
                       {sc ? (
-                        <><span className={`asn${isLive ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${isLive ? ' r' : ' g'}`}>{sc.a}</span></>
+                        <><span className={`asn${live ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a}</span></>
                       ) : <span className="avs">VS</span>}
                     </div>
                     <div className="ate aw">
@@ -1341,11 +1342,11 @@ export default function Admin() {
   const [confirm, setConfirm] = useState(null);
   const [rebuilding, setRebuilding] = useState(null);
 
-  const defaultDates = useMemo(() => [dateOffset(-1), todayStr(), dateOffset(1)], []);
+  const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
   const extraDates = useMemo(() => {
     const dates = [];
     for (let i = -14; i <= 14; i++) {
-      const d = dateOffset(i);
+      const d = getLocalDateStr(i);
       if (!defaultDates.includes(d)) dates.push(d);
     }
     return dates.sort();

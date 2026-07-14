@@ -1,5 +1,19 @@
-Contact: mailto:streetzoka@gmail.com
-Expires: 2027-12-31T23:59:59.000Z
-Preferred-Languages: en
-Canonical: https://www.zokascore.xyz/.well-known/security.txt
-Policy: https://www.zokascore.xyz/privacy
+# ═══════════════════════════════════════════════════════════════════════════════
+# FILE: public/security.txt
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Contact
+Contact: streetzoka@gmail.com
+Phone: +254 721 635 810
+Encryption: https://keybase.io/ (coming soon)
+
+# Security Policy
+Our security policy is available at /privacy-policy
+We follow responsible disclosure practices
+
+# Preferred Languages
+English, Swahili
+
+# Acknowledgments
+We use Firebase for authentication and data storage
+We use Cloudflare for DDoS protection and CDN

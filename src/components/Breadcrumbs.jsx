@@ -1,7 +1,6 @@
 import { Link, useLocation } from "react-router-dom";
 
 const TITLES = {
-  "": "Home",
   fixtures: "Fixtures",
   predictions: "Predictions",
   mastergames: "Master Games",
@@ -11,23 +10,11 @@ const TITLES = {
   leaderboard: "Leaderboard",
   profile: "Profile",
   login: "Login",
-
   about: "About",
-  contact: "Contact",
-  partners: "Partners",
-  advertise: "Advertise",
-  careers: "Careers",
-
   privacy: "Privacy Policy",
   terms: "Terms of Service",
-  cookies: "Cookie Policy",
-  disclaimer: "Disclaimer",
-
   faq: "FAQ",
   help: "Help Center",
-
-  status: "System Status",
-  changelog: "Changelog",
 };
 
 export default function Breadcrumbs() {
@@ -47,42 +34,23 @@ export default function Breadcrumbs() {
         fontSize: ".9rem",
       }}
     >
-      <Link
-        to="/"
-        style={{
-          color: "#60a5fa",
-          textDecoration: "none",
-        }}
-      >
+      <Link to="/" style={{ color: "#60a5fa", textDecoration: "none" }}>
         Home
       </Link>
 
       {parts.map((part, index) => {
-        const url =
-          "/" + parts.slice(0, index + 1).join("/");
-
+        const url = "/" + parts.slice(0, index + 1).join("/");
         const last = index === parts.length - 1;
 
         return (
           <span key={url}>
-            {" "}
-            /{" "}
+            {" / "}
             {last ? (
-              <span
-                style={{
-                  color: "#ffffff",
-                }}
-              >
+              <span style={{ color: "#ffffff" }}>
                 {TITLES[part] || decodeURIComponent(part)}
               </span>
             ) : (
-              <Link
-                to={url}
-                style={{
-                  color: "#60a5fa",
-                  textDecoration: "none",
-                }}
-              >
+              <Link to={url} style={{ color: "#60a5fa", textDecoration: "none" }}>
                 {TITLES[part] || decodeURIComponent(part)}
               </Link>
             )}

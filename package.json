@@ -1,8 +1,45 @@
 {
-  "name": "footballprediction",
+  "name": "zokapredict",
   "private": true,
-  "version": "0.0.0",
+  "version": "2.0.0",
   "type": "module",
+  "description": "Real-time football prediction platform — predict scores, climb leaderboards, prove you know the beautiful game",
+  "author": {
+    "name": "Kimutai Gibson",
+    "email": "streetzoka@gmail.com",
+    "url": "https://zokapredict.com"
+  },
+  "license": "UNLICENSED",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/streetzoka/zokapredict"
+  },
+  "keywords": [
+    "football",
+    "football-prediction",
+    "score-prediction",
+    "match-prediction",
+    "soccer",
+    "premier-league",
+    "leaderboard",
+    "predictions",
+    "tips",
+    "zokapredict",
+    "react",
+    "firebase",
+    "real-time",
+    "live-scores",
+    "nba",
+    "basketball",
+    "sports-prediction",
+    "kenya",
+    "africa"
+  ],
+  "bugs": {
+    "url": "https://github.com/streetzoka/zokapredict/issues",
+    "email": "streetzoka@gmail.com"
+  },
+  "homepage": "https://zokapredict.com",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/generate-sitemap.js",
@@ -12,7 +49,7 @@
   "dependencies": {
     "axios": "^1.18.1",
     "firebase": "^12.16.0",
-    "lucide-react": "^1.23.0",
+    "lucide-react": "^1.24.0",
     "nprogress": "^0.2.0",
     "prop-types": "^15.8.1",
     "react": "^19.2.7",

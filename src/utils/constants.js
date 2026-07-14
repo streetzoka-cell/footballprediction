@@ -1,25 +1,63 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/constants.js
-// SINGLE SOURCE OF TRUTH — All shared constants and types
+// SINGLE SOURCE OF TRUTH — All shared constants, types, and helpers
 // ═══════════════════════════════════════════════════════════════
 
 /* ═══════════════════════════════════════════════════
    SPORT TYPES
    ═══════════════════════════════════════════════════ */
-export const SPORT = {
+export const SPORT = Object.freeze({
   FOOTBALL: 'football',
   BASKETBALL: 'basketball',
-};
+});
 
-export const SPORT_PREFIX = {
+export const SPORT_PREFIX = Object.freeze({
   [SPORT.FOOTBALL]: 'ft',
   [SPORT.BASKETBALL]: 'bb',
-};
+});
+
+/* ═══════════════════════════════════════════════════
+   ★ PREDICTION SOURCE — KEY DISTINCTION
+   ═══════════════════════════════════════════════════
+   
+   ZOKA    = Platform predictions posted for ALL users (especially guests).
+             These are "Zoka Picks" — the app's own predictions that
+             random visitors see when they land on the site.
+   
+   USER    = Logged-in user predictions for FEATURED MATCHES.
+             These feed into daily/weekly/monthly leaderboards.
+             Users compete for rankings and prizes (like FPL).
+   
+   Both types NEVER disappear. They're grouped by daily date
+   and daily points roll up to weekly → monthly → all-time (GOAT).
+   ═══════════════════════════════════════════════════ */
+export const PREDICTION_SOURCE = Object.freeze({
+  ZOKA: 'zoka',    // Platform picks — for guests & everyone
+  USER: 'user',    // User picks — for logged-in competition
+});
+
+/* ═══════════════════════════════════════════════════
+   LEADERBOARD PERIODS
+   ═══════════════════════════════════════════════════ */
+export const PERIOD = Object.freeze({
+  DAILY: 'daily',
+  WEEKLY: 'weekly',
+  MONTHLY: 'monthly',
+  GOAT: 'goat',        // All-time
+});
+
+/** Period display labels */
+export const PERIOD_LABEL = Object.freeze({
+  [PERIOD.DAILY]: 'Today',
+  [PERIOD.WEEKLY]: 'This Week',
+  [PERIOD.MONTHLY]: 'This Month',
+  [PERIOD.GOAT]: 'All Time',
+});
 
 /* ═══════════════════════════════════════════════════
    MATCH STATUS CONSTANTS
    ═══════════════════════════════════════════════════ */
-export const STATUS = {
+export const STATUS = Object.freeze({
   // Football
   FOOTBALL_LIVE: Object.freeze(['1H', '2H', 'HT', 'ET', 'BT', 'P']),
   FOOTBALL_FINISHED: Object.freeze(['FT', 'AET', 'PEN', 'ABD', 'AWD', 'WO']),
@@ -29,9 +67,9 @@ export const STATUS = {
   BASKETBALL_LIVE: Object.freeze(['1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT']),
   BASKETBALL_FINISHED: Object.freeze(['FT', 'AOT', 'ABD']),
   BASKETBALL_SCHEDULED: Object.freeze(['NS', 'POST', 'CANC', 'SUSP']),
-};
+});
 
-/** Get live/finished/scheduled arrays for any sport */
+/** Get live/finished/scheduled status arrays for a sport */
 export const getStatusSets = (sport) => {
   if (sport === SPORT.BASKETBALL) {
     return {
@@ -47,37 +85,47 @@ export const getStatusSets = (sport) => {
   };
 };
 
-/** Check if a status indicates live match */
-export const isLiveStatus = (status, sport = SPORT.FOOTBALL) => {
-  return getStatusSets(sport).live.includes(status);
-};
+export const isLiveStatus = (status, sport = SPORT.FOOTBALL) =>
+  getStatusSets(sport).live.includes(status);
 
-/** Check if a status indicates finished match */
-export const isFinishedStatus = (status, sport = SPORT.FOOTBALL) => {
-  return getStatusSets(sport).finished.includes(status);
-};
+export const isFinishedStatus = (status, sport = SPORT.FOOTBALL) =>
+  getStatusSets(sport).finished.includes(status);
 
-/** Check if a status indicates scheduled match */
-export const isScheduledStatus = (status, sport = SPORT.FOOTBALL) => {
-  return getStatusSets(sport).scheduled.includes(status);
-};
+export const isScheduledStatus = (status, sport = SPORT.FOOTBALL) =>
+  getStatusSets(sport).scheduled.includes(status);
 
 /* ═══════════════════════════════════════════════════
-   PREDICTION RESULT TYPES
+   PREDICTION RESULT TYPES & POINTS
    ═══════════════════════════════════════════════════ */
-export const RESULT_TYPE = {
-  EXACT: 'exact',    // +10 points
-  RESULT: 'result',  // +3 points
-  MISS: 'miss',      // +0 points
-  PENDING: 'pending', // Not yet resolved
-};
+export const RESULT_TYPE = Object.freeze({
+  EXACT: 'exact',     // Score matches exactly → 10 pts
+  RESULT: 'result',   // Winner correct (or draw) → 3 pts
+  MISS: 'miss',       // Wrong → 0 pts
+  PENDING: 'pending', // Not yet resolved → 0 pts
+});
 
-export const POINTS = {
+export const POINTS = Object.freeze({
   [RESULT_TYPE.EXACT]: 10,
   [RESULT_TYPE.RESULT]: 3,
   [RESULT_TYPE.MISS]: 0,
   [RESULT_TYPE.PENDING]: 0,
-};
+});
+
+/** Calculate points for a prediction */
+export function calcPoints(predH, predA, actualH, actualA) {
+  if (actualH == null || actualA == null) {
+    return { points: POINTS.PENDING, type: RESULT_TYPE.PENDING };
+  }
+  if (predH === actualH && predA === actualA) {
+    return { points: POINTS.EXACT, type: RESULT_TYPE.EXACT };
+  }
+  const predResult = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
+  const actualResult = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
+  if (predResult === actualResult) {
+    return { points: POINTS.RESULT, type: RESULT_TYPE.RESULT };
+  }
+  return { points: POINTS.MISS, type: RESULT_TYPE.MISS };
+}
 
 /* ═══════════════════════════════════════════════════
    LEAGUE COLORS
@@ -113,9 +161,8 @@ export const BASKETBALL_LEAGUE_PRIORITY = Object.freeze({
   62: 30, 60: 28, 61: 26,
 });
 
-export const getBasketballLeaguePriority = (leagueId) => {
-  return BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
-};
+export const getBasketballLeaguePriority = (leagueId) =>
+  BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
 
 /* ═══════════════════════════════════════════════════
    CACHE TTL (milliseconds)
@@ -124,13 +171,13 @@ export const TTL = Object.freeze({
   FIXTURE_SNAPSHOT:       5 * 60 * 1000,       // 5 min — live scores
   FIXTURE_SNAPSHOT_IDLE:  30 * 60 * 1000,      // 30 min — no live matches
   REFERENCE:              24 * 60 * 60 * 1000, // 24 hours
-  ACTIVE_PREDICTIONS:     10 * 60 * 1000,      // 10 min
-  DAILY_LEADERBOARD:      10 * 60 * 1000,      // 10 min
-  ZOKA_PICKS:             30 * 60 * 1000,      // 30 min
+  ACTIVE_PREDICTIONS:     10 * 60 * 1000,      // 10 min — featured matches for users
+  ZOKA_PICKS:             30 * 60 * 1000,      // 30 min — zoka picks for guests
   ZOKA_VOTES:             10 * 60 * 1000,      // 10 min
+  DAILY_LEADERBOARD:      10 * 60 * 1000,      // 10 min
   USER_DATA:              10 * 60 * 1000,      // 10 min
   HISTORICAL:             60 * 60 * 1000,      // 1 hour
-  STALE_GRACE:            30 * 60 * 1000,      // 30 min grace
+  STALE_GRACE:            30 * 60 * 1000,      // 30 min grace period
 });
 
 /* ═══════════════════════════════════════════════════
@@ -161,24 +208,32 @@ export const POLL_INTERVAL = Object.freeze({
 export const PATHS = Object.freeze({
   FIXTURE_SNAPSHOTS: 'fixture_snapshots',
   REFERENCE_DATA: 'reference_data',
+  
+  // ★ Featured matches — what logged-in users predict on
   ACTIVE_PREDICTIONS: 'active_predictions',
   PREDICTION_SNAPSHOTS: 'prediction_snapshots',
+  
+  // ★ User predictions & results — never deleted, grouped by matchDate
   USER_PREDICTIONS: 'user_predictions',
   PREDICTION_RESULTS: 'prediction_results',
   USER_POINTS_TOTAL: 'user_points_total',
+  
+  // ★ Leaderboards — daily rolls up to weekly/monthly/goat
   DAILY_LEADERBOARD: 'daily_leaderboard',
   LEADERBOARD_SUMMARIES: 'leaderboard_summaries',
+  
+  // ★ Zoka Picks — platform predictions for guests/everyone
   ZOKA_PICKS: 'zoka_picks',
   ZOKA_VOTE_STATS: 'zoka_vote_stats',
+  
+  // ★ Admin
   MATCH_RESOLUTION_STATUS: 'match_resolution_status',
   USERS: 'users',
 });
 
 /** Build snapshot document ID for a sport+date */
 export const getSnapshotDocId = (sport, dateStr) => {
-  if (sport === SPORT.BASKETBALL) {
-    return `basketball_${dateStr}`;
-  }
+  if (sport === SPORT.BASKETBALL) return `basketball_${dateStr}`;
   return dateStr;
 };
 
@@ -191,67 +246,48 @@ export const getRefDocId = (type, sport = SPORT.FOOTBALL) => {
 /* ═══════════════════════════════════════════════════
    CACHE KEY BUILDERS
    ═══════════════════════════════════════════════════ */
-export const CACHE_KEY = {
-  snapshot: (sport, dateStr) => `snap:${SPORT_PREFIX[sport]}:${dateStr}`,
-  reference: (docId) => `snap:ref:${docId}`,
-  activePredictions: (dateStr) => `active:${dateStr}`,
-  dailyLeaderboard: (dateStr) => `dlb:${dateStr}`,
-  zokaPicks: (dateStr) => `zoka:${dateStr}`,
-  zokaVotes: (dateStr) => `zokaVotes:${dateStr}`,
-  userPredictions: (uid, dateStr) => `myPreds:${uid}:${dateStr}`,
-  predictionResults: (uid, dateStr) => `myResults:${uid}:${dateStr}`,
-  userPoints: (uid) => `upt:${uid}`,
-  historical: (period) => `hist:${period}`,
-};
+export const CACHE_KEY = Object.freeze({
+  snapshot:          (sport, dateStr) => `snap:${SPORT_PREFIX[sport]}:${dateStr}`,
+  reference:         (docId)          => `snap:ref:${docId}`,
+  activePredictions: (dateStr)        => `active:${dateStr}`,
+  dailyLeaderboard:  (dateStr)        => `dlb:${dateStr}`,
+  zokaPicks:         (dateStr)        => `zoka:${dateStr}`,
+  zokaVotes:         (dateStr)        => `zokaVotes:${dateStr}`,
+  userPredictions:   (uid, dateStr)   => `myPreds:${uid}:${dateStr}`,
+  predictionResults: (uid, dateStr)   => `myResults:${uid}:${dateStr}`,
+  userPoints:        (uid)            => `upt:${uid}`,
+  historical:        (period)         => `hist:${period}`,
+});
 
 /* ═══════════════════════════════════════════════════
-   POINTS CALCULATION
-   ═══════════════════════════════════════════════════ */
-export function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) {
-    return { points: POINTS.PENDING, type: RESULT_TYPE.PENDING };
-  }
-  if (predH === actualH && predA === actualA) {
-    return { points: POINTS.EXACT, type: RESULT_TYPE.EXACT };
-  }
-  const predResult = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const actualResult = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (predResult === actualResult) {
-    return { points: POINTS.RESULT, type: RESULT_TYPE.RESULT };
-  }
-  return { points: POINTS.MISS, type: RESULT_TYPE.MISS };
-}
-
-
-/* ═══════════════════════════════════════════════════
-   TRANSFORMED MATCH SHAPE (documentation)
+   TRANSFORMED MATCH SHAPE (TypeScript-style docs)
    ═══════════════════════════════════════════════════ */
 /**
  * @typedef {Object} TransformedMatch
- * @property {string} id - Match ID (string)
- * @property {string} sport - 'football' | 'basketball'
- * @property {string} date - ISO date string
- * @property {string} kickoff - Formatted time "HH:MM"
+ * @property {string} id          - Match ID (string)
+ * @property {string} sport       - 'football' | 'basketball'
+ * @property {string} date        - ISO date string
+ * @property {string} kickoff     - Formatted time "HH:MM"
  * @property {number|null} timestamp - Unix timestamp
- * @property {Object} homeTeam - { id, name, abbr, color }
- * @property {Object} awayTeam - { id, name, abbr, color }
- * @property {string} homeId - Home team ID
- * @property {string} awayId - Away team ID
+ * @property {Object} homeTeam    - { id, name, abbr, color }
+ * @property {Object} awayTeam    - { id, name, abbr, color }
+ * @property {string} homeId      - Home team ID
+ * @property {string} awayId      - Away team ID
  * @property {string|null} homeLogo - Logo URL
  * @property {string|null} awayLogo - Logo URL
- * @property {Object} league - { id, name, color, emblem, country, flag, type, season, round }
- * @property {string} leagueKey - League ID string
+ * @property {Object} league      - { id, name, color, emblem, country, flag, type, season, round }
+ * @property {string} leagueKey   - League ID string
  * @property {string} leagueCountry - Country name
- * @property {string} status - Short status code
- * @property {string} rawStatus - Same as status
- * @property {string} statusLong - Long status description
+ * @property {string} status      - Short status code
+ * @property {string} rawStatus   - Same as status
+ * @property {string} statusLong  - Long status description
  * @property {number|null} homeScore - Home score
  * @property {number|null} awayScore - Away score
- * @property {Object} score - Score breakdown object
- * @property {boolean} isLive - Currently playing
+ * @property {Object} score       - Score breakdown object
+ * @property {boolean} isLive     - Currently playing
  * @property {boolean} isFinished - Match ended
  * @property {boolean} isScheduled - Not started
  * @property {string|null} minute - Current minute or period
- * @property {string|null} venue - Venue name
+ * @property {string|null} venue  - Venue name
  * @property {string|null} referee - Referee name
  */
