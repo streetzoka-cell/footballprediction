@@ -296,10 +296,11 @@ export default function Login() {
       overflow: 'hidden',
     }}>
       <SEO
-        title="Sign In"
-        description="Sign in to ZOKASCORE to track your football predictions, earn badges, and climb the leaderboard."
-        keywords="login, sign in, ZOKASCORE account, football predictions"
-        url="https://zokascore.xyz/login"
+        title="Login to Your Account | ZOKASCORE"
+        description="Securely log in to your ZOKASCORE account to access premium football predictions, track your leaderboard progress, and manage your gaming profile here."
+        keywords="login, ZOKASCORE account, user login, secure access, member login"
+        path="/login"
+        robots="noindex,nofollow"
       />
 
       {/* ── Background Decorations ── */}

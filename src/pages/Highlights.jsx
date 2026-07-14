@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PlayCircle, X, AlertCircle, Tv, Clock } from 'lucide-react';
 import { fetchHighlights } from '../utils/youtubeApi';
 import SEO from "../components/SEO";
+
 /* ═══════════════════════════════════════════════════════════════
    STYLE INJECTION
    ═══════════════════════════════════════════════════════════════ */
@@ -68,11 +69,12 @@ export default function Highlights() {
    return (
     <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)' }}>
       <SEO
-  title="Football Highlights & Match Recaps"
-  description="Watch football highlights, match recaps, key moments, goals and the best action from matches around the world with ZOKASCORE."
-  keywords="football highlights, soccer highlights, match highlights, football goals, match recap, latest football videos"
-  path="/highlights"
-/>    
+        title="Football Match Highlights & Videos | ZOKASCORE"
+        description="Watch the latest football match highlights, goals, and video clips. Relive the best moments from today's top matches and major leagues on ZOKASCORE."
+        keywords="football highlights, match videos, goals, soccer highlights, football clips"
+        path="/highlights"
+        robots="index,follow"
+      />    
       {/* INTERNAL VIDEO PLAYER MODAL */}
       {activeVideo && (
         <div onClick={() => setActiveVideo(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>

@@ -171,7 +171,13 @@ export default function FAQ() {
 
   return (
     <div style={styles.page}>
-      <SEO title="FAQ — ZokaPredict" description="Find answers to common questions about ZokaPredict predictions, leagues, and features." path="/faq" />
+      <SEO
+        title="ZOKASCORE FAQ: Football Predictions Support"
+        description="Find answers to frequently asked questions about ZOKASCORE. Learn how to make predictions, join leaderboards, and manage your account with our FAQ."
+        keywords="FAQ, ZOKASCORE support, help, football predictions questions, account help"
+        path="/faq"
+        robots="index,follow"
+      />
 
       {/* Header */}
       <div style={styles.header}>

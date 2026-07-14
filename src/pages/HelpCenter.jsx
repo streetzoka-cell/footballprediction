@@ -1,4 +1,5 @@
 import { Link } from "react-router-dom";
+import SEO from "../components/SEO";
 
 export default function HelpCenter() {
   return (
@@ -10,6 +11,14 @@ export default function HelpCenter() {
         lineHeight: 1.8,
       }}
     >
+      <SEO
+        title="ZOKASCORE Help Center: Support & Guides"
+        description="Need assistance? Visit the ZOKASCORE Help Center for guides on using our platform, troubleshooting issues, and getting the most out of your experience."
+        keywords="help center, customer support, ZOKASCORE guides, troubleshooting, user guide"
+        path="/help"
+        robots="index,follow"
+      />
+
       <h1>Help Center</h1>
 
       <p>

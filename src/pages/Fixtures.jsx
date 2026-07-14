@@ -1,12 +1,12 @@
 // ═════════════════════════════════════════════════════════════════════════════════
-// FILE: src/pages/MasterGames.jsx
-// v9.2 Pro UI — League Priority, Bottom Toasts, 30-Day Smart Nav, Auto-Failover
+// FILE: src/pages/fixtures.jsx
+// v9.4 Pro UI — Deduplicated, League Priority, Stats, Mobile-Optimized, Fixed Live Count
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
-  Pause, Flag, Zap, ChevronRight, ChevronDown, Bell, BellOff,
+  Pause, Flag, Zap, ChevronRight, ChevronDown,
   RefreshCw, Calendar, AlertTriangle, Activity
 } from 'lucide-react';
 
@@ -47,196 +47,185 @@ const LEAGUE_PRIORITY = {
 const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
 
 /* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Pro v9.2
+   STYLE INJECTION — Pro v9.4 (Mobile Optimized & Smaller)
    ═══════════════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('mg9-css')) return;
   const s = document.createElement('style');
   s.id = 'mg9-css';
   s.textContent = `
-    @keyframes mg9FadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes mg9SlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes mg9FadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes mg9SlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
     @keyframes mg9Pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.6)}}
-    @keyframes mg9ScorePop{0%{transform:scale(1)}40%{transform:scale(1.5);color:#fff}100%{transform:scale(1)}}
+    @keyframes mg9ScorePop{0%{transform:scale(1)}40%{transform:scale(1.4);color:#fff}100%{transform:scale(1)}}
     @keyframes mg9GoalFlash{0%{background:rgba(16,185,129,.2)}100%{background:transparent}}
-    @keyframes mg9LiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2)}50%{box-shadow:0 0 12px 1px rgba(239,68,68,.3)}}
+    @keyframes mg9LiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2)}50%{box-shadow:0 0 8px 1px rgba(239,68,68,.3)}}
     @keyframes mg9Expand{from{opacity:0;max-height:0}to{opacity:1;max-height:800px}}
-    @keyframes mg9ToastIn{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-    @keyframes mg9Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-140px) rotate(720deg);opacity:0}}
+    @keyframes mg9ToastIn{from{opacity:0;transform:translateY(12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes mg9Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-120px) rotate(720deg);opacity:0}}
     @keyframes mg9Shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     @keyframes mg9StatusIn{from{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(.8)}}
     @keyframes mg9Spin{to{transform:rotate(360deg)}}
     @keyframes mg9StarPop{0%{transform:scale(1)}50%{transform:scale(1.4) rotate(15deg)}100%{transform:scale(1) rotate(0)}}
 
-    .mg9-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 120px;position:relative;color:var(--text-primary,#f1f5f9)}
-    .mg9-page::before{content:'';position:fixed;top:0;left:0;right:0;height:200px;background:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,transparent 60%);pointer-events:none;z-index:0}
-    .mg9-wrap{max-width:640px;margin:0 auto;padding:0 16px;position:relative;z-index:1}
+    .mg9-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 100px;position:relative;color:var(--text-primary,#f1f5f9)}
+    .mg9-wrap{max-width:100%;margin:0 auto;padding:0 8px;position:relative;z-index:1}
 
-    .mg9-hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg-deep,#0a0f1a) 85%, transparent);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);padding:14px 0 12px;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;gap:12px}
+    .mg9-hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg-deep,#0a0f1a) 92%, transparent);backdrop-filter:blur(12px) saturate(1.5);-webkit-backdrop-filter:blur(12px) saturate(1.5);padding:10px 0;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;gap:8px}
     .mg9-hdr-title{display:flex;flex-direction:column;flex:1;min-width:0}
-    .mg9-hdr-title h1{margin:0;font-size:1.1rem;font-weight:900;letter-spacing:-.02em;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:6px}
-    .mg9-hdr-title .sub{font-size:.68rem;color:var(--text-muted,#64748b);font-weight:600;margin-top:2px}
-    .mg9-hdr-actions{display:flex;align-items:center;gap:8px}
-    .mg9-hdr-btn{width:36px;height:36px;border-radius:10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:center;color:var(--text-muted,#64748b);cursor:pointer;transition:all .2s ease;-webkit-tap-highlight-color:transparent}
+    .mg9-hdr-title h1{margin:0;font-size:1rem;font-weight:900;letter-spacing:-.02em;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:4px}
+    .mg9-hdr-title .sub{font-size:.6rem;color:var(--text-muted,#64748b);font-weight:600;margin-top:1px}
+    .mg9-hdr-actions{display:flex;align-items:center;gap:4px}
+    .mg9-hdr-btn{width:32px;height:32px;border-radius:8px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:center;color:var(--text-muted,#64748b);cursor:pointer;transition:all .2s ease;-webkit-tap-highlight-color:transparent}
     .mg9-hdr-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
     .mg9-hdr-btn.active{color:var(--accent,#10b981);border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)}
     .mg9-spin{animation:mg9Spin .8s linear infinite}
 
-    .mg9-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 16px}
-    .mg9-schip{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:10px 8px;text-align:center;animation:mg9FadeIn .4s ease both}
-    .mg9-schip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
+    .mg9-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
+    .mg9-schip{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:6px 4px;text-align:center}
+    .mg9-schip .val{font-size:.9rem;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
     .mg9-schip .val.live-c{color:#ef4444}.mg9-schip .val.total-c{color:var(--accent,#10b981)}.mg9-schip .val.fav-c{color:#f59e0b}
-    .mg9-schip .lbl{font-size:.54rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
+    .mg9-schip .lbl{font-size:.45rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
 
-    /* ── Date Navigation ── */
-    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 auto 16px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:4px;width:fit-content;position:relative}
-    .mg9-nav-btn{padding:8px 16px;border-radius:9px;border:none;background:transparent;color:var(--text-muted,#64748b);font-size:.74rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
-    .mg9-nav-btn:hover{color:var(--text-primary,#f1f5f9);background:rgba(255,255,255,.02)}
-    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.2)}
+    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:2px;margin:0 auto 10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:3px;width:fit-content;position:relative}
+    .mg9-nav-btn{padding:6px 12px;border-radius:7px;border:none;background:transparent;color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.2)}
     .mg9-more-wrap{position:relative}
-    .mg9-more-btn{display:flex;align-items:center;gap:4px;padding:8px 14px;border-radius:9px;border:none;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
-    .mg9-more-btn:hover{color:var(--text-primary,#f1f5f9)}
+    .mg9-more-btn{display:flex;align-items:center;gap:3px;padding:6px 10px;border-radius:7px;border:none;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);font-size:.66rem;font-weight:600;cursor:pointer;font-family:inherit}
     .mg9-more-btn.open{background:rgba(16,185,129,.1);color:var(--accent,#10b981)}
-    .mg9-more-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:50;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.4);max-height:360px;overflow-y:auto;animation:mg9FadeIn .2s ease both}
-    .mg9-more-dropdown::-webkit-scrollbar{width:4px}
-    .mg9-more-dropdown::-webkit-scrollbar-thumb{background:var(--border,#1e293b);border-radius:4px}
-    .mg9-more-item{display:block;width:100%;text-align:left;padding:8px 14px;border:none;border-radius:8px;background:none;color:var(--text-muted,#64748b);font-size:.73rem;font-weight:600;cursor:pointer;transition:all .15s ease;font-family:inherit;white-space:nowrap}
-    .mg9-more-item:hover{background:rgba(255,255,255,.05);color:var(--text-primary,#f1f5f9)}
+    .mg9-more-dropdown{position:absolute;top:calc(100% + 4px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:4px;z-index:50;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:300px;overflow-y:auto}
+    .mg9-more-item{display:block;width:100%;text-align:left;padding:6px 10px;border:none;border-radius:6px;background:none;color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
     .mg9-more-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
-    .mg9-more-label{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted,#64748b);opacity:.6;padding:8px 14px 4px;border-bottom:1px solid var(--border,#1e293b);margin-bottom:4px}
+    .mg9-more-label{font-size:.55rem;font-weight:800;text-transform:uppercase;color:var(--text-muted,#64748b);opacity:.6;padding:6px 10px 2px;border-bottom:1px solid var(--border,#1e293b);margin-bottom:2px}
 
-    .mg9-tabs{display:flex;gap:3px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:3px;margin-bottom:14px}
-    .mg9-tab{flex:1;padding:9px 4px;border:none;border-radius:9px;background:transparent;color:var(--text-muted,#64748b);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .25s ease;text-align:center;font-family:inherit;text-transform:uppercase;letter-spacing:.03em}
-    .mg9-tab:hover{color:var(--text-primary,#f1f5f9)}
-    .mg9-tab.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.2)}
+    .mg9-tabs{display:flex;gap:2px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:2px;margin-bottom:10px}
+    .mg9-tab{flex:1;padding:6px 2px;border:none;border-radius:6px;background:transparent;color:var(--text-muted,#64748b);font-size:.62rem;font-weight:700;cursor:pointer;transition:all .2s ease;text-align:center;font-family:inherit;text-transform:uppercase}
+    .mg9-tab.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 6px rgba(16,185,129,.2)}
 
-    .mg9-filters{display:flex;gap:5px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}
+    .mg9-filters{display:flex;gap:4px;overflow-x:auto;padding:2px 0 10px;scrollbar-width:none}
     .mg9-filters::-webkit-scrollbar{display:none}
-    .mg9-filter{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s ease;white-space:nowrap;font-family:inherit}
-    .mg9-filter:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
+    .mg9-filter{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:4px 8px;border-radius:6px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.62rem;font-weight:600;cursor:pointer;white-space:nowrap;font-family:inherit}
     .mg9-filter.active{background:rgba(16,185,129,.08);color:var(--accent,#10b981);border-color:rgba(16,185,129,.25)}
-    .mg9-filter img{width:13px;height:13px;object-fit:contain;border-radius:2px}
+    .mg9-filter img{width:11px;height:11px;object-fit:contain;border-radius:2px}
 
     .mg9-search-wrap{overflow:hidden;transition:max-height .3s ease,opacity .25s ease,margin .3s ease}
     .mg9-search-wrap.shut{max-height:0;opacity:0;margin-bottom:0}
-    .mg9-search-wrap.open{max-height:56px;opacity:1;margin-bottom:12px}
-    .mg9-search{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827)}
-    .mg9-search input{flex:1;background:none;border:none;outline:none;color:var(--text-primary,#f1f5f9);font-size:.82rem;font-weight:500;font-family:inherit}
+    .mg9-search-wrap.open{max-height:50px;opacity:1;margin-bottom:10px}
+    .mg9-search{display:flex;align-items:center;gap:6px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827)}
+    .mg9-search input{flex:1;background:none;border:none;outline:none;color:var(--text-primary,#f1f5f9);font-size:.75rem;font-weight:500;font-family:inherit}
 
-    .mg9-rescue{width:100%;padding:10px 14px;border-radius:11px;border:1px solid rgba(251,191,36,.15);background:linear-gradient(135deg,rgba(251,191,36,.04),rgba(251,191,36,.01));margin-bottom:12px;display:flex;align-items:center;gap:10px;animation:mg9FadeIn .4s ease-out both}
-    .mg9-rescue-icon{width:30px;height:30px;border-radius:8px;background:rgba(251,191,36,.08);display:flex;align-items:center;justify-content:center;color:#fbbf24;font-size:.8rem;flex-shrink:0}
-    .mg9-rescue-text{flex:1;min-width:0}
-    .mg9-rescue-title{font-size:.72rem;font-weight:700;color:#fbbf24}
-    .mg9-rescue-sub{font-size:.58rem;color:var(--text-muted,#64748b);margin-top:1px}
+    .mg9-rescue{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(251,191,36,.15);background:linear-gradient(135deg,rgba(251,191,36,.04),rgba(251,191,36,.01));margin-bottom:8px;display:flex;align-items:center;gap:8px}
+    .mg9-rescue-icon{width:24px;height:24px;border-radius:6px;background:rgba(251,191,36,.08);display:flex;align-items:center;justify-content:center;color:#fbbf24;flex-shrink:0}
+    .mg9-rescue-title{font-size:.66rem;font-weight:700;color:#fbbf24}
+    .mg9-rescue-sub{font-size:.55rem;color:var(--text-muted,#64748b)}
 
-    .mg9-section{margin-bottom:20px;animation:mg9FadeIn .3s ease both}
-    .mg9-league-hd{display:flex;align-items:center;gap:7px;margin-bottom:7px;padding:0 2px}
-    .mg9-league-hd img{width:15px;height:15px;object-fit:contain;border-radius:3px;flex-shrink:0}
-    .mg9-league-hd span{font-size:.74rem;font-weight:700;color:var(--text-muted,#64748b)}
-    .mg9-league-hd .cnt{margin-left:auto;font-size:.56rem;font-weight:600;color:var(--text-muted,#64748b);opacity:.4}
+    .mg9-section{margin-bottom:14px;animation:mg9FadeIn .3s ease both}
+    .mg9-league-hd{display:flex;align-items:center;gap:5px;margin-bottom:5px;padding:0 2px}
+    .mg9-league-hd img{width:12px;height:12px;object-fit:contain;border-radius:2px;flex-shrink:0}
+    .mg9-league-hd span{font-size:.65rem;font-weight:700;color:var(--text-muted,#64748b)}
+    .mg9-league-hd .cnt{margin-left:auto;font-size:.5rem;font-weight:600;color:var(--text-muted,#64748b);opacity:.4}
 
-    .mg9-card{position:relative;overflow:hidden;padding:12px 14px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;margin-bottom:5px;transition:all .2s cubic-bezier(.22,1,.36,1);animation:mg9SlideIn .3s ease both;cursor:pointer}
-    .mg9-card:hover{background:rgba(255,255,255,.02);transform:translateY(-1px);border-color:var(--border-hover,#334155)}
+    .mg9-card{position:relative;overflow:hidden;padding:8px 10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;margin-bottom:4px;transition:all .2s cubic-bezier(.22,1,.36,1);animation:mg9SlideIn .3s ease both;cursor:pointer}
+    .mg9-card:hover{background:rgba(255,255,255,.02);border-color:var(--border-hover,#334155)}
     .mg9-card.live{border-color:rgba(239,68,68,.2);animation:mg9LiveGlow 2.5s ease-in-out infinite,mg9SlideIn .3s ease both}
-    .mg9-card.finished{opacity:.65}
-    .mg9-card.scheduled{border-left:3px solid rgba(59,130,246,.25)}
-    .mg9-card.expanded{border-radius:12px 12px 0 0;margin-bottom:0;border-color:rgba(16,185,129,.2)}
+    .mg9-card.finished{opacity:.6}
+    .mg9-card.scheduled{border-left:2px solid rgba(59,130,246,.25)}
+    .mg9-card.expanded{border-radius:10px 10px 0 0;margin-bottom:0;border-color:rgba(16,185,129,.2)}
     .mg9-card.goal-flash{animation:mg9GoalFlash 2s ease-out both}
-    .mg9-left-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
+    .mg9-left-bar{position:absolute;left:0;top:0;bottom:0;width:2px;border-radius:0 2px 2px 0}
 
-    .mg9-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    .mg9-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:.6rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
+    .mg9-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+    .mg9-status{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:.5rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
     .mg9-status.live-s{color:#ef4444;background:rgba(239,68,68,.1)}
     .mg9-status.ft-s{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
-    .mg9-status.time-s{color:var(--text-muted,#64748b);background:rgba(255,255,255,.04);font-size:.68rem;font-weight:600}
-    .mg9-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;animation:mg9Pulse 1.2s ease-in-out infinite;flex-shrink:0}
+    .mg9-status.time-s{color:var(--text-muted,#64748b);background:rgba(255,255,255,.04);font-size:.6rem}
+    .mg9-dot{width:4px;height:4px;border-radius:50%;background:#ef4444;animation:mg9Pulse 1.2s ease-in-out infinite;flex-shrink:0}
     .mg9-card-actions{display:flex;align-items:center;gap:2px}
-    .mg9-icon-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:7px;border:none;background:transparent;color:var(--text-muted,#64748b);cursor:pointer;transition:all .15s ease;opacity:.4}
-    .mg9-card:hover .mg9-icon-btn{opacity:.8}
-    .mg9-icon-btn:hover{background:rgba(255,255,255,.06);color:var(--text-primary,#f1f5f9)}
+    .mg9-icon-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--text-muted,#64748b);cursor:pointer;transition:all .15s ease;opacity:.4}
     .mg9-icon-btn.fav.active{color:#f59e0b;opacity:1;animation:mg9StarPop .4s ease}
 
-    .mg9-teams{display:flex;align-items:center;gap:6px}
+    .mg9-teams{display:flex;align-items:center;gap:4px}
     .mg9-team-col{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
     .mg9-team-col.home{align-items:flex-end}
     .mg9-team-col.away{align-items:flex-start}
-    .mg9-team-row{display:flex;align-items:center;gap:6px;min-width:0}
+    .mg9-team-row{display:flex;align-items:center;gap:4px;min-width:0}
     .mg9-team-col.home .mg9-team-row{flex-direction:row-reverse}
-    .mg9-crest{width:22px;height:22px;object-fit:contain;flex-shrink:0;border-radius:3px}
-    .mg9-team-name{font-size:.82rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+    .mg9-crest{width:16px;height:16px;object-fit:contain;flex-shrink:0;border-radius:2px}
+    .mg9-team-name{font-size:.72rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.1}
     .mg9-team-col.home .mg9-team-name{text-align:right}
-    .mg9-score-box{width:68px;flex-shrink:0;text-align:center;display:flex;align-items:center;justify-content:center}
-    .mg9-scores{display:flex;align-items:center;gap:6px}
-    .mg9-score-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:1.1rem;font-weight:800;min-width:20px;text-align:center;line-height:1}
+    
+    .mg9-score-box{width:50px;flex-shrink:0;text-align:center;display:flex;align-items:center;justify-content:center}
+    .mg9-scores{display:flex;align-items:center;gap:4px}
+    .mg9-score-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:.9rem;font-weight:800;min-width:16px;text-align:center;line-height:1}
     .mg9-score-num.live-score{color:#ef4444}
     .mg9-score-num.ft-score{color:var(--accent,#10b981)}
     .mg9-score-num.pop{animation:mg9ScorePop .45s cubic-bezier(.22,1,.36,1) both}
-    .mg9-sep{color:var(--text-muted,#64748b);font-size:.7rem;font-weight:700;opacity:.35}
-    .mg9-vs{font-size:.68rem;font-weight:800;color:var(--text-muted,#64748b);opacity:.25;letter-spacing:.08em}
+    .mg9-sep{color:var(--text-muted,#64748b);font-size:.6rem;font-weight:700;opacity:.35}
+    .mg9-vs{font-size:.6rem;font-weight:800;color:var(--text-muted,#64748b);opacity:.25}
 
-    .mg9-comp-row{display:flex;align-items:center;gap:5px;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.03)}
-    .mg9-comp-row img{width:12px;height:12px;object-fit:contain;flex-shrink:0}
-    .mg9-comp-row span{font-size:.6rem;color:var(--text-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg9-comp-row{display:flex;align-items:center;gap:4px;margin-top:4px;padding-top:3px;border-top:1px solid rgba(255,255,255,.03)}
+    .mg9-comp-row img{width:10px;height:10px;object-fit:contain;flex-shrink:0}
+    .mg9-comp-row span{font-size:.5rem;color:var(--text-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    .mg9-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-radius:inherit;z-index:3;pointer-events:none}
-    .mg9-overlay-badge{padding:8px 22px;border-radius:10px;color:#fff;font-weight:800;font-size:.85rem;letter-spacing:.05em;display:flex;align-items:center;gap:7px;animation:mg9StatusIn 3s ease both}
+    .mg9-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);border-radius:inherit;z-index:3;pointer-events:none}
+    .mg9-overlay-badge{padding:6px 16px;border-radius:8px;color:#fff;font-weight:800;font-size:.7rem;letter-spacing:.05em;display:flex;align-items:center;gap:5px;animation:mg9StatusIn 3s ease both}
 
-    .mg9-expanded{background:var(--bg-surface,#0d1321);border:1px solid var(--border,#1e293b);border-top:none;border-radius:0 0 12px 12px;overflow:hidden;animation:mg9Expand .3s ease-out both}
-    .mg9-exp-section{padding:10px 14px 4px;font-size:.56rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em}
-    .mg9-exp-row{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.72rem}
+    .mg9-expanded{background:var(--bg-surface,#0d1321);border:1px solid var(--border,#1e293b);border-top:none;border-radius:0 0 10px 10px;overflow:hidden;animation:mg9Expand .3s ease-out both}
+    .mg9-exp-section{padding:8px 10px 2px;font-size:.5rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em}
+    .mg9-exp-row{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem}
     .mg9-exp-row:last-child{border-bottom:none}
     .mg9-exp-label{color:var(--text-muted,#64748b);font-weight:600}
     .mg9-exp-val{color:var(--text-primary,#f1f5f9);font-weight:700;font-family:var(--font-display,system-ui)}
-    .mg9-no-data{padding:14px;text-align:center;color:var(--text-muted,#64748b);font-size:.7rem;opacity:.5}
+    .mg9-stat-row{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:4px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem}
+    .mg9-stat-home{text-align:right;color:var(--text-primary);font-weight:700}
+    .mg9-stat-away{text-align:left;color:var(--text-primary);font-weight:700}
+    .mg9-stat-label{text-align:center;color:var(--text-muted);font-weight:600;font-size:.6rem}
+    .mg9-no-data{padding:10px;text-align:center;color:var(--text-muted,#64748b);font-size:.6rem;opacity:.5}
 
-    .mg9-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 20px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:14px;text-align:center}
-    .mg9-empty-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);margin-bottom:2px}
-    .mg9-empty p{color:var(--text-muted,#64748b);font-size:.78rem;margin:0;font-weight:600}
+    .mg9-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:30px 20px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;text-align:center}
+    .mg9-empty-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);margin-bottom:2px}
+    .mg9-empty p{color:var(--text-muted,#64748b);font-size:.7rem;margin:0;font-weight:600}
 
-    .mg9-sk{height:60px;border-radius:12px;background:linear-gradient(90deg,var(--bg-surface,#0d1321) 25%,var(--bg-card,#111827) 50%,var(--bg-surface,#0d1321) 75%);background-size:200% 100%;animation:mg9Shimmer 1.5s ease-in-out infinite;margin-bottom:5px}
+    .mg9-sk{height:40px;border-radius:10px;background:linear-gradient(90deg,var(--bg-surface,#0d1321) 25%,var(--bg-card,#111827) 50%,var(--bg-surface,#0d1321) 75%);background-size:200% 100%;animation:mg9Shimmer 1.5s ease-in-out infinite;margin-bottom:4px}
 
-    /* Toast moved to bottom so it pops up exactly where the user is reading */
-    .mg9-toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:calc(100% - 32px);max-width:380px}
-    .mg9-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.15);border-radius:11px;padding:10px 14px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.5);animation:mg9ToastIn .3s cubic-bezier(.22,1,.36,1) both;font-size:.74rem}
-    .mg9-toast-inner{display:flex;align-items:flex-start;gap:8px}
-    .mg9-toast-icon{font-size:1.2rem;flex-shrink:0;line-height:1}
-    .mg9-toast-title{font-weight:800;font-size:.66rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
+    .mg9-toast-wrap{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:calc(100% - 20px);max-width:360px}
+    .mg9-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:8px 12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.5);animation:mg9ToastIn .3s cubic-bezier(.22,1,.36,1) both;font-size:.7rem}
+    .mg9-toast-inner{display:flex;align-items:flex-start;gap:6px}
+    .mg9-toast-icon{font-size:1rem;flex-shrink:0;line-height:1}
+    .mg9-toast-title{font-weight:800;font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
     .mg9-toast-msg{font-weight:600;line-height:1.3;opacity:.95}
-    .mg9-toast-detail{font-size:.6rem;opacity:.6;margin-top:1px}
-    .mg9-toast-score{font-family:var(--font-display,system-ui);font-weight:800;font-size:1rem;flex-shrink:0;margin-left:auto;text-shadow:0 0 8px rgba(255,255,255,.2)}
+    .mg9-toast-detail{font-size:.55rem;opacity:.6;margin-top:1px}
+    .mg9-toast-score{font-family:var(--font-display,system-ui);font-weight:800;font-size:.9rem;flex-shrink:0;margin-left:auto;text-shadow:0 0 8px rgba(255,255,255,.2)}
 
     .mg9-confetti{position:fixed;inset:0;pointer-events:none;z-index:400;overflow:hidden}
-    .mg9-confetti-p{position:absolute;width:8px;height:8px;border-radius:2px;animation:mg9Confetti 1.4s ease-out forwards}
+    .mg9-confetti-p{position:absolute;width:6px;height:6px;border-radius:2px;animation:mg9Confetti 1.4s ease-out forwards}
 
-    .mg9-tbl-wrap{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;overflow:hidden;margin-bottom:10px}
-    .mg9-tbl{width:100%;border-collapse:collapse;font-size:.7rem}
+    .mg9-tbl-wrap{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;overflow:hidden;margin-bottom:8px}
+    .mg9-tbl{width:100%;border-collapse:collapse;font-size:.65rem}
     .mg9-tbl thead{background:rgba(255,255,255,.02)}
-    .mg9-tbl th{padding:8px 6px;font-size:.54rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;text-align:left;border-bottom:1px solid var(--border,#1e293b)}
-    .mg9-tbl th.c{text-align:center;width:24px}.mg9-tbl th.p{text-align:center;width:34px}
-    .mg9-tbl td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.025);vertical-align:middle}
+    .mg9-tbl th{padding:6px 4px;font-size:.5rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;text-align:left;border-bottom:1px solid var(--border,#1e293b)}
+    .mg9-tbl th.c{text-align:center;width:20px}
+    .mg9-tbl td{padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.025);vertical-align:middle}
     .mg9-tbl tr:last-child td{border-bottom:none}
     .mg9-tbl .pos{font-weight:700;color:var(--text-muted,#64748b);text-align:center;font-variant-numeric:tabular-nums}
-    .mg9-tbl .tc{display:flex;align-items:center;gap:6px;min-width:0}
-    .mg9-tbl .tc img{width:16px;height:16px;object-fit:contain;flex-shrink:0;border-radius:3px}
+    .mg9-tbl .tc{display:flex;align-items:center;gap:4px;min-width:0}
+    .mg9-tbl .tc img{width:14px;height:14px;object-fit:contain;flex-shrink:0;border-radius:2px}
     .mg9-tbl .tc span{font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .mg9-tbl .sc{text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-muted,#64748b)}
     .mg9-tbl .pc{text-align:center;font-weight:800;color:var(--text-primary,#f1f5f9)}
 
-    .mg9-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
-    .mg9-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:11px;padding:14px 8px;text-align:center;transition:all .2s ease}
-    .mg9-team-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
-    .mg9-team-card img{width:32px;height:32px;object-fit:contain;margin:0 auto 5px;display:block}
-    .mg9-team-card .name{font-size:.68rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg9-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px}
+    .mg9-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:10px 6px;text-align:center}
+    .mg9-team-card img{width:28px;height:28px;object-fit:contain;margin:0 auto 4px;display:block}
+    .mg9-team-card .name{font-size:.6rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    .mg9-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
-    .mg9-comp-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:14px;display:flex;align-items:center;gap:11px;transition:all .2s ease;cursor:pointer}
-    .mg9-comp-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
-    .mg9-comp-card img{width:28px;height:28px;object-fit:contain;flex-shrink:0}
-    .mg9-comp-card .info{flex:1;min-width:0}
-    .mg9-comp-card .cname{font-size:.76rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .mg9-comp-card .carea{font-size:.54rem;color:var(--text-muted,#64748b);margin-top:1px}
+    .mg9-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
+    .mg9-comp-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:10px;display:flex;align-items:center;gap:8px;cursor:pointer}
+    .mg9-comp-card img{width:24px;height:24px;object-fit:contain;flex-shrink:0}
+    .mg9-comp-card .cname{font-size:.7rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg9-comp-card .carea{font-size:.5rem;color:var(--text-muted,#64748b)}
 
-    @media(max-width:380px){.mg9-team-name{font-size:.74rem}.mg9-score-num{font-size:.98rem}.mg9-score-box{width:58px}.mg9-crest{width:18px;height:18px}.mg9-card{padding:10px 10px 11px}}
+    @media(max-width:380px){.mg9-team-name{font-size:.68rem}.mg9-score-num{font-size:.85rem}.mg9-crest{width:14px;height:14px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
   `;
   document.head.appendChild(s);
@@ -382,9 +371,10 @@ function normalizeMatch(raw, isPrimary) {
     kickoff = raw.kickoff;
   }
 
-  const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H');
+  // ★ FIX: Check raw flags AND status strings for both Primary & Backup to perfectly match Home.jsx logic
+  const isLive = raw.isLive || status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE';
   const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET');
+  const isFinished = raw.isFinished || status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN';
 
   const homeScore = isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
   const awayScore = isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
@@ -400,6 +390,7 @@ function normalizeMatch(raw, isPrimary) {
     leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
     leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
     score: raw.score,
+    stats: raw.stats || raw.matchStats || [],
   };
 }
 
@@ -408,18 +399,41 @@ function normalizeMatch(raw, isPrimary) {
    ═══════════════════════════════════════════════════════════════════════ */
 function ScoreBreakdown({ match }) {
   const s = match.score || {};
+  const stats = match.stats || [];
+  
   const periods = [
-    { l: 'Half Time', h: s.halfTime?.home ?? match.homeScore, a: s.halfTime?.away ?? match.awayScore },
+    { l: 'Half Time', h: s.halfTime?.home, a: s.halfTime?.away },
     { l: 'Full Time', h: s.fullTime?.home ?? match.homeScore, a: s.fullTime?.away ?? match.awayScore },
   ];
-  const hasData = periods.some(p => p.h != null || p.a != null);
-  if (!hasData) return <div className="mg9-no-data">Details appear once the match begins</div>;
+  
+  const hasScoreData = periods.some(p => p.h != null || p.a != null);
+  const hasStatsData = stats.length > 0;
+  
+  if (!hasScoreData && !hasStatsData) return <div className="mg9-no-data">Details appear once the match begins</div>;
+  
   return (
-    <div style={{ padding: '6px 0 2px' }}>
-      <div className="mg9-exp-section">Score Breakdown</div>
-      {periods.filter(p => p.h != null || p.a != null).map(p => (
-        <div key={p.l} className="mg9-exp-row"><span className="mg9-exp-label">{p.l}</span><span className="mg9-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
-      ))}
+    <div style={{ padding: '4px 0 0' }}>
+      {hasScoreData && (
+        <>
+          <div className="mg9-exp-section">Score Breakdown</div>
+          {periods.filter(p => p.h != null || p.a != null).map(p => (
+            <div key={p.l} className="mg9-exp-row"><span className="mg9-exp-label">{p.l}</span><span className="mg9-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
+          ))}
+        </>
+      )}
+      
+      {hasStatsData && (
+        <>
+          <div className="mg9-exp-section">Match Stats</div>
+          {stats.map((stat, i) => (
+            <div key={i} className="mg9-stat-row">
+              <span className="mg9-stat-home">{stat.home ?? '-'}</span>
+              <span className="mg9-stat-label">{stat.type}</span>
+              <span className="mg9-stat-away">{stat.away ?? '-'}</span>
+            </div>
+          ))}
+        </>
+      )}
     </div>
   );
 }
@@ -447,7 +461,7 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
 
   return (
     <div>
-      <div className={cls} style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isFt) ? 16 : 14 }} onClick={() => onToggle(isExp ? null : m.id)}>
+      <div className={cls} style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isFt) ? 12 : 10 }} onClick={() => onToggle(isExp ? null : m.id)}>
         {(isLive || isFt) && <div className="mg9-left-bar" style={{ background: barColor }} />}
         <div className="mg9-card-top">
           <div>
@@ -458,7 +472,7 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
           </div>
           <div className="mg9-card-actions" onClick={e => e.stopPropagation()}>
             <button className={`mg9-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
-              <Star size={14} fill={isFav ? '#f59e0b' : 'none'} />
+              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} />
             </button>
           </div>
         </div>
@@ -492,9 +506,9 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
         {sa && (
           <div className="mg9-overlay">
             <div className="mg9-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>
-              {sa.type === 'ht' && <><Pause size={15} /> HALF TIME</>}
-              {sa.type === 'ft' && <><Flag size={15} /> FULL TIME</>}
-              {sa.type === 'live' && <><Zap size={15} /> KICK OFF</>}
+              {sa.type === 'ht' && <><Pause size={12} /> HALF TIME</>}
+              {sa.type === 'ft' && <><Flag size={12} /> FULL TIME</>}
+              {sa.type === 'live' && <><Zap size={12} /> KICK OFF</>}
             </div>
           </div>
         )}
@@ -617,11 +631,19 @@ export default function MasterGames() {
       setPrimaryFixtures(prev => prev.map(f => {
         const live = liveMap.get(String(f.id));
         if (live) {
-          return { ...f, homeScore: live.homeScore, awayScore: live.awayScore, isLive: true, isFinished: false, status: live.status || 'LIVE' };
+          // Match IS in live feed -> update score & status
+          return { 
+            ...f, 
+            homeScore: live.homeScore ?? f.homeScore, 
+            awayScore: live.awayScore ?? f.awayScore, 
+            isLive: true, 
+            isFinished: false, 
+            status: live.status || 'LIVE' 
+          };
         }
-        if (f.isLive) {
-          return { ...f, isLive: false, isFinished: true, status: 'FT' };
-        }
+        
+        // ★ FIX: If it's not in this specific poll, just keep its current state.
+        // Do NOT mark it as FT prematurely, as the API might have just dropped it for a second.
         return f;
       }));
     });
@@ -630,7 +652,7 @@ export default function MasterGames() {
   }, [selectedDate]);
 
   /* ═══════════════════════════════════════════════════════════════
-     2. SEAMLESS AUTO-FAILOVER BLEND
+     2. SEAMLESS AUTO-FAILOVER BLEND & DEDUPLICATION
      ═══════════════════════════════════════════════════════════════ */
   const backupFixtures = useMemo(() => {
     return (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === selectedDate);
@@ -665,7 +687,17 @@ export default function MasterGames() {
       const terms = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
       if (terms.length) list = list.filter(m => matchQ(m, terms));
     }
-    return list;
+    
+    // ★ DEDUPLICATION LOGIC: Remove duplicate match IDs
+    const uniqueIds = new Set();
+    const dedupedList = list.filter(m => {
+      const idStr = String(m.id);
+      if (uniqueIds.has(idStr)) return false;
+      uniqueIds.add(idStr);
+      return true;
+    });
+    
+    return dedupedList;
   }, [primaryFixtures, backupFixtures, compFilter, searchQ]);
 
   /* ═══════════════════════════════════════════════════════════════
@@ -710,7 +742,7 @@ export default function MasterGames() {
   }, [displayFixtures]);
 
   const liveCount = useMemo(() => displayFixtures.filter(m => m.isLive).length, [displayFixtures]);
-  const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(m.id)), [displayFixtures, favs]);
+  const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(String(m.id))), [displayFixtures, favs]);
 
   /* ═══════════════════════════════════════════════════════════════
      4. TABS (Standings / Teams)
@@ -798,7 +830,13 @@ export default function MasterGames() {
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="mg9-page">
-      <SEO title="Football Fixtures & Live Scores" description="Live football scores, fixtures, and predictions." path="/fixtures" />
+      <SEO
+        title="Football Fixtures & Upcoming Matches | ZOKASCORE"
+        description="View today's football fixtures and upcoming match schedules. Stay updated with kick-off times and match details for all major leagues on ZOKASCORE."
+        keywords="football fixtures, match schedules, upcoming matches, soccer fixtures, today matches"
+        path="/fixtures"
+        robots="index,follow"
+      />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -806,18 +844,18 @@ export default function MasterGames() {
         {/* Header */}
         <div className="mg9-hdr">
           <div className="mg9-hdr-title">
-            <h1><Activity size={16} style={{ color: 'var(--accent)' }} /> Master Games</h1>
+            <h1><Activity size={14} style={{ color: 'var(--accent)' }} /> Master Games</h1>
             <div className="sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
           <div className="mg9-hdr-actions">
             <button className={`mg9-hdr-btn ${searchOpen ? 'active' : ''}`} onClick={() => setSearchOpen(p => !p)} title="Search">
-              {searchOpen ? <X size={16} /> : <Search size={16} />}
+              {searchOpen ? <X size={14} /> : <Search size={14} />}
             </button>
             <button className={`mg9-hdr-btn ${soundOn ? 'active' : ''}`} onClick={() => setSoundOn(p => !p)} title="Sound">
-              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
+              {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
             </button>
             <button className="mg9-hdr-btn" onClick={() => refreshFixtures()} title="Refresh">
-              <RefreshCw size={16} className={primaryLoading || backupLoading ? 'mg9-spin' : ''} />
+              <RefreshCw size={14} className={primaryLoading || backupLoading ? 'mg9-spin' : ''} />
             </button>
           </div>
         </div>
@@ -895,7 +933,7 @@ export default function MasterGames() {
           <>
             {rescued && (
               <div className="mg9-rescue">
-                <div className="mg9-rescue-icon"><AlertTriangle size={15} /></div>
+                <div className="mg9-rescue-icon"><AlertTriangle size={14} /></div>
                 <div className="mg9-rescue-text">
                   <div className="mg9-rescue-title">Backup Source Active</div>
                   <div className="mg9-rescue-sub">Showing {backupFixtures.length} games from global feed</div>

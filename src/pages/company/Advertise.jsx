@@ -110,7 +110,13 @@ export default function Advertise() {
 
   return (
     <div className="ad-page">
-      <SEO title="Advertise on ZokaPredict — Reach Football Fans" description="Advertise to 50,000+ engaged football fans. Banner ads, sponsored leaderboards, and targeted campaigns." path="/advertise" />
+      <SEO
+        title="Advertise With ZOKASCORE | Sports Marketing"
+        description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our premium banner ads and sponsored leaderboard marketing opportunities."
+        keywords="advertise on ZOKASCORE, sports marketing, football ads, banner advertising, sponsored leaderboards"
+        path="/advertise"
+        robots="index,follow"
+      />
 
       <div className="ad-hdr">
         <div className="ad-wrap">

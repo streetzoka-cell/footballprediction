@@ -6,8 +6,9 @@ export default function NotFound() {
   return (
     <>
       <SEO
-        title="404 - Page Not Found"
-        description="The page you're looking for doesn't exist or may have been moved."
+        title="404 - Page Not Found | ZOKASCORE"
+        description="The page you are looking for doesn't exist or may have been moved. Check the URL or navigate back to the ZOKASCORE homepage to find what you need."
+        keywords="404 page not found, broken link, missing page, ZOKASCORE error"
         path="/404"
         robots="noindex,nofollow"
       />

@@ -426,9 +426,10 @@ useEffect(() => {
     <div className="lb18-page" key={focusKey}>
       <SEO
         title="Football Prediction Leaderboard"
-        description="View the ZOKASCORE football prediction leaderboard."
-        keywords="football prediction leaderboard, football rankings"
+        description="Compete with football fans, climb the leaderboard, and view the best football prediction rankings on ZOKASCORE. See who tops the charts this season."
+        keywords="football leaderboard, prediction rankings, football predictions, ZOKASCORE leaderboard"
         path="/leaderboard"
+        robots="index,follow"
       />
 
       {/* ─── Sticky Header ─── */}

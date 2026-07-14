@@ -737,7 +737,7 @@ export default function Home() {
               <span className="v21-ldot" /><span style={{ fontSize: '.76rem', fontWeight: 900, color: '#ef4444' }}>{liveCount} LIVE</span>
               <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,.12)', borderRadius: 1 }} />
               {/* ★ Updated Route Link */}
-              <Link to="/mastergames" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
+              <Link to="/fixtures" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
             </div>
             <div className="v21-livestrip">{liveMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
           </div>

@@ -1260,7 +1260,13 @@ export default function Predictions() {
 
   return (
     <div className="v19-page">
-      <SEO title="Predictions — ZokaPredict" description="Make your score predictions for featured matches and compete on the daily leaderboard." />
+      <SEO
+        title="Expert Football Predictions & Tips | ZOKASCORE"
+        description="Access accurate football predictions and expert betting tips. Analyze stats and make informed decisions with our daily match predictions on ZOKASCORE."
+        keywords="football predictions, betting tips, match predictions, soccer tips, football analysis"
+        path="/predictions"
+        robots="index,follow"
+      />
 
       <div className="v19-hdr">
         <div className="v19-wrap">

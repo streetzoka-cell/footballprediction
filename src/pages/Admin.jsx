@@ -35,6 +35,7 @@ import {
 
 // ★ NEW: Primary Source (Node Backend)
 import { fetchFixtures } from '../utils/api';
+import SEO from '../components/SEO';
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    MEMORY LAYER
@@ -1623,6 +1624,13 @@ export default function Admin() {
 
   return (
     <div className="ap">
+      <SEO
+        title="Admin Dashboard | ZOKASCORE"
+        description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently."
+        keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards"
+        path="/admin"
+        robots="noindex,nofollow"
+      />
       <div className="aw">
         <div className="ah">
           <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>

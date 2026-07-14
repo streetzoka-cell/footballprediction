@@ -98,7 +98,13 @@ export default function Partners() {
 
   return (
     <div className="pa-page">
-      <SEO title="Partner with ZokaPredict — Advertise & Sponsor" description="Reach 50,000+ football fans through sponsored leaderboards, in-app ads, and content partnerships on ZokaPredict." path="/partners" />
+      <SEO
+        title="Partner With ZOKASCORE | Sports Advertising"
+        description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our sponsored leaderboards, in-app banner ads, and sports partnership deals."
+        keywords="sports partnerships, sponsor ZOKASCORE, football advertising, sports marketing, banner ads, sponsored leaderboards"
+        path="/partners"
+        robots="index,follow"
+      />
 
       <div className="pa-hdr">
         <div className="pa-wrap">

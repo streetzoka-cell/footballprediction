@@ -126,7 +126,13 @@ export default function Contact() {
 
   return (
     <div className="cc-page">
-      <SEO title="Contact ZokaPredict" description="Get in touch with the ZokaPredict team. Report bugs, request features, or explore partnership opportunities." path="/contact" />
+      <SEO
+        title="Contact ZOKASCORE Support Team"
+        description="Need assistance? Contact the ZOKASCORE team for support, bug reports, feature requests, or business partnerships. We're here to help you 24/7."
+        keywords="contact ZOKASCORE, customer support, feature request, bug report, business partnership, help center"
+        path="/contact"
+        robots="index,follow"
+      />
 
       <div className="cc-hdr">
         <div className="cc-wrap">

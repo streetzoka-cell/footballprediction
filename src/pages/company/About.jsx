@@ -117,7 +117,13 @@ export default function About() {
 
   return (
     <div className="co-page">
-      <SEO title="About ZokaPredict — Our Story" description="Learn about ZokaPredict, the football prediction platform built for fans who love the beautiful game. Founded by Kimutai Gibson." path="/about" />
+      <SEO
+        title="About ZOKASCORE | Football Predictions Platform"
+        description="Learn more about ZOKASCORE, your trusted platform for football predictions, live scores, and community gaming. Discover our mission and what we offer."
+        keywords="about ZOKASCORE, football platform, prediction community, sports gaming, company info"
+        path="/about"
+        robots="index,follow"
+      />
 
       <div className="co-hdr">
         <div className="co-wrap">

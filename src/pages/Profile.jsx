@@ -306,10 +306,11 @@ export default function Profile() {
   return (
     <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
       <SEO
-        title="My Profile"
-        description="View your prediction stats, accuracy, badges, and leaderboard rank on ZOKASCORE."
-        keywords="profile, prediction stats, accuracy, badges, leaderboard rank"
-        url="https://zokascore.xyz/profile"
+        title="My Profile & Settings | ZOKASCORE"
+        description="View and manage your ZOKASCORE profile. Update your account settings, track your prediction history, and review your overall leaderboard rankings here."
+        keywords="user profile, account settings, ZOKASCORE profile, prediction history, user dashboard"
+        path="/profile"
+        robots="noindex,nofollow"
       />
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 20px 100px' }}>

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import SEO from "../../components/SEO";
 
 const styles = {
   page: {
@@ -135,6 +136,14 @@ const styles = {
 export default function Team() {
   return (
     <div style={styles.page}>
+      <SEO
+        title="Meet the ZOKASCORE Developer | Solo Dev Team"
+        description="Learn about the solo developer behind ZOKASCORE. Designed, coded, and maintained by one passionate creator dedicated to delivering the ultimate football experience."
+        keywords="ZOKASCORE team, solo developer, about the developer, football prediction creator, Kimutai Gibson"
+        path="/team"
+        robots="index,follow"
+      />
+      
       <div style={styles.hero}>
         <div style={styles.container}>
           

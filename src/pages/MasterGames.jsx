@@ -660,7 +660,7 @@ export default function MasterGames() {
   const todayStr = getLocalDateStr(0);
   const yesterdayStr = getLocalDateStr(-1);
   const tomorrowStr = getLocalDateStr(1);
-      const otherDates = useMemo(() => {
+  const otherDates = useMemo(() => {
     const arr = [];
     for (let i = -14; i <= 14; i++) { // Changed from -7 / +7 to -14 / +14
       if (i >= -1 && i <= 1) continue; 
@@ -685,7 +685,7 @@ export default function MasterGames() {
   }, [fixtures, selectedDate, compFilter, searchQ]);
 
   /* -- Grouped by competition -- */
-    const grouped = useMemo(() => {
+  const grouped = useMemo(() => {
     const map = new Map();
     filteredFixtures.forEach(m => {
       const key = m.competition?.name || 'Other';
@@ -761,7 +761,13 @@ export default function MasterGames() {
 
   return (
     <div className="mg8-page">
-      <SEO title="Live Football Scores & Fixtures" description="Real-time football scores, fixtures, standings and teams." />
+      <SEO
+        title="Master Games & Premium Predictions | ZOKASCORE"
+        description="Join the Master Games at ZOKASCORE for premium football predictions and high-stakes competition. Test your skills against top predictors and win big."
+        keywords="master games, premium predictions, football tips, high stakes, expert predictions"
+        path="/mastergames"
+        robots="index,follow"
+      />
 
       <div className="mg8-wrap">
         <header className="mg8-header">

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function Terms() {
   const sectionStyle = { marginBottom: 32 };
@@ -10,6 +11,14 @@ export default function Terms() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+      <SEO
+        title="Terms of Service - ZOKASCORE Rules"
+        description="Review the ZOKASCORE Terms of Service to understand the rules and guidelines for using our football prediction platform, contests, and community features."
+        keywords="terms of service, terms and conditions, ZOKASCORE rules, user agreement, legal terms"
+        path="/terms"
+        robots="index,follow"
+      />
+
       {/* Header */}
       <div style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '40px 20px' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>

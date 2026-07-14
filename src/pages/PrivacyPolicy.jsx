@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Shield, ArrowLeft } from 'lucide-react';
+import SEO from '../components/SEO';
 
 export default function PrivacyPolicy() {
   const sectionStyle = { marginBottom: 32 };
@@ -10,6 +11,14 @@ export default function PrivacyPolicy() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)' }}>
+      <SEO
+        title="Privacy Policy - ZOKASCORE Platform"
+        description="Read the ZOKASCORE Privacy Policy to understand how we collect, use, and protect your personal data while you enjoy our football prediction services."
+        keywords="privacy policy, data protection, ZOKASCORE privacy, user data, cookie policy"
+        path="/privacy"
+        robots="index,follow"
+      />
+
       {/* Header */}
       <div style={{ background: 'var(--bg-card)', borderBottom: '1px solid var(--border)', padding: '40px 20px' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
