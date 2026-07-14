@@ -114,17 +114,17 @@ export const POINTS = Object.freeze({
 /** Calculate points for a prediction */
 export function calcPoints(predH, predA, actualH, actualA) {
   if (actualH == null || actualA == null) {
-    return { points: POINTS.PENDING, type: RESULT_TYPE.PENDING };
+    return { points: POINTS[RESULT_TYPE.PENDING], type: RESULT_TYPE.PENDING };
   }
   if (predH === actualH && predA === actualA) {
-    return { points: POINTS.EXACT, type: RESULT_TYPE.EXACT };
+    return { points: POINTS[RESULT_TYPE.EXACT], type: RESULT_TYPE.EXACT }; // 10 points
   }
   const predResult = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
   const actualResult = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
   if (predResult === actualResult) {
-    return { points: POINTS.RESULT, type: RESULT_TYPE.RESULT };
+    return { points: POINTS[RESULT_TYPE.RESULT], type: RESULT_TYPE.RESULT }; // 3 points
   }
-  return { points: POINTS.MISS, type: RESULT_TYPE.MISS };
+  return { points: POINTS[RESULT_TYPE.MISS], type: RESULT_TYPE.MISS }; // 0 points
 }
 
 /* ═══════════════════════════════════════════════════

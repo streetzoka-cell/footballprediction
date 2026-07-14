@@ -495,9 +495,11 @@ function Skeleton() {
 }
 
 function ResultBadge({ result }) {
-  if (!result || result.type === 'pending') return null;
-  if (result.type === 'exact') return <span className="v19-bdg ex"><CheckCircle2 size={8} /> EXACT +{result.points || 10}</span>;
-  if (result.type === 'result') return <span className="v19-bdg rs"><TrendingUp size={8} /> RESULT +{result.points || 3}</span>;
+  if (!result) return null;
+  const rType = result.resultType || result.type; // ★ Handles both Firestore data and local calc
+  if (!rType || rType === 'pending') return null;
+  if (rType === 'exact') return <span className="v19-bdg ex"><CheckCircle2 size={8} /> EXACT +{result.points || 10}</span>;
+  if (rType === 'result') return <span className="v19-bdg rs"><TrendingUp size={8} /> RESULT +{result.points || 3}</span>;
   return <span className="v19-bdg ms"><CircleX size={8} /> MISS</span>;
 }
 
@@ -610,7 +612,6 @@ function ZokaPredCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
     </div>
   );
 }
-
 /* ═══════════════════════════════════════════════════
    PREDICTION CARD
    ═══════════════════════════════════════════════════ */
@@ -618,7 +619,10 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   const isFinished = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
   const hasPred = !!userPred;
-  const isResolved = result?.resultType && result.resultType !== 'pending';
+  
+  // ★ FIX: Use resultType (saved by backend) with fallback to type (for local calc)
+  const rType = result?.resultType || result?.type;
+  const isResolved = rType && rType !== 'pending';
 
   const homeLogo = pred.homeLogo || pred.homeTeam?.logo || pred.homeTeam?.crest;
   const awayLogo = pred.awayLogo || pred.awayTeam?.logo || pred.awayTeam?.crest;
@@ -630,9 +634,9 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   let leftBorder = 'var(--border)';
   let cardExtra = '';
   if (isEditing) { leftBorder = 'var(--accent)'; cardExtra = ' editing'; }
-  else if (isResolved && result.type === 'exact') leftBorder = 'var(--accent)';
-  else if (isResolved && result.type === 'result') leftBorder = 'var(--gold)';
-  else if (isResolved && result.type === 'miss') leftBorder = '#ef4444';
+  else if (isResolved && rType === 'exact') leftBorder = 'var(--accent)';
+  else if (isResolved && rType === 'result') leftBorder = 'var(--gold)';
+  else if (isResolved && rType === 'miss') leftBorder = '#ef4444';
   else if (isLive) leftBorder = '#ef4444';
   else if (isFinished) leftBorder = 'rgba(0,230,118,.25)';
   else if (hasPred) leftBorder = '#60a5fa';
@@ -645,9 +649,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   else if (isFinished) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(0,230,118,.08)'; }
   else if (isMatchLocked && !isEditing) { statusLabel = 'LOCKED'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,.08)'; }
 
-  const cardCls = `v19-mc${cardExtra}${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}${standalone ? ' standalone' : ''}`;
-
-  return (
+  const cardCls = `v19-mc${cardExtra}${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}${standalone ? ' standalone' : ''}`;  return (
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftBorder}`, animation: `v19-stagger .3s ${SMOOTH} ${index * 25}ms both` }}>
       <div className="v19-mh">
         <div className="v19-ml">
@@ -1037,22 +1039,29 @@ export default function Predictions() {
           return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
         });
 
-        if (loggedIn && uid) {
+               if (loggedIn && uid) {
           try {
-            const predsData = await dataLayer.fetchUserPredictions(uid, selDate);
-            if (predsData && mounted.current) {
+            // ★ FIXED: Fetch predictions for ALL visible dates, not just selDate
+            const allPredsData = await Promise.all(fetchDates.map(d => dataLayer.fetchUserPredictions(uid, d).catch(() => ({}))));
+            if (mounted.current) {
               const map = {};
-              Object.values(predsData).forEach(p => {
-                if (p.predId) map[p.predId] = p;
-                if (p.matchId) map[String(p.matchId)] = p;
+              allPredsData.forEach(preds => {
+                Object.values(preds || {}).forEach(p => {
+                  if (p.predId) map[p.predId] = p;
+                  if (p.matchId) map[String(p.matchId)] = p;
+                });
               });
               setUserPreds(map);
             }
           } catch { /* ignore */ }
 
           try {
-            const resultsData = await dataLayer.fetchPredictionResults(uid, selDate);
-            if (resultsData && mounted.current) setPredResults(resultsData.results || []);
+            // ★ FIXED: Fetch results for ALL visible dates
+            const allResultsData = await Promise.all(fetchDates.map(d => dataLayer.fetchPredictionResults(uid, d).catch(() => ({ results: [] }))));
+            if (mounted.current) {
+              const allResults = allResultsData.flatMap(r => r?.results || []);
+              setPredResults(allResults);
+            }
           } catch { /* ignore */ }
 
           try {
@@ -1085,11 +1094,6 @@ export default function Predictions() {
           setLoadedDates(prev => new Set([...prev, key]));
         }
       }
-    };
-    run();
-    return () => { cancelled = true; };
-  }, [selDate, loggedIn, uid, fetchDates, loadedDates]);
-
   useEffect(() => {
     const unsubs = [];
     unsubs.push(eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (payload) => {
@@ -1116,16 +1120,19 @@ export default function Predictions() {
         return updated;
       });
     }));
-    unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
-      if (payload.uid !== uid || payload.dateStr !== selDate) return;
-      dataLayer.fetchUserPredictions(uid, selDate).then(data => {
+        unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
+      if (payload.uid !== uid) return;
+      // ★ FIXED: Fetch the specific date that was saved, regardless of what selDate is
+      dataLayer.fetchUserPredictions(uid, payload.dateStr).then(data => {
         if (!mounted.current || !data) return;
-        const map = {};
-        Object.values(data).forEach(p => {
-          if (p.predId) map[p.predId] = p;
-          if (p.matchId) map[String(p.matchId)] = p;
+        setUserPreds(prev => {
+          const updated = { ...prev };
+          Object.values(data).forEach(p => {
+            if (p.predId) updated[p.predId] = p;
+            if (p.matchId) updated[String(p.matchId)] = p;
+          });
+          return updated;
         });
-        setUserPreds(map);
       }).catch(err => {
         console.warn('[Predictions] Re-fetch after save failed:', err.message);
       });
