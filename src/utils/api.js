@@ -277,7 +277,8 @@ function _emptyResult(error = null) {
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(date);
+    // ALWAYS read from today's snapshot doc, because it contains yesterday, today, and tomorrow arrays
+const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
     if (!snapshot) return _emptyResult(null);
     const matches = _extractMatchesForDate(snapshot, date);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);

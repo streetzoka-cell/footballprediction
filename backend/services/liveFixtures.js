@@ -43,6 +43,10 @@ class LiveFixturesService {
     this.repo = repo;
     this.ftProcessor = ftProcessor;
     this.lastLiveSnapshot = new Map();
+    
+    // ★ FIX: Initialize lastFinishedSnapshot to prevent undefined .values() error
+    this.lastFinishedSnapshot = new Map();
+    
     this.trackedLeagueIds = new Set(
       LEAGUES.filter(function (l) {
         return l.active;

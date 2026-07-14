@@ -102,6 +102,9 @@ class DailyFixturesService {
           logger.info(
             `[DailyFixtures] Cache verified (${this._docCache.tomorrow.length} tomorrow docs) — skipping`
           );
+          // ★ FIX: Write snapshot before returning early!
+          await this._writeSnapshot(todayStr);
+          
           return {
             total: 0,
             writes: 0,
@@ -120,6 +123,10 @@ class DailyFixturesService {
           { skipTomorrow: true } // Tomorrow is already populated
         );
         cache.invalidatePrefix("ft:");
+        
+        // ★ FIX: Write snapshot before returning early!
+        await this._writeSnapshot(todayStr);
+        
         return {
           total: this._docCache.tomorrow.length,
           writes: fillResult.writes,
@@ -144,6 +151,10 @@ class DailyFixturesService {
           { skipTomorrow: true }
         );
         cache.invalidatePrefix("ft:");
+        
+        // ★ FIX: Write snapshot before returning early!
+        await this._writeSnapshot(todayStr);
+        
         return {
           total: this._docCache.tomorrow.length,
           writes: fillResult.writes,
@@ -337,15 +348,7 @@ class DailyFixturesService {
     cache.invalidatePrefix("ft:");
 
     // ── Write snapshot for frontend (single-doc read) ──
-    try {
-      await snapshotWriter.writeFootballSnapshot(todayStr, {
-        yesterday: this._docCache.yesterday,
-        today: this._docCache.today,
-        tomorrow: this._docCache.tomorrow,
-      });
-    } catch (err) {
-      logger.error(`[DailyFixtures] Snapshot write failed: ${err.message}`);
-    }
+    await this._writeSnapshot(todayStr);
 
     const duration = Date.now() - startTime;
     const totalApiCalls = fillResult.fetches + tomorrowApiCall;
@@ -378,6 +381,23 @@ class DailyFixturesService {
   // ==========================================================
   // PRIVATE
   // ==========================================================
+
+  /**
+   * ★ FIX: Helper to write the frontend snapshot document.
+   * This guarantees the frontend dataLayer can read the matches.
+   */
+  async _writeSnapshot(todayStr) {
+    try {
+      await snapshotWriter.writeFootballSnapshot(todayStr, {
+        yesterday: this._docCache.yesterday,
+        today: this._docCache.today,
+        tomorrow: this._docCache.tomorrow,
+      });
+      logger.info(`[DailyFixtures] Snapshot written to Firestore for frontend`);
+    } catch (err) {
+      logger.error(`[DailyFixtures] Snapshot write failed: ${err.message}`);
+    }
+  }
 
   /**
    * Fill empty day collections from API.

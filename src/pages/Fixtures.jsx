@@ -1,20 +1,53 @@
 // ═════════════════════════════════════════════════════════════════════════════════
-// FILE: src/pages/MasterGames.jsx (or Fixtures.jsx)
-// v9.0 — Pro UI, Smart Notifications, No Reloads, Seamless Date Strip
+// FILE: src/pages/MasterGames.jsx
+// v9.1 Pro UI — League Priority, Bottom Toasts, Smart Date Nav, Auto-Failover
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown, Bell, BellOff,
-  RefreshCw, Calendar, AlertTriangle, Activity, ChevronLeft
+  RefreshCw, Calendar, AlertTriangle, Activity
 } from 'lucide-react';
+
+// Primary Source (Node Backend)
+import {
+  fetchFixtures,
+  subscribeToLiveFixtures,
+  getTodayStr,
+  getYesterdayStr,
+  getTomorrowStr
+} from '../utils/api';
+
+// Backup Source (Football-data.org context)
 import { useFootballData } from '../context/FootballDataContext';
-import { todayStr, getLocalDateStr, getLocalDateFromUtc, getDateRange, formatDateShort } from '../utils/dates';
+
+// Date Helpers
+import { getLocalDateStr, getLocalDateFromUtc, formatDateShort } from '../utils/dates';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Pro v9.0
+   LEAGUE PRIORITY MAP (World Cup downwards)
+   ═══════════════════════════════════════════════════════════════════════ */
+const LEAGUE_PRIORITY = {
+  'FIFA World Cup': 1,
+  'UEFA Champions League': 2,
+  'UEFA Europa League': 3,
+  'UEFA Conference League': 4,
+  'Premier League': 5,
+  'La Liga': 6,
+  'Serie A': 7,
+  'Bundesliga': 8,
+  'Ligue 1': 9,
+  'Primeira Liga': 10,
+  'Eredivisie': 11,
+  'Süper Lig': 12,
+  'Championship': 13,
+};
+const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
+
+/* ═══════════════════════════════════════════════════════════════════════
+   STYLE INJECTION — Pro v9.1
    ═══════════════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('mg9-css')) return;
@@ -28,18 +61,17 @@ const injectStyles = () => {
     @keyframes mg9GoalFlash{0%{background:rgba(16,185,129,.2)}100%{background:transparent}}
     @keyframes mg9LiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2)}50%{box-shadow:0 0 12px 1px rgba(239,68,68,.3)}}
     @keyframes mg9Expand{from{opacity:0;max-height:0}to{opacity:1;max-height:800px}}
-    @keyframes mg9ToastIn{from{opacity:0;transform:translateY(-16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-    @keyframes mg9Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(140px) rotate(720deg);opacity:0}}
+    @keyframes mg9ToastIn{from{opacity:0;transform:translateY(16px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes mg9Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-140px) rotate(720deg);opacity:0}}
     @keyframes mg9Shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     @keyframes mg9StatusIn{from{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(.8)}}
     @keyframes mg9Spin{to{transform:rotate(360deg)}}
     @keyframes mg9StarPop{0%{transform:scale(1)}50%{transform:scale(1.4) rotate(15deg)}100%{transform:scale(1) rotate(0)}}
 
-    .mg9-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 100px;position:relative;color:var(--text-primary,#f1f5f9)}
+    .mg9-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 120px;position:relative;color:var(--text-primary,#f1f5f9)}
     .mg9-page::before{content:'';position:fixed;top:0;left:0;right:0;height:200px;background:radial-gradient(ellipse at 50% 0%,rgba(16,185,129,.04) 0%,transparent 60%);pointer-events:none;z-index:0}
     .mg9-wrap{max-width:640px;margin:0 auto;padding:0 16px;position:relative;z-index:1}
 
-    /* Header */
     .mg9-hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg-deep,#0a0f1a) 85%, transparent);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);padding:14px 0 12px;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;gap:12px}
     .mg9-hdr-title{display:flex;flex-direction:column;flex:1;min-width:0}
     .mg9-hdr-title h1{margin:0;font-size:1.1rem;font-weight:900;letter-spacing:-.02em;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:6px}
@@ -50,31 +82,31 @@ const injectStyles = () => {
     .mg9-hdr-btn.active{color:var(--accent,#10b981);border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)}
     .mg9-spin{animation:mg9Spin .8s linear infinite}
 
-    /* Stats */
     .mg9-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:18px 0 16px}
     .mg9-schip{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:10px 8px;text-align:center;animation:mg9FadeIn .4s ease both}
     .mg9-schip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
     .mg9-schip .val.live-c{color:#ef4444}.mg9-schip .val.total-c{color:var(--accent,#10b981)}.mg9-schip .val.fav-c{color:#f59e0b}
     .mg9-schip .lbl{font-size:.54rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
 
-    /* Date Strip */
-    .mg9-datestrip{display:flex;gap:6px;overflow-x:auto;padding:0 0 14px;scrollbar-width:none;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity}
-    .mg9-datestrip::-webkit-scrollbar{display:none}
-    .mg9-date{flex-shrink:0;scroll-snap-align:center;display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 14px;border-radius:11px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);color:var(--text-muted,#64748b);cursor:pointer;transition:all .2s cubic-bezier(.22,1,.36,1);min-width:52px;font-family:inherit}
-    .mg9-date:hover{border-color:var(--border-hover,#334155);color:var(--text-primary,#f1f5f9)}
-    .mg9-date.on{background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05));border-color:rgba(16,185,129,.4);color:var(--accent,#10b981);box-shadow:0 4px 14px rgba(16,185,129,.1)}
-    .mg9-date .dn{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
-    .mg9-date .dd{font-size:1.05rem;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
-    .mg9-date.today{border-color:rgba(245,197,66,.3);color:var(--gold,#f5c542)}
-    .mg9-date.today.on{background:linear-gradient(135deg,rgba(245,197,66,.15),rgba(245,197,66,.05));color:var(--gold,#f5c542);box-shadow:0 4px 14px rgba(245,197,66,.1)}
+    /* ── Date Navigation ── */
+    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;position:relative}
+    .mg9-nav-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.75rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg9-nav-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
+    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981);box-shadow:0 2px 12px rgba(16,185,129,.25)}
+    .mg9-more-wrap{position:relative}
+    .mg9-more-btn{display:flex;align-items:center;gap:4px;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg9-more-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
+    .mg9-more-btn.open{border-color:var(--accent,#10b981);color:var(--accent,#10b981)}
+    .mg9-more-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:50;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.4);max-height:320px;overflow-y:auto;animation:mg9FadeIn .2s ease both}
+    .mg9-more-item{display:block;width:100%;text-align:left;padding:8px 14px;border:none;border-radius:8px;background:none;color:var(--text-muted,#64748b);font-size:.73rem;font-weight:600;cursor:pointer;transition:all .15s ease;font-family:inherit;white-space:nowrap}
+    .mg9-more-item:hover{background:rgba(255,255,255,.05);color:var(--text-primary,#f1f5f9)}
+    .mg9-more-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
 
-    /* Tabs */
     .mg9-tabs{display:flex;gap:3px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:3px;margin-bottom:14px}
     .mg9-tab{flex:1;padding:9px 4px;border:none;border-radius:9px;background:transparent;color:var(--text-muted,#64748b);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .25s ease;text-align:center;font-family:inherit;text-transform:uppercase;letter-spacing:.03em}
     .mg9-tab:hover{color:var(--text-primary,#f1f5f9)}
     .mg9-tab.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.2)}
 
-    /* Filters & Search */
     .mg9-filters{display:flex;gap:5px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}
     .mg9-filters::-webkit-scrollbar{display:none}
     .mg9-filter{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 11px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s ease;white-space:nowrap;font-family:inherit}
@@ -88,19 +120,12 @@ const injectStyles = () => {
     .mg9-search{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827)}
     .mg9-search input{flex:1;background:none;border:none;outline:none;color:var(--text-primary,#f1f5f9);font-size:.82rem;font-weight:500;font-family:inherit}
 
-    /* Rescue Banner */
     .mg9-rescue{width:100%;padding:10px 14px;border-radius:11px;border:1px solid rgba(251,191,36,.15);background:linear-gradient(135deg,rgba(251,191,36,.04),rgba(251,191,36,.01));margin-bottom:12px;display:flex;align-items:center;gap:10px;animation:mg9FadeIn .4s ease-out both}
     .mg9-rescue-icon{width:30px;height:30px;border-radius:8px;background:rgba(251,191,36,.08);display:flex;align-items:center;justify-content:center;color:#fbbf24;font-size:.8rem;flex-shrink:0}
     .mg9-rescue-text{flex:1;min-width:0}
     .mg9-rescue-title{font-size:.72rem;font-weight:700;color:#fbbf24}
     .mg9-rescue-sub{font-size:.58rem;color:var(--text-muted,#64748b);margin-top:1px}
 
-    /* Live Header */
-    .mg9-live-hd{display:flex;align-items:center;gap:7px;margin-bottom:10px;padding:0 2px}
-    .mg9-live-dot{width:8px;height:8px;border-radius:50%;background:#ef4444;animation:mg9Pulse 1.2s ease-in-out infinite;box-shadow:0 0 8px rgba(239,68,68,.5)}
-    .mg9-live-txt{font-size:.78rem;font-weight:800;color:#ef4444;text-transform:uppercase;letter-spacing:.04em}
-
-    /* Match Card */
     .mg9-section{margin-bottom:20px;animation:mg9FadeIn .3s ease both}
     .mg9-league-hd{display:flex;align-items:center;gap:7px;margin-bottom:7px;padding:0 2px}
     .mg9-league-hd img{width:15px;height:15px;object-fit:contain;border-radius:3px;flex-shrink:0}
@@ -127,7 +152,6 @@ const injectStyles = () => {
     .mg9-card:hover .mg9-icon-btn{opacity:.8}
     .mg9-icon-btn:hover{background:rgba(255,255,255,.06);color:var(--text-primary,#f1f5f9)}
     .mg9-icon-btn.fav.active{color:#f59e0b;opacity:1;animation:mg9StarPop .4s ease}
-    .mg9-icon-btn.notif.active{color:var(--accent,#10b981);opacity:1}
 
     .mg9-teams{display:flex;align-items:center;gap:6px}
     .mg9-team-col{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
@@ -168,8 +192,8 @@ const injectStyles = () => {
 
     .mg9-sk{height:60px;border-radius:12px;background:linear-gradient(90deg,var(--bg-surface,#0d1321) 25%,var(--bg-card,#111827) 50%,var(--bg-surface,#0d1321) 75%);background-size:200% 100%;animation:mg9Shimmer 1.5s ease-in-out infinite;margin-bottom:5px}
 
-    /* Toasts */
-    .mg9-toast-wrap{position:fixed;top:12px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:calc(100% - 32px);max-width:380px}
+    /* Toast moved to bottom so it pops up exactly where the user is reading */
+    .mg9-toast-wrap{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:calc(100% - 32px);max-width:380px}
     .mg9-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.15);border-radius:11px;padding:10px 14px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.5);animation:mg9ToastIn .3s cubic-bezier(.22,1,.36,1) both;font-size:.74rem}
     .mg9-toast-inner{display:flex;align-items:flex-start;gap:8px}
     .mg9-toast-icon{font-size:1.2rem;flex-shrink:0;line-height:1}
@@ -181,6 +205,34 @@ const injectStyles = () => {
     .mg9-confetti{position:fixed;inset:0;pointer-events:none;z-index:400;overflow:hidden}
     .mg9-confetti-p{position:absolute;width:8px;height:8px;border-radius:2px;animation:mg9Confetti 1.4s ease-out forwards}
 
+    .mg9-tbl-wrap{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;overflow:hidden;margin-bottom:10px}
+    .mg9-tbl{width:100%;border-collapse:collapse;font-size:.7rem}
+    .mg9-tbl thead{background:rgba(255,255,255,.02)}
+    .mg9-tbl th{padding:8px 6px;font-size:.54rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;text-align:left;border-bottom:1px solid var(--border,#1e293b)}
+    .mg9-tbl th.c{text-align:center;width:24px}.mg9-tbl th.p{text-align:center;width:34px}
+    .mg9-tbl td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.025);vertical-align:middle}
+    .mg9-tbl tr:last-child td{border-bottom:none}
+    .mg9-tbl .pos{font-weight:700;color:var(--text-muted,#64748b);text-align:center;font-variant-numeric:tabular-nums}
+    .mg9-tbl .tc{display:flex;align-items:center;gap:6px;min-width:0}
+    .mg9-tbl .tc img{width:16px;height:16px;object-fit:contain;flex-shrink:0;border-radius:3px}
+    .mg9-tbl .tc span{font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg9-tbl .sc{text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-muted,#64748b)}
+    .mg9-tbl .pc{text-align:center;font-weight:800;color:var(--text-primary,#f1f5f9)}
+
+    .mg9-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+    .mg9-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:11px;padding:14px 8px;text-align:center;transition:all .2s ease}
+    .mg9-team-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
+    .mg9-team-card img{width:32px;height:32px;object-fit:contain;margin:0 auto 5px;display:block}
+    .mg9-team-card .name{font-size:.68rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    .mg9-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px}
+    .mg9-comp-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:14px;display:flex;align-items:center;gap:11px;transition:all .2s ease;cursor:pointer}
+    .mg9-comp-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
+    .mg9-comp-card img{width:28px;height:28px;object-fit:contain;flex-shrink:0}
+    .mg9-comp-card .info{flex:1;min-width:0}
+    .mg9-comp-card .cname{font-size:.76rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg9-comp-card .carea{font-size:.54rem;color:var(--text-muted,#64748b);margin-top:1px}
+
     @media(max-width:380px){.mg9-team-name{font-size:.74rem}.mg9-score-num{font-size:.98rem}.mg9-score-box{width:58px}.mg9-crest{width:18px;height:18px}.mg9-card{padding:10px 10px 11px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
   `;
@@ -191,7 +243,7 @@ const injectStyles = () => {
    SOUND & COMMENTARY
    ═══════════════════════════════════════════════════════════════════════ */
 const Sound = {
-  ctx: null, on: true, _lg: 0, _lc: 0, _lw: 0,
+  ctx: null, on: true, _lg: 0, _lw: 0,
   _init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return false; } } if (this.ctx.state === 'suspended') this.ctx.resume(); return !!this.ctx; },
   _t() { return this.ctx ? this.ctx.currentTime : 0; },
   goal() {
@@ -202,11 +254,6 @@ const Sound = {
     g.gain.setValueAtTime(.04,t); g.gain.exponentialRampToValueAtTime(.001,t+.18);
     w.connect(g); g.connect(this.ctx.destination); w.start(t); w.stop(t+.2);
     [523.25,659.25,783.99,1046.5].forEach((f,i)=>{const o=this.ctx.createOscillator(),gn=this.ctx.createGain();o.type='sine';o.frequency.value=f;const s=t+.14+i*.085;gn.gain.setValueAtTime(0,s);gn.gain.linearRampToValueAtTime(.15,s+.035);gn.gain.exponentialRampToValueAtTime(.001,s+.55);o.connect(gn);gn.connect(this.ctx.destination);o.start(s);o.stop(s+.6);});
-  },
-  card() {
-    if (!this.on || !this._init()) return; if (Date.now() - this._lc < 1500) return; this._lc = Date.now();
-    try { navigator.vibrate?.([50,30,50]); } catch {}
-    const t = this._t(); [0,.15].forEach(off=>{const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type='square';o.frequency.value=880;g.gain.setValueAtTime(.04,t+off);g.gain.exponentialRampToValueAtTime(.001,t+off+.1);o.connect(g);g.connect(this.ctx.destination);o.start(t+off);o.stop(t+off+.12);});
   },
   whistle(type='ft') {
     if (!this.on || !this._init()) return; if (Date.now() - this._lw < 3000) return; this._lw = Date.now();
@@ -226,18 +273,16 @@ const Sound = {
 };
 
 const CMT = {
-  goal:["GOOOAL! The stadium erupts!","What a strike! Net ripped!","Pure football magic!","The ball is in the back of the net!","Somebody call the fire department!"],
-  card:["Yellow card shown!","Into the book!","Walking on thin ice now!"],
-  redCard:["RED CARD! Early shower!","Straight red! Game changer!"],
+  goal:["GOOOAL! The stadium erupts!","What a strike! Net ripped!","Pure football magic!"],
   ft:["Full Time! What a match!","Final whistle!"],
   ht:["Half Time! Regrouping...","HT — Manager's talk incoming!"],
   kickoff:["Kick Off! We're underway!","And we're off! Game on!"],
-  rescue:["No fixtures for this date — showing all available games","Switching to worldwide coverage","Rescue mode: pulling games from all leagues"],
+  rescue:["Backup Source Active","Switched to global feed"],
 };
 const pick = (a) => a[Math.floor(Math.random()*a.length)];
 
 /* ═══════════════════════════════════════════════════════════════════════
-   TOAST SYSTEM (Non-Intrusive, Max 2)
+   TOAST SYSTEM & CONFETTI
    ═══════════════════════════════════════════════════════════════════════ */
 function useToasts() {
   const [toasts, setToasts] = useState([]);
@@ -245,7 +290,7 @@ function useToasts() {
   const timers = useRef(new Map());
   const add = useCallback(t => {
     const id = ++idRef.current;
-    setToasts(p => [...p.slice(-1), { ...t, id }]); // Keep max 2
+    setToasts(p => [...p.slice(-1), { ...t, id }]);
     timers.current.set(id, setTimeout(() => { setToasts(p => p.filter(x => x.id !== id)); timers.current.delete(id); }, t.dur || 3500));
     return id;
   }, []);
@@ -262,11 +307,10 @@ function ToastContainer({ toasts, onDismiss }) {
   return (
     <div className="mg9-toast-wrap">
       {toasts.map(t => {
-        const isGoal = t.type === 'goal', isCard = t.type === 'card', isRescue = t.type === 'rescue';
+        const isGoal = t.type === 'goal', isRescue = t.type === 'rescue';
         let bg, icon;
         if (isRescue) { bg = 'linear-gradient(135deg,rgba(251,191,36,.92),rgba(245,158,11,.9))'; icon = '🌐'; }
         else if (isGoal) { bg = 'linear-gradient(135deg,rgba(239,68,68,.92),rgba(185,28,28,.9))'; icon = '⚽'; }
-        else if (isCard) { bg = t.cardType === 'RED_CARD' ? 'linear-gradient(135deg,rgba(220,38,38,.92),rgba(153,27,27,.9))' : 'linear-gradient(135deg,rgba(202,138,4,.92),rgba(146,100,4,.9))'; icon = t.cardType === 'RED_CARD' ? '🟥' : '🟨'; }
         else {
           const m = { ft: ['rgba(16,185,129,.92)','rgba(5,150,105,.9)'], ht: ['rgba(249,115,22,.92)','rgba(217,90,12,.9)'], live: ['rgba(239,68,68,.92)','rgba(220,38,38,.9)'] };
           const c = m[t.st] || m.live; bg = `linear-gradient(135deg,${c[0]},${c[1]})`;
@@ -277,7 +321,7 @@ function ToastContainer({ toasts, onDismiss }) {
             <div className="mg9-toast-inner">
               <span className="mg9-toast-icon">{icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="mg9-toast-title">{isRescue ? 'AUTO-SWITCH' : isGoal ? 'GOAL!' : isCard ? (t.cardType === 'RED_CARD' ? 'RED CARD' : 'YELLOW CARD') : t.st === 'ft' ? 'FULL TIME' : t.st === 'ht' ? 'HALF TIME' : 'KICK OFF'}</div>
+                <div className="mg9-toast-title">{isRescue ? 'AUTO-SWITCH' : isGoal ? 'GOAL!' : t.st === 'ft' ? 'FULL TIME' : t.st === 'ht' ? 'HALF TIME' : 'KICK OFF'}</div>
                 {t.msg && <div className="mg9-toast-msg">{t.msg}</div>}
                 {t.detail && <div className="mg9-toast-detail">{t.detail}</div>}
               </div>
@@ -290,118 +334,98 @@ function ToastContainer({ toasts, onDismiss }) {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   CONFETTI
-   ═══════════════════════════════════════════════════════════════════════ */
 function Confetti({ active }) {
   if (!active) return null;
   const colors = ['#ef4444','#10b981','#f59e0b','#3b82f6','#a855f7','#ec4899'];
-  const p = Array.from({ length: 18 }, (_, i) => ({ left: 8 + Math.random() * 84, top: -8, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
+  const p = Array.from({ length: 18 }, (_, i) => ({ left: 8 + Math.random() * 84, bottom: 60, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
   return (
     <div className="mg9-confetti">
-      {p.map((x, i) => <div key={i} className="mg9-confetti-p" style={{ left: x.left + '%', top: x.top + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
+      {p.map((x, i) => <div key={i} className="mg9-confetti-p" style={{ left: x.left + '%', bottom: x.bottom + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════════════
-   HELPERS
+   DATA NORMALIZATION & HELPERS
    ═══════════════════════════════════════════════════════════════════════ */
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-const matchQ = (m, terms) => [m.homeTeam?.name, m.awayTeam?.name, m.competition?.name, m.league?.name].map(norm).some(x => x && terms.every(t => x.includes(t)));
-const extractMatchDate = (m) => {
+const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
+
+function extractMatchDate(m) {
   if (!m) return '';
   if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
-  if (m.date) return getLocalDateFromUtc(m.date);
-  if (m.kickoff?.includes('T')) return getLocalDateFromUtc(m.kickoff);
+  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
+  if (m.date) return m.date;
   return '';
-};
+}
+
+function normalizeMatch(raw, isPrimary) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  
+  let dateStr = extractMatchDate(raw);
+  let kickoff = 'TBD';
+  let timestamp = 0;
+
+  const rawDate = raw.utcDate || raw.date;
+  if (rawDate) {
+    try {
+      const dt = new Date(rawDate);
+      kickoff = dt.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      timestamp = dt.getTime();
+    } catch {}
+  } else if (raw.kickoff) {
+    kickoff = raw.kickoff;
+  }
+
+  const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H');
+  const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
+  const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET');
+
+  const homeScore = isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
+  const awayScore = isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
+
+  return {
+    id, dateStr, kickoff, timestamp,
+    status, isLive, isHT, isFinished,
+    homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
+    awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
+    homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
+    awayLogo: isPrimary ? raw.awayLogo : raw.awayTeam?.crest,
+    homeScore, awayScore,
+    leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
+    leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
+    score: raw.score,
+  };
+}
 
 /* ═══════════════════════════════════════════════════════════════════════
-   FAVOURITES & NOTIFICATIONS
-   ═══════════════════════════════════════════════════════════════════════ */
-function useFavourites() {
-  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg9_favs') || '[]')); } catch { return new Set(); } });
-  const toggle = useCallback(id => { setFavs(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); try { localStorage.setItem('mg9_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
-  const isFav = useCallback(id => favs.has(id), [favs]);
-  return { favs, toggle, isFav };
-}
-
-function useNotifications() {
-  const [notifs, setNotifs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg9_notifs') || '[]')); } catch { return new Set(); } });
-  const [globalEnabled, setGlobalEnabled] = useState(() => { try { return localStorage.getItem('mg9_notif_global') === 'true'; } catch { return false; } });
-  const toggle = useCallback(id => { setNotifs(p => { const n = new Set(p); if (n.has(id)) n.delete(id); else n.add(id); try { localStorage.setItem('mg9_notifs', JSON.stringify([...n])); } catch {} return n; }); }, []);
-  const isOn = useCallback(id => notifs.has(id), [notifs]);
-  const toggleGlobal = useCallback(() => { setGlobalEnabled(p => { const n = !p; try { localStorage.setItem('mg9_notif_global', String(n)); } catch {} return n; }); }, []);
-  return { notifs, toggle, isOn, globalEnabled, toggleGlobal };
-}
-
-async function requestNotifPermission() {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  return (await Notification.requestPermission()) === 'granted';
-}
-
-function sendBrowserNotif(title, body, icon) {
-  if (!('Notification' in window) || Notification.permission !== 'granted') return;
-  try { new Notification(title, { body, icon: icon || '', badge: icon || '', vibrate: [80, 40, 80], tag: 'mg9-' + Date.now() }); } catch {}
-}
-
-/* ═══════════════════════════════════════════════════════════════════════
-   SCORE BREAKDOWN
+   UI COMPONENTS
    ═══════════════════════════════════════════════════════════════════════ */
 function ScoreBreakdown({ match }) {
   const s = match.score || {};
   const periods = [
-    { l: 'Half Time', h: s.halfTime?.home, a: s.halfTime?.away },
-    { l: 'Full Time', h: s.fullTime?.home, a: s.fullTime?.away },
-    { l: 'Extra Time', h: s.extraTime?.home, a: s.extraTime?.away },
-    { l: 'Penalties', h: s.penalties?.home, a: s.penalties?.away },
+    { l: 'Half Time', h: s.halfTime?.home ?? match.homeScore, a: s.halfTime?.away ?? match.awayScore },
+    { l: 'Full Time', h: s.fullTime?.home ?? match.homeScore, a: s.fullTime?.away ?? match.awayScore },
   ];
-  const goals = s.goals || [], cards = s.cards || [], corners = s.corners, refs = match.referees || [];
-  const hasData = periods.some(p => p.h != null || p.a != null) || goals.length || cards.length || corners || refs.length;
+  const hasData = periods.some(p => p.h != null || p.a != null);
   if (!hasData) return <div className="mg9-no-data">Details appear once the match begins</div>;
   return (
     <div style={{ padding: '6px 0 2px' }}>
-      {periods.some(p => p.h != null || p.a != null) && <>
-        <div className="mg9-exp-section">Score Breakdown</div>
-        {periods.filter(p => p.h != null || p.a != null).map(p => (
-          <div key={p.l} className="mg9-exp-row"><span className="mg9-exp-label">{p.l}</span><span className="mg9-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
-        ))}
-      </>}
-      {goals.length > 0 && <>
-        <div className="mg9-exp-section">Goals ({goals.length})</div>
-        {goals.map((g, i) => (
-          <div key={i} className="mg9-exp-row">
-            <span className="mg9-exp-label">{g.minute != null ? g.minute + "'" : ''} ⚽</span>
-            <span className="mg9-exp-val">{g.scorer?.name || 'Unknown'}</span>
-          </div>
-        ))}
-      </>}
-      {cards.length > 0 && <>
-        <div className="mg9-exp-section">Cards ({cards.length})</div>
-        {cards.map((c, i) => (
-          <div key={i} className="mg9-exp-row">
-            <span className="mg9-exp-label">{c.minute != null ? c.minute + "'" : ''} {c.type === 'YELLOW_CARD' ? '🟨' : '🟥'}</span>
-            <span className="mg9-exp-val">{c.player?.name || 'Unknown'}</span>
-          </div>
-        ))}
-      </>}
+      <div className="mg9-exp-section">Score Breakdown</div>
+      {periods.filter(p => p.h != null || p.a != null).map(p => (
+        <div key={p.l} className="mg9-exp-row"><span className="mg9-exp-label">{p.l}</span><span className="mg9-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
+      ))}
     </div>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════════════
-   MATCH CARD
-   ═══════════════════════════════════════════════════════════════════════ */
-function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav, isNotif, onNotif }) {
-  const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === '1H' || m.status === '2H' || m.status === 'ET' || m.status === 'BT';
-  const isHT = m.status === 'HALF_TIME' || m.status === 'HT' || m.status === 'BT';
-  const isFt = m.status === 'FINISHED' || m.status === 'FT' || m.status === 'AET' || m.status === 'PEN';
-  const isSched = m.status === 'SCHEDULED' || m.status === 'TIMED' || m.status === 'NS' || m.status === 'TBD';
-  const sh = m.score?.fullTime;
-  const time = m.utcDate ? new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : (m.kickoff || '');
+function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav }) {
+  const isLive = m.isLive;
+  const isHT = m.isHT;
+  const isFt = m.isFinished;
+  const isSched = !isLive && !isHT && !isFt;
   const isExp = expanded === m.id;
   const id = String(m.id);
   const isFlash = flashGoals.has(id);
@@ -427,43 +451,40 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
             {isLive && <span className="mg9-status live-s"><span className="mg9-dot" /> LIVE</span>}
             {isHT && <span className="mg9-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.08)' }}>HT</span>}
             {isFt && <span className="mg9-status ft-s">FT</span>}
-            {isSched && <span className="mg9-status time-s">{time}</span>}
+            {isSched && <span className="mg9-status time-s">{m.kickoff}</span>}
           </div>
           <div className="mg9-card-actions" onClick={e => e.stopPropagation()}>
             <button className={`mg9-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
               <Star size={14} fill={isFav ? '#f59e0b' : 'none'} />
-            </button>
-            <button className={`mg9-icon-btn notif ${isNotif ? 'active' : ''}`} onClick={() => onNotif(m.id)} title="Notifications" aria-label="Toggle notifications">
-              {isNotif ? <Bell size={14} /> : <BellOff size={14} />}
             </button>
           </div>
         </div>
         <div className="mg9-teams">
           <div className="mg9-team-col home">
             <div className="mg9-team-row">
-              {m.homeTeam?.crest && <img className="mg9-crest" src={m.homeTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg9-team-name">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
+              {m.homeLogo && <img className="mg9-crest" src={m.homeLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              <span className="mg9-team-name">{m.homeName}</span>
             </div>
           </div>
           <div className="mg9-score-box">
             {(isLive || isHT || isFt) ? (
               <div className="mg9-scores">
-                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${sh?.home}-${popSide}`}>{sh?.home ?? 0}</span>
+                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${m.homeScore}-${popSide}`}>{m.homeScore ?? 0}</span>
                 <span className="mg9-sep">–</span>
-                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${sh?.away}-${popSide}`}>{sh?.away ?? 0}</span>
+                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${m.awayScore}-${popSide}`}>{m.awayScore ?? 0}</span>
               </div>
             ) : <span className="mg9-vs">VS</span>}
           </div>
           <div className="mg9-team-col away">
             <div className="mg9-team-row">
-              {m.awayTeam?.crest && <img className="mg9-crest" src={m.awayTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg9-team-name">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
+              {m.awayLogo && <img className="mg9-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              <span className="mg9-team-name">{m.awayName}</span>
             </div>
           </div>
         </div>
         <div className="mg9-comp-row">
-          {m.competition?.emblem && <img src={m.competition.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{m.competition?.name || m.league?.name || ''}</span>
+          {m.leagueLogo && <img src={m.leagueLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{m.leagueName}</span>
         </div>
         {sa && (
           <div className="mg9-overlay">
@@ -486,15 +507,20 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
 export default function MasterGames() {
   injectStyles();
 
-  const { fixtures, liveMatches, competitions, loading, lastUpdated, getStandings, getTeams, refreshFixtures } = useFootballData();
+  // Backup Context (always runs silently in the background)
+  const { fixtures: backupRaw, liveMatches: backupLive, competitions, loading: backupLoading, lastUpdated, loadDateFixtures, getStandings, getTeams, refreshFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
-  const { favs, toggle: toggleFav, isFav } = useFavourites();
-  const { isOn: isNotif, toggle: toggleNotif, globalEnabled, toggleGlobal } = useNotifications();
+  
+  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg9_favs') || '[]')); } catch { return new Set(); } });
+  const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem('mg9_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
+  const isFav = useCallback(id => favs.has(String(id)), [favs]);
 
   /* ── State ── */
   const [tab, setTab] = useState('fixtures');
   const [compFilter, setCompFilter] = useState('ALL');
-  const [selectedDate, setSelectedDate] = useState(todayStr());
+  const [selectedDate, setSelectedDate] = useState(getTodayStr());
+  const [primaryFixtures, setPrimaryFixtures] = useState([]);
+  const [primaryLoading, setPrimaryLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
   const [searchQ, setSearchQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
@@ -504,8 +530,8 @@ export default function MasterGames() {
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
-  const [notifBannerDismissed, setNotifBannerDismissed] = useState(() => { try { return localStorage.getItem('mg9_notif_banner_dismissed') === 'true'; } catch { return false; } });
   const [rescued, setRescued] = useState(false);
+  const [moreDatesOpen, setMoreDatesOpen] = useState(false);
   const rescueToastSent = useRef(false);
   const [scorePops, setScorePops] = useState(new Map());
   const [flashGoals, setFlashGoals] = useState(new Set());
@@ -514,57 +540,109 @@ export default function MasterGames() {
   /* ── Refs ── */
   const prevScores = useRef(new Map());
   const prevStatuses = useRef(new Map());
-  const prevCardData = useRef(new Map());
   const timeouts = useRef(new Map());
+  const moreRef = useRef(null);
 
-  // ★ Single declaration of dateList for the horizontal strip
-  const dateList = useMemo(() => getDateRange(10, -3), []);
+  // Generate 14 future dates for the dropdown
+  const futureDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const d = getLocalDateStr(i + 2);
+    return { str: d, label: formatDateShort(d) };
+  }), []);
 
   useEffect(() => { Sound.on = soundOn; }, [soundOn]);
   const clearTO = (k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } };
   const setTO = (k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); };
 
-  /* ── Normalize Fixtures ── */
-  const allFixtures = useMemo(() => {
-    return (fixtures || []).map(m => {
-      if (m.homeTeam && typeof m.homeTeam === 'object' && m.homeTeam.name) return m;
-      if (m.homeTeam && typeof m.homeTeam === 'string') {
-        return {
-          ...m,
-          homeTeam: { name: m.homeTeam, shortName: m.homeShortName || m.homeTeam, crest: m.homeLogo || m.homeCrest },
-          awayTeam: { name: m.awayTeam, shortName: m.awayShortName || m.awayTeam, crest: m.awayLogo || m.awayCrest },
-          competition: m.competition || (m.league ? { name: m.league, emblem: m.leagueLogo } : null),
-          score: m.score || { fullTime: { home: m.homeScore ?? m.goalsHome, away: m.awayScore ?? m.goalsAway } },
-          utcDate: m.utcDate || m.date || (m.kickoff || ''),
-        };
-      }
-      return m;
-    }).filter(m => m.homeTeam && m.awayTeam);
-  }, [fixtures]);
-
-  // Date-specific fixtures
-  const dateSpecificFixtures = useMemo(() => {
-    return allFixtures.filter(m => extractMatchDate(m) === selectedDate);
-  }, [allFixtures, selectedDate]);
-
-  // AUTO-RESCUE: If no fixtures for this date but master data exists, show everything
-  const needsRescue = useMemo(() => {
-    return dateSpecificFixtures.length === 0 && allFixtures.length > 0 && !loading;
-  }, [dateSpecificFixtures.length, allFixtures.length, loading]);
-
+  // Close more-dates dropdown on outside click
   useEffect(() => {
+    const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreDatesOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  /* ═══════════════════════════════════════════════════════════════
+     1. DATA FETCHING (Primary + Backup)
+     ═══════════════════════════════════════════════════════════════ */
+  const isPrimaryDate = [getYesterdayStr(), getTodayStr(), getTomorrowStr()].includes(selectedDate);
+
+  // Fetch Primary (Node Backend)
+  useEffect(() => {
+    if (!isPrimaryDate) {
+      setPrimaryFixtures([]); // Clear primary if outside 3-day window
+      setPrimaryLoading(false);
+      return;
+    }
+
+    let mnt = true;
+    setPrimaryLoading(true);
+
+    (async () => {
+      try {
+        const res = await fetchFixtures(selectedDate);
+        if (mnt) {
+          const l = Array.isArray(res) ? res : res?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
+        }
+      } catch (e) {
+        if (mnt) setPrimaryFixtures([]);
+      } finally {
+        if (mnt) setPrimaryLoading(false);
+      }
+    })();
+
+    return () => { mnt = false; };
+  }, [selectedDate, isPrimaryDate]);
+
+  // Fetch Backup (Football-data.org)
+  useEffect(() => {
+    if (selectedDate) loadDateFixtures(selectedDate);
+  }, [selectedDate, loadDateFixtures]);
+
+  // Primary Live Polling (Only for Today)
+  useEffect(() => {
+    if (selectedDate !== getTodayStr()) return;
+
+    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+      if (!lm || lm.length === 0) return;
+      const liveMap = new Map(lm.map(m => [String(m.id), m]));
+      
+      setPrimaryFixtures(prev => prev.map(f => {
+        const live = liveMap.get(String(f.id));
+        if (live) {
+          return { ...f, homeScore: live.homeScore, awayScore: live.awayScore, isLive: true, isFinished: false, status: live.status || 'LIVE' };
+        }
+        if (f.isLive) {
+          return { ...f, isLive: false, isFinished: true, status: 'FT' };
+        }
+        return f;
+      }));
+    });
+
+    return () => unsub();
+  }, [selectedDate]);
+
+  /* ═══════════════════════════════════════════════════════════════
+     2. SEAMLESS AUTO-FAILOVER BLEND
+     ═══════════════════════════════════════════════════════════════ */
+  const backupFixtures = useMemo(() => {
+    return (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === selectedDate);
+  }, [backupRaw, selectedDate]);
+
+  // Determine if we need to show the rescue banner
+  useEffect(() => {
+    const needsRescue = primaryFixtures.length === 0 && backupFixtures.length > 0 && !primaryLoading;
     if (needsRescue && !rescued) {
       setRescued(true);
       if (!rescueToastSent.current) {
         rescueToastSent.current = true;
-        addToast({ type: 'rescue', msg: pick(CMT.rescue), detail: `Showing ${allFixtures.length} games from all dates`, dur: 4000 });
+        addToast({ type: 'rescue', msg: pick(CMT.rescue), detail: `Showing ${backupFixtures.length} games from backup`, dur: 4000 });
       }
     }
     if (!needsRescue) {
       setRescued(false);
       rescueToastSent.current = false;
     }
-  }, [needsRescue, rescued, allFixtures.length, addToast]);
+  }, [primaryFixtures.length, backupFixtures.length, primaryLoading, rescued, addToast]);
 
   useEffect(() => {
     setRescued(false);
@@ -572,58 +650,63 @@ export default function MasterGames() {
     setExpanded(null);
   }, [selectedDate]);
 
-  // The actual display list — rescued or date-filtered
   const displayFixtures = useMemo(() => {
-    let list = rescued ? allFixtures : dateSpecificFixtures;
-    if (compFilter !== 'ALL') list = list.filter(m => String(m.competition?.id || m.league?.id) === compFilter);
+    let list = primaryFixtures.length > 0 ? primaryFixtures : backupFixtures;
+    if (compFilter !== 'ALL') list = list.filter(m => String(m.leagueName) === compFilter);
     if (searchQ.trim()) {
       const terms = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
       if (terms.length) list = list.filter(m => matchQ(m, terms));
     }
     return list;
-  }, [rescued, allFixtures, dateSpecificFixtures, compFilter, searchQ]);
+  }, [primaryFixtures, backupFixtures, compFilter, searchQ]);
 
-  /* ── Grouped by competition ── */
+  /* ═══════════════════════════════════════════════════════════════
+     3. GROUPING & SORTING (League Priority & Live Status)
+     ═══════════════════════════════════════════════════════════════ */
   const grouped = useMemo(() => {
     const map = new Map();
     displayFixtures.forEach(m => {
-      const key = m.competition?.name || m.league?.name || 'Other';
-      if (!map.has(key)) map.set(key, { comp: m.competition || m.league, matches: [] });
+      const key = m.leagueName || 'Other';
+      if (!map.has(key)) map.set(key, { name: key, logo: m.leagueLogo, matches: [] });
       map.get(key).matches.push(m);
     });
+
+    // Sort matches within each league
     map.forEach(g => {
       g.matches.sort((a, b) => {
-        const statusOrder = s => {
-          const st = s.status || '';
-          if (st === 'IN_PLAY' || st === 'PAUSED' || st === '1H' || st === '2H') return 0;
-          if (st === 'HALF_TIME' || st === 'HT' || st === 'BT') return 1;
-          if (st === 'SCHEDULED' || st === 'TIMED' || st === 'NS') return 2;
-          return 3;
-        };
-        return statusOrder(a) - statusOrder(b);
+        if (a.isLive && !b.isLive) return -1;
+        if (!a.isLive && b.isLive) return 1;
+        if (a.isHT && !b.isHT) return -1;
+        if (!a.isHT && b.isHT) return 1;
+        if (a.isFinished && !b.isFinished) return 1;
+        if (!a.isFinished && b.isFinished) return -1;
+        return (a.timestamp || 0) - (b.timestamp || 0);
       });
     });
-    return [...map.values()];
+
+    // Sort leagues themselves by Priority, then Alphabetically
+    return [...map.values()].sort((a, b) => {
+      const pa = getLeaguePriority(a.name);
+      const pb = getLeaguePriority(b.name);
+      if (pa !== pb) return pa - pb;
+      return a.name.localeCompare(b.name);
+    });
   }, [displayFixtures]);
 
-  /* ── Competitions for filter ── */
   const compList = useMemo(() => {
     const map = new Map();
-    allFixtures.forEach(m => {
-      const c = m.competition || m.league;
-      if (c) map.set(String(c.id || c.name), c);
+    displayFixtures.forEach(m => {
+      if (!map.has(m.leagueName)) map.set(m.leagueName, { id: m.leagueName, name: m.leagueName, emblem: m.leagueLogo });
     });
-    return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [allFixtures]);
+    return [...map.values()].sort((a, b) => getLeaguePriority(a.name) - getLeaguePriority(b.name));
+  }, [displayFixtures]);
 
-  const liveCount = useMemo(() => displayFixtures.filter(m => {
-    const s = m.status || '';
-    return s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H';
-  }).length, [displayFixtures]);
-
+  const liveCount = useMemo(() => displayFixtures.filter(m => m.isLive).length, [displayFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(m.id)), [displayFixtures, favs]);
 
-  /* ── Load standings/teams ── */
+  /* ═══════════════════════════════════════════════════════════════
+     4. TABS (Standings / Teams)
+     ═══════════════════════════════════════════════════════════════ */
   const handleTabChange = useCallback(async (t) => {
     setTab(t);
     if (t === 'standings' && !standingsData && !standingsLoading) {
@@ -639,75 +722,60 @@ export default function MasterGames() {
   }, [standingsData, standingsLoading, teamsData, teamsLoading, getStandings, getTeams]);
 
   /* ═══════════════════════════════════════════════════════════════
-     LIVE CHANGE DETECTION (Non-Intrusive: Only Fav or Fixtures Tab)
+     5. LIVE CHANGE DETECTION (Unified)
      ═══════════════════════════════════════════════════════════════ */
-  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET';
+  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET' || s === 'BT' || s === 'LIVE';
+
+  const liveMatches = useMemo(() => {
+    if (primaryFixtures.length > 0) return primaryFixtures.filter(m => m.isLive);
+    return (backupLive || []).map(m => normalizeMatch(m, false)).filter(m => m.isLive);
+  }, [primaryFixtures, backupLive]);
 
   useEffect(() => {
-    const live = liveMatches || [];
-
-    live.forEach(m => {
+    liveMatches.forEach(m => {
       const id = String(m.id);
-      const shouldNotify = isFav(id) || tab === 'fixtures'; // Smart scoping
-      
+      const shouldNotify = isFav(id) || tab === 'fixtures';
       const prev = prevScores.current.get(id);
-      const h = m.score?.fullTime?.home, a = m.score?.fullTime?.away;
+      const h = m.homeScore, a = m.awayScore;
+      
       if (prev) {
         if (h != null && prev.h != null && h > prev.h) {
-          if (shouldNotify) {
-            const team = m.homeTeam?.name || 'Home';
-            const score = `${h}–${a}`;
-            addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
-            if (Sound.on) Sound.goal();
-            setConfettiKey(k => k + 1);
-          }
-          setFlashGoals(p => new Set([...p, id]));
-          setScorePops(p => new Map([...p, [id, 'home']]));
+          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'home']]));
           setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-          if (isNotif(id) && globalEnabled) sendBrowserNotif('⚽ GOAL!', `${m.homeTeam?.name} scored! ${h}-${a}`, m.homeTeam?.crest);
         }
         if (a != null && prev.a != null && a > prev.a) {
-          if (shouldNotify) {
-            const team = m.awayTeam?.name || 'Away';
-            const score = `${h}–${a}`;
-            addToast({ type: 'goal', msg: pick(CMT.goal), detail: team, score, dur: 3500 });
-            if (Sound.on) Sound.goal();
-            setConfettiKey(k => k + 1);
-          }
-          setFlashGoals(p => new Set([...p, id]));
-          setScorePops(p => new Map([...p, [id, 'away']]));
+          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'away']]));
           setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-          if (isNotif(id) && globalEnabled) sendBrowserNotif('⚽ GOAL!', `${m.awayTeam?.name} scored! ${h}-${a}`, m.awayTeam?.crest);
         }
       }
       prevScores.current.set(id, { h, a });
     });
 
-    live.forEach(m => {
+    liveMatches.forEach(m => {
       const id = String(m.id);
       const shouldNotify = isFav(id) || tab === 'fixtures';
       const prev = prevStatuses.current.get(id);
       const curr = m.status || '';
       if (prev && prev !== curr) {
         if (!isLiveStatus(prev) && isLiveStatus(curr)) {
-          if (shouldNotify) addToast({ type: 'status', st: 'live', msg: pick(CMT.kickoff), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, dur: 3000 });
+          if (shouldNotify) addToast({ type: 'status', st: 'live', msg: pick(CMT.kickoff), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
           if (Sound.on) Sound.kickoff();
           setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-          if (isNotif(id) && globalEnabled) sendBrowserNotif('⚡ Kick Off!', `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, m.competition?.emblem);
         }
         if (isLiveStatus(prev) && (curr === 'FINISHED' || curr === 'FT')) {
-          const score = `${m.score?.fullTime?.home ?? 0}–${m.score?.fullTime?.away ?? 0}`;
-          if (shouldNotify) addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, score, dur: 4000 });
+          const score = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
+          if (shouldNotify) addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeName} vs ${m.awayName}`, score, dur: 4000 });
           if (Sound.on) Sound.whistle('ft');
           setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-          if (isNotif(id) && globalEnabled) sendBrowserNotif('🏁 Full Time', `${m.homeTeam?.name} ${score} ${m.awayTeam?.name}`, m.competition?.emblem);
         }
         if ((curr === 'HALF_TIME' || curr === 'HT') && prev !== 'HALF_TIME' && prev !== 'HT') {
-          if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeTeam?.name} vs ${m.awayTeam?.name}`, dur: 3000 });
+          if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
           if (Sound.on) Sound.whistle('ht');
           setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
@@ -715,51 +783,14 @@ export default function MasterGames() {
       }
       prevStatuses.current.set(id, curr);
     });
-
-    live.forEach(m => {
-      const id = String(m.id);
-      const shouldNotify = isFav(id) || tab === 'fixtures';
-      const cards = m.score?.cards || [];
-      const prev = prevCardData.current.get(id) || [];
-      if (prev.length > 0 && cards.length > prev.length) {
-        cards.slice(prev.length).forEach(c => {
-          if (shouldNotify) {
-            if (c.type === 'RED_CARD') { addToast({ type: 'card', cardType: 'RED_CARD', msg: pick(CMT.redCard), detail: c.player?.name || '', dur: 3000 }); if (Sound.on) Sound.card(); }
-            else if (c.type === 'YELLOW_CARD') { addToast({ type: 'card', cardType: 'YELLOW_CARD', msg: pick(CMT.card), detail: c.player?.name || '', dur: 2500 }); if (Sound.on) Sound.card(); }
-          }
-        });
-      }
-      prevCardData.current.set(id, cards);
-    });
-  }, [liveMatches, addToast, isNotif, globalEnabled, isFav, tab]);
-
-  const handleGlobalNotif = useCallback(async () => {
-    if (!globalEnabled) { const granted = await requestNotifPermission(); if (!granted) { addToast({ type: 'status', st: 'live', msg: 'Notifications blocked by browser.', dur: 3000 }); return; } }
-    toggleGlobal();
-  }, [globalEnabled, toggleGlobal, addToast]);
-
-  const handleNotifToggle = useCallback(async (id) => {
-    const willEnable = !isNotif(id);
-    if (willEnable && !globalEnabled) { const granted = await requestNotifPermission(); if (!granted) { addToast({ type: 'status', st: 'live', msg: 'Enable notifications in browser settings first.', dur: 3000 }); return; } toggleGlobal(); }
-    toggleNotif(id);
-  }, [isNotif, toggleNotif, globalEnabled, toggleGlobal, addToast]);
-
-  const dismissBanner = useCallback(() => {
-    setNotifBannerDismissed(true);
-    try { localStorage.setItem('mg9_notif_banner_dismissed', 'true'); } catch {}
-  }, []);
+  }, [liveMatches, addToast, isFav, tab]);
 
   /* ═══════════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="mg9-page">
-      <SEO
-        title="Today's Football Fixtures & Match Schedule"
-        description="Check today's football fixtures, upcoming matches, kick-off times, leagues and match details from around the world with ZOKASCORE."
-        keywords="football fixtures today, soccer fixtures, football match schedule, upcoming football matches, live football scores, football leagues"
-        path="/fixtures"
-      />
+      <SEO title="Football Fixtures & Live Scores" description="Live football scores, fixtures, and predictions." path="/fixtures" />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -768,7 +799,7 @@ export default function MasterGames() {
         <div className="mg9-hdr">
           <div className="mg9-hdr-title">
             <h1><Activity size={16} style={{ color: 'var(--accent)' }} /> Master Games</h1>
-            <div className="sub">{rescued ? 'Showing all available games' : 'Live scores · Fixtures · Standings'}</div>
+            <div className="sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
           <div className="mg9-hdr-actions">
             <button className={`mg9-hdr-btn ${searchOpen ? 'active' : ''}`} onClick={() => setSearchOpen(p => !p)} title="Search">
@@ -777,11 +808,8 @@ export default function MasterGames() {
             <button className={`mg9-hdr-btn ${soundOn ? 'active' : ''}`} onClick={() => setSoundOn(p => !p)} title="Sound">
               {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
-            <button className={`mg9-hdr-btn ${globalEnabled ? 'active' : ''}`} onClick={handleGlobalNotif} title="Alerts">
-              {globalEnabled ? <Bell size={16} /> : <BellOff size={16} />}
-            </button>
             <button className="mg9-hdr-btn" onClick={() => refreshFixtures()} title="Refresh">
-              <RefreshCw size={16} className={loading ? 'mg9-spin' : ''} />
+              <RefreshCw size={16} className={primaryLoading || backupLoading ? 'mg9-spin' : ''} />
             </button>
           </div>
         </div>
@@ -794,7 +822,7 @@ export default function MasterGames() {
           </div>
           <div className="mg9-schip">
             <div className="val total-c">{displayFixtures.length}</div>
-            <div className="lbl">{rescued ? 'All Games' : 'Matches'}</div>
+            <div className="lbl">Matches</div>
           </div>
           <div className="mg9-schip">
             <div className="val fav-c">{favs.size}</div>
@@ -802,18 +830,31 @@ export default function MasterGames() {
           </div>
         </div>
 
-        {/* Date Strip */}
-        <div className="mg9-datestrip">
-          {dateList.map(d => (
-            <button
-              key={d.str}
-              className={`mg9-date ${selectedDate === d.str ? 'on' : ''} ${d.isToday ? 'today' : ''}`}
-              onClick={() => setSelectedDate(d.str)}
-            >
-              <span className="dn">{d.day}</span>
-              <span className="dd">{d.num}</span>
+        {/* Date Navigation - 3 Buttons + More Dropdown */}
+        <div className="mg9-datenav">
+          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>
+            Yesterday
+          </button>
+          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(0))}>
+            Today
+          </button>
+          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(1))}>
+            Tomorrow
+          </button>
+          <div className="mg9-more-wrap" ref={moreRef}>
+            <button className={`mg9-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(p => !p)}>
+              <Calendar size={12} /> More <ChevronDown size={12} />
             </button>
-          ))}
+            {moreDatesOpen && (
+              <div className="mg9-more-dropdown">
+                {futureDates.map(d => (
+                  <button key={d.str} className={`mg9-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                    {d.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Tabs */}
@@ -835,167 +876,170 @@ export default function MasterGames() {
         </div>
 
         {/* ═══ Fixtures Tab ═══ */}
-        {tab === 'fixtures' && <>
-          {rescued && (
-            <div className="mg9-rescue">
-              <div className="mg9-rescue-icon"><AlertTriangle size={15} /></div>
-              <div className="mg9-rescue-text">
-                <div className="mg9-rescue-title">No fixtures for this date</div>
-                <div className="mg9-rescue-sub">Showing {allFixtures.length} games from all available dates</div>
+        {tab === 'fixtures' && (
+          <>
+            {rescued && (
+              <div className="mg9-rescue">
+                <div className="mg9-rescue-icon"><AlertTriangle size={15} /></div>
+                <div className="mg9-rescue-text">
+                  <div className="mg9-rescue-title">Backup Source Active</div>
+                  <div className="mg9-rescue-sub">Showing {backupFixtures.length} games from global feed</div>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {compList.length > 1 && (
-            <div className="mg9-filters">
-              <button className={`mg9-filter ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCompFilter('ALL')}>All</button>
-              {compList.map(c => (
-                <button key={c.id || c.name} className={`mg9-filter ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => setCompFilter(String(c.id))}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          )}
+            {compList.length > 1 && (
+              <div className="mg9-filters">
+                <button className={`mg9-filter ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCompFilter('ALL')}>All</button>
+                {compList.map(c => (
+                  <button key={c.id} className={`mg9-filter ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => setCompFilter(String(c.id))}>
+                    {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {loading ? (
-            <div>{[1,2,3,4,5].map(i => <div key={i} className="mg9-sk" style={{ animationDelay: i * 80 + 'ms' }} />)}</div>
-          ) : displayFixtures.length === 0 ? (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Calendar size={22} /></div>
-              <p>No matches found</p>
-              <div className="hint" style={{ fontSize: '.64rem', color: 'var(--text-muted)', opacity: .4, marginTop: 4 }}>{rescued ? 'Master data is still loading...' : 'Try a different date or filter'}</div>
-            </div>
-          ) : (
-            <>
-              {liveCount > 0 && (
-                <div className="mg9-section">
-                  <div className="mg9-live-hd">
-                    <span className="mg9-live-dot" />
-                    <span className="mg9-live-txt">Live Now</span>
-                    <span className="mg9-live-cnt" style={{ fontSize: '.58rem', fontWeight: 600, color: '#ef4444', opacity: .5 }}>{liveCount} match{liveCount > 1 ? 'es' : ''}</span>
+            {primaryLoading && isPrimaryDate ? (
+              <div>{[1,2,3,4,5].map(i => <div key={i} className="mg9-sk" style={{ animationDelay: i * 80 + 'ms' }} />)}</div>
+            ) : grouped.length === 0 ? (
+              <div className="mg9-empty">
+                <div className="mg9-empty-icon"><Search size={20} /></div>
+                <p>No matches found for this date</p>
+              </div>
+            ) : (
+              <>
+                {favMatches.length > 0 && (
+                  <div className="mg9-section">
+                    <div className="mg9-league-hd"><Star size={14} style={{ color: '#f59e0b' }} /><span>Favourites</span></div>
+                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
                   </div>
-                  {grouped.filter(g => g.matches.some(m => isLiveStatus(m.status))).map(g => (
-                    <div key={g.comp?.id || g.comp?.name || 'live'}>
-                      {g.matches.some(m => !isLiveStatus(m.status)) && (
-                        <div className="mg9-league-hd">
-                          {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                          <span>{g.comp?.name || ''}</span>
-                        </div>
-                      )}
-                      {g.matches.filter(m => isLiveStatus(m.status)).map((m, i) => (
-                        <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} isNotif={isNotif(m.id)} onNotif={handleNotifToggle} />
-                      ))}
+                )}
+                {grouped.map(g => (
+                  <div key={g.name} className="mg9-section">
+                    <div className="mg9-league-hd">
+                      {g.logo && <img src={g.logo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      <span>{g.name}</span>
+                      <span className="cnt">{g.matches.length}</span>
                     </div>
-                  ))}
-                </div>
-              )}
-
-              {grouped.filter(g => g.matches.some(m => !isLiveStatus(m.status))).map(g => (
-                <div key={g.comp?.id || g.comp?.name || g.comp?.name + '-rest'} className="mg9-section">
-                  <div className="mg9-league-hd">
-                    {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{g.comp?.name || ''}</span>
-                    <span className="cnt">{g.matches.filter(m => !isLiveStatus(m.status)).length}</span>
+                    {g.matches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
                   </div>
-                  {g.matches.filter(m => !isLiveStatus(m.status)).map((m, i) => (
-                    <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} isNotif={isNotif(m.id)} onNotif={handleNotifToggle} />
-                  ))}
-                </div>
-              ))}
-            </>
-          )}
-        </>}
+                ))}
+              </>
+            )}
+          </>
+        )}
 
         {/* ═══ Favourites Tab ═══ */}
-        {tab === 'favourites' && <>
-          {favMatches.length === 0 ? (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Star size={22} /></div>
-              <p>No favourites yet</p>
-              <div className="hint" style={{ fontSize: '.64rem', color: 'var(--text-muted)', opacity: .4, marginTop: 4 }}>Tap the star icon on any match to add it here</div>
-            </div>
-          ) : (
-            <>
-              {favMatches.map((m, i) => (
-                <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} isNotif={isNotif(m.id)} onNotif={handleNotifToggle} />
-              ))}
-            </>
-          )}
-        </>}
+        {tab === 'favourites' && (
+          <>
+            {favMatches.length > 0 ? (
+              <div className="mg9-section">
+                <div className="mg9-league-hd"><Star size={14} style={{ color: '#f59e0b' }} /><span>Favourites ({favMatches.length})</span></div>
+                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
+              </div>
+            ) : (
+              <div className="mg9-empty">
+                <div className="mg9-empty-icon"><Star size={20} /></div>
+                <p>No favourite matches found for this date</p>
+              </div>
+            )}
+          </>
+        )}
 
         {/* ═══ Standings Tab ═══ */}
-        {tab === 'standings' && <>
-          {standingsLoading ? (
-            <div>{[1,2,3].map(i => <div key={i} className="mg9-sk" style={{ height: 200, animationDelay: i * 100 + 'ms' }} />)}</div>
-          ) : !standingsData ? (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Trophy size={22} /></div>
-              <p>No standings data</p>
-              <div className="hint" style={{ fontSize: '.64rem', color: 'var(--text-muted)', opacity: .4, marginTop: 4 }}>Select a competition to view standings</div>
-            </div>
-          ) : (
-            <div>Standings Table Component Here</div>
-          )}
-        </>}
-
-        {/* ═══ Teams Tab ═══ */}
-        {tab === 'teams' && <>
-          {teamsLoading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(120px,1fr))', gap: 8 }}>{[1,2,3,4,5,6].map(i => <div key={i} className="mg9-sk" style={{ height: 90, animationDelay: i * 60 + 'ms' }} />)}</div>
-          ) : !teamsData?.length ? (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Users size={22} /></div>
-              <p>No teams data</p>
-              <div className="hint" style={{ fontSize: '.64rem', color: 'var(--text-muted)', opacity: .4, marginTop: 4 }}>Select a competition to view teams</div>
-            </div>
-          ) : (
-            <div>Teams Grid Component Here</div>
-          )}
-        </>}
-
-        {/* ═══ Competitions Tab ═══ */}
-        {tab === 'competitions' && <>
-          {(!competitions || competitions.length === 0) ? (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Trophy size={22} /></div>
-              <p>No competitions</p>
-              <div className="hint" style={{ fontSize: '.64rem', color: 'var(--text-muted)', opacity: .4, marginTop: 4 }}>Competitions will appear once data loads</div>
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(180px,1fr))', gap: 8 }}>
-              {competitions.map(c => (
-                <div key={c.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 14, display: 'flex', alignItems: 'center', gap: 11, cursor: 'pointer', transition: 'all .2s' }} onClick={() => { setCompFilter(String(c.id)); setTab('fixtures'); }}>
-                  {c.emblem && <img src={c.emblem} alt="" style={{ width: 28, height: 28 }} onError={e => { e.target.style.display = 'none'; }} />}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{c.name}</div>
-                    {c.area?.name && <div style={{ fontSize: '.54rem', color: 'var(--text-muted)', marginTop: 1 }}>{c.area.name}</div>}
+        {tab === 'standings' && (
+          standingsLoading ? (
+            <div>{[1, 2, 3].map(i => <div key={i} className="mg9-sk" style={{ height: '250px', marginBottom: '10px', animationDelay: i * 80 + 'ms' }} />)}</div>
+          ) : standingsData && standingsData.length > 0 ? (
+            <div className="mg9-section">
+              {standingsData.map((league, i) => (
+                <div key={i} style={{ marginBottom: '20px' }}>
+                  <div className="mg9-league-hd">
+                    {league.area?.ensignUrl || league.league?.emblem && <img src={league.area?.ensignUrl || league.league?.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <span>{league.league?.name || 'League Table'}</span>
                   </div>
-                  <ChevronRight size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+                  <div className="mg9-tbl-wrap">
+                    <table className="mg9-tbl">
+                      <thead>
+                        <tr>
+                          <th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="p">Pts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {league.standings?.[0]?.map(row => (
+                          <tr key={row.team?.id || row.position}>
+                            <td className="pos">{row.position}</td>
+                            <td>
+                              <div className="tc">
+                                {row.team?.crest && <img src={row.team?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                                <span>{row.team?.shortName || row.team?.name || 'TBD'}</span>
+                              </div>
+                            </td>
+                            <td className="sc">{row.playedGames}</td>
+                            <td className="sc">{row.won}</td>
+                            <td className="sc">{row.draw}</td>
+                            <td className="sc">{row.lost}</td>
+                            <td className="pc">{row.points}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               ))}
             </div>
-          )}
-        </>}
+          ) : (
+            <div className="mg9-empty">
+              <div className="mg9-empty-icon"><Trophy size={20} /></div>
+              <p>No standings data available</p>
+            </div>
+          )
+        )}
 
-        {lastUpdated && (
-          <div style={{ textAlign: 'center', padding: '16px 0 0', fontSize: '.58rem', color: 'var(--text-muted)', opacity: .35 }}>
-            Updated {new Date(lastUpdated).toLocaleTimeString()}
-          </div>
+        {/* ═══ Teams Tab ═══ */}
+        {tab === 'teams' && (
+          teamsLoading ? (
+            <div>{[1, 2, 3, 4, 5].map(i => <div key={i} className="mg9-sk" style={{ height: '100px', marginBottom: '10px', animationDelay: i * 80 + 'ms' }} />)}</div>
+          ) : teamsData && teamsData.length > 0 ? (
+            <div className="mg9-teams-grid">
+              {teamsData.map(t => (
+                <div key={t.id} className="mg9-team-card">
+                  {t.crest && <img src={t.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                  <div className="name">{t.shortName || t.name}</div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mg9-empty">
+              <div className="mg9-empty-icon"><Users size={20} /></div>
+              <p>No teams data available</p>
+            </div>
+          )
+        )}
+
+        {/* ═══ Competitions Tab ═══ */}
+        {tab === 'competitions' && (
+          competitions && competitions.length > 0 ? (
+            <div className="mg9-comp-grid">
+              {competitions.map(c => (
+                <div key={c.id} className="mg9-comp-card">
+                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                  <div className="info">
+                    <div className="cname">{c.name}</div>
+                    <div className="carea">{c.area?.name || ''}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="mg9-empty">
+              <div className="mg9-empty-icon"><Trophy size={20} /></div>
+              <p>No competitions data available</p>
+            </div>
+          )
         )}
       </div>
-
-      {!globalEnabled && !notifBannerDismissed && (
-        <div style={{ position: 'fixed', bottom: 0, left: 0, right: 0, zIndex: 100, background: 'linear-gradient(180deg,transparent,rgba(10,15,26,.95) 30%)', padding: '30px 16px 20px', textAlign: 'center' }}>
-          <button className="mg9-notif-btn" onClick={handleGlobalNotif} style={{ display: 'inline-flex', alignItems: 'center', gap: 7, padding: '11px 24px', borderRadius: 12, border: 'none', background: 'var(--accent,#10b981)', color: '#fff', fontSize: '.78rem', fontWeight: 700, cursor: 'pointer', boxShadow: '0 4px 16px rgba(16,185,129,.3)' }}>
-            <Bell size={15} />
-            Enable Live Notifications
-          </button>
-          <div style={{ marginTop: 6 }}>
-            <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.6rem', cursor: 'pointer', opacity: .5, fontFamily: 'inherit' }} onClick={dismissBanner}>Dismiss</button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
