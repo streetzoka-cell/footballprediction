@@ -112,8 +112,16 @@ export function FootballDataProvider({ children }) {
   useEffect(() => {
     let cancelled = false;
     async function init() {
-      await Promise.all([fetchInitialFixtures(), fetchCompetitions()]);
-      if (!cancelled) setLoading(false);
+      try {
+        await Promise.all([fetchInitialFixtures(), fetchCompetitions()]);
+      } catch (e) {
+        console.error("[FootballData] Init failed, but app will continue loading.", e.message);
+        // We don't crash the app. We just log the error and move on.
+      } finally {
+        // ALWAYS stop loading, even if the football database failed.
+        // This un-freezes your login page!
+        if (!cancelled) setLoading(false); 
+      }
     }
     init();
     return () => { cancelled = true; };
