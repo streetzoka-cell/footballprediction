@@ -443,7 +443,10 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
    ═══════════════════════════════════════ */
 const ZokaRow = ({ pick, index }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
-  const ko = (pick.kickoff || '').includes('T') ? (pick.kickoff.split('T')[1] || '').slice(0, 5) : (pick.kickoff || '').slice(0, 5);
+  const koRaw = pick.kickoff || '';
+  const ko = koRaw 
+    ? new Date(koRaw.includes('T') ? koRaw : `${pick.matchDate || todayStr()}T${koRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : 'TBD';
   const predH = pick.adminPick?.home, predA = pick.adminPick?.away;
 
   return (

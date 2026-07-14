@@ -38,13 +38,12 @@ export const Careers = lazy(() => import("../pages/company/Careers"));
 export const Contact = lazy(() => import("../pages/company/Contact"));
 export const Partners = lazy(() => import("../pages/company/Partners"));
 export const Advertise = lazy(() => import("../pages/company/Advertise"));
-
 /* ===============================
    SUPPORT
 =============================== */
 
-export const FAQ = lazy(() => import("../pages/support/FAQ"));
-export const HelpCenter = lazy(() => import("../pages/support/HelpCenter"));
+export const FAQ = lazy(() => import("../pages/FAQ"));
+export const HelpCenter = lazy(() => import("../pages/HelpCenter"));
 
 /* ===============================
    ERROR

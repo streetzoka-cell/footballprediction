@@ -529,9 +529,9 @@ function ZokaPredCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
   const homeLogo = pick.homeLogo || pick.homeTeam?.logo || pick.homeTeam?.crest;
   const awayLogo = pick.awayLogo || pick.awayTeam?.logo || pick.awayTeam?.crest;
   const kickoffRaw = pick.kickoff || '';
-  const kickoff = kickoffRaw.includes('T')
-    ? kickoffRaw.split('T')[1]?.split(':').slice(0, 2).join(':') || '--:--'
-    : kickoffRaw.split(':').slice(0, 2).join(':') || '--:--';
+  const kickoff = kickoffRaw 
+    ? new Date(kickoffRaw.includes('T') ? kickoffRaw : `${pick.matchDate || todayStr()}T${kickoffRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : '--:--';
 
   let leftBorder = 'rgba(245,197,66,.15)';
   if (res?.type === 'exact') leftBorder = 'var(--accent)';
@@ -600,8 +600,10 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   const awayLogo = pred.awayLogo || pred.awayTeam?.logo || pred.awayTeam?.crest;
   const homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
   const awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
-  const kickoff = pred.kickoff || 'TBD';
-  const kickoffTime = kickoff.includes('T') ? kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : kickoff.split(':').slice(0, 2).join(':') || '';
+  const kickoffRaw = pred.kickoff || '';
+  const kickoffTime = kickoffRaw 
+    ? new Date(kickoffRaw.includes('T') ? kickoffRaw : `${pred.matchDate || todayStr()}T${kickoffRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : '';
 
   let leftBorder = 'var(--border)';
   let cardExtra = '';
