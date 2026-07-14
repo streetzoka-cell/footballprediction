@@ -65,8 +65,23 @@ export default function AppRoutes() {
 
       {/* ================= SUPPORT ================= */}
       <Route path="/faq" element={<Animated><FAQ /></Animated>} />
-      <Route path="/help-center" element={<Animated><HelpCenter /></Animated>} />
+     <Route
+  path="/help"
+  element={
+    <Animated>
+      <HelpCenter />
+    </Animated>
+  }
+/>
 
+<Route
+  path="/help-center"
+  element={
+    <Animated>
+      <HelpCenter />
+    </Animated>
+  }
+/>
       {/* ================= LEGAL ================= */}
       <Route path="/privacy" element={<Animated><PrivacyPolicy /></Animated>} />
       <Route path="/terms" element={<Animated><Terms /></Animated>} />
