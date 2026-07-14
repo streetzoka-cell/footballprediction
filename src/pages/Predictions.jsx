@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v19.0 — Aligned with Core Architecture
+// v19.1 — Fully Aligned & Fixed
 // ═════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue, startTransition } from 'react';
@@ -20,9 +20,9 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { dataLayer } from '../utils/dataLayer';
-import { todayStr, getLocalDateStr } from '../utils/dates'; // ★ Single source for dates
+import { todayStr, getLocalDateStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { calcPoints, CACHE_KEY, PATHS, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants'; // ★ Single source for statuses
+import { calcPoints, CACHE_KEY, PATHS, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
 import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote } from '../hooks/useMatchData';
 import SEO from '../components/SEO';
 
@@ -175,35 +175,6 @@ function DateStrip({ date, onChange, dates, hasDataMap }) {
           <ChevronLeft size={11} /> Less
         </button>
       )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════
-   LEAGUE GROUP
-   ═══════════════════════════════════════════════════ */
-function LeagueGroup({ league, matches, renderMatch, defaultOpen = true, delay = 0, accent }) {
-  const [open, setOpen] = useState(defaultOpen);
-  const contentRef = useRef(null);
-  const [maxH, setMaxH] = useState(defaultOpen ? 9999 : 0);
-
-  useEffect(() => {
-    if (contentRef.current) {
-      setMaxH(open ? contentRef.current.scrollHeight + 200 : 0);
-    }
-  }, [open, matches.length]);
-
-  return (
-    <div style={{ marginBottom: 10, animation: `v19-stagger .3s ${SMOOTH} ${delay}ms both` }}>
-      <div className="v19-lgh" onClick={() => setOpen(p => !p)} style={accent ? { '--lg-accent': accent } : {}}>
-        {league?.emblem && <img src={league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-        <span>{league?.name || 'Other'}</span>
-        <span className="cnt">{matches.length}</span>
-        <ChevronDown size={13} className={`chev${open ? ' open' : ''}`} />
-      </div>
-      <div className="v19-lgc" style={{ maxHeight: maxH }} ref={contentRef}>
-        {matches.map((m, i) => renderMatch(m, i))}
-      </div>
     </div>
   );
 }
@@ -496,7 +467,7 @@ function Skeleton() {
 
 function ResultBadge({ result }) {
   if (!result) return null;
-  const rType = result.resultType || result.type; // ★ Handles both Firestore data and local calc
+  const rType = result.resultType || result.type; // ★ FIX
   if (!rType || rType === 'pending') return null;
   if (rType === 'exact') return <span className="v19-bdg ex"><CheckCircle2 size={8} /> EXACT +{result.points || 10}</span>;
   if (rType === 'result') return <span className="v19-bdg rs"><TrendingUp size={8} /> RESULT +{result.points || 3}</span>;
@@ -612,6 +583,7 @@ function ZokaPredCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
     </div>
   );
 }
+
 /* ═══════════════════════════════════════════════════
    PREDICTION CARD
    ═══════════════════════════════════════════════════ */
@@ -649,7 +621,9 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   else if (isFinished) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(0,230,118,.08)'; }
   else if (isMatchLocked && !isEditing) { statusLabel = 'LOCKED'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,.08)'; }
 
-  const cardCls = `v19-mc${cardExtra}${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}${standalone ? ' standalone' : ''}`;  return (
+  const cardCls = `v19-mc${cardExtra}${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}${standalone ? ' standalone' : ''}`;
+
+  return (
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftBorder}`, animation: `v19-stagger .3s ${SMOOTH} ${index * 25}ms both` }}>
       <div className="v19-mh">
         <div className="v19-ml">
@@ -799,8 +773,9 @@ function ResultsOverlay({ date, preds, userPredsArr, results, onClose, nav }) {
             const res = resMap.get(String(p.matchId));
             const isFinished = isFinishedStatus(p.status, SPORT.FOOTBALL);
             const resCalc = res?.resultType ? res : (isFinished ? calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore) : null);
+            const rType = resCalc?.resultType || resCalc?.type;
             return (
-              <div key={p.id} className="v19-res-row" style={{ animationDelay: `${i * 25}ms`, borderLeft: resCalc?.type === 'exact' ? '3px solid var(--accent)' : resCalc?.type === 'result' ? '3px solid var(--gold)' : resCalc?.type === 'miss' ? '3px solid #ef4444' : '3px solid var(--border)' }}>
+              <div key={p.id} className="v19-res-row" style={{ animationDelay: `${i * 25}ms`, borderLeft: rType === 'exact' ? '3px solid var(--accent)' : rType === 'result' ? '3px solid var(--gold)' : rType === 'miss' ? '3px solid #ef4444' : '3px solid var(--border)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.76rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.homeTeam?.shortName || p.homeTeam?.name} vs {p.awayTeam?.shortName || p.awayTeam?.name}</div>
                   <div style={{ fontSize: '.62rem', color: 'var(--text-muted)', marginTop: 1 }}>{p.league?.name || ''}</div>
@@ -809,7 +784,7 @@ function ResultsOverlay({ date, preds, userPredsArr, results, onClose, nav }) {
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#60a5fa', fontSize: '.82rem', background: 'rgba(96,165,250,.06)', padding: '2px 7px', borderRadius: 6 }}>{up.homeScore}-{up.awayScore}</span>
                   {isFinished && p.homeScore != null && <span style={{ color: 'var(--text-muted)', fontSize: '.7rem' }}>→</span>}
                   {isFinished && p.homeScore != null && <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-primary)', fontSize: '.82rem' }}>{p.homeScore}-{p.awayScore}</span>}
-                  {resCalc && resCalc.type !== 'pending' && <span className={`v19-bdg ${resCalc.type === 'exact' ? 'pr' : resCalc.type === 'result' ? 'rs' : 'ms'}`}>+{resCalc.points}</span>}
+                  {resCalc && rType !== 'pending' && <span className={`v19-bdg ${rType === 'exact' ? 'pr' : rType === 'result' ? 'rs' : 'ms'}`}>+{resCalc.points}</span>}
                 </div>
               </div>
             );
@@ -1039,7 +1014,7 @@ export default function Predictions() {
           return [...map.values()].sort((a, b) => a.date.localeCompare(b.date));
         });
 
-               if (loggedIn && uid) {
+        if (loggedIn && uid) {
           try {
             // ★ FIXED: Fetch predictions for ALL visible dates, not just selDate
             const allPredsData = await Promise.all(fetchDates.map(d => dataLayer.fetchUserPredictions(uid, d).catch(() => ({}))));
@@ -1094,6 +1069,11 @@ export default function Predictions() {
           setLoadedDates(prev => new Set([...prev, key]));
         }
       }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [selDate, loggedIn, uid, fetchDates, loadedDates]);
+
   useEffect(() => {
     const unsubs = [];
     unsubs.push(eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (payload) => {
@@ -1120,7 +1100,7 @@ export default function Predictions() {
         return updated;
       });
     }));
-        unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
+    unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
       if (payload.uid !== uid) return;
       // ★ FIXED: Fetch the specific date that was saved, regardless of what selDate is
       dataLayer.fetchUserPredictions(uid, payload.dateStr).then(data => {
@@ -1149,7 +1129,7 @@ export default function Predictions() {
           dataLayer.fetchUserPoints(uid),
         ]);
         if (!mounted.current) return;
-        if (results?.results) setPredResults(results.results);
+        if (results?.results) setPredResults(prev => [...prev, ...results.results]);
         if (lb) setDailyLB(lb);
         if (pts) setUserPoints(pts);
       } catch (e) {

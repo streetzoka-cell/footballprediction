@@ -1,10 +1,10 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
   onAuthStateChanged,
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
@@ -20,11 +20,17 @@ export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   // ─── Handle Google Redirect Result ───────────────────────
-  // When the browser returns from the Google login page, this catches the result
   useEffect(() => {
-    getRedirectResult(auth).catch((err) => {
-      console.error('[Auth] Redirect result error:', err.message);
-    });
+    getRedirectResult(auth)
+      .then((result) => {
+        if (result) {
+          console.log('[Auth] Redirect sign-in successful:', result.user.uid);
+          // onAuthStateChanged will handle setting the user
+        }
+      })
+      .catch((err) => {
+        console.error('[Auth] Redirect result error:', err.code, err.message);
+      });
   }, []);
 
   // ─── Listen for auth state changes ───────────────────────
@@ -42,7 +48,6 @@ export function AuthProvider({ children }) {
           if (profileDoc.exists()) {
             setUserProfile(profileDoc.data());
           } else {
-            // Create profile on first login
             const profile = {
               uid: user.uid,
               email: user.email,
@@ -97,11 +102,22 @@ export function AuthProvider({ children }) {
     return cred.user;
   }, []);
 
-  // ★ CHANGED: Using Redirect instead of Popup
+  // ★ FIXED: Popup first, redirect as fallback
   const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
-    // This redirects the whole page to Google, avoiding popup blockers and network timeouts
-    await signInWithRedirect(auth, provider);
+    try {
+      // Try popup first (works on desktop, most mobile browsers)
+      const result = await signInWithPopup(auth, provider);
+      return result.user;
+    } catch (err) {
+      // If popup is blocked, fall back to full redirect
+      if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
+        await signInWithRedirect(auth, provider);
+        // Page navigates away here — never returns to this execution
+        return null; // This line is unreachable after redirect, but satisfies linters
+      }
+      throw err;
+    }
   }, []);
 
   const signOut = useCallback(async () => {
@@ -129,7 +145,7 @@ export function AuthProvider({ children }) {
       ...updates,
       updatedAt: serverTimestamp(),
     };
-    delete profileUpdates.uid; 
+    delete profileUpdates.uid;
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
 

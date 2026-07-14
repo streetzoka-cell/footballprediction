@@ -215,8 +215,19 @@ export default function Login() {
   const [errorVis, setErrorVis] = useState(false);
   const [modeTrans, setModeTrans] = useState(false);
 
-  const { login, register, loginWithGoogle } = useAuth();
+  // ★ FIX 1: Destructure currentUser and authLoading
+  const { currentUser, authLoading, login, register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
+
+  // ★ FIX 2: Auto-navigate when user becomes authenticated
+  // This handles BOTH: 
+  //   - User returning from Google redirect sign-in
+  //   - User already logged in visiting /login
+  useEffect(() => {
+    if (!authLoading && currentUser) {
+      navigate('/profile', { replace: true });
+    }
+  }, [currentUser, authLoading, navigate]);
 
   useEffect(() => {
     if (error) { const t = setTimeout(() => setErrorVis(true), 10); return () => clearTimeout(t); }
@@ -233,7 +244,7 @@ export default function Login() {
         if (!displayName.trim()) { setError('Display name is required'); setLoading(false); return; }
         await register(email, password, displayName.trim());
       }
-      navigate('/profile');
+      // Navigation is now handled by the useEffect above!
     } catch (err) {
       const errors = {
         'auth/user-not-found': 'No account found with this email',
@@ -246,15 +257,26 @@ export default function Login() {
       setError(errors[err.code] || err.message);
     }
     setLoading(false);
-  }, [isLogin, email, password, displayName, login, register, navigate]);
+  }, [isLogin, email, password, displayName, login, register]);
 
+  // ★ FIX 3: Updated Google Handler
   const handleGoogle = useCallback(async () => {
     setError('');
     setLoading(true);
-    try { await loginWithGoogle(); navigate('/profile'); }
-    catch (err) { if (err.code !== 'auth/popup-closed-by-user') setError('Google sign-in failed. Please try again.'); }
+    try {
+      await loginWithGoogle(); 
+      // For popup flow: user is signed in, the useEffect above will navigate.
+      // For redirect flow: page navigates away to Google. When it returns, 
+      // the useEffect above will detect the user and navigate.
+    } catch (err) {
+      if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+        // User closed the popup themselves, don't show a scary error
+      } else {
+        setError('Google sign-in failed. Please try again.');
+      }
+    }
     setLoading(false);
-  }, [loginWithGoogle, navigate]);
+  }, [loginWithGoogle]);
 
   const toggleMode = useCallback(() => {
     setModeTrans(true);

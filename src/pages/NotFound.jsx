@@ -1,9 +1,7 @@
-// src/pages/NotFound.jsx
-
 import { Link } from "react-router-dom";
-
 import SEO from "../components/SEO";
 import PageLayout from "../components/PageLayout";
+import './Pages.css';
 
 export default function NotFound() {
   return (
@@ -19,80 +17,27 @@ export default function NotFound() {
         title="404"
         subtitle="Sorry, the page you were looking for could not be found."
       >
-        <div
-          style={{
-            textAlign: "center",
-            maxWidth: 700,
-            margin: "0 auto",
-          }}
-        >
-          <h2
-            style={{
-              fontSize: "2rem",
-              marginBottom: 20,
-            }}
-          >
+        <div className="not-found-content">
+          <h1 className="not-found-code">404</h1>
+          <h2 className="not-found-title">
             Oops! This page doesn't exist.
           </h2>
 
-          <p
-            style={{
-              color: "#b8c4d6",
-              lineHeight: 1.8,
-              marginBottom: 40,
-            }}
-          >
+          <p className="not-found-desc">
             The page may have been moved, deleted, or you may have entered an
             incorrect address.
           </p>
 
-          <div
-            style={{
-              display: "flex",
-              gap: 16,
-              justifyContent: "center",
-              flexWrap: "wrap",
-            }}
-          >
-            <Link
-              to="/"
-              style={{
-                background: "#2563eb",
-                color: "#fff",
-                padding: "14px 24px",
-                borderRadius: 10,
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
+          <div className="not-found-actions">
+            <Link to="/" className="not-found-btn not-found-btn-home">
               Go Home
             </Link>
 
-            <Link
-              to="/fixtures"
-              style={{
-                background: "#16a34a",
-                color: "#fff",
-                padding: "14px 24px",
-                borderRadius: 10,
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
+            <Link to="/fixtures" className="not-found-btn not-found-btn-fixtures">
               Today's Fixtures
             </Link>
 
-            <Link
-              to="/predictions"
-              style={{
-                background: "#9333ea",
-                color: "#fff",
-                padding: "14px 24px",
-                borderRadius: 10,
-                textDecoration: "none",
-                fontWeight: 600,
-              }}
-            >
+            <Link to="/predictions" className="not-found-btn not-found-btn-predictions">
               Predictions
             </Link>
           </div>
