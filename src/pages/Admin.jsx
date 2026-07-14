@@ -561,7 +561,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const [openDay, setOpenDay] = useState(null);
 
   const dayFx = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
-  const selectableFx = useMemo(() => dayFx.filter(m => !isFin(m)), [dayFx]);
+  
+  // ★ FIX: Filter out both Finished AND Live matches
+  const selectableFx = useMemo(() => dayFx.filter(m => !isFin(m) && !isLive(m)), [dayFx]);
 
   const leagues = useMemo(() => {
     const map = new Map();
@@ -588,13 +590,15 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const scored = Object.values(sel).filter(s => s.h !== '' && s.a !== '').length;
   const ready = cnt > 0 && scored === cnt;
 
+  const pubMatches = useMemo(() => Array.isArray(pubPicks) ? pubPicks : (pubPicks?.matches || []), [pubPicks]);
+  
   const pubMap = useMemo(() => {
-    if (!pubPicks?.matches) return new Map();
-    return new Map(pubPicks.matches.map(p => [String(p.matchId), p]));
-  }, [pubPicks]);
+    return new Map(pubMatches.map(p => [String(p.matchId), p]));
+  }, [pubMatches]);
 
   const toggle = (m) => {
-    if (isFin(m)) { toast('Cannot select finished matches', 'in'); return; }
+    // ★ FIX: Block selection if finished or live
+    if (isFin(m) || isLive(m)) { toast('Cannot select finished or live matches', 'in'); return; }
     const id = String(m.id);
     if (ids.has(id)) {
       setSel(prev => { const n = { ...prev }; delete n[id]; return n; });
@@ -635,7 +639,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   };
 
   const mergeWithExisting = (newPicks) => {
-    const existing = pubPicks?.matches || [];
+    const existing = pubMatches;
     const merged = [...existing];
     for (const np of newPicks) {
       const idx = merged.findIndex(p => String(p.matchId) === String(np.matchId));
@@ -704,9 +708,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   };
 
   const pubRes = useMemo(() => {
-    if (!pubPicks?.matches) return { e: 0, r: 0, mi: 0, p: 0 };
+    if (!pubMatches.length) return { e: 0, r: 0, mi: 0, p: 0 };
     let e = 0, r = 0, mi = 0, p = 0;
-    pubPicks.matches.forEach(pk => {
+    pubMatches.forEach(pk => {
       if (pk.status !== 'finished' || pk.homeScore == null) { p++; return; }
       const h = pk.adminPick?.home, a = pk.adminPick?.away;
       if (h === pk.homeScore && a === pk.awayScore) { e++; return; }
@@ -714,7 +718,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       mi++;
     });
     return { e, r, mi, p };
-  }, [pubPicks]);
+  }, [pubMatches]);
 
   return (
     <div className="ae">
@@ -734,21 +738,19 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
               <button className="ab ab-gh ab-sm" onClick={handleSave} disabled={saving || cnt === 0 || scored === 0}>
                 <Save size={12} /> Save
               </button>
-              {ready && (
-                <button className="ab ab-gd ab-sm" onClick={handlePublish} disabled={publishing}>
-                  <Send size={12} /> Publish
-                </button>
-              )}
+              <button className="ab ab-gd ab-sm" onClick={handlePublish} disabled={publishing || !ready} title={!ready ? 'Enter scores for all picks to publish' : ''}>
+                <Send size={12} /> Publish
+              </button>
             </div>
           </div>
         </div>
       )}
 
-      {pubPicks?.matches && cnt === 0 && (
+      {pubMatches.length > 0 && cnt === 0 && (
         <div className="azs pop" style={{ position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 6 }}>
             <span style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              {pubPicks.matches.length} published · Tap a match to edit
+              {pubMatches.length} published · Tap a match to edit
             </span>
             <div style={{ display: 'flex', gap: 4 }}>
               <span className="abdg ex"><CheckCircle2 size={9} /> {pubRes.e}</span>
@@ -799,8 +801,8 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
           <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
-        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'All fixtures are finished'}
-          hint={dayFx.length === 0 ? 'Try a different day' : 'Finished games cannot be selected'} />
+        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'}
+          hint={dayFx.length === 0 ? 'Try a different day' : 'Live and finished matches cannot be selected'} />
       )}
 
       <div className="asec" style={{ marginTop: 18 }}>
@@ -852,6 +854,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   );
 }
 
+
 /* ═════════════════════════════════════════════════════════════════════════════════
    FEATURED TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
@@ -868,16 +871,18 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
   const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
 
+  // ★ FIX: Filter out both Finished AND Live matches
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    let l = fixtures.filter(m => extractDate(m) === date && !isFin(m)); 
+    let l = fixtures.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)); 
     if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
     return l;
   }, [fixtures, date, lg]);
 
+  // ★ FIX: Filter out both Finished AND Live matches for the league filter chips
   const leagues = useMemo(() => {
     const map = new Map();
-    (fixtures?.filter(m => extractDate(m) === date && !isFin(m)) || []).forEach(f => {
+    (fixtures?.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)) || []).forEach(f => {
       const c = f.competition || f.league; if (!c) return;
       const id = String(c.id || c.code || 'x');
       if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
@@ -997,12 +1002,13 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
             <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
           </div>
         ) : (
-          <Empty icon={CalendarDays} title="No available matches" hint="All matches are finished or already featured" />
+          <Empty icon={CalendarDays} title="No available matches" hint="Live and finished matches cannot be featured" />
         )}
       </div>
     </div>
   );
 }
+
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    RESULTS TAB
