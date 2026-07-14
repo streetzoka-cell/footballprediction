@@ -136,20 +136,29 @@ class LocalCache {
   }
 }
 
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════
 // DATA LAYER CLASS
-// ═══════════════════════════════════════════════════
-
+// ═══════════════════════════════════════
 class DataLayer {
-  constructor() {
-    this._memory = new Map();
+  constructor() {    this._memory = new Map();
     this._locks = new Map();
     this._subscribers = new Map();
     this._local = new LocalCache();
     this._backgroundRefreshInProgress = new Set();
     this._local.startPeriodicCleanup();
-  }
 
+    // ★ FIX: Auto-clear user caches when tab regains focus
+    // This ensures users instantly see new points/results/leaderboards
+    if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+      const onFocus = () => {
+        if (document.visibilityState === 'visible') {
+          const prefixes = ['myPreds:', 'myResults:', 'upt:', 'dlb:', 'hist:', 'active:'];
+          prefixes.forEach(p => this.invalidatePrefix(p));
+        }
+      };
+      document.addEventListener('visibilitychange', onFocus);
+    }
+  }
   // ─── Memory Cache ────────────────────────────────
   _memGet(key, ttlMs) {
     const entry = this._memory.get(key);
@@ -686,7 +695,8 @@ export async function saveUserPrediction({ matchId, homeScore, awayScore, matchD
 export async function deleteUserPrediction(matchId) {
   const uid = auth.currentUser?.uid;
   if (!uid || !matchId) return;
-  await deleteDoc(doc(db, PATHS.USER_PREDICTIONS, String(matchId)));
+  // ★ FIX: Match the new uid_matchId doc ID structure
+  await deleteDoc(doc(db, PATHS.USER_PREDICTIONS, `${uid}_${String(matchId)}`));
 }
 
 // ═══════════════════════════════════════════════════

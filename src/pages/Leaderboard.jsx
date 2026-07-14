@@ -362,7 +362,14 @@ export default function Leaderboard() {
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const [showCount, setShowCount] = useState(15);
-  const [retryKey, setRetryKey] = useState(0);
+  const [focusKey, setFocusKey] = useState(0);
+  
+  
+useEffect(() => {
+  const onFocus = () => setFocusKey(k => k + 1);
+  document.addEventListener('visibilitychange', onFocus);
+  return () => document.removeEventListener('visibilitychange', onFocus);
+}, []);
 
   // ★ Hooks from the new architecture
   const dailyLB = useDailyLeaderboard(todayStr());
@@ -403,7 +410,7 @@ export default function Leaderboard() {
   const hasMore = filteredRest.length > showCount - 3;
 
   const handleClear = useCallback(() => { setSearch(''); searchRef.current?.focus(); }, []);
-  const handleRetry = () => { setRetryKey(k => k + 1); };
+  const handleRetry = () => { setFocusKey(k => k + 1); };
   const handleTabChange = (t) => {
     startTransition(() => { setTab(t); setShowCount(15); setSearch(''); });
   };
@@ -416,7 +423,7 @@ export default function Leaderboard() {
   }[tab] || '';
 
   return (
-    <div className="lb18-page">
+    <div className="lb18-page" key={focusKey}>
       <SEO
         title="Football Prediction Leaderboard"
         description="View the ZOKASCORE football prediction leaderboard."

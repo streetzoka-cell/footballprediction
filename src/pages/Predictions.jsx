@@ -835,6 +835,7 @@ export default function Predictions() {
   const [userVotes, setUserVotes] = useState({});
 
   const [loading, setLoading] = useState(true);
+  const [focusKey, setFocusKey] = useState(0);
   const [loadError, setLoadError] = useState(false);
   const [saving, setSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -846,10 +847,14 @@ export default function Predictions() {
   const [showLogin, setShowLogin] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [now, setNow] = useState(Date.now());
-  const [loadedDates, setLoadedDates] = useState(new Set());
+  
 
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
-
+   useEffect(() => {
+  const onFocus = () => setFocusKey(k => k + 1);
+  document.addEventListener('visibilitychange', onFocus);
+  return () => document.removeEventListener('visibilitychange', onFocus);
+}, []);
   const dateList = useMemo(() => {
     const arr = [];
     for (let i = -14; i <= FUTURE_DAYS; i++) arr.push(dateOffset(i));
@@ -977,12 +982,9 @@ export default function Predictions() {
   /* ═══════════════════════════════════════════════════
      DATA LOADING
      ═══════════════════════════════════════════════════ */
-  useEffect(() => {
-    const key = fetchDates.join(',');
-    if (loadedDates.has(key)) return;
-
+    useEffect(() => {
     let cancelled = false;
-    const run = async () => {
+      const run = async () => {
       try {
         const dates = fetchDates;
         const [predsResults, zokaResults] = await Promise.all([
@@ -1066,13 +1068,14 @@ export default function Predictions() {
       } finally {
         if (mounted.current) {
           setLoading(false);
-          setLoadedDates(prev => new Set([...prev, key]));
+         
         }
       }
     };
     run();
     return () => { cancelled = true; };
-  }, [selDate, loggedIn, uid, fetchDates, loadedDates]);
+
+  }, [selDate, loggedIn, uid, fetchDates, focusKey]);
 
   useEffect(() => {
     const unsubs = [];
@@ -1351,7 +1354,7 @@ export default function Predictions() {
           ) : loadError ? (
             <div style={{ textAlign: 'center', padding: 40 }}>
               <p style={{ color: 'var(--text-muted)', fontWeight: 700, marginBottom: 12 }}>Failed to load</p>
-              <button className="v19-b v19-bgh" onClick={() => setLoadedDates(new Set())} style={{ padding: '10px 20px' }}><RotateCcw size={13} /> Retry</button>
+              <button className="v19-b v19-bgh" onClick={() => setFocusKey(k => k + 1)} style={{ padding: '10px 20px' }}><RotateCcw size={13} /> Retry</button>
             </div>
           ) : filteredPreds.length > 0 ? (
             <>
