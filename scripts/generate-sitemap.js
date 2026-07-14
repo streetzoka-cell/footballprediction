@@ -1,5 +1,5 @@
 import { SitemapStream, streamToPromise } from "sitemap";
-import { createWriteStream } from "fs";
+import { createWriteStream, mkdirSync } from "fs";
 
 const hostname = "https://zokascore.xyz";
 
@@ -19,13 +19,18 @@ const pages = [
   { url: "/terms", changefreq: "yearly", priority: 0.3 },
 ];
 
+mkdirSync("./dist", { recursive: true });
+
 const sitemap = new SitemapStream({ hostname });
-const write = createWriteStream("./public/sitemap.xml");
+
+const write = createWriteStream("./dist/sitemap.xml");
 
 sitemap.pipe(write);
+
 pages.forEach((page) => sitemap.write(page));
+
 sitemap.end();
 
 streamToPromise(sitemap).then(() => {
-  console.log("✅ sitemap.xml generated");
+  console.log("✅ sitemap.xml generated in dist/");
 });

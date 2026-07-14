@@ -7,7 +7,7 @@
   "author": {
     "name": "Kimutai Gibson",
     "email": "streetzoka@gmail.com",
-    "url": "https://zokapredict.com"
+    "url": "https://zokascore.xyz"
   },
   "license": "UNLICENSED",
   "repository": {
@@ -39,7 +39,7 @@
     "url": "https://github.com/streetzoka/zokapredict/issues",
     "email": "streetzoka@gmail.com"
   },
-  "homepage": "https://zokapredict.com",
+  "homepage": "https://zokascore.xyz",
   "scripts": {
     "dev": "vite",
     "build": "vite build && node scripts/generate-sitemap.js",
@@ -72,7 +72,6 @@
     "sitemap": "^9.0.1",
     "vite": "^8.1.1",
     "vite-imagetools": "^10.0.1",
-    "vite-plugin-compression": "^0.5.1",
-    "vite-plugin-sitemap": "^0.8.2"
+    "vite-plugin-compression": "^0.5.1"
   }
 }

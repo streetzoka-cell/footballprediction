@@ -1,243 +1,199 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en-KE">
 
 <head>
   <meta charset="UTF-8" />
+
   <title>ZOKASCORE | Live Football Scores, Predictions & Fixtures</title>
+
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-  <meta name="description" content="ZOKASCORE — Real-time football predictions with live scores, fixtures, standings, leaderboards, AI match analysis, basketball updates and prediction competitions. Compete daily, weekly and all-time." />
-  <meta name="keywords" content="football scores, football predictions, live scores, football fixtures, soccer predictions, premier league predictions, champions league, la liga, serie a, bundesliga, basketball scores, sports prediction app, ZOKASCORE, prediction leaderboard, exact score predictor, football tips, match results, football statistics" />
+
+  <meta
+    name="description"
+    content="ZOKASCORE delivers live football scores, fixtures, predictions, standings, leaderboards, basketball updates and AI-powered match analysis."
+  />
+
+  <meta
+    name="keywords"
+    content="football predictions, live football scores, fixtures, standings, football tips, soccer predictions, premier league, champions league, la liga, bundesliga, serie a, basketball scores"
+  />
+
   <meta name="author" content="Kimutai Gibson" />
-  <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large, max-video-preview:-1" />
-  <meta name="googlebot" content="index, follow, max-image-preview:large, max-snippet:-1" />
+
+  <meta
+    name="robots"
+    content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
+  />
+
+  <meta
+    name="googlebot"
+    content="index,follow,max-snippet:-1,max-image-preview:large"
+  />
+
   <meta name="theme-color" content="#07141f" />
   <meta name="color-scheme" content="dark" />
 
-  <!-- Verification -->
-  <meta name="google-site-verification" content="" />
+  <!-- Google Verification -->
+  <meta name="google-site-verification" content="YOUR_VERIFICATION_CODE" />
 
-  <!-- PWA -->
+  <!-- Canonical -->
+  <link rel="canonical" href="https://zokascore.xyz/" />
+
+  <!-- Language -->
+  <link rel="alternate" hreflang="en" href="https://zokascore.xyz/" />
+
+  <!-- Manifest -->
   <link rel="manifest" href="/manifest.json" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
 
   <!-- Icons -->
-  <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+  <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192.png" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-32.png" />
-  <link rel="icon" type="image/png" sizes="16x16" href="/icons/icon-16.png" />
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-  <!-- SEO -->
-  <link rel="canonical" href="https://zokascore.xyz/" />
-  <link rel="alternate" hreflang="en" href="https://zokascore.xyz/" />
-  <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-  <link rel="humans.txt" href="/humans.txt" />
-  <link rel="security.txt" href="/security.txt" />
-  <link rel="ads.txt" href="/ads.txt" />
+  <!-- Mobile -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
+  <meta
+    name="apple-mobile-web-app-status-bar-style"
+    content="black-translucent"
+  />
 
-  <!-- Preconnect for performance -->
+  <!-- Performance -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link rel="preconnect" href="https://api.football-data.org" />
-  <link rel="preconnect" href="https://firebaseapp.com" />
   <link rel="preconnect" href="https://www.googletagmanager.com" />
   <link rel="preconnect" href="https://www.google-analytics.com" crossorigin />
-  <link rel="dns-prefetch" href="https://firestore.googleapis.com" />
-  <link rel="dns-prefetch" href="https://firebase-installations.googleapis.com" />
-  <link rel="dns-prefetch" href="https://identitytoolkit.googleapis.com" />
 
   <!-- Open Graph -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ZOKASCORE" />
   <meta property="og:locale" content="en_KE" />
-  <meta property="og:title" content="ZOKASCORE | Live Football Scores & Predictions" />
-  <meta property="og:description" content="Predict football scores, compete on leaderboards, and prove you know the beautiful game. Live scores, fixtures, standings and AI analysis." />
   <meta property="og:url" content="https://zokascore.xyz/" />
-  <meta property="og:image" content="https://zokascore.xyz/og-image.jpg" />
+
+  <meta
+    property="og:title"
+    content="ZOKASCORE | Live Football Scores & Predictions"
+  />
+
+  <meta
+    property="og:description"
+    content="Real-time football scores, predictions, standings, fixtures and leaderboards."
+  />
+
+  <meta
+    property="og:image"
+    content="https://zokascore.xyz/og-image.jpg"
+  />
+
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-  <meta property="og:image:alt" content="ZOKASCORE — Football Prediction Platform" />
+  <meta property="og:image:alt" content="ZOKASCORE" />
 
-  <!-- Twitter / X -->
+  <!-- Twitter -->
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@zokascore" />
   <meta name="twitter:creator" content="@zokascore" />
-  <meta name="twitter:title" content="ZOKASCORE | Football Predictions & Live Scores" />
-  <meta name="twitter:description" content="Predict scores, climb leaderboards, prove you know football. 50K+ users competing daily." />
-  <meta name="twitter:image" content="https://zokascore.xyz/og-image.jpg" />
 
-  <!-- WebApplication Schema -->
+  <meta
+    name="twitter:title"
+    content="ZOKASCORE | Football Predictions & Live Scores"
+  />
+
+  <meta
+    name="twitter:description"
+    content="Predict football matches, climb leaderboards and follow live scores."
+  />
+
+  <meta
+    name="twitter:image"
+    content="https://zokascore.xyz/og-image.jpg"
+  />
+
+  <!-- WebSite -->
   <script type="application/ld+json">
   {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "ZOKASCORE",
-    "url": "https://zokascore.xyz",
-    "applicationCategory": "SportsApplication",
-    "operatingSystem": "Web",
-    "browserRequirements": "Requires JavaScript. Compatible with Chrome, Firefox, Safari, Edge.",
-    "description": "Real-time football prediction platform with live scores, fixtures, leaderboards and AI match analysis.",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "KES",
-      "availability": "https://schema.org/InStock"
-    },
-    "author": {
-      "@type": "Person",
-      "name": "Kimutai Gibson",
-      "email": "streetzoka@gmail.com",
-      "jobTitle": "Founder & Lead Developer"
-    },
-    "publisher": {
-      "@type": "Organization",
-      "name": "ZOKASCORE",
-      "url": "https://zokascore.xyz",
-      "logo": {
-        "@type": "ImageObject",
-        "url": "https://zokascore.xyz/logo.png",
-        "width": 512,
-        "height": 512
-      }
-    },
-    "screenshot": {
-      "@type": "ImageObject",
-      "url": "https://zokascore.xyz/og-image.jpg",
-      "width": 1200,
-      "height": 630,
-      "caption": "ZOKASCORE prediction interface showing live matches and leaderboard"
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"ZOKASCORE",
+    "url":"https://zokascore.xyz/",
+    "potentialAction":{
+      "@type":"SearchAction",
+      "target":"https://zokascore.xyz/search?q={search_term_string}",
+      "query-input":"required name=search_term_string"
     }
   }
   </script>
 
-  <!-- WebSite Schema with SearchAction -->
+  <!-- Organization -->
   <script type="application/ld+json">
   {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "name": "ZOKASCORE",
-    "alternateName": "ZokaPredict",
-    "url": "https://zokascore.xyz",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://zokascore.xyz/logo.png",
-      "width": 512,
-      "height": 512
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"ZOKASCORE",
+    "url":"https://zokascore.xyz/",
+    "logo":"https://zokascore.xyz/logo.png",
+    "founder":{
+      "@type":"Person",
+      "name":"Kimutai Gibson"
     },
-    "description": "Real-time football prediction platform with live scores, fixtures, leaderboards and sports statistics.",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": {
-        "@type": "EntryPoint",
-        "urlTemplate": "https://zokascore.xyz/search?q={search_term_string}",
-        "inLanguage": "en"
-      },
-      "query-input": "required name=search_term_string"
-    }
-  }
-  </script>
-
-  <!-- Organization Schema -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "Organization",
-    "name": "ZOKASCORE",
-    "alternateName": "ZokaPredict",
-    "url": "https://zokascore.xyz",
-    "logo": {
-      "@type": "ImageObject",
-      "url": "https://zokascore.xyz/logo.png",
-      "width": 512,
-      "height": 512
-    },
-    "description": "ZOKASCORE is a real-time football prediction platform providing live scores, fixtures, match analysis, prediction competitions and sports statistics across 15+ leagues.",
-    "foundingDate": "2024",
-    "founder": {
-      "@type": "Person",
-      "name": "Kimutai Gibson",
-      "email": "streetzoka@gmail.com",
-      "jobTitle": "Founder"
-    },
-    "foundingLocation": {
-      "@type": "Place",
-      "name": "Nairobi, Kenya"
-    },
-    "contactPoint": {
-      "@type": "ContactPoint",
-      "contactType": "customer support",
-      "email": "streetzoka@gmail.com",
-      "telephone": "+254-721-635-810",
-      "availableLanguage": ["English", "Swahili"]
-    },
-    "sameAs": [
+    "sameAs":[
       "https://twitter.com/zokascore",
       "https://github.com/streetzoka/zokapredict"
-    ],
-    "knowsAbout": [
-      "Football", "Soccer", "Sports Predictions", "Live Scores",
-      "Premier League", "Champions League", "La Liga", "Serie A",
-      "Bundesliga", "NBA", "Basketball", "Web Development", "Firebase"
     ]
   }
   </script>
 
-  <!-- SportsOrganization Schema for SEO -->
+  <!-- WebApplication -->
   <script type="application/ld+json">
   {
-    "@context": "https://schema.org",
-    "@type": "SportsOrganization",
-    "name": "ZOKASCORE",
-    "url": "https://zokascore.xyz",
-    "sport": "Football",
-    "description": "Football prediction platform covering 15+ leagues including the Premier League, Champions League, La Liga, Serie A, Bundesliga, and more.",
-    "foundingDate": "2024",
-    "member": {
-      "@type": "SportsTeam",
-      "name": "ZOKASCORE Community",
-      "sport": "Football",
-      "memberCount": "50000"
-    },
-    "athlete": [
+    "@context":"https://schema.org",
+    "@type":"WebApplication",
+    "name":"ZOKASCORE",
+    "url":"https://zokascore.xyz/",
+    "applicationCategory":"SportsApplication",
+    "operatingSystem":"Web",
+    "offers":{
+      "@type":"Offer",
+      "price":"0",
+      "priceCurrency":"KES"
+    }
+  }
+  </script>
+
+  <!-- Breadcrumb -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"BreadcrumbList",
+    "itemListElement":[
       {
-        "@type": "Person",
-        "name": "Kimutai Gibson",
-        "jobTitle": "Founder",
-        "url": "https://zokascore.xyz/company/about"
+        "@type":"ListItem",
+        "position":1,
+        "name":"Home",
+        "item":"https://zokascore.xyz/"
       }
     ]
   }
   </script>
 
-  <!-- BreadcrumbList for home page -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      {
-        "@type": "ListItem",
-        "position": 1,
-        "name": "Home",
-        "item": "https://zokascore.xyz"
-      }
-    ]
-  }
-  </script>
 </head>
 
 <body>
+
   <noscript>
-    <div style="padding:40px 20px;text-align:center;font-family:system-ui;max-width:400px;margin:40px auto">
-      <h1 style="font-size:1.2rem;margin:0 0 10px">JavaScript Required</h1>
-      <p style="color:#666;line-height:1.6;margin:0">ZOKASCORE requires JavaScript to run. Please enable JavaScript in your browser settings and reload the page.</p>
+    <div style="padding:40px;text-align:center;font-family:system-ui">
+      <h1>JavaScript Required</h1>
+      <p>
+        ZOKASCORE requires JavaScript to provide live football scores,
+        predictions and statistics.
+      </p>
     </div>
   </noscript>
-  <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
-</body>
 
+  <div id="root"></div>
+
+  <script type="module" src="/src/main.jsx"></script>
+
+</body>
 </html>
