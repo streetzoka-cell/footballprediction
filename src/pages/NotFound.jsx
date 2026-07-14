@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import SEO from "../components/SEO";
 import PageLayout from "../components/PageLayout";
-import './Pages.css';
+
 
 export default function NotFound() {
   return (
