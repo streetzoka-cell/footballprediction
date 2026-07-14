@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v13.2 — Fixed mobile smoothness, fixed hide-in/out animations, refactored CSS
+// v13.3 — Fixed missing ProHeader styles, removed strobe animations, smoothed ticker
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -28,7 +28,6 @@ const injectBase = () => {
   s.id = 'nv-base-v14';
   s.textContent = `
     @keyframes nvMarquee{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
-    @keyframes nvBannerShimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
     @keyframes nvFadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
     @keyframes nvDotBlink{0%,100%{opacity:1}50%{opacity:.2}}
     @keyframes nvShine{0%{left:-100%}100%{left:200%}}
@@ -38,18 +37,32 @@ const injectBase = () => {
     @keyframes nvBellRing{0%,100%{transform:rotate(0)}15%{transform:rotate(14deg)}30%{transform:rotate(-12deg)}45%{transform:rotate(8deg)}60%{transform:rotate(-4deg)}75%{transform:rotate(0)}}
     @keyframes nvBadgePop{0%{transform:scale(0)}60%{transform:scale(1.2)}100%{transform:scale(1)}}
     @keyframes nvStreakFire{0%,100%{opacity:.6;transform:scale(1)}50%{opacity:1;transform:scale(1.15)}}
-    @keyframes nvBorderGlow{0%,100%{border-color:rgba(0,230,118,.06)}50%{border-color:rgba(0,230,118,.14)}}
     @keyframes nvNotifSlide{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes nvOverlayIn{from{opacity:0}to{opacity:1}}
     @keyframes nvMobItemIn{from{opacity:0;transform:translateX(24px)}to{opacity:1;transform:translateX(0)}}
     @keyframes nvMobUserIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes nvMobStatPop{0%{transform:scale(.8);opacity:0}60%{transform:scale(1.05)}100%{transform:scale(1);opacity:1}}
     @keyframes nvPulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.4)}50%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
     @keyframes nvPointsCount{0%{transform:scale(1)}50%{transform:scale(1.08)}100%{transform:scale(1)}}
     @keyframes nvLogoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-1px)}}
-    @keyframes nvTickerPulse{0%,100%{opacity:.92}50%{opacity:1}}
     @keyframes nvNotifHeaderGlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
     @keyframes nvInfoExpand{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
+
+    /* ★ FIX: Added missing ProHeader styles */
+    .nv-pro-wrap { padding: 12px 16px 0; max-width: 1140px; margin: 0 auto; }
+    .nv-pro-inner { background: var(--bg-card, #111827); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; transition: all 0.2s ease; }
+    .nv-pro-inner:hover { border-color: rgba(0,230,118,0.2); transform: translateY(-1px); }
+    .nv-pro-tag { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; font-weight: 700; color: var(--text-muted, #64748b); text-transform: uppercase; letter-spacing: 0.05em; }
+    .nv-pro-teams { display: flex; align-items: center; gap: 10px; }
+    .nv-pro-team { flex: 1; display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 700; color: var(--text-primary, #f1f5f9); overflow: hidden; }
+    .nv-pro-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nv-pro-team-aw { justify-content: flex-end; }
+    .nv-pro-score-bar { display: flex; align-items: center; gap: 8px; padding: 4px 12px; background: rgba(255,255,255,0.04); border-radius: 8px; border: 1px solid var(--border, #1e293b); }
+    .nv-pro-score { font-family: var(--font-display, system-ui); font-weight: 900; font-size: 1rem; color: var(--text-primary, #f1f5f9); }
+    .nv-pro-score-live { color: #ef4444; }
+    .nv-pro-time { font-size: 0.75rem; font-weight: 700; color: var(--text-muted, #64748b); display: flex; align-items: center; gap: 4px; }
+    .nv-pro-vs { font-size: 0.75rem; font-weight: 700; color: var(--text-muted, #64748b); opacity: 0.5; }
+    .nv-pro-minute { position: absolute; top: 10px; right: 14px; display: flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; color: #ef4444; }
+    .nv-pro-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; animation: nvLiveDot 1.2s infinite; box-shadow: 0 0 8px rgba(239,68,68,0.6); }
 
     /* Mobile Optimizations: Disable backdrop blur for smooth scroll */
     @media (max-width: 900px) {
@@ -97,7 +110,6 @@ const injectBase = () => {
     .nv-mob-scroll::-webkit-scrollbar-thumb { background: rgba(0,230,118,0.15); border-radius: 10px; }
 
     .nv-link-shimmer { position: relative; overflow: hidden; }
-    .nv-link-shimmer::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 0%, rgba(0,230,118,0.04) 50%, transparent 100%); background-size: 200% 100%; animation: nvLinkHover 0.6s ease both; pointer-events: none; }
     
     /* Helper classes to clean up JSX */
     .nv-mob-link { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 10px; border: none; cursor: pointer; text-align: left; background: transparent; color: #9ca3af; font-size: 0.88rem; font-weight: 500; transition: all 0.2s ease; }
@@ -185,10 +197,10 @@ function ProHeader({ matches, liveMatches, nav }) {
 
   return (
     <div className="nv-pro-wrap" onClick={() => nav(m.matchId ? `/predictions?match=${m.matchId}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
-      <div className="nv-pro-inner" style={{ border: `1.5px solid ${featured.isLive ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,0.06)'}`, animation: 'nvFadeUp .4s cubic-bezier(.22,1,.36,1) both' }}>
+      <div className="nv-pro-inner" style={{ border: `1.5px solid ${featured.isLive ? 'rgba(239,68,68,.2)' : 'rgba(255,255,255,0.06)'}` }}>
         <div className="nv-pro-tag">
           {featured.isLive && <span className="nv-pro-live-dot" />}
-          <span className="nv-pro-league">{m.league?.name || 'Featured'}</span>
+          <span>{m.league?.name || 'Featured'}</span>
         </div>
         <div className="nv-pro-teams">
           <div className="nv-pro-team">
@@ -471,19 +483,19 @@ export default function Navbar() {
   useEffect(() => {
     if (notifOpen && predNotifs.length > 0) setSeenNotifIds(new Set(predNotifs.map(n => n.id)));
   }, [notifOpen, predNotifs]);
+
   // Listen for app refocus to instantly refresh data
   useEffect(() => {
     const handleRefocus = async () => {
       try {
-        // Re-fetch fixtures instantly on return
         const res = await fetchFixtures(todayStr());
         if (res?.matches?.length > 0) setBannerMatches(res.matches);
       } catch { /* silent */ }
     };
-
     window.addEventListener('app:refocused', handleRefocus);
     return () => window.removeEventListener('app:refocused', handleRefocus);
   }, []);
+
   /* ═══ HANDLERS ═══ */
   const handleLogout = useCallback(async () => {
     setMobileOpen(false);
@@ -594,14 +606,12 @@ export default function Navbar() {
       <div style={{
         position: 'sticky', top: 0, zIndex: 1001, height: 40, overflow: 'hidden',
         display: 'flex', alignItems: 'center',
-        background: hasLive
-          ? 'linear-gradient(90deg, #7f1d1d 0%, #dc2626 15%, #b91c1c 30%, #f871c9 48%, #fbbf24 65%, #fef083 82%, #fef3c7 95%, #fbbf24 110%)'
-          : 'linear-gradient(90deg, #059669 0%, #0d9488 15%, #0891b2 30%, #0ea5e9 48%, #6366f1 65%, #a855f7 82%, #ec4899 95%, #059669 110%)',
-        backgroundSize: '200% 100%',
-        animation: 'nvBannerShimmer 10s linear infinite, nvTickerPulse 4s ease-in-out infinite',
-        borderBottom: '1px solid rgba(255,255,255,0.1)',
-        transition: 'all 0.6s cubic-bezier(0.22,1,0.36,1)',
-        willChange: 'background, box-shadow',
+        // ★ FIX: Replaced strobe rainbow with a sleek, static dark gradient
+        background: hasLive 
+          ? 'linear-gradient(90deg, #0f172a 0%, #1e1215 50%, #0f172a 100%)' 
+          : 'linear-gradient(90deg, #0f172a 0%, #111827 50%, #0f172a 100%)',
+        borderBottom: '1px solid rgba(255,255,255,0.06)',
+        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
       }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(90deg, rgba(0,0,0,0.5) 0%, transparent 8%, transparent 92%, rgba(0,0,0,0.5) 100%)' }} />
         {hasLive && (
@@ -621,7 +631,17 @@ export default function Navbar() {
             maskImage: 'linear-gradient(90deg, transparent, black 4%, black 96%, transparent)',
             WebkitMaskImage: 'linear-gradient(90deg, transparent, black 4%, black 96%, transparent)',
           }}>
-            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 24, animation: 'nvMarquee 45s linear infinite', color: 'rgba(255,255,255,0.92)' }}>
+            {/* ★ SMOOTH & EXTRA SLOW TICKER */}
+            <div style={{ 
+              display: 'inline-flex', 
+              alignItems: 'center', 
+              gap: 24, 
+              animation: 'nvMarquee 240s linear infinite', 
+              color: 'rgba(255,255,255,0.92)',
+              willChange: 'transform',
+              backfaceVisibility: 'hidden',
+              WebkitFontSmoothing: 'antialiased'
+            }}>
               {tickerContent}
               <span style={{ color: 'rgba(255,255,255,0.12)', fontSize: '0.55rem' }}>⚽</span>
               {tickerContent}
@@ -645,7 +665,6 @@ export default function Navbar() {
         boxShadow: scrolled ? '0 1px 0 rgba(0,230,118,0.04), 0 8px 40px rgba(0,0,0,0.35)' : 'none',
         transition: 'all 0.5s cubic-bezier(0.22,1,0.36,1)',
         willChange: 'background, backdrop-filter, box-shadow',
-        animation: scrolled ? 'nvBorderGlow 4s ease-in-out infinite' : 'none',
       }}>
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 16px', height: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', alignItems: 'center', gap: 8 }}>
           

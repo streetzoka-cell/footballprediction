@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v21.0 — Aligned with Core Architecture
+// v21.1 — Core Architecture + Auto-Failover + Correct Routing
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
@@ -14,11 +14,22 @@ import {
   Shield, Percent, Gamepad2
 } from 'lucide-react';
 
-import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
+// Primary Source (Node Backend)
+import {
+  fetchFixtures,
+  subscribeToLiveFixtures,
+  getTodayStr
+} from '../utils/api';
+
+// Backup Source (Football-data.org context)
+import { useFootballData } from '../context/FootballDataContext';
+
 import { useAuth } from '../context/AuthContext';
 import { dataLayer } from '../utils/dataLayer';
-import { todayStr, getLocalDateStr } from '../utils/dates'; // ★ Single source for dates
-import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants'; // ★ Single source for statuses
+// ★ Import getLocalDateStr and getLocalDateFromUtc directly from dates.js
+import { getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; 
+
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs } from 'firebase/firestore';
@@ -44,7 +55,7 @@ const getGreeting = () => {
 };
 
 const dateLabel = (d) => {
-  const t = todayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
+  const t = getTodayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
   if (d === t) return 'Today'; if (d === tm) return 'Tomorrow'; if (d === ys) return 'Yesterday';
   const dt = new Date(d + 'T12:00:00');
   return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]} ${d.slice(5)}`;
@@ -56,6 +67,33 @@ function estimateMatchStatus(fix) {
   if (fix.isFinished || isFinishedStatus(fix.status, sport)) return 'ft';
   if (fix.status === 'HT' || fix.status === 'BT') return 'ht';
   return 'upcoming';
+}
+
+function extractMatchDate(m) {
+  if (!m) return '';
+  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
+  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
+  if (m.date) return m.date;
+  return '';
+}
+
+function normalizeMatch(raw, isPrimary) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
+  const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
+
+  return {
+    id,
+    status, isLive, isFinished,
+    homeTeam: { name: raw.homeTeam?.name || 'TBD', shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD' },
+    awayTeam: { name: raw.awayTeam?.name || 'TBD', shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD' },
+    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? null),
+    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? null),
+    league: { name: raw.league?.name || raw.competition?.name || 'Other' },
+    minute: raw.minute || raw.elapsed || null
+  };
 }
 
 const FUTURE_DAYS = 3;
@@ -445,7 +483,7 @@ const ZokaRow = ({ pick, index }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
   const ko = koRaw 
-    ? new Date(koRaw.includes('T') ? koRaw : `${pick.matchDate || todayStr()}T${koRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    ? new Date(koRaw.includes('T') ? koRaw : `${pick.matchDate || getTodayStr()}T${koRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
     : 'TBD';
   const predH = pick.adminPick?.home, predA = pick.adminPick?.away;
 
@@ -492,8 +530,9 @@ export default function Home() {
   const mounted = useRef(true);
   const greeting = useMemo(() => getGreeting(), []);
 
-  const [fixtures, setFixtures] = useState([]);
+  const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [fxLoading, setFxLoading] = useState(true);
+  
   const [allFeatured, setAllFeatured] = useState([]);
   const [allZoka, setAllZoka] = useState([]);
   const [featLoading, setFeatLoading] = useState(true);
@@ -508,9 +547,10 @@ export default function Home() {
   const [showMoreZoka, setShowMoreZoka] = useState(false);
   const [showMoreLB, setShowMoreLB] = useState(false);
 
-  /* ★ Aligned: Accurately use backend-provided stats from daily leaderboard */
   const [stats, setStats] = useState({ users: 0, predictions: 0, accuracy: 0, totalPoints: 0, totalPossible: 0 });
   const [totalUsers, setTotalUsers] = useState(null);
+
+  const { fixtures: backupRaw, liveMatches: backupLive } = useFootballData();
 
   useEffect(() => {
     const on = () => setOffline(false); const off = () => setOffline(true);
@@ -518,23 +558,21 @@ export default function Home() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  /* 1. Fixtures */
+  /* 1. Fixtures (Primary + Live Polling) */
   useEffect(() => {
     let mnt = true;
     (async () => {
       try {
-        const data = await fetchFixtures(todayStr());
-        if (mnt && data) { const l = Array.isArray(data) ? data : data?.matches || []; setFixtures(l); }
+        const data = await fetchFixtures(getTodayStr());
+        if (mnt && data) { const l = Array.isArray(data) ? data : data?.matches || []; setPrimaryFixtures(l.map(m => normalizeMatch(m, true))); }
       } catch {} finally { if (mnt) setFxLoading(false); }
     })();
-    const unsub = subscribeToTodayFixtures((u) => {
-      if (!mnt) return;
-      const l = u?.matches || u || [];
-      setFixtures(prev => prev.length === 0 ? l : prev.map(f => {
-        const live = l.find(m => String(m.id) === String(f.id));
-        return live ? { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, minute: live.minute ?? f.minute, status: live.status || f.status } : f;
+    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+      if (!mnt || !lm) return;
+      setPrimaryFixtures(prev => prev.map(f => {
+        const live = lm.find(m => String(m.id) === String(f.id));
+        return live ? { ...f, homeScore: live.homeScore, awayScore: live.awayScore, isLive: true, isFinished: false, minute: live.minute ?? f.minute, status: 'LIVE' } : f;
       }));
-      setFxLoading(false);
     });
     return () => { mnt = false; if (unsub) unsub(); };
   }, []);
@@ -547,7 +585,7 @@ export default function Home() {
         const [pr, zk, lb] = await Promise.allSettled([
           Promise.all(FETCH_DATES.map(d => dataLayer.fetchActivePredictions(d).catch(() => null))),
           Promise.all(FETCH_DATES.map(d => dataLayer.fetchZokaPicks(d).catch(() => null))),
-          dataLayer.fetchDailyLeaderboard(todayStr()),
+          dataLayer.fetchDailyLeaderboard(getTodayStr()),
         ]);
         if (!mnt) return;
 
@@ -562,8 +600,6 @@ export default function Home() {
         if (lb.status === 'fulfilled' && lb.value?.entries) {
           const entries = lb.value.entries;
           setLeaderboard(entries.slice(0, 15));
-          
-          // ★ Use backend pre-calculated stats directly for perfect accuracy
           const lbStats = lb.value.stats || {};
           setStats({
             users: entries.length,
@@ -585,8 +621,8 @@ export default function Home() {
     (async () => {
       try {
         const [pd, rd] = await Promise.all([
-          dataLayer.fetchUserPredictions(uid, todayStr()).catch(() => ({})),
-          dataLayer.fetchPredictionResults(uid, todayStr()).catch(() => ({ results: [], resultMap: {} })),
+          dataLayer.fetchUserPredictions(uid, getTodayStr()).catch(() => ({})),
+          dataLayer.fetchPredictionResults(uid, getTodayStr()).catch(() => ({ results: [], resultMap: {} })),
         ]);
         if (!mnt) return;
         if (pd) { const m = {}; Object.values(pd).forEach(p => { m[p.predId || p.matchId] = p; }); setUserPreds(m); }
@@ -618,7 +654,7 @@ export default function Home() {
         if (i >= 0) u[i] = { ...u[i], matches: l.slice(0, 12) }; else if (l.length) { u.push({ date: p.dateStr, matches: l.slice(0, 12) }); u.sort((a, b) => a.date.localeCompare(b.date)); } return u; });
     });
     const u3 = eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (p) => {
-      if (p.dateStr === todayStr() && p.leaderboard?.entries) {
+      if (p.dateStr === getTodayStr() && p.leaderboard?.entries) {
         const entries = p.leaderboard.entries; setLeaderboard(entries.slice(0, 15));
         const lbStats = p.leaderboard.stats || {};
         setStats(prev => ({ 
@@ -633,7 +669,7 @@ export default function Home() {
     });
     const u4 = eventBus.on(EVENT.MATCH_RESOLVED, (p) => {
       if (isLoggedIn && uid && p.affectedUsers?.includes(uid)) {
-        Promise.all([dataLayer.fetchPredictionResults(uid, todayStr()), dataLayer.fetchDailyLeaderboard(todayStr())]).then(([r, lb]) => {
+        Promise.all([dataLayer.fetchPredictionResults(uid, getTodayStr()), dataLayer.fetchDailyLeaderboard(getTodayStr())]).then(([r, lb]) => {
           if (!mounted.current) return;
           if (r?.resultMap) setUserResults(prev => ({ ...prev, ...r.resultMap }));
           if (lb?.entries) setLeaderboard(lb.entries.slice(0, 15));
@@ -644,7 +680,8 @@ export default function Home() {
   }, [isLoggedIn, uid]);
 
   /* ═══ DERIVED ═══ */
-  const liveMatches = useMemo(() => fixtures.filter(f => { const s = estimateMatchStatus(f); return s === 'live' || s === 'ht'; }), [fixtures]);
+  const allFixtures = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false));
+  const liveMatches = useMemo(() => allFixtures.filter(f => { const s = estimateMatchStatus(f); return s === 'live' || s === 'ht'; }), [allFixtures]);
   const liveCount = liveMatches.length;
 
   const featFlat = useMemo(() => allFeatured.flatMap(g => g.matches.map(m => ({ ...m, _d: g.date }))), [allFeatured]);
@@ -658,7 +695,7 @@ export default function Home() {
   const lbVis = showMoreLB ? leaderboard : leaderboard.slice(0, 5);
   const lbHidden = Math.max(0, leaderboard.length - 5);
 
-  const todayFeat = useMemo(() => allFeatured.find(g => g.date === todayStr())?.matches || [], [allFeatured]);
+  const todayFeat = useMemo(() => allFeatured.find(g => g.date === getTodayStr())?.matches || [], [allFeatured]);
   const myExact = useMemo(() => todayFeat.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r?.resultType === 'exact'; }).length, [todayFeat, userResults]);
   const myResult = useMemo(() => todayFeat.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r?.resultType === 'result'; }).length, [todayFeat, userResults]);
   const myPredicted = useMemo(() => todayFeat.filter(p => userPreds[p.id || p.matchId]).length, [todayFeat, userPreds]);
@@ -699,7 +736,8 @@ export default function Home() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
               <span className="v21-ldot" /><span style={{ fontSize: '.76rem', fontWeight: 900, color: '#ef4444' }}>{liveCount} LIVE</span>
               <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,.12)', borderRadius: 1 }} />
-              <Link to="/predictions" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
+              {/* ★ Updated Route Link */}
+              <Link to="/mastergames" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
             </div>
             <div className="v21-livestrip">{liveMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
           </div>
@@ -818,10 +856,10 @@ export default function Home() {
                       <span style={{ width: 28, textAlign: 'center', fontWeight: 900, color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>#{rank}</span>
                       <div style={{ width: 30, height: 30, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.66rem', fontWeight: 800, color: '#fff' }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}{isMe && <span style={{ marginLeft: 5, fontSize: '.56rem', color: 'var(--accent)' }}>(YOU)</span>}</div>
-                        <div style={{ fontSize: '.58rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.predictions || 0} preds · {u.accuracy || 0}%</div>
+                        <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}</div>
+                        <div style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.exact || 0} exact · {u.result || 0} results</div>
                       </div>
-                      <span style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#a855f7', fontSize: '.85rem' }}>{u.points || 0}</span>
+                      <span style={{ fontSize: '.82rem', fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>{u.points || 0}</span>
                     </div>
                   );
                 })}
@@ -833,42 +871,48 @@ export default function Home() {
               )}
             </>
           ) : (
-            <div style={{ textAlign: 'center', padding: 24, color: 'var(--text-muted)', fontSize: '.82rem', fontWeight: 600, border: '1px dashed var(--border)', borderRadius: 12, background: 'var(--bg-surface)' }}>
-              No leaderboard entries yet
-            </div>
+            <div className="v21-skel" style={{ height: 150, borderRadius: 12 }} />
           )}
         </div>
 
-        {/* ═══ EXPLORE ═══ */}
+        {/* ═══ EXPLORE GRID ═══ */}
         <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 300ms both' }}>
           <div className="v21-sech">
-            <Sparkles size={14} style={{ color: 'var(--text-muted)' }} />
+            <Gamepad2 size={14} style={{ color: 'var(--accent)' }} />
             <h2>Explore</h2>
             <div className="v21-sech-line" />
           </div>
           <div className="v21-explore">
-            <Link to="/predictions" className="v21-ecard" style={{ borderColor: 'rgba(0,230,118,.12)' }}>
+            <Link to="/mastergames" className="v21-ecard">
               <div className="v21-ecard-accent" style={{ background: 'var(--accent)' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-primary)' }}>Predict Matches</span>
-                  <span style={{ fontSize: '.62rem', color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>Win points & climb ranks</span>
-                </div>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(0,230,118,.06)', border: '1px solid rgba(0,230,118,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--accent)' }}>
-                  <Target size={15} />
-                </div>
+              <Activity size={20} style={{ color: 'var(--accent)' }} />
+              <div>
+                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Master Games</div>
+                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>All fixtures & live scores</div>
               </div>
             </Link>
-            <Link to="/leaderboard" className="v21-ecard" style={{ borderColor: 'rgba(245,197,66,.12)' }}>
-              <div className="v21-ecard-accent" style={{ background: 'var(--gold)' }} />
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', flexDirection: 'column' }}>
-                  <span style={{ fontSize: '.78rem', fontWeight: 800, color: 'var(--text-primary)' }}>Leaderboards</span>
-                  <span style={{ fontSize: '.62rem', color: 'var(--text-muted)', marginTop: 2, fontWeight: 600 }}>Top predictors today</span>
-                </div>
-                <div style={{ width: 32, height: 32, borderRadius: 10, background: 'rgba(245,197,66,.06)', border: '1px solid rgba(245,197,66,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--gold)' }}>
-                  <Trophy size={15} />
-                </div>
+            <Link to="/highlights" className="v21-ecard">
+              <div className="v21-ecard-accent" style={{ background: '#f97316' }} />
+              <Medal size={20} style={{ color: '#f97316' }} />
+              <div>
+                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Highlights</div>
+                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Latest match videos</div>
+              </div>
+            </Link>
+            <Link to="/livestream" className="v21-ecard">
+              <div className="v21-ecard-accent" style={{ background: '#ef4444' }} />
+              <Zap size={20} style={{ color: '#ef4444' }} />
+              <div>
+                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
+                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Watch matches live</div>
+              </div>
+            </Link>
+            <Link to="/basketball" className="v21-ecard">
+              <div className="v21-ecard-accent" style={{ background: '#3b82f6' }} />
+              <BarChart3 size={20} style={{ color: '#3b82f6' }} />
+              <div>
+                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Basketball</div>
+                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Hoops action & scores</div>
               </div>
             </Link>
           </div>
@@ -876,30 +920,15 @@ export default function Home() {
 
         {/* ═══ CTA ═══ */}
         {!isLoggedIn && (
-          <div style={{ marginTop: 8, animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
+          <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
             <Link to="/login" className="v21-cta">
-              <LogIn size={16} /> Login to Compete
+              <LogIn size={16} /> Sign In to Predict & Win
             </Link>
           </div>
         )}
-        {isLoggedIn && (
-          <div style={{ marginTop: 8, animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
-            <Link to="/predictions" className="v21-cta">
-              <Zap size={16} /> Make Your Predictions
-            </Link>
-          </div>
-        )}
-
       </div>
 
-      {toast && (
-        <div className="v21-toast">
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '11px 20px', borderRadius: 13, background: 'rgba(0,230,118,.1)', border: '1.5px solid rgba(0,230,118,.25)', backdropFilter: 'blur(12px)', boxShadow: '0 8px 24px rgba(0,0,0,.3)' }}>
-            <CheckCircle2 size={16} style={{ color: 'var(--accent)' }} />
-            <span style={{ fontSize: '.85rem', fontWeight: 800, color: 'var(--accent)' }}>{toast}</span>
-          </div>
-        </div>
-      )}
+      {toast && <div className="v21-toast">{toast}</div>}
     </div>
   );
 }

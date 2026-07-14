@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// PRODUCTION-READY ADMIN v14.0 — ALIGNED WITH NEW ARCHITECTURE
+// PRODUCTION-READY ADMIN v14.2 — Fixed Array Overwrites & Visual Badges
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -19,9 +19,9 @@ import { useAuth } from '../context/AuthContext';
 import { useFootballData } from '../context/FootballDataContext';
 import { db } from '../utils/firebase';
 import { dataLayer } from '../utils/dataLayer';
-import { todayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; // ★ Using single source dates
+import { todayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { isLiveStatus, isFinishedStatus } from '../utils/constants'; // ★ Using single source statuses
+import { isLiveStatus, isFinishedStatus, PATHS, CACHE_KEY } from '../utils/constants';
 import {
   collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
   updateDoc, serverTimestamp, getDoc, getDocs,
@@ -32,7 +32,9 @@ import {
   rebuildPeriodLeaderboard, rebuildAllLeaderboards,
   invalidateCache
 } from '../hooks/useMatchData';
-import { PATHS, CACHE_KEY } from '../utils/constants';
+
+// ★ NEW: Primary Source (Node Backend)
+import { fetchFixtures } from '../utils/api';
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    MEMORY LAYER
@@ -53,7 +55,6 @@ const MAX_FEATURED = 10;
 const MAX_ZOKA = 10;
 const SHOW_INIT = 8;
 
-// ★ Aligned with dates.js single source of truth
 const dateOffset = (o = 0) => getLocalDateStr(o); 
 const dateLabel = (d) => {
   const t = todayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
@@ -61,6 +62,47 @@ const dateLabel = (d) => {
   const dt = new Date(d + 'T12:00:00'), days = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
   return `${days[dt.getDay()]} ${d.slice(5)}`;
 };
+
+function extractMatchDate(m) {
+  if (!m) return '';
+  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
+  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
+  if (m.date) return m.date;
+  return '';
+}
+const extractDate = m => extractMatchDate(m);
+
+function normalizeMatch(raw, isPrimary) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  const live = isPrimary 
+    ? (raw.isLive || isLiveStatus(status, 'football')) 
+    : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
+  const finished = isPrimary 
+    ? (raw.isFinished || isFinishedStatus(status, 'football')) 
+    : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
+
+  return {
+    id, status, isLive: live, isFinished: finished,
+    homeTeam: { 
+      name: raw.homeTeam?.name || 'TBD', 
+      shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD', 
+      crest: raw.homeTeam?.crest || raw.homeLogo 
+    },
+    awayTeam: { 
+      name: raw.awayTeam?.name || 'TBD', 
+      shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD', 
+      crest: raw.awayTeam?.crest || raw.awayLogo 
+    },
+    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.homeScore ?? null),
+    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.awayScore ?? null),
+    league: { name: raw.league?.name || raw.competition?.name || 'Other', emblem: raw.league?.emblem || raw.competition?.emblem },
+    competition: raw.competition || raw.league,
+    utcDate: raw.utcDate || raw.date || raw.kickoff,
+    minute: raw.minute || raw.elapsed || null
+  };
+}
 
 const ST_MAP = {
   SCHEDULED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
@@ -83,13 +125,6 @@ const ST_MAP = {
 };
 const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
 
-// ★ Aligned with dates.js for UTC parsing
-const extractDate = m => {
-  if (!m) return '';
-  return getLocalDateFromUtc(m.utcDate || m.date || m.kickoff) || '';
-};
-
-// ★ Aligned with constants.js status checks
 const isLive = m => isLiveStatus(m?.status, m?.sport || 'football') || m?.isLive;
 const isFin = m => isFinishedStatus(m?.status, m?.sport || 'football') || m?.isFinished;
 const getScore = m => m?.score?.fullTime ? {h:m.score.fullTime.home,a:m.score.fullTime.away} : m?.homeScore!=null ? {h:m.homeScore,a:m.awayScore} : {h:null,a:null};
@@ -251,6 +286,8 @@ const injectCSS = () => {
 .abdg.rs{background:rgba(245,197,66,.08);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.18)}
 .abdg.ms{background:rgba(239,68,68,.07);color:#ef4444;border:1px solid rgba(239,68,68,.15)}
 .abdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
+.abdg.gd{background:rgba(245,197,66,.1);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.22)}
+.abdg.gn{background:rgba(0,230,118,.1);color:var(--accent);border:1px solid rgba(0,230,118,.22)}
 
 .aem{padding:36px 20px;text-align:center;border:2px dashed var(--border);border-radius:14px;background:var(--bg-surface)}
 .aem p{color:var(--text-muted);font-size:.82rem;margin:0;font-weight:600}
@@ -638,7 +675,6 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
     setPublishing(false);
   };
 
-  // ★ Aligned with DataLayer for fetching Zoka history
   const loadHist = async () => {
     if (hist.length > 0 || histLoad) return;
     setHistLoad(true);
@@ -747,7 +783,11 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
             return (
               <div key={mid}>
                 <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
-                  scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null} />
+                  scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null}
+                  extraBadge={isPublished && !sel[mid] ? (
+                    <span className="abdg gd"><Star size={9} /> Published</span>
+                  ) : null}
+                />
                 {isPublished && !sel[mid] && (
                   <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
                     <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
@@ -826,13 +866,14 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
   const [removingId, setRemovingId] = useState(null);
   const isFull = preds.length >= MAX_FEATURED;
 
+  const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
+
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    const pids = new Set(preds.map(p => String(p.matchId)));
-    let l = fixtures.filter(m => extractDate(m) === date && !pids.has(String(m.id)) && !isFin(m));
+    let l = fixtures.filter(m => extractDate(m) === date && !isFin(m)); 
     if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
     return l;
-  }, [fixtures, date, preds, lg]);
+  }, [fixtures, date, lg]);
 
   const leagues = useMemo(() => {
     const map = new Map();
@@ -905,7 +946,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                     </div>
                   </div>
                   <div className="aa">
-                    <span className="abdg pn">#{i + 1}</span>
+                    <span className="abdg gn"><Radio size={9} /> Featured</span>
                     <button className="ab ab-sm ab-dg" onClick={() => handleRemoveClick(p)} disabled={isRemoving}>
                       {isRemoving ? <Loader2 size={11} className="asp" /> : <Trash2 size={11} />} Remove
                     </button>
@@ -937,13 +978,18 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
             {vis.map((m, i) => {
               const mid = String(m.id);
               const isAdding = addingId === mid;
+              const isFeatured = pids.has(mid);
               return (
                 <MatchRow key={mid} m={m} idx={i} mode="featured"
                   onAction={(match) => (
-                    <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(match)} disabled={isAdding || isFull}>
-                      {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
-                      {isFull ? 'Full' : 'Add'}
-                    </button>
+                    isFeatured ? (
+                      <span className="abdg gn"><CheckCircle2 size={9} /> Featured</span>
+                    ) : (
+                      <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(match)} disabled={isAdding || isFull}>
+                        {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
+                        {isFull ? 'Full' : 'Add'}
+                      </button>
+                    )
                   )}
                 />
               );
@@ -1329,7 +1375,7 @@ export default function Admin() {
   injectCSS();
   const nav = useNavigate();
   const { userProfile } = useAuth();
-  const { fixtures, loading: fxLoading, liveMatches } = useFootballData();
+  const { fixtures: backupRaw, loading: backupLoading, liveMatches } = useFootballData();
   const mounted = useMounted();
 
   const [tab, setTab] = useState('dashboard');
@@ -1342,6 +1388,9 @@ export default function Admin() {
   const [confirm, setConfirm] = useState(null);
   const [rebuilding, setRebuilding] = useState(null);
 
+  const [primaryFixtures, setPrimaryFixtures] = useState([]);
+  const [primaryLoading, setPrimaryLoading] = useState(true);
+
   const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
   const extraDates = useMemo(() => {
     const dates = [];
@@ -1352,7 +1401,30 @@ export default function Admin() {
     return dates.sort();
   }, []);
 
-  const dayFixtures = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
+  useEffect(() => {
+    let mnt = true;
+    setPrimaryLoading(true);
+    (async () => {
+      try {
+        const res = await fetchFixtures(date);
+        if (mnt) {
+          const l = Array.isArray(res) ? res : res?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
+        }
+      } catch (e) {
+        if (mnt) setPrimaryFixtures([]);
+      } finally {
+        if (mnt) setPrimaryLoading(false);
+      }
+    })();
+    return () => { mnt = false; };
+  }, [date]);
+
+  const allFixtures = useMemo(() => 
+    primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)),
+  [primaryFixtures, backupRaw]);
+
+  const dayFixtures = useMemo(() => allFixtures?.filter(m => extractDate(m) === date) || [], [allFixtures, date]);
   const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
   const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
 
@@ -1440,6 +1512,11 @@ export default function Admin() {
       priority: preds.length + 1,
     };
 
+    // 1. Update local state immediately
+    const updatedPreds = [...preds, pred];
+    setPreds(updatedPreds);
+
+    // 2. Write to Firestore
     await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
       ...pred,
       createdAt: serverTimestamp(),
@@ -1447,28 +1524,34 @@ export default function Admin() {
     });
 
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: [...preds, pred],
+      predictions: updatedPreds,
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
+    // 3. Invalidate cache & emit event
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: [...preds, pred] });
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
   };
 
   const handleFeaturedRemove = async (p) => {
     if (!db) return;
     const predId = p.id || `feat_${date}_${p.matchId}`;
 
+    // 1. Update local state immediately
+    const updatedPreds = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
+    setPreds(updatedPreds);
+
+    // 2. Delete from Firestore
     await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
 
-    const updated = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updated,
+      predictions: updatedPreds,
       updatedAt: serverTimestamp(),
     }, { merge: true });
 
+    // 3. Invalidate cache & emit event
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
   };
 
   const handleResolve = async (pred, h, a) => {
@@ -1484,6 +1567,8 @@ export default function Admin() {
       if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true };
       return p;
     });
+    setPreds(updated); // Update locally immediately
+
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
       predictions: updated, updatedAt: serverTimestamp(),
     }, { merge: true });
@@ -1505,6 +1590,8 @@ export default function Admin() {
       if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a };
       return p;
     });
+    setPreds(updated); // Update locally immediately
+
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
       predictions: updated, updatedAt: serverTimestamp(),
     }, { merge: true });
@@ -1573,15 +1660,15 @@ export default function Admin() {
         )}
 
         {tab === 'zoka' && (
-          <ZokaTab date={date} fixtures={fixtures} fxLoading={fxLoading} pubPicks={pubPicks}
+          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading || backupLoading} pubPicks={pubPicks}
             onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish}
             onSaveDraft={handleZokaSaveDraft} toast={setToast} />
         )}
 
         {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={fixtures}
+          <FeaturedTab date={date} preds={preds} fixtures={allFixtures}
             onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove}
-            fxLoading={fxLoading} toast={setToast} />
+            fxLoading={primaryLoading || backupLoading} toast={setToast} />
         )}
 
         {tab === 'results' && (

@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v9.1 Pro UI — League Priority, Bottom Toasts, Smart Date Nav, Auto-Failover
+// v9.2 Pro UI — League Priority, Bottom Toasts, 30-Day Smart Nav, Auto-Failover
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -47,7 +47,7 @@ const LEAGUE_PRIORITY = {
 const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
 
 /* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Pro v9.1
+   STYLE INJECTION — Pro v9.2
    ═══════════════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('mg9-css')) return;
@@ -89,18 +89,21 @@ const injectStyles = () => {
     .mg9-schip .lbl{font-size:.54rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
 
     /* ── Date Navigation ── */
-    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap;position:relative}
-    .mg9-nav-btn{padding:9px 16px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.75rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
-    .mg9-nav-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
-    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;border-color:var(--accent,#10b981);box-shadow:0 2px 12px rgba(16,185,129,.25)}
+    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 auto 16px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:4px;width:fit-content;position:relative}
+    .mg9-nav-btn{padding:8px 16px;border-radius:9px;border:none;background:transparent;color:var(--text-muted,#64748b);font-size:.74rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg9-nav-btn:hover{color:var(--text-primary,#f1f5f9);background:rgba(255,255,255,.02)}
+    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.2)}
     .mg9-more-wrap{position:relative}
-    .mg9-more-btn{display:flex;align-items:center;gap:4px;padding:9px 12px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-muted,#64748b);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
-    .mg9-more-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
-    .mg9-more-btn.open{border-color:var(--accent,#10b981);color:var(--accent,#10b981)}
-    .mg9-more-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:50;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.4);max-height:320px;overflow-y:auto;animation:mg9FadeIn .2s ease both}
+    .mg9-more-btn{display:flex;align-items:center;gap:4px;padding:8px 14px;border-radius:9px;border:none;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg9-more-btn:hover{color:var(--text-primary,#f1f5f9)}
+    .mg9-more-btn.open{background:rgba(16,185,129,.1);color:var(--accent,#10b981)}
+    .mg9-more-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:50;min-width:180px;box-shadow:0 8px 32px rgba(0,0,0,.4);max-height:360px;overflow-y:auto;animation:mg9FadeIn .2s ease both}
+    .mg9-more-dropdown::-webkit-scrollbar{width:4px}
+    .mg9-more-dropdown::-webkit-scrollbar-thumb{background:var(--border,#1e293b);border-radius:4px}
     .mg9-more-item{display:block;width:100%;text-align:left;padding:8px 14px;border:none;border-radius:8px;background:none;color:var(--text-muted,#64748b);font-size:.73rem;font-weight:600;cursor:pointer;transition:all .15s ease;font-family:inherit;white-space:nowrap}
     .mg9-more-item:hover{background:rgba(255,255,255,.05);color:var(--text-primary,#f1f5f9)}
     .mg9-more-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
+    .mg9-more-label{font-size:.6rem;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--text-muted,#64748b);opacity:.6;padding:8px 14px 4px;border-bottom:1px solid var(--border,#1e293b);margin-bottom:4px}
 
     .mg9-tabs{display:flex;gap:3px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:3px;margin-bottom:14px}
     .mg9-tab{flex:1;padding:9px 4px;border:none;border-radius:9px;background:transparent;color:var(--text-muted,#64748b);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .25s ease;text-align:center;font-family:inherit;text-transform:uppercase;letter-spacing:.03em}
@@ -543,9 +546,14 @@ export default function MasterGames() {
   const timeouts = useRef(new Map());
   const moreRef = useRef(null);
 
-  // Generate 14 future dates for the dropdown
+  // Generate 14 past dates (reversed so oldest is at top) and 14 future dates
+  const pastDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
+    const d = getLocalDateStr(-(i + 2)); // -2, -3, ..., -15
+    return { str: d, label: formatDateShort(d) };
+  }).reverse(), []); 
+
   const futureDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
-    const d = getLocalDateStr(i + 2);
+    const d = getLocalDateStr(i + 2); // +2, +3, ..., +15
     return { str: d, label: formatDateShort(d) };
   }), []);
 
@@ -830,7 +838,7 @@ export default function MasterGames() {
           </div>
         </div>
 
-        {/* Date Navigation - 3 Buttons + More Dropdown */}
+        {/* Date Navigation - 3 Buttons + More Dropdown (Past & Future) */}
         <div className="mg9-datenav">
           <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>
             Yesterday
@@ -847,6 +855,13 @@ export default function MasterGames() {
             </button>
             {moreDatesOpen && (
               <div className="mg9-more-dropdown">
+                <div className="mg9-more-label">Past Dates</div>
+                {pastDates.map(d => (
+                  <button key={d.str} className={`mg9-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                    {d.label}
+                  </button>
+                ))}
+                <div className="mg9-more-label" style={{ marginTop: '6px' }}>Future Dates</div>
                 {futureDates.map(d => (
                   <button key={d.str} className={`mg9-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
                     {d.label}
