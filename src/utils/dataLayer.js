@@ -664,16 +664,16 @@ class DataLayer {
 // USER PREDICTION WRITE OPERATIONS
 // ═══════════════════════════════════════════════════
 
-/** Save a user prediction. Doc ID = matchId for reliable lookups. */
+/** Save a user prediction. Doc ID = uid_matchId for unique per-user docs. */
 export async function saveUserPrediction({ matchId, homeScore, awayScore, matchDate, extra = {} }) {
   const uid = auth.currentUser?.uid;
   if (!uid || !matchId) throw new Error('Not signed in or missing matchId');
 
-  const docId = String(matchId);
+  const docId = `${uid}_${String(matchId)}`;  // ★ FIX: Include uid
   await setDoc(doc(db, PATHS.USER_PREDICTIONS, docId), {
     userId: uid,
-    matchId: docId,
-    predId: docId,
+    matchId: String(matchId),
+    predId: docId,  // ★ FIX: Keep consistent
     matchDate: matchDate || todayStr(),
     homeScore: Number(homeScore),
     awayScore: Number(awayScore),
@@ -682,7 +682,6 @@ export async function saveUserPrediction({ matchId, homeScore, awayScore, matchD
     ...extra,
   }, { merge: true });
 }
-
 /** Delete a user prediction. */
 export async function deleteUserPrediction(matchId) {
   const uid = auth.currentUser?.uid;

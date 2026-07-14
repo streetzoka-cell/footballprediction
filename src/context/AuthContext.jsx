@@ -20,26 +20,19 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
-  // ─── Handle Google Redirect Result ───────────────────────
   useEffect(() => {
     getRedirectResult(auth)
       .then((result) => {
-        if (result) {
-          console.log('[Auth] Redirect sign-in successful:', result.user.uid);
-        }
+        if (result) console.log('[Auth] Redirect sign-in successful:', result.user.uid);
       })
-      .catch((err) => {
-        console.error('[Auth] Redirect result error:', err.code, err.message);
-      });
+      .catch((err) => console.error('[Auth] Redirect result error:', err.code));
   }, []);
 
-  // ─── Listen for auth state changes ───────────────────────
   useEffect(() => {
     let unsubscribed = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
-
       setCurrentUser(user);
 
       if (user) {
@@ -67,7 +60,6 @@ export function AuthProvider({ children }) {
       } else {
         setUserProfile(null);
       }
-
       setAuthLoading(false);
     });
 
@@ -77,7 +69,6 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  // ─── Actions ─────────────────────────────────────────────
   const login = useCallback(async (email, password) => {
     const cred = await signInWithEmailAndPassword(auth, email, password);
     return cred.user;
@@ -85,9 +76,8 @@ export function AuthProvider({ children }) {
 
   const register = useCallback(async (email, password, displayName) => {
     const cred = await createUserWithEmailAndPassword(auth, email, password);
-    if (displayName) {
-      await fbUpdateProfile(cred.user, { displayName });
-    }
+    if (displayName) await fbUpdateProfile(cred.user, { displayName });
+    
     const profile = {
       uid: cred.user.uid,
       email: cred.user.email,
@@ -102,7 +92,6 @@ export function AuthProvider({ children }) {
     return cred.user;
   }, []);
 
-  // ★ Popup first, redirect as fallback
   const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
     try {
@@ -138,33 +127,26 @@ export function AuthProvider({ children }) {
       await fbUpdateProfile(currentUser, authUpdates);
     }
 
-    const profileUpdates = {
-      ...updates,
-      updatedAt: serverTimestamp(),
-    };
+    const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
-
+    
     const refreshed = await getDoc(doc(db, 'users', currentUser.uid));
-    if (refreshed.exists()) {
-      setUserProfile(refreshed.data());
-    }
+    if (refreshed.exists()) setUserProfile(refreshed.data());
   }, [currentUser]);
 
-  const value = {
-    currentUser,
-    userProfile,
-    authLoading,
-    login,
-    register,
-    loginWithGoogle,
-    signOut,
-    updateProfile,
-  };
-
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={{
+      currentUser,
+      userProfile,
+      authLoading,
+      login,
+      register,
+      loginWithGoogle,
+      signOut,
+      updateProfile,
+    }}>
       {children}
     </AuthContext.Provider>
   );
@@ -172,9 +154,7 @@ export function AuthProvider({ children }) {
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 }
 

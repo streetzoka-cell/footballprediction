@@ -412,18 +412,22 @@ export function useHistoricalLeaderboard(period) {
 // ★ USER ACTIONS
 // ═══════════════════════════════════════════════════════════════
 
-/** Save a user prediction for a featured match. Doc ID = matchId. */
+/** Save a user prediction for a featured match. Doc ID = uid_matchId to prevent collisions. */
 export async function savePrediction(uid, displayName, pred, h, a) {
   if (!db) throw new Error('Firestore not initialized');
   
   const matchId = String(pred.matchId || pred.id);
   const dateStr = pred.matchDate || pred._dateStr || todayStr();
 
-  await setDoc(doc(db, PATHS.USER_PREDICTIONS, matchId), {
+  // ★ FIX: Doc ID must include uid so multiple users can predict the same match
+  // Without this, User B's write becomes an "update" on User A's doc and fails the ownership rule
+  const predId = `${uid}_${matchId}`;
+
+  await setDoc(doc(db, PATHS.USER_PREDICTIONS, predId), {
     userId: uid,
     displayName: displayName || 'Anonymous',
     matchId,
-    predId: matchId,
+    predId: predId,  // ★ Keep predId consistent with doc ID
     homeScore: Number(h),
     awayScore: Number(a),
     matchDate: dateStr,
@@ -441,7 +445,7 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   try { await dataLayer.fetchUserPredictions(uid, dateStr); } catch { /* */ }
 
   eventBus.emit(EVENT.USER_PREDICTION_SAVED, {
-    uid, matchId, predId: matchId, dateStr, homeScore: Number(h), awayScore: Number(a),
+    uid, matchId, predId, dateStr, homeScore: Number(h), awayScore: Number(a),
   });
 }
 

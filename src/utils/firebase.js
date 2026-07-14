@@ -13,6 +13,7 @@ const firebaseConfig = {
 
 let app;
 try {
+  // Prevent re-initialization if already imported elsewhere
   app = getApp();
 } catch {
   app = initializeApp(firebaseConfig);
@@ -21,7 +22,8 @@ try {
 const db = getFirestore(app);
 const auth = getAuth(app);
 
-console.log('[Firebase:Main] Project:', app.options.projectId);
+// ★ Changed log name to make it easy to spot duplicates
+console.log('[Firebase] Initialized Project:', app.options.projectId);
 
 export { app, db, auth };
 export default app;
