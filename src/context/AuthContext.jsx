@@ -1,3 +1,4 @@
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'; // ← THIS WAS MISSING
 import {
   onAuthStateChanged,
   signOut as fbSignOut,
@@ -25,7 +26,6 @@ export function AuthProvider({ children }) {
       .then((result) => {
         if (result) {
           console.log('[Auth] Redirect sign-in successful:', result.user.uid);
-          // onAuthStateChanged will handle setting the user
         }
       })
       .catch((err) => {
@@ -102,19 +102,16 @@ export function AuthProvider({ children }) {
     return cred.user;
   }, []);
 
-  // ★ FIXED: Popup first, redirect as fallback
+  // ★ Popup first, redirect as fallback
   const loginWithGoogle = useCallback(async () => {
     const provider = new GoogleAuthProvider();
     try {
-      // Try popup first (works on desktop, most mobile browsers)
       const result = await signInWithPopup(auth, provider);
       return result.user;
     } catch (err) {
-      // If popup is blocked, fall back to full redirect
       if (err.code === 'auth/popup-blocked' || err.code === 'auth/popup-closed-by-user') {
         await signInWithRedirect(auth, provider);
-        // Page navigates away here — never returns to this execution
-        return null; // This line is unreachable after redirect, but satisfies linters
+        return null;
       }
       throw err;
     }
