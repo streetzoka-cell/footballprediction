@@ -94,11 +94,16 @@ export const addFav = (team) => {
 export const removeFav = (id) => setFavs(getFavs().filter((t) => t.id !== id));
 export const isFav = (id) => getFavs().some((t) => t.id === id);
 
+const getUserId = () => {
+  const user = auth?.currentUser;
+  return user ? user.uid : getDeviceId();
+};
+
 const pushToFb = async (key, value) => {
   if (!db) return;
   await waitForAuth();
   try {
-    await setDoc(doc(db, 'users', getDeviceId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, 'users', getUserId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
   } catch (err) { console.warn('[Firestore] Push failed:', err.message); }
 };
 
@@ -106,7 +111,7 @@ export const initFirebaseSync = async () => {
   if (!db) return;
   await waitForAuth();
   try {
-    const snap = await getDoc(doc(db, 'users', getDeviceId()));
+    const snap = await getDoc(doc(db, 'users', getUserId()));
     if (!snap.exists()) return;
     const data = snap.data();
     if (data.favorites?.length > getFavs().length) lsSet('fx_favs', data.favorites);

@@ -1,4 +1,4 @@
-import { initializeApp } from 'firebase/app';
+﻿import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
 
 const config = {
@@ -10,23 +10,21 @@ const config = {
   appId: import.meta.env.VITE_FOOTBALL_FB_APP_ID,
 };
 
-// Validate config before initializing
-const missing = Object.entries(config).filter(([k, v]) => !v || v.includes('your_') || v.includes('000000'));
+const missing = Object.entries(config).filter(([, v]) => !v);
 if (missing.length > 0) {
   console.error(
-    '[FootballFirebase] Missing/invalid env vars:',
+    '[FootballFirebase] Missing env vars:',
     missing.map(([k]) => k).join(', ')
   );
-  console.error('[FootballFirebase] Fix VITE_FOOTBALL_FB_* in your .env file');
-  console.error('[FootballFirebase] Get values from: Firebase Console > 2nd project > Settings > Your apps > Web app');
 }
 
 let db = null;
 if (missing.length === 0) {
   try {
-    const app = initializeApp(config, 'football-data');
+    const existingApp = getApps().find(a => a.name === 'football-data');
+    const app = existingApp || initializeApp(config, 'football-data');
     db = getFirestore(app);
-    console.log('[FootballFirebase] Connected � project:', config.projectId);
+    console.log('[FootballFirebase] Project:', config.projectId);
   } catch (e) {
     console.error('[FootballFirebase] Init failed:', e.message);
   }

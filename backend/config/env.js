@@ -1,74 +1,32 @@
-/*
- * env.js
- * Loads and validates environment variables.
- */
+import { initializeApp, getApps, getApp } from "firebase/app";
+import { getFirestore } from "firebase/firestore";
+import { getAuth } from "firebase/auth";
 
-const path = require("path");
-require("dotenv").config({
-  path: path.resolve(__dirname, "..", ".env"),
-});
-
-function parseNumber(value, fallback) {
-  const parsed = Number.parseInt(value, 10);
-  return Number.isFinite(parsed) ? parsed : fallback;
-}
-
-const env = {
-  // ───── API-Football ─────
-  API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY,
-  API_FOOTBALL_BASE_URL:
-    process.env.API_FOOTBALL_BASE_URL ||
-    "https://v3.football.api-sports.io",
-
-  // ───── API-Basketball ─────
-  API_BASKETBALL_KEY: process.env.API_BASKETBALL_KEY,
-  API_BASKETBALL_BASE_URL:
-    process.env.API_BASKETBALL_BASE_URL ||
-    "https://v1.basketball.api-sports.io",
-
-  // ───── Firebase Admin ─────
-  FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
-  FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY
-    ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
-    : null,
-  FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
-
-  // ───── Server ─────
-  PORT: parseNumber(process.env.PORT, 3099),
-  LOG_LEVEL: process.env.LOG_LEVEL || "info",
+const firebaseConfig = {
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-// ───────────────────────────────────────────────
-// Required — Fail Fast
-// ───────────────────────────────────────────────
-const required = [
-  ["API_FOOTBALL_KEY", env.API_FOOTBALL_KEY],
-  ["FIREBASE_PROJECT_ID", env.FIREBASE_PROJECT_ID],
-  ["FIREBASE_PRIVATE_KEY", env.FIREBASE_PRIVATE_KEY],
-  ["FIREBASE_CLIENT_EMAIL", env.FIREBASE_CLIENT_EMAIL],
-];
-
-const missing = required.filter(([, value]) => !value);
-
-if (missing.length > 0) {
-  console.error("");
-  console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.error(" FATAL CONFIGURATION ERROR");
-  console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  for (const [name] of missing) {
-    console.error(` Missing: ${name}`);
-  }
-  console.error("");
-  console.error("Please check your .env file.");
-  console.error("");
-  process.exit(1);
+// ★ FIX: Check for the DEFAULT app specifically, not just any app
+let app;
+try {
+  app = getApp(); // Gets DEFAULT app if it exists
+} catch {
+  // DEFAULT app doesn't exist yet — create it
+  app = initializeApp(firebaseConfig);
 }
 
-// ───────────────────────────────────────────────
-// Optional Warning
-// ───────────────────────────────────────────────
-if (!env.API_BASKETBALL_KEY) {
-  console.warn("\n⚠️  API_BASKETBALL_KEY not set — Basketball disabled\n");
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+// ★ Debug: Verify which project auth is connected to
+if (app.options.projectId) {
+  console.log('[Firebase:Main] Connected to project:', app.options.projectId);
 }
 
-module.exports = Object.freeze(env);
+export { app, db, auth };
+export default app;
