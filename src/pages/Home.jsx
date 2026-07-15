@@ -1,740 +1,930 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx (Ultimate Pro News Hub)
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// FILE: src/pages/Home.jsx
+// v22.5 — Clean UI, Smart Strip Fallback, Explicit Data Fetch
+// ═══════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { 
-  Newspaper, X, Clock, Heart, MessageCircle, Plus, Pencil, Trash2, 
-  Send, Image as ImageIcon, Loader, Sun, Moon, ArrowLeft, Eye, 
-  Bookmark, Share2, Flame, Link as LinkIcon
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  ArrowRight, Zap, Users, Target, Trophy, CalendarDays, Flame,
+  ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
+  Clock, Lock, Crown, Activity, Medal, BarChart3, XCircle,
+  ArrowUpRight, Sun, Moon, CloudSun, Timer, Gamepad2,
+  TrendingUp as TrendIcon, ChevronRight, Newspaper
 } from 'lucide-react';
 
+import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
+import { useFootballData } from '../context/FootballDataContext';
 import { useAuth } from '../context/AuthContext';
+import { useAppData } from '../context/AppDataContext';
+import { dataLayer } from '../utils/dataLayer';
+import { todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { db } from '../utils/firebase';
-import { 
-  collection, query, orderBy, onSnapshot, addDoc, updateDoc, 
-  deleteDoc, doc, serverTimestamp, increment, arrayUnion, arrayRemove, getDoc, where, limit
-} from 'firebase/firestore';
-import SEO from "../components/SEO";
+import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import SEO from '../components/SEO';
 
-/* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION (Themed)
-   ═══════════════════════════════════════════════════════════════ */
+/* ═══════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════ */
+const Sunset = (props) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
+    <path d="M12 10V2" /><path d="m4.93 10.93 1.41 1.41" /><path d="M2 18h2" /><path d="M20 18h2" /><path d="m19.07 10.93-1.41 1.41" /><path d="M22 22H2" />
+    <path d="m16 6-4 4-4-4" /><path d="M16 18a4 4 0 0 0-8 0" />
+  </svg>
+);
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 5) return { text: 'Night owl?', icon: <Moon size={18} />, emoji: '🦉' };
+  if (h < 12) return { text: 'Good morning', icon: <Sun size={18} />, emoji: '☀️' };
+  if (h < 17) return { text: 'Good afternoon', icon: <CloudSun size={18} />, emoji: '🌤️' };
+  if (h < 21) return { text: 'Good evening', icon: <Sunset size={18} />, emoji: '🌅' };
+  return { text: 'Night owl?', icon: <Moon size={18} />, emoji: '🦉' };
+};
+
+const dateLabel = (d) => {
+  const t = getTodayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
+  if (d === t) return 'Today';
+  if (d === tm) return 'Tomorrow';
+  if (d === ys) return 'Yesterday';
+  const dt = new Date(d + 'T12:00:00');
+  return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]} ${d.slice(5)}`;
+};
+
+function normalizeMatch(raw, isPrimary = true) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  
+  const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
+  const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
+
+  return {
+    id, status, isLive, isFinished,
+    homeTeam: { 
+      name: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'), 
+      shortName: isPrimary ? (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') 
+    },
+    awayTeam: { 
+      name: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'), 
+      shortName: isPrimary ? (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') 
+    },
+    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.homeScore ?? null),
+    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.awayScore ?? null),
+    league: { name: raw.league?.name || raw.competition?.name || 'Other' },
+    minute: raw.minute || raw.elapsed || null,
+    kickoff: raw.kickoff || null
+  };
+}
+
+/* ═══════════════════════════════════════
+   ANIMATED NUMBER
+   ═══════════════════════════════════════ */
+function AnimNum({ value, duration = 600, delay = 0, suffix = '' }) {
+  const [display, setDisplay] = useState(0);
+  const raf = useRef(null);
+  useEffect(() => {
+    const target = value || 0;
+    if (target === 0) { setDisplay(0); return; }
+    const start = performance.now() + delay;
+    const run = (now) => {
+      if (now < start) { raf.current = requestAnimationFrame(run); return; }
+      const p = Math.min((now - start) / duration, 1);
+      setDisplay(Math.round((1 - Math.pow(1 - p, 3)) * target));
+      if (p < 1) raf.current = requestAnimationFrame(run);
+    };
+    raf.current = requestAnimationFrame(run);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [value, duration, delay]);
+  return <>{display.toLocaleString()}{suffix}</>;
+}
+
+/* ═══════════════════════════════════════
+   ACCURACY RING
+   ═══════════════════════════════════════ */
+function AccuracyRing({ value, size = 44, stroke = 4, color = 'var(--accent)' }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = Math.min(100, Math.max(0, value)) / 100;
+  return (
+    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke="var(--border)" strokeWidth={stroke} opacity=".3" />
+      <circle cx={size/2} cy={size/2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
+        strokeLinecap="round" style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)' }} />
+    </svg>
+  );
+}
+
+/* ═══════════════════════════════════════
+   LIVE CLOCK
+   ═══════════════════════════════════════ */
+function LiveClock() {
+  const [time, setTime] = useState('');
+  useEffect(() => {
+    const tick = () => setTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, []);
+  if (!time) return null;
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 12px', borderRadius: 8, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)', fontFamily: 'var(--font-display,monospace)', fontSize: '.82rem', fontWeight: 800, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', letterSpacing: '.02em', flexShrink: 0 }}>
+      <Timer size={12} style={{ opacity: .5 }} />{time}
+    </span>
+  );
+}
+
+/* ═══════════════════════════════════════
+   ZOKA RESULT BADGE
+   ═══════════════════════════════════════ */
+function ZokaBadge({ pick }) {
+  if (!pick?.adminPick || pick.status !== 'finished') return null;
+  const { home: h, away: a } = pick.adminPick;
+  const ph = pick.homeScore, pa = pick.awayScore;
+  if (ph == null || pa == null) return <span className="bdg pn">PENDING</span>;
+  if (h === ph && a === pa) return <span className="bdg ex"><CheckCircle2 size={8} /> EXACT</span>;
+  if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="bdg rs"><TrendIcon size={8} /> RESULT</span>;
+  return <span className="bdg ms"><XCircle size={8} /> MISS</span>;
+}
+
+/* ═══════════════════════════════════════
+   MINI PODIUM
+   ═══════════════════════════════════════ */
+function MiniPodium({ entries }) {
+  const top3 = entries.slice(0, 3);
+  if (top3.length === 0) return null;
+  const order = [1, 0, 2];
+  const cfg = [
+    { h: 80, border: 'var(--gold)', bg: 'rgba(245,197,66,.06)', color: 'var(--gold)', sz: 48, fs: '.85rem' },
+    { h: 56, border: '#94a3b8', bg: 'rgba(148,163,184,.04)', color: '#94a3b8', sz: 38, fs: '.72rem' },
+    { h: 44, border: '#b45309', bg: 'rgba(180,83,9,.04)', color: '#d97706', sz: 32, fs: '.65rem' },
+  ];
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 8, padding: '8px 0 0' }}>
+      {order.map(pos => {
+        const u = top3[pos];
+        if (!u) return <div key={pos} style={{ flex: 1, maxWidth: 120 }} />;
+        const c = cfg[pos];
+        return (
+          <div key={u.uid} style={{ flex: 1, maxWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6 }}>
+              {pos === 0 && <Crown size={14} style={{ color: 'var(--gold)', marginBottom: -2, animation: 'v22-crown 3s ease-in-out infinite' }} />}
+              <div style={{ width: c.sz, height: c.sz, borderRadius: '50%', background: `${c.border}15`, border: `2px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: c.fs, fontWeight: 900, color: c.color, fontFamily: 'var(--font-display)' }}>
+                {(u.displayName || '??').slice(0, 2).toUpperCase()}
+              </div>
+              <div style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: 4, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{u.displayName}</div>
+              <div style={{ fontSize: '.62rem', fontWeight: 800, color: c.color, fontFamily: 'var(--font-display)' }}>{u.points} pts</div>
+            </div>
+            <div style={{ width: '100%', height: c.h, borderRadius: '10px 10px 0 0', background: c.bg, border: `1px solid ${c.border}22`, borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <span style={{ fontSize: '1.1rem', fontWeight: 900, color: c.color, fontFamily: 'var(--font-display)' }}>#{pos + 1}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════
+   STYLES
+   ═══════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('news-hub-ultimate-css')) return;
+  if (document.getElementById('home-v22-css')) return;
   const s = document.createElement('style');
-  s.id = 'news-hub-ultimate-css';
+  s.id = 'home-v22-css';
   s.textContent = `
-    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; }
-    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; }
-    @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
-    @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-    .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
-    .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
-    .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
-    .nh-btn:hover { transform: translateY(-1px); }
-    .nh-btn:active { transform: scale(0.96); }
-    .nh-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-    .nh-scroll::-webkit-scrollbar-track { background: transparent; }
-    .nh-scroll::-webkit-scrollbar-thumb { background: var(--nh-border); border-radius: 10px; }
-    .nh-dropzone { border: 2px dashed var(--nh-border); background: var(--nh-surface-hover); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--nh-text-muted); }
-    .nh-dropzone:hover { border-color: var(--nh-accent); color: var(--nh-accent); }
+@keyframes v22-fade-up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes v22-scale{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes v22-slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes v22-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
+@keyframes v22-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes v22-cta{0%,100%{box-shadow:0 4px 20px rgba(0,230,118,.15)}50%{box-shadow:0 4px 32px rgba(0,230,118,.3)}}
+@keyframes v22-crown{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
+@keyframes v22-live-glow{0%,100%{border-color:rgba(239,68,68,.12)}50%{border-color:rgba(239,68,68,.3)}}
+@keyframes v22-zoka-glow{0%,100%{border-color:rgba(245,197,66,.15)}50%{border-color:rgba(245,197,66,.3)}}
+@keyframes v22-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes v22-strip{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes v22-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes v22-hero-line{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+
+/* ★ NEWS MARQUEE ANIMATION */
+@keyframes v22-news-marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.v22-news-marquee {
+  display: flex;
+  gap: 14px;
+  animation: v22-news-marquee 40s linear infinite;
+  width: max-content;
+  padding: 4px 0;
+}
+.v22-news-marquee:hover {
+  animation-play-state: paused;
+}
+
+.v22{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
+.v22-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
+
+.v22-hero{padding:22px 0 0;position:relative}
+.v22-hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.v22-hero-line{height:2px;border-radius:1px;background:linear-gradient(90deg,var(--accent),var(--gold),var(--accent));animation:v22-hero-line .8s cubic-bezier(.22,1,.36,1) both;margin:14px 0 0}
+
+.v22-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0 22px}
+.v22-chip{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
+.v22-chip:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px)}
+.v22-chip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display);color:var(--text-primary);line-height:1}
+.v22-chip .lbl{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+.v22-chip .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);margin-top:5px;overflow:hidden}
+.v22-chip .bar-fill{height:100%;border-radius:2px;transform-origin:left;animation:v22-bar .6s cubic-bezier(.22,1,.36,1) both}
+
+.v22-sec{margin-bottom:26px}
+.v22-sech{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.v22-sech h2{margin:0;font-size:.92rem;font-weight:900;color:var(--text-primary);white-space:nowrap}
+.v22-sech-line{flex:1;height:1px;background:var(--border);border-radius:1px}
+.v22-sech-badge{font-size:.58rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0}
+
+.v22-livestrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 6px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.v22-livestrip::-webkit-scrollbar{display:none}
+.v22-livemini{min-width:175px;max-width:210px;flex-shrink:0;padding:10px 12px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:12px;scroll-snap-align:start;animation:v22-live-glow 2s ease-in-out infinite,v22-strip .35s cubic-bezier(.22,1,.36,1) both;transition:transform .15s}
+.v22-livemini:hover{transform:translateY(-1px)}
+.v22-ldot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:v22-pulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
+
+.v22-mc{display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:6px;transition:all .15s;animation:v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc:hover{background:rgba(255,255,255,.012)}
+.v22-mc.live{animation:v22-live-glow 2s ease-in-out infinite,v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc.ft{border-color:rgba(0,230,118,.15)}
+.v22-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border-color:rgba(245,197,66,.15);animation:v22-zoka-glow 2.5s ease-in-out infinite,v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc.dim{opacity:.45}
+
+.v22-mh{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.v22-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
+.v22-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
+.v22-ml span{font-size:.64rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v22-st{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:.56rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
+
+.v22-tm{display:flex;align-items:center;gap:6px}
+.v22-te{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+.v22-te.aw{flex-direction:row-reverse;text-align:right}
+.v22-te img{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0}
+.v22-te span{font-size:.78rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.v22-sb{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;min-width:68px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+.v22-sb.lv{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
+.v22-sb.ft{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
+.v22-sb.zk{background:rgba(245,197,66,.06);border-color:rgba(245,197,66,.2)}
+.v22-sn{font-size:.92rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.v22-sn.r{color:#ef4444}.v22-sn.g{color:var(--accent)}.v22-sn.gd{color:var(--gold,#f5c542)}
+.v22-sep{color:var(--text-muted);font-size:.7rem;font-weight:700;opacity:.25}
+.v22-vs{font-size:.58rem;font-weight:800;color:var(--text-muted);opacity:.15;letter-spacing:.08em}
+
+.v22-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+
+.v22-btn{padding:6px 11px;border-radius:8px;font-size:.7rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:32px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none;color:inherit}
+.v22-btn:active{transform:scale(.97)}
+.v22-btn-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.15)}
+.v22-btn-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.v22-btn-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-muted)}
+.v22-btn-gh:hover{border-color:var(--border-hover);color:var(--text-primary)}
+.v22-btn-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+.v22-btn-ol:hover{border-color:var(--gold);color:var(--gold)}
+.v22-btn-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.05)}
+
+.bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.6rem;font-weight:800;white-space:nowrap}
+.bdg.ex{background:rgba(0,230,118,.08);color:var(--accent);border:1px solid rgba(0,230,118,.18)}
+.bdg.rs{background:rgba(245,197,66,.06);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.15)}
+.bdg.ms{background:rgba(239,68,68,.06);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
+.bdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
+.bdg.gd{background:rgba(245,197,66,.06);color:var(--gold);border:1px solid rgba(245,197,66,.15)}
+
+.v22-explore{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.v22-ecard{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:all .2s;-webkit-tap-highlight-color:transparent;outline:none}
+.v22-ecard:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.v22-ecard:active{transform:scale(.98)}
+.v22-ecard-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
+
+.v22-lbrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px;animation:v22-slide .3s cubic-bezier(.22,1,.36,1) both;transition:background .15s}
+.v22-lbrow:hover{background:rgba(255,255,255,.015)}
+.v22-lbrow.me{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.15)}
+
+.v22-toggle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;margin-top:8px;border-radius:10px;font-size:.78rem;font-weight:700;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.v22-toggle:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:var(--text-primary)}
+.v22-toggle:active{transform:scale(.98)}
+.v22-toggle svg{transition:transform .25s}
+.v22-toggle.open svg{transform:rotate(180deg)}
+
+.v22-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:v22-shimmer 1.2s ease-in-out infinite;border-radius:10px}
+
+.v22-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.76rem;font-weight:700;color:#ef4444}
+
+.v22-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v22-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none;color:#fff}
+.v22-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
+.v22-cta:active{transform:scale(.98)}
+
+.v22-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
+
+/* ★ NEWS CARDS CSS */
+.v22-newsmini {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 220px;
+  height: 150px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .2s, border-color .2s;
+  position: relative;
+}
+.v22-newsmini:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59,130,246,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.v22-news-img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+.v22-news-img-ph {
+  width: 100%;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02));
+  color: var(--accent);
+}
+.v22-news-body {
+  padding: 8px 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.v22-news-cat {
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+.v22-news-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media(max-width:640px){
+  .v22-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .v22-chip .val{font-size:.95rem}
+  .v22-te span{font-size:.72rem}.v22-sn{font-size:.82rem}
+  .v22-sb{min-width:60px;padding:4px 8px}
+}
+@media(max-width:380px){
+  .v22-stats{gap:6px}.v22-chip{padding:10px 6px}.v22-chip .val{font-size:.85rem}
+  .v22-ecard{padding:12px}
+}
+@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `;
   document.head.appendChild(s);
 };
 
-const formatTimeAgo = (date) => {
-  if (!date) return 'Just now';
-  const diff = Date.now() - (date.toMillis ? date.toMillis() : new Date(date).getTime());
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return 'Just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+/* ═══════════════════════════════════════
+   LIVE MINI CARD
+   ═══════════════════════════════════════ */
+const LiveMini = ({ match, index }) => {
+  const min = match.elapsed || match.minute;
+  const isLive = match.isLive || isLiveStatus(match.status, SPORT.FOOTBALL);
+  const hasScore = match.homeScore != null && match.awayScore != null;
+  
+  return (
+    <div className="v22-livemini" style={{ animationDelay: `${index * 60}ms`, borderColor: isLive ? 'rgba(239,68,68,.15)' : 'var(--border)' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{match.league?.name}</span>
+        {isLive && min ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(239,68,68,.1)', padding: '2px 6px', borderRadius: 4 }}>
+            <span className="v22-ldot" style={{ width: 4, height: 4 }} />
+            <span style={{ fontSize: '.6rem', fontWeight: 900, color: '#ef4444', fontFamily: 'var(--font-display)' }}>{min}'</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{match.kickoff || 'VS'}</div>
+        )}
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name}</span>
+        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{hasScore ? match.homeScore : '-'}</span>
+      </div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name}</span>
+        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{hasScore ? match.awayScore : '-'}</span>
+      </div>
+    </div>
+  );
 };
 
-const calcReadTime = (body) => {
-  const words = body?.trim().split(/\s+/).length || 1;
-  return Math.max(1, Math.ceil(words / 200));
+/* ═══════════════════════════════════════
+   FEATURED ROW
+   ═══════════════════════════════════════ */
+const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
+  const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
+  const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
+  const isHT = pred.status === 'ht' || pred.status === 'HT';
+  const hasScore = pred.homeScore != null && pred.awayScore != null;
+  const isPredicted = !!userPred;
+  const isResolved = !!userResult?.resultType && userResult.resultType !== 'pending';
+  const isExact = isResolved && userResult.resultType === 'exact';
+  const isHit = isResolved && userResult.resultType === 'result';
+
+  let border = 'var(--border)';
+  if (isExact) border = 'var(--accent)';
+  else if (isHit) border = 'var(--gold)';
+  else if (isResolved && !isExact && !isHit) border = '#ef4444';
+  else if (isLive || isHT) border = '#ef4444';
+  else if (isFin) border = 'rgba(0,230,118,.25)';
+  else if (isPredicted) border = '#60a5fa';
+
+  let sLabel = pred.kickoff || 'VS', sColor = 'var(--text-muted)', sBg = 'rgba(255,255,255,.04)';
+  if (isLive) { sLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; sColor = '#ef4444'; sBg = 'rgba(239,68,68,.1)'; }
+  else if (isHT) { sLabel = 'HT'; sColor = '#f97316'; sBg = 'rgba(249,115,22,.1)'; }
+  else if (isFin) { sLabel = 'FT'; sColor = 'var(--accent)'; sBg = 'rgba(0,230,118,.08)'; }
+
+  const cls = `v22-mc${isLive ? ' live' : ''}${isFin ? ' ft' : ''}${isFin && !isResolved && !isPredicted ? ' dim' : ''}`;
+  const mid = pred.id || pred.matchId;
+
+  return (
+    <div className={cls} style={{ borderLeft: `3px solid ${border}`, animationDelay: `${index * 18}ms` }}>
+      <div className="v22-mh">
+        <div className="v22-ml">
+          {pred.league?.emblem && <img src={pred.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pred.league?.name || 'Featured'}</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {isLive && <span className="v22-ldot" />}
+          <span className="v22-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
+        </div>
+      </div>
+      <div className="v22-tm">
+        <div className="v22-te">
+          {pred.homeLogo && <img src={pred.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home'}</span>
+        </div>
+        <div className={`v22-sb${isLive ? ' lv' : ''}${isFin ? ' ft' : ''}`}>
+          {hasScore ? (
+            <>
+              <span className={`v22-sn${isLive ? ' r' : ' g'}`}>{pred.homeScore}</span>
+              <span className="v22-sep">–</span>
+              <span className={`v22-sn${isLive ? ' r' : ' g'}`}>{pred.awayScore}</span>
+            </>
+          ) : (
+            <span className="v22-vs">VS</span>
+          )}
+        </div>
+        <div className="v22-te aw">
+          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'}</span>
+        </div>
+      </div>
+      <div className="v22-ma">
+        {isResolved ? (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+            <span className={`bdg ${isExact ? 'ex' : isHit ? 'rs' : 'ms'}`}>
+              {isExact ? <><CheckCircle2 size={8} /> EXACT +10</> : isHit ? <><TrendIcon size={8} /> RESULT +3</> : <><XCircle size={8} /> MISS</>}
+            </span>
+            {isPredicted && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>You: {userPred.homeScore}–{userPred.awayScore}</span>}
+          </div>
+        ) : isPredicted ? (
+          <Link to="/predictions" className="v22-btn v22-btn-ol on" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><CheckCircle size={9} /> Locked</Link>
+        ) : isLoggedIn ? (
+          <Link to={`/predictions?match=${mid}`} className="v22-btn v22-btn-p" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Target size={9} /> Predict</Link>
+        ) : (
+          <Link to="/login" className="v22-btn v22-btn-gh" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Lock size={9} /> Login</Link>
+        )}
+      </div>
+    </div>
+  );
 };
 
-const BADGES = {
-  'Breaking': { color: '#ef4444', bg: 'rgba(239,68,68,.15)', label: '🔴 BREAKING' },
-  'Official': { color: '#10b981', bg: 'rgba(16,185,129,.15)', label: '🟢 OFFICIAL' },
-  'Rumour': { color: '#f5c542', bg: 'rgba(245,197,66,.15)', label: '🟡 RUMOUR' },
-  'Match Report': { color: '#3b82f6', bg: 'rgba(59,130,246,.15)', label: '🔵 MATCH REPORT' },
-  'Transfers': { color: '#f97316', bg: 'rgba(249,115,22,.15)', label: '🟠 TRANSFERS' },
-  'Injuries': { color: '#a855f7', bg: 'rgba(168,85,247,.15)', label: '🟣 INJURIES' },
+/* ═══════════════════════════════════════
+   ZOKA ROW
+   ═══════════════════════════════════════ */
+const ZokaRow = ({ pick, index }) => {
+  const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
+  const koRaw = pick.kickoff || '';
+  const ko = koRaw 
+    ? new Date(koRaw.includes('T') ? koRaw : `${pick.matchDate || getTodayStr()}T${koRaw}:00`).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })
+    : 'TBD';
+  const predH = pick.adminPick?.home, predA = pick.adminPick?.away;
+
+  return (
+    <div className="v22-mc zoka" style={{ animationDelay: `${index * 25}ms` }}>
+      <div className="v22-mh">
+        <div className="v22-ml">
+          {pick.league?.emblem && <img src={pick.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pick.league?.name || 'Zoka'}</span>
+        </div>
+        <span className="v22-st" style={{ color: isFin ? 'var(--accent)' : 'var(--text-muted)', background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)' }}>{isFin ? 'FT' : ko || 'TBD'}</span>
+      </div>
+      <div className="v22-tm">
+        <div className="v22-te">
+          {pick.homeLogo && <img src={pick.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}</span>
+        </div>
+        <div className={`v22-sb${isFin ? ' ft' : ' zk'}`}>
+          {isFin && pick.homeScore != null
+            ? <><span className="v22-sn g">{pick.homeScore}</span><span className="v22-sep">–</span><span className="v22-sn g">{pick.awayScore}</span></>
+            : <span className="v22-sn gd">{predH ?? '?'}–{predA ?? '?'}</span>}
+        </div>
+        <div className="v22-te aw">
+          {pick.awayLogo && <img src={pick.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          <span>{pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}</span>
+        </div>
+      </div>
+      <div className="v22-ma">
+        {isFin ? <ZokaBadge pick={pick} /> : <span className="bdg gd"><Star size={8} fill="currentColor" /> Prediction</span>}
+      </div>
+    </div>
+  );
 };
 
-const CATEGORIES = [
-  { key: 'All', label: 'All News' },
-  { key: 'Breaking', label: 'Breaking' },
-  { key: 'Official', label: 'Official' },
-  { key: 'Transfers', label: 'Transfers' },
-  { key: 'Match Report', label: 'Match Reports' },
-  { key: 'Injuries', label: 'Injuries' },
-];
-
-const REACTIONS = [
-  { key: 'like', icon: '👍', label: 'Like' },
-  { key: 'fire', icon: '🔥', label: 'Fire' },
-  { key: 'wow', icon: '😮', label: 'Wow' },
-  { key: 'funny', icon: '😂', label: 'Funny' },
-  { key: 'sad', icon: '😢', label: 'Sad' },
-];
-
-/* ═══════════════════════════════════════════════════════════════
-   MAIN NEWS COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
-export default function Highlights() {
+/* ═══════════════════════════════════════
+   MAIN COMPONENT
+   ═══════════════════════════════════════ */
+export default function Home() {
   injectStyles();
   const { currentUser, userProfile } = useAuth();
-  const user = currentUser;
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
+  const isLoggedIn = !!currentUser;
+  const uid = currentUser?.uid;
+  const mounted = useRef(true);
+  const greeting = useMemo(() => getGreeting(), []);
+
+  const appData = useAppData();
+  const {
+    activePredictions,
+    zokaPicks,
+    dailyEntries,
+    dailyStats,
+    userPredictions,
+    predictionResults,
+    userStats,
+    loading: ctxLoading,
+    ensureUserData,
+  } = appData;
+
+  const [primaryFixtures, setPrimaryFixtures] = useState([]);
+  const [fxLoading, setFxLoading] = useState(true);
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [showMoreFeat, setShowMoreFeat] = useState(false);
+  const [showMoreZoka, setShowMoreZoka] = useState(false);
+  const [showMoreLB, setShowMoreLB] = useState(false);
+  const [totalUsers, setTotalUsers] = useState(null);
   
-  const { id: urlPostId, author: authorFilter } = useParams();
-  const navigate = useNavigate();
+  const [newsPosts, setNewsPosts] = useState([]);
 
-  const [theme, setTheme] = useState('dark');
-  const [posts, setPosts] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeFilter, setActiveFilter] = useState('All');
-  const [expandedComments, setExpandedComments] = useState({});
-  const [activePost, setActivePost] = useState(null);
-  const [relatedMatch, setRelatedMatch] = useState(null);
-  const [savedPosts, setSavedPosts] = useState(() => JSON.parse(localStorage.getItem('nh_saved') || '[]'));
-  const [shareData, setShareData] = useState(null);
+  const { fixtures: backupRaw } = useFootballData();
 
-  const [isFormOpen, setIsFormOpen] = useState(false);
-  const [editingPost, setEditingPost] = useState(null);
-  const [formData, setFormData] = useState({ title: '', category: 'Breaking', body: '', imageUrl: '', relatedMatchId: '' });
-  const [saving, setSaving] = useState(false);
-  const [uploadingImage, setUploadingImage] = useState(false);
+  useEffect(() => {
+    if (uid) ensureUserData(uid);
+  }, [uid, ensureUserData]);
 
-  const [comments, setComments] = useState({});
-  const [newComments, setNewComments] = useState({});
-  const fileInputRef = useRef(null);
+  useEffect(() => {
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
+    return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+  }, []);
 
-  // Fetch Feed Posts
   useEffect(() => {
     if (!db) return;
-    setLoading(true);
-    let q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'));
-    
+    getDocs(query(collection(db, 'users'), limit(1))).then(s => {
+      if (!s.empty && mounted.current) setTotalUsers(s.docs[0].data().totalUsers || null);
+    }).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
     const unsub = onSnapshot(q, (snap) => {
-      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoading(false);
+      if (mounted.current) setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
     });
     return () => unsub();
   }, [db]);
 
-  // Fetch Single Post if URL changes
   useEffect(() => {
-    if (!db || !urlPostId) {
-      setActivePost(null);
-      setRelatedMatch(null);
-      return;
-    }
-    setLoading(true);
-    getDoc(doc(db, 'news_posts', urlPostId)).then(snap => {
-      if (snap.exists()) {
-        const postData = { id: snap.id, ...snap.data() };
-        setActivePost(postData);
-        
-        // Increment Views
-        updateDoc(doc(db, 'news_posts', urlPostId), { views: increment(1) }).catch(()=>{});
-
-        // Fetch Related Match
-        if (postData.relatedMatchId) {
-          getDoc(doc(db, 'active_predictions', postData.relatedMatchId)).then(mSnap => {
-            if (mSnap.exists()) setRelatedMatch({ id: mSnap.id, ...mSnap.data() });
-          });
+    let mnt = true;
+    (async () => {
+      try {
+        const data = await fetchFixtures(getTodayStr());
+        if (mnt && data) {
+          const l = Array.isArray(data) ? data : data?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)).filter(Boolean));
         }
-      } else {
-        navigate('/highlights'); 
-      }
-      setLoading(false);
-    });
-  }, [db, urlPostId, navigate]);
-
-  // Fetch Comments for expanded posts
-  useEffect(() => {
-    const targetId = activePost ? activePost.id : Object.keys(expandedComments).find(id => expandedComments[id]);
-    if (!targetId || comments[targetId]) return;
-
-    const q = query(collection(db, 'news_posts', targetId, 'comments'), orderBy('createdAt', 'desc'));
-    onSnapshot(q, (snap) => {
-      setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
-    });
-  }, [expandedComments, activePost]);
-
-  const toggleSave = (postId) => {
-    setSavedPosts(prev => {
-      const newArr = prev.includes(postId) ? prev.filter(id => id !== postId) : [...prev, postId];
-      localStorage.setItem('nh_saved', JSON.stringify(newArr));
-      return newArr;
-    });
-  };
-
-  const filteredPosts = useMemo(() => {
-    let list = posts;
-    if (authorFilter) list = list.filter(p => p.authorId === authorFilter);
-    if (activeFilter === 'Saved') list = list.filter(p => savedPosts.includes(p.id));
-    else if (activeFilter !== 'All') list = list.filter(p => p.category === activeFilter);
-    return list;
-  }, [posts, activeFilter, authorFilter, savedPosts]);
-
-  const trendingPosts = useMemo(() => [...posts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5), [posts]);
-
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
-
-  const openCreate = () => {
-    setEditingPost(null);
-    setFormData({ title: '', category: 'Breaking', body: '', imageUrl: '', relatedMatchId: '' });
-    setIsFormOpen(true);
-  };
-
-  const openEdit = (post) => {
-    setEditingPost(post);
-    setFormData({ title: post.title, category: post.category, body: post.body, imageUrl: post.imageUrl || '', relatedMatchId: post.relatedMatchId || '' });
-    setIsFormOpen(true);
-  };
-
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-    setUploadingImage(true);
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let { width, height } = img;
-        const MAX_WIDTH = 1200;
-        if (width > MAX_WIDTH) { height = Math.round((height * MAX_WIDTH) / width); width = MAX_WIDTH; }
-        canvas.width = width; canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0, width, height);
-        setFormData(d => ({ ...d, imageUrl: canvas.toDataURL('image/jpeg', 0.7) }));
-        setUploadingImage(false);
-      };
-      img.src = event.target.result;
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleSave = async (e) => {
-    e.preventDefault();
-    if (!formData.title || !formData.body) return;
-    if (!user) return alert("Authentication error.");
-    setSaving(true);
-
-    try {
-      const payload = { ...formData, relatedMatchId: formData.relatedMatchId || null };
-      if (editingPost) {
-        await updateDoc(doc(db, 'news_posts', editingPost.id), { ...payload, updatedAt: serverTimestamp() });
-      } else {
-        await addDoc(collection(db, 'news_posts'), {
-          ...payload,
-          authorId: user.uid,
-          authorName: userProfile?.displayName || 'Admin',
-          authorRole: userProfile?.role || 'admin',
-          createdAt: serverTimestamp(),
-          views: 0, commentsCount: 0, likedBy: [], reactions: { like: 0, fire: 0, wow: 0, funny: 0, sad: 0 }
-        });
-      }
-      setIsFormOpen(false);
-    } catch (err) {
-      console.error("Save post error:", err);
-      alert("Failed to save post.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  const handleDelete = async (postId) => {
-    if (!window.confirm("Delete this post permanently?")) return;
-    try { await deleteDoc(doc(db, 'news_posts', postId)); navigate('/highlights'); } 
-    catch (err) { console.error("Delete error:", err); }
-  };
-
-  const handleReaction = async (post, type) => {
-    if (!user) return alert("Please log in to react.");
-    const currentReactions = post.reactions || {};
-    const userReactedKey = `reacted_${type}_${user.uid}`;
-    const hasReacted = post[userReactedKey];
-
-    const updateState = (p) => p.id === post.id ? {
-      ...p,
-      [userReactedKey]: !hasReacted,
-      reactions: { ...currentReactions, [type]: (currentReactions[type] || 0) + (hasReacted ? -1 : 1) }
-    } : p;
-
-    if (activePost) setActivePost(updateState);
-    else setPosts(prev => prev.map(updateState));
-
-    try {
-      const updateObj = {
-        [`reactions.${type}`]: increment(hasReacted ? -1 : 1),
-        [userReactedKey]: !hasReacted
-      };
-      await updateDoc(doc(db, 'news_posts', post.id), updateObj);
-    } catch (err) {
-      console.error("Reaction error:", err);
-    }
-  };
-
-  const handleComment = async (postId) => {
-    const text = newComments[postId]?.trim();
-    if (!text || !user) return;
+      } catch {} finally { if (mnt) setFxLoading(false); }
+    })();
     
-    const tempComment = { id: `temp_${Date.now()}`, body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: { toMillis: () => Date.now() } };
-    setComments(prev => ({ ...prev, [postId]: [tempComment, ...(prev[postId] || [])] }));
-    setNewComments(prev => ({ ...prev, [postId]: '' }));
+    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+      if (!mnt || !lm) return;
+      setPrimaryFixtures(prev => prev.map(f => {
+        const freshMatch = lm.find(m => String(m.id) === String(f.id));
+        if (freshMatch) return { ...f, ...freshMatch };
+        return f;
+      }));
+    });
+    
+    return () => { mnt = false; if (unsub) unsub(); };
+  }, []);
 
-    try {
-      await addDoc(collection(db, 'news_posts', postId, 'comments'), { body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: serverTimestamp() });
-      await updateDoc(doc(db, 'news_posts', postId), { commentsCount: increment(1) });
-    } catch (err) {
-      console.error("Comment error:", err);
-      setComments(prev => ({ ...prev, [postId]: prev[postId].filter(c => c.id !== tempComment.id) }));
-    }
-  };
+  const allFixtures = useMemo(() => {
+    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)).filter(Boolean);
+    const uniqueIds = new Set();
+    return list.filter(m => { const idStr = String(m.id); if (uniqueIds.has(idStr)) return false; uniqueIds.add(idStr); return true; });
+  }, [primaryFixtures, backupRaw]);
 
-  const handleShare = (post) => {
-    const url = `https://zokascore.xyz/highlights/${post.id}`;
-    if (navigator.share) {
-      navigator.share({ title: post.title, text: post.body.substring(0, 100), url }).catch(()=>{});
-    } else {
-      setShareData({ ...post, url });
-    }
-  };
+  const liveMatches = useMemo(() => allFixtures.filter(f => f.isLive || isLiveStatus(f.status, SPORT.FOOTBALL)), [allFixtures]);
+  
+  // ★ FIX: Fallback to all fixtures if no live matches
+  const stripMatches = liveMatches.length > 0 ? liveMatches : allFixtures.slice(0, 10);
 
-  const generateJsonLd = (post) => {
-    if (!post) return null;
-    return {
-      "@context": "https://schema.org", "@type": "NewsArticle",
-      "headline": post.title, "image": [post.imageUrl || "https://zokascore.xyz/logo.png"],
-      "datePublished": post.createdAt?.toMillis ? new Date(post.createdAt.toMillis()).toISOString() : new Date().toISOString(),
-      "author": [{ "@type": "Person", "name": post.authorName || "Admin" }],
-      "publisher": { "@type": "Organization", "name": "ZOKASCORE" },
-      "description": post.body.substring(0, 150), "articleSection": post.category
-    };
-  };
+  const zokaFlat = useMemo(() => {
+    const matches = zokaPicks?.matches || [];
+    return matches.map(m => ({ ...m, _d: getTodayStr() }));
+  }, [zokaPicks]);
+  const zokaVis = showMoreZoka ? zokaFlat : zokaFlat.slice(0, 4);
+  const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
-  const seoPost = activePost || posts[0]; 
+  const featFlat = useMemo(() => (activePredictions || []).map(m => ({ ...m, _d: getTodayStr() })), [activePredictions]);
+  const featVis = showMoreFeat ? featFlat : featFlat.slice(0, 5);
+  const featHidden = Math.max(0, featFlat.length - 5);
+
+  const lbVis = showMoreLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
+  const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
+
+  const userPredMap = useMemo(() => {
+    const m = {};
+    Object.values(userPredictions || {}).forEach(p => { m[p.predId || p.matchId] = p; });
+    return m;
+  }, [userPredictions]);
+
+  const resultMap = useMemo(() => {
+    const m = {};
+    (predictionResults?.results || []).forEach(r => { m[String(r.matchId)] = r; });
+    return m;
+  }, [predictionResults]);
+
+  const myPredicted = useMemo(() => {
+    return (activePredictions || []).filter(p => userPredMap[p.id || p.matchId]).length;
+  }, [activePredictions, userPredMap]);
+
+  useEffect(() => { return () => { mounted.current = false; }; }, []);
 
   return (
-    <div className={theme === 'dark' ? 'nh-dark' : 'nh-light'} style={{ minHeight: '100vh', background: 'var(--nh-bg)', color: 'var(--nh-text)', transition: 'background 0.3s' }}>
-      
-      <SEO 
-        title={seoPost ? seoPost.title : "Football News Hub | ZOKASCORE"}
-        description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
-        path={seoPost ? `/highlights/${seoPost.id}` : '/highlights'}
-        image={seoPost?.imageUrl}
-        type="article"
-        structuredData={generateJsonLd(seoPost)}
-      />
+    <div className="v22">
+      <SEO title="Football Predictions, Fixtures & Live Scores — ZOKASCORE" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKASCORE" path="/" />
 
-      {/* HEADER */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-surface)', borderBottom: '1px solid var(--nh-border)', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
-        <div style={{ maxWidth: 700, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => { navigate('/highlights'); setActiveFilter('All'); }}>
-            {activePost && <ArrowLeft size={18} />}
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
-              <Newspaper size={18} />
+      {offline && <div className="v22-offline"><WifiOff size={14} /> You're offline — showing cached data</div>}
+
+      <div className="v22-wrap">
+        {/* HERO */}
+        <section className="v22-hero">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <span style={{ fontSize: '1.3rem' }}>{greeting.emoji}</span>
+              <div>
+                <h1 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
+                  {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName.split(' ')[0]}` : ''} {greeting.icon}
+                </h1>
+                <p style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-muted)', margin: '2px 0 0' }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+              </div>
             </div>
-            <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>News Hub</span>
+            <LiveClock />
           </div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={toggleTheme} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-            </button>
-            {isAdmin && (
-              <button onClick={openCreate} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: '.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                <Plus size={16} /> New Post
+          <div className="v22-hero-line" />
+        </section>
+
+        {/* MATCH STRIP (Live or Upcoming) */}
+        {stripMatches.length > 0 && (
+          <div style={{ margin: '16px 0 0', animation: 'v22-fade-up .4s cubic-bezier(.22,1,.36,1) both' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+              {liveMatches.length > 0 ? (
+                <>
+                  <span className="v22-ldot" />
+                  <span style={{ fontSize: '.74rem', fontWeight: 900, color: '#ef4444' }}>{liveMatches.length} LIVE</span>
+                </>
+              ) : (
+                <span style={{ fontSize: '.74rem', fontWeight: 900, color: 'var(--text-muted)' }}>TODAY'S MATCHES</span>
+              )}
+              <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
+              <Link to="/fixtures" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
+            </div>
+            <div className="v22-livestrip">{stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
+          </div>
+        )}
+
+        {/* STATS STRIP */}
+        <div className="v22-stats" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 100ms both' }}>
+          <div className="v22-chip">
+            <div className="val"><AnimNum value={totalUsers || dailyStats?.players || 0} delay={200} /></div>
+            <div className="lbl">Users</div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, ((dailyStats?.players || 0) || (totalUsers || 0)) / 5)}%`, background: '#60a5fa', animationDelay: '400ms' }} /></div>
+          </div>
+          <div className="v22-chip">
+            <div className="val"><AnimNum value={dailyStats?.preds || 0} delay={280} /></div>
+            <div className="lbl">Predictions</div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (dailyStats?.preds || 0) / 10)}%`, background: 'var(--gold)', animationDelay: '500ms' }} /></div>
+          </div>
+          <div className="v22-chip" style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', right: 8, top: 8 }}><AccuracyRing value={dailyStats?.avg ? parseFloat(dailyStats.avg) : 0} size={36} stroke={3} color={(dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 50 ? 'var(--accent)' : (dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 25 ? 'var(--gold)' : '#ef4444'} /></div>
+            <div className="val" style={{ fontSize: '.92rem' }}><AnimNum value={dailyStats?.avg ? Math.round(parseFloat(dailyStats.avg)) : 0} delay={360} suffix="%" /></div>
+            <div className="lbl">Accuracy</div>
+          </div>
+          <div className="v22-chip">
+            <div className="val" style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {isLoggedIn ? <AnimNum value={userStats?.todayPoints || 0} delay={440} /> : '—'}
+            </div>
+            <div className="lbl">My Points</div>
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (userStats?.todayPoints || 0) / 5)}%`, background: 'var(--accent)', animationDelay: '600ms' }} /></div>}
+          </div>
+        </div>
+
+        {/* LATEST NEWS MARQUEE */}
+        {newsPosts.length > 0 && (
+          <div style={{ margin: '18px 0 22px', animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 120ms both', overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Newspaper size={14} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: '.74rem', fontWeight: 900, color: 'var(--text-primary)' }}>LATEST NEWS</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
+              <Link to="/highlights" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>Hub <ChevronRight size={11} /></Link>
+            </div>
+            <div className="v22-news-marquee">
+              {[...newsPosts, ...newsPosts].map((post, i) => (
+                <Link to={`/highlights/${post.id}`} key={`${post.id}-${i}`} className="v22-newsmini">
+                  {post.imageUrl ? (
+                    <img src={post.imageUrl} alt={post.title} className="v22-news-img" />
+                  ) : (
+                    <div className="v22-news-img-ph"><Newspaper size={18} /></div>
+                  )}
+                  <div className="v22-news-body">
+                    <span className="v22-news-cat">{post.category}</span>
+                    <h4 className="v22-news-title">{post.title}</h4>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ZOKA PICKS */}
+        {!ctxLoading && zokaFlat.length > 0 && (
+          <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 150ms both' }}>
+            <div className="v22-sech">
+              <Star size={14} style={{ color: 'var(--gold)' }} />
+              <h2>Zoka Picks</h2>
+              <span className="v22-sech-badge" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.15)' }}>{zokaFlat.length}</span>
+              <div className="v22-sech-line" />
+            </div>
+            <div className="v22-zoka-wrap">
+              {zokaVis.map((p, i) => <ZokaRow key={p.matchId || i} pick={p} index={i} />)}
+            </div>
+            {zokaHidden > 0 && (
+              <button className={`v22-toggle${showMoreZoka ? ' open' : ''}`} onClick={() => setShowMoreZoka(p => !p)}>
+                {showMoreZoka ? 'Show less' : `Show ${zokaHidden} more`} <ChevronDown size={13} />
               </button>
             )}
           </div>
-        </div>
-      </div>
+        )}
 
-      <div style={{ maxWidth: 700, margin: '0 auto', padding: '20px 16px 80px' }}>
-        
-        {loading ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-            {[1, 2, 3].map(i => <div key={i} className="nh-shimmer" style={{ height: 300, borderRadius: 16 }} />)}
+        {/* FEATURED MATCHES */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 200ms both' }}>
+          <div className="v22-sech">
+            <Target size={14} style={{ color: 'var(--accent)' }} />
+            <h2>Featured — Compete</h2>
+            <span className="v22-sech-badge" style={{ background: 'rgba(0,230,118,.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.15)' }}>{featFlat.length}</span>
+            {isLoggedIn && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{featFlat.length} predicted</span>}
+            <div className="v22-sech-line" />
           </div>
-        ) : activePost ? (
-          <SinglePostView 
-            post={activePost} 
-            comments={comments[activePost.id] || []} 
-            relatedMatch={relatedMatch}
-            isAdmin={isAdmin} 
-            user={user} 
-            savedPosts={savedPosts}
-            onToggleSave={toggleSave}
-            onShare={handleShare}
-            onReaction={handleReaction} 
-            onEdit={openEdit} 
-            onDelete={handleDelete}
-            onAuthorClick={() => navigate(`/highlights/author/${activePost.authorId}`)}
-            relatedPosts={posts.filter(p => p.category === activePost.category && p.id !== activePost.id).slice(0, 3)}
-            onRelatedClick={(id) => navigate(`/highlights/${id}`)}
-            newComments={newComments}
-            setNewComments={setNewComments}
-            handleComment={handleComment}
-          />
-        ) : (
-          // FEED VIEW
-          <>
-            {/* FILTER TABS */}
-            <div className="nh-scroll" style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
-              {CATEGORIES.map(cat => (
-                <button key={cat.key} onClick={() => setActiveFilter(cat.key)} className="nh-btn" style={{ padding: '8px 16px', borderRadius: 20, background: activeFilter === cat.key ? 'var(--nh-accent-bg)' : 'var(--nh-surface)', color: activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-text-muted)', border: `1px solid ${activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-border)'}`, fontWeight: 700, fontSize: '.8rem', whiteSpace: 'nowrap' }}>
-                  {cat.label}
-                </button>
-              ))}
-              {savedPosts.length > 0 && (
-                <button onClick={() => setActiveFilter('Saved')} className="nh-btn" style={{ padding: '8px 16px', borderRadius: 20, background: activeFilter === 'Saved' ? 'var(--nh-accent-bg)' : 'var(--nh-surface)', color: activeFilter === 'Saved' ? 'var(--nh-accent)' : 'var(--nh-text-muted)', border: `1px solid ${activeFilter === 'Saved' ? 'var(--nh-accent)' : 'var(--nh-border)'}`, fontWeight: 700, fontSize: '.8rem', whiteSpace: 'nowrap' }}>
-                  Saved ({savedPosts.length})
+          {ctxLoading ? (
+            <div>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="v22-skel" style={{ height: 90, marginBottom: 6, animationDelay: `${i * 60}ms` }} />)}</div>
+          ) : featVis.length > 0 ? (
+            featVis.map((p, i) => <FeaturedRow key={p.id || String(p.matchId) || i} pred={p} userPred={userPredMap[p.id || p.matchId]} userResult={resultMap[String(p.matchId || p.id)]} index={i} isLoggedIn={isLoggedIn} />)
+          ) : (
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: '.8rem', fontWeight: 600 }}>
+              No featured matches right now
+              <div style={{ fontSize: '.68rem', opacity: .5, marginTop: 4 }}>Check back later or go to Predictions</div>
+            </div>
+          )}
+          {featHidden > 0 && (
+            <button className={`v22-toggle${showMoreFeat ? ' open' : ''}`} onClick={() => setShowMoreFeat(p => !p)}>
+              {showMoreFeat ? 'Show less' : `Show ${featHidden} more`} <ChevronDown size={13} />
+            </button>
+          )}
+        </div>
+
+        {/* LEADERBOARD */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 250ms both' }}>
+          <div className="v22-sech">
+            <Trophy size={14} style={{ color: 'var(--gold)' }} />
+            <h2>Daily Leaderboard</h2>
+            <div className="v22-sech-line" />
+            <Link to="/leaderboard" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>Full <ArrowUpRight size={11} /></Link>
+          </div>
+          {ctxLoading ? (
+            <div>{Array.from({ length: 5 }).map((_, i) => <div key={i} className="v22-skel" style={{ height: 48, marginBottom: 5, animationDelay: `${i * 50}ms` }} />)}</div>
+          ) : (dailyEntries || []).length > 0 ? (
+            <>
+              <MiniPodium entries={dailyEntries || []} />
+              <div style={{ marginTop: 10 }}>
+                {lbVis.slice(3).map((u, i) => {
+                  const isMe = isLoggedIn && u.uid === uid;
+                  const rank = u.rank || (i + 4);
+                  const color = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'][(rank - 1) % 8];
+                  return (
+                    <div key={u.uid} className={`v22-lbrow${isMe ? ' me' : ''}`} style={{ animationDelay: `${(i + 3) * 25}ms` }}>
+                      <span style={{ width: 28, textAlign: 'center', fontWeight: 900, color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>#{rank}</span>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.64rem', fontWeight: 800, color: '#fff' }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}</div>
+                        <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.exact || 0} exact · {u.result || 0} results</div>
+                      </div>
+                      <span style={{ fontSize: '.8rem', fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>{u.points || 0}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              {lbHidden > 0 && (
+                <button className={`v22-toggle${showMoreLB ? ' open' : ''}`} onClick={() => setShowMoreLB(p => !p)}>
+                  {showMoreLB ? 'Show less' : `Show ${lbHidden} more`} <ChevronDown size={13} />
                 </button>
               )}
-            </div>
+            </>
+          ) : (
+            <div className="v22-skel" style={{ height: 150, borderRadius: 12 }} />
+          )}
+        </div>
 
-            {authorFilter && (
-              <div style={{ marginBottom: 20, padding: '10px 16px', background: 'var(--nh-accent-bg)', border: '1px solid var(--nh-accent)', borderRadius: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ color: 'var(--nh-accent)', fontWeight: 700, fontSize: '.85rem' }}>Showing posts by specific author</span>
-                <button onClick={() => navigate('/highlights')} className="nh-btn" style={{ color: 'var(--nh-accent)', background: 'transparent', fontWeight: 800 }}>Clear</button>
-              </div>
-            )}
-
-            {/* TRENDING CAROUSEL */}
-            {trendingPosts.length > 1 && activeFilter === 'All' && !authorFilter && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
-                  <Flame size={16} style={{ color: '#ef4444' }} />
-                  <span style={{ fontSize: '.85rem', fontWeight: 800 }}>Trending Now</span>
-                </div>
-                <div className="nh-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
-                  {trendingPosts.map(p => (
-                    <div key={p.id} onClick={() => navigate(`/highlights/${p.id}`)} style={{ minWidth: 200, maxWidth: 200, background: 'var(--nh-surface)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)', cursor: 'pointer' }}>
-                      <img src={p.imageUrl || 'https://via.placeholder.com/200x100'} style={{ width: '100%', height: 100, objectFit: 'cover' }} alt="" />
-                      <div style={{ padding: 10 }}>
-                        <div style={{ fontSize: '.6rem', fontWeight: 800, color: BADGES[p.category]?.color || 'var(--nh-text-muted)', marginBottom: 4 }}>{BADGES[p.category]?.label || p.category}</div>
-                        <div style={{ fontSize: '.75rem', fontWeight: 700, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {filteredPosts.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: 40, color: 'var(--nh-text-muted)', background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)' }}>
-                <Newspaper size={40} style={{ opacity: 0.3, marginBottom: 12 }} /><p>No news articles found.</p>
-              </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-                {filteredPosts.map((post, i) => (
-                  <PostCard 
-                    key={post.id} 
-                    post={post} 
-                    index={i} 
-                    isAdmin={isAdmin} 
-                    user={user} 
-                    savedPosts={savedPosts}
-                    onToggleSave={toggleSave}
-                    onShare={handleShare}
-                    onReaction={handleReaction} 
-                    onEdit={openEdit} 
-                    onDelete={handleDelete}
-                    onExpand={(postId) => navigate(`/highlights/${postId}`)}
-                    onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
-                    isHero={i === 0 && activeFilter === 'All' && !authorFilter}
-                  />
-                ))}
-              </div>
-            )}
-          </>
-        )}
-      </div>
-
-      {/* CREATE / EDIT MODAL */}
-      {isFormOpen && (
-        <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
-          <div onClick={e => e.stopPropagation()} className="nh-enter" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--nh-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
-              <button onClick={() => setIsFormOpen(false)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: 6, borderRadius: 8, border: '1px solid var(--nh-border)' }}><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSave} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }} className="nh-scroll">
+        {/* EXPLORE GRID */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 300ms both' }}>
+          <div className="v22-sech">
+            <Gamepad2 size={14} style={{ color: 'var(--accent)' }} />
+            <h2>Explore</h2>
+            <div className="v22-sech-line" />
+          </div>
+          <div className="v22-explore">
+            <Link to="/mastergames" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: 'var(--accent)' }} />
+              <Activity size={20} style={{ color: 'var(--accent)' }} />
               <div>
-                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Title</label>
-                <input value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} required placeholder="e.g. Mbappe ruled out for 3 weeks" style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }} />
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Master Games</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>All fixtures & live scores</div>
               </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Category</label>
-                  <select value={formData.category} onChange={e => setFormData(d => ({ ...d, category: e.target.value }))} style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}>
-                    {Object.keys(BADGES).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div style={{ flex: 1 }}>
-                  <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Match ID (Optional)</label>
-                  <input value={formData.relatedMatchId} onChange={e => setFormData(d => ({ ...d, relatedMatchId: e.target.value }))} placeholder="e.g. feat_2023-10-01_123" style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }} />
-                </div>
-              </div>
+            </Link>
+            <Link to="/highlights" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#f97316' }} />
+              <Newspaper size={20} style={{ color: '#f97316' }} />
               <div>
-                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Attachment (Optional)</label>
-                {formData.imageUrl ? (
-                  <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)' }}>
-                    <img src={formData.imageUrl} alt="Preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover' }} />
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="nh-btn" style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', borderRadius: 8, padding: 6, border: 'none' }}><X size={16} /></button>
-                  </div>
-                ) : (
-                  <div className="nh-dropzone" onClick={() => fileInputRef.current?.click()}>
-                    {uploadingImage ? <Loader size={24} className="animate-spin" /> : <ImageIcon size={24} />}
-                    <span style={{ fontSize: '.85rem', fontWeight: 600 }}>Click to upload from device</span>
-                    <span style={{ fontSize: '.7rem' }}>Auto-compresses for fast loading</span>
-                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
-                  </div>
-                )}
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>News Hub</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Official updates & articles</div>
               </div>
+            </Link>
+            <Link to="/livestream" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#ef4444' }} />
+              <Zap size={20} style={{ color: '#ef4444' }} />
               <div>
-                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Body / Content</label>
-                <textarea value={formData.body} onChange={e => setFormData(d => ({ ...d, body: e.target.value }))} required rows={6} placeholder="Write the news details here..." style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.5 }} />
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Watch matches live</div>
               </div>
-              <button type="submit" disabled={saving} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', border: 'none', borderRadius: 10, padding: '14px', fontWeight: 800, fontSize: '.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-                {saving ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
-                {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}
-              </button>
-            </form>
+            </Link>
+            <Link to="/basketball" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#3b82f6' }} />
+              <BarChart3 size={20} style={{ color: '#3b82f6' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Basketball</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Hoops action & scores</div>
+              </div>
+            </Link>
           </div>
         </div>
-      )}
 
-      {/* SHARE MODAL */}
-      {shareData && (
-        <div onClick={() => setShareData(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div onClick={e => e.stopPropagation()} style={{ background: 'var(--nh-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, textAlign: 'center' }}>
-            <h3 style={{ margin: '0 0 16px' }}>Share Article</h3>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-              <a href={`https://wa.me/?text=${encodeURIComponent(shareData.title + " " + shareData.url)}`} target="_blank" rel="noreferrer" className="nh-btn" style={{ background: '#25D366', color: '#fff', padding: '12px', borderRadius: 10, textDecoration: 'none' }}>WhatsApp</a>
-              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareData.title)}&url=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="nh-btn" style={{ background: '#1DA1F2', color: '#fff', padding: '12px', borderRadius: 10, textDecoration: 'none' }}>Twitter</a>
-              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="nh-btn" style={{ background: '#1877F2', color: '#fff', padding: '12px', borderRadius: 10, textDecoration: 'none' }}>Facebook</a>
-              <a href={`https://t.me/share/url?url=${encodeURIComponent(shareData.url)}&text=${encodeURIComponent(shareData.title)}`} target="_blank" rel="noreferrer" className="nh-btn" style={{ background: '#0088cc', color: '#fff', padding: '12px', borderRadius: 10, textDecoration: 'none' }}>Telegram</a>
-            </div>
-            <button onClick={() => { navigator.clipboard.writeText(shareData.url); alert('Link copied!'); }} className="nh-btn" style={{ width: '100%', marginTop: 12, background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: '12px', borderRadius: 10, border: '1px solid var(--nh-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-              <LinkIcon size={16} /> Copy Link
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   POST CARD COMPONENT (For Feed)
-   ═══════════════════════════════════════════════════════════════ */
-function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero }) {
-  const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
-  const totalReactions = Object.values(post.reactions || {}).reduce((a, b) => a + b, 0);
-
-  const heroStyles = isHero ? { border: '1px solid var(--nh-border)', boxShadow: 'var(--nh-shadow)' } : {};
-
-  return (
-    <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
-      {isHero && post.imageUrl && (
-        <div onClick={() => onExpand(post.id)} style={{ cursor: 'pointer', position: 'relative', height: 240, overflow: 'hidden' }}>
-          <img src={post.imageUrl} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent 60%)' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16 }}>
-            <span style={{ display: 'inline-block', padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800, marginBottom: 8 }}>{badge.label}</span>
-            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{post.title}</h2>
-          </div>
-        </div>
-      )}
-
-      <div style={{ padding: 16 }}>
-        {/* HEADER */}
-        {!isHero && (
-          <div onClick={() => onExpand(post.id)} style={{ cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
-              <div style={{ flex: 1 }}>
-                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-                <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
-              </div>
-              <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>
-            </div>
-            <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>
-            <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{post.body}</p>
+        {/* CTA */}
+        {!isLoggedIn && (
+          <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
+            <Link to="/login" className="v22-cta"><LogIn size={16} /> Sign In to Predict & Win</Link>
           </div>
         )}
-
-        {isHero && (
-           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-             <div onClick={() => onAuthorClick()} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span> • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
-             <div style={{ display: 'flex', gap: 8 }}>
-               <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'none', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>
-               <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'none', color: 'var(--nh-text-muted)' }}><Share2 size={18} /></button>
-             </div>
-           </div>
-        )}
-
-        {/* ACTIONS */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--nh-border)' }}>
-          <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
-            {REACTIONS.map(r => {
-              const count = post.reactions?.[r.key] || 0;
-              const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-              return (
-                <button key={r.key} onClick={() => onReaction(post, r.key)} className="nh-btn" style={{ padding: '6px 10px', borderRadius: 20, background: hasReacted ? 'var(--nh-accent-bg)' : 'var(--nh-surface-hover)', color: hasReacted ? 'var(--nh-accent)' : 'var(--nh-text-muted)', fontSize: '.75rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap' }}>
-                  <span style={{ fontSize: '1rem' }}>{r.icon}</span> {count > 0 && count}
-                </button>
-              );
-            })}
-          </div>
-          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            {!isHero && <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'none', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>}
-            {!isHero && <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'none', color: 'var(--nh-text-muted)' }}><Share2 size={18} /></button>}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   SINGLE POST VIEW 
-   ═══════════════════════════════════════════════════════════════ */
-function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, newComments, setNewComments, handleComment }) {
-  const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
-
-  return (
-    <div className="nh-enter" style={{ background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)', overflow: 'hidden', boxShadow: 'var(--nh-shadow)' }}>
-      {/* Header */}
-      <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div onClick={onAuthorClick} style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
-          <div>
-            <div onClick={onAuthorClick} style={{ fontWeight: 700, fontSize: '.9rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-            <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
-          </div>
-        </div>
-        <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800 }}>{badge.label}</span>
-      </div>
-
-      {/* Body */}
-      <div style={{ padding: '0 16px 12px' }}>
-        <h1 style={{ margin: '0 0 12px', fontSize: '1.8rem', fontWeight: 800, lineHeight: 1.3 }}>{post.title}</h1>
-        <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.8, fontSize: '1rem', whiteSpace: 'pre-wrap' }}>{post.body}</p>
-      </div>
-
-      {/* Match Link */}
-      {relatedMatch && (
-        <div style={{ margin: '0 16px 16px', padding: 16, background: 'var(--nh-bg)', borderRadius: 12, border: '1px solid var(--nh-border)' }}>
-          <div style={{ fontSize: '.7rem', fontWeight: 800, color: 'var(--nh-accent)', marginBottom: 8 }}>RELATED MATCH</div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <span style={{ fontWeight: 700 }}>{relatedMatch.homeTeam?.name || 'Home'}</span>
-            <span style={{ fontFamily: 'monospace', fontWeight: 800, color: 'var(--nh-accent)' }}>{relatedMatch.homeScore ?? '-'} - {relatedMatch.awayScore ?? '-'}</span>
-            <span style={{ fontWeight: 700 }}>{relatedMatch.awayTeam?.name || 'Away'}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Image */}
-      {post.imageUrl && <img src={post.imageUrl} alt={post.title} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)' }} loading="lazy" />}
-
-      {/* Actions */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
-        <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
-          {REACTIONS.map(r => {
-            const count = post.reactions?.[r.key] || 0;
-            const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-            return (
-              <button key={r.key} onClick={() => onReaction(post, r.key)} className="nh-btn" style={{ padding: '8px 14px', borderRadius: 20, background: hasReacted ? 'var(--nh-accent-bg)' : 'var(--nh-surface-hover)', color: hasReacted ? 'var(--nh-accent)' : 'var(--nh-text-muted)', fontSize: '.8rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
-                <span style={{ fontSize: '1.1rem' }}>{r.icon}</span> {count > 0 && count}
-              </button>
-            );
-          })}
-        </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)', padding: 8, borderRadius: 8, border: '1px solid var(--nh-border)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>
-          <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', padding: 8, borderRadius: 8, border: '1px solid var(--nh-border)' }}><Share2 size={18} /></button>
-        </div>
-      </div>
-
-      {/* Admin Controls */}
-      {isAdmin && (
-        <div style={{ padding: '0 16px 16px', display: 'flex', gap: 8 }}>
-          <button onClick={() => onEdit(post)} className="nh-btn" style={{ flex: 1, background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: 10, borderRadius: 8, border: '1px solid var(--nh-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Pencil size={14} /> Edit</button>
-          <button onClick={() => onDelete(post.id)} className="nh-btn" style={{ flex: 1, background: 'var(--nh-danger-bg)', color: 'var(--nh-danger)', padding: 10, borderRadius: 8, border: '1px solid var(--nh-danger-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Trash2 size={14} /> Delete</button>
-        </div>
-      )}
-
-      <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
-
-      {/* Related Articles */}
-      {relatedPosts.length > 0 && (
-        <div style={{ padding: 16, borderTop: '1px solid var(--nh-border)' }}>
-          <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 12px' }}>You might also like</h3>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {relatedPosts.map(p => (
-              <div key={p.id} onClick={() => onRelatedClick(p.id)} style={{ display: 'flex', gap: 12, cursor: 'pointer' }}>
-                {p.imageUrl && <img src={p.imageUrl} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} alt="" />}
-                <div>
-                  <div style={{ fontSize: '.65rem', fontWeight: 800, color: BADGES[p.category]?.color || 'var(--nh-text-muted)', marginBottom: 4 }}>{BADGES[p.category]?.label || p.category}</div>
-                  <div style={{ fontSize: '.85rem', fontWeight: 700, lineHeight: 1.3 }}>{p.title}</div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════════════════════════════
-   COMMENT SECTION COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
-function CommentSection({ postId, comments, newComments, setNewComments, handleComment }) {
-  return (
-    <div style={{ padding: 16, background: 'var(--nh-bg)', borderTop: '1px solid var(--nh-border)' }}>
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-        <input 
-          value={newComments[postId] || ''}
-          onChange={e => setNewComments(prev => ({ ...prev, [postId]: e.target.value }))}
-          placeholder="Write a comment..."
-          style={{ flex: 1, background: 'var(--nh-surface)', border: '1px solid var(--nh-border)', borderRadius: 20, padding: '10px 16px', color: 'var(--nh-text)', fontSize: '.85rem', outline: 'none' }}
-        />
-        <button onClick={() => handleComment(postId)} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', borderRadius: 20, padding: '0 16px', display: 'flex', alignItems: 'center' }}>
-          <Send size={16} />
-        </button>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {(comments || []).length === 0 && <p style={{ fontSize: '.8rem', color: 'var(--nh-text-muted)', textAlign: 'center' }}>No comments yet.</p>}
-        {(comments || []).map(c => (
-          <div key={c.id} style={{ display: 'flex', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--nh-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700, color: 'var(--nh-text-muted)', flexShrink: 0 }}>{c.authorName?.[0] || 'G'}</div>
-            <div style={{ background: 'var(--nh-surface)', borderRadius: 12, padding: '10px 14px', flex: 1, border: '1px solid var(--nh-border)' }}>
-              <div style={{ fontSize: '.75rem', fontWeight: 700, marginBottom: 4 }}>{c.authorName || 'Guest'}</div>
-              <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--nh-text)' }}>{c.body}</p>
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
