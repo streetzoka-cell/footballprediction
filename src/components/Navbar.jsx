@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v13.4 — Fixed missing ProHeader styles, removed strobe animations, smoothed ticker
+// v13.5 — Notification dropdown fixed overlay & mobile drawer cleanup
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -10,6 +10,7 @@ import {
   Clock, Target, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useAppData } from '../context/AppDataContext'; // ★ FIX: Use AppData for stats
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
@@ -47,7 +48,6 @@ const injectBase = () => {
     @keyframes nvNotifHeaderGlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
     @keyframes nvInfoExpand{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
 
-    /* ★ FIX: Added missing ProHeader styles */
     .nv-pro-wrap { padding: 12px 16px 0; max-width: 1140px; margin: 0 auto; }
     .nv-pro-inner { background: var(--bg-card, #111827); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 8px; position: relative; overflow: hidden; transition: all 0.2s ease; }
     .nv-pro-inner:hover { border-color: rgba(0,230,118,0.2); transform: translateY(-1px); }
@@ -64,7 +64,6 @@ const injectBase = () => {
     .nv-pro-minute { position: absolute; top: 10px; right: 14px; display: flex; align-items: center; gap: 4px; font-size: 0.7rem; font-weight: 700; color: #ef4444; }
     .nv-pro-live-dot { width: 6px; height: 6px; border-radius: 50%; background: #ef4444; animation: nvLiveDot 1.2s infinite; box-shadow: 0 0 8px rgba(239,68,68,0.6); }
 
-    /* Mobile Optimizations: Disable backdrop blur for smooth scroll */
     @media (max-width: 900px) {
       .nv-dk { display: none !important; }
       .nv-tg { display: flex !important; }
@@ -84,7 +83,6 @@ const injectBase = () => {
       .nv-tg { display: none !important; }
     }
 
-    /* Mobile Drawer Animation Fix (Hide in/out) */
     .nv-mob-overlay {
       position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.65);
       backdrop-filter: blur(4px);
@@ -111,7 +109,6 @@ const injectBase = () => {
 
     .nv-link-shimmer { position: relative; overflow: hidden; }
     
-    /* Helper classes to clean up JSX */
     .nv-mob-link { width: 100%; display: flex; align-items: center; gap: 12px; padding: 13px 16px; border-radius: 10px; border: none; cursor: pointer; text-align: left; background: transparent; color: #9ca3af; font-size: 0.88rem; font-weight: 500; transition: all 0.2s ease; }
     .nv-mob-link:hover { background: rgba(255,255,255,0.04); color: #e2e8f0; padding-left: 20px; }
     .nv-mob-link.active { background: rgba(0,230,118,0.08); color: #00e676; font-weight: 700; border-left: 3px solid #00e676; }
@@ -124,15 +121,6 @@ const injectBase = () => {
    HELPERS & SVG
    ═══════════════════════════════════════════════════ */
 const todayStr = () => new Date().toISOString().split('T')[0];
-
-function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
-}
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -248,6 +236,10 @@ export default function Navbar() {
   const uid = currentUser?.uid;
   const isLoggedIn = !!uid;
 
+  // ★ FIX: Pull stats directly from AppDataContext for instant, accurate points
+  const appData = useAppData();
+  const { userStats, myRank } = appData;
+
   const [mobileOpen, setMobileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
@@ -256,6 +248,7 @@ export default function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
+  const [notifPos, setNotifPos] = useState({ top: 0, right: 0 });
   
   const [rememberedAdmin, setRememberedAdmin] = useState(() => {
     try { return localStorage.getItem(ADMIN_REMEMBER_KEY) === 'true'; } catch { return false; }
@@ -282,76 +275,14 @@ export default function Navbar() {
   const isAdmin = userProfile ? userProfile.role === 'admin' : rememberedAdmin;
 
   const [bannerMatches, setBannerMatches] = useState([]);
-  const [activePreds, setActivePreds] = useState([]);
-  const [allPreds, setAllPreds] = useState([]);
-
   const searchRef = useRef(null);
-  const notifRef = useRef(null);
+  const notifDropdownRef = useRef(null);
   const rafRef = useRef(false);
 
   const isHome = location.pathname === '/';
   const isActive = useCallback((p) => location.pathname === p, [location.pathname]);
 
   const liveMatches = useMemo(() => bannerMatches.filter(m => m.isLive), [bannerMatches]);
-
-  const scoreMap = useMemo(() => {
-    const m = new Map();
-    activePreds.forEach(p => {
-      if (p.status === 'finished' && p.homeScore != null)
-        m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore, homeTeam: p.homeTeam, awayTeam: p.awayTeam });
-    });
-    return m;
-  }, [activePreds]);
-
-  const userPredMap = useMemo(() => {
-    if (!uid) return {};
-    const m = {};
-    allPreds.filter(p => p.userId === uid).forEach(p => { m[p.predId] = p; });
-    return m;
-  }, [allPreds, uid]);
-
-  const userStats = useMemo(() => {
-    const my = Object.values(userPredMap);
-    let exact = 0, result = 0, miss = 0, points = 0, resolved = 0;
-    my.forEach(p => {
-      const a = scoreMap.get(String(p.matchId));
-      if (!a) return;
-      resolved++;
-      const r = calcPoints(p.homeScore, p.awayScore, a.h, a.a);
-      points += r.points;
-      if (r.type === 'exact') exact++;
-      else if (r.type === 'result') result++;
-      else miss++;
-    });
-    return { predicted: my.length, total: activePreds.length, exact, result, miss, points, resolved };
-  }, [userPredMap, scoreMap, activePreds]);
-
-  const streak = useMemo(() => {
-    const my = Object.values(userPredMap);
-    const resolved = my.filter(p => scoreMap.get(String(p.matchId))).map(p => {
-      const a = scoreMap.get(String(p.matchId));
-      return calcPoints(p.homeScore, p.awayScore, a.h, a.a).type !== 'miss' ? 1 : 0;
-    });
-    let s = 0;
-    for (let i = resolved.length - 1; i >= 0; i--) { if (resolved[i]) s++; else break; }
-    return s;
-  }, [userPredMap, scoreMap]);
-
-  const userRank = useMemo(() => {
-    if (!uid) return null;
-    const um = {};
-    allPreds.forEach(p => {
-      if (!um[p.userId]) um[p.userId] = { uid: p.userId, points: 0, resolved: 0 };
-      const u = um[p.userId];
-      const a = scoreMap.get(String(p.matchId));
-      if (!a) return;
-      u.resolved++;
-      u.points += calcPoints(p.homeScore, p.awayScore, a.h, a.a).points;
-    });
-    const sorted = Object.values(um).filter(u => u.resolved > 0).sort((a, b) => b.points - a.points);
-    const idx = sorted.findIndex(u => u.uid === uid);
-    return idx >= 0 ? idx + 1 : null;
-  }, [allPreds, scoreMap, uid]);
 
   const predNotifs = useMemo(() => {
     const combined = [];
@@ -364,24 +295,21 @@ export default function Navbar() {
       });
     });
     
-    // 2. Prediction Results
-    if (uid) {
-      Object.values(userPredMap).forEach(p => {
-        const actual = scoreMap.get(String(p.matchId));
-        if (!actual) return;
-        const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
-        if (r.type === 'pending') return;
+    // 2. Prediction Results (from context results)
+    if (uid && appData.predictionResults?.results) {
+      appData.predictionResults.results.forEach(r => {
+        if (r.resultType === 'pending') return;
         combined.push({
-          id: `pred-${p.predId}`, type: r.type, points: r.points,
-          homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away',
-          predScore: `${p.homeScore}-${p.awayScore}`, actualScore: `${actual.h}-${actual.a}`,
-          time: p.updatedAt?.toMillis?.() || p.createdAt?.toMillis?.() || 0,
+          id: `pred-${r.matchId}`, type: r.resultType, points: r.points,
+          homeTeam: r.homeTeam || 'Home', awayTeam: r.awayTeam || 'Away',
+          predScore: `${r.predictedHome}-${r.predictedAway}`, actualScore: `${r.actualHome}-${r.actualAway}`,
+          time: r.resolvedAt?.toMillis?.() || 0,
         });
       });
     }
     
     return combined.sort((a, b) => b.time - a.time);
-  }, [adminNotifs, userPredMap, scoreMap, uid]);
+  }, [adminNotifs, appData.predictionResults, uid]);
 
   const notifCount = useMemo(() => predNotifs.filter(n => !seenNotifIds.has(n.id)).length, [predNotifs, seenNotifIds]);
 
@@ -418,20 +346,6 @@ export default function Navbar() {
     return () => unsub();
   }, []);
 
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => setActivePreds(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => setAllPreds(snap.docs.map(d => d.data())), () => {});
-    return () => unsub();
-  }, []);
-
   // ★ FIX: Fetch Admin Broadcasts securely based on auth state
   useEffect(() => {
     if (!db) return setAdminNotifs([]);
@@ -456,8 +370,6 @@ export default function Navbar() {
     return () => unsub();
   }, [db, uid]);
 
-  
-  // Scroll listener
   useEffect(() => {
     const fn = () => {
       if (!rafRef.current) { 
@@ -467,13 +379,13 @@ export default function Navbar() {
           rafRef.current = false; 
         }); 
       }
+      if (notifOpen) setNotifOpen(false); // Close dropdown on scroll to prevent detaching
     };
     window.addEventListener('scroll', fn, { passive: true });
     setScrolled(window.scrollY > 10);
     return () => window.removeEventListener('scroll', fn);
-  }, []);
+  }, [notifOpen]);
 
-  // Close menus on route change
   useEffect(() => { 
     setMobileOpen(false); 
     setSearchOpen(false); 
@@ -481,7 +393,6 @@ export default function Navbar() {
     setInfoOpen(false); 
   }, [location.pathname]);
 
-  // Improved body scroll lock for mobile
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = 'hidden';
@@ -499,7 +410,6 @@ export default function Navbar() {
     };
   }, [mobileOpen]);
 
-  // Outside click & Escape key
   useEffect(() => {
     const fn = (e) => {
       if (e.key === 'Escape') { 
@@ -508,7 +418,9 @@ export default function Navbar() {
         setNotifOpen(false); 
       }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      if (notifDropdownRef.current && !notifDropdownRef.current.contains(e.target) && !e.target.closest('[data-notif-trigger]')) {
+        setNotifOpen(false);
+      }
     };
     document.addEventListener('keydown', fn);
     document.addEventListener('mousedown', fn);
@@ -522,7 +434,6 @@ export default function Navbar() {
     if (notifOpen && predNotifs.length > 0) setSeenNotifIds(new Set(predNotifs.map(n => n.id)));
   }, [notifOpen, predNotifs]);
 
-  // Listen for app refocus to instantly refresh data
   useEffect(() => {
     const handleRefocus = async () => {
       try {
@@ -553,8 +464,22 @@ export default function Navbar() {
 
   const handleMobileNav = useCallback((to) => { 
     setMobileOpen(false); 
-    setTimeout(() => navigate(to), 250); // Wait for drawer animation to finish before routing
+    setTimeout(() => navigate(to), 250);
   }, [navigate]);
+
+  const toggleNotif = useCallback((e) => {
+    e.stopPropagation();
+    setNotifOpen(prev => {
+      if (!prev) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        setNotifPos({ 
+          top: rect.bottom + 8, 
+          right: window.innerWidth - rect.right 
+        });
+      }
+      return !prev;
+    });
+  }, []);
 
   /* ═══ TICKER ═══ */
   const renderTickerItem = (m, i) => {
@@ -665,7 +590,6 @@ export default function Navbar() {
       <div style={{
         position: 'sticky', top: 0, zIndex: 1001, height: 40, overflow: 'hidden',
         display: 'flex', alignItems: 'center',
-        // ★ FIX: Replaced strobe rainbow with a sleek, static dark gradient
         background: hasLive 
           ? 'linear-gradient(90deg, #0f172a 0%, #1e1215 50%, #0f172a 100%)' 
           : 'linear-gradient(90deg, #0f172a 0%, #111827 50%, #0f172a 100%)',
@@ -690,7 +614,6 @@ export default function Navbar() {
             maskImage: 'linear-gradient(90deg, transparent, black 4%, black 96%, transparent)',
             WebkitMaskImage: 'linear-gradient(90deg, transparent, black 4%, black 96%, transparent)',
           }}>
-            {/* ★ SMOOTH & EXTRA SLOW TICKER */}
             <div style={{ 
               display: 'inline-flex', 
               alignItems: 'center', 
@@ -800,11 +723,11 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Notifications */}
+            {/* Notifications (Desktop) */}
             {/* ★ FIX: Show bell for guests if there are admin broadcasts */}
             {(isLoggedIn || adminNotifs.length > 0) && (
-              <div ref={notifRef} style={{ position: 'relative' }}>
-                <button onClick={() => setNotifOpen(p => !p)} style={{
+              <div style={{ position: 'relative' }}>
+                <button data-notif-trigger onClick={toggleNotif} style={{
                   width: 36, height: 36, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center',
                   background: notifOpen ? 'rgba(0,230,118,0.08)' : 'transparent',
                   color: notifOpen ? '#00e676' : '#6b7280',
@@ -825,47 +748,12 @@ export default function Navbar() {
                     }}>{notifCount > 9 ? '9+' : notifCount}</span>
                   )}
                 </button>
-                {notifOpen && (
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 8px)', right: -8, width: 340,
-                    background: 'rgba(12,18,32,0.98)', border: '1px solid rgba(0,230,118,0.1)',
-                    borderRadius: 14, overflow: 'hidden',
-                    boxShadow: '0 16px 50px rgba(0,0,0,0.55), 0 1px 0 rgba(0,230,118,0.06)',
-                    animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both',
-                  }}>
-                    <div style={{
-                      padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: 'linear-gradient(135deg, rgba(0,230,118,0.04) 0%, rgba(0,230,118,0.01) 50%, rgba(168,85,247,0.03) 100%)',
-                      backgroundSize: '200% 100%', animation: 'nvNotifHeaderGlow 6s ease infinite',
-                    }}>
-                      <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Bell size={14} style={{ opacity: 0.5 }} /> Notifications
-                      </span>
-                      {predNotifs.length > 0 && (
-                        <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#00e676', background: 'rgba(0,230,118,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(0,230,118,0.15)' }}>{predNotifs.length} results</span>
-                      )}
-                    </div>
-                    {predNotifs.length === 0 ? (
-                      <div style={{ padding: '36px 24px', textAlign: 'center' }}>
-                        <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
-                          <Target size={24} style={{ color: '#4a5568', opacity: 0.5 }} />
-                        </div>
-                        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>No results yet</div>
-                        <div style={{ fontSize: '0.75rem', color: '#4a5568', lineHeight: 1.5 }}>Make predictions and check back<br />after matches end</div>
-                      </div>
-                    ) : (
-                      <div style={{ maxHeight: 320, overflowY: 'auto' }} className="nv-mob-scroll">
-                        {predNotifs.map(renderNotifItem)}
-                      </div>
-                    )}
-                  </div>
-                )}
               </div>
             )}
 
             {/* Points badge */}
-            {isLoggedIn && userStats.resolved > 0 && (
+            {/* ★ FIX: Using userStats from context for accuracy */}
+            {isLoggedIn && userStats?.resolved > 0 && (
               <div
                 onMouseEnter={() => setPointsHover(true)}
                 onMouseLeave={() => setPointsHover(false)}
@@ -880,8 +768,8 @@ export default function Navbar() {
                 <span style={{ fontSize: '0.9rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
                 <span style={{ fontWeight: 900, fontSize: '0.85rem', color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: pointsHover ? 'nvPointsCount 0.4s ease both' : 'none' }}>{userStats.points.toLocaleString()}</span>
                 <span style={{ fontSize: '0.52rem', fontWeight: 700, color: '#92400e', background: 'rgba(251,191,36,0.1)', padding: '2px 7px', borderRadius: 4, opacity: 0.7 }}>PTS</span>
-                {streak > 0 && (
-                  <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#f97316', display: 'flex', alignItems: 'center', gap: 2, marginLeft: 2, opacity: pointsHover ? 1 : 0.5, transition: 'opacity 0.2s ease' }}>🔥{streak}</span>
+                {userStats.streak > 0 && (
+                  <span style={{ fontSize: '0.58rem', fontWeight: 800, color: '#f97316', display: 'flex', alignItems: 'center', gap: 2, marginLeft: 2, opacity: pointsHover ? 1 : 0.5, transition: 'opacity 0.2s ease' }}>🔥{userStats.streak}</span>
                 )}
               </div>
             )}
@@ -975,21 +863,24 @@ export default function Navbar() {
                 transition: 'all 0.2s ease',
               }}><Shield size={17} /></Link>
             )}
-            {notifCount > 0 && (
-              <div style={{
+            {/* ★ FIX: Bell now toggles overlay dropdown for mobile guests too */}
+            {(isLoggedIn || adminNotifs.length > 0) && (
+              <div data-notif-trigger onClick={toggleNotif} style={{
                 width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)',
                 position: 'relative', cursor: 'pointer', color: '#ef4444',
                 transition: 'all 0.2s ease',
-              }} onClick={() => setMobileOpen(true)}>
+              }}>
                 <Bell size={17} />
-                <span style={{
-                  position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
-                  background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.48rem', fontWeight: 900,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #0c1220',
-                  boxShadow: '0 0 10px rgba(239,68,68,0.5)',
-                  animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
-                }}>{notifCount > 9 ? '9+' : notifCount}</span>
+                {notifCount > 0 && (
+                  <span style={{
+                    position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
+                    background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.48rem', fontWeight: 900,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #0c1220',
+                    boxShadow: '0 0 10px rgba(239,68,68,0.5)',
+                    animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
+                  }}>{notifCount > 9 ? '9+' : notifCount}</span>
+                )}
               </div>
             )}
             <button
@@ -1005,6 +896,50 @@ export default function Navbar() {
           </div>
         </div>
       </nav>
+
+      {/* ═══ NOTIFICATION DROPDOWN (Fixed Overlay) ═══ */}
+      {notifOpen && (
+        <div ref={notifDropdownRef} data-notif-dropdown style={{
+          position: 'fixed', 
+          top: `${notifPos.top}px`, 
+          right: `${notifPos.right}px`, 
+          width: 'min(340px, calc(100vw - 32px))',
+          zIndex: 2000,
+          background: 'rgba(12,18,32,0.98)', 
+          border: '1px solid rgba(0,230,118,0.1)',
+          borderRadius: 14, 
+          overflow: 'hidden',
+          boxShadow: '0 16px 50px rgba(0,0,0,0.55), 0 1px 0 rgba(0,230,118,0.06)',
+          animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both',
+        }}>
+          <div style={{
+            padding: '14px 18px', borderBottom: '1px solid rgba(255,255,255,0.05)',
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            background: 'linear-gradient(135deg, rgba(0,230,118,0.04) 0%, rgba(0,230,118,0.01) 50%, rgba(168,85,247,0.03) 100%)',
+            backgroundSize: '200% 100%', animation: 'nvNotifHeaderGlow 6s ease infinite',
+          }}>
+            <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Bell size={14} style={{ opacity: 0.5 }} /> Notifications
+            </span>
+            {predNotifs.length > 0 && (
+              <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#00e676', background: 'rgba(0,230,118,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(0,230,118,0.15)' }}>{predNotifs.length} results</span>
+            )}
+          </div>
+          {predNotifs.length === 0 ? (
+            <div style={{ padding: '36px 24px', textAlign: 'center' }}>
+              <div style={{ width: 48, height: 48, borderRadius: 14, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 14px' }}>
+                <Target size={24} style={{ color: '#4a5568', opacity: 0.5 }} />
+              </div>
+              <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#6b7280', marginBottom: 4 }}>No results yet</div>
+              <div style={{ fontSize: '0.75rem', color: '#4a5568', lineHeight: 1.5 }}>Make predictions and check back<br />after matches end</div>
+            </div>
+          ) : (
+            <div style={{ maxHeight: 320, overflowY: 'auto' }} className="nv-mob-scroll">
+              {predNotifs.map(renderNotifItem)}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ═══ MOBILE MENU (Fixed Hide In/Out) ═══ */}
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
@@ -1053,10 +988,10 @@ export default function Navbar() {
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
                 {[
-                  { label: 'Points', value: userStats.points, color: '#fbbf24', icon: '⚡' },
-                  { label: 'Exact', value: userStats.exact, color: '#00e676', icon: '🎯' },
-                  { label: 'Rank', value: userRank ? `#${userRank}` : '—', color: '#a855f7', icon: '🏆' },
-                  { label: 'Streak', value: streak > 0 ? `${streak}🔥` : '—', color: '#f97316', icon: '🔥' },
+                  { label: 'Points', value: userStats?.points || 0, color: '#fbbf24', icon: '⚡' },
+                  { label: 'Exact', value: userStats?.exact || 0, color: '#00e676', icon: '🎯' },
+                  { label: 'Rank', value: myRank ? `#${myRank.rank}` : '—', color: '#a855f7', icon: '🏆' },
+                  { label: 'Streak', value: userStats?.streak > 0 ? `${userStats.streak}🔥` : '—', color: '#f97316', icon: '🔥' },
                 ].map((s, i) => (
                   <div key={s.label} style={{
                     textAlign: 'center', padding: '10px 2px', borderRadius: 10,
@@ -1069,18 +1004,6 @@ export default function Navbar() {
                     <div style={{ fontSize: '0.48rem', fontWeight: 700, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{s.label}</div>
                   </div>
                 ))}
-              </div>
-            </div>
-          )}
-
-          {/* Notifications in Mobile Menu */}
-          {predNotifs.length > 0 && (
-            <div style={{ padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-              <div style={{ padding: '0 16px 10px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted, #6b728b)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                Recent Notifications
-              </div>
-              <div style={{ maxHeight: '220px', overflowY: 'auto' }} className="nv-mob-scroll">
-                {predNotifs.slice(0, 5).map(renderNotifItem)}
               </div>
             </div>
           )}

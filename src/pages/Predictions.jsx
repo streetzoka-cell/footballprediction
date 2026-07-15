@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v20 — Clean, Accurate, Reactive
+// v20.1 — Clean, Accurate, Reactive (Uses AppDataContext)
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue } from 'react';
@@ -58,7 +58,6 @@ function isMatchLocked(pred, now) {
   if (isFinishedStatus(pred.status, SPORT.FOOTBALL)) return { locked: true, reason: 'finished' };
   if (isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive) return { locked: true, reason: 'live' };
   
-  // Check 1-hour lock based on kickoff time
   const kickoffStr = pred.kickoff || pred.date;
   if (kickoffStr) {
     const kickoffTime = new Date(kickoffStr);
@@ -323,11 +322,12 @@ function Skeleton() {
   return <div className="v20-skel" />;
 }
 
-function ResultBadge({ result }) {
-  if (!result?.resultType || result.resultType === 'pending') return null;
-  if (result.resultType === 'exact') return <span className="v20-bdg ex"><CheckCircle2 size={8} /> +{result.points || 10}</span>;
-  if (result.resultType === 'result') return <span className="v20-bdg rs"><TrendingUp size={8} /> +{result.points || 3}</span>;
-  return <span className="v20-bdg ms"><CircleX size={8} /> 0</span>;
+function ResultBadge({ result, isCalculating }) {
+  if (isCalculating) return <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>;
+  if (!result || result.resultType === 'pending') return <span className="v20-bdg pn"><Clock size={8} /> Pending</span>;
+  if (result.resultType === 'exact') return <span className="v20-bdg ex"><CheckCircle2 size={8} /> Hit +{result.points || 10}</span>;
+  if (result.resultType === 'result') return <span className="v20-bdg rs"><TrendingUp size={8} /> Won +{result.points || 3}</span>;
+  return <span className="v20-bdg ms"><CircleX size={8} /> Missed</span>;
 }
 
 function SaveToast({ show, score }) {
@@ -508,7 +508,11 @@ function ZokaPickCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
         </div>
       </div>
       <div className="v20-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
-        {res && res.type !== 'pending' && <ResultBadge result={res} />}
+        {/* ★ FIX: Show result badge if finished and resolved */}
+        {isFin && res && res.type !== 'pending' && <ResultBadge result={res} />}
+        {/* ★ FIX: Show calculating if finished but scores not processed yet */}
+        {isFin && (!res || res.type === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
+        
         {!isFin && !isLive && vs.total > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
             <button
@@ -543,7 +547,15 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
-  const isResolved = !!result && result.resultType !== 'pending';
+  
+  // ★ FIX: If backend hasn't resolved yet, calculate locally for instant feedback
+  const localResult = (isFin && hasPred && pred.homeScore != null) 
+    ? calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore) 
+    : null;
+    
+  // Use backend result if available, otherwise use localResult
+  const effectiveResult = result || localResult;
+  const isResolved = !!effectiveResult && effectiveResult.resultType !== 'pending';
 
   // ★ 1-HOUR LOCK CHECK
   const lockInfo = isMatchLocked(pred, now);
@@ -638,7 +650,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
               <button className="v20-b v20-bgh v20-bsm" onClick={onCancel}><X size={10} /> Cancel</button>
             </>
           ) : isResolved ? (
-            <ResultBadge result={result} />
+            <ResultBadge result={effectiveResult} />
           ) : isFin && !hasPred ? (
             <span className="v20-bdg ms"><CircleX size={8} /> Missed</span>
           ) : isLocked && !isFin ? (

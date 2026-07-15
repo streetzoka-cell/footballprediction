@@ -10,6 +10,27 @@ import { CACHE_KEY } from '../utils/constants';
 
 const AppDataContext = createContext(null);
 
+// ★ FIX: Added calcPoints helper to resolve local fallback calculations
+function calcPoints(predHome, predAway, actualHome, actualAway) {
+  if (predHome == null || predAway == null || actualHome == null || actualAway == null) {
+    return { points: 0, type: 'miss' };
+  }
+  if (predHome === actualHome && predAway === actualAway) {
+    return { points: 8, type: 'exact' };
+  }
+  const predDiff = predHome - predAway;
+  const actualDiff = actualHome - actualAway;
+  if (
+    (predDiff > 0 && actualDiff > 0) ||
+    (predDiff < 0 && actualDiff < 0) ||
+    (predDiff === 0 && actualDiff === 0)
+  ) {
+    if (predDiff === actualDiff) return { points: 5, type: 'result' };
+    return { points: 3, type: 'result' };
+  }
+  return { points: 0, type: 'miss' };
+}
+
 function loadUserVotesFromStorage() {
   try {
     const stored = localStorage.getItem(`zoka_votes_${todayStr()}`);
@@ -314,7 +335,7 @@ export function AppDataProvider({ children, userId, displayName }) {
         : 0;
     }
 
-    // ★ Calculate today's stats from predictionResults
+    // ★ Calculate today's stats from predictionResults, with local fallback for instant FT updates
     if (predictionResults?.results) {
       const { results } = predictionResults;
       userStats.todayExact = results.filter((r) => r.resultType === 'exact').length;
@@ -324,10 +345,40 @@ export function AppDataProvider({ children, userId, displayName }) {
       userStats.todayResolved = userStats.todayExact + userStats.todayResult + userStats.todayMiss;
     }
 
-    const predCounts = dailyLeaderboard?.predCounts || {};
-    const predDist = dailyLeaderboard?.predDist || {};
+    // ★ FIX: Local Fallback. If a match is FT but not yet in prediction_results (Admin delay), calculate locally for instant points
+    if (activePredictions && userPredictions) {
+      const scoreMap = new Map();
+      activePredictions.forEach(p => {
+        if (p.status === 'finished' && p.homeScore != null) {
+          scoreMap.set(String(p.matchId), { h: p.homeScore, a: p.awayScore });
+        }
+      });
 
-    return { dailyEntries, dailyTop3, dailyRest, dailyStats, myRank, userStats, predCounts, predDist };
+      Object.values(userPredictions).forEach(p => {
+        const actual = scoreMap.get(String(p.matchId));
+        // Check if it's already resolved in backend to avoid double counting
+        const isResolvedInBackend = predictionResults?.results?.some(r => String(r.matchId) === String(p.matchId));
+        
+        if (actual && !isResolvedInBackend) {
+          const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
+          userStats.todayPoints += r.points;
+          if (r.type === 'exact') userStats.todayExact++;
+          else if (r.type === 'result') userStats.todayResult++;
+          else userStats.todayMiss++;
+          userStats.todayResolved++;
+        }
+      });
+    }
+
+    return {
+      dailyTop3,
+      dailyRest,
+      dailyStats,
+      myRank,
+      userStats,
+      predicted,
+      total
+    };
   }, [state, userId]);
 
   // ═══════════════════════════════════════════════════
