@@ -1,11 +1,12 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx (Now Football News Hub)
+// FILE: src/pages/Highlights.jsx (Pro News Hub)
 // ═══════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Newspaper, X, AlertCircle, Clock, Heart, MessageCircle, 
-  Plus, Pencil, Trash2, Send, Tag, Image as ImageIcon, Loader 
+  Plus, Pencil, Trash2, Send, Tag, Image as ImageIcon, Loader, 
+  Sun, Moon, ThumbsUp
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
@@ -16,35 +17,60 @@ import {
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION
+   STYLE INJECTION (Themed)
    ═══════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('news-hub-css')) return;
+  if (document.getElementById('news-hub-pro-css')) return;
   const s = document.createElement('style');
-  s.id = 'news-hub-css';
+  s.id = 'news-hub-pro-css';
   s.textContent = `
-    @keyframes nh_fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes nh_pop{0%{transform:scale(.9);opacity:0}100%{transform:scale(1);opacity:1}}
-    @keyframes nh_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    
-    body{overflow-x:hidden;width:100%;max-width:100vw}
-    
-    .nh-enter{animation:nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both}
-    .nh-pop{animation:nh_pop .3s cubic-bezier(.22,1,.36,1) both}
-    .nh-shimmer{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:nh_shimmer 1.5s ease-in-out infinite}
-    
-    .nh-btn{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none}
-    .nh-btn:hover{transform:translateY(-2px)}
-    .nh-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
-    .nh-card:hover{transform:translateY(-4px);box-shadow:0 12px 30px rgba(0,0,0,.3)}
-    
-    .nh-scroll::-webkit-scrollbar{width:6px}
-    .nh-scroll::-webkit-scrollbar-track{background:transparent}
-    .nh-scroll::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:10px}
-    
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}
+    /* THEME VARIABLES */
+    .nh-dark {
+      --nh-bg: #0b1018;
+      --nh-surface: #141a24;
+      --nh-surface-hover: #1a212e;
+      --nh-border: rgba(255,255,255,0.08);
+      --nh-text: #f1f5f9;
+      --nh-text-muted: #94a3b8;
+      --nh-accent: #3b82f6;
+      --nh-accent-bg: rgba(59,130,246,0.1);
+      --nh-danger: #ef4444;
+      --nh-danger-bg: rgba(239,68,68,0.1);
+      --nh-shadow: 0 8px 24px rgba(0,0,0,0.3);
     }
+    .nh-light {
+      --nh-bg: #f0f2f5;
+      --nh-surface: #ffffff;
+      --nh-surface-hover: #f8fafc;
+      --nh-border: #e2e8f0;
+      --nh-text: #1e293b;
+      --nh-text-muted: #64748b;
+      --nh-accent: #2563eb;
+      --nh-accent-bg: #eff6ff;
+      --nh-danger: #dc2626;
+      --nh-danger-bg: #fee2e2;
+      --nh-shadow: 0 8px 24px rgba(0,0,0,0.05);
+    }
+
+    @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    
+    .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
+    .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
+    .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
+    .nh-btn:hover { transform: translateY(-1px); }
+    .nh-btn:active { transform: scale(0.96); }
+    
+    .nh-like-anim { animation: nh_pop 0.3s ease-in-out; }
+    
+    .nh-scroll::-webkit-scrollbar { width: 6px; }
+    .nh-scroll::-webkit-scrollbar-track { background: transparent; }
+    .nh-scroll::-webkit-scrollbar-thumb { background: var(--nh-border); border-radius: 10px; }
+    
+    /* Dropzone */
+    .nh-dropzone { border: 2px dashed var(--nh-border); background: var(--nh-surface-hover); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--nh-text-muted); }
+    .nh-dropzone:hover { border-color: var(--nh-accent); color: var(--nh-accent); }
   `;
   document.head.appendChild(s);
 };
@@ -52,11 +78,14 @@ const injectStyles = () => {
 const formatTimeAgo = (date) => {
   if (!date) return 'Just now';
   const diff = Date.now() - (date.toMillis ? date.toMillis() : new Date(date).getTime());
-  const hours = Math.floor(diff / (1000 * 60 * 60));
-  if (hours < 1) return `${Math.floor(diff / (1000 * 60))}m ago`;
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 7) return `${days}d ago`;
+  const sec = Math.floor(diff / 1000);
+  if (sec < 60) return 'Just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return `${min}m ago`;
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return `${hr}h ago`;
+  const day = Math.floor(hr / 24);
+  if (day < 7) return `${day}d ago`;
   return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 };
 
@@ -74,55 +103,52 @@ const CATEGORIES = [
 export default function Highlights() {
   injectStyles();
   const { currentUser, userProfile } = useAuth();
-  const user = currentUser; // Alias it so the rest of the code works
-  const isAdmin = userProfile?.role === 'admin';
+  const user = currentUser; // Alias
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
 
+  const [theme, setTheme] = useState('dark');
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
+  const [expandedComments, setExpandedComments] = useState({}); // { postId: true }
   
-  // Modals
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [editingPost, setEditingPost] = useState(null);
-  const [activePost, setActivePost] = useState(null); // For reading full post & comments
-  
-  // Form State
   const [formData, setFormData] = useState({ title: '', category: 'Official', body: '', imageUrl: '' });
   const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
 
-  // Comments State
-  const [comments, setComments] = useState([]);
-  const [newComment, setNewComment] = useState('');
-  const [loadingComments, setLoadingComments] = useState(false);
+  const [comments, setComments] = useState({});
+  const [newComments, setNewComments] = useState({}); // { postId: 'text' }
+  const fileInputRef = useRef(null);
 
   // Fetch Posts
   useEffect(() => {
     if (!db) return;
     const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
-      const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPosts(data);
-      setLoading(false);
-    }, (err) => {
-      console.error("News fetch error:", err);
+      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
     });
     return () => unsub();
   }, []);
 
-  // Fetch Comments for Active Post
+  // Fetch Comments for expanded posts
   useEffect(() => {
-    if (!activePost || !db) return setComments([]);
-    setLoadingComments(true);
-    const q = query(collection(db, 'news_posts', activePost.id, 'comments'), orderBy('createdAt', 'desc'));
-    const unsub = onSnapshot(q, (snap) => {
-      setComments(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      setLoadingComments(false);
-    }, () => setLoadingComments(false));
-    return () => unsub();
-  }, [activePost]);
+    const expandedIds = Object.keys(expandedComments).filter(id => expandedComments[id]);
+    expandedIds.forEach(postId => {
+      if (!comments[postId]) {
+        const q = query(collection(db, 'news_posts', postId, 'comments'), orderBy('createdAt', 'desc'));
+        onSnapshot(q, (snap) => {
+          setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+        });
+      }
+    });
+  }, [expandedComments]);
 
   const filteredPosts = activeFilter === 'All' ? posts : posts.filter(p => p.category === activeFilter);
+
+  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   const openCreate = () => {
     setEditingPost(null);
@@ -133,15 +159,27 @@ export default function Highlights() {
   const openEdit = (post) => {
     setEditingPost(post);
     setFormData({ title: post.title, category: post.category, body: post.body, imageUrl: post.imageUrl || '' });
-    setActivePost(null);
     setIsFormOpen(true);
   };
 
-   const handleSave = async (e) => {
+  const handleImageUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (file.size > 800000) return alert("Image too large (max 800KB for fast loading)");
+    
+    setUploadingImage(true);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setFormData(d => ({ ...d, imageUrl: reader.result }));
+      setUploadingImage(false);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.body) return;
-    if (!user) return alert("You must be logged in to do this.");
-    
+    if (!user) return alert("Authentication error. Please log in again.");
     setSaving(true);
 
     try {
@@ -164,96 +202,110 @@ export default function Highlights() {
       setIsFormOpen(false);
     } catch (err) {
       console.error("Save post error:", err);
-      alert("Failed to save post. Check console for details.");
+      alert("Failed to save post. Check Firestore rules.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDelete = async (postId) => {
-    if (!window.confirm("Are you sure you want to delete this post?")) return;
+    if (!window.confirm("Delete this post permanently?")) return;
     try {
       await deleteDoc(doc(db, 'news_posts', postId));
-      setActivePost(null);
     } catch (err) {
       console.error("Delete error:", err);
-      alert("Failed to delete.");
     }
   };
 
+  // ★ OPTIMISTIC LIKE UPDATE (Instant reaction, no delay)
   const handleLike = async (post) => {
     if (!user) return alert("Please log in to like posts.");
-    const postRef = doc(db, 'news_posts', post.id);
     const hasLiked = post.likedBy?.includes(user.uid);
 
+    // 1. Instant UI Update
+    setPosts(prev => prev.map(p => p.id === post.id ? {
+      ...p,
+      likedBy: hasLiked ? p.likedBy.filter(id => id !== user.uid) : [...(p.likedBy || []), user.uid],
+      likesCount: hasLiked ? (p.likesCount || 1) - 1 : (p.likesCount || 0) + 1
+    } : p));
+
+    // 2. Background Firebase Update
     try {
+      const postRef = doc(db, 'news_posts', post.id);
       await updateDoc(postRef, {
         likedBy: hasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid),
         likesCount: increment(hasLiked ? -1 : 1)
       });
     } catch (err) {
       console.error("Like error:", err);
+      // Revert on failure
+      setPosts(prev => prev.map(p => p.id === post.id ? {
+        ...p,
+        likedBy: hasLiked ? [...(p.likedBy || []), user.uid] : p.likedBy.filter(id => id !== user.uid),
+        likesCount: hasLiked ? (p.likesCount || 0) + 1 : (p.likesCount || 1) - 1
+      } : p));
     }
   };
 
-  const handleComment = async (e) => {
-    e.preventDefault();
-    if (!newComment.trim() || !activePost) return;
+  const handleComment = async (postId) => {
+    const text = newComments[postId]?.trim();
+    if (!text || !user) return;
     
+    // Optimistic comment update
+    const tempComment = {
+      id: `temp_${Date.now()}`,
+      body: text,
+      authorId: user.uid,
+      authorName: userProfile?.displayName || 'User',
+      createdAt: { toMillis: () => Date.now() }
+    };
+    setComments(prev => ({ ...prev, [postId]: [tempComment, ...(prev[postId] || [])] }));
+    setNewComments(prev => ({ ...prev, [postId]: '' }));
+
     try {
-      await addDoc(collection(db, 'news_posts', activePost.id, 'comments'), {
-        body: newComment.trim(),
-        authorId: user?.uid || 'guest',
-        authorName: userProfile?.displayName || (user ? 'User' : 'Guest'),
+      await addDoc(collection(db, 'news_posts', postId, 'comments'), {
+        body: text,
+        authorId: user.uid,
+        authorName: userProfile?.displayName || 'User',
         createdAt: serverTimestamp()
       });
-      await updateDoc(doc(db, 'news_posts', activePost.id), {
-        commentsCount: increment(1)
-      });
-      setNewComment('');
+      await updateDoc(doc(db, 'news_posts', postId), { commentsCount: increment(1) });
     } catch (err) {
       console.error("Comment error:", err);
-      alert("Failed to post comment.");
+      // Revert UI
+      setComments(prev => ({ ...prev, [postId]: prev[postId].filter(c => c.id !== tempComment.id) }));
     }
   };
 
-  const SkeletonCard = () => <div className="nh-shimmer" style={{ borderRadius: 16, height: 320 }} />;
-
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep, #0a0f1a)' }}>
-      <SEO
-        title="Football News Hub | ZOKASCORE"
-        description="The latest official football news, injury updates, transfer done deals, and match reports."
-        keywords="football news, soccer news, transfers, injuries, official updates"
-        path="/highlights"
-        robots="index,follow"
-      />
+    <div className={theme === 'dark' ? 'nh-dark' : 'nh-light'} style={{ minHeight: '100vh', background: 'var(--nh-bg)', color: 'var(--nh-text)', transition: 'background 0.3s' }}>
+      <SEO title="Football News Hub | ZOKASCORE" description="Official football news, transfers, and injuries." path="/highlights" />
 
       {/* HEADER */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,15,26,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border, #1e293b)' }}>
-        <div style={{ maxWidth: 900, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--accent, #10b981)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0a0f1a' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-surface)', borderBottom: '1px solid var(--nh-border)', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+        <div style={{ maxWidth: 600, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{ width: 32, height: 32, borderRadius: 8, background: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}>
               <Newspaper size={18} />
             </div>
-            <span style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary, #f1f5f9)' }}>News Hub</span>
+            <span style={{ fontSize: '1.1rem', fontWeight: 800 }}>News Hub</span>
           </div>
-          {isAdmin && (
-            <button onClick={openCreate} className="nh-btn" style={{ background: 'var(--accent, #10b981)', color: '#0a0f1a', padding: '8px 16px', borderRadius: 8, border: 'none', fontWeight: 800, fontSize: '.8rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <Plus size={14} /> New Post
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={toggleTheme} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', width: 36, height: 36, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-          )}
+            {isAdmin && (
+              <button onClick={openCreate} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', padding: '0 16px', borderRadius: 8, fontWeight: 700, fontSize: '.85rem', display: 'flex', alignItems: 'center', gap: 6 }}>
+                <Plus size={16} /> New Post
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 80px' }}>
-        <div className="nh-enter" style={{ marginBottom: 24 }}>
-          <h1 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary, #f1f5f9)', margin: 0, letterSpacing: '-.02em' }}>Football News & Updates</h1>
-          <p style={{ fontSize: '.88rem', color: 'var(--text-muted, #64748b)', marginTop: 6, fontWeight: 500 }}>Official announcements, transfer done deals, and injury reports.</p>
-        </div>
-
+      <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 16px 80px' }}>
         {/* FILTER TABS */}
-        <div className="nh-enter" style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }} className="nh-scroll">
+        <div className="nh-scroll" style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
           {CATEGORIES.map(cat => (
             <button
               key={cat.key}
@@ -262,12 +314,13 @@ export default function Highlights() {
               style={{
                 padding: '8px 16px',
                 borderRadius: 20,
-                border: `1px solid ${activeFilter === cat.key ? 'var(--accent, #10b981)' : 'var(--border, #1e293b)'}`,
-                background: activeFilter === cat.key ? 'rgba(16,185,129,.1)' : 'var(--bg-card, #111827)',
-                color: activeFilter === cat.key ? 'var(--accent, #10b981)' : 'var(--text-muted, #64748b)',
+                background: activeFilter === cat.key ? 'var(--nh-accent-bg)' : 'var(--nh-surface)',
+                color: activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-text-muted)',
+                border: `1px solid ${activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-border)'}`,
                 fontWeight: 700,
-                fontSize: '.75rem',
-                whiteSpace: 'nowrap'
+                fontSize: '.8rem',
+                whiteSpace: 'nowrap',
+                boxShadow: 'none'
               }}
             >
               {cat.label}
@@ -277,212 +330,155 @@ export default function Highlights() {
 
         {/* LOADING SKELETONS */}
         {loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-            {Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            {[1, 2, 3].map(i => <div key={i} className="nh-shimmer" style={{ height: 300, borderRadius: 16 }} />)}
           </div>
         )}
 
-        {/* NO POSTS */}
+        {/* NEWS FEED */}
         {!loading && filteredPosts.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 40, color: 'var(--text-muted)' }}>
+          <div style={{ textAlign: 'center', padding: 40, color: 'var(--nh-text-muted)', background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)' }}>
             <Newspaper size={40} style={{ opacity: 0.3, marginBottom: 12 }} />
             <p>No news articles found.</p>
           </div>
         )}
 
-        {/* NEWS GRID */}
-        {!loading && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 20 }}>
-            {filteredPosts.map((post, i) => (
-              <div 
-                key={post.id} 
-                className="nh-card nh-enter" 
-                style={{ 
-                  background: 'var(--bg-card, #111827)', 
-                  border: '1px solid var(--border, #1e293b)', 
-                  borderRadius: 16, 
-                  overflow: 'hidden',
-                  animationDelay: `${i * 50}ms`,
-                  display: 'flex',
-                  flexDirection: 'column'
-                }}
-              >
-                {/* Image Thumbnail */}
-                <div onClick={() => setActivePost(post)} style={{ cursor: 'pointer', position: 'relative', paddingTop: '56.25%', background: 'var(--bg-surface)' }}>
-                  {post.imageUrl ? (
-                    <img src={post.imageUrl} alt={post.title} style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', objectFit: 'cover' }} loading="lazy" />
-                  ) : (
-                    <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-muted)', opacity: 0.2 }}>
-                      <Newspaper size={48} />
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+          {filteredPosts.map((post, i) => {
+            const isExpanded = expandedComments[post.id];
+            const hasLiked = post.likedBy?.includes(user?.uid);
+
+            return (
+              <div key={post.id} className="nh-enter" style={{ animationDelay: `${i * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)', overflow: 'hidden', boxShadow: 'var(--nh-shadow)' }}>
+                
+                {/* Post Header */}
+                <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>
+                      {(post.authorName || 'A')[0]}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{post.authorName || 'Admin'}</div>
+                      <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {post.category}</div>
+                    </div>
+                  </div>
+                  {isAdmin && (
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button onClick={() => openEdit(post)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', padding: 6, borderRadius: 8, border: '1px solid var(--nh-border)' }}><Pencil size={14} /></button>
+                      <button onClick={() => handleDelete(post.id)} className="nh-btn" style={{ background: 'var(--nh-danger-bg)', color: 'var(--nh-danger)', padding: 6, borderRadius: 8, border: '1px solid var(--nh-danger-bg)' }}><Trash2 size={14} /></button>
                     </div>
                   )}
-                  <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,.8), transparent 50%)' }} />
-                  
-                  {/* Category Badge */}
-                  <div style={{ position: 'absolute', top: 10, left: 10, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', padding: '4px 10px', borderRadius: 6, fontSize: '.62rem', fontWeight: 800, color: 'var(--accent, #10b981)', textTransform: 'uppercase', letterSpacing: '0.05em', border: '1px solid rgba(16,185,129,0.2)' }}>
-                    {post.category || 'General'}
-                  </div>
                 </div>
 
-                {/* Info */}
-                <div style={{ padding: '16px', flex: 1, display: 'flex', flexDirection: 'column' }} onClick={() => setActivePost(post)}>
-                  <h3 style={{ margin: 0, fontSize: '.95rem', fontWeight: 700, color: 'var(--text-primary, #f1f5f9)', lineHeight: 1.4, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', textOverflow: 'ellipsis', cursor: 'pointer' }}>
-                    {post.title}
-                  </h3>
-                  <p style={{ fontSize: '.78rem', color: 'var(--text-muted)', marginTop: 8, display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', flex: 1 }}>
-                    {post.body}
-                  </p>
-
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.68rem', color: 'var(--text-muted)' }}>
-                      <Clock size={12} /> {formatTimeAgo(post.createdAt)}
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.72rem', color: post.likedBy?.includes(user?.uid) ? '#ef4444' : 'var(--text-muted)' }}>
-                        <Heart size={14} fill={post.likedBy?.includes(user?.uid) ? '#ef4444' : 'none'} /> {post.likesCount || 0}
-                      </span>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.72rem', color: 'var(--text-muted)' }}>
-                        <MessageCircle size={14} /> {post.commentsCount || 0}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* ═══════════════════════════════════════════════════════════════
-          READ FULL POST MODAL (with comments)
-          ═══════════════════════════════════════════════════════════════ */}
-      {activePost && (
-        <div onClick={() => setActivePost(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
-          <div onClick={e => e.stopPropagation()} className="nh-pop" style={{ width: '100%', maxWidth: 700, maxHeight: '90vh', background: 'var(--bg-deep, #0a0f1a)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border, #1e293b)', display: 'flex', flexDirection: 'column' }}>
-            
-            {/* Post Header */}
-            <div style={{ position: 'relative', padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ fontSize: '.6rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(16,185,129,.1)', padding: '4px 10px', borderRadius: 6, textTransform: 'uppercase' }}>
-                {activePost.category}
-              </div>
-              <button onClick={() => setActivePost(null)} className="nh-btn" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px', borderRadius: 8, display: 'flex' }}>
-                <X size={18} />
-              </button>
-            </div>
-
-            {/* Post Content Scroll Area */}
-            <div className="nh-scroll" style={{ overflowY: 'auto', padding: 24 }}>
-              {activePost.imageUrl && (
-                <img src={activePost.imageUrl} alt={activePost.title} style={{ width: '100%', maxHeight: 300, objectFit: 'cover', borderRadius: 12, marginBottom: 20 }} />
-              )}
-              
-              <h1 style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--text-primary)', margin: '0 0 12px' }}>{activePost.title}</h1>
-              
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: '.75rem', color: 'var(--text-muted)', marginBottom: 20 }}>
-                <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{activePost.authorName || 'Admin'}</span>
-                <span>•</span>
-                <span>{formatTimeAgo(activePost.createdAt)}</span>
-              </div>
-
-              <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, fontSize: '.95rem', whiteSpace: 'pre-wrap' }}>{activePost.body}</p>
-
-              {/* Action Bar */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 32, paddingTop: 20, borderTop: '1px solid var(--border)' }}>
-                <button onClick={() => handleLike(activePost)} className="nh-btn" style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'none', border: 'none', color: activePost.likedBy?.includes(user?.uid) ? '#ef4444' : 'var(--text-muted)', fontWeight: 700, fontSize: '.85rem' }}>
-                  <Heart size={18} fill={activePost.likedBy?.includes(user?.uid) ? '#ef4444' : 'none'} /> {activePost.likesCount || 0} Likes
-                </button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontWeight: 700, fontSize: '.85rem' }}>
-                  <MessageCircle size={18} /> {activePost.commentsCount || 0} Comments
+                {/* Post Body */}
+                <div style={{ padding: '0 16px 12px' }}>
+                  <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>
+                  <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', whiteSpace: 'pre-wrap' }}>{post.body}</p>
                 </div>
 
-                {isAdmin && (
-                  <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
-                    <button onClick={() => openEdit(activePost)} className="nh-btn" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: '.75rem' }}>
-                      <Pencil size={14} /> Edit
-                    </button>
-                    <button onClick={() => handleDelete(activePost.id)} className="nh-btn" style={{ background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.2)', color: '#ef4444', padding: '6px 12px', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 6, fontSize: '.75rem' }}>
-                      <Trash2 size={14} /> Delete
-                    </button>
-                  </div>
+                {/* Post Image */}
+                {post.imageUrl && (
+                  <img src={post.imageUrl} alt={post.title} style={{ width: '100%', maxHeight: 400, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)' }} loading="lazy" />
                 )}
-              </div>
 
-              {/* Comments Section */}
-              <div style={{ marginTop: 32 }}>
-                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)', marginBottom: 16 }}>Comments</h3>
-                
-                <form onSubmit={handleComment} style={{ display: 'flex', gap: 8, marginBottom: 24 }}>
-                  <input 
-                    value={newComment}
-                    onChange={e => setNewComment(e.target.value)}
-                    placeholder={user ? "Add a comment..." : "Commenting as Guest..."}
-                    style={{ flex: 1, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', color: 'var(--text-primary)', fontSize: '.85rem', outline: 'none' }}
-                  />
-                  <button type="submit" disabled={!newComment.trim()} className="nh-btn" style={{ background: 'var(--accent)', color: '#0a0f1a', border: 'none', borderRadius: 10, padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
-                    <Send size={16} />
+                {/* Post Stats & Actions */}
+                <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--nh-border)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.8rem', color: 'var(--nh-text-muted)' fontWeight: 600 }}>
+                    <ThumbsUp size={14} fill="var(--nh-accent)" color="var(--nh-accent)" /> 
+                    <span>{post.likesCount || 0}</span>
+                  </div>
+                  <div style={{ fontSize: '.8rem', color: 'var(--nh-text-muted)', cursor: 'pointer', fontWeight: 600 }} onClick={() => setExpandedComments(p => ({ ...p, [post.id]: !p[post.id] }))}>
+                    {post.commentsCount || 0} Comments
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', padding: '4px 8px', borderTop: '1px solid var(--nh-border)' }}>
+                  <button 
+                    onClick={() => handleLike(post)} 
+                    className="nh-btn nh-like-anim" 
+                    key={hasLiked} /* Key forces re-render for animation */
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: hasLiked ? 'var(--nh-accent)' : 'var(--nh-text-muted)', fontWeight: 600, background: 'transparent' }}
+                  >
+                    <Heart size={18} fill={hasLiked ? 'var(--nh-accent)' : 'none'} /> Like
                   </button>
-                </form>
+                  <button 
+                    onClick={() => setExpandedComments(p => ({ ...p, [post.id]: !p[post.id] }))} 
+                    className="nh-btn" 
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--nh-text-muted)', fontWeight: 600, background: 'transparent' }}
+                  >
+                    <MessageCircle size={18} /> Comment
+                  </button>
+                </div>
 
-                {loadingComments ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '.8rem' }}>Loading comments...</div>
-                ) : comments.length === 0 ? (
-                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', fontSize: '.8rem', padding: 20 }}>No comments yet. Start the conversation!</div>
-                ) : (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                    {comments.map(c => (
-                      <div key={c.id} style={{ display: 'flex', gap: 12 }}>
-                        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.75rem', fontWeight: 700, color: 'var(--accent)', flexShrink: 0 }}>
-                          {c.authorName?.[0]?.toUpperCase() || 'G'}
-                        </div>
-                        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 12, padding: 12, flex: 1 }}>
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                            <span style={{ fontWeight: 700, fontSize: '.75rem', color: 'var(--text-primary)' }}>{c.authorName || 'Guest'}</span>
-                            <span style={{ fontSize: '.65rem', color: 'var(--text-muted)' }}>{formatTimeAgo(c.createdAt)}</span>
+                {/* Comments Section */}
+                {isExpanded && (
+                  <div style={{ padding: '16px', background: 'var(--nh-bg)', borderTop: '1px solid var(--nh-border)' }}>
+                    <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                      <input 
+                        value={newComments[post.id] || ''}
+                        onChange={e => setNewComments(prev => ({ ...prev, [post.id]: e.target.value }))}
+                        placeholder="Write a comment..."
+                        style={{ flex: 1, background: 'var(--nh-surface)', border: '1px solid var(--nh-border)', borderRadius: 20, padding: '10px 16px', color: 'var(--nh-text)', fontSize: '.85rem', outline: 'none' }}
+                      />
+                      <button onClick={() => handleComment(post.id)} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', borderRadius: 20, padding: '0 16px', display: 'flex', alignItems: 'center' }}>
+                        <Send size={16} />
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                      {comments[post.id]?.length === 0 && <p style={{ fontSize: '.8rem', color: 'var(--nh-text-muted)', textAlign: 'center' }}>No comments yet.</p>}
+                      {comments[post.id]?.map(c => (
+                        <div key={c.id} style={{ display: 'flex', gap: 10 }}>
+                          <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--nh-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700, color: 'var(--nh-text-muted)', flexShrink: 0 }}>
+                            {c.authorName?.[0] || 'G'}
                           </div>
-                          <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--text-muted)' }}>{c.body}</p>
+                          <div style={{ background: 'var(--nh-surface)', borderRadius: 12, padding: '10px 14px', flex: 1 }}>
+                            <div style={{ fontSize: '.75rem', fontWeight: 700, marginBottom: 2 }}>{c.authorName || 'Guest'}</div>
+                            <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--nh-text)' }}>{c.body}</p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
-            </div>
-          </div>
+            );
+          })}
         </div>
-      )}
+      </div>
 
       {/* ═══════════════════════════════════════════════════════════════
           CREATE / EDIT POST MODAL
           ═══════════════════════════════════════════════════════════════ */}
       {isFormOpen && (
-        <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.85)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
-          <div onClick={e => e.stopPropagation()} className="nh-pop" style={{ width: '100%', maxWidth: 600, background: 'var(--bg-deep, #0a0f1a)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--border, #1e293b)' }}>
+        <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
+          <div onClick={e => e.stopPropagation()} className="nh-enter" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column' }}>
             
-            <div style={{ padding: '20px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h2 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{editingPost ? 'Edit Post' : 'Create News Post'}</h2>
-              <button onClick={() => setIsFormOpen(false)} className="nh-btn" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', padding: '6px', borderRadius: 8, display: 'flex' }}>
+            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--nh-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
+              <button onClick={() => setIsFormOpen(false)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: 6, borderRadius: 8, border: '1px solid var(--nh-border)' }}>
                 <X size={18} />
               </button>
             </div>
 
-            <form onSubmit={handleSave} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <form onSubmit={handleSave} style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16, overflowY: 'auto' }} className="nh-scroll">
               <div>
-                <label style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Title</label>
+                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Title</label>
                 <input 
                   value={formData.title}
                   onChange={e => setFormData(d => ({ ...d, title: e.target.value }))}
                   required
                   placeholder="e.g. Mbappe ruled out for 3 weeks"
-                  style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', color: 'var(--text-primary)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}
                 />
               </div>
 
               <div>
-                <label style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Category</label>
+                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Category</label>
                 <select 
                   value={formData.category}
                   onChange={e => setFormData(d => ({ ...d, category: e.target.value }))}
-                  style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', color: 'var(--text-primary)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}
+                  style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}
                 >
                   {CATEGORIES.filter(c => c.key !== 'All').map(c => (
                     <option key={c.key} value={c.key}>{c.label}</option>
@@ -490,30 +486,40 @@ export default function Highlights() {
                 </select>
               </div>
 
+              {/* IMAGE UPLOAD ZONE */}
               <div>
-                <label style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Image URL (Optional)</label>
-                <input 
-                  value={formData.imageUrl}
-                  onChange={e => setFormData(d => ({ ...d, imageUrl: e.target.value }))}
-                  placeholder="https://image-url.jpg"
-                  style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', color: 'var(--text-primary)', fontSize: '.9rem', outline: 'none', boxSizing: 'border-box' }}
-                />
+                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Attachment (Optional)</label>
+                {formData.imageUrl ? (
+                  <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)' }}>
+                    <img src={formData.imageUrl} alt="Preview" style={{ width: '100%', maxHeight: 200, objectFit: 'cover' }} />
+                    <button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="nh-btn" style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(0,0,0,0.6)', color: '#fff', borderRadius: 8, padding: 6, border: 'none' }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  <div className="nh-dropzone" onClick={() => fileInputRef.current?.click()}>
+                    {uploadingImage ? <Loader size={24} className="animate-spin" /> : <ImageIcon size={24} />}
+                    <span style={{ fontSize: '.85rem', fontWeight: 600 }}>Click to upload from device</span>
+                    <span style={{ fontSize: '.7rem' }}>Max 800KB</span>
+                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
+                  </div>
+                )}
               </div>
 
               <div>
-                <label style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)', marginBottom: 6, display: 'block' }}>Body / Content</label>
+                <label style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--nh-text-muted)', marginBottom: 6, display: 'block' }}>Body / Content</label>
                 <textarea 
                   value={formData.body}
                   onChange={e => setFormData(d => ({ ...d, body: e.target.value }))}
                   required
                   rows={6}
                   placeholder="Write the news details here..."
-                  style={{ width: '100%', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 10, padding: '12px 16px', color: 'var(--text-primary)', fontSize: '.9rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit' }}
+                  style={{ width: '100%', background: 'var(--nh-bg)', border: '1px solid var(--nh-border)', borderRadius: 10, padding: '12px 16px', color: 'var(--nh-text)', fontSize: '.9rem', outline: 'none', resize: 'vertical', boxSizing: 'border-box', fontFamily: 'inherit', lineHeight: 1.5 }}
                 />
               </div>
 
-              <button type="submit" disabled={saving} className="nh-btn" style={{ background: 'var(--accent, #10b981)', color: '#0a0f1a', border: 'none', borderRadius: 10, padding: '14px', fontWeight: 800, fontSize: '.9rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, cursor: 'pointer' }}>
-                {saving ? <Loader size={16} className="animate-spin" /> : <Plus size={16} />}
+              <button type="submit" disabled={saving} className="nh-btn" style={{ background: 'var(--nh-accent)', color: '#fff', border: 'none', borderRadius: 10, padding: '14px', fontWeight: 800, fontSize: '.95rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                {saving ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />}
                 {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}
               </button>
             </form>
