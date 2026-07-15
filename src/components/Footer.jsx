@@ -301,8 +301,8 @@ export default function Footer() {
               <p style={styles.brandDesc}>
                 Live football scores, fixtures, predictions, standings, basketball, statistics and sports updates.
               </p>
-              <a href="mailto:info@zokascore.com" style={styles.contactItem}>📧 info@zokascore.com</a>
-              <a href="tel:+254700000000" style={styles.contactItem}>📞 +254 700 000 000</a>
+              <a href="mailto:zokastreet@gmail.com" style={styles.contactItem}>📧 zokastreet@gmail.com</a>
+              <a href="tel:+254721635810" style={styles.contactItem}>📞 +254 700 000 000</a>
               <div style={styles.contactItem}>📍 Nairobi, Kenya</div>
               <div style={styles.socials}>
                 {socialLinks.map((s) => (

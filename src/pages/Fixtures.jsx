@@ -1,5 +1,5 @@
 // ═════════════════════════════════════════════════════════════════════════════════
-// FILE: src/pages/fixtures.jsx
+// FILE: src/pages/MasterGames.jsx
 // v9.4 Pro UI — Deduplicated, League Priority, Stats, Mobile-Optimized, Fixed Live Count
 // ═════════════════════════════════════════════════════════════════════════════════
 
@@ -830,13 +830,7 @@ export default function MasterGames() {
      ═══════════════════════════════════════════════════════════════ */
   return (
     <div className="mg9-page">
-      <SEO
-        title="Football Fixtures & Upcoming Matches | ZOKASCORE"
-        description="View today's football fixtures and upcoming match schedules. Stay updated with kick-off times and match details for all major leagues on ZOKASCORE."
-        keywords="football fixtures, match schedules, upcoming matches, soccer fixtures, today matches"
-        path="/fixtures"
-        robots="index,follow"
-      />
+      <SEO title="Football Fixtures & Live Scores" description="Live football scores, fixtures, and predictions." path="/fixtures" />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
