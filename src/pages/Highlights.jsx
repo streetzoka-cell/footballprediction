@@ -383,7 +383,7 @@ export default function Highlights() {
 
                 {/* Post Stats & Actions */}
                 <div style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid var(--nh-border)' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.8rem', color: 'var(--nh-text-muted)' fontWeight: 600 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '.8rem', color: 'var(--nh-text-muted)', fontWeight: 600 }}>
                     <ThumbsUp size={14} fill="var(--nh-accent)" color="var(--nh-accent)" /> 
                     <span>{post.likesCount || 0}</span>
                   </div>
