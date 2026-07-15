@@ -1,10 +1,25 @@
 import { SitemapStream, streamToPromise } from "sitemap";
-import { createWriteStream, mkdirSync, readFileSync } from "fs";
+import { createWriteStream, mkdirSync, readFileSync, existsSync } from "fs";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
-// ★ 1. Initialize Firebase Admin
-const serviceAccount = JSON.parse(readFileSync("./firebase-adminsdk.json"));
+let serviceAccount;
+
+try {
+  // 1. Try reading from local file (for local development)
+  if (existsSync("./firebase-adminsdk.json")) {
+    serviceAccount = JSON.parse(readFileSync("./firebase-adminsdk.json"));
+  } 
+  // 2. Try reading from Vercel Environment Variables (for production)
+  else if (process.env.FIREBASE_ADMIN_SDK) {
+    serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_SDK);
+  } else {
+    throw new Error("Firebase Admin SDK credentials not found.");
+  }
+} catch (e) {
+  console.error("❌ Error loading Firebase Admin SDK:", e.message);
+  process.exit(1); // Exit if no credentials found so the build fails loudly
+}
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
