@@ -7,6 +7,7 @@ import dataLayer from '../utils/dataLayer';
 import { todayStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { CACHE_KEY } from '../utils/constants';
+import { useAuth } from '../context/AuthContext'; // ★ FIX: Import useAuth
 
 const AppDataContext = createContext(null);
 
@@ -47,7 +48,11 @@ const EMPTY_STATS = {
   _loaded: false,
 };
 
-export function AppDataProvider({ children, userId, displayName }) {
+export function AppDataProvider({ children }) { // ★ FIX: Remove props, use internal auth
+  const { currentUser } = useAuth(); // ★ FIX: Get user directly
+  const userId = currentUser?.uid;
+  const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
+
   const mountedRef = useRef(true);
   const userIdRef = useRef(userId);
   userIdRef.current = userId;
@@ -139,11 +144,10 @@ export function AppDataProvider({ children, userId, displayName }) {
   // ═══════════════════════════════════════════════════
   const ensureUserData = useCallback(async (uid) => {
     if (!uid) return;
-    // Use functional setState to check current value without stale closure
     let needsLoad = false;
     setState((prev) => {
       if (!prev._userDataLoaded) needsLoad = true;
-      return prev; // Don't change state, just read
+      return prev;
     });
     if (needsLoad) {
       await loadUserData(uid);
@@ -151,40 +155,32 @@ export function AppDataProvider({ children, userId, displayName }) {
   }, [loadUserData]);
 
   // ═══════════════════════════════════════════════════
-  // ★ REFRESH USER DATA (force reload, bypasses _userDataLoaded check)
-  // This is the KEY FIX - used when we know data has changed
+  // ★ REFRESH USER DATA (force reload)
   // ═══════════════════════════════════════════════════
   const refreshUserData = useCallback(async (uid) => {
     const effectiveUid = uid || userIdRef.current;
     if (!effectiveUid) return;
     
-    // Invalidate caches first to ensure fresh fetch
     const today = todayStr();
     dataLayer.invalidate(CACHE_KEY.userPoints(effectiveUid));
     dataLayer.invalidate(CACHE_KEY.predictionResults(effectiveUid, today));
     dataLayer.invalidate(CACHE_KEY.userPredictions(effectiveUid, today));
     
-    // Then reload
     await loadUserData(effectiveUid);
   }, [loadUserData]);
 
   // ═══════════════════════════════════════════════════
   // ★ REAL-TIME EVENT LISTENERS
-  // This is the KEY FIX - context now reacts to events
   // ═══════════════════════════════════════════════════
   useEffect(() => {
     const unsubs = [];
 
-    // ★ When a match is resolved and user is affected, refresh their data
     unsubs.push(
       eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
         const uid = userIdRef.current;
         if (uid && payload.affectedUsers?.includes(uid)) {
-          // Don't await - let it update state asynchronously
           refreshUserData(uid);
         }
-        
-        // Also refresh leaderboard if it's today's match
         if (payload.dateStr === todayStr()) {
           dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr()));
           loadSharedData();
@@ -192,7 +188,6 @@ export function AppDataProvider({ children, userId, displayName }) {
       })
     );
 
-    // ★ When user saves a prediction, refresh their predictions
     unsubs.push(
       eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
         const uid = userIdRef.current;
@@ -202,30 +197,22 @@ export function AppDataProvider({ children, userId, displayName }) {
       })
     );
 
-    // ★ When daily leaderboard updates (from other sources)
     unsubs.push(
       eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
         if (!payload.dateStr || payload.dateStr === todayStr()) {
           dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr()));
           dataLayer.fetchDailyLeaderboard(todayStr()).then((leaderboard) => {
-            updateState((prev) => ({
-              ...prev,
-              dailyLeaderboard: leaderboard,
-            }));
+            updateState((prev) => ({ ...prev, dailyLeaderboard: leaderboard }));
           }).catch(() => { /* ignore */ });
         }
       })
     );
 
-    // ★ When zoka vote is cast, update vote stats
     unsubs.push(
       eventBus.on(EVENT.ZOKA_VOTE_CAST, () => {
         dataLayer.invalidate(CACHE_KEY.zokaVotes(todayStr()));
         dataLayer.fetchZokaVotes(todayStr()).then((data) => {
-          updateState((prev) => ({
-            ...prev,
-            zokaVoteStats: data?.stats || {},
-          }));
+          updateState((prev) => ({ ...prev, zokaVoteStats: data?.stats || {} }));
         }).catch(() => { /* ignore */ });
       })
     );
@@ -243,7 +230,7 @@ export function AppDataProvider({ children, userId, displayName }) {
   }, [loadSharedData]);
 
   // ═══════════════════════════════════════════════════
-  // ★ HANDLE USER SIGN IN/OUT
+  // ★ HANDLE USER SIGN IN/OUT (AUTO-LOAD)
   // ═══════════════════════════════════════════════════
   useEffect(() => {
     if (!userId) {
@@ -254,8 +241,12 @@ export function AppDataProvider({ children, userId, displayName }) {
         userPoints: null,
         _userDataLoaded: false,
       }));
+    } else {
+      // ★ FIX: Automatically trigger user data load on login/page reload
+      // This prevents pages from missing data if they forget to call ensureUserData
+      ensureUserData(userId);
     }
-  }, [userId, updateState]);
+  }, [userId, ensureUserData, updateState]);
 
   // ═══════════════════════════════════════════════════
   // ★ HISTORICAL LEADERBOARD LOADER
@@ -304,18 +295,15 @@ export function AppDataProvider({ children, userId, displayName }) {
     const predicted = myPredValues.length;
     const total = activePredictions.length;
 
-    // ★ Build userStats - separate all-time vs today
     const userStats = {
       predicted,
       total,
-      // All-time stats from userPoints
       exact: 0,
       result: 0,
       miss: 0,
       points: 0,
       resolved: 0,
       accuracy: 0,
-      // Today's stats from predictionResults
       todayExact: 0,
       todayResult: 0,
       todayMiss: 0,
@@ -335,7 +323,6 @@ export function AppDataProvider({ children, userId, displayName }) {
         : 0;
     }
 
-    // ★ Calculate today's stats from predictionResults, with local fallback for instant FT updates
     if (predictionResults?.results) {
       const { results } = predictionResults;
       userStats.todayExact = results.filter((r) => r.resultType === 'exact').length;
@@ -345,7 +332,6 @@ export function AppDataProvider({ children, userId, displayName }) {
       userStats.todayResolved = userStats.todayExact + userStats.todayResult + userStats.todayMiss;
     }
 
-    // ★ FIX: Local Fallback. If a match is FT but not yet in prediction_results (Admin delay), calculate locally for instant points
     if (activePredictions && userPredictions) {
       const scoreMap = new Map();
       activePredictions.forEach(p => {
@@ -356,7 +342,6 @@ export function AppDataProvider({ children, userId, displayName }) {
 
       Object.values(userPredictions).forEach(p => {
         const actual = scoreMap.get(String(p.matchId));
-        // Check if it's already resolved in backend to avoid double counting
         const isResolvedInBackend = predictionResults?.results?.some(r => String(r.matchId) === String(p.matchId));
         
         if (actual && !isResolvedInBackend) {
@@ -399,7 +384,6 @@ export function AppDataProvider({ children, userId, displayName }) {
     loading: state.loading,
     error: state.error,
     lastUpdate: state.lastUpdate,
-    // ★ Expose refreshUserData for components that need it
     refreshUserData,
     refresh,
     invalidate,
