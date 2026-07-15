@@ -18,7 +18,7 @@ import {
   calcPoints, RESULT_TYPE, POINTS,
 } from './constants';
 
-// FIX: Removed alias, export native names directly for consistency
+// FIX: Export native names directly for consistency across the app
 export { todayStr, yesterdayStr, tomorrowStr, getDateRange };
 
 let isUserAuthenticated = false;
@@ -218,15 +218,13 @@ function _transformApiFormat(m) {
   };
 }
 
+// ★ FIX: Prioritize live and finished arrays over the daily 'today' array
 function _extractMatchesForDate(snapshot, date) {
   const raw = [];
   const yd = yesterdayStr();
   const tm = tomorrowStr();
 
-  if (date === yd) raw.push(...(snapshot.yesterday || []));
-  else if (date === tm) raw.push(...(snapshot.tomorrow || []));
-  else raw.push(...(snapshot.today || []));
-
+  // 1. Push live and finished FIRST so they override the daily 'NS' status
   (snapshot.live || []).forEach((m) => {
     if (m.date?.split('T')[0] === date) raw.push(m);
   });
@@ -234,7 +232,21 @@ function _extractMatchesForDate(snapshot, date) {
     if (m.date?.split('T')[0] === date) raw.push(m);
   });
 
-  return raw.map((d) => transformMatch(d));
+  // 2. Push the daily arrays LAST
+  if (date === yd) raw.push(...(snapshot.yesterday || []));
+  else if (date === tm) raw.push(...(snapshot.tomorrow || []));
+  else raw.push(...(snapshot.today || []));
+
+  // 3. Deduplicate keeping the FIRST occurrence (which is now live/finished)
+  const uniqueIds = new Set();
+  const deduped = raw.filter(m => {
+    const id = String(m.id || m.matchId);
+    if (uniqueIds.has(id)) return false;
+    uniqueIds.add(id);
+    return true;
+  });
+
+  return deduped.map((d) => transformMatch(d));
 }
 
 function _emptyResult(error = null) {
@@ -274,8 +286,9 @@ export const fetchLiveScores = async () => {
   } catch (err) { return { matches: [], error: err.message }; }
 };
 
+// ★ FIX: includeToday: true AND deduplication logic inside poll
 export const subscribeToLiveFixtures = (callback) =>
-  _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE });
+  _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
 
 export const subscribeToTodayFixtures = (callback) =>
   _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
@@ -301,13 +314,24 @@ function _createPollingSubscription(sport, callback, options = {}) {
       errorCount = 0;
 
       const liveMatches = (snapshot?.live || []).map((d) => transformMatch(d));
-      const allMatches = includeToday
-        ? [...liveMatches, ...(snapshot?.today || []).map((d) => transformMatch(d))]
-        : liveMatches;
+      const finishedMatches = (snapshot?.finished || []).map((d) => transformMatch(d));
+      const todayMatches = includeToday ? (snapshot?.today || []).map((d) => transformMatch(d)) : [];
 
-      currentMatches = allMatches;
+      // ★ FIX: Order matters! Live and Finished must be first to override the 'NS' status from todayMatches
+      const allMatches = [...liveMatches, ...finishedMatches, ...todayMatches];
+
+      // Deduplicate keeping the first occurrence (Live/Finished)
+      const uniqueIds = new Set();
+      const dedupedMatches = allMatches.filter(m => {
+        const id = String(m.id);
+        if (uniqueIds.has(id)) return false;
+        uniqueIds.add(id);
+        return true;
+      });
+
+      currentMatches = dedupedMatches;
       const hasLive = liveMatches.length > 0;
-      callback({ matches: allMatches, hasLive, liveCount: liveMatches.length, error: null });
+      callback({ matches: dedupedMatches, hasLive, liveCount: liveMatches.length, error: null });
       if (active) timer = setTimeout(poll, hasLive ? activeMs : idleMs);
     } catch (err) {
       errorCount++;
@@ -361,7 +385,7 @@ export const fetchBasketballLiveScores = async () => {
 };
 
 export const subscribeToBasketballLiveFixtures = (callback) =>
-  _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE });
+  _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
 
 export const subscribeToBasketballTodayFixtures = (callback) =>
   _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });

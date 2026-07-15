@@ -5,9 +5,14 @@ export default function StructuredData({ data }) {
 
   return (
     <Helmet>
-      <script type="application/ld+json">
-        {JSON.stringify(data)}
-      </script>
+      {/* 
+        ★ FIX: Use dangerouslySetInnerHTML to prevent Vite JSX parser from crashing.
+        Putting raw JSON directly inside <script> tags in JSX causes a ParseError in Vite.
+      */}
+      <script 
+        type="application/ld+json" 
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} 
+      />
     </Helmet>
   );
 }

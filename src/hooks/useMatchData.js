@@ -6,12 +6,12 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { db } from '../utils/firebase';
 import {
   collection, query, where, doc,
-  setDoc, getDoc, getDocs, writeBatch, serverTimestamp, increment, runTransaction // FIX: Added runTransaction
+  setDoc, getDoc, getDocs, writeBatch, serverTimestamp, increment, runTransaction
 } from 'firebase/firestore';
 
 import { dataLayer } from '../utils/dataLayer';
 import { todayStr, yesterdayStr, tomorrowStr, getWeekStart, getMonthStart } from '../utils/dates';
-import { useAppData } from '../context/AppDataContext';
+import { useAppData, EMPTY_STATS } from '../context/AppDataContext';
 import { eventBus, EVENT } from '../utils/eventBus';
 
 import {
@@ -57,7 +57,7 @@ export function invalidateCache(key) { dataLayer.invalidate(key); }
 export function invalidateCachePrefix(prefix) { dataLayer.invalidatePrefix(prefix); }
 
 // ═══════════════════════════════════════════════════
-// ★ ZOKA PICKS HOOKS
+// ★ ZOKA PICKS HOOKS (for guests)
 // ═══════════════════════════════════════════════════
 
 export function useZokaPicks(date) {
@@ -66,24 +66,19 @@ export function useZokaPicks(date) {
   const appData = useAppData();
   const cancelledRef = useRef(false);
   const [picks, setPicks] = useState(null);
-  const [loading, setLoading] = useState(false);
 
+  // For today, just use context (now reactive via event listeners)
   useEffect(() => {
-    if (!isToday) return;
-    return eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (payload) => {
-      if (payload.dateStr === dateStr && appData.zokaPicks) setPicks(appData.zokaPicks);
-    });
-  }, [isToday, dateStr]);
+    if (isToday) setPicks(appData.zokaPicks);
+  }, [isToday, appData.zokaPicks]);
 
-  useEffect(() => { if (isToday) setPicks(appData.zokaPicks); }, [isToday, appData.zokaPicks]);
-
+  // For other dates, fetch independently
   useEffect(() => {
     if (isToday) return;
     cancelledRef.current = false;
-    setLoading(true);
     dataLayer.fetchZokaPicks(dateStr)
-      .then((data) => { if (!cancelledRef.current) { setPicks(data); setLoading(false); } })
-      .catch(() => { if (!cancelledRef.current) { setPicks(null); setLoading(false); } });
+      .then((data) => { if (!cancelledRef.current) setPicks(data); })
+      .catch(() => { if (!cancelledRef.current) setPicks(null); });
     return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
 
@@ -97,15 +92,15 @@ export function useZokaVotes(date) {
   const [voteStats, setVoteStats] = useState({});
   const [userVotes, setUserVotes] = useState({});
 
+  // For today, use context (now reactive)
   useEffect(() => {
-    if (!isToday) return;
-    return eventBus.on(EVENT.ZOKA_VOTE_CAST, () => setVoteStats(appData.zokaVoteStats));
-  }, [isToday]);
-
-  useEffect(() => {
-    if (isToday) { setVoteStats(appData.zokaVoteStats); setUserVotes(appData.currentUserVotes); }
+    if (isToday) {
+      setVoteStats(appData.zokaVoteStats);
+      setUserVotes(appData.currentUserVotes);
+    }
   }, [isToday, appData.zokaVoteStats, appData.currentUserVotes]);
 
+  // For other dates, fetch independently
   useEffect(() => {
     if (isToday) return;
     let cancelled = false;
@@ -119,11 +114,15 @@ export function useZokaVotes(date) {
     return () => { cancelled = true; };
   }, [dateStr, isToday]);
 
-  return { votes: [], voteStats: isToday ? appData.zokaVoteStats : voteStats, userVotes: isToday ? appData.currentUserVotes : userVotes };
+  return {
+    votes: [],
+    voteStats: isToday ? appData.zokaVoteStats : voteStats,
+    userVotes: isToday ? appData.currentUserVotes : userVotes,
+  };
 }
 
 // ═══════════════════════════════════════════════════
-// ★ FEATURED MATCHES HOOKS
+// ★ FEATURED MATCHES HOOKS (for logged-in users)
 // ═══════════════════════════════════════════════════
 
 export function useActivePredictions(date) {
@@ -134,17 +133,15 @@ export function useActivePredictions(date) {
   const [preds, setPreds] = useState(null);
   const [loading, setLoading] = useState(!isToday);
 
+  // For today, use context (now reactive)
   useEffect(() => {
-    if (!isToday) return;
-    return eventBus.on(EVENT.PREDICTIONS_UPDATED, (payload) => {
-      if (payload.dateStr === dateStr && appData.activePredictions) setPreds(appData.activePredictions);
-    });
-  }, [isToday, dateStr]);
-
-  useEffect(() => {
-    if (isToday) { setPreds(appData.activePredictions); setLoading(appData.loading); }
+    if (isToday) {
+      setPreds(appData.activePredictions);
+      setLoading(appData.loading);
+    }
   }, [isToday, appData.activePredictions, appData.loading]);
 
+  // For other dates, fetch independently
   useEffect(() => {
     if (isToday) return;
     cancelledRef.current = false;
@@ -155,11 +152,14 @@ export function useActivePredictions(date) {
     return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
 
-  const scoreMap = useMemo(() => dataLayer.getScoreMap(preds || []), [preds]);
+  const scoreMap = useMemo(() => dataLayer.getScoreMap(isToday ? appData.activePredictions : preds || []), [isToday, appData.activePredictions, preds]);
+
   return {
     preds: isToday ? appData.activePredictions : (preds || []),
-    scoreMap, loading: isToday ? appData.loading : loading,
-    error: null, lastUpdate: appData.lastUpdate || Date.now(),
+    scoreMap,
+    loading: isToday ? appData.loading : loading,
+    error: null,
+    lastUpdate: appData.lastUpdate || Date.now(),
   };
 }
 
@@ -169,107 +169,81 @@ export function useMyPredictions(uid, date) {
   const appData = useAppData();
   const cancelledRef = useRef(false);
   const [preds, setPreds] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [triggered, setTriggered] = useState(false);
 
+  // ★ Ensure user data is loaded (lazy, once)
   useEffect(() => {
-    if (!uid || !isToday) return;
-    return eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
-      if (payload.uid === uid && payload.dateStr === dateStr) setPreds(appData.userPredictions);
-    });
-  }, [uid, isToday, dateStr]);
+    if (uid) safeEnsureUser(appData, uid);
+  }, [uid, appData]);
 
+  // For today, use context (now reactive via MATCH_RESOLVED events)
   useEffect(() => {
-    if (isToday && uid && !triggered) {
-      setTriggered(true);
-      setLoading(true);
-      safeEnsureUser(appData, uid).finally(() => { if (!cancelledRef.current) setLoading(false); });
-    }
-  }, [isToday, uid, triggered, appData]);
-
-  useEffect(() => {
-    if (isToday && uid && appData._userDataLoaded !== false) {
+    if (isToday && uid) {
       setPreds(appData.userPredictions);
-      setLoading(false);
-    } else if (!uid) { setPreds({}); setLoading(false); }
-  }, [isToday, uid, appData.userPredictions, appData._userDataLoaded]);
+    } else if (!uid) {
+      setPreds({});
+    }
+  }, [isToday, uid, appData.userPredictions]);
 
+  // For other dates, fetch independently
   useEffect(() => {
     if (isToday || !uid) return;
     cancelledRef.current = false;
-    setLoading(true);
     dataLayer.fetchUserPredictions(uid, dateStr)
-      .then((data) => { if (!cancelledRef.current) { setPreds(data); setLoading(false); } })
-      .catch(() => { if (!cancelledRef.current) { setPreds({}); setLoading(false); } });
+      .then((data) => { if (!cancelledRef.current) setPreds(data); })
+      .catch(() => { if (!cancelledRef.current) setPreds({}); });
     return () => { cancelledRef.current = true; };
   }, [uid, dateStr, isToday]);
 
   return isToday ? (appData.userPredictions || {}) : (preds || {});
 }
 
+// ═══════════════════════════════════════════════════
+// ★ PREDICTION RESULTS HOOK
+// ═══════════════════════════════════════════════════
+
 export function usePredictionResults(uid) {
   const appData = useAppData();
-  const [triggered, setTriggered] = useState(false);
-  const [results, setResults] = useState(null);
 
+  // ★ Ensure user data is loaded
   useEffect(() => {
-    if (!uid) return;
-    return eventBus.on(EVENT.MATCH_RESOLVED, async (payload) => {
-      if (payload.affectedUsers?.includes(uid) && payload.dateStr) {
-        try {
-          const freshData = await dataLayer.fetchPredictionResults(uid, payload.dateStr);
-          if (freshData) setResults(freshData);
-        } catch (err) { console.warn('[usePredictionResults] Refresh failed:', err.message); }
-        setTriggered((t) => !t);
-      }
-    });
-  }, [uid]);
+    if (uid) safeEnsureUser(appData, uid);
+  }, [uid, appData]);
 
-  useEffect(() => {
-    if (uid && !triggered) { setTriggered(true); safeEnsureUser(appData, uid); }
-  }, [uid, triggered, appData]);
-
+  // ★ Just return from context - it's now reactive!
   if (!uid) return { results: [], resultMap: {} };
-  return results || appData.predictionResults || { results: [], resultMap: {} };
+  return appData.predictionResults || { results: [], resultMap: {} };
 }
+
+// ═══════════════════════════════════════════════════
+// ★ USER POINTS HOOK
+// ═══════════════════════════════════════════════════
 
 export function useUserPoints(uid) {
   const appData = useAppData();
-  const [triggered, setTriggered] = useState(false);
 
+  // ★ Ensure user data is loaded
   useEffect(() => {
-    if (!uid) return;
-    return eventBus.on(EVENT.MATCH_RESOLVED, async (payload) => {
-      if (payload.affectedUsers?.includes(uid)) {
-        try { await dataLayer.fetchUserPoints(uid); } catch { /* */ }
-        setTriggered((t) => !t);
-      }
-    });
-  }, [uid]);
+    if (uid) safeEnsureUser(appData, uid);
+  }, [uid, appData]);
 
-  useEffect(() => {
-    if (uid && !triggered) { setTriggered(true); safeEnsureUser(appData, uid); }
-  }, [uid, triggered, appData]);
-
+  // ★ Just return from context - it's now reactive!
   return uid ? appData.userPoints : null;
 }
 
+// ═══════════════════════════════════════════════════
+// ★ USER STATS HOOK
+// ═══════════════════════════════════════════════════
+
 export function useMyStats(uid) {
   const appData = useAppData();
-  const [triggered, setTriggered] = useState(false);
 
+  // ★ Ensure user data is loaded
   useEffect(() => {
-    if (!uid) return;
-    return eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
-      if (payload.affectedUsers?.includes(uid)) setTriggered((t) => !t);
-    });
-  }, [uid]);
+    if (uid) safeEnsureUser(appData, uid);
+  }, [uid, appData]);
 
-  useEffect(() => {
-    if (uid && !triggered) { setTriggered(true); safeEnsureUser(appData, uid); }
-  }, [uid, triggered, appData]);
-
-  if (!uid) return { predicted: 0, total: 0, exact: 0, result: 0, miss: 0, points: 0, resolved: 0, accuracy: 0, todayExact: 0, todayResult: 0, todayMiss: 0, todayPoints: 0, _loaded: false };
+  // ★ Just return from context - it's now reactive!
+  if (!uid) return EMPTY_STATS;
   return appData.userStats;
 }
 
@@ -284,33 +258,20 @@ export function useDailyLeaderboard(date) {
   const cancelledRef = useRef(false);
   const [local, setLocal] = useState({ entries: null, top3: null, rest: null, stats: null, loading: false });
 
-  useEffect(() => {
-    return eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
-      if (payload.dateStr === dateStr) {
-        if (isToday) {
-          setLocal({
-            entries: appData.dailyEntries, top3: appData.dailyTop3,
-            rest: appData.dailyRest, stats: appData.dailyStats, loading: false,
-          });
-        } else if (payload.entries) {
-          setLocal({
-            entries: payload.entries, top3: payload.entries.slice(0, 3),
-            rest: payload.entries.slice(3), stats: computeStats(payload.entries), loading: false,
-          });
-        }
-      }
-    });
-  }, [isToday, dateStr, appData]);
-
+  // For today, use context (now reactive via DAILY_LEADERBOARD_UPDATED events)
   useEffect(() => {
     if (isToday) {
       setLocal({
-        entries: appData.dailyEntries, top3: appData.dailyTop3,
-        rest: appData.dailyRest, stats: appData.dailyStats, loading: appData.loading,
+        entries: appData.dailyEntries,
+        top3: appData.dailyTop3,
+        rest: appData.dailyRest,
+        stats: appData.dailyStats,
+        loading: appData.loading,
       });
     }
   }, [isToday, appData.dailyEntries, appData.dailyTop3, appData.dailyRest, appData.dailyStats, appData.loading]);
 
+  // For other dates, fetch independently
   useEffect(() => {
     if (isToday) return;
     cancelledRef.current = false;
@@ -320,8 +281,11 @@ export function useDailyLeaderboard(date) {
         if (!cancelledRef.current) {
           if (data?.entries) {
             setLocal({
-              entries: data.entries, top3: data.top3 || data.entries.slice(0, 3),
-              rest: data.rest || data.entries.slice(3), stats: data.stats || computeStats(data.entries), loading: false,
+              entries: data.entries,
+              top3: data.top3 || data.entries.slice(0, 3),
+              rest: data.rest || data.entries.slice(3),
+              stats: data.stats || computeStats(data.entries),
+              loading: false,
             });
           } else {
             setLocal({ entries: [], top3: [], rest: [], stats: computeStats([]), loading: false });
@@ -329,7 +293,9 @@ export function useDailyLeaderboard(date) {
         }
       })
       .catch(() => {
-        if (!cancelledRef.current) setLocal({ entries: [], top3: [], rest: [], stats: computeStats([]), loading: false });
+        if (!cancelledRef.current) {
+          setLocal({ entries: [], top3: [], rest: [], stats: computeStats([]), loading: false });
+        }
       });
     return () => { cancelledRef.current = true; };
   }, [dateStr, isToday]);
@@ -351,28 +317,39 @@ export function useHistoricalLeaderboard(period) {
   const cachedData = appData.historicalLeaderboards?.[period];
 
   useEffect(() => {
-    const unsubs = [
-      eventBus.on(EVENT.LEADERBOARD_UPDATED, (payload) => {
-        if (payload.period === period) { setLoading(false); setError(null); }
-      }),
-      period === 'goat' ? eventBus.on(EVENT.GOAT_LEADERBOARD_UPDATED, () => { setLoading(false); setError(null); }) : () => {},
-    ];
-    return () => unsubs.forEach((u) => u());
-  }, [period]);
-
-  useEffect(() => {
-    if (cachedData) { setLoading(false); setError(null); return; }
+    if (cachedData) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
     let cancelled = false;
     setLoading(true);
     setError(null);
     const timer = setTimeout(() => {
-      if (!cancelled) { setLoading(false); setError('timeout'); }
+      if (!cancelled) {
+        setLoading(false);
+        setError('timeout');
+      }
     }, TIMEOUT.HIST_LOAD_SAFETY);
 
     appData.loadHistoricalLeaderboard?.(period)
-      .catch((err) => { if (!cancelled) { setLoading(false); setError('load_failed'); } });
+      .then(() => {
+        if (!cancelled) {
+          setLoading(false);
+          setError(null);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setLoading(false);
+          setError('load_failed');
+        }
+      });
 
-    return () => { cancelled = true; clearTimeout(timer); };
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [period, cachedData, appData]);
 
   const data = appData.historicalLeaderboards?.[period] || cachedData;
@@ -391,26 +368,25 @@ export function useHistoricalLeaderboard(period) {
 
 export async function savePrediction(uid, displayName, pred, h, a) {
   if (!db) throw new Error('Firestore not initialized');
-  
+
   const matchId = String(pred.matchId || pred.id);
   const dateStr = pred.matchDate || pred._dateStr || todayStr();
+  const predId = `${uid}_${matchId}`;
 
-  const predId = `${uid}_${matchId}`; // FIX: Standardized predId
-
-  // FIX: Prevent [object Object] from being saved if pred.homeTeam is an object
-  const homeTeamName = typeof pred.homeTeam === 'object' 
-    ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home') 
+  // Prevent [object Object] from being saved if pred.homeTeam is an object
+  const homeTeamName = typeof pred.homeTeam === 'object'
+    ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home')
     : (pred.homeTeam || 'Home');
-    
-  const awayTeamName = typeof pred.awayTeam === 'object' 
-    ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') 
+
+  const awayTeamName = typeof pred.awayTeam === 'object'
+    ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away')
     : (pred.awayTeam || 'Away');
 
   await setDoc(doc(db, PATHS.USER_PREDICTIONS, predId), {
     userId: uid,
     displayName: displayName || 'Anonymous',
     matchId,
-    predId: predId, 
+    predId,
     homeScore: Number(h),
     awayScore: Number(a),
     matchDate: dateStr,
@@ -424,11 +400,17 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     updatedAt: serverTimestamp(),
   }, { merge: true });
 
+  // ★ Invalidate cache - context will handle re-fetch via event
   dataLayer.invalidate(CACHE_KEY.userPredictions(uid, dateStr));
-  try { await dataLayer.fetchUserPredictions(uid, dateStr); } catch { /* */ }
 
+  // ★ Emit event - context listener will refresh user data
   eventBus.emit(EVENT.USER_PREDICTION_SAVED, {
-    uid, matchId, predId, dateStr, homeScore: Number(h), awayScore: Number(a),
+    uid,
+    matchId,
+    predId,
+    dateStr,
+    homeScore: Number(h),
+    awayScore: Number(a),
   });
 }
 
@@ -438,17 +420,27 @@ export async function saveZokaVote(uid, matchId, vote) {
   await setDoc(
     doc(db, PATHS.ZOKA_VOTE_STATS, dateStr),
     {
-      stats: { [matchId]: { agree: increment(vote === 'agree' ? 1 : 0), disagree: increment(vote === 'disagree' ? 1 : 0), total: increment(1) } },
-      updatedAt: serverTimestamp(), date: dateStr,
+      stats: {
+        [matchId]: {
+          agree: increment(vote === 'agree' ? 1 : 0),
+          disagree: increment(vote === 'disagree' ? 1 : 0),
+          total: increment(1),
+        },
+      },
+      updatedAt: serverTimestamp(),
+      date: dateStr,
     },
     { merge: true }
   );
+
   try {
     const key = `zoka_votes_${dateStr}`;
     const existing = JSON.parse(localStorage.getItem(key) || '{}');
     existing[matchId] = vote;
     localStorage.setItem(key, JSON.stringify(existing));
-  } catch { /* */ }
+  } catch { /* ignore */ }
+
+  // ★ Emit event - context listener will refresh vote stats
   dataLayer.invalidate(CACHE_KEY.zokaVotes(dateStr));
   eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr });
 }
@@ -458,10 +450,11 @@ export async function removeZokaVote(uid, matchId, newVote) {
   const dateStr = todayStr();
   const key = `zoka_votes_${dateStr}`;
   let existing = {};
-  try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch { /* */ }
+  try {
+    existing = JSON.parse(localStorage.getItem(key) || '{}');
+  } catch { /* ignore */ }
   const oldV = existing[matchId];
 
-  // FIX: Use transaction to prevent race conditions on vote counts
   await runTransaction(db, async (transaction) => {
     const ref = doc(db, PATHS.ZOKA_VOTE_STATS, dateStr);
     const snap = await transaction.get(ref);
@@ -469,8 +462,13 @@ export async function removeZokaVote(uid, matchId, newVote) {
     if (!current) return;
 
     const matchStats = { ...current };
-    if (oldV === 'agree') { matchStats.agree = Math.max(0, (matchStats.agree || 1) - 1); matchStats.total = Math.max(0, (matchStats.total || 1) - 1); }
-    else if (oldV === 'disagree') { matchStats.disagree = Math.max(0, (matchStats.disagree || 1) - 1); matchStats.total = Math.max(0, (matchStats.total || 1) - 1); }
+    if (oldV === 'agree') {
+      matchStats.agree = Math.max(0, (matchStats.agree || 1) - 1);
+      matchStats.total = Math.max(0, (matchStats.total || 1) - 1);
+    } else if (oldV === 'disagree') {
+      matchStats.disagree = Math.max(0, (matchStats.disagree || 1) - 1);
+      matchStats.total = Math.max(0, (matchStats.total || 1) - 1);
+    }
 
     if (newVote) {
       if (newVote === 'agree') matchStats.agree = (matchStats.agree || 0) + 1;
@@ -484,21 +482,21 @@ export async function removeZokaVote(uid, matchId, newVote) {
     if (newVote) existing[matchId] = newVote;
     else delete existing[matchId];
     localStorage.setItem(key, JSON.stringify(existing));
-  } catch { /* */ }
+  } catch { /* ignore */ }
+
+  // ★ Emit event - context listener will refresh
   dataLayer.invalidate(CACHE_KEY.zokaVotes(dateStr));
   eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote: newVote, dateStr });
 }
 
 // ═══════════════════════════════════════════════════
-// ★ ADMIN FUNCTIONS 
-// ⚠️ SECURITY WARNING: These should ideally be Cloud Functions. 
-// If kept on client, ensure strict Firestore rules block standard users.
+// ★ ADMIN FUNCTIONS
+// ⚠️ SECURITY WARNING: These should ideally be Cloud Functions.
 // ═══════════════════════════════════════════════════
 
 async function _updateDailySummaryIncremental(dateStr, resolvedList) {
   if (!db || !resolvedList.length) return;
 
-  // FIX: Use transaction to prevent clobbering concurrent updates
   await runTransaction(db, async (transaction) => {
     const ref = doc(db, PATHS.DAILY_LEADERBOARD, dateStr);
     const snap = await transaction.get(ref);
@@ -511,7 +509,16 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
       scoreMap[String(r.matchId)] = { h: r.actualH, a: r.actualA };
       let entry = entryMap.get(r.userId);
       if (!entry) {
-        entry = { uid: r.userId, displayName: r.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+        entry = {
+          uid: r.userId,
+          displayName: r.displayName || 'Player',
+          points: 0,
+          predictions: 0,
+          exact: 0,
+          result: 0,
+          miss: 0,
+          resolved: 0,
+        };
         entryMap.set(r.userId, entry);
       }
       entry.displayName = r.displayName || entry.displayName || 'Player';
@@ -524,28 +531,34 @@ async function _updateDailySummaryIncremental(dateStr, resolvedList) {
     }
 
     const entries = rankEntries([...entryMap.values()].filter((u) => u.predictions > 0));
-    transaction.set(ref, {
-      entries, top3: entries.slice(0, 3), rest: entries.slice(3),
-      stats: computeStats(entries), scoreMap, predDist: base?.predDist || {}, predCounts: base?.predCounts || {},
-      date: dateStr, updatedAt: serverTimestamp(),
-    }, { merge: true });
+    transaction.set(
+      ref,
+      {
+        entries,
+        top3: entries.slice(0, 3),
+        rest: entries.slice(3),
+        stats: computeStats(entries),
+        scoreMap,
+        predDist: base?.predDist || {},
+        predCounts: base?.predCounts || {},
+        date: dateStr,
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   });
 
-  eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries: null }); // entries will be fetched by hooks
+  // ★ Emit with entries: null so hooks fetch fresh data
+  eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries: null });
 }
 
 async function _updateGoatIncremental(resolvedList) {
   if (!db || !resolvedList.length) return;
 
-  // FIX: Use transaction for atomic GOAT leaderboard updates
   await runTransaction(db, async (transaction) => {
     const ref = doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current');
     const snap = await transaction.get(ref);
-    if (!snap.exists()) { 
-      // If it doesn't exist, we can't safely populate it in a transaction without reads. 
-      // Fallback to rebuild outside transaction.
-      return; 
-    }
+    if (!snap.exists()) return;
 
     const entryMap = new Map();
     (snap.data().entries || []).forEach((e) => entryMap.set(e.uid, { ...e }));
@@ -553,7 +566,16 @@ async function _updateGoatIncremental(resolvedList) {
     for (const r of resolvedList) {
       let entry = entryMap.get(r.userId);
       if (!entry) {
-        entry = { uid: r.userId, displayName: r.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+        entry = {
+          uid: r.userId,
+          displayName: r.displayName || 'Player',
+          points: 0,
+          predictions: 0,
+          exact: 0,
+          result: 0,
+          miss: 0,
+          resolved: 0,
+        };
         entryMap.set(r.userId, entry);
       }
       entry.displayName = r.displayName || entry.displayName || 'Player';
@@ -566,10 +588,17 @@ async function _updateGoatIncremental(resolvedList) {
     }
 
     const entries = rankEntries([...entryMap.values()].filter((u) => u.predictions > 0));
-    transaction.set(ref, {
-      entries, top3: entries.slice(0, 3), rest: entries.slice(3),
-      stats: computeStats(entries), updatedAt: serverTimestamp(),
-    }, { merge: true });
+    transaction.set(
+      ref,
+      {
+        entries,
+        top3: entries.slice(0, 3),
+        rest: entries.slice(3),
+        stats: computeStats(entries),
+        updatedAt: serverTimestamp(),
+      },
+      { merge: true }
+    );
   });
 
   eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries: null });
@@ -586,11 +615,14 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
     const dateKey = matchDate || todayStr();
     const numH = Number(actualH);
     const numA = Number(actualA);
-    if (isNaN(numH) || isNaN(numA)) { console.error(`[Resolver] Invalid scores for ${matchId}`); return 0; }
+    if (isNaN(numH) || isNaN(numA)) {
+      console.error(`[Resolver] Invalid scores for ${matchId}`);
+      return 0;
+    }
 
     const statusRef = doc(db, PATHS.MATCH_RESOLUTION_STATUS, dateKey);
-    
-    // FIX: Use transaction for exactly-once resolution lock
+
+    // Use transaction for exactly-once resolution lock
     let alreadyResolved = false;
     await runTransaction(db, async (transaction) => {
       const statusSnap = await transaction.get(statusRef);
@@ -609,9 +641,7 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
       query(collection(db, PATHS.USER_PREDICTIONS), where('matchId', '==', String(matchId)))
     );
 
-    if (predsSnap.empty) {
-      return 0;
-    }
+    if (predsSnap.empty) return 0;
 
     const resolvedList = [];
     const predBatch = writeBatch(db);
@@ -626,38 +656,70 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
         const points = r.points ?? 0;
         const resultType = r.type ?? 'miss';
 
-        resolvedList.push({ userId: uid, displayName: p.displayName || 'Player', matchId: String(matchId), points, resultType, actualH: numH, actualA: numA });
+        resolvedList.push({
+          userId: uid,
+          displayName: p.displayName || 'Player',
+          matchId: String(matchId),
+          points,
+          resultType,
+          actualH: numH,
+          actualA: numA,
+        });
 
-        predBatch.set(doc(db, 'prediction_results', `${uid}_${matchId}`), {
-          userId: uid, matchId: String(matchId), 
-          predId: `${uid}_${matchId}`, // FIX: Enforce consistent predId
-          matchDate: p.matchDate || dateKey,
-          homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away',
-          homeLogo: p.homeLogo || null, awayLogo: p.awayLogo || null,
-          league: p.league || '', kickoff: p.kickoff || null,
-          predictedHome: p.homeScore, predictedAway: p.awayScore,
-          actualHome: numH, actualAway: numA,
-          points, resultType, resolvedAt: serverTimestamp(),
-        }, { merge: true });
+        predBatch.set(
+          doc(db, 'prediction_results', `${uid}_${matchId}`),
+          {
+            userId: uid,
+            matchId: String(matchId),
+            predId: `${uid}_${matchId}`,
+            matchDate: p.matchDate || dateKey,
+            homeTeam: p.homeTeam || 'Home',
+            awayTeam: p.awayTeam || 'Away',
+            homeLogo: p.homeLogo || null,
+            awayLogo: p.awayLogo || null,
+            league: p.league || '',
+            kickoff: p.kickoff || null,
+            predictedHome: p.homeScore,
+            predictedAway: p.awayScore,
+            actualHome: numH,
+            actualAway: numA,
+            points,
+            resultType,
+            resolvedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
 
-        predBatch.set(doc(db, 'user_points_total', uid), {
-          totalPoints: increment(points),
-          exactCount: increment(resultType === 'exact' ? 1 : 0),
-          resultCount: increment(resultType === 'result' ? 1 : 0),
-          missCount: increment(resultType === 'miss' ? 1 : 0),
-          predictionsCount: increment(1),
-          updatedAt: serverTimestamp(),
-        }, { merge: true });
-      } catch (err) { console.error('[Resolver] Error processing prediction for', matchId, err); hasError = true; }
+        predBatch.set(
+          doc(db, 'user_points_total', uid),
+          {
+            totalPoints: increment(points),
+            exactCount: increment(resultType === 'exact' ? 1 : 0),
+            resultCount: increment(resultType === 'result' ? 1 : 0),
+            missCount: increment(resultType === 'miss' ? 1 : 0),
+            predictionsCount: increment(1),
+            updatedAt: serverTimestamp(),
+          },
+          { merge: true }
+        );
+      } catch (err) {
+        console.error('[Resolver] Error processing prediction for', matchId, err);
+        hasError = true;
+      }
     });
 
     if (hasError) return 0;
-    try { await predBatch.commit(); } catch (err) { console.error('[Resolver] Batch commit failed:', err); return 0; }
+    try {
+      await predBatch.commit();
+    } catch (err) {
+      console.error('[Resolver] Batch commit failed:', err);
+      return 0;
+    }
 
+    // Update zoka picks with actual scores
     const metaBatch = writeBatch(db);
     const zokaSnap = await getDoc(doc(db, PATHS.ZOKA_PICKS, dateKey));
-    
-    // FIX: Track explicit changes to prevent useless writes
+
     let zokaChanged = false;
     if (zokaSnap.exists()) {
       const zokaData = zokaSnap.data();
@@ -669,18 +731,23 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
         }
         return m;
       });
-      
+
       if (zokaChanged) {
         metaBatch.set(doc(db, PATHS.ZOKA_PICKS, dateKey), { ...zokaData, matches: updated, updatedAt: serverTimestamp() }, { merge: true });
       }
     }
 
-    // FIX: Removed `metaBatch._mutations?.length` private API check. Empty batch commits are safe.
-    try { await metaBatch.commit(); } catch (err) { console.error('[Resolver] Meta batch failed:', err); }
+    try {
+      await metaBatch.commit();
+    } catch (err) {
+      console.error('[Resolver] Meta batch failed:', err);
+    }
 
+    // Update leaderboards
     await _updateDailySummaryIncremental(dateKey, resolvedList);
     await _updateGoatIncremental(resolvedList);
 
+    // ★ Invalidate all relevant caches
     dataLayer.invalidatePrefix(`dlb:${dateKey}`);
     resolvedList.forEach((r) => {
       dataLayer.invalidate(CACHE_KEY.userPoints(r.userId));
@@ -691,9 +758,14 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
     dataLayer.invalidate(CACHE_KEY.activePredictions(dateKey));
     dataLayer.invalidate(CACHE_KEY.zokaPicks(dateKey));
 
+    // ★ Emit event - AppDataContext listener will handle UI updates
     eventBus.emit(EVENT.MATCH_RESOLVED, {
-      matchId: String(matchId), dateStr: dateKey, actualH: numH, actualA: numA,
-      results: resolvedList, affectedUsers: resolvedList.map((r) => r.userId),
+      matchId: String(matchId),
+      dateStr: dateKey,
+      actualH: numH,
+      actualA: numA,
+      results: resolvedList,
+      affectedUsers: resolvedList.map((r) => r.userId),
     });
 
     return resolvedList.length;
@@ -704,6 +776,10 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
     _resolvingNow.delete(matchId);
   }
 }
+
+// ═══════════════════════════════════════════════════
+// ★ REBUILD FUNCTIONS (admin use)
+// ═══════════════════════════════════════════════════
 
 export async function rebuildDailySummary(dateStr) {
   if (!db) return;
@@ -717,15 +793,21 @@ export async function rebuildDailySummary(dateStr) {
     const scoreMap = {};
     activeSnap.docs.forEach((d) => {
       const p = d.data();
-      if (p.status === 'finished' && p.homeScore != null) scoreMap[String(p.matchId)] = { h: p.homeScore, a: p.awayScore };
+      if (p.status === 'finished' && p.homeScore != null) {
+        scoreMap[String(p.matchId)] = { h: p.homeScore, a: p.awayScore };
+      }
     });
 
     const userStats = {};
     resultsSnap.docs.forEach((d) => {
       const r = d.data();
-      if (!userStats[r.userId]) userStats[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      if (!userStats[r.userId]) {
+        userStats[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      }
       const u = userStats[r.userId];
-      u.predictions++; u.resolved++; u.points += r.points || 0;
+      u.predictions++;
+      u.resolved++;
+      u.points += r.points || 0;
       if (r.resultType === RESULT_TYPE.EXACT) u.exact++;
       else if (r.resultType === RESULT_TYPE.RESULT) u.result++;
       else u.miss++;
@@ -736,10 +818,14 @@ export async function rebuildDailySummary(dateStr) {
       const p = d.data();
       if (p.matchDate && p.matchDate !== dateStr) return;
       const mid = String(p.matchId);
-      if (resolvedIds.has(mid)) { if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || 'Player'; return; }
-      if (!userStats[p.userId]) userStats[p.userId] = { uid: p.userId, displayName: p.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      if (resolvedIds.has(mid)) {
+        if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || 'Player';
+        return;
+      }
+      if (!userStats[p.userId]) {
+        userStats[p.userId] = { uid: p.userId, displayName: p.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      }
       const u = userStats[p.userId];
-      u.displayName = p.displayName || 'Player';
       u.predictions++;
       const actual = scoreMap[mid];
       if (!actual) return;
@@ -753,15 +839,22 @@ export async function rebuildDailySummary(dateStr) {
 
     const entries = rankEntries(Object.values(userStats).filter((u) => u.predictions > 0));
     await setDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr), {
-      entries, top3: entries.slice(0, 3), rest: entries.slice(3),
-      stats: computeStats(entries), scoreMap, updatedAt: serverTimestamp(), date: dateStr,
+      entries,
+      top3: entries.slice(0, 3),
+      rest: entries.slice(3),
+      stats: computeStats(entries),
+      scoreMap,
+      updatedAt: serverTimestamp(),
+      date: dateStr,
     });
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(dateStr));
     dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(dateStr));
     eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries });
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr });
-  } catch (e) { console.error('[Summary] Rebuild failed:', e); }
+  } catch (e) {
+    console.error('[Summary] Rebuild failed:', e);
+  }
 }
 
 export async function rebuildGoatLeaderboard() {
@@ -769,21 +862,32 @@ export async function rebuildGoatLeaderboard() {
   try {
     const snap = await getDocs(collection(db, PATHS.USER_POINTS_TOTAL));
     const entries = rankEntries(
-      snap.docs.map((d) => ({ id: d.id, ...d.data() }))
+      snap
+        .docs.map((d) => ({ id: d.id, ...d.data() }))
         .filter((u) => (u.predictionsCount || 0) > 0)
         .map((u) => ({
-          uid: u.id, displayName: u.displayName || 'Player', points: u.totalPoints || 0,
-          predictions: u.predictionsCount || 0, exact: u.exactCount || 0,
-          result: u.resultCount || 0, miss: u.missCount || 0, resolved: u.predictionsCount || 0,
+          uid: u.id,
+          displayName: u.displayName || 'Player',
+          points: u.totalPoints || 0,
+          predictions: u.predictionsCount || 0,
+          exact: u.exactCount || 0,
+          result: u.resultCount || 0,
+          miss: u.missCount || 0,
+          resolved: u.predictionsCount || 0,
         }))
     );
     await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'), {
-      entries, top3: entries.slice(0, 3), rest: entries.slice(3),
-      stats: computeStats(entries), updatedAt: serverTimestamp(),
+      entries,
+      top3: entries.slice(0, 3),
+      rest: entries.slice(3),
+      stats: computeStats(entries),
+      updatedAt: serverTimestamp(),
     });
     dataLayer.invalidate(CACHE_KEY.historical('goat'));
     eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries });
-  } catch (e) { console.error('[GOAT] Rebuild failed:', e); }
+  } catch (e) {
+    console.error('[GOAT] Rebuild failed:', e);
+  }
 }
 
 export async function rebuildPeriodLeaderboard(period, startDate) {
@@ -799,21 +903,32 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
     const userMap = {};
     snap.docs.forEach((d) => {
       const r = d.data();
-      if (!userMap[r.userId]) userMap[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      if (!userMap[r.userId]) {
+        userMap[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
+      }
       const u = userMap[r.userId];
-      u.predictions++; u.resolved++; u.points += r.points || 0;
+      u.predictions++;
+      u.resolved++;
+      u.points += r.points || 0;
       if (r.resultType === RESULT_TYPE.EXACT) u.exact++;
       else if (r.resultType === RESULT_TYPE.RESULT) u.result++;
       else u.miss++;
     });
     const entries = rankEntries(Object.values(userMap).filter((u) => u.predictions > 0));
     await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId), {
-      entries, top3: entries.slice(0, 3), rest: entries.slice(3),
-      stats: computeStats(entries), period, startDate, updatedAt: serverTimestamp(),
+      entries,
+      top3: entries.slice(0, 3),
+      rest: entries.slice(3),
+      stats: computeStats(entries),
+      period,
+      startDate,
+      updatedAt: serverTimestamp(),
     });
     dataLayer.invalidate(CACHE_KEY.historical(period));
     eventBus.emit(EVENT.LEADERBOARD_UPDATED, { period, entries });
-  } catch (e) { console.error(`[Period] Rebuild ${period} failed:`, e); }
+  } catch (e) {
+    console.error(`[Period] Rebuild ${period} failed:`, e);
+  }
 }
 
 export async function rebuildAllLeaderboards() {

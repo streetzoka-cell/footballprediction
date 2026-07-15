@@ -1,8 +1,4 @@
-export default function PageLayout({
-  title,
-  subtitle,
-  children,
-}) {
+export default function PageLayout({ title, label, subtitle, children }) {
   return (
     <main
       style={{
@@ -25,15 +21,15 @@ export default function PageLayout({
         zIndex: 0,
       }} />
 
-      <div style={{ position: "relative", zIndex: 1 }}>
+      <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
         {/* Decorative accent line */}
         <div style={{
           width: 48,
           height: 3,
           borderRadius: 2,
-          background: "linear-gradient(90deg, var(--accent, #00e676), transparent)",
+          background: "linear-gradient(90deg, transparent, var(--accent, #00e676), transparent)",
           margin: "0 auto 32px",
-          opacity: 0.25,
+          opacity: 0.5,
           boxShadow: "0 0 12px rgba(0,230,118,0.1)",
         }} />
 
@@ -42,45 +38,49 @@ export default function PageLayout({
             marginBottom: 44,
             borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))",
             paddingBottom: 28,
+            display: "inline-block",
+            width: "100%"
           }}
         >
-          {/* Section label */}
-          <div style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            marginBottom: 16,
-            animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) both",
-          }}>
+          {/* Section label (Kicker) */}
+          {(label || title) && (
             <div style={{
-              width: 28,
-              height: 28,
-              borderRadius: 8,
-              background: "linear-gradient(135deg, rgba(0,230,118,0.1), rgba(0,230,118,0.02))",
-              border: "1px solid rgba(0,230,118,0.12)",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              marginBottom: 0,
+              gap: 8,
+              marginBottom: 16,
+              animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) both",
             }}>
               <div style={{
-                width: 10,
-                height: 10,
-                borderRadius: 3,
-                background: "var(--accent, #00e676)",
-                boxShadow: "0 0 6px rgba(0,230,118,0.4)",
-              }} />
+                width: 28,
+                height: 28,
+                borderRadius: 8,
+                background: "linear-gradient(135deg, rgba(0,230,118,0.1), rgba(0,230,118,0.02))",
+                border: "1px solid rgba(0,230,118,0.12)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}>
+                <div style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 3,
+                  background: "var(--accent, #00e676)",
+                  boxShadow: "0 0 6px rgba(0,230,118,0.4)",
+                }} />
+              </div>
+              <span style={{
+                fontSize: "0.65rem",
+                fontWeight: 700,
+                color: "var(--text-muted, #64748b)",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+              }}>
+                {label || title}
+              </span>
             </div>
-            <span style={{
-              fontSize: "0.65rem",
-              fontWeight: 700,
-              color: "var(--text-muted, #64748b)",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-            }}>
-              {title}
-            </span>
-          </div>
+          )}
 
           {/* Title with gradient text */}
           <h1
@@ -122,7 +122,7 @@ export default function PageLayout({
         </header>
 
         {/* Content with staggered fade-in */}
-        <div style={{ animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) .25s both" }}>
+        <div style={{ animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) .25s both", textAlign: "left" }}>
           <div style={{ display: "grid", gap: 36 }}>
             {children}
           </div>

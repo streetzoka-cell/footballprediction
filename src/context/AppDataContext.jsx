@@ -5,6 +5,8 @@
 import { createContext, useContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import dataLayer from '../utils/dataLayer';
 import { todayStr } from '../utils/dates';
+import { eventBus, EVENT } from '../utils/eventBus';
+import { CACHE_KEY } from '../utils/constants';
 
 const AppDataContext = createContext(null);
 
@@ -16,25 +18,30 @@ function loadUserVotesFromStorage() {
   return {};
 }
 
+// ★ Default empty stats to avoid conditional rendering issues
+const EMPTY_STATS = {
+  predicted: 0, total: 0, exact: 0, result: 0, miss: 0,
+  points: 0, resolved: 0, accuracy: 0,
+  todayExact: 0, todayResult: 0, todayMiss: 0, todayPoints: 0,
+  _loaded: false,
+};
+
 export function AppDataProvider({ children, userId, displayName }) {
   const mountedRef = useRef(true);
-  // FIX: Removed pollTimerRef as we are removing redundant polling
+  const userIdRef = useRef(userId);
+  userIdRef.current = userId;
 
   const [state, setState] = useState({
     zokaPicks: null,
     zokaVoteStats: {},
-
     activePredictions: [],
     scoreMap: new Map(),
-
     dailyLeaderboard: null,
     historicalLeaderboards: {},
-
     userPredictions: null,
     predictionResults: null,
     userPoints: null,
     _userDataLoaded: false,
-
     loading: true,
     error: null,
     lastUpdate: null,
@@ -45,6 +52,9 @@ export function AppDataProvider({ children, userId, displayName }) {
     if (mountedRef.current) setState((prev) => updater(prev));
   }, []);
 
+  // ═══════════════════════════════════════════════════
+  // ★ SHARED DATA LOADER (not user-specific)
+  // ═══════════════════════════════════════════════════
   const loadSharedData = useCallback(async () => {
     const today = todayStr();
     try {
@@ -72,6 +82,9 @@ export function AppDataProvider({ children, userId, displayName }) {
     }
   }, [updateState]);
 
+  // ═══════════════════════════════════════════════════
+  // ★ USER DATA LOADER (specific to logged-in user)
+  // ═══════════════════════════════════════════════════
   const loadUserData = useCallback(async (uid) => {
     if (!uid) return;
     const today = todayStr();
@@ -100,11 +113,132 @@ export function AppDataProvider({ children, userId, displayName }) {
     }
   }, [updateState]);
 
+  // ═══════════════════════════════════════════════════
+  // ★ ENSURE USER DATA (lazy load, once only)
+  // ═══════════════════════════════════════════════════
   const ensureUserData = useCallback(async (uid) => {
-    if (!uid || state._userDataLoaded) return;
-    await loadUserData(uid || userId);
-  }, [state._userDataLoaded, loadUserData, userId]);
+    if (!uid) return;
+    // Use functional setState to check current value without stale closure
+    let needsLoad = false;
+    setState((prev) => {
+      if (!prev._userDataLoaded) needsLoad = true;
+      return prev; // Don't change state, just read
+    });
+    if (needsLoad) {
+      await loadUserData(uid);
+    }
+  }, [loadUserData]);
 
+  // ═══════════════════════════════════════════════════
+  // ★ REFRESH USER DATA (force reload, bypasses _userDataLoaded check)
+  // This is the KEY FIX - used when we know data has changed
+  // ═══════════════════════════════════════════════════
+  const refreshUserData = useCallback(async (uid) => {
+    const effectiveUid = uid || userIdRef.current;
+    if (!effectiveUid) return;
+    
+    // Invalidate caches first to ensure fresh fetch
+    const today = todayStr();
+    dataLayer.invalidate(CACHE_KEY.userPoints(effectiveUid));
+    dataLayer.invalidate(CACHE_KEY.predictionResults(effectiveUid, today));
+    dataLayer.invalidate(CACHE_KEY.userPredictions(effectiveUid, today));
+    
+    // Then reload
+    await loadUserData(effectiveUid);
+  }, [loadUserData]);
+
+  // ═══════════════════════════════════════════════════
+  // ★ REAL-TIME EVENT LISTENERS
+  // This is the KEY FIX - context now reacts to events
+  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    const unsubs = [];
+
+    // ★ When a match is resolved and user is affected, refresh their data
+    unsubs.push(
+      eventBus.on(EVENT.MATCH_RESOLVED, (payload) => {
+        const uid = userIdRef.current;
+        if (uid && payload.affectedUsers?.includes(uid)) {
+          // Don't await - let it update state asynchronously
+          refreshUserData(uid);
+        }
+        
+        // Also refresh leaderboard if it's today's match
+        if (payload.dateStr === todayStr()) {
+          dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr()));
+          loadSharedData();
+        }
+      })
+    );
+
+    // ★ When user saves a prediction, refresh their predictions
+    unsubs.push(
+      eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
+        const uid = userIdRef.current;
+        if (uid && payload.uid === uid) {
+          refreshUserData(uid);
+        }
+      })
+    );
+
+    // ★ When daily leaderboard updates (from other sources)
+    unsubs.push(
+      eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (payload) => {
+        if (!payload.dateStr || payload.dateStr === todayStr()) {
+          dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr()));
+          dataLayer.fetchDailyLeaderboard(todayStr()).then((leaderboard) => {
+            updateState((prev) => ({
+              ...prev,
+              dailyLeaderboard: leaderboard,
+            }));
+          }).catch(() => { /* ignore */ });
+        }
+      })
+    );
+
+    // ★ When zoka vote is cast, update vote stats
+    unsubs.push(
+      eventBus.on(EVENT.ZOKA_VOTE_CAST, () => {
+        dataLayer.invalidate(CACHE_KEY.zokaVotes(todayStr()));
+        dataLayer.fetchZokaVotes(todayStr()).then((data) => {
+          updateState((prev) => ({
+            ...prev,
+            zokaVoteStats: data?.stats || {},
+          }));
+        }).catch(() => { /* ignore */ });
+      })
+    );
+
+    return () => unsubs.forEach((u) => u());
+  }, [refreshUserData, loadSharedData, updateState]);
+
+  // ═══════════════════════════════════════════════════
+  // ★ INITIAL LOAD
+  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    mountedRef.current = true;
+    loadSharedData();
+    return () => { mountedRef.current = false; };
+  }, [loadSharedData]);
+
+  // ═══════════════════════════════════════════════════
+  // ★ HANDLE USER SIGN IN/OUT
+  // ═══════════════════════════════════════════════════
+  useEffect(() => {
+    if (!userId) {
+      updateState((prev) => ({
+        ...prev,
+        userPredictions: null,
+        predictionResults: null,
+        userPoints: null,
+        _userDataLoaded: false,
+      }));
+    }
+  }, [userId, updateState]);
+
+  // ═══════════════════════════════════════════════════
+  // ★ HISTORICAL LEADERBOARD LOADER
+  // ═══════════════════════════════════════════════════
   const loadHistoricalLeaderboard = useCallback(async (period) => {
     try {
       const data = await dataLayer.fetchHistoricalLeaderboard(period);
@@ -117,37 +251,24 @@ export function AppDataProvider({ children, userId, displayName }) {
     }
   }, [updateState]);
 
-  useEffect(() => {
-    mountedRef.current = true;
-    loadSharedData();
-
-    // FIX: Removed the 10-minute interval polling. 
-    // api.jsx's visibility-based polling handles cache invalidation and triggers events automatically.
-
-    return () => {
-      mountedRef.current = false;
-    };
-  }, [loadSharedData]);
-
-  useEffect(() => {
-    if (!userId) {
-      updateState((prev) => ({
-        ...prev,
-        userPredictions: null, predictionResults: null, userPoints: null, _userDataLoaded: false,
-      }));
-    }
-  }, [userId, updateState]);
-
+  // ═══════════════════════════════════════════════════
+  // ★ PUBLIC REFRESH/INVALIDATE
+  // ═══════════════════════════════════════════════════
   const refresh = useCallback(async (options = {}) => {
     const { invalidateCache = false, userId: uid, includeUserData = false } = options;
     if (invalidateCache) dataLayer.clear();
     await loadSharedData();
-    if (includeUserData && (uid || userId)) await loadUserData(uid || userId);
-  }, [loadSharedData, loadUserData, userId]);
+    if (includeUserData && (uid || userId)) {
+      await refreshUserData(uid || userId);
+    }
+  }, [loadSharedData, refreshUserData, userId]);
 
   const invalidate = useCallback((key) => dataLayer.invalidate(key), []);
   const invalidatePrefix = useCallback((prefix) => dataLayer.invalidatePrefix(prefix), []);
 
+  // ═══════════════════════════════════════════════════
+  // ★ COMPUTED VALUES (reactive to state changes)
+  // ═══════════════════════════════════════════════════
   const computed = useMemo(() => {
     const { dailyLeaderboard, userPoints, predictionResults, activePredictions, userPredictions, _userDataLoaded } = state;
 
@@ -162,9 +283,23 @@ export function AppDataProvider({ children, userId, displayName }) {
     const predicted = myPredValues.length;
     const total = activePredictions.length;
 
+    // ★ Build userStats - separate all-time vs today
     const userStats = {
-      predicted, total, exact: 0, result: 0, miss: 0, points: 0,
-      resolved: 0, accuracy: 0, todayExact: 0, todayResult: 0, todayMiss: 0, todayPoints: 0,
+      predicted,
+      total,
+      // All-time stats from userPoints
+      exact: 0,
+      result: 0,
+      miss: 0,
+      points: 0,
+      resolved: 0,
+      accuracy: 0,
+      // Today's stats from predictionResults
+      todayExact: 0,
+      todayResult: 0,
+      todayMiss: 0,
+      todayPoints: 0,
+      todayResolved: 0,
       _loaded: _userDataLoaded,
     };
 
@@ -179,12 +314,14 @@ export function AppDataProvider({ children, userId, displayName }) {
         : 0;
     }
 
+    // ★ Calculate today's stats from predictionResults
     if (predictionResults?.results) {
       const { results } = predictionResults;
       userStats.todayExact = results.filter((r) => r.resultType === 'exact').length;
       userStats.todayResult = results.filter((r) => r.resultType === 'result').length;
       userStats.todayMiss = results.filter((r) => r.resultType === 'miss').length;
       userStats.todayPoints = results.reduce((s, r) => s + (r.points || 0), 0);
+      userStats.todayResolved = userStats.todayExact + userStats.todayResult + userStats.todayMiss;
     }
 
     const predCounts = dailyLeaderboard?.predCounts || {};
@@ -193,6 +330,9 @@ export function AppDataProvider({ children, userId, displayName }) {
     return { dailyEntries, dailyTop3, dailyRest, dailyStats, myRank, userStats, predCounts, predDist };
   }, [state, userId]);
 
+  // ═══════════════════════════════════════════════════
+  // ★ CONTEXT VALUE
+  // ═══════════════════════════════════════════════════
   const value = useMemo(() => ({
     activePredictions: state.activePredictions,
     scoreMap: state.scoreMap,
@@ -208,9 +348,16 @@ export function AppDataProvider({ children, userId, displayName }) {
     loading: state.loading,
     error: state.error,
     lastUpdate: state.lastUpdate,
-    refresh, invalidate, invalidatePrefix, loadHistoricalLeaderboard, loadUserData, ensureUserData,
+    // ★ Expose refreshUserData for components that need it
+    refreshUserData,
+    refresh,
+    invalidate,
+    invalidatePrefix,
+    loadHistoricalLeaderboard,
+    loadUserData,
+    ensureUserData,
     dataLayer,
-  }), [state, computed, refresh, invalidate, invalidatePrefix, loadHistoricalLeaderboard, loadUserData, ensureUserData]);
+  }), [state, computed, refreshUserData, refresh, invalidate, invalidatePrefix, loadHistoricalLeaderboard, loadUserData, ensureUserData]);
 
   return <AppDataContext.Provider value={value}>{children}</AppDataContext.Provider>;
 }
@@ -221,4 +368,5 @@ export function useAppData() {
   return ctx;
 }
 
+export { EMPTY_STATS };
 export default AppDataContext;

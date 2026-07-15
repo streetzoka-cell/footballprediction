@@ -1,34 +1,25 @@
-// ═════════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v21.2 — Core Architecture + Auto-Failover + Correct Routing + Deduplication
-// ═════════════════════════════════════════════════════════════════════════════════
+// v22.2 — Clean, Accurate, Reactive (Uses AppDataContext)
+// ═══════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
+import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowRight, Zap, Users, Target, Trophy, CalendarDays, Flame,
   ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
-  Clock, Loader, Lock, Crown, Sparkles, Activity, Medal,
-  BarChart3, CircleDot, ArrowUpRight, Sun, Moon, CloudSun,
-  Timer, Eye, XCircle, TrendingUp as TrendIcon, ChevronRight,
-  Shield, Percent, Gamepad2
+  Clock, Lock, Crown, Activity, Medal, BarChart3, XCircle,
+  ArrowUpRight, Sun, Moon, CloudSun, Timer, Gamepad2,
+  TrendingUp as TrendIcon, ChevronRight
 } from 'lucide-react';
 
-// Primary Source (Node Backend)
-import {
-  fetchFixtures,
-  subscribeToLiveFixtures
-} from '../utils/api';
-
-// Backup Source (Football-data.org context)
+import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { useFootballData } from '../context/FootballDataContext';
-
 import { useAuth } from '../context/AuthContext';
+import { useAppData } from '../context/AppDataContext';
 import { dataLayer } from '../utils/dataLayer';
-import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; 
-
+import { todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
-import { eventBus, EVENT } from '../utils/eventBus';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs } from 'firebase/firestore';
 import SEO from '../components/SEO';
@@ -54,40 +45,38 @@ const getGreeting = () => {
 
 const dateLabel = (d) => {
   const t = getTodayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
-  if (d === t) return 'Today'; if (d === tm) return 'Tomorrow'; if (d === ys) return 'Yesterday';
+  if (d === t) return 'Today';
+  if (d === tm) return 'Tomorrow';
+  if (d === ys) return 'Yesterday';
   const dt = new Date(d + 'T12:00:00');
   return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]} ${d.slice(5)}`;
 };
 
-function estimateMatchStatus(fix) {
-  const sport = fix.sport || SPORT.FOOTBALL;
-  if (fix.isLive || isLiveStatus(fix.status, sport)) return 'live';
-  if (fix.isFinished || isFinishedStatus(fix.status, sport)) return 'ft';
-  if (fix.status === 'HT' || fix.status === 'BT') return 'ht';
-  return 'upcoming';
-}
-
-function normalizeMatch(raw, isPrimary) {
+// ★ FIX: Added isPrimary parameter to correctly map Primary vs Backup data shapes
+function normalizeMatch(raw, isPrimary = true) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   const status = raw.status || '';
+  
   const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
   const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
 
   return {
-    id,
-    status, isLive, isFinished,
-    homeTeam: { name: raw.homeTeam?.name || 'TBD', shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD' },
-    awayTeam: { name: raw.awayTeam?.name || 'TBD', shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD' },
-    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? null),
-    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? null),
+    id, status, isLive, isFinished,
+    homeTeam: { 
+      name: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'), 
+      shortName: isPrimary ? (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') 
+    },
+    awayTeam: { 
+      name: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'), 
+      shortName: isPrimary ? (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') 
+    },
+    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.homeScore ?? null),
+    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.awayScore ?? null),
     league: { name: raw.league?.name || raw.competition?.name || 'Other' },
-    minute: raw.minute || raw.elapsed || null
+    minute: raw.minute || raw.elapsed || null,
   };
 }
-
-const FUTURE_DAYS = 3;
-const FETCH_DATES = Array.from({ length: FUTURE_DAYS + 1 }, (_, i) => getLocalDateStr(i));
 
 /* ═══════════════════════════════════════
    ANIMATED NUMBER
@@ -112,7 +101,7 @@ function AnimNum({ value, duration = 600, delay = 0, suffix = '' }) {
 }
 
 /* ═══════════════════════════════════════
-   ACCURACY RING (SVG donut)
+   ACCURACY RING
    ═══════════════════════════════════════ */
 function AccuracyRing({ value, size = 44, stroke = 4, color = 'var(--accent)' }) {
   const r = (size - stroke) / 2;
@@ -135,7 +124,9 @@ function LiveClock() {
   const [time, setTime] = useState('');
   useEffect(() => {
     const tick = () => setTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    tick(); const id = setInterval(tick, 1000); return () => clearInterval(id);
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
   }, []);
   if (!time) return null;
   return (
@@ -159,12 +150,12 @@ function ZokaBadge({ pick }) {
 }
 
 /* ═══════════════════════════════════════
-   MINI PODIUM (top 3 leaderboard)
+   MINI PODIUM
    ═══════════════════════════════════════ */
 function MiniPodium({ entries }) {
   const top3 = entries.slice(0, 3);
   if (top3.length === 0) return null;
-  const order = [1, 0, 2]; // silver, gold, bronze display order
+  const order = [1, 0, 2];
   const cfg = [
     { h: 80, border: 'var(--gold)', bg: 'rgba(245,197,66,.06)', color: 'var(--gold)', sz: 48, fs: '.85rem' },
     { h: 56, border: '#94a3b8', bg: 'rgba(148,163,184,.04)', color: '#94a3b8', sz: 38, fs: '.72rem' },
@@ -179,7 +170,7 @@ function MiniPodium({ entries }) {
         return (
           <div key={u.uid} style={{ flex: 1, maxWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6 }}>
-              {pos === 0 && <Crown size={14} style={{ color: 'var(--gold)', marginBottom: -2, animation: 'v21-crown 3s ease-in-out infinite' }} />}
+              {pos === 0 && <Crown size={14} style={{ color: 'var(--gold)', marginBottom: -2, animation: 'v22-crown 3s ease-in-out infinite' }} />}
               <div style={{ width: c.sz, height: c.sz, borderRadius: '50%', background: `${c.border}15`, border: `2px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: c.fs, fontWeight: 900, color: c.color, fontFamily: 'var(--font-display)' }}>
                 {(u.displayName || '??').slice(0, 2).toUpperCase()}
               </div>
@@ -197,171 +188,136 @@ function MiniPodium({ entries }) {
 }
 
 /* ═══════════════════════════════════════
-   DATE DIVIDER
-   ═══════════════════════════════════════ */
-function DateDivider({ date, accent }) {
-  return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '14px 0 10px', fontSize: '.7rem', fontWeight: 800, color: accent || 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '.05em' }}>
-      <CalendarDays size={11} style={{ opacity: .6 }} /><span>{dateLabel(date)}</span>
-      <span style={{ opacity: .35, fontWeight: 600, fontSize: '.6rem' }}>{date}</span>
-      <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
-    </div>
-  );
-}
-
-/* ═══════════════════════════════════════
    STYLES
    ═══════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('home-v21-css')) return;
+  if (document.getElementById('home-v22-css')) return;
   const s = document.createElement('style');
-  s.id = 'home-v21-css';
+  s.id = 'home-v22-css';
   s.textContent = `
-@keyframes v21-fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v21-scale{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
-@keyframes v21-slide{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
-@keyframes v21-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
-@keyframes v21-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes v21-cta{0%,100%{box-shadow:0 4px 20px rgba(0,230,118,.15)}50%{box-shadow:0 4px 32px rgba(0,230,118,.3)}}
-@keyframes v21-crown{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
-@keyframes v21-live-glow{0%,100%{border-color:rgba(239,68,68,.12)}50%{border-color:rgba(239,68,68,.3)}}
-@keyframes v21-zoka-glow{0%,100%{border-color:rgba(245,197,66,.15)}50%{border-color:rgba(245,197,66,.3)}}
-@keyframes v21-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes v21-strip{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v21-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes v21-hero-line{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes v22-fade-up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes v22-scale{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}
+@keyframes v22-slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
+@keyframes v22-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
+@keyframes v22-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes v22-cta{0%,100%{box-shadow:0 4px 20px rgba(0,230,118,.15)}50%{box-shadow:0 4px 32px rgba(0,230,118,.3)}}
+@keyframes v22-crown{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
+@keyframes v22-live-glow{0%,100%{border-color:rgba(239,68,68,.12)}50%{border-color:rgba(239,68,68,.3)}}
+@keyframes v22-zoka-glow{0%,100%{border-color:rgba(245,197,66,.15)}50%{border-color:rgba(245,197,66,.3)}}
+@keyframes v22-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes v22-strip{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+@keyframes v22-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
+@keyframes v22-hero-line{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 
-.v21{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
-.v21-wrap{max-width:680px;margin:0 auto;padding:0 16px;position:relative}
+.v22{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
+.v22-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
 
-/* Hero */
-.v21-hero{padding:24px 0 0;position:relative}
-.v21-hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
-.v21-hero-line{height:2px;border-radius:1px;background:linear-gradient(90deg,var(--accent),var(--gold),var(--accent));animation:v21-hero-line .8s cubic-bezier(.22,1,.36,1) both;margin:16px 0 0}
+.v22-hero{padding:22px 0 0;position:relative}
+.v22-hero::after{content:'';position:absolute;bottom:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--border),transparent)}
+.v22-hero-line{height:2px;border-radius:1px;background:linear-gradient(90deg,var(--accent),var(--gold),var(--accent));animation:v22-hero-line .8s cubic-bezier(.22,1,.36,1) both;margin:14px 0 0}
 
-/* Stat strip */
-.v21-statstrip{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:20px 0 24px}
-.v21-schip{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 10px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
-.v21-schip:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px)}
-.v21-schip .val{font-size:1.15rem;font-weight:900;font-family:var(--font-display);color:var(--text-primary);line-height:1}
-.v21-schip .lbl{font-size:.58rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
-.v21-schip .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);margin-top:6px;overflow:hidden}
-.v21-schip .bar-fill{height:100%;border-radius:2px;transform-origin:left;animation:v21-bar .6s cubic-bezier(.22,1,.36,1) both}
+.v22-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0 22px}
+.v22-chip{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
+.v22-chip:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px)}
+.v22-chip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display);color:var(--text-primary);line-height:1}
+.v22-chip .lbl{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+.v22-chip .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);margin-top:5px;overflow:hidden}
+.v22-chip .bar-fill{height:100%;border-radius:2px;transform-origin:left;animation:v22-bar .6s cubic-bezier(.22,1,.36,1) both}
 
-/* Section */
-.v21-sec{margin-bottom:28px}
-.v21-sech{display:flex;align-items:center;gap:10px;margin-bottom:14px}
-.v21-sech h2{margin:0;font-size:.95rem;font-weight:900;color:var(--text-primary);white-space:nowrap}
-.v21-sech-line{flex:1;height:1px;background:var(--border);border-radius:1px}
-.v21-sech-badge{font-size:.6rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
+.v22-sec{margin-bottom:26px}
+.v22-sech{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.v22-sech h2{margin:0;font-size:.92rem;font-weight:900;color:var(--text-primary);white-space:nowrap}
+.v22-sech-line{flex:1;height:1px;background:var(--border);border-radius:1px}
+.v22-sech-badge{font-size:.58rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0}
 
-/* Live strip */
-.v21-livestrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 6px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.v21-livestrip::-webkit-scrollbar{display:none}
-.v21-livemini{min-width:180px;max-width:220px;flex-shrink:0;padding:10px 12px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:12px;scroll-snap-align:start;animation:v21-live-glow 2s ease-in-out infinite,v21-strip .35s cubic-bezier(.22,1,.36,1) both;transition:transform .15s}
-.v21-livemini:hover{transform:translateY(-1px)}
-.v21-ldot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:v21-pulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
+.v22-livestrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 6px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.v22-livestrip::-webkit-scrollbar{display:none}
+.v22-livemini{min-width:175px;max-width:210px;flex-shrink:0;padding:10px 12px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:12px;scroll-snap-align:start;animation:v22-live-glow 2s ease-in-out infinite,v22-strip .35s cubic-bezier(.22,1,.36,1) both;transition:transform .15s}
+.v22-livemini:hover{transform:translateY(-1px)}
+.v22-ldot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:v22-pulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
 
-/* Match card */
-.v21-mc{display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:6px;transition:all .15s;animation:v21-card .3s cubic-bezier(.22,1,.36,1) both}
-.v21-mc:hover{background:rgba(255,255,255,.012)}
-.v21-mc.live{animation:v21-live-glow 2s ease-in-out infinite,v21-card .3s cubic-bezier(.22,1,.36,1) both}
-.v21-mc.ft{border-color:rgba(0,230,118,.15)}
-.v21-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border-color:rgba(245,197,66,.15);animation:v21-zoka-glow 2.5s ease-in-out infinite,v21-card .3s cubic-bezier(.22,1,.36,1) both}
-.v21-mc.dim{opacity:.45}
+.v22-mc{display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:6px;transition:all .15s;animation:v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc:hover{background:rgba(255,255,255,.012)}
+.v22-mc.live{animation:v22-live-glow 2s ease-in-out infinite,v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc.ft{border-color:rgba(0,230,118,.15)}
+.v22-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border-color:rgba(245,197,66,.15);animation:v22-zoka-glow 2.5s ease-in-out infinite,v22-card .3s cubic-bezier(.22,1,.36,1) both}
+.v22-mc.dim{opacity:.45}
 
-.v21-mh{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.v21-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
-.v21-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
-.v21-ml span{font-size:.66rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v21-st{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:.58rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
+.v22-mh{display:flex;align-items:center;justify-content:space-between;gap:6px}
+.v22-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
+.v22-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
+.v22-ml span{font-size:.64rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v22-st{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:.56rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
 
-.v21-tm{display:flex;align-items:center;gap:6px}
-.v21-te{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
-.v21-te.aw{flex-direction:row-reverse;text-align:right}
-.v21-te img{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0}
-.v21-te span{font-size:.8rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v22-tm{display:flex;align-items:center;gap:6px}
+.v22-te{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+.v22-te.aw{flex-direction:row-reverse;text-align:right}
+.v22-te img{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0}
+.v22-te span{font-size:.78rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-.v21-sb{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;min-width:72px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid var(--border)}
-.v21-sb.lv{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
-.v21-sb.ft{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
-.v21-sb.zk{background:rgba(245,197,66,.06);border-color:rgba(245,197,66,.2)}
-.v21-sn{font-size:.95rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
-.v21-sn.r{color:#ef4444}.v21-sn.g{color:var(--accent)}.v21-sn.gd{color:var(--gold,#f5c542)}
-.v21-sep{color:var(--text-muted);font-size:.7rem;font-weight:700;opacity:.25}
-.v21-vs{font-size:.6rem;font-weight:800;color:var(--text-muted);opacity:.15;letter-spacing:.08em}
+.v22-sb{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;min-width:68px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+.v22-sb.lv{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
+.v22-sb.ft{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
+.v22-sb.zk{background:rgba(245,197,66,.06);border-color:rgba(245,197,66,.2)}
+.v22-sn{font-size:.92rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
+.v22-sn.r{color:#ef4444}.v22-sn.g{color:var(--accent)}.v22-sn.gd{color:var(--gold,#f5c542)}
+.v22-sep{color:var(--text-muted);font-size:.7rem;font-weight:700;opacity:.25}
+.v22-vs{font-size:.58rem;font-weight:800;color:var(--text-muted);opacity:.15;letter-spacing:.08em}
 
-.v21-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+.v22-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
 
-/* Buttons */
-.v21-btn{padding:7px 12px;border-radius:8px;font-size:.72rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:34px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none;color:inherit}
-.v21-btn:active{transform:scale(.97)}
-.v21-btn-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.15)}
-.v21-btn-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
-.v21-btn-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-muted)}
-.v21-btn-gh:hover{border-color:var(--border-hover);color:var(--text-primary)}
-.v21-btn-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
-.v21-btn-ol:hover{border-color:var(--gold);color:var(--gold)}
-.v21-btn-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.05)}
+.v22-btn{padding:6px 11px;border-radius:8px;font-size:.7rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:32px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none;color:inherit}
+.v22-btn:active{transform:scale(.97)}
+.v22-btn-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.15)}
+.v22-btn-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
+.v22-btn-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-muted)}
+.v22-btn-gh:hover{border-color:var(--border-hover);color:var(--text-primary)}
+.v22-btn-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+.v22-btn-ol:hover{border-color:var(--gold);color:var(--gold)}
+.v22-btn-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.05)}
 
-/* Badges */
-.bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.62rem;font-weight:800;white-space:nowrap}
+.bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.6rem;font-weight:800;white-space:nowrap}
 .bdg.ex{background:rgba(0,230,118,.08);color:var(--accent);border:1px solid rgba(0,230,118,.18)}
 .bdg.rs{background:rgba(245,197,66,.06);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.15)}
 .bdg.ms{background:rgba(239,68,68,.06);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
 .bdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
 .bdg.gd{background:rgba(245,197,66,.06);color:var(--gold);border:1px solid rgba(245,197,66,.15)}
 
-/* Explore grid */
-.v21-explore{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.v21-ecard{display:flex;flex-direction:column;gap:10px;padding:16px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:all .2s;-webkit-tap-highlight-color:transparent;outline:none}
-.v21-ecard:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.v21-ecard:active{transform:scale(.98)}
-.v21-ecard:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
-.v21-ecard-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
+.v22-explore{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.v22-ecard{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:all .2s;-webkit-tap-highlight-color:transparent;outline:none}
+.v22-ecard:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+.v22-ecard:active{transform:scale(.98)}
+.v22-ecard-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
 
-/* Leaderboard row */
-.v21-lbrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px;animation:v21-slide .3s cubic-bezier(.22,1,.36,1) both;transition:background .15s}
-.v21-lbrow:hover{background:rgba(255,255,255,.015)}
-.v21-lbrow.me{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.15)}
+.v22-lbrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px;animation:v22-slide .3s cubic-bezier(.22,1,.36,1) both;transition:background .15s}
+.v22-lbrow:hover{background:rgba(255,255,255,.015)}
+.v22-lbrow.me{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.15)}
 
-/* Toast */
-.v21-toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:9999;pointer-events:none;animation:v21-slide .3s cubic-bezier(.22,1,.36,1) both}
+.v22-toggle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;margin-top:8px;border-radius:10px;font-size:.78rem;font-weight:700;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+.v22-toggle:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:var(--text-primary)}
+.v22-toggle:active{transform:scale(.98)}
+.v22-toggle svg{transition:transform .25s}
+.v22-toggle.open svg{transform:rotate(180deg)}
 
-/* Toggle */
-.v21-toggle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;margin-top:8px;border-radius:10px;font-size:.8rem;font-weight:700;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.v21-toggle:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:var(--text-primary)}
-.v21-toggle:active{transform:scale(.98)}
-.v21-toggle svg{transition:transform .25s}
-.v21-toggle.open svg{transform:rotate(180deg)}
+.v22-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:v22-shimmer 1.2s ease-in-out infinite;border-radius:10px}
 
-/* Skeleton */
-.v21-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:v21-shimmer 1.2s ease-in-out infinite;border-radius:10px}
+.v22-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.76rem;font-weight:700;color:#ef4444}
 
-/* Offline */
-.v21-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.78rem;font-weight:700;color:#ef4444}
+.v22-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v22-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none;color:#fff}
+.v22-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
+.v22-cta:active{transform:scale(.98)}
 
-/* CTA */
-.v21-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.9rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v21-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none;color:#fff}
-.v21-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
-.v21-cta:active{transform:scale(.98)}
-
-/* Zoka section wrapper */
-.v21-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
+.v22-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
 
 @media(max-width:640px){
-  .v21-statstrip{grid-template-columns:repeat(2,1fr);gap:8px}
-  .v21-explore{grid-template-columns:1fr 1fr;gap:8px}
-  .v21-schip .val{font-size:1rem}
-  .v21-te span{font-size:.74rem}.v21-sn{font-size:.85rem}
-  .v21-sb{min-width:62px;padding:4px 8px}
+  .v22-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+  .v22-chip .val{font-size:.95rem}
+  .v22-te span{font-size:.72rem}.v22-sn{font-size:.82rem}
+  .v22-sb{min-width:60px;padding:4px 8px}
 }
 @media(max-width:380px){
-  .v21-statstrip{gap:6px}
-  .v21-schip{padding:10px 8px}
-  .v21-schip .val{font-size:.9rem}
-  .v21-explore{gap:6px}
-  .v21-ecard{padding:12px}
+  .v22-stats{gap:6px}.v22-chip{padding:10px 6px}.v22-chip .val{font-size:.85rem}
+  .v22-ecard{padding:12px}
 }
 @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `;
@@ -374,18 +330,18 @@ const injectStyles = () => {
 const LiveMini = ({ match, index }) => {
   const min = match.elapsed || match.minute;
   return (
-    <div className="v21-livemini" style={{ animationDelay: `${index * 60}ms` }}>
+    <div className="v22-livemini" style={{ animationDelay: `${index * 60}ms` }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{match.league?.name}</span>
-        {min ? <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(239,68,68,.1)', padding: '2px 6px', borderRadius: 4 }}><span className="v21-ldot" style={{ width: 4, height: 4 }} /><span style={{ fontSize: '.62rem', fontWeight: 900, color: '#ef4444', fontFamily: 'var(--font-display)' }}>{min}'</span></div> : null}
+        <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{match.league?.name}</span>
+        {min ? <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(239,68,68,.1)', padding: '2px 6px', borderRadius: 4 }}><span className="v22-ldot" style={{ width: 4, height: 4 }} /><span style={{ fontSize: '.6rem', fontWeight: 900, color: '#ef4444', fontFamily: 'var(--font-display)' }}>{min}'</span></div> : null}
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ flex: 1, fontSize: '.72rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name}</span>
-        <span style={{ fontSize: '.85rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{match.homeScore ?? '-'}</span>
+        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name}</span>
+        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{match.homeScore ?? '-'}</span>
       </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
-        <span style={{ flex: 1, fontSize: '.72rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name}</span>
-        <span style={{ fontSize: '.85rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{match.awayScore ?? '-'}</span>
+        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name}</span>
+        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: '#ef4444', fontVariantNumeric: 'tabular-nums' }}>{match.awayScore ?? '-'}</span>
       </div>
     </div>
   );
@@ -417,49 +373,49 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
   else if (isHT) { sLabel = 'HT'; sColor = '#f97316'; sBg = 'rgba(249,115,22,.1)'; }
   else if (isFin) { sLabel = 'FT'; sColor = 'var(--accent)'; sBg = 'rgba(0,230,118,.08)'; }
 
-  const cls = `v21-mc${isLive ? ' live' : ''}${isFin ? ' ft' : ''}${isFin && !isResolved && !isPredicted ? ' dim' : ''}`;
+  const cls = `v22-mc${isLive ? ' live' : ''}${isFin ? ' ft' : ''}${isFin && !isResolved && !isPredicted ? ' dim' : ''}`;
   const mid = pred.id || pred.matchId;
 
   return (
     <div className={cls} style={{ borderLeft: `3px solid ${border}`, animationDelay: `${index * 18}ms` }}>
-      <div className="v21-mh">
-        <div className="v21-ml">
+      <div className="v22-mh">
+        <div className="v22-ml">
           {pred.league?.emblem && <img src={pred.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.league?.name || 'Featured'}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {isLive && <span className="v21-ldot" />}
-          <span className="v21-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
+          {isLive && <span className="v22-ldot" />}
+          <span className="v22-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
         </div>
       </div>
-      <div className="v21-tm">
-        <div className="v21-te">
+      <div className="v22-tm">
+        <div className="v22-te">
           {pred.homeLogo && <img src={pred.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home'}</span>
         </div>
-        <div className={`v21-sb${isLive ? ' lv' : ''}${isFin ? ' ft' : ''}`}>
-          {hasScore ? (<><span className={`v21-sn${isLive ? ' r' : ' g'}`}>{pred.homeScore}</span><span className="v21-sep">–</span><span className={`v21-sn${isLive ? ' r' : ' g'}`}>{pred.awayScore}</span></>)
-          : <span className="v21-vs">VS</span>}
+        <div className={`v22-sb${isLive ? ' lv' : ''}${isFin ? ' ft' : ''}`}>
+          {hasScore ? (<><span className={`v22-sn${isLive ? ' r' : ' g'}`}>{pred.homeScore}</span><span className="v22-sep">–</span><span className={`v22-sn${isLive ? ' r' : ' g'}`}>{pred.awayScore}</span></>)
+          : <span className="v22-vs">VS</span>}
         </div>
-        <div className="v21-te aw">
+        <div className="v22-te aw">
           {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'}</span>
         </div>
       </div>
-      <div className="v21-ma">
+      <div className="v22-ma">
         {isResolved ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
             <span className={`bdg ${isExact ? 'ex' : isHit ? 'rs' : 'ms'}`}>
               {isExact ? <><CheckCircle2 size={8} /> EXACT +10</> : isHit ? <><TrendIcon size={8} /> RESULT +3</> : <><XCircle size={8} /> MISS</>}
             </span>
-            {isPredicted && <span style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--text-muted)' }}>You: {userPred.homeScore}–{userPred.awayScore}</span>}
+            {isPredicted && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>You: {userPred.homeScore}–{userPred.awayScore}</span>}
           </div>
         ) : isPredicted ? (
-          <Link to="/predictions" className="v21-btn v21-btn-ol on" style={{ minHeight: 32, fontSize: '.66rem', padding: '5px 10px' }}><CheckCircle size={10} /> Locked</Link>
+          <Link to="/predictions" className="v22-btn v22-btn-ol on" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><CheckCircle size={9} /> Locked</Link>
         ) : isLoggedIn ? (
-          <Link to={`/predictions?match=${mid}`} className="v21-btn v21-btn-p" style={{ minHeight: 32, fontSize: '.66rem', padding: '5px 10px' }}><Target size={10} /> Predict</Link>
+          <Link to={`/predictions?match=${mid}`} className="v22-btn v22-btn-p" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Target size={9} /> Predict</Link>
         ) : (
-          <Link to="/login" className="v21-btn v21-btn-gh" style={{ minHeight: 32, fontSize: '.66rem', padding: '5px 10px' }}><Lock size={10} /> Login</Link>
+          <Link to="/login" className="v22-btn v22-btn-gh" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Lock size={9} /> Login</Link>
         )}
       </div>
     </div>
@@ -478,32 +434,31 @@ const ZokaRow = ({ pick, index }) => {
   const predH = pick.adminPick?.home, predA = pick.adminPick?.away;
 
   return (
-    <div className="v21-mc zoka" style={{ animationDelay: `${index * 25}ms` }}>
-      <div className="v21-mh">
-        <div className="v21-ml">
+    <div className="v22-mc zoka" style={{ animationDelay: `${index * 25}ms` }}>
+      <div className="v22-mh">
+        <div className="v22-ml">
           {pick.league?.emblem && <img src={pick.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.league?.name || 'Zoka'}</span>
         </div>
-        <span className="v21-st" style={{ color: isFin ? 'var(--accent)' : 'var(--text-muted)', background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)' }}>{isFin ? 'FT' : ko || 'TBD'}</span>
+        <span className="v22-st" style={{ color: isFin ? 'var(--accent)' : 'var(--text-muted)', background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)' }}>{isFin ? 'FT' : ko || 'TBD'}</span>
       </div>
-      <div className="v21-tm">
-        <div className="v21-te">
+      <div className="v22-tm">
+        <div className="v22-te">
           {pick.homeLogo && <img src={pick.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}</span>
         </div>
-        <div className={`v21-sb${isFin ? ' ft' : ' zk'}`}>
+        <div className={`v22-sb${isFin ? ' ft' : ' zk'}`}>
           {isFin && pick.homeScore != null
-            ? <><span className="v21-sn g">{pick.homeScore}</span><span className="v21-sep">–</span><span className="v21-sn g">{pick.awayScore}</span></>
-            : <span className="v21-sn gd">{predH ?? '?'}–{predA ?? '?'}</span>}
+            ? <><span className="v22-sn g">{pick.homeScore}</span><span className="v22-sep">–</span><span className="v22-sn g">{pick.awayScore}</span></>
+            : <span className="v22-sn gd">{predH ?? '?'}–{predA ?? '?'}</span>}
         </div>
-        <div className="v21-te aw">
+        <div className="v22-te aw">
           {pick.awayLogo && <img src={pick.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}</span>
         </div>
       </div>
-      <div className="v21-ma">
-        {isFin ? <ZokaBadge pick={pick} />
-          : <span className="bdg gd"><Star size={8} fill="currentColor" /> Prediction</span>}
+      <div className="v22-ma">
+        {isFin ? <ZokaBadge pick={pick} /> : <span className="bdg gd"><Star size={8} fill="currentColor" /> Prediction</span>}
       </div>
     </div>
   );
@@ -520,109 +475,40 @@ export default function Home() {
   const mounted = useRef(true);
   const greeting = useMemo(() => getGreeting(), []);
 
+  // ★ Use AppDataContext for REACTIVE data (like navbar)
+  const appData = useAppData();
+  const {
+    activePredictions,
+    zokaPicks,
+    dailyEntries,
+    dailyStats,
+    userPredictions,
+    predictionResults,
+    userStats,
+    loading: ctxLoading,
+  } = appData;
+
+  // Fixtures (not in context, fetched independently)
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [fxLoading, setFxLoading] = useState(true);
-  
-  const [allFeatured, setAllFeatured] = useState([]);
-  const [allZoka, setAllZoka] = useState([]);
-  const [featLoading, setFeatLoading] = useState(true);
-  const [zokaLoading, setZokaLoading] = useState(true);
-  const [leaderboard, setLeaderboard] = useState([]);
-  const [lbLoading, setLbLoading] = useState(true);
-  const [userPreds, setUserPreds] = useState({});
-  const [userResults, setUserResults] = useState({});
   const [offline, setOffline] = useState(!navigator.onLine);
-  const [toast, setToast] = useState(null);
   const [showMoreFeat, setShowMoreFeat] = useState(false);
   const [showMoreZoka, setShowMoreZoka] = useState(false);
   const [showMoreLB, setShowMoreLB] = useState(false);
-
-  const [stats, setStats] = useState({ users: 0, predictions: 0, accuracy: 0, totalPoints: 0, totalPossible: 0 });
   const [totalUsers, setTotalUsers] = useState(null);
 
-  const { fixtures: backupRaw, liveMatches: backupLive } = useFootballData();
+  const { fixtures: backupRaw } = useFootballData();
 
+  // Offline detection
   useEffect(() => {
-    const on = () => setOffline(false); const off = () => setOffline(true);
-    window.addEventListener('online', on); window.addEventListener('offline', off);
+    const on = () => setOffline(false);
+    const off = () => setOffline(true);
+    window.addEventListener('online', on);
+    window.addEventListener('offline', off);
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  /* 1. Fixtures (Primary + Live Polling) */
-  useEffect(() => {
-    let mnt = true;
-    (async () => {
-      try {
-        const data = await fetchFixtures(getTodayStr());
-        if (mnt && data) { const l = Array.isArray(data) ? data : data?.matches || []; setPrimaryFixtures(l.map(m => normalizeMatch(m, true))); }
-      } catch {} finally { if (mnt) setFxLoading(false); }
-    })();
-    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
-      if (!mnt || !lm) return;
-      setPrimaryFixtures(prev => prev.map(f => {
-        const live = lm.find(m => String(m.id) === String(f.id));
-        return live ? { ...f, homeScore: live.homeScore, awayScore: live.awayScore, isLive: true, isFinished: false, minute: live.minute ?? f.minute, status: 'LIVE' } : f;
-      }));
-    });
-    return () => { mnt = false; if (unsub) unsub(); };
-  }, []);
-
-  /* 2. Featured + Zoka + Leaderboard */
-  useEffect(() => {
-    let mnt = true;
-    (async () => {
-      try {
-        const [pr, zk, lb] = await Promise.allSettled([
-          Promise.all(FETCH_DATES.map(d => dataLayer.fetchActivePredictions(d).catch(() => null))),
-          Promise.all(FETCH_DATES.map(d => dataLayer.fetchZokaPicks(d).catch(() => null))),
-          dataLayer.fetchDailyLeaderboard(getTodayStr()),
-        ]);
-        if (!mnt) return;
-
-        if (pr.status === 'fulfilled') {
-          const g = []; pr.value.forEach((d, i) => { if (d) { const l = Array.isArray(d) ? d : []; if (l.length) g.push({ date: FETCH_DATES[i], matches: l.slice(0, 12) }); } });
-          g.sort((a, b) => a.date.localeCompare(b.date)); setAllFeatured(g);
-        }
-        if (zk.status === 'fulfilled') {
-          const g = []; zk.value.forEach((d, i) => { if (d) { const m = d?.matches || (Array.isArray(d) ? d : []); if (m.length) g.push({ date: FETCH_DATES[i], matches: m }); } });
-          g.sort((a, b) => a.date.localeCompare(b.date)); setAllZoka(g);
-        }
-        if (lb.status === 'fulfilled' && lb.value?.entries) {
-          const entries = lb.value.entries;
-          setLeaderboard(entries.slice(0, 15));
-          const lbStats = lb.value.stats || {};
-          setStats({
-            users: entries.length,
-            predictions: lbStats.preds || 0,
-            accuracy: Math.round(parseFloat(lbStats.avg || '0')) || 0,
-            totalPoints: entries.reduce((s, e) => s + (e.points || 0), 0),
-            totalPossible: (lbStats.preds || 0) * 10
-          });
-        }
-      } catch {} finally { if (mnt) { setFeatLoading(false); setZokaLoading(false); setLbLoading(false); } }
-    })();
-    return () => { mnt = false; };
-  }, []);
-
-  /* 3. User predictions & results */
-  useEffect(() => {
-    if (!isLoggedIn || !uid) return;
-    let mnt = true;
-    (async () => {
-      try {
-        const [pd, rd] = await Promise.all([
-          dataLayer.fetchUserPredictions(uid, getTodayStr()).catch(() => ({})),
-          dataLayer.fetchPredictionResults(uid, getTodayStr()).catch(() => ({ results: [], resultMap: {} })),
-        ]);
-        if (!mnt) return;
-        if (pd) { const m = {}; Object.values(pd).forEach(p => { m[p.predId || p.matchId] = p; }); setUserPreds(m); }
-        if (rd?.resultMap) setUserResults(rd.resultMap);
-      } catch {}
-    })();
-    return () => { mnt = false; };
-  }, [isLoggedIn, uid]);
-
-  /* 4. Total users */
+  // Total users (one-time fetch)
   useEffect(() => {
     if (!db) return;
     getDocs(query(collection(db, 'users'), limit(1))).then(s => {
@@ -630,306 +516,284 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
-  /* 5. Event bus */
+  // Fixtures with live polling
   useEffect(() => {
-    const u1 = eventBus.on(EVENT.ZOKA_PICKS_UPDATED, (p) => {
-      if (!FETCH_DATES.includes(p.dateStr) || !p.picks?.matches) return;
-      setAllZoka(prev => { const u = [...prev]; const i = u.findIndex(g => g.date === p.dateStr); const m = p.picks.matches;
-        if (i >= 0) u[i] = { ...u[i], matches: m }; else if (m.length) { u.push({ date: p.dateStr, matches: m }); u.sort((a, b) => a.date.localeCompare(b.date)); } return u; });
+    let mnt = true;
+    (async () => {
+      try {
+        const data = await fetchFixtures(getTodayStr());
+        if (mnt && data) {
+          const l = Array.isArray(data) ? data : data?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)).filter(Boolean));
+        }
+      } catch {} finally { if (mnt) setFxLoading(false); }
+    })();
+    
+    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+      if (!mnt || !lm) return;
+      setPrimaryFixtures(prev => prev.map(f => {
+        // Find the fresh match from the poll
+        const freshMatch = lm.find(m => String(m.id) === String(f.id));
+        
+        // If we found it, merge the fresh data over the old data.
+        // This guarantees we get the new 'FT' status and scores.
+        if (freshMatch) {
+          return { ...f, ...freshMatch };
+        }
+        
+        return f;
+      }));
     });
-    const u2 = eventBus.on(EVENT.PREDICTIONS_UPDATED, (p) => {
-      if (!FETCH_DATES.includes(p.dateStr) || !p.predictions) return;
-      const l = Array.isArray(p.predictions) ? p.predictions : [];
-      setAllFeatured(prev => { const u = [...prev]; const i = u.findIndex(g => g.date === p.dateStr);
-        if (i >= 0) u[i] = { ...u[i], matches: l.slice(0, 12) }; else if (l.length) { u.push({ date: p.dateStr, matches: l.slice(0, 12) }); u.sort((a, b) => a.date.localeCompare(b.date)); } return u; });
-    });
-    const u3 = eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (p) => {
-      if (p.dateStr === getTodayStr() && p.leaderboard?.entries) {
-        const entries = p.leaderboard.entries; setLeaderboard(entries.slice(0, 15));
-        const lbStats = p.leaderboard.stats || {};
-        setStats(prev => ({ 
-          ...prev, 
-          users: entries.length, 
-          predictions: lbStats.preds || 0, 
-          accuracy: Math.round(parseFloat(lbStats.avg || '0')) || 0,
-          totalPoints: entries.reduce((s, e) => s + (e.points || 0), 0),
-          totalPossible: (lbStats.preds || 0) * 10
-        }));
-      }
-    });
-    const u4 = eventBus.on(EVENT.MATCH_RESOLVED, (p) => {
-      if (isLoggedIn && uid && p.affectedUsers?.includes(uid)) {
-        Promise.all([dataLayer.fetchPredictionResults(uid, getTodayStr()), dataLayer.fetchDailyLeaderboard(getTodayStr())]).then(([r, lb]) => {
-          if (!mounted.current) return;
-          if (r?.resultMap) setUserResults(prev => ({ ...prev, ...r.resultMap }));
-          if (lb?.entries) setLeaderboard(lb.entries.slice(0, 15));
-        });
-      }
-    });
-    return () => { u1(); u2(); u3(); u4(); };
-  }, [isLoggedIn, uid]);
+    
+    return () => { mnt = false; if (unsub) unsub(); };
+  }, []);
 
-  /* ═══ DERIVED ═══ */
+  // ★ DERIVED — All from reactive context, instant updates!
   const allFixtures = useMemo(() => {
-    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false));
-    // ★ FIX: Deduplicate matches by ID to prevent live coverage duplicates
+    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)).filter(Boolean);
     const uniqueIds = new Set();
-    return list.filter(m => {
-      const idStr = String(m.id);
-      if (uniqueIds.has(idStr)) return false;
-      uniqueIds.add(idStr);
-      return true;
-    });
+    return list.filter(m => { const idStr = String(m.id); if (uniqueIds.has(idStr)) return false; uniqueIds.add(idStr); return true; });
   }, [primaryFixtures, backupRaw]);
-  
-  const liveMatches = useMemo(() => allFixtures.filter(f => { const s = estimateMatchStatus(f); return s === 'live' || s === 'ht'; }), [allFixtures]);
-  const liveCount = liveMatches.length;
 
-  const featFlat = useMemo(() => allFeatured.flatMap(g => g.matches.map(m => ({ ...m, _d: g.date }))), [allFeatured]);
-  const featVis = showMoreFeat ? featFlat : featFlat.slice(0, 5);
-  const featHidden = Math.max(0, featFlat.length - 5);
+  const liveMatches = useMemo(() => allFixtures.filter(f => f.isLive || isLiveStatus(f.status, SPORT.FOOTBALL)), [allFixtures]);
 
-  const zokaFlat = useMemo(() => allZoka.flatMap(g => g.matches.map(m => ({ ...m, _d: g.date }))), [allZoka]);
+  // Zoka picks (from context for today)
+  const zokaFlat = useMemo(() => {
+    const matches = zokaPicks?.matches || [];
+    return matches.map(m => ({ ...m, _d: getTodayStr() }));
+  }, [zokaPicks]);
   const zokaVis = showMoreZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
-  const lbVis = showMoreLB ? leaderboard : leaderboard.slice(0, 5);
-  const lbHidden = Math.max(0, leaderboard.length - 5);
+  // Featured predictions (from context)
+  const featFlat = useMemo(() => (activePredictions || []).map(m => ({ ...m, _d: getTodayStr() })), [activePredictions]);
+  const featVis = showMoreFeat ? featFlat : featFlat.slice(0, 5);
+  const featHidden = Math.max(0, featFlat.length - 5);
 
-  const todayFeat = useMemo(() => allFeatured.find(g => g.date === getTodayStr())?.matches || [], [allFeatured]);
-  const myExact = useMemo(() => todayFeat.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r?.resultType === 'exact'; }).length, [todayFeat, userResults]);
-  const myResult = useMemo(() => todayFeat.filter(p => { const r = userResults[String(p.matchId || p.id)]; return r?.resultType === 'result'; }).length, [todayFeat, userResults]);
-  const myPredicted = useMemo(() => todayFeat.filter(p => userPreds[p.id || p.matchId]).length, [todayFeat, userPreds]);
+  // ★ FIX: Safe Leaderboard fallback to prevent crashes if null
+  const lbVis = showMoreLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
+  const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
+
+  // User predictions/results maps (from context)
+  const userPredMap = useMemo(() => {
+    const m = {};
+    Object.values(userPredictions || {}).forEach(p => { m[p.predId || p.matchId] = p; });
+    return m;
+  }, [userPredictions]);
+
+  const resultMap = useMemo(() => {
+    const m = {};
+    (predictionResults?.results || []).forEach(r => { m[String(r.matchId)] = r; });
+    return m;
+  }, [predictionResults]);
+
+  // ★ Stats — All accurate and reactive
+  const myPredicted = useMemo(() => {
+    return (activePredictions || []).filter(p => userPredMap[p.id || p.matchId]).length;
+  }, [activePredictions, userPredMap]);
 
   useEffect(() => { return () => { mounted.current = false; }; }, []);
 
-  const showToast = useCallback((msg) => { setToast(msg); setTimeout(() => { if (mounted.current) setToast(null); }, 2800); }, []);
-
-  const AVATAR_COLORS = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'];
-
   return (
-    <div className="v21">
+    <div className="v22">
       <SEO title="Football Predictions, Fixtures & Live Scores — ZOKASCORE" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKASCORE" path="/" />
 
-      {offline && <div className="v21-offline"><WifiOff size={14} /> You're offline — showing cached data</div>}
+      {offline && <div className="v22-offline"><WifiOff size={14} /> You're offline — showing cached data</div>}
 
-      <div className="v21-wrap">
-        {/* ═══ HERO ═══ */}
-        <section className="v21-hero">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) both' }}>
+      <div className="v22-wrap">
+        {/* HERO */}
+        <section className="v22-hero">
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4, animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) both' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <span style={{ fontSize: '1.3rem' }}>{greeting.emoji}</span>
               <div>
-                <h1 style={{ fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
+                <h1 style={{ fontSize: '1.1rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, lineHeight: 1.2 }}>
                   {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName.split(' ')[0]}` : ''} {greeting.icon}
                 </h1>
-                <p style={{ fontSize: '.72rem', fontWeight: 600, color: 'var(--text-muted)', margin: '2px 0 0' }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
+                <p style={{ fontSize: '.7rem', fontWeight: 600, color: 'var(--text-muted)', margin: '2px 0 0' }}>{new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}</p>
               </div>
             </div>
             <LiveClock />
           </div>
-          <div className="v21-hero-line" />
+          <div className="v22-hero-line" />
         </section>
 
-        {/* ═══ LIVE STRIP ═══ */}
-        {liveCount > 0 && (
-          <div style={{ margin: '18px 0 0', animation: 'v21-fade-up .4s cubic-bezier(.22,1,.36,1) both' }}>
+        {/* LIVE STRIP */}
+        {liveMatches.length > 0 && (
+          <div style={{ margin: '16px 0 0', animation: 'v22-fade-up .4s cubic-bezier(.22,1,.36,1) both' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-              <span className="v21-ldot" /><span style={{ fontSize: '.76rem', fontWeight: 900, color: '#ef4444' }}>{liveCount} LIVE</span>
+              <span className="v22-ldot" /><span style={{ fontSize: '.74rem', fontWeight: 900, color: '#ef4444' }}>{liveMatches.length} LIVE</span>
               <div style={{ flex: 1, height: 1, background: 'rgba(239,68,68,.12)', borderRadius: 1 }} />
-              {/* ★ Updated Route Link */}
-              <Link to="/fixtures" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
+              <Link to="/fixtures" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
             </div>
-            <div className="v21-livestrip">{liveMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
+            <div className="v22-livestrip">{liveMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
           </div>
         )}
 
-        {/* ═══ STATS STRIP ═══ */}
-        <div className="v21-statstrip" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 100ms both' }}>
-          <div className="v21-schip">
-            <div className="val"><AnimNum value={totalUsers || stats.users} delay={200} /></div>
+        {/* ★ STATS STRIP — Now reactive and accurate */}
+        <div className="v22-stats" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 100ms both' }}>
+          <div className="v22-chip">
+            <div className="val"><AnimNum value={totalUsers || dailyStats?.players || 0} delay={200} /></div>
             <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (stats.users || 0) / 5)}%`, background: '#60a5fa', animationDelay: '400ms' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, ((dailyStats?.players || 0) || (totalUsers || 0)) / 5)}%`, background: '#60a5fa', animationDelay: '400ms' }} /></div>
           </div>
-          <div className="v21-schip">
-            <div className="val"><AnimNum value={stats.predictions} delay={280} /></div>
+          <div className="v22-chip">
+            <div className="val"><AnimNum value={dailyStats?.preds || 0} delay={280} /></div>
             <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, stats.predictions / 10)}%`, background: 'var(--gold)', animationDelay: '500ms' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (dailyStats?.preds || 0) / 10)}%`, background: 'var(--gold)', animationDelay: '500ms' }} /></div>
           </div>
-          <div className="v21-schip" style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', right: 8, top: 8 }}><AccuracyRing value={stats.accuracy} size={36} stroke={3} color={stats.accuracy >= 50 ? 'var(--accent)' : stats.accuracy >= 25 ? 'var(--gold)' : '#ef4444'} /></div>
-            <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={stats.accuracy} delay={360} suffix="%" /></div>
+          <div className="v22-chip" style={{ position: 'relative' }}>
+            <div style={{ position: 'absolute', right: 8, top: 8 }}><AccuracyRing value={dailyStats?.avg ? parseFloat(dailyStats.avg) : 0} size={36} stroke={3} color={(dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 50 ? 'var(--accent)' : (dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 25 ? 'var(--gold)' : '#ef4444'} /></div>
+            <div className="val" style={{ fontSize: '.92rem' }}><AnimNum value={dailyStats?.avg ? Math.round(parseFloat(dailyStats.avg)) : 0} delay={360} suffix="%" /></div>
             <div className="lbl">Accuracy</div>
           </div>
-          <div className="v21-schip">
-            <div className="val" style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-primary)' }}>
-              {isLoggedIn ? <><AnimNum value={myExact * 10 + myResult * 3} delay={440} /></> : '—'}
+          <div className="v22-chip">
+            <div className="val" style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {isLoggedIn ? <AnimNum value={userStats?.todayPoints || 0} delay={440} /> : '—'}
             </div>
-            <div className="lbl">{isLoggedIn ? 'My Points' : 'My Points'}</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (myExact * 10 + myResult * 3) / 5)}%`, background: 'var(--accent)', animationDelay: '600ms' }} /></div>}
+            <div className="lbl">My Points</div>
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (userStats?.todayPoints || 0) / 5)}%`, background: 'var(--accent)', animationDelay: '600ms' }} /></div>}
           </div>
         </div>
 
-        {/* ═══ ZOKA PICKS ═══ */}
-        {!zokaLoading && zokaFlat.length > 0 && (
-          <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 150ms both' }}>
-            <div className="v21-sech">
+        {/* ZOKA PICKS */}
+        {!ctxLoading && zokaFlat.length > 0 && (
+          <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 150ms both' }}>
+            <div className="v22-sech">
               <Star size={14} style={{ color: 'var(--gold)' }} />
               <h2>Zoka Picks</h2>
-              <span className="v21-sech-badge" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.15)' }}>{zokaFlat.length}</span>
-              <div className="v21-sech-line" />
+              <span className="v22-sech-badge" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.15)' }}>{zokaFlat.length}</span>
+              <div className="v22-sech-line" />
             </div>
-            <div className="v21-zoka-wrap">
-              {zokaVis.map((p, i) => {
-                const showDate = i === 0 || p._d !== zokaVis[i - 1]?._d;
-                return (
-                  <Fragment key={p.matchId || i}>
-                    {showDate && allZoka.length > 1 && <DateDivider date={p._d} accent="var(--gold)" />}
-                    <ZokaRow pick={p} index={i} />
-                  </Fragment>
-                );
-              })}
+            <div className="v22-zoka-wrap">
+              {zokaVis.map((p, i) => <ZokaRow key={p.matchId || i} pick={p} index={i} />)}
             </div>
             {zokaHidden > 0 && (
-              <button className="v21-toggle" onClick={() => setShowMoreZoka(p => !p)}>
+              <button className={`v22-toggle${showMoreZoka ? ' open' : ''}`} onClick={() => setShowMoreZoka(p => !p)}>
                 {showMoreZoka ? 'Show less' : `Show ${zokaHidden} more`} <ChevronDown size={13} />
               </button>
             )}
           </div>
         )}
 
-        {/* ═══ FEATURED MATCHES ═══ */}
-        <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 200ms both' }}>
-          <div className="v21-sech">
+        {/* FEATURED MATCHES */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 200ms both' }}>
+          <div className="v22-sech">
             <Target size={14} style={{ color: 'var(--accent)' }} />
             <h2>Featured — Compete</h2>
-            <span className="v21-sech-badge" style={{ background: 'rgba(0,230,118,.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.15)' }}>{featFlat.length}</span>
-            {isLoggedIn && <span style={{ fontSize: '.62rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{todayFeat.length} predicted</span>}
-            <div className="v21-sech-line" />
+            <span className="v22-sech-badge" style={{ background: 'rgba(0,230,118,.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.15)' }}>{featFlat.length}</span>
+            {isLoggedIn && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{featFlat.length} predicted</span>}
+            <div className="v22-sech-line" />
           </div>
-          {featLoading ? (
-            <div>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="v21-skel" style={{ height: 90, marginBottom: 6, animationDelay: `${i * 60}ms` }} />)}</div>
+          {ctxLoading ? (
+            <div>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="v22-skel" style={{ height: 90, marginBottom: 6, animationDelay: `${i * 60}ms` }} />)}</div>
           ) : featVis.length > 0 ? (
-            <>
-              {featVis.map((p, i) => {
-                const showDate = i === 0 || p._d !== featVis[i - 1]?._d;
-                return (
-                  <Fragment key={p.id || String(p.matchId) || i}>
-                    {showDate && allFeatured.length > 1 && <DateDivider date={p._d} accent="var(--accent)" />}
-                    <FeaturedRow pred={p} userPred={userPreds[p.id || p.matchId]} userResult={userResults[String(p.matchId || p.id)]} index={i} isLoggedIn={isLoggedIn} />
-                  </Fragment>
-                );
-              })}
-            </>
+            featVis.map((p, i) => <FeaturedRow key={p.id || String(p.matchId) || i} pred={p} userPred={userPredMap[p.id || p.matchId]} userResult={resultMap[String(p.matchId || p.id)]} index={i} isLoggedIn={isLoggedIn} />)
           ) : (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: '.82rem', fontWeight: 600 }}>
+            <div style={{ textAlign: 'center', padding: 32, color: 'var(--text-muted)', fontSize: '.8rem', fontWeight: 600 }}>
               No featured matches right now
-              <div style={{ fontSize: '.7rem', opacity: .5, marginTop: 4 }}>Check back later or go to Predictions</div>
+              <div style={{ fontSize: '.68rem', opacity: .5, marginTop: 4 }}>Check back later or go to Predictions</div>
             </div>
           )}
           {featHidden > 0 && (
-            <button className="v21-toggle" onClick={() => setShowMoreFeat(p => !p)}>
+            <button className={`v22-toggle${showMoreFeat ? ' open' : ''}`} onClick={() => setShowMoreFeat(p => !p)}>
               {showMoreFeat ? 'Show less' : `Show ${featHidden} more`} <ChevronDown size={13} />
             </button>
           )}
         </div>
 
-        {/* ═══ LEADERBOARD ═══ */}
-        <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 250ms both' }}>
-          <div className="v21-sech">
+        {/* LEADERBOARD */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 250ms both' }}>
+          <div className="v22-sech">
             <Trophy size={14} style={{ color: 'var(--gold)' }} />
             <h2>Daily Leaderboard</h2>
-            <div className="v21-sech-line" />
-            <Link to="/leaderboard" style={{ fontSize: '.66rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>Full <ArrowUpRight size={11} /></Link>
+            <div className="v22-sech-line" />
+            <Link to="/leaderboard" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>Full <ArrowUpRight size={11} /></Link>
           </div>
-          {lbLoading ? (
-            <div>{Array.from({ length: 5 }).map((_, i) => <div key={i} className="v21-skel" style={{ height: 48, marginBottom: 5, animationDelay: `${i * 50}ms` }} />)}</div>
-          ) : leaderboard.length > 0 ? (
+          {ctxLoading ? (
+            <div>{Array.from({ length: 5 }).map((_, i) => <div key={i} className="v22-skel" style={{ height: 48, marginBottom: 5, animationDelay: `${i * 50}ms` }} />)}</div>
+          ) : (dailyEntries || []).length > 0 ? (
             <>
-              <MiniPodium entries={leaderboard} />
+              <MiniPodium entries={dailyEntries || []} />
               <div style={{ marginTop: 10 }}>
                 {lbVis.slice(3).map((u, i) => {
                   const isMe = isLoggedIn && u.uid === uid;
                   const rank = u.rank || (i + 4);
-                  const color = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
+                  const color = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'][(rank - 1) % 8];
                   return (
-                    <div key={u.uid} className={`v21-lbrow${isMe ? ' me' : ''}`} style={{ animationDelay: `${(i + 3) * 25}ms` }}>
+                    <div key={u.uid} className={`v22-lbrow${isMe ? ' me' : ''}`} style={{ animationDelay: `${(i + 3) * 25}ms` }}>
                       <span style={{ width: 28, textAlign: 'center', fontWeight: 900, color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>#{rank}</span>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.66rem', fontWeight: 800, color: '#fff' }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
+                      <div style={{ width: 30, height: 30, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.64rem', fontWeight: 800, color: '#fff' }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}</div>
-                        <div style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.exact || 0} exact · {u.result || 0} results</div>
+                        <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}</div>
+                        <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.exact || 0} exact · {u.result || 0} results</div>
                       </div>
-                      <span style={{ fontSize: '.82rem', fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>{u.points || 0}</span>
+                      <span style={{ fontSize: '.8rem', fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>{u.points || 0}</span>
                     </div>
                   );
                 })}
               </div>
               {lbHidden > 0 && (
-                <button className="v21-toggle" onClick={() => setShowMoreLB(p => !p)}>
+                <button className={`v22-toggle${showMoreLB ? ' open' : ''}`} onClick={() => setShowMoreLB(p => !p)}>
                   {showMoreLB ? 'Show less' : `Show ${lbHidden} more`} <ChevronDown size={13} />
                 </button>
               )}
             </>
           ) : (
-            <div className="v21-skel" style={{ height: 150, borderRadius: 12 }} />
+            <div className="v22-skel" style={{ height: 150, borderRadius: 12 }} />
           )}
         </div>
 
-        {/* ═══ EXPLORE GRID ═══ */}
-        <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 300ms both' }}>
-          <div className="v21-sech">
+        {/* EXPLORE GRID */}
+        <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 300ms both' }}>
+          <div className="v22-sech">
             <Gamepad2 size={14} style={{ color: 'var(--accent)' }} />
             <h2>Explore</h2>
-            <div className="v21-sech-line" />
+            <div className="v22-sech-line" />
           </div>
-          <div className="v21-explore">
-            <Link to="/mastergames" className="v21-ecard">
-              <div className="v21-ecard-accent" style={{ background: 'var(--accent)' }} />
+          <div className="v22-explore">
+            <Link to="/mastergames" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: 'var(--accent)' }} />
               <Activity size={20} style={{ color: 'var(--accent)' }} />
               <div>
-                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Master Games</div>
-                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>All fixtures & live scores</div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Master Games</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>All fixtures & live scores</div>
               </div>
             </Link>
-            <Link to="/highlights" className="v21-ecard">
-              <div className="v21-ecard-accent" style={{ background: '#f97316' }} />
+            <Link to="/highlights" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#f97316' }} />
               <Medal size={20} style={{ color: '#f97316' }} />
               <div>
-                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Highlights</div>
-                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Latest match videos</div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Highlights</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Latest match videos</div>
               </div>
             </Link>
-            <Link to="/livestream" className="v21-ecard">
-              <div className="v21-ecard-accent" style={{ background: '#ef4444' }} />
+            <Link to="/livestream" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#ef4444' }} />
               <Zap size={20} style={{ color: '#ef4444' }} />
               <div>
-                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
-                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Watch matches live</div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Watch matches live</div>
               </div>
             </Link>
-            <Link to="/basketball" className="v21-ecard">
-              <div className="v21-ecard-accent" style={{ background: '#3b82f6' }} />
+            <Link to="/basketball" className="v22-ecard">
+              <div className="v22-ecard-accent" style={{ background: '#3b82f6' }} />
               <BarChart3 size={20} style={{ color: '#3b82f6' }} />
               <div>
-                <div style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--text-primary)' }}>Basketball</div>
-                <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>Hoops action & scores</div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Basketball</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Hoops action & scores</div>
               </div>
             </Link>
           </div>
         </div>
 
-        {/* ═══ CTA ═══ */}
+        {/* CTA */}
         {!isLoggedIn && (
-          <div className="v21-sec" style={{ animation: 'v21-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
-            <Link to="/login" className="v21-cta">
-              <LogIn size={16} /> Sign In to Predict & Win
-            </Link>
+          <div className="v22-sec" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
+            <Link to="/login" className="v22-cta"><LogIn size={16} /> Sign In to Predict & Win</Link>
           </div>
         )}
       </div>
-
-      {toast && <div className="v21-toast">{toast}</div>}
     </div>
   );
 }

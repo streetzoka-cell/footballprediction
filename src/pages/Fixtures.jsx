@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v9.8 Pro UI — Smart Dropdown, Toggles, Live Only, Accurate Minutes, Started State
+// v9.9 Pro UI — Smart Dropdown, Toggles, Live Only, Accurate Minutes, Started State
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -21,7 +21,6 @@ import { useFootballData } from '../context/FootballDataContext';
 
 // Date & Constants Helpers
 import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime } from '../utils/dates';
-import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
 const getYesterdayStr = () => getLocalDateStr(-1);
 const getTomorrowStr = () => getLocalDateStr(1);
@@ -49,7 +48,7 @@ const LEAGUE_PRIORITY = {
 const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
 
 /* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Pro v9.8
+   STYLE INJECTION — Pro v9.9
    ═══════════════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
   if (document.getElementById('mg9-css')) return;
@@ -386,10 +385,10 @@ function normalizeMatch(raw, isPrimary) {
     kickoff = raw.kickoff;
   }
 
-  // ★ FIX: Match Home.jsx logic exactly for isLive/isFinished
-  const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
+  // ★ FIX: Inline status checks to avoid dependency scope issues
+  const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE');
   const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
+  const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN');
   
   // ★ NEW: Calculate if match has started but has no live coverage
   let isStarted = false;
@@ -676,24 +675,31 @@ export default function MasterGames() {
       const liveMap = new Map(lm.map(m => [String(m.id), m]));
       
       setPrimaryFixtures(prev => prev.map(f => {
-        const live = liveMap.get(String(f.id));
-        if (live) {
-          return { 
-            ...f, 
-            homeScore: live.homeScore ?? f.homeScore, 
-            awayScore: live.awayScore ?? f.awayScore, 
-            isLive: true, 
-            isFinished: false, 
-            status: live.status || 'LIVE',
-            minute: live.minute ?? live.elapsed ?? f.minute // ★ FIX: Update minute during poll
-          };
+        const freshMatch = liveMap.get(String(f.id));
+        
+        // If we have fresh data, use it entirely
+        if (freshMatch) {
+          return { ...f, ...freshMatch };
         }
-        // ★ FIX: Only mark as STARTED if not already live
+        
+        // ★ FIX: If a match was live but is no longer in the feed, assume it finished
+        // This prevents matches from being stuck as LIVE forever
+        if (f.isLive) {
+          const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
+          const now = Date.now();
+          // If kickoff was more than 2 hours ago, it's definitely finished
+          if (ko > 0 && now > ko + (2 * 60 * 60 * 1000)) {
+            return { ...f, isLive: false, isFinished: true, status: 'FT' };
+          }
+        }
+
+        // Only mark as STARTED if not already live/finished
         const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
         const now = Date.now();
         if (!f.isLive && !f.isStarted && ko > 0 && now > ko && !f.isFinished) {
           return { ...f, isStarted: true, status: 'STARTED' };
         }
+        
         return f;
       }));
     });

@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// v15.1 Pro UI — Full Fidelity, Smart Auto-Resolve, Strict Validation, Broadcast
+// v15.2 Pro UI — Auto-Failover, User Broadcast, Bulletproof User Loading
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
+import { useFootballData } from '../context/FootballDataContext'; // ★ FIX: Import backup context
 import { db } from '../utils/firebase';
 import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr, getLocalDateFromUtc, formatTime, formatDateShort } from '../utils/dates';
@@ -30,7 +31,7 @@ import {
 
 import {
   collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
-  serverTimestamp, getDoc, getDocs, orderBy, limit as limitQ, startAfter, addDoc
+  serverTimestamp, getDoc, getDocs, limit as limitQ, startAfter, addDoc
 } from 'firebase/firestore';
 
 import SEO from '../components/SEO';
@@ -494,6 +495,9 @@ export default function Admin() {
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [primaryLoading, setPrimaryLoading] = useState(true);
 
+  // ★ FIX: Import backup context so Admin doesn't lose matches if API fails
+  const { fixtures: backupRaw } = useFootballData();
+
   const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
   const extraDates = useMemo(() => {
     const dates = [];
@@ -523,7 +527,12 @@ export default function Admin() {
     return () => { mnt = false; };
   }, [date]);
 
-  const allFixtures = primaryFixtures;
+  // ★ FIX: Fallback to backup matches if primary is empty
+  const allFixtures = useMemo(() => {
+    if (primaryFixtures.length > 0) return primaryFixtures;
+    return (backupRaw || []).filter(m => extractDate(m) === date).map(m => normalizeMatch(m, false));
+  }, [primaryFixtures, backupRaw, date]);
+
   const dayFixtures = useMemo(() => allFixtures?.filter(m => extractDate(m) === date) || [], [allFixtures, date]);
   const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
   const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
@@ -563,7 +572,7 @@ export default function Admin() {
     return unsub;
   }, [date]);
 
-  // ★ AUTO-RESOLVE LOGIC: When fixtures update and a featured match is FT, resolve it automatically.
+  // ★ AUTO-RESOLVE LOGIC
   useEffect(() => {
     if (!preds.length || !dayFixtures.length) return;
     preds.forEach(p => {
@@ -610,34 +619,18 @@ export default function Admin() {
     const matchDate = date;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
-      id: predId,
-      matchId: String(m.id),
-      matchDate,
-      homeTeam: m.homeTeam,
-      awayTeam: m.awayTeam,
-      homeLogo: m.homeTeam?.crest || null,
-      awayLogo: m.awayTeam?.crest || null,
-      league: m.competition || m.league,
-      kickoff: m.utcDate || m.kickoff,
-      status: m.status || 'NS',
-      homeScore: null,
-      awayScore: null,
-      priority: preds.length + 1,
+      id: predId, matchId: String(m.id), matchDate,
+      homeTeam: m.homeTeam, awayTeam: m.awayTeam,
+      homeLogo: m.homeTeam?.crest || null, awayLogo: m.awayTeam?.crest || null,
+      league: m.competition || m.league, kickoff: m.utcDate || m.kickoff,
+      status: m.status || 'NS', homeScore: null, awayScore: null, priority: preds.length + 1,
     };
 
     const updatedPreds = [...preds, pred];
     setPreds(updatedPreds);
 
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      ...pred,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updatedPreds,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...pred, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updatedPreds, updatedAt: serverTimestamp() }, { merge: true });
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
@@ -650,10 +643,7 @@ export default function Admin() {
     setPreds(updatedPreds);
 
     await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updatedPreds,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updatedPreds, updatedAt: serverTimestamp() }, { merge: true });
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
@@ -663,22 +653,13 @@ export default function Admin() {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
 
-    // Update Firestore Featured Doc
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp() }, { merge: true });
 
-    const updated = preds.map(p => {
-      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true };
-      return p;
-    });
+    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true } : p);
     setPreds(updated);
 
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updated, updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
 
-    // Run the resolver for all users
     await resolveMatchForAllUsers(matchId, h, a, date);
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
@@ -692,19 +673,12 @@ export default function Admin() {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
 
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      homeScore: h, awayScore: a, updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, updatedAt: serverTimestamp() }, { merge: true });
 
-    const updated = preds.map(p => {
-      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a };
-      return p;
-    });
+    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
     setPreds(updated);
 
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updated, updatedAt: serverTimestamp(),
-    }, { merge: true });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
 
     await resolveMatchForAllUsers(matchId, h, a, date);
 
@@ -727,13 +701,7 @@ export default function Admin() {
 
   return (
     <div className="ap">
-      <SEO
-        title="Admin Dashboard | ZOKASCORE"
-        description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently."
-        keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards"
-        path="/admin"
-        robots="noindex,nofollow"
-      />
+      <SEO title="Admin Dashboard | ZOKASCORE" description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently." keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards" path="/admin" robots="noindex,nofollow" />
       <div className="aw">
         <div className="ah">
           <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>
@@ -754,43 +722,32 @@ export default function Admin() {
         <div className="ask" style={{ top: 108 }}>
           <div className="adb">
             {defaultDates.map(d => (
-              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
-                {dateLabel(d)}
-              </button>
+              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
             ))}
             <button className="more-dates-btn" onClick={() => setShowMoreDates(p => !p)}>
               {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
               {showMoreDates ? 'Less' : 'More dates'}
             </button>
             {showMoreDates && extraDates.map(d => (
-              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
-                {dateLabel(d)}
-              </button>
+              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
             ))}
           </div>
         </div>
 
         {tab === 'dashboard' && (
-          <DashTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length}
-            liveCount={liveCount} finCount={finCount} date={date}
-            onRebuild={handleRebuild} rebuilding={rebuilding} />
+          <DashTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} />
         )}
 
         {tab === 'zoka' && (
-          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading} pubPicks={pubPicks}
-            onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish}
-            onSaveDraft={handleZokaSaveDraft} toast={setToast} />
+          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={setToast} />
         )}
 
         {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={allFixtures}
-            onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove}
-            fxLoading={primaryLoading} toast={setToast} />
+          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={primaryLoading} toast={setToast} />
         )}
 
         {tab === 'results' && (
-          <ResultsTab date={date} preds={preds}
-            onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
+          <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
         )}
 
         {tab === 'broadcast' && <BroadcastTab toast={setToast} />}
@@ -886,8 +843,6 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const [openDay, setOpenDay] = useState(null);
 
   const dayFx = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
-  
-  // ★ FIX: Filter out both Finished AND Live matches
   const selectableFx = useMemo(() => dayFx.filter(m => !isFin(m) && !isLive(m)), [dayFx]);
 
   const leagues = useMemo(() => {
@@ -916,10 +871,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const ready = cnt > 0 && scored === cnt;
 
   const pubMatches = useMemo(() => Array.isArray(pubPicks) ? pubPicks : (pubPicks?.matches || []), [pubPicks]);
-  
-  const pubMap = useMemo(() => {
-    return new Map(pubMatches.map(p => [String(p.matchId), p]));
-  }, [pubMatches]);
+  const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
 
   const toggle = (m) => {
     if (isFin(m) || isLive(m)) { toast('Cannot select finished or live matches', 'in'); return; }
@@ -928,12 +880,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       setSel(prev => { const n = { ...prev }; delete n[id]; return n; });
     } else if (!full) {
       const existing = pubMap.get(id);
-      setSel(prev => ({
-        ...prev,
-        [id]: existing
-          ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') }
-          : { h: '', a: '' }
-      }));
+      setSel(prev => ({ ...prev, [id]: existing ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') } : { h: '', a: '' } }));
     } else {
       toast(`Max ${MAX_ZOKA} Zoka Picks`, 'in');
     }
@@ -1073,18 +1020,14 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       {pubMatches.length > 0 && cnt === 0 && (
         <div className="azs pop" style={{ position: 'relative' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: 6 }}>
-            <span style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              {pubMatches.length} published · Tap a match to edit
-            </span>
+            <span style={{ fontSize: '.75rem', fontWeight: 700, color: 'var(--text-muted)' }}>{pubMatches.length} published · Tap a match to edit</span>
             <div style={{ display: 'flex', gap: 4 }}>
               <span className="abdg ex"><CheckCircle2 size={9} /> {pubRes.e}</span>
               <span className="abdg rs"><TrendingUp size={9} /> {pubRes.r}</span>
               <span className="abdg ms"><XCircle size={9} /> {pubRes.mi}</span>
               {pubRes.p > 0 && <span className="abdg pn">{pubRes.p}</span>}
             </div>
-            <button className="ab ab-dg ab-sm" onClick={onUnpublish} style={{ marginLeft: 'auto' }}>
-              <X size={11} /> Unpublish All
-            </button>
+            <button className="ab ab-dg ab-sm" onClick={onUnpublish} style={{ marginLeft: 'auto' }}><X size={11} /> Unpublish All</button>
           </div>
         </div>
       )}
@@ -1110,9 +1053,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
               <div key={mid}>
                 <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
                   scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null}
-                  extraBadge={isPublished && !sel[mid] ? (
-                    <span className="abdg gd"><Star size={9} /> Published</span>
-                  ) : null}
+                  extraBadge={isPublished && !sel[mid] ? (<span className="abdg gd"><Star size={9} /> Published</span>) : null}
                 />
                 {isPublished && !sel[mid] && (
                   <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
@@ -1125,8 +1066,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
           <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
-        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'}
-          hint={dayFx.length === 0 ? 'Try a different day' : 'Live and finished matches cannot be selected'} />
+        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'} hint={dayFx.length === 0 ? 'Try a different day' : 'Live and finished matches cannot be selected'} />
       )}
 
       <div className="asec" style={{ marginTop: 18 }}>
@@ -1241,9 +1181,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
               const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
               const live = isLive(p);
               const finished = isFin(p);
-              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' }
-                        : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' }
-                        : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
+              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
               return (
                 <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
                   <div className="amh">
@@ -1262,9 +1200,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                       <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                     </div>
                     <div className={`asb${live ? ' lv' : ''}${finished ? ' ft' : ''}`}>
-                      {sc ? (
-                        <><span className={`asn${live ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a}</span></>
-                      ) : <span className="avs">VS</span>}
+                      {sc ? (<><span className={`asn${live ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a}</span></>) : <span className="avs">VS</span>}
                     </div>
                     <div className="ate aw">
                       {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1350,10 +1286,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
     [preds, scores]
   );
 
-  const resolved = useMemo(() =>
-    preds.filter(p => p.isFinished || p.status === 'finished'),
-    [preds]
-  );
+  const resolved = useMemo(() => preds.filter(p => p.isFinished || p.status === 'finished'), [preds]);
 
   const updScore = (mid, f, v) => {
     const c = v.replace(/[^0-9]/g, '').slice(0, 2);
@@ -1373,9 +1306,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
       await onResolve(pred, h, a);
       setScores(prev => { const n = { ...prev }; delete n[mid]; return n; });
       toast(`Resolved: ${pred.homeTeam?.shortName || pred.homeTeam?.name} ${h}-${a} ${pred.awayTeam?.shortName || pred.awayTeam?.name}`, 'ok');
-    } catch (e) {
-      toast('Resolve failed: ' + e.message, 'er');
-    }
+    } catch (e) { toast('Resolve failed: ' + e.message, 'er'); }
     setResolving(prev => ({ ...prev, [mid]: false }));
   };
 
@@ -1392,9 +1323,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
       await onOverride(pred, h, a);
       setScores(prev => { const n = { ...prev }; delete n[mid]; return n; });
       toast(`Override: ${pred.homeTeam?.shortName || pred.homeTeam?.name} → ${h}-${a}`, 'ok');
-    } catch (e) {
-      toast('Override failed: ' + e.message, 'er');
-    }
+    } catch (e) { toast('Override failed: ' + e.message, 'er'); }
     setOverriding(prev => ({ ...prev, [mid]: false }));
   };
 
@@ -1406,20 +1335,13 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
     });
     if (toResolve.length === 0) { toast('No scored matches to resolve', 'in'); return; }
 
-    setResolving(prev => {
-      const n = { ...prev };
-      toResolve.forEach(p => { n[String(p.matchId || p.id)] = true; });
-      return n;
-    });
+    setResolving(prev => { const n = { ...prev }; toResolve.forEach(p => { n[String(p.matchId || p.id)] = true; }); return n; });
 
     let ok = 0, fail = 0;
     for (const p of toResolve) {
       const mid = String(p.matchId || p.id);
       const s = scores[mid];
-      try {
-        await onResolve(p, Number(s.h), Number(s.a));
-        ok++;
-      } catch { fail++; }
+      try { await onResolve(p, Number(s.h), Number(s.a)); ok++; } catch { fail++; }
     }
 
     setScores({});
@@ -1433,8 +1355,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
         <div className="asec">
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <h3 className="ast" style={{ margin: 0 }}><Zap size={15} /> Score & Resolve ({unresolved.length})</h3>
-            <button className="ab ab-sm ab-p" onClick={handleResolveAll}
-              disabled={Object.values(resolving).some(Boolean)}>
+            <button className="ab ab-sm ab-p" onClick={handleResolveAll} disabled={Object.values(resolving).some(Boolean)}>
               <Zap size={11} /> Resolve All Scored
             </button>
           </div>
@@ -1458,11 +1379,9 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
                   <div className="asb" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
-                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99"
-                      value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
+                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
                     <span className="asep">–</span>
-                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99"
-                      value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
+                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
                   </div>
                   <div className="ate aw">
                     {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1509,11 +1428,9 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
                   <div className="asb ft" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
-                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99"
-                      value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
+                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
                     <span className="asep">–</span>
-                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99"
-                      value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
+                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
                   </div>
                   <div className="ate aw">
                     {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1540,7 +1457,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
 }
 
 /* ═════════════════════════════════════════════════════════════════════════════════
-   BROADCAST TAB (NEW)
+   BROADCAST TAB (UPGRADED)
    ═════════════════════════════════════════════════════════════════════════════════ */
 function BroadcastTab({ toast }) {
   const [type, setType] = useState('global');
@@ -1548,6 +1465,44 @@ function BroadcastTab({ toast }) {
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
+  
+  // User loading state for personal messages
+  const [users, setUsers] = useState([]);
+  const [loadingUsers, setLoadingUsers] = useState(false);
+  const [search, setSearch] = useState('');
+  const [showUserList, setShowUserList] = useState(false);
+
+  const loadUsers = async () => {
+    if (!db) return;
+    setLoadingUsers(true);
+    try {
+      // ★ FIX: Removed orderBy('createdAt') which crashes if a user is missing that field
+      const snap = await getDocs(query(collection(db, 'users'), limitQ(100)));
+      setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      setShowUserList(true);
+    } catch (e) {
+      toast('Load failed: ' + e.message, 'er');
+    }
+    setLoadingUsers(false);
+  };
+
+  const selectUser = (u) => {
+    setType('personal');
+    setUid(u.id);
+    setSearch(`${u.displayName || u.email || u.id}`);
+    setShowUserList(false);
+    toast(`Selected ${u.displayName || u.email}`, 'ok');
+  };
+
+  const filteredUsers = useMemo(() => {
+    if (!search.trim()) return users;
+    const q = search.toLowerCase();
+    return users.filter(u => 
+      (u.displayName || '').toLowerCase().includes(q) || 
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.id || '').toLowerCase().includes(q)
+    );
+  }, [users, search]);
 
   const handleSend = async () => {
     if (!db || !title.trim() || !message.trim()) return;
@@ -1564,7 +1519,7 @@ function BroadcastTab({ toast }) {
         readBy: [],
       });
       toast(`Notification sent!`, 'ok');
-      setTitle(''); setMessage(''); setUid('');
+      setTitle(''); setMessage(''); setUid(''); setSearch('');
     } catch (e) { toast('Send failed: ' + e.message, 'er'); }
     setSending(false);
   };
@@ -1585,7 +1540,28 @@ function BroadcastTab({ toast }) {
 
         {type === 'personal' && (
           <div style={{ marginBottom: 12 }}>
-            <input className="aip" placeholder="Enter User UID..." value={uid} onChange={e => setUid(e.target.value)} />
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <input className="aip" placeholder="Enter User UID manually or load users..." value={search} onChange={e => setSearch(e.target.value)} />
+              <button className="ab ab-bl ab-sm" onClick={loadUsers} disabled={loadingUsers} style={{ flexShrink: 0 }}>
+                {loadingUsers ? <Loader2 size={11} className="asp" /> : <Users size={11} />} Load Users
+              </button>
+            </div>
+            {showUserList && (
+              <div style={{ border: '1px solid var(--border)', borderRadius: '10px', maxHeight: '200px', overflowY: 'auto', background: 'var(--bg-surface)' }}>
+                {filteredUsers.length > 0 ? filteredUsers.map(u => (
+                  <div key={u.id} className="aur" style={{ margin: 0, borderRadius: 0, borderBottom: '1px solid var(--border)' }} onClick={() => selectUser(u)}>
+                    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--bg-card)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.65rem', fontWeight: 800, color: '#fff' }}>
+                      {(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}
+                    </div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName || 'Anonymous'}</div>
+                      <div style={{ fontSize: '.62rem', color: 'var(--text-muted)' }}>{u.email || u.id}</div>
+                    </div>
+                  </div>
+                )) : <p style={{ padding: 14, textAlign: 'center', color: 'var(--text-muted)', fontSize: '.75rem' }}>No users found</p>}
+              </div>
+            )}
+            {uid && <div className="aedit-hint" style={{ marginTop: 4 }}>Target UID: {uid}</div>}
           </div>
         )}
 
@@ -1656,8 +1632,7 @@ function StaffTab({ toast }) {
       <div className="asec">
         <h3 className="ast"><UserCog size={15} /> Staff Members</h3>
         <div className="ausr-input">
-          <input className="aip" placeholder="Enter email to add as staff..." value={email}
-            onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addStaff()} />
+          <input className="aip" placeholder="Enter email to add as staff..." value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addStaff()} />
           <button className="ab ab-p ab-sm" onClick={addStaff} disabled={adding || !email.trim()}>
             {adding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />} Add
           </button>
@@ -1698,11 +1673,17 @@ function UsersTab({ toast }) {
     if (!db) return;
     setLoading(true);
     try {
-      let q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limitQ(50));
-      if (more && lastKey) q = query(q, startAfter(lastKey));
+      // ★ FIX: Removed orderBy('createdAt') to prevent query from failing if a user is missing the field
+      let q = query(collection(db, 'users'), limitQ(50));
       const snap = await getDocs(q);
       if (mounted.current) {
         const newUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+        // Sort client-side by createdAt if it exists
+        newUsers.sort((a, b) => {
+          const tsA = a.createdAt?.seconds || 0;
+          const tsB = b.createdAt?.seconds || 0;
+          return tsB - tsA;
+        });
         setUsers(prev => more ? [...prev, ...newUsers] : newUsers);
         setLastKey(snap.docs[snap.docs.length - 1] || null);
         setHasMore(snap.docs.length === 50);
@@ -1714,8 +1695,8 @@ function UsersTab({ toast }) {
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
     const q = search.toLowerCase();
-    return users.filter(u =>
-      (u.displayName || '').toLowerCase().includes(q) ||
+    return users.filter(u => 
+      (u.displayName || '').toLowerCase().includes(q) || 
       (u.email || '').toLowerCase().includes(q) ||
       (u.id || '').toLowerCase().includes(q)
     );
@@ -1725,8 +1706,7 @@ function UsersTab({ toast }) {
     <div className="ae">
       <div className="asec">
         <h3 className="ast"><Users size={15} /> Users</h3>
-        <button className="ab ab-p" onClick={() => loadUsers(false)} disabled={loading}
-          style={{ marginBottom: 14, width: '100%', justifyContent: 'center' }}>
+        <button className="ab ab-p" onClick={() => loadUsers(false)} disabled={loading} style={{ marginBottom: 14, width: '100%', justifyContent: 'center' }}>
           {loading ? <Loader2 size={14} className="asp" /> : <Users size={14} />}
           {users.length > 0 ? 'Reload Users' : 'Load Users from Firebase'}
         </button>
