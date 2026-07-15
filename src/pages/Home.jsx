@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v22.2 — Clean, Accurate, Reactive (Uses AppDataContext)
+// v22.3 — Explicit user data fetch on mount
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
@@ -486,6 +486,7 @@ export default function Home() {
     predictionResults,
     userStats,
     loading: ctxLoading,
+    ensureUserData, // ★ FIX: Destructure ensureUserData
   } = appData;
 
   // Fixtures (not in context, fetched independently)
@@ -498,6 +499,13 @@ export default function Home() {
   const [totalUsers, setTotalUsers] = useState(null);
 
   const { fixtures: backupRaw } = useFootballData();
+
+  // ★ FIX: Explicitly trigger user data fetch on mount to guarantee predictions/results load
+  useEffect(() => {
+    if (uid) {
+      ensureUserData(uid);
+    }
+  }, [uid, ensureUserData]);
 
   // Offline detection
   useEffect(() => {
