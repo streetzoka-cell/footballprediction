@@ -152,18 +152,46 @@ export default function Highlights() {
     setIsFormOpen(true);
   };
 
+  // ★ SMART IMAGE COMPRESSION: Automatically resizes & compresses large images
   const handleImageUpload = (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    if (file.size > 800000) return alert("Image too large (max 800KB for fast loading)");
+    
     setUploadingImage(true);
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setFormData(d => ({ ...d, imageUrl: reader.result }));
-      setUploadingImage(false);
+    
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        // Create a canvas to draw and resize the image
+        const canvas = document.createElement('canvas');
+        let { width, height } = img;
+        
+        // Max width: 1200px to keep file size tiny but quality high
+        const MAX_WIDTH = 1200;
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Draw the image onto the canvas
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Compress to JPEG with 70% quality (dramatically reduces file size)
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        
+        setFormData(d => ({ ...d, imageUrl: compressedDataUrl }));
+        setUploadingImage(false);
+      };
+      img.src = event.target.result;
     };
     reader.readAsDataURL(file);
   };
+
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -415,7 +443,7 @@ export default function Highlights() {
                   <div className="nh-dropzone" onClick={() => fileInputRef.current?.click()}>
                     {uploadingImage ? <Loader size={24} className="animate-spin" /> : <ImageIcon size={24} />}
                     <span style={{ fontSize: '.85rem', fontWeight: 600 }}>Click to upload from device</span>
-                    <span style={{ fontSize: '.7rem' }}>Max 800KB</span>
+                    <span style={{ fontSize: '.7rem' }}>Auto-compresses for fast loading</span>
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
                   </div>
                 )}
