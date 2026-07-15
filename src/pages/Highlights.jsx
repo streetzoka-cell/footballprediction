@@ -73,7 +73,8 @@ const CATEGORIES = [
    ═══════════════════════════════════════════════════════════════ */
 export default function Highlights() {
   injectStyles();
-  const { user, userProfile } = useAuth();
+  const { currentUser, userProfile } = useAuth();
+  const user = currentUser; // Alias it so the rest of the code works
   const isAdmin = userProfile?.role === 'admin';
 
   const [posts, setPosts] = useState([]);
@@ -136,9 +137,11 @@ export default function Highlights() {
     setIsFormOpen(true);
   };
 
-  const handleSave = async (e) => {
+   const handleSave = async (e) => {
     e.preventDefault();
     if (!formData.title || !formData.body) return;
+    if (!user) return alert("You must be logged in to do this.");
+    
     setSaving(true);
 
     try {
@@ -151,7 +154,7 @@ export default function Highlights() {
         await addDoc(collection(db, 'news_posts'), {
           ...formData,
           authorId: user.uid,
-          authorName: userProfile.displayName || 'Admin',
+          authorName: userProfile?.displayName || 'Admin',
           createdAt: serverTimestamp(),
           likesCount: 0,
           commentsCount: 0,
@@ -161,7 +164,7 @@ export default function Highlights() {
       setIsFormOpen(false);
     } catch (err) {
       console.error("Save post error:", err);
-      alert("Failed to save post. Check Firestore rules.");
+      alert("Failed to save post. Check console for details.");
     } finally {
       setSaving(false);
     }
