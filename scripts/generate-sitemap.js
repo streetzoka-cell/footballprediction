@@ -6,19 +6,16 @@ import { getFirestore } from "firebase-admin/firestore";
 let serviceAccount;
 
 try {
-  // 1. Try reading from local file (for local development)
   if (existsSync("./firebase-adminsdk.json")) {
     serviceAccount = JSON.parse(readFileSync("./firebase-adminsdk.json"));
-  } 
-  // 2. Try reading from Vercel Environment Variables (for production)
-  else if (process.env.FIREBASE_ADMIN_SDK) {
+  } else if (process.env.FIREBASE_ADMIN_SDK) {
     serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_SDK);
   } else {
     throw new Error("Firebase Admin SDK credentials not found.");
   }
 } catch (e) {
   console.error("❌ Error loading Firebase Admin SDK:", e.message);
-  process.exit(1); // Exit if no credentials found so the build fails loudly
+  process.exit(1);
 }
 
 initializeApp({ credential: cert(serviceAccount) });
@@ -39,7 +36,7 @@ async function generateSitemap() {
       { url: "/mastergames", changefreq: "daily", priority: 0.9 },
       { url: "/leaderboard", changefreq: "daily", priority: 0.85 },
       { url: "/basketball", changefreq: "hourly", priority: 0.85 },
-      { url: "/highlights", changefreq: "daily", priority: 0.8 },
+      { url: "/highlights", changefreq: "hourly", priority: 0.9 }, // Increased priority for News Hub
       { url: "/livestream", changefreq: "daily", priority: 0.75 },
       { url: "/about", changefreq: "monthly", priority: 0.6 },
       { url: "/faq", changefreq: "monthly", priority: 0.55 },
@@ -48,13 +45,13 @@ async function generateSitemap() {
       { url: "/terms", changefreq: "yearly", priority: 0.3 },
     ];
 
-    // ★ 2. Fetch Dynamic Matches from Firestore
+    const dynamicRoutes = [];
+
+    // ★ 1. Fetch Dynamic Matches from Firestore
     const today = new Date().toISOString().split("T")[0];
     const todaySnap = await db.collection("fixture_snapshots").doc(today).get();
     
     let matchCount = 0;
-    const dynamicRoutes = [];
-
     if (todaySnap.exists) {
       const data = todaySnap.data();
       const allMatches = [
@@ -79,8 +76,21 @@ async function generateSitemap() {
         }
       });
     }
-
     console.log(`Found ${matchCount} matches to add to sitemap.`);
+
+    // ★ 2. Fetch Dynamic News Posts from Firestore
+    const newsSnap = await db.collection("news_posts").orderBy("createdAt", "desc").limit(500).get();
+    let newsCount = 0;
+    
+    newsSnap.forEach(doc => {
+      dynamicRoutes.push({
+        url: `/highlights/${doc.id}`,
+        changefreq: "daily",
+        priority: 0.85 // High priority for SEO
+      });
+      newsCount++;
+    });
+    console.log(`Found ${newsCount} news posts to add to sitemap.`);
 
     // ★ 3. Generate Sitemap XML
     mkdirSync("./dist", { recursive: true });

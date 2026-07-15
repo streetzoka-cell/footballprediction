@@ -52,7 +52,9 @@ export default function AppRoutes() {
       <Route path="/predictions" element={<Animated><Predictions /></Animated>} />
       <Route path="/mastergames" element={<Animated><MasterGames /></Animated>} />
       <Route path="/basketball" element={<Animated><Basketball /></Animated>} />
-      <Route path="/highlights" element={<Animated><Highlights /></Animated>} />
+            <Route path="/highlights" element={<Animated><Highlights /></Animated>} />
+      
+      <Route path="/highlights/:id" element={<Animated><Highlights /></Animated>} />
       <Route path="/livestream" element={<Animated><LiveStream /></Animated>} />
       <Route path="/leaderboard" element={<Animated><Leaderboard /></Animated>} />
 
