@@ -477,7 +477,7 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
           : <span className="v22-vs">VS</span>}
         </div>
         <div className="v22-te aw">
-          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}>
+          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'}</span>
         </div>
       </div>
