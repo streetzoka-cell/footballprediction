@@ -121,7 +121,7 @@ export default function Highlights() {
   
   // Extract ID from slug URL (e.g. /highlights/mbappe-injured-123 -> 123)
   const { slugId, author: authorFilter } = useParams();
-  const urlPostId = slugId ? slugId.split('-').pop() : null;
+  const urlPostId = slugId && slugId !== 'author' ? slugId.split('-').pop() : null;
   const navigate = useNavigate();
 
   const [theme, setTheme] = useState('dark');
@@ -133,6 +133,7 @@ export default function Highlights() {
   const [relatedMatch, setRelatedMatch] = useState(null);
   const [savedPosts, setSavedPosts] = useState(() => JSON.parse(localStorage.getItem('nh_saved') || '[]'));
   const [shareData, setShareData] = useState(null);
+  const [lightboxImage, setLightboxImage] = useState(null); // ★ NEW: Lightbox state
   
   const [visibleCount, setVisibleCount] = useState(15);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -420,6 +421,7 @@ export default function Highlights() {
             relatedPosts={posts.filter(p => p.category === activePost.category && p.id !== activePost.id).slice(0, 3)}
             onRelatedClick={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
             onBackToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            onImageClick={(url) => setLightboxImage(url)} // ★ NEW: Lightbox trigger
             newComments={newComments}
             setNewComments={setNewComments}
             handleComment={handleComment}
@@ -512,6 +514,16 @@ export default function Highlights() {
         </button>
       )}
 
+      {/* ★ NEW: IMAGE LIGHTBOX MODAL */}
+      {lightboxImage && (
+        <div onClick={() => setLightboxImage(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.95)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'pointer' }}>
+          <img src={lightboxImage} style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} alt="Expanded view" />
+          <button onClick={() => setLightboxImage(null)} style={{ position: 'absolute', top: 24, right: 24, background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: '50%', width: 44, height: 44, color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <X size={24} />
+          </button>
+        </div>
+      )}
+
       {/* CREATE / EDIT MODAL */}
       {isFormOpen && (
         <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
@@ -599,6 +611,8 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
 
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
+      
+      {/* HERO IMAGE LAYOUT */}
       {isHero && post.imageUrl && (
         <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', height: 240, overflow: 'hidden' }}>
           <img src={post.imageUrl} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }} loading="lazy" />
@@ -611,36 +625,35 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
       )}
 
       <div style={{ padding: 16 }}>
-        {!isHero && (
-          <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
-              <div style={{ flex: 1 }}>
-                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-                <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
+        
+        {/* ★ FIX: Unified Clickable Content Area (Works for Hero without image AND Normal posts) */}
+        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
+          {!isHero || !post.imageUrl ? (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
+                <div style={{ flex: 1 }}>
+                  <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
+                  <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
+                </div>
+                <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>
               </div>
-              <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>
+              <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>
+              
+              <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+                {post.body}
+              </p>
+              {!isExpanded && post.body.length > 100 && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
+              {isExpanded && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
+            </>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 0 }}>
+              <div onClick={() => onAuthorClick()} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span> • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
             </div>
-            <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>
-            
-            <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-              {post.body}
-            </p>
-            {!isExpanded && post.body.length > 100 && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
-            {isExpanded && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
-          </div>
-        )}
+          )}
+        </div>
 
-        {isHero && (
-           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 12 }}>
-             <div onClick={() => onAuthorClick()} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span> • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
-             <div style={{ display: 'flex', gap: 8 }}>
-               <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'none', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>
-               <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'none', color: 'var(--nh-text-muted)' }}><Share2 size={18} /></button>
-             </div>
-           </div>
-        )}
-
+        {/* ACTIONS */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--nh-border)' }}>
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
             {REACTIONS.map(r => {
@@ -666,7 +679,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
 /* ═══════════════════════════════════════════════════════════════
    SINGLE POST VIEW 
    ═══════════════════════════════════════════════════════════════ */
-function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onBackToTop, newComments, setNewComments, handleComment }) {
+function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onBackToTop, onImageClick, newComments, setNewComments, handleComment }) {
   const isSaved = savedPosts.includes(post.id);
   const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
 
@@ -699,7 +712,8 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       )}
 
-      {post.imageUrl && <img src={post.imageUrl} alt={post.title} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)' }} loading="lazy" />}
+      {/* ★ NEW: Image is now clickable to open Lightbox */}
+      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">

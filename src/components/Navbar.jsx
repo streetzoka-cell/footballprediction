@@ -146,11 +146,12 @@ const StatusDot = ({ status, size = 6 }) => {
 
 const LINKS = [
   { to: '/', label: 'Home', emoji: '🏠', pro: true },
-  { to: '/fixtures', label: 'Fixtures', emoji: '⚽' },
+  { to: '/fixtures', label: 'LiveScores & fixtures', emoji: '⚽' },
+  { to: '/highlights', label: 'News Hub', emoji: '🎬' },
   { to: '/mastergames', label: 'Master Games', emoji: '🎮' },
   { to: '/predictions', label: 'Predictions', emoji: '🎯', badge: 'NEW' },
   { to: '/leaderboard', label: 'Leaderboard', emoji: '🏆' },
-  { to: '/highlights', label: 'Highlights', emoji: '🎬' },
+  
   { to: '/livestream', label: 'Live Stream', emoji: '📡', isLive: true },
 ];
 
