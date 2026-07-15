@@ -1,16 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/dataLayer.js
-// DIRECT FIRESTORE DATA LAYER — Zero-Backend Architecture
-//
-// ★ SINGLE SOURCE for all date helpers
-// ★ Integrates with EventBus for reactive updates
-// ★ Clear separation: Zoka (guests) vs User (logged-in)
-// ★ Predictions fetched by date — they never disappear
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
 import {
-  collection, query, where, doc,
+  collection, query, where, doc, limit, // FIX: Added limit import
   getDoc, getDocs, setDoc, deleteDoc, serverTimestamp,
 } from 'firebase/firestore';
 
@@ -22,12 +16,8 @@ import {
 import { eventBus, EVENT } from './eventBus';
 
 // ═══════════════════════════════════════════════════
-// DATE HELPERS — SINGLE SOURCE OF TRUTH
-// ═══════════════════════════════════════════════════
-
-// ═══════════════════════════════════════════════════════════════
 // DATE HELPERS — RE-EXPORTED FROM SINGLE SOURCE
-// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════
 export { 
   todayStr, yesterdayStr, tomorrowStr, getDateStr,
   getWeekStart, getMonthStart, getLocalDateFromUtc,
@@ -35,6 +25,7 @@ export {
 } from './dates';
 
 import { todayStr, getWeekStart, getMonthStart } from './dates';
+
 // ═══════════════════════════════════════════════════
 // TIMEOUT UTILITY
 // ═══════════════════════════════════════════════════
@@ -140,15 +131,14 @@ class LocalCache {
 // DATA LAYER CLASS
 // ═══════════════════════════════════════
 class DataLayer {
-  constructor() {    this._memory = new Map();
+  constructor() {
+    this._memory = new Map();
     this._locks = new Map();
     this._subscribers = new Map();
     this._local = new LocalCache();
     this._backgroundRefreshInProgress = new Set();
     this._local.startPeriodicCleanup();
 
-    // ★ FIX: Auto-clear user caches when tab regains focus
-    // This ensures users instantly see new points/results/leaderboards
     if (typeof window !== 'undefined' && typeof document !== 'undefined') {
       const onFocus = () => {
         if (document.visibilityState === 'visible') {
@@ -159,7 +149,7 @@ class DataLayer {
       document.addEventListener('visibilitychange', onFocus);
     }
   }
-  // ─── Memory Cache ────────────────────────────────
+
   _memGet(key, ttlMs) {
     const entry = this._memory.get(key);
     if (!entry) return undefined;
@@ -174,15 +164,12 @@ class DataLayer {
     this._memory.set(key, { data, ts: Date.now(), ttl: ttlMs });
   }
 
-  // ─── Main getOrSet — emits events on fresh fetch ─
   async getOrSet(key, fetchFn, ttlMs, options = {}) {
     const { graceMs, skipLocal, event, eventPayload } = options;
 
-    // Layer 1: Memory
     const memData = this._memGet(key, ttlMs);
     if (memData !== undefined) return memData;
 
-    // Layer 2: localStorage
     if (!skipLocal) {
       const localData = this._local.get(key, ttlMs);
       if (localData !== undefined) {
@@ -190,7 +177,6 @@ class DataLayer {
         return localData;
       }
 
-      // Layer 2.5: Stale-while-revalidate
       const staleEntry = this._local.getWithGrace(key, ttlMs, graceMs);
       if (staleEntry) {
         this._memSet(key, staleEntry.data, ttlMs);
@@ -201,13 +187,11 @@ class DataLayer {
       }
     }
 
-    // Layer 3: Thundering herd protection
     const existingLock = this._locks.get(key);
     if (existingLock) {
       try { return await existingLock; } catch { /* fall through */ }
     }
 
-    // Layer 4: Fetch from Firestore
     const promise = fetchFn()
       .then((data) => {
         this._memSet(key, data, ttlMs);
@@ -258,7 +242,6 @@ class DataLayer {
     });
   }
 
-  // ─── Subscriptions ───────────────────────────────
   subscribe(key, callback) {
     if (!this._subscribers.has(key)) this._subscribers.set(key, new Set());
     this._subscribers.get(key).add(callback);
@@ -283,7 +266,6 @@ class DataLayer {
     });
   }
 
-  // ─── Cache Invalidation ─────────────────────────
   invalidate(key) {
     this._memory.delete(key);
     this._local.delete(key);
@@ -322,7 +304,6 @@ class DataLayer {
   // DATA FETCHERS
   // ═══════════════════════════════════════════════════
 
-  // ─── Football Fixtures ───────────────────────────
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     const key = CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr);
@@ -355,7 +336,6 @@ class DataLayer {
     };
   }
 
-  // ─── Basketball Fixtures ─────────────────────────
   async fetchBasketballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     const key = CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr);
@@ -389,7 +369,6 @@ class DataLayer {
     };
   }
 
-  // ─── Generic Snapshot Fetch ──────────────────────
   async fetchSnapshot(sport, dateStr) {
     return sport === SPORT.BASKETBALL
       ? this.fetchBasketballSnapshot(dateStr)
@@ -402,7 +381,6 @@ class DataLayer {
       : this.fetchFootballFixtures(dateStr);
   }
 
-  // ─── Reference Data ─────────────────────────────
   async fetchLeagues(sport = SPORT.FOOTBALL) {
     const docId = getRefDocId('leagues', sport);
     return this.getOrSet(CACHE_KEY.reference(docId), async () => {
@@ -476,7 +454,6 @@ class DataLayer {
     return this.getOrSet(key, async () => {
       if (!db) return [];
 
-      // Try snapshot first (fast, single read)
       const snap = await withTimeout(
         getDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr)),
         TIMEOUT.SNAPSHOT_READ, null
@@ -484,7 +461,6 @@ class DataLayer {
 
       if (snap?.exists()) return snap.data().predictions || [];
 
-      // Fallback: collection query
       const querySnap = await withTimeout(
         getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr))),
         TIMEOUT.COLLECTION_QUERY, { docs: [] }
@@ -500,7 +476,7 @@ class DataLayer {
   }
 
   // ═══════════════════════════════════════════════════
-  // ★ USER PREDICTIONS — Never deleted, grouped by date
+  // ★ USER PREDICTIONS
   // ═══════════════════════════════════════════════════
 
   async fetchUserPredictions(uid, dateStr) {
@@ -509,7 +485,6 @@ class DataLayer {
     const key = CACHE_KEY.userPredictions(uid, dateStr);
 
     return this.getOrSet(key, async () => {
-      // Try indexed query (userId + matchDate)
       let snap = await withTimeout(
         getDocs(query(
           collection(db, PATHS.USER_PREDICTIONS),
@@ -519,10 +494,14 @@ class DataLayer {
         TIMEOUT.USER_QUERY, null
       );
 
-      // Fallback: userId only (for old data missing matchDate)
+      // FIX: Added limit(500) to the fallback query to prevent massive historical pulls
       if (!snap || snap.empty) {
         snap = await withTimeout(
-          getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid))),
+          getDocs(query(
+            collection(db, PATHS.USER_PREDICTIONS), 
+            where('userId', '==', uid),
+            limit(500)
+          )),
           TIMEOUT.USER_QUERY, null
         );
       }
@@ -534,7 +513,6 @@ class DataLayer {
         const data = d.data();
         if (data.matchDate && data.matchDate !== dateStr) return;
         
-        // Key by all possible IDs so lookups always work
         const keys = new Set([d.id]);
         if (data.predId) keys.add(String(data.predId));
         if (data.matchId) keys.add(String(data.matchId));
@@ -564,7 +542,11 @@ class DataLayer {
 
       if (!snap || snap.empty) {
         snap = await withTimeout(
-          getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid))),
+          getDocs(query(
+            collection(db, PATHS.PREDICTION_RESULTS), 
+            where('userId', '==', uid),
+            limit(500)
+          )),
           TIMEOUT.USER_QUERY, null
         );
       }
@@ -601,7 +583,7 @@ class DataLayer {
   }
 
   // ═══════════════════════════════════════════════════
-  // ★ LEADERBOARDS — Daily → Weekly → Monthly → GOAT
+  // ★ LEADERBOARDS
   // ═══════════════════════════════════════════════════
 
   async fetchDailyLeaderboard(dateStr) {
@@ -640,7 +622,6 @@ class DataLayer {
     });
   }
 
-  // ─── Helpers ─────────────────────────────────────
   getScoreMap(predictions) {
     const map = new Map();
     predictions?.forEach((p) => {
@@ -658,7 +639,6 @@ class DataLayer {
     return period;
   }
 
-  // ─── Reactive Subscriptions ─────────────────────
   onFixturesUpdated(sport, callback) {
     const event = sport === SPORT.BASKETBALL ? EVENT.BASKETBALL_UPDATED : EVENT.FOOTBALL_UPDATED;
     return eventBus.on(event, callback);
@@ -678,11 +658,11 @@ export async function saveUserPrediction({ matchId, homeScore, awayScore, matchD
   const uid = auth.currentUser?.uid;
   if (!uid || !matchId) throw new Error('Not signed in or missing matchId');
 
-  const docId = `${uid}_${String(matchId)}`;  // ★ FIX: Include uid
+  const docId = `${uid}_${String(matchId)}`;
   await setDoc(doc(db, PATHS.USER_PREDICTIONS, docId), {
     userId: uid,
     matchId: String(matchId),
-    predId: docId,  // ★ FIX: Keep consistent
+    predId: docId, // FIX: Keep predId strictly consistent with doc ID
     matchDate: matchDate || todayStr(),
     homeScore: Number(homeScore),
     awayScore: Number(awayScore),
@@ -691,16 +671,12 @@ export async function saveUserPrediction({ matchId, homeScore, awayScore, matchD
     ...extra,
   }, { merge: true });
 }
-/** Delete a user prediction. */
+
 export async function deleteUserPrediction(matchId) {
   const uid = auth.currentUser?.uid;
   if (!uid || !matchId) return;
-  // ★ FIX: Match the new uid_matchId doc ID structure
   await deleteDoc(doc(db, PATHS.USER_PREDICTIONS, `${uid}_${String(matchId)}`));
 }
 
-// ═══════════════════════════════════════════════════
-// SINGLETON
-// ═══════════════════════════════════════════════════
 export const dataLayer = new DataLayer();
 export default dataLayer;

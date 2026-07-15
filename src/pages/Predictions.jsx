@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v19.1 — Fully Aligned & Fixed
+// v19.1 — Fully Aligned & Fixed (Lock Logic Restored)
 // ═════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue, startTransition } from 'react';
@@ -467,7 +467,7 @@ function Skeleton() {
 
 function ResultBadge({ result }) {
   if (!result) return null;
-  const rType = result.resultType || result.type; // ★ FIX
+  const rType = result.resultType || result.type;
   if (!rType || rType === 'pending') return null;
   if (rType === 'exact') return <span className="v19-bdg ex"><CheckCircle2 size={8} /> EXACT +{result.points || 10}</span>;
   if (rType === 'result') return <span className="v19-bdg rs"><TrendingUp size={8} /> RESULT +{result.points || 3}</span>;
@@ -587,7 +587,7 @@ function ZokaPredCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
 /* ═══════════════════════════════════════════════════
    PREDICTION CARD
    ═══════════════════════════════════════════════════ */
-function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMatchLocked, isGlobalLocked, zokaPick, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, standalone = true }) {
+function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMatchLocked, zokaPick, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, standalone = true }) {
   const isFinished = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
   const hasPred = !!userPred;
@@ -621,7 +621,6 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
   if (isEditing) { statusLabel = 'EDITING'; statusColor = 'var(--accent)'; statusBg = 'rgba(0,230,118,.08)'; }
   else if (isLive) { statusLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,.1)'; }
   else if (isFinished) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(0,230,118,.08)'; }
-  else if (isMatchLocked && !isEditing) { statusLabel = 'LOCKED'; statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,.08)'; }
 
   const cardCls = `v19-mc${cardExtra}${isLive ? ' lg' : ''}${isFinished ? ' ok' : ''}${standalone ? ' standalone' : ''}`;
 
@@ -695,11 +694,11 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, isMa
             <span className="v19-bdg pn"><Lock size={8} /> Locked</span>
           ) : hasPred ? (
             <>
-              <span className="v19-bdg bl"><CheckCircle size={8} /> Locked</span>
-              {!isMatchLocked && !isGlobalLocked && <button className="v19-b v19-bbl v19-bsm" onClick={() => onEdit(pred)}><Pencil size={10} /> Edit</button>}
+              <span className="v19-bdg bl"><CheckCircle size={8} /> Saved</span>
+              <button className="v19-b v19-bbl v19-bsm" onClick={() => onEdit(pred)}><Pencil size={10} /> Edit</button>
             </>
-          ) : isMatchLocked || isGlobalLocked ? (
-            <span className="v19-bdg pn"><Lock size={8} /> Locked</span>
+          ) : isLive ? (
+            <span className="v19-bdg pn"><Lock size={8} /> Live</span>
           ) : loggedIn ? (
             <button className="v19-b v19-bp v19-bsm" onClick={() => onEdit(pred)}><Target size={11} /> Predict</button>
           ) : (
@@ -849,14 +848,14 @@ export default function Predictions() {
   const [showLogin, setShowLogin] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [now, setNow] = useState(Date.now());
-  
 
   useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
-   useEffect(() => {
-  const onFocus = () => setFocusKey(k => k + 1);
-  document.addEventListener('visibilitychange', onFocus);
-  return () => document.removeEventListener('visibilitychange', onFocus);
-}, []);
+  useEffect(() => {
+    const onFocus = () => setFocusKey(k => k + 1);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, []);
+
   const dateList = useMemo(() => {
     const arr = [];
     for (let i = -14; i <= FUTURE_DAYS; i++) arr.push(dateOffset(i));
@@ -913,24 +912,12 @@ export default function Predictions() {
 
   const selDateFeatured = useMemo(() => allFeatured.find(g => g.date === selDate)?.matches || [], [allFeatured, selDate]);
 
-  const globalDeadline = useMemo(() => {
-    const times = selDateFeatured
-      .filter(p => !isFinishedStatus(p.status, SPORT.FOOTBALL))
-      .map(p => parseKickoff(p.kickoff, p.matchDate || selDate))
-      .filter(Boolean)
-      .sort((a, b) => a - b);
-    return times.length > 0 ? new Date(times[0].getTime() - 3600000) : null;
-  }, [selDateFeatured, selDate]);
-
-  const isGlobalLocked = globalDeadline ? now > globalDeadline.getTime() : false;
-
+  // ★ FIX: Removed the 1-hour global lock. Matches only lock when they start (Live) or finish.
   const isMatchLocked = useCallback((pred) => {
     if (isFinishedStatus(pred.status, SPORT.FOOTBALL)) return true;
-    const matchDate = pred._dateStr || pred.matchDate || selDate;
-    const ko = parseKickoff(pred.kickoff, matchDate);
-    if (!ko) return false;
-    return now > ko.getTime() - 3600000;
-  }, [selDate, now]);
+    if (isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive) return true;
+    return false;
+  }, []);
 
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
@@ -984,9 +971,9 @@ export default function Predictions() {
   /* ═══════════════════════════════════════════════════
      DATA LOADING
      ═══════════════════════════════════════════════════ */
-    useEffect(() => {
+  useEffect(() => {
     let cancelled = false;
-      const run = async () => {
+    const run = async () => {
       try {
         const dates = fetchDates;
         const [predsResults, zokaResults] = await Promise.all([
@@ -1020,7 +1007,6 @@ export default function Predictions() {
 
         if (loggedIn && uid) {
           try {
-            // ★ FIXED: Fetch predictions for ALL visible dates, not just selDate
             const allPredsData = await Promise.all(fetchDates.map(d => dataLayer.fetchUserPredictions(uid, d).catch(() => ({}))));
             if (mounted.current) {
               const map = {};
@@ -1035,7 +1021,6 @@ export default function Predictions() {
           } catch { /* ignore */ }
 
           try {
-            // ★ FIXED: Fetch results for ALL visible dates
             const allResultsData = await Promise.all(fetchDates.map(d => dataLayer.fetchPredictionResults(uid, d).catch(() => ({ results: [] }))));
             if (mounted.current) {
               const allResults = allResultsData.flatMap(r => r?.results || []);
@@ -1070,7 +1055,6 @@ export default function Predictions() {
       } finally {
         if (mounted.current) {
           setLoading(false);
-         
         }
       }
     };
@@ -1107,7 +1091,6 @@ export default function Predictions() {
     }));
     unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (payload) => {
       if (payload.uid !== uid) return;
-      // ★ FIXED: Fetch the specific date that was saved, regardless of what selDate is
       dataLayer.fetchUserPredictions(uid, payload.dateStr).then(data => {
         if (!mounted.current || !data) return;
         setUserPreds(prev => {
@@ -1249,14 +1232,14 @@ export default function Predictions() {
       <PredCard
         key={mid || i} pred={pred} index={i} userPred={up} result={res}
         isEditing={isEditing} editH={editH} editA={editA}
-        isMatchLocked={isMatchLocked(pred)} isGlobalLocked={isGlobalLocked}
+        isMatchLocked={isMatchLocked(pred)} 
         zokaPick={zoka} standalone={false}
         onEdit={startEdit} onSave={savePrediction} onCancel={cancelEdit}
         onQuickPick={quickPick} onEditH={setEditH} onEditA={setEditA}
         loggedIn={loggedIn} onLogin={() => setShowLogin(true)} saving={saving}
       />
     );
-  }, [editingId, editH, editA, userPredMap, resultMap, zokaMatchMap, isMatchLocked, isGlobalLocked, loggedIn, saving]);
+  }, [editingId, editH, editA, userPredMap, resultMap, zokaMatchMap, isMatchLocked, loggedIn, saving]);
 
   return (
     <div className="v19-page">

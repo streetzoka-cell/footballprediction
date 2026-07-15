@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// PRODUCTION-READY ADMIN v14.2 — Fixed Array Overwrites & Visual Badges
+// v15.1 Pro UI — Full Fidelity, Smart Auto-Resolve, Strict Validation, Broadcast
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -12,29 +12,27 @@ import {
   Clock, TrendingUp, Star, Sparkles, X,
   Save, Timer, Users, UserCog, Search,
   LayoutDashboard, Copy, History,
-  ChevronUp, RotateCcw, Activity,
+  ChevronUp, RotateCcw, Activity, Megaphone,
   Eye, ChevronRight, Ban, ArrowLeft
 } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
-import { useFootballData } from '../context/FootballDataContext';
 import { db } from '../utils/firebase';
 import { dataLayer } from '../utils/dataLayer';
-import { todayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates';
+import { todayStr, getLocalDateStr, getLocalDateFromUtc, formatTime, formatDateShort } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { isLiveStatus, isFinishedStatus, PATHS, CACHE_KEY } from '../utils/constants';
-import {
-  collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
-  updateDoc, serverTimestamp, getDoc, getDocs,
-  orderBy, limit as limitQ, startAfter, writeBatch
-} from 'firebase/firestore';
+import { isLiveStatus, isFinishedStatus, PATHS, CACHE_KEY, SPORT } from '../utils/constants';
+import { fetchFixtures } from '../utils/api';
 import {
   resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard,
-  rebuildPeriodLeaderboard, rebuildAllLeaderboards,
-  invalidateCache
+  rebuildPeriodLeaderboard, rebuildAllLeaderboards
 } from '../hooks/useMatchData';
 
-// ★ NEW: Primary Source (Node Backend)
-import { fetchFixtures } from '../utils/api';
+import {
+  collection, query, where, onSnapshot, doc, setDoc, deleteDoc,
+  serverTimestamp, getDoc, getDocs, orderBy, limit as limitQ, startAfter, addDoc
+} from 'firebase/firestore';
+
 import SEO from '../components/SEO';
 
 /* ═════════════════════════════════════════════════════════════════════════════════
@@ -73,7 +71,7 @@ function extractMatchDate(m) {
 }
 const extractDate = m => extractMatchDate(m);
 
-function normalizeMatch(raw, isPrimary) {
+function normalizeMatch(raw, isPrimary = true) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   const status = raw.status || '';
@@ -150,6 +148,7 @@ const TABS = [
   {key:'zoka',label:'Zoka Picks',icon:Star},
   {key:'featured',label:'Featured',icon:Radio},
   {key:'results',label:'Results',icon:Trophy},
+  {key:'broadcast',label:'Broadcast',icon:Megaphone},
   {key:'staff',label:'Staff',icon:UserCog},
   {key:'users',label:'Users',icon:Users},
 ];
@@ -158,9 +157,9 @@ const TABS = [
    STYLE INJECTION
    ═════════════════════════════════════════════════════════════════════════════════ */
 const injectCSS = () => {
-  if (document.getElementById('adm-v14-css')) return;
+  if (document.getElementById('adm-v15-css')) return;
   const s = document.createElement('style');
-  s.id = 'adm-v14-css';
+  s.id = 'adm-v15-css';
   s.textContent = `
 @keyframes afu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
 @keyframes asp{from{transform:rotate(0)}to{transform:rotate(360deg)}}
@@ -466,16 +465,341 @@ function MatchRow({ m, idx, mode, sel, onToggleSel, scoreInput, onScoreInput, on
           </div>
         )}
         {mode === 'featured' && typeof onAction === 'function' && onAction(m, idx)}
-        {mode === 'results' && scoreInput && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input className="ari" type="number" min="0" max="99" value={scoreInput.h ?? ''} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="-" />
-            <span style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '.8rem' }}>–</span>
-            <input className="ari" type="number" min="0" max="99" value={scoreInput.a ?? ''} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="-" />
-          </div>
-        )}
         {pubPick && <RBadge pick={pubPick} />}
         {extraBadge}
       </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
+   MAIN ADMIN COMPONENT
+   ═════════════════════════════════════════════════════════════════════════════════ */
+export default function Admin() {
+  injectCSS();
+  const nav = useNavigate();
+  const { userProfile } = useAuth();
+  const mounted = useMounted();
+
+  const [tab, setTab] = useState('dashboard');
+  const [date, setDate] = useState(todayStr());
+  const [showMoreDates, setShowMoreDates] = useState(false);
+
+  const [preds, setPreds] = useState([]);
+  const [pubPicks, setPubPicks] = useState(null);
+  const [toast, setToast] = useState(null);
+  const [confirm, setConfirm] = useState(null);
+  const [rebuilding, setRebuilding] = useState(null);
+
+  const [primaryFixtures, setPrimaryFixtures] = useState([]);
+  const [primaryLoading, setPrimaryLoading] = useState(true);
+
+  const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
+  const extraDates = useMemo(() => {
+    const dates = [];
+    for (let i = -14; i <= 14; i++) {
+      const d = getLocalDateStr(i);
+      if (!defaultDates.includes(d)) dates.push(d);
+    }
+    return dates.sort();
+  }, []);
+
+  useEffect(() => {
+    let mnt = true;
+    setPrimaryLoading(true);
+    (async () => {
+      try {
+        const res = await fetchFixtures(date);
+        if (mnt) {
+          const l = Array.isArray(res) ? res : res?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
+        }
+      } catch (e) {
+        if (mnt) setPrimaryFixtures([]);
+      } finally {
+        if (mnt) setPrimaryLoading(false);
+      }
+    })();
+    return () => { mnt = false; };
+  }, [date]);
+
+  const allFixtures = primaryFixtures;
+  const dayFixtures = useMemo(() => allFixtures?.filter(m => extractDate(m) === date) || [], [allFixtures, date]);
+  const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
+  const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(
+      doc(db, PATHS.PREDICTION_SNAPSHOTS, date),
+      (snap) => {
+        if (!mounted.current) return;
+        if (snap.exists()) {
+          const data = snap.data();
+          setPreds(Array.isArray(data.predictions) ? data.predictions : []);
+        } else {
+          getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', date)))
+            .then(qs => {
+              if (mounted.current) setPreds(qs.docs.map(d => d.data()).sort((a, b) => (b.priority || 0) - (a.priority || 0)));
+            })
+            .catch(() => {});
+        }
+      },
+      () => {}
+    );
+    return unsub;
+  }, [date]);
+
+  useEffect(() => {
+    if (!db) return;
+    const unsub = onSnapshot(
+      doc(db, PATHS.ZOKA_PICKS, date),
+      (snap) => {
+        if (!mounted.current) return;
+        setPubPicks(snap.exists() ? snap.data() : null);
+      },
+      () => {}
+    );
+    return unsub;
+  }, [date]);
+
+  // ★ AUTO-RESOLVE LOGIC: When fixtures update and a featured match is FT, resolve it automatically.
+  useEffect(() => {
+    if (!preds.length || !dayFixtures.length) return;
+    preds.forEach(p => {
+      if (p.status === 'finished' || p.isFinished) return;
+      const fx = dayFixtures.find(f => String(f.id) === String(p.matchId));
+      if (fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null) {
+        handleResolve(p, fx.homeScore, fx.awayScore, true);
+      }
+    });
+  }, [dayFixtures, preds]);
+
+  const handleZokaSaveDraft = async (data) => {
+    if (!db) return;
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+  };
+
+  const handleZokaPublish = async (data) => {
+    if (!db) return;
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+  };
+
+  const handleZokaUnpublish = async () => {
+    if (!db || !pubPicks) return;
+    setConfirm({
+      title: 'Unpublish All Zoka Picks?',
+      msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
+      onYes: async () => {
+        await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
+        setPubPicks(null);
+        dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
+        eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
+        setConfirm(null);
+      },
+    });
+  };
+
+  const handleFeaturedAdd = async (m) => {
+    if (!db) return;
+    if (isLive(m) || isFin(m)) { setToast('Cannot add live or finished matches', 'er'); return; }
+    const matchDate = date;
+    const predId = `feat_${date}_${m.id}`;
+    const pred = {
+      id: predId,
+      matchId: String(m.id),
+      matchDate,
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      homeLogo: m.homeTeam?.crest || null,
+      awayLogo: m.awayTeam?.crest || null,
+      league: m.competition || m.league,
+      kickoff: m.utcDate || m.kickoff,
+      status: m.status || 'NS',
+      homeScore: null,
+      awayScore: null,
+      priority: preds.length + 1,
+    };
+
+    const updatedPreds = [...preds, pred];
+    setPreds(updatedPreds);
+
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      ...pred,
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updatedPreds,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
+  };
+
+  const handleFeaturedRemove = async (p) => {
+    if (!db) return;
+    const predId = p.id || `feat_${date}_${p.matchId}`;
+    const updatedPreds = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
+    setPreds(updatedPreds);
+
+    await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updatedPreds,
+      updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
+  };
+
+  const handleResolve = async (pred, h, a, isAuto = false) => {
+    const matchId = String(pred.matchId || pred.id);
+    const predId = pred.id || `feat_${date}_${matchId}`;
+
+    // Update Firestore Featured Doc
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    const updated = preds.map(p => {
+      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true };
+      return p;
+    });
+    setPreds(updated);
+
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updated, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    // Run the resolver for all users
+    await resolveMatchForAllUsers(matchId, h, a, date);
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+
+    if (!isAuto) setToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
+  };
+
+  const handleOverride = async (pred, h, a) => {
+    const matchId = String(pred.matchId || pred.id);
+    const predId = pred.id || `feat_${date}_${matchId}`;
+
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
+      homeScore: h, awayScore: a, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    const updated = preds.map(p => {
+      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a };
+      return p;
+    });
+    setPreds(updated);
+
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
+      predictions: updated, updatedAt: serverTimestamp(),
+    }, { merge: true });
+
+    await resolveMatchForAllUsers(matchId, h, a, date);
+
+    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
+    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+  };
+
+  const handleRebuild = async (period) => {
+    setRebuilding(period);
+    try {
+      if (period === 'daily') await rebuildDailySummary(date);
+      else if (period === 'goat') await rebuildGoatLeaderboard();
+      else if (period === 'weekly') await rebuildPeriodLeaderboard('weekly');
+      else if (period === 'monthly') await rebuildPeriodLeaderboard('monthly');
+      else if (period === 'all') await rebuildAllLeaderboards();
+    } catch (e) { console.error('[Admin] Rebuild err:', e); }
+    setRebuilding(null);
+  };
+
+  return (
+    <div className="ap">
+      <SEO
+        title="Admin Dashboard | ZOKASCORE"
+        description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently."
+        keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards"
+        path="/admin"
+        robots="noindex,nofollow"
+      />
+      <div className="aw">
+        <div className="ah">
+          <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>
+            <ArrowLeft size={14} />
+          </button>
+          <h1><ShieldAlert size={14} style={{ color: 'var(--gold)', verticalAlign: 'middle', marginRight: 6 }} /> Admin Control Room</h1>
+          <div className="sub">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
+        </div>
+
+        <div className="at">
+          {TABS.map(t => (
+            <button key={t.key} className={`atb${tab === t.key ? ' on' : ''}`} onClick={() => setTab(t.key)}>
+              <t.icon size={13} /><span className="lb">{t.label}</span>
+            </button>
+          ))}
+        </div>
+
+        <div className="ask" style={{ top: 108 }}>
+          <div className="adb">
+            {defaultDates.map(d => (
+              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
+                {dateLabel(d)}
+              </button>
+            ))}
+            <button className="more-dates-btn" onClick={() => setShowMoreDates(p => !p)}>
+              {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+              {showMoreDates ? 'Less' : 'More dates'}
+            </button>
+            {showMoreDates && extraDates.map(d => (
+              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
+                {dateLabel(d)}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {tab === 'dashboard' && (
+          <DashTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length}
+            liveCount={liveCount} finCount={finCount} date={date}
+            onRebuild={handleRebuild} rebuilding={rebuilding} />
+        )}
+
+        {tab === 'zoka' && (
+          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading} pubPicks={pubPicks}
+            onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish}
+            onSaveDraft={handleZokaSaveDraft} toast={setToast} />
+        )}
+
+        {tab === 'featured' && (
+          <FeaturedTab date={date} preds={preds} fixtures={allFixtures}
+            onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove}
+            fxLoading={primaryLoading} toast={setToast} />
+        )}
+
+        {tab === 'results' && (
+          <ResultsTab date={date} preds={preds}
+            onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
+        )}
+
+        {tab === 'broadcast' && <BroadcastTab toast={setToast} />}
+        {tab === 'staff' && <StaffTab toast={setToast} />}
+        {tab === 'users' && <UsersTab toast={setToast} />}
+      </div>
+
+      {toast && <Toast message={typeof toast === 'string' ? toast : toast} type={typeof toast === 'string' ? 'ok' : toast} onDone={() => setToast(null)} />}
+      {confirm && <Confirm title={confirm.title} msg={confirm.msg} onYes={confirm.onYes} onNo={() => setConfirm(null)} danger={confirm.danger} />}
     </div>
   );
 }
@@ -598,7 +922,6 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   }, [pubMatches]);
 
   const toggle = (m) => {
-    // ★ FIX: Block selection if finished or live
     if (isFin(m) || isLive(m)) { toast('Cannot select finished or live matches', 'in'); return; }
     const id = String(m.id);
     if (ids.has(id)) {
@@ -724,7 +1047,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   return (
     <div className="ae">
       {cnt > 0 && (
-        <div className="ask pop">
+        <div className="asec pop" style={{ background: 'rgba(245,197,66,.03)', borderColor: 'rgba(245,197,66,.15)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
             <div>
               <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-muted)' }}>
@@ -855,7 +1178,6 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   );
 }
 
-
 /* ═════════════════════════════════════════════════════════════════════════════════
    FEATURED TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
@@ -872,7 +1194,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
   const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
 
-  // ★ FIX: Filter out both Finished AND Live matches
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
     let l = fixtures.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)); 
@@ -880,7 +1201,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
     return l;
   }, [fixtures, date, lg]);
 
-  // ★ FIX: Filter out both Finished AND Live matches for the league filter chips
   const leagues = useMemo(() => {
     const map = new Map();
     (fixtures?.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)) || []).forEach(f => {
@@ -1010,7 +1330,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
   );
 }
 
-
 /* ═════════════════════════════════════════════════════════════════════════════════
    RESULTS TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
@@ -1044,8 +1363,8 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
   const handleResolve = async (pred) => {
     const mid = String(pred.matchId || pred.id);
     const s = scores[mid];
-    const h = s?.h != '' ? Number(s.h) : (pred.homeScore ?? null);
-    const a = s?.a != '' ? Number(s.a) : (pred.awayScore ?? null);
+    const h = s?.h !== '' ? Number(s.h) : (pred.homeScore ?? null);
+    const a = s?.a !== '' ? Number(s.a) : (pred.awayScore ?? null);
 
     if (h == null || a == null) { toast('Enter both scores', 'in'); return; }
 
@@ -1063,8 +1382,8 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
   const handleOverride = async (pred) => {
     const mid = String(pred.matchId || pred.id);
     const s = scores[mid];
-    const h = s?.h != '' ? Number(s.h) : null;
-    const a = s?.a != '' ? Number(s.a) : null;
+    const h = s?.h !== '' ? Number(s.h) : null;
+    const a = s?.a !== '' ? Number(s.a) : null;
 
     if (h == null || a == null) { toast('Enter new scores to override', 'in'); return; }
 
@@ -1221,6 +1540,72 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
 }
 
 /* ═════════════════════════════════════════════════════════════════════════════════
+   BROADCAST TAB (NEW)
+   ═════════════════════════════════════════════════════════════════════════════════ */
+function BroadcastTab({ toast }) {
+  const [type, setType] = useState('global');
+  const [uid, setUid] = useState('');
+  const [title, setTitle] = useState('');
+  const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
+
+  const handleSend = async () => {
+    if (!db || !title.trim() || !message.trim()) return;
+    if (type === 'personal' && !uid.trim()) { toast('Target UID required', 'in'); return; }
+    
+    setSending(true);
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        type,
+        targetUid: type === 'personal' ? uid.trim() : null,
+        title: title.trim(),
+        body: message.trim(),
+        createdAt: serverTimestamp(),
+        readBy: [],
+      });
+      toast(`Notification sent!`, 'ok');
+      setTitle(''); setMessage(''); setUid('');
+    } catch (e) { toast('Send failed: ' + e.message, 'er'); }
+    setSending(false);
+  };
+
+  return (
+    <div className="ae">
+      <div className="asec">
+        <h3 className="ast"><Megaphone size={15} /> Send Notification</h3>
+        
+        <div style={{ display: 'flex', gap: 8, marginBottom: 14 }}>
+          <button className={`ab ab-sm ${type === 'global' ? 'ab-p' : 'ab-ol'}`} onClick={() => setType('global')} style={{ flex: 1 }}>
+            <Users size={12} /> Global
+          </button>
+          <button className={`ab ab-sm ${type === 'personal' ? 'ab-p' : 'ab-ol'}`} onClick={() => setType('personal')} style={{ flex: 1 }}>
+            <UserCog size={12} /> Personal
+          </button>
+        </div>
+
+        {type === 'personal' && (
+          <div style={{ marginBottom: 12 }}>
+            <input className="aip" placeholder="Enter User UID..." value={uid} onChange={e => setUid(e.target.value)} />
+          </div>
+        )}
+
+        <div style={{ marginBottom: 12 }}>
+          <input className="aip" placeholder="Notification Title..." value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+        
+        <div style={{ marginBottom: 14 }}>
+          <textarea className="aip" placeholder="Message body..." value={message} onChange={e => setMessage(e.target.value)} rows={4} style={{ resize: 'vertical', minHeight: 100 }} />
+        </div>
+
+        <button className="ab ab-p" onClick={handleSend} disabled={sending || !title.trim() || !message.trim()} style={{ width: '100%' }}>
+          {sending ? <Loader2 size={13} className="asp" /> : <Send size={13} />} Broadcast Message
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ═════════════════════════════════════════════════════════════════════════════════
    STAFF TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
 function StaffTab({ toast }) {
@@ -1299,7 +1684,7 @@ function StaffTab({ toast }) {
 }
 
 /* ═════════════════════════════════════════════════════════════════════════════════
-   USERS TAB
+   USERS TAB (FIXED)
    ═════════════════════════════════════════════════════════════════════════════════ */
 function UsersTab({ toast }) {
   const mounted = useMounted();
@@ -1331,7 +1716,8 @@ function UsersTab({ toast }) {
     const q = search.toLowerCase();
     return users.filter(u =>
       (u.displayName || '').toLowerCase().includes(q) ||
-      (u.email || '').toLowerCase().includes(q)
+      (u.email || '').toLowerCase().includes(q) ||
+      (u.id || '').toLowerCase().includes(q)
     );
   }, [users, search]);
 
@@ -1347,17 +1733,17 @@ function UsersTab({ toast }) {
         {users.length > 0 && (
           <div style={{ position: 'relative', marginBottom: 12 }}>
             <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-            <input className="aip" style={{ paddingLeft: 36 }} placeholder="Search by name or email..." value={search} onChange={e => setSearch(e.target.value)} />
+            <input className="aip" style={{ paddingLeft: 36 }} placeholder="Search by name, email, UID..." value={search} onChange={e => setSearch(e.target.value)} />
           </div>
         )}
         {filtered.length > 0 ? filtered.map((u, i) => (
           <div key={u.id} className="aur">
             <div style={{ width: 38, height: 38, borderRadius: 10, background: `hsl(${(i * 37) % 360}, 50%, 25%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: '.78rem', flexShrink: 0 }}>
-              {(u.displayName || u.email || '??').slice(0, 2).toUpperCase()
-              }</div>
+              {(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}
+            </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName || 'Anonymous'}</div>
-              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.email}</div>
+              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.email || u.id}</div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0 }}>
               <div style={{ fontSize: '.68rem', fontWeight: 700, color: u.role === 'admin' ? 'var(--gold)' : u.role === 'staff' ? 'var(--blue)' : 'var(--text-muted)' }}>{(u.role || 'user').toUpperCase()}</div>
@@ -1371,331 +1757,6 @@ function UsersTab({ toast }) {
           </button>
         )}
       </div>
-    </div>
-  );
-}
-
-/* ═════════════════════════════════════════════════════════════════════════════════
-   MAIN ADMIN COMPONENT
-   ═════════════════════════════════════════════════════════════════════════════════ */
-export default function Admin() {
-  injectCSS();
-  const nav = useNavigate();
-  const { userProfile } = useAuth();
-  const { fixtures: backupRaw, loading: backupLoading, liveMatches } = useFootballData();
-  const mounted = useMounted();
-
-  const [tab, setTab] = useState('dashboard');
-  const [date, setDate] = useState(todayStr());
-  const [showMoreDates, setShowMoreDates] = useState(false);
-
-  const [preds, setPreds] = useState([]);
-  const [pubPicks, setPubPicks] = useState(null);
-  const [toast, setToast] = useState(null);
-  const [confirm, setConfirm] = useState(null);
-  const [rebuilding, setRebuilding] = useState(null);
-
-  const [primaryFixtures, setPrimaryFixtures] = useState([]);
-  const [primaryLoading, setPrimaryLoading] = useState(true);
-
-  const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
-  const extraDates = useMemo(() => {
-    const dates = [];
-    for (let i = -14; i <= 14; i++) {
-      const d = getLocalDateStr(i);
-      if (!defaultDates.includes(d)) dates.push(d);
-    }
-    return dates.sort();
-  }, []);
-
-  useEffect(() => {
-    let mnt = true;
-    setPrimaryLoading(true);
-    (async () => {
-      try {
-        const res = await fetchFixtures(date);
-        if (mnt) {
-          const l = Array.isArray(res) ? res : res?.matches || [];
-          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
-        }
-      } catch (e) {
-        if (mnt) setPrimaryFixtures([]);
-      } finally {
-        if (mnt) setPrimaryLoading(false);
-      }
-    })();
-    return () => { mnt = false; };
-  }, [date]);
-
-  const allFixtures = useMemo(() => 
-    primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)),
-  [primaryFixtures, backupRaw]);
-
-  const dayFixtures = useMemo(() => allFixtures?.filter(m => extractDate(m) === date) || [], [allFixtures, date]);
-  const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
-  const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
-
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(
-      doc(db, PATHS.PREDICTION_SNAPSHOTS, date),
-      (snap) => {
-        if (!mounted.current) return;
-        if (snap.exists()) {
-          const data = snap.data();
-          setPreds(Array.isArray(data.predictions) ? data.predictions : []);
-        } else {
-          getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', date)))
-            .then(qs => {
-              if (mounted.current) setPreds(qs.docs.map(d => d.data()).sort((a, b) => (b.priority || 0) - (a.priority || 0)));
-            })
-            .catch(() => {});
-        }
-      },
-      () => {}
-    );
-    return unsub;
-  }, [date]);
-
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(
-      doc(db, PATHS.ZOKA_PICKS, date),
-      (snap) => {
-        if (!mounted.current) return;
-        setPubPicks(snap.exists() ? snap.data() : null);
-      },
-      () => {}
-    );
-    return unsub;
-  }, [date]);
-
-  const handleZokaSaveDraft = async (data) => {
-    if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, updatedAt: serverTimestamp() }, { merge: true });
-    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
-    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  };
-
-  const handleZokaPublish = async (data) => {
-    if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
-    dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
-    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  };
-
-  const handleZokaUnpublish = async () => {
-    if (!db || !pubPicks) return;
-    setConfirm({
-      title: 'Unpublish All Zoka Picks?',
-      msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
-      onYes: async () => {
-        await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
-        setPubPicks(null);
-        dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
-        eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
-        setConfirm(null);
-      },
-    });
-  };
-
-  const handleFeaturedAdd = async (m) => {
-    if (!db) return;
-    const matchDate = date;
-    const predId = `feat_${date}_${m.id}`;
-    const pred = {
-      id: predId,
-      matchId: String(m.id),
-      matchDate,
-      homeTeam: m.homeTeam,
-      awayTeam: m.awayTeam,
-      homeLogo: m.homeTeam?.crest || null,
-      awayLogo: m.awayTeam?.crest || null,
-      league: m.competition || m.league,
-      kickoff: m.utcDate || m.kickoff,
-      status: m.status || 'NS',
-      homeScore: null,
-      awayScore: null,
-      priority: preds.length + 1,
-    };
-
-    // 1. Update local state immediately
-    const updatedPreds = [...preds, pred];
-    setPreds(updatedPreds);
-
-    // 2. Write to Firestore
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      ...pred,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updatedPreds,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    // 3. Invalidate cache & emit event
-    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  };
-
-  const handleFeaturedRemove = async (p) => {
-    if (!db) return;
-    const predId = p.id || `feat_${date}_${p.matchId}`;
-
-    // 1. Update local state immediately
-    const updatedPreds = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
-    setPreds(updatedPreds);
-
-    // 2. Delete from Firestore
-    await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
-
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updatedPreds,
-      updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    // 3. Invalidate cache & emit event
-    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  };
-
-  const handleResolve = async (pred, h, a) => {
-    const matchId = String(pred.matchId || pred.id);
-    await resolveMatchForAllUsers(matchId, h, a, date);
-
-    const predId = pred.id || `feat_${date}_${matchId}`;
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    const updated = preds.map(p => {
-      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true };
-      return p;
-    });
-    setPreds(updated); // Update locally immediately
-
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updated, updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
-    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-  };
-
-  const handleOverride = async (pred, h, a) => {
-    const matchId = String(pred.matchId || pred.id);
-    const predId = pred.id || `feat_${date}_${matchId}`;
-
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), {
-      homeScore: h, awayScore: a, updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    const updated = preds.map(p => {
-      if (String(p.matchId) === matchId) return { ...p, homeScore: h, awayScore: a };
-      return p;
-    });
-    setPreds(updated); // Update locally immediately
-
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), {
-      predictions: updated, updatedAt: serverTimestamp(),
-    }, { merge: true });
-
-    await resolveMatchForAllUsers(matchId, h, a, date);
-
-    dataLayer.invalidate(CACHE_KEY.activePredictions(date));
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
-    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-  };
-
-  const handleRebuild = async (period) => {
-    setRebuilding(period);
-    try {
-      if (period === 'daily') await rebuildDailySummary(date);
-      else if (period === 'goat') await rebuildGoatLeaderboard();
-      else if (period === 'weekly') await rebuildPeriodLeaderboard('weekly');
-      else if (period === 'monthly') await rebuildPeriodLeaderboard('monthly');
-      else if (period === 'all') await rebuildAllLeaderboards();
-    } catch (e) { console.error('[Admin] Rebuild err:', e); }
-    setRebuilding(null);
-  };
-
-  return (
-    <div className="ap">
-      <SEO
-        title="Admin Dashboard | ZOKASCORE"
-        description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently."
-        keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards"
-        path="/admin"
-        robots="noindex,nofollow"
-      />
-      <div className="aw">
-        <div className="ah">
-          <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>
-            <ArrowLeft size={14} />
-          </button>
-          <h1><ShieldAlert size={14} style={{ color: 'var(--gold)', verticalAlign: 'middle', marginRight: 6 }} /> Admin Control Room</h1>
-          <div className="sub">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
-        </div>
-
-        <div className="at">
-          {TABS.map(t => (
-            <button key={t.key} className={`atb${tab === t.key ? ' on' : ''}`} onClick={() => setTab(t.key)}>
-              <t.icon size={13} /><span className="lb">{t.label}</span>
-            </button>
-          ))}
-        </div>
-
-        <div className="ask" style={{ top: 108 }}>
-          <div className="adb">
-            {defaultDates.map(d => (
-              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
-                {dateLabel(d)}
-              </button>
-            ))}
-            <button className="more-dates-btn" onClick={() => setShowMoreDates(p => !p)}>
-              {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {showMoreDates ? 'Less' : 'More dates'}
-            </button>
-            {showMoreDates && extraDates.map(d => (
-              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>
-                {dateLabel(d)}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {tab === 'dashboard' && (
-          <DashTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length}
-            liveCount={liveCount} finCount={finCount} date={date}
-            onRebuild={handleRebuild} rebuilding={rebuilding} />
-        )}
-
-        {tab === 'zoka' && (
-          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading || backupLoading} pubPicks={pubPicks}
-            onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish}
-            onSaveDraft={handleZokaSaveDraft} toast={setToast} />
-        )}
-
-        {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={allFixtures}
-            onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove}
-            fxLoading={primaryLoading || backupLoading} toast={setToast} />
-        )}
-
-        {tab === 'results' && (
-          <ResultsTab date={date} preds={preds}
-            onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
-        )}
-
-        {tab === 'staff' && <StaffTab toast={setToast} />}
-        {tab === 'users' && <UsersTab toast={setToast} />}
-      </div>
-
-      {toast && <Toast message={typeof toast === 'string' ? toast : toast} type={typeof toast === 'string' ? 'ok' : toast} onDone={() => setToast(null)} />}
-      {confirm && <Confirm title={confirm.title} msg={confirm.msg} onYes={confirm.onYes} onNo={() => setConfirm(null)} danger={confirm.danger} />}
     </div>
   );
 }

@@ -15,6 +15,7 @@ import {
   Highlights,
   LiveStream,
   Leaderboard,
+  MatchDetails, // ★ Ensure this is here
 
   Login,
   Profile,
@@ -55,6 +56,9 @@ export default function AppRoutes() {
       <Route path="/livestream" element={<Animated><LiveStream /></Animated>} />
       <Route path="/leaderboard" element={<Animated><Leaderboard /></Animated>} />
 
+      {/* ★ NEW: DYNAMIC MATCH DETAILS ROUTE FOR SEO ★ */}
+      <Route path="/match/:matchId/:slug" element={<Animated><MatchDetails /></Animated>} />
+
       {/* ================= COMPANY ================= */}
       <Route path="/about" element={<Animated><About /></Animated>} />
       <Route path="/team" element={<Animated><Team /></Animated>} />
@@ -65,23 +69,9 @@ export default function AppRoutes() {
 
       {/* ================= SUPPORT ================= */}
       <Route path="/faq" element={<Animated><FAQ /></Animated>} />
-     <Route
-  path="/help"
-  element={
-    <Animated>
-      <HelpCenter />
-    </Animated>
-  }
-/>
-
-<Route
-  path="/help-center"
-  element={
-    <Animated>
-      <HelpCenter />
-    </Animated>
-  }
-/>
+      <Route path="/help" element={<Animated><HelpCenter /></Animated>} />
+      <Route path="/help-center" element={<Animated><HelpCenter /></Animated>} />
+      
       {/* ================= LEGAL ================= */}
       <Route path="/privacy" element={<Animated><PrivacyPolicy /></Animated>} />
       <Route path="/terms" element={<Animated><Terms /></Animated>} />

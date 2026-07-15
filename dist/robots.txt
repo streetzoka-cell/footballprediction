@@ -1,0 +1,9 @@
+User-agent: *
+
+Allow: /
+
+Disallow: /login
+Disallow: /profile
+Disallow: /zks-admin-8f9x2-control-panel
+
+Sitemap: https://zokascore.xyz/sitemap.xml

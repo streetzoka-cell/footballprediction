@@ -12,6 +12,7 @@ export default function SEO({
   keywords = SITE.keywords,
   type = "website",
   canonical,
+  structuredData, // ★ Prop for JSON-LD Schema
   children,
 }) {
   // Prevent duplicate branding if "ZOKASCORE" is already in the title
@@ -38,16 +39,24 @@ export default function SEO({
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
       <meta property="og:image" content={image} />
-      <meta property="og:locale" content={SITE.locale} /> {/* Added og:locale */}
+      <meta property="og:locale" content={SITE.locale} />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content={SITE.twitter} /> {/* Added twitter:site */}
+      <meta name="twitter:site" content={SITE.twitter} />
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
 
       <meta name="theme-color" content={SITE.themeColor} />
+
+      {/* ★ FIX: Use dangerouslySetInnerHTML for JSON-LD to prevent Vite parsing errors */}
+      {structuredData && (
+        <script 
+          type="application/ld+json" 
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} 
+        />
+      )}
 
       {children}
     </Helmet>

@@ -1,17 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
-//
-// ★ THIN FACADE over dataLayer + constants
-//   - All date helpers imported from dataLayer (single source)
-//   - All constants imported from constants.js (single source)
-//   - Match transformations live here (presentation concern)
-//   - Uses eventBus for reactive updates
-//   - NO duplicated logic
-//
-// ★ KEY DISTINCTION:
-//   - Zoka Picks: Fetched via fetchZokaPicks() — for guests
-//   - Featured Matches: Fetched via fetchFixtures() + fetchActivePredictions() — for users
-// ═══════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
@@ -29,12 +18,9 @@ import {
   calcPoints, RESULT_TYPE, POINTS,
 } from './constants';
 
-// Re-export date helpers from their single source
-export { todayStr as getTodayStr, yesterdayStr as getYesterdayStr, tomorrowStr as getTomorrowStr, getDateRange };
+// FIX: Removed alias, export native names directly for consistency
+export { todayStr, yesterdayStr, tomorrowStr, getDateRange };
 
-/* ═══════════════════════════════════════════════════
-   AUTH STATE TRACKING
-   ═══════════════════════════════════════════════════ */
 let isUserAuthenticated = false;
 let authReady = false;
 const authWaiters = [];
@@ -59,9 +45,6 @@ export const waitForAuth = () =>
 
 export const isAuthenticated = () => isUserAuthenticated;
 
-/* ═══════════════════════════════════════════════════
-   DEVICE ID & LOCAL STORAGE
-   ═══════════════════════════════════════════════════ */
 const getDeviceId = () => {
   let id = localStorage.getItem('fx_device_id');
   if (!id) {
@@ -80,9 +63,6 @@ const lsSet = (key, value) => {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full */ }
 };
 
-/* ═══════════════════════════════════════════════════
-   FAVORITES & PREFERENCES
-   ═══════════════════════════════════════════════════ */
 export const getFavs = () => lsGet('fx_favs', []);
 export const setFavs = (favs) => { lsSet('fx_favs', favs); pushToFb('favorites', favs); };
 export const getPrefs = () => lsGet('fx_prefs', { sound: true, goals: true, cards: true, kickoff: true, lineups: true, notifications: false });
@@ -119,18 +99,10 @@ export const initFirebaseSync = async () => {
   } catch (err) { console.warn('[Firestore] Sync read failed:', err.message); }
 };
 
-/* ═══════════════════════════════════════════════════
-   DATE / TIME FORMATTING
-   ═══════════════════════════════════════════════════ */
 export function formatDate(dateStr) {
   return new Date(dateStr).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-// formatTime, getDateRange, isInRolloverWindow now come from dates.js
-
-/* ═══════════════════════════════════════════════════
-   MATCH TRANSFORMS — Presentation layer concern
-   ═══════════════════════════════════════════════════ */
 export function transformMatch(m) {
   if (!m) return null;
   if (m.fixture) return _transformApiFormat(m);
@@ -246,10 +218,6 @@ function _transformApiFormat(m) {
   };
 }
 
-/* ═══════════════════════════════════════════════════
-   ★ FOOTBALL FIXTURES
-   ═══════════════════════════════════════════════════ */
-
 function _extractMatchesForDate(snapshot, date) {
   const raw = [];
   const yd = yesterdayStr();
@@ -259,7 +227,6 @@ function _extractMatchesForDate(snapshot, date) {
   else if (date === tm) raw.push(...(snapshot.tomorrow || []));
   else raw.push(...(snapshot.today || []));
 
-  // Include live/finished that match this date
   (snapshot.live || []).forEach((m) => {
     if (m.date?.split('T')[0] === date) raw.push(m);
   });
@@ -277,8 +244,7 @@ function _emptyResult(error = null) {
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
   try {
-    // ALWAYS read from today's snapshot doc, because it contains yesterday, today, and tomorrow arrays
-const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
+    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
     if (!snapshot) return _emptyResult(null);
     const matches = _extractMatchesForDate(snapshot, date);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
@@ -307,10 +273,6 @@ export const fetchLiveScores = async () => {
     return { matches: (snapshot.live || []).map((d) => transformMatch(d)), error: null };
   } catch (err) { return { matches: [], error: err.message }; }
 };
-
-/* ═══════════════════════════════════════════════════
-   ★ LIVE POLLING
-   ═══════════════════════════════════════════════════ */
 
 export const subscribeToLiveFixtures = (callback) =>
   _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE });
@@ -366,10 +328,6 @@ function _createPollingSubscription(sport, callback, options = {}) {
   };
 }
 
-/* ═══════════════════════════════════════════════════
-   ★ BASKETBALL FIXTURES
-   ═══════════════════════════════════════════════════ */
-
 export const fetchBasketballFixtures = async (date) => {
   try {
     const snapshot = await dataLayer.fetchBasketballSnapshot(date);
@@ -407,10 +365,6 @@ export const subscribeToBasketballLiveFixtures = (callback) =>
 
 export const subscribeToBasketballTodayFixtures = (callback) =>
   _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
-
-/* ═══════════════════════════════════════════════════
-   STANDINGS, LEAGUES, TEAM FIXTURES
-   ═══════════════════════════════════════════════════ */
 
 export const fetchLeagueStandings = async (leagueId) => {
   try {
@@ -454,10 +408,6 @@ export async function fetchBasketballTeamFixtures(teamId) {
   } catch { return []; }
 }
 
-/* ═══════════════════════════════════════════════════
-   BACKEND STATUS
-   ═══════════════════════════════════════════════════ */
-
 export const fetchBackendStatus = async () => {
   try {
     const snap = await dataLayer.fetchFootballSnapshot(todayStr());
@@ -481,9 +431,6 @@ export const getSyncStatusMessage = (status) => {
   return 'Updated';
 };
 
-/* ═══════════════════════════════════════════════════
-   STUBS / COMPATIBILITY
-   ═══════════════════════════════════════════════════ */
 export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'firestore' });
 export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'firestore' });
 export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'firestore' });
@@ -496,9 +443,6 @@ export const loadFixturesFromAnyCache = async (date) => {
 export const getCacheStats = () => ({ dates: 0, total: 0, finished: 0, cachedDates: [], ...dataLayer.getStats() });
 export const clearAllCache = () => dataLayer.clear();
 
-// ═══════════════════════════════════════════════════
-// EXPORTS
-// ═══════════════════════════════════════════════════
 export const getLivePollInterval = () => POLL_INTERVAL.LIVE_ACTIVE;
 export const isBackendReachable = () => true;
 export const initApp = async () => { await waitForAuth(); initFirebaseSync(); };

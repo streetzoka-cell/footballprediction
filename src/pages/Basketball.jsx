@@ -6,15 +6,12 @@ import {
   ChevronDown, ChevronRight,
   Lock, LogIn, CheckCircle2, Sparkles, Flame,
 } from 'lucide-react';
-import {
-  fetchBasketballFixtures,
-  subscribeToBasketballLiveFixtures,
-  getDateRange,
-  getTodayStr,
-  getYesterdayStr,
-  getTomorrowStr,
-  getBasketballLeaguePriority,
-} from '../utils/api';
+import { fetchBasketballFixtures, subscribeToBasketballLiveFixtures, getDateRange, getBasketballLeaguePriority } from "../utils/api";
+import { todayStr as getTodayStr, getLocalDateStr } from "../utils/dates";
+
+const getYesterdayStr = () => getLocalDateStr(-1);
+const getTomorrowStr = () => getLocalDateStr(1);
+
 
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';

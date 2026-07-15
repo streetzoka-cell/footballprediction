@@ -1,17 +1,15 @@
 // ═════════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v18.0 — Aligned with Core Architecture (FPL Style Competition)
+// v18.1 — Aligned with Core Architecture (FPL Style Competition)
 // ═════════════════════════════════════════════════════════════════
 
-import { useState, useRef, useMemo, useCallback, useEffect, useTransition, useDeferredValue, startTransition } from 'react';
+import { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
-  Calendar, Medal, Star, Loader, ChevronDown, Award,
-  Database, Clock, ArrowLeft, Eye, Zap, Percent,
-  ChevronRight, Activity, RotateCcw, CheckCircle,
-  CircleDot, Home, Hash, ChevronLeft, Minus
+  Calendar, Medal, Award, Database, Clock, ArrowLeft, 
+  ChevronDown, RotateCcw, ChevronRight
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -61,12 +59,9 @@ const injectCSS = () => {
 @keyframes lb18-shim{0%{background-position:-300% 0}100%{background-position:300% 0}}
 @keyframes lb18-podium{from{transform:scaleY(0);transform-origin:bottom}to{transform:scaleY(1);transform-origin:bottom}}
 @keyframes lb18-fade-in{from{opacity:0}to{opacity:1}}
-@keyframes lb18-gold{0%,100%{text-shadow:0 0 6px rgba(245,197,66,.25)}50%{text-shadow:0 0 16px rgba(245,197,66,.5)}}
 @keyframes lb18-pulse-dot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.6)}}
 @keyframes lb18-shine{0%{left:-100%}100%{left:200%}}
-@keyframes lb18-tab-ind{from{transform:scaleX(0);opacity:0}to{transform:scaleX(1);opacity:1}}
 @keyframes lb18-count{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-@keyframes lb18-overlay{from{opacity:0}to{opacity:1}}
 
 .lb18-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding-bottom:90px;position:relative;overflow-x:hidden}
 .lb18-page::before{content:'';position:fixed;top:-40%;left:-20%;width:140%;height:80%;background:radial-gradient(ellipse at 50% 0%,rgba(245,197,66,.012) 0%,transparent 60%);pointer-events:none;z-index:0}
@@ -137,6 +132,7 @@ const injectCSS = () => {
 .lb18-row.me{background:rgba(0,230,118,.035)!important}
 .lb18-row.me:hover{background:rgba(0,230,118,.055)!important}
 .lb18-td{padding:13px 16px;vertical-align:middle;font-size:.84rem;font-weight:600}
+.lb18-td.r{text-align:right} /* FIX: Added right alignment for td */
 
 .lb18-acc{display:flex;align-items:center;gap:6px;min-width:100px}
 .lb18-acc-bar{height:5px;border-radius:3px;background:rgba(255,255,255,.04);overflow:hidden;flex:1}
@@ -353,10 +349,10 @@ function TabBar({ tabs, active, onChange }) {
    ═══════════════════════════════════════════════════ */
 export default function Leaderboard() {
   injectCSS();
-  const { currentUser } = useAuth();
+  const { user: currentUser } = useAuth(); // FIX: Safely extract user
+  const uid = currentUser?.uid;
   const nav = useNavigate();
   const searchRef = useRef(null);
-  const mounted = useRef(true);
 
   const [tab, setTab] = useState(PERIOD.DAILY);
   const [search, setSearch] = useState('');
@@ -364,12 +360,11 @@ export default function Leaderboard() {
   const [showCount, setShowCount] = useState(15);
   const [focusKey, setFocusKey] = useState(0);
   
-  
-useEffect(() => {
-  const onFocus = () => setFocusKey(k => k + 1);
-  document.addEventListener('visibilitychange', onFocus);
-  return () => document.removeEventListener('visibilitychange', onFocus);
-}, []);
+  useEffect(() => {
+    const onFocus = () => setFocusKey(k => k + 1);
+    document.addEventListener('visibilitychange', onFocus);
+    return () => document.removeEventListener('visibilitychange', onFocus);
+  }, []);
 
   // ★ Hooks from the new architecture
   const dailyLB = useDailyLeaderboard(todayStr());
@@ -393,9 +388,9 @@ useEffect(() => {
   const top3 = useMemo(() => entries.slice(0, 3), [entries]);
 
   const myEntry = useMemo(() => {
-    if (!currentUser?.uid) return null;
-    return entries.find(u => u.uid === currentUser.uid) || null;
-  }, [entries, currentUser]);
+    if (!uid) return null;
+    return entries.find(u => u.uid === uid) || null;
+  }, [entries, uid]);
 
   /* ─--- Search (uses actual rank from entries, not sequential) ─--- */
   const filtered = useMemo(() => {
@@ -563,41 +558,47 @@ useEffect(() => {
                 )}
 
                 {/* ─── Non-Daily Top 3 Badges ─── */}
-                {tab !== PERIOD.DAILY && filteredTop3.length >= 1 && (
-                  <div className="lb18-top3">
-                    {filteredTop3.slice(0, 3).map((u, i) => {
-                      const colors = ['var(--gold)', '#94a3b8', '#d97706'];
-                      return (
-                        <div key={u.uid} className="lb18-top3-badge" style={{ animationDelay: `${i * 80}ms` }}>
-                          <div style={{ position: 'relative' }}>
-                            {i === 0 && (
-                              <Crown
-                                size={18}
-                                style={{ color: 'var(--gold)', position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)' }}
-                              />
-                            )}
-                            <div
-                              className="lb18-top3-avatar"
-                              style={{
-                                background: `linear-gradient(135deg,${colors[i]}25,${colors[i]}08)`,
-                                border: `2px solid ${colors[i]}`,
-                                color: colors[i],
-                                boxShadow: `0 0 18px ${colors[i]}15`,
-                              }}
-                            >
-                              {(u.displayName || '??').slice(0, 2).toUpperCase()}
+                {tab !== PERIOD.DAILY && (
+                  loading ? (
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: 14, marginBottom: 30 }}>
+                      {[0, 1, 2].map(i => <div key={i} className="lb18-skel" style={{ width: 54, height: 54, borderRadius: '50%', animationDelay: `${i*80}ms` }} />)}
+                    </div>
+                  ) : filteredTop3.length >= 1 ? (
+                    <div className="lb18-top3">
+                      {filteredTop3.slice(0, 3).map((u, i) => {
+                        const colors = ['var(--gold)', '#94a3b8', '#d97706'];
+                        return (
+                          <div key={u.uid} className="lb18-top3-badge" style={{ animationDelay: `${i * 80}ms` }}>
+                            <div style={{ position: 'relative' }}>
+                              {i === 0 && (
+                                <Crown
+                                  size={18}
+                                  style={{ color: 'var(--gold)', position: 'absolute', top: -16, left: '50%', transform: 'translateX(-50%)' }}
+                                />
+                              )}
+                              <div
+                                className="lb18-top3-avatar"
+                                style={{
+                                  background: `linear-gradient(135deg,${colors[i]}25,${colors[i]}08)`,
+                                  border: `2px solid ${colors[i]}`,
+                                  color: colors[i],
+                                  boxShadow: `0 0 18px ${colors[i]}15`,
+                                }}
+                              >
+                                {(u.displayName || '??').slice(0, 2).toUpperCase()}
+                              </div>
                             </div>
+                            <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
+                              {u.displayName}
+                            </span>
+                            <span style={{ fontSize: '.7rem', fontWeight: 800, color: colors[i], fontFamily: 'var(--font-display)' }}>
+                              {u.points} pts
+                            </span>
                           </div>
-                          <span style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>
-                            {u.displayName}
-                          </span>
-                          <span style={{ fontSize: '.7rem', fontWeight: 800, color: colors[i], fontFamily: 'var(--font-display)' }}>
-                            {u.points} pts
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
+                        );
+                      })}
+                    </div>
+                  ) : null
                 )}
 
                 {/* ─── Search ─── */}
@@ -645,7 +646,7 @@ useEffect(() => {
                       <thead>
                         <tr>
                           {['Rank', 'Player', 'Accuracy', 'Points', 'Predicted', 'Exact'].map(h => (
-                            <th key={h} className={`lb18-th${h === 'Exact' ? ' r' : ''}`}>{h}</th>
+                            <th key={h} className={`lb18-th${['Points', 'Predicted', 'Exact'].includes(h) ? ' r' : ''}`}>{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -682,8 +683,8 @@ useEffect(() => {
                         ) : (
                           visibleRest.map((user, i) => {
                             // Use the user's actual rank from the entries array, NOT sequential
-                            const rank = user.rank;
-                            const isMe = currentUser?.uid === user.uid;
+                            const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
+                            const isMe = uid === user.uid;
                             const delay = Math.min(i * 30, 300);
                             const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
                             const exactColor = (user.exact || 0) >= 15

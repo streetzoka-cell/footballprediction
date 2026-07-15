@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v21.1 — Core Architecture + Auto-Failover + Correct Routing
+// v21.2 — Core Architecture + Auto-Failover + Correct Routing + Deduplication
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback, Fragment } from 'react';
@@ -17,8 +17,7 @@ import {
 // Primary Source (Node Backend)
 import {
   fetchFixtures,
-  subscribeToLiveFixtures,
-  getTodayStr
+  subscribeToLiveFixtures
 } from '../utils/api';
 
 // Backup Source (Football-data.org context)
@@ -26,8 +25,7 @@ import { useFootballData } from '../context/FootballDataContext';
 
 import { useAuth } from '../context/AuthContext';
 import { dataLayer } from '../utils/dataLayer';
-// ★ Import getLocalDateStr and getLocalDateFromUtc directly from dates.js
-import { getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; 
+import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc } from '../utils/dates'; 
 
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { eventBus, EVENT } from '../utils/eventBus';
@@ -67,14 +65,6 @@ function estimateMatchStatus(fix) {
   if (fix.isFinished || isFinishedStatus(fix.status, sport)) return 'ft';
   if (fix.status === 'HT' || fix.status === 'BT') return 'ht';
   return 'upcoming';
-}
-
-function extractMatchDate(m) {
-  if (!m) return '';
-  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
-  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
-  if (m.date) return m.date;
-  return '';
 }
 
 function normalizeMatch(raw, isPrimary) {
@@ -680,7 +670,18 @@ export default function Home() {
   }, [isLoggedIn, uid]);
 
   /* ═══ DERIVED ═══ */
-  const allFixtures = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false));
+  const allFixtures = useMemo(() => {
+    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false));
+    // ★ FIX: Deduplicate matches by ID to prevent live coverage duplicates
+    const uniqueIds = new Set();
+    return list.filter(m => {
+      const idStr = String(m.id);
+      if (uniqueIds.has(idStr)) return false;
+      uniqueIds.add(idStr);
+      return true;
+    });
+  }, [primaryFixtures, backupRaw]);
+  
   const liveMatches = useMemo(() => allFixtures.filter(f => { const s = estimateMatchStatus(f); return s === 'live' || s === 'ht'; }), [allFixtures]);
   const liveCount = liveMatches.length;
 

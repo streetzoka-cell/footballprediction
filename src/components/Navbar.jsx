@@ -260,6 +260,7 @@ export default function Navbar() {
   const [rememberedAdmin, setRememberedAdmin] = useState(() => {
     try { return localStorage.getItem(ADMIN_REMEMBER_KEY) === 'true'; } catch { return false; }
   });
+  const [adminNotifs, setAdminNotifs] = useState([]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -353,22 +354,34 @@ export default function Navbar() {
   }, [allPreds, scoreMap, uid]);
 
   const predNotifs = useMemo(() => {
-    if (!uid) return [];
-    const notifs = [];
-    Object.values(userPredMap).forEach(p => {
-      const actual = scoreMap.get(String(p.matchId));
-      if (!actual) return;
-      const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
-      if (r.type === 'pending') return;
-      notifs.push({
-        id: p.predId, type: r.type, points: r.points,
-        homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away',
-        predScore: `${p.homeScore}-${p.awayScore}`, actualScore: `${actual.h}-${actual.a}`,
-        time: p.updatedAt?.toMillis?.() || p.createdAt?.toMillis?.() || 0,
+    const combined = [];
+    
+    // 1. Admin Broadcasts
+    adminNotifs.forEach(n => {
+      combined.push({
+        id: n.id, type: 'admin', title: n.title, body: n.body,
+        time: n.createdAt?.toMillis?.() || 0,
       });
     });
-    return notifs.sort((a, b) => b.time - a.time);
-  }, [userPredMap, scoreMap, uid]);
+    
+    // 2. Prediction Results
+    if (uid) {
+      Object.values(userPredMap).forEach(p => {
+        const actual = scoreMap.get(String(p.matchId));
+        if (!actual) return;
+        const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
+        if (r.type === 'pending') return;
+        combined.push({
+          id: `pred-${p.predId}`, type: r.type, points: r.points,
+          homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away',
+          predScore: `${p.homeScore}-${p.awayScore}`, actualScore: `${actual.h}-${actual.a}`,
+          time: p.updatedAt?.toMillis?.() || p.createdAt?.toMillis?.() || 0,
+        });
+      });
+    }
+    
+    return combined.sort((a, b) => b.time - a.time);
+  }, [adminNotifs, userPredMap, scoreMap, uid]);
 
   const notifCount = useMemo(() => predNotifs.filter(n => !seenNotifIds.has(n.id)).length, [predNotifs, seenNotifIds]);
 
@@ -418,6 +431,18 @@ export default function Navbar() {
     const unsub = onSnapshot(q, snap => setAllPreds(snap.docs.map(d => d.data())), () => {});
     return () => unsub();
   }, []);
+
+  // ★ Fetch Admin Broadcasts (Global & Personal) smartly
+  useEffect(() => {
+    if (!db) return setAdminNotifs([]);
+    // If user is logged in, fetch their personal notifs AND global. Otherwise, just global.
+    const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
+    const unsub = onSnapshot(q, (snap) => {
+      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      setAdminNotifs(notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
+    }, () => {});
+    return () => unsub();
+  }, [db, uid]);
 
   // Scroll listener
   useEffect(() => {
@@ -551,6 +576,27 @@ export default function Navbar() {
 
   /* ═══ NOTIFICATION ITEM ═══ */
   const renderNotifItem = (n) => {
+    if (n.type === 'admin') {
+      return (
+        <div key={n.id} style={{
+          padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
+          borderBottom: '1px solid rgba(255,255,255,0.04)',
+          background: 'rgba(59,130,246,0.06)', borderLeft: '3px solid rgba(59,130,246,0.4)',
+          animation: 'nvNotifSlide 0.3s ease both',
+          transition: 'background 0.2s ease',
+        }}>
+          <span style={{ fontSize: '1.2rem', flexShrink: 0 }}>📣</span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: '0.78rem', fontWeight: 800, color: '#e2e8f0', marginBottom: 2 }}>{n.title}</div>
+            <div style={{ fontSize: '0.72rem', color: '#9ca3af', lineHeight: 1.4 }}>{n.body}</div>
+          </div>
+          <div style={{ textAlign: 'right', flexShrink: 0 }}>
+            <div style={{ fontSize: '0.56rem', color: '#4a5568', marginTop: 2 }}>{timeAgo(n.time)}</div>
+          </div>
+        </div>
+      );
+    }
+
     const isExact = n.type === 'exact';
     const isResult = n.type === 'result';
     const bgColor = isExact ? 'rgba(0,230,118,0.06)' : isResult ? 'rgba(251,191,36,0.06)' : 'rgba(239,68,68,0.06)';
@@ -780,7 +826,7 @@ export default function Navbar() {
                       backgroundSize: '200% 100%', animation: 'nvNotifHeaderGlow 6s ease infinite',
                     }}>
                       <span style={{ fontSize: '0.85rem', fontWeight: 800, color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <Bell size={14} style={{ opacity: 0.5 }} /> Prediction Results
+                        <Bell size={14} style={{ opacity: 0.5 }} /> Notifications
                       </span>
                       {predNotifs.length > 0 && (
                         <span style={{ fontSize: '0.6rem', fontWeight: 800, color: '#00e676', background: 'rgba(0,230,118,0.1)', padding: '3px 10px', borderRadius: 20, border: '1px solid rgba(0,230,118,0.15)' }}>{predNotifs.length} results</span>
