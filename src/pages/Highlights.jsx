@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx (Ultimate Pro News Hub - Polished)
+// FILE: src/pages/Highlights.jsx (Ultimate Pro News Hub - Final)
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -13,49 +13,15 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
 import { 
   collection, query, orderBy, onSnapshot, addDoc, updateDoc, 
-  deleteDoc, doc, serverTimestamp, increment, arrayUnion, arrayRemove, getDoc
+  deleteDoc, doc, serverTimestamp, increment, getDoc
 } from 'firebase/firestore';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION (Themed & Polished)
+   HELPERS & CONFIG
    ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('news-hub-ultimate-css')) return;
-  const s = document.createElement('style');
-  s.id = 'news-hub-ultimate-css';
-  s.textContent = `
-    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; }
-    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; }
-    
-    @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
-    @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-    @keyframes nh_modal_pop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    
-    .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
-    .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
-    .nh-modal-pop { animation: nh_modal_pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
-    
-    .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
-    .nh-btn:hover { transform: translateY(-1px); }
-    .nh-btn:active { transform: scale(0.96); }
-    
-    .nh-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-    .nh-scroll::-webkit-scrollbar-track { background: transparent; }
-    .nh-scroll::-webkit-scrollbar-thumb { background: var(--nh-border); border-radius: 10px; }
-    
-    .nh-dropzone { border: 2px dashed var(--nh-border); background: var(--nh-surface-hover); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--nh-text-muted); }
-    .nh-dropzone:hover { border-color: var(--nh-accent); color: var(--nh-accent); }
-    
-    .nh-fab { position: fixed; bottom: 24px; right: 24px; width: 48px; height: 48px; border-radius: 50%; background: var(--nh-accent); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; z-index: 50; border: none; transition: transform 0.2s, opacity 0.3s; }
-    .nh-fab:hover { transform: scale(1.1) translateY(-2px); }
-    
-    .nh-read-more { color: var(--nh-accent); font-weight: 700; cursor: pointer; display: inline-block; margin-top: 4px; font-size: 0.8rem; }
-    .nh-load-more { width: 100%; padding: 14px; border-radius: 12px; background: var(--nh-surface); border: 1px solid var(--nh-border); color: var(--nh-text-muted); font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .nh-load-more:hover { color: var(--nh-accent); border-color: var(--nh-accent); background: var(--nh-accent-bg); }
-  `;
-  document.head.appendChild(s);
+const slugify = (text) => {
+  return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
 const formatTimeAgo = (date) => {
@@ -104,6 +70,47 @@ const REACTIONS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
+   STYLE INJECTION
+   ═══════════════════════════════════════════════════════════════ */
+const injectStyles = () => {
+  if (document.getElementById('news-hub-ultimate-css')) return;
+  const s = document.createElement('style');
+  s.id = 'news-hub-ultimate-css';
+  s.textContent = `
+    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; }
+    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; }
+    
+    @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
+    @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes nh_modal_pop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+    
+    .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
+    .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
+    .nh-modal-pop { animation: nh_modal_pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
+    
+    .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
+    .nh-btn:hover { transform: translateY(-1px); }
+    .nh-btn:active { transform: scale(0.96); }
+    
+    .nh-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
+    .nh-scroll::-webkit-scrollbar-track { background: transparent; }
+    .nh-scroll::-webkit-scrollbar-thumb { background: var(--nh-border); border-radius: 10px; }
+    
+    .nh-dropzone { border: 2px dashed var(--nh-border); background: var(--nh-surface-hover); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--nh-text-muted); }
+    .nh-dropzone:hover { border-color: var(--nh-accent); color: var(--nh-accent); }
+    
+    .nh-fab { position: fixed; bottom: 24px; right: 24px; width: 48px; height: 48px; border-radius: 50%; background: var(--nh-accent); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; z-index: 50; border: none; transition: transform 0.2s, opacity 0.3s; }
+    .nh-fab:hover { transform: scale(1.1) translateY(-2px); }
+    
+    .nh-read-more { color: var(--nh-accent); font-weight: 700; cursor: pointer; display: inline-block; margin-top: 4px; font-size: 0.8rem; }
+    .nh-load-more { width: 100%; padding: 14px; border-radius: 12px; background: var(--nh-surface); border: 1px solid var(--nh-border); color: var(--nh-text-muted); font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
+    .nh-load-more:hover { color: var(--nh-accent); border-color: var(--nh-accent); background: var(--nh-accent-bg); }
+  `;
+  document.head.appendChild(s);
+};
+
+/* ═══════════════════════════════════════════════════════════════
    MAIN NEWS COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Highlights() {
@@ -112,7 +119,9 @@ export default function Highlights() {
   const user = currentUser;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
   
-  const { id: urlPostId, author: authorFilter } = useParams();
+  // Extract ID from slug URL (e.g. /highlights/mbappe-injured-123 -> 123)
+  const { slugId, author: authorFilter } = useParams();
+  const urlPostId = slugId ? slugId.split('-').pop() : null;
   const navigate = useNavigate();
 
   const [theme, setTheme] = useState('dark');
@@ -125,7 +134,6 @@ export default function Highlights() {
   const [savedPosts, setSavedPosts] = useState(() => JSON.parse(localStorage.getItem('nh_saved') || '[]'));
   const [shareData, setShareData] = useState(null);
   
-  // Pagination & Scroll
   const [visibleCount, setVisibleCount] = useState(15);
   const [showScrollTop, setShowScrollTop] = useState(false);
 
@@ -146,7 +154,6 @@ export default function Highlights() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Reset visible count on filter change
   useEffect(() => { setVisibleCount(15); }, [activeFilter, authorFilter]);
 
   // Fetch Feed Posts
@@ -174,6 +181,7 @@ export default function Highlights() {
       if (snap.exists()) {
         const postData = { id: snap.id, ...snap.data() };
         setActivePost(postData);
+        window.scrollTo({ top: 0, behavior: 'instant' });
         updateDoc(doc(db, 'news_posts', urlPostId), { views: increment(1) }).catch(()=>{});
 
         if (postData.relatedMatchId) {
@@ -332,7 +340,7 @@ export default function Highlights() {
   };
 
   const handleShare = (post) => {
-    const url = `https://zokascore.xyz/highlights/${post.id}`;
+    const url = `https://zokascore.xyz/highlights/${slugify(post.title)}-${post.id}`;
     if (navigator.share) {
       navigator.share({ title: post.title, text: post.body.substring(0, 100), url }).catch(()=>{});
     } else {
@@ -360,7 +368,7 @@ export default function Highlights() {
       <SEO 
         title={seoPost ? seoPost.title : "Football News Hub | ZOKASCORE"}
         description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
-        path={seoPost ? `/highlights/${seoPost.id}` : '/highlights'}
+        path={seoPost ? `/highlights/${slugify(seoPost.title)}-${seoPost.id}` : '/highlights'}
         image={seoPost?.imageUrl}
         type="article"
         structuredData={generateJsonLd(seoPost)}
@@ -410,7 +418,8 @@ export default function Highlights() {
             onDelete={handleDelete}
             onAuthorClick={() => navigate(`/highlights/author/${activePost.authorId}`)}
             relatedPosts={posts.filter(p => p.category === activePost.category && p.id !== activePost.id).slice(0, 3)}
-            onRelatedClick={(id) => navigate(`/highlights/${id}`)}
+            onRelatedClick={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
+            onBackToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
             newComments={newComments}
             setNewComments={setNewComments}
             handleComment={handleComment}
@@ -418,7 +427,6 @@ export default function Highlights() {
         ) : (
           // FEED VIEW
           <>
-            {/* FILTER TABS */}
             <div className="nh-scroll" style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
               {CATEGORIES.map(cat => (
                 <button key={cat.key} onClick={() => setActiveFilter(cat.key)} className="nh-btn" style={{ padding: '8px 16px', borderRadius: 20, background: activeFilter === cat.key ? 'var(--nh-accent-bg)' : 'var(--nh-surface)', color: activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-text-muted)', border: `1px solid ${activeFilter === cat.key ? 'var(--nh-accent)' : 'var(--nh-border)'}`, fontWeight: 700, fontSize: '.8rem', whiteSpace: 'nowrap' }}>
@@ -439,7 +447,6 @@ export default function Highlights() {
               </div>
             )}
 
-            {/* TRENDING CAROUSEL */}
             {trendingPosts.length > 1 && activeFilter === 'All' && !authorFilter && (
               <div style={{ marginBottom: 24 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 12 }}>
@@ -448,7 +455,7 @@ export default function Highlights() {
                 </div>
                 <div className="nh-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
                   {trendingPosts.map(p => (
-                    <div key={p.id} onClick={() => navigate(`/highlights/${p.id}`)} style={{ minWidth: 200, maxWidth: 200, background: 'var(--nh-surface)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)', cursor: 'pointer', transition: 'transform 0.2s' }} className="nh-btn">
+                    <div key={p.id} onClick={() => navigate(`/highlights/${slugify(p.title)}-${p.id}`)} style={{ minWidth: 200, maxWidth: 200, background: 'var(--nh-surface)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)', cursor: 'pointer', transition: 'transform 0.2s' }} className="nh-btn">
                       <img src={p.imageUrl || 'https://via.placeholder.com/200x100'} style={{ width: '100%', height: 100, objectFit: 'cover' }} alt="" />
                       <div style={{ padding: 10 }}>
                         <div style={{ fontSize: '.6rem', fontWeight: 800, color: BADGES[p.category]?.color || 'var(--nh-text-muted)', marginBottom: 4 }}>{BADGES[p.category]?.label || p.category}</div>
@@ -480,14 +487,13 @@ export default function Highlights() {
                       onReaction={handleReaction} 
                       onEdit={openEdit} 
                       onDelete={handleDelete}
-                      onExpand={(postId) => navigate(`/highlights/${postId}`)}
+                      onExpand={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
                       onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
                       isHero={i === 0 && activeFilter === 'All' && !authorFilter}
                     />
                   ))}
                 </div>
 
-                {/* LOAD MORE BUTTON */}
                 {filteredPosts.length > visibleCount && (
                   <button onClick={() => setVisibleCount(c => c + 15)} className="nh-load-more" style={{ marginTop: 24 }}>
                     <ChevronDown size={16} /> Load More Articles
@@ -594,7 +600,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
       {isHero && post.imageUrl && (
-        <div onClick={() => onExpand(post.id)} style={{ cursor: 'pointer', position: 'relative', height: 240, overflow: 'hidden' }}>
+        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', height: 240, overflow: 'hidden' }}>
           <img src={post.imageUrl} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }} loading="lazy" />
           <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent 60%)' }} />
           <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16 }}>
@@ -605,9 +611,8 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
       )}
 
       <div style={{ padding: 16 }}>
-        {/* HEADER */}
         {!isHero && (
-          <div onClick={() => onExpand(post.id)} style={{ cursor: 'pointer' }}>
+          <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
               <div style={{ flex: 1 }}>
@@ -636,7 +641,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
            </div>
         )}
 
-        {/* ACTIONS */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--nh-border)' }}>
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
             {REACTIONS.map(r => {
@@ -662,13 +666,12 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
 /* ═══════════════════════════════════════════════════════════════
    SINGLE POST VIEW 
    ═══════════════════════════════════════════════════════════════ */
-function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, newComments, setNewComments, handleComment }) {
+function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onBackToTop, newComments, setNewComments, handleComment }) {
   const isSaved = savedPosts.includes(post.id);
   const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
 
   return (
     <div className="nh-enter" style={{ background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)', overflow: 'hidden', boxShadow: 'var(--nh-shadow)' }}>
-      {/* Header */}
       <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div onClick={onAuthorClick} style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
@@ -680,13 +683,11 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800 }}>{badge.label}</span>
       </div>
 
-      {/* Body */}
       <div style={{ padding: '0 16px 12px' }}>
         <h1 style={{ margin: '0 0 12px', fontSize: '1.8rem', fontWeight: 800, lineHeight: 1.3 }}>{post.title}</h1>
         <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.8, fontSize: '1rem', whiteSpace: 'pre-wrap' }}>{post.body}</p>
       </div>
 
-      {/* Match Link */}
       {relatedMatch && (
         <div style={{ margin: '0 16px 16px', padding: 16, background: 'var(--nh-bg)', borderRadius: 12, border: '1px solid var(--nh-border)' }}>
           <div style={{ fontSize: '.7rem', fontWeight: 800, color: 'var(--nh-accent)', marginBottom: 8 }}>RELATED MATCH</div>
@@ -698,10 +699,8 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       )}
 
-      {/* Image */}
       {post.imageUrl && <img src={post.imageUrl} alt={post.title} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)' }} loading="lazy" />}
 
-      {/* Actions */}
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
         <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
           {REACTIONS.map(r => {
@@ -720,7 +719,6 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       </div>
 
-      {/* Admin Controls */}
       {isAdmin && (
         <div style={{ padding: '0 16px 16px', display: 'flex', gap: 8 }}>
           <button onClick={() => onEdit(post)} className="nh-btn" style={{ flex: 1, background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: 10, borderRadius: 8, border: '1px solid var(--nh-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}><Pencil size={14} /> Edit</button>
@@ -730,13 +728,12 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
 
       <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
 
-      {/* Related Articles */}
       {relatedPosts.length > 0 && (
         <div style={{ padding: 16, borderTop: '1px solid var(--nh-border)' }}>
           <h3 style={{ fontSize: '1rem', fontWeight: 800, margin: '0 0 12px' }}>You might also like</h3>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
             {relatedPosts.map(p => (
-              <div key={p.id} onClick={() => onRelatedClick(p.id)} style={{ display: 'flex', gap: 12, cursor: 'pointer' }}>
+              <div key={p.id} onClick={() => onRelatedClick(p)} style={{ display: 'flex', gap: 12, cursor: 'pointer' }}>
                 {p.imageUrl && <img src={p.imageUrl} style={{ width: 80, height: 80, borderRadius: 8, objectFit: 'cover' }} alt="" />}
                 <div>
                   <div style={{ fontSize: '.65rem', fontWeight: 800, color: BADGES[p.category]?.color || 'var(--nh-text-muted)', marginBottom: 4 }}>{BADGES[p.category]?.label || p.category}</div>
@@ -747,6 +744,13 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
           </div>
         </div>
       )}
+
+      {/* BACK TO TOP BUTTON AT BOTTOM OF ARTICLE */}
+      <div style={{ padding: '0 16px 24px', textAlign: 'center' }}>
+        <button onClick={onBackToTop} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', padding: '12px 24px', borderRadius: 20, border: '1px solid var(--nh-border)', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '.85rem' }}>
+          <ArrowUp size={16} /> Back to Top
+        </button>
+      </div>
     </div>
   );
 }
