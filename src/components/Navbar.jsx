@@ -432,10 +432,19 @@ export default function Navbar() {
     return () => unsub();
   }, []);
 
-  // ★ FIX: Fetch Admin Broadcasts (Global & Personal) smartly with error logging
+  // ★ FIX: Fetch Admin Broadcasts securely based on auth state
   useEffect(() => {
     if (!db) return setAdminNotifs([]);
-    const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
+
+    let q;
+    if (uid) {
+      // Logged in: fetch global (null) AND personal (uid)
+      q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid]));
+    } else {
+      // Guest: fetch global (null) ONLY
+      q = query(collection(db, 'notifications'), where('targetUid', '==', null));
+    }
+
     const unsub = onSnapshot(q, (snap) => {
       const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAdminNotifs(notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
@@ -443,9 +452,11 @@ export default function Navbar() {
       console.error("[Navbar] Error fetching notifications. Check Firestore Security Rules:", err);
       setAdminNotifs([]);
     });
+    
     return () => unsub();
   }, [db, uid]);
 
+  
   // Scroll listener
   useEffect(() => {
     const fn = () => {
