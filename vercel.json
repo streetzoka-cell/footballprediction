@@ -1,4 +1,10 @@
 {
+  "rewrites": [
+    {
+      "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/).*)",
+      "destination": "/index.html"
+    }
+  ],
   "headers": [
     {
       "source": "/sitemap.xml",
@@ -19,18 +25,8 @@
         {
           "key": "Content-Type",
           "value": "text/plain"
-        },
-        {
-          "key": "Cache-Control",
-          "value": "public, max-age=3600"
         }
       ]
-    }
-  ],
-  "rewrites": [
-    {
-      "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/).*)",
-      "destination": "/"
     }
   ]
 }
