@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v13.3 — Fixed missing ProHeader styles, removed strobe animations, smoothed ticker
+// v13.4 — Fixed missing ProHeader styles, removed strobe animations, smoothed ticker
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -432,15 +432,17 @@ export default function Navbar() {
     return () => unsub();
   }, []);
 
-  // ★ Fetch Admin Broadcasts (Global & Personal) smartly
+  // ★ FIX: Fetch Admin Broadcasts (Global & Personal) smartly with error logging
   useEffect(() => {
     if (!db) return setAdminNotifs([]);
-    // If user is logged in, fetch their personal notifs AND global. Otherwise, just global.
     const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
     const unsub = onSnapshot(q, (snap) => {
       const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setAdminNotifs(notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0)));
-    }, () => {});
+    }, (err) => {
+      console.error("[Navbar] Error fetching notifications. Check Firestore Security Rules:", err);
+      setAdminNotifs([]);
+    });
     return () => unsub();
   }, [db, uid]);
 
@@ -731,7 +733,7 @@ export default function Navbar() {
 
           {/* CENTER: Logo */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
-            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }}>
+            <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} onClick={() => navigate('/')}>
               <div style={{
                 width: 38, height: 38, borderRadius: 11, position: 'relative', overflow: 'hidden', flexShrink: 0,
                 background: 'linear-gradient(145deg, #00e676 0%, #00c853 35%, #059669 100%)',
@@ -788,7 +790,8 @@ export default function Navbar() {
             </div>
 
             {/* Notifications */}
-            {isLoggedIn && (
+            {/* ★ FIX: Show bell for guests if there are admin broadcasts */}
+            {(isLoggedIn || adminNotifs.length > 0) && (
               <div ref={notifRef} style={{ position: 'relative' }}>
                 <button onClick={() => setNotifOpen(p => !p)} style={{
                   width: 36, height: 36, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -961,13 +964,13 @@ export default function Navbar() {
                 transition: 'all 0.2s ease',
               }}><Shield size={17} /></Link>
             )}
-            {isLoggedIn && notifCount > 0 && (
+            {notifCount > 0 && (
               <div style={{
                 width: 38, height: 38, borderRadius: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
                 background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.15)',
                 position: 'relative', cursor: 'pointer', color: '#ef4444',
                 transition: 'all 0.2s ease',
-              }} onClick={() => { setMobileOpen(true); }}>
+              }} onClick={() => setMobileOpen(true)}>
                 <Bell size={17} />
                 <span style={{
                   position: 'absolute', top: 2, right: 2, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
@@ -1055,6 +1058,18 @@ export default function Navbar() {
                     <div style={{ fontSize: '0.48rem', fontWeight: 700, color: '#4a5568', textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{s.label}</div>
                   </div>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Notifications in Mobile Menu */}
+          {predNotifs.length > 0 && (
+            <div style={{ padding: '14px 0', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+              <div style={{ padding: '0 16px 10px', fontSize: '0.7rem', fontWeight: 700, color: 'var(--text-muted, #6b728b)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                Recent Notifications
+              </div>
+              <div style={{ maxHeight: '220px', overflowY: 'auto' }} className="nv-mob-scroll">
+                {predNotifs.slice(0, 5).map(renderNotifItem)}
               </div>
             </div>
           )}
