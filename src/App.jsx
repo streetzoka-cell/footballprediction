@@ -1,6 +1,7 @@
 // src/App.jsx
 
 import { Suspense, useEffect } from "react";
+import { useLocation } from "react-router-dom"; // ★ FIX: Import useLocation for tracking
 
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
@@ -77,6 +78,8 @@ const cleanupStaleJunk = () => {
 };
 
 function AppShell() {
+  const location = useLocation(); // ★ FIX: Get current route
+
   useEffect(() => {
     // 1. Clean up unnecessary junk on initial app load
     cleanupStaleJunk();
@@ -103,6 +106,16 @@ function AppShell() {
       window.removeEventListener("focus", handleVisibilityChange);
     };
   }, []);
+
+  // ★ FIX: Google Analytics Page View Tracking
+  useEffect(() => {
+    if (typeof window.gtag === "function") {
+      window.gtag("event", "page_view", {
+        page_path: location.pathname + location.search,
+        page_location: window.location.href,
+      });
+    }
+  }, [location.pathname, location.search]);
 
   return (
     <>
