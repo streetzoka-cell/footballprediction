@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx (Pro News Hub + SEO Optimized)
+// FILE: src/pages/Highlights.jsx (Pro News Hub + Gamified + SEO)
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Newspaper, X, AlertCircle, Clock, Heart, MessageCircle, 
   Plus, Pencil, Trash2, Send, Tag, Image as ImageIcon, Loader, 
-  Sun, Moon, ThumbsUp, ArrowLeft
+  Sun, Moon, ThumbsUp, ArrowLeft, BadgeCheck, Trophy, Star, ShieldCheck
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
@@ -15,7 +15,7 @@ import {
   collection, query, orderBy, onSnapshot, addDoc, updateDoc, 
   deleteDoc, doc, serverTimestamp, increment, arrayUnion, arrayRemove, getDoc
 } from 'firebase/firestore';
-import SEO from "../components/SEO"; // Uses your existing Helmet component
+import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
    STYLE INJECTION (Themed)
@@ -25,11 +25,12 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'news-hub-pro-css';
   s.textContent = `
-    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); }
-    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); }
+    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; }
+    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; }
     @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
     @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
     @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
+    @keyframes nh_glow { 0%, 100% { box-shadow: 0 0 5px rgba(245,197,66,0.3); } 50% { box-shadow: 0 0 15px rgba(245,197,66,0.6); } }
     .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
     .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
     .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
@@ -76,7 +77,6 @@ export default function Highlights() {
   const user = currentUser;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
   
-  // SEO: Get URL params for individual post routing
   const { id: urlPostId } = useParams();
   const navigate = useNavigate();
 
@@ -86,7 +86,6 @@ export default function Highlights() {
   const [activeFilter, setActiveFilter] = useState('All');
   const [expandedComments, setExpandedComments] = useState({});
   
-  // SEO: State for Single Post View
   const [activePost, setActivePost] = useState(null);
 
   const [isFormOpen, setIsFormOpen] = useState(false);
@@ -101,7 +100,7 @@ export default function Highlights() {
 
   // Fetch Feed Posts
   useEffect(() => {
-    if (!db || urlPostId) return; // Don't fetch feed if viewing single post
+    if (!db || urlPostId) return; 
     const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'));
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
@@ -110,7 +109,7 @@ export default function Highlights() {
     return () => unsub();
   }, [db, urlPostId]);
 
-  // SEO: Fetch Single Post if URL changes
+  // Fetch Single Post if URL changes
   useEffect(() => {
     if (!db || !urlPostId) {
       setActivePost(null);
@@ -121,7 +120,7 @@ export default function Highlights() {
       if (snap.exists()) {
         setActivePost({ id: snap.id, ...snap.data() });
       } else {
-        navigate('/highlights'); // Redirect if post doesn't exist
+        navigate('/highlights'); 
       }
       setLoading(false);
     });
@@ -180,6 +179,7 @@ export default function Highlights() {
           ...formData,
           authorId: user.uid,
           authorName: userProfile?.displayName || 'Admin',
+          authorRole: userProfile?.role || 'admin', // Save role for verification badge
           createdAt: serverTimestamp(),
           likesCount: 0, commentsCount: 0, likedBy: []
         });
@@ -226,12 +226,26 @@ export default function Highlights() {
     const text = newComments[postId]?.trim();
     if (!text || !user) return;
     
-    const tempComment = { id: `temp_${Date.now()}`, body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: { toMillis: () => Date.now() } };
+    // Include user's points/role for gamification badges
+    const tempComment = { 
+      id: `temp_${Date.now()}`, 
+      body: text, 
+      authorId: user.uid, 
+      authorName: userProfile?.displayName || 'User', 
+      authorRole: userProfile?.role || 'user',
+      createdAt: { toMillis: () => Date.now() } 
+    };
     setComments(prev => ({ ...prev, [postId]: [tempComment, ...(prev[postId] || [])] }));
     setNewComments(prev => ({ ...prev, [postId]: '' }));
 
     try {
-      await addDoc(collection(db, 'news_posts', postId, 'comments'), { body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: serverTimestamp() });
+      await addDoc(collection(db, 'news_posts', postId, 'comments'), { 
+        body: text, 
+        authorId: user.uid, 
+        authorName: userProfile?.displayName || 'User',
+        authorRole: userProfile?.role || 'user',
+        createdAt: serverTimestamp() 
+      });
       await updateDoc(doc(db, 'news_posts', postId), { commentsCount: increment(1) });
     } catch (err) {
       console.error("Comment error:", err);
@@ -256,13 +270,11 @@ export default function Highlights() {
     };
   };
 
-  // The post being displayed (either single view or feed view meta)
   const seoPost = activePost || posts[0]; 
 
   return (
     <div className={theme === 'dark' ? 'nh-dark' : 'nh-light'} style={{ minHeight: '100vh', background: 'var(--nh-bg)', color: 'var(--nh-text)', transition: 'background 0.3s' }}>
       
-      {/* ★ SEO: Dynamic Tags & Schema Injection using YOUR SEO component */}
       <SEO 
         title={seoPost ? seoPost.title : "Football News Hub"}
         description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
@@ -301,12 +313,24 @@ export default function Highlights() {
 
       <div style={{ maxWidth: 600, margin: '0 auto', padding: '20px 16px 80px' }}>
         
+        {/* ★ NEW: Monthly Prize Promo Banner */}
+        {!activePost && (
+          <div className="nh-enter" style={{ background: 'linear-gradient(135deg, rgba(245,197,66,0.15), rgba(245,197,66,0.05))', border: '1px solid rgba(245,197,66,0.3)', borderRadius: 16, padding: '16px', display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24, boxShadow: '0 4px 20px rgba(245,197,66,0.1)' }}>
+            <div style={{ width: 44, height: 44, borderRadius: 12, background: 'rgba(245,197,66,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--nh-gold)', animation: 'nh_glow 3s infinite ease-in-out' }}>
+              <Trophy size={22} />
+            </div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontWeight: 800, color: 'var(--nh-gold)', fontSize: '.9rem' }}>Win Monthly Prizes!</div>
+              <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', marginTop: 2 }}>Top interactors (likes & comments) win cash prizes at month's end. Keep engaging!</div>
+            </div>
+          </div>
+        )}
+
         {loading ? (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             {[1, 2, 3].map(i => <div key={i} className="nh-shimmer" style={{ height: 300, borderRadius: 16 }} />)}
           </div>
         ) : activePost ? (
-          // SEO: SINGLE POST VIEW (Deep linked for Google)
           <SinglePostView 
             post={activePost} 
             comments={comments[activePost.id] || []} 
@@ -321,7 +345,6 @@ export default function Highlights() {
             handleComment={handleComment}
           />
         ) : (
-          // FEED VIEW
           <>
             <div className="nh-scroll" style={{ display: 'flex', gap: 8, marginBottom: 24, overflowX: 'auto', paddingBottom: 4 }}>
               {CATEGORIES.map(cat => (
@@ -347,7 +370,7 @@ export default function Highlights() {
                     onLike={handleLike} 
                     onEdit={openEdit} 
                     onDelete={handleDelete}
-                    onExpand={(postId) => navigate(`/highlights/${postId}`)} // Navigate for SEO
+                    onExpand={(postId) => navigate(`/highlights/${postId}`)}
                     expandedComments={expandedComments}
                     setExpandedComments={setExpandedComments}
                     comments={comments}
@@ -414,19 +437,39 @@ export default function Highlights() {
 }
 
 /* ═══════════════════════════════════════════════════════════════
+   HELPER: USER BADGE COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+function UserBadge({ role }) {
+  const isAdmin = role === 'admin' || role === 'super_admin';
+  const isMember = !!role && role !== 'guest';
+
+  if (isAdmin) {
+    return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', marginLeft: 6 }}><ShieldCheck size={8} /> ADMIN</span>;
+  }
+  if (isMember) {
+    return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'rgba(245,197,66,0.15)', color: 'var(--nh-gold)', marginLeft: 6 }}><Star size={8} fill="currentColor" /> MEMBER</span>;
+  }
+  return <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontSize: '0.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: 4, background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', marginLeft: 6 }}>GUEST</span>;
+}
+
+/* ═══════════════════════════════════════════════════════════════
    POST CARD COMPONENT (For Feed)
    ═══════════════════════════════════════════════════════════════ */
 function PostCard({ post, index, isAdmin, user, onLike, onEdit, onDelete, onExpand, expandedComments, setExpandedComments, comments, newComments, setNewComments, handleComment }) {
   const isExpanded = expandedComments[post.id];
   const hasLiked = post.likedBy?.includes(user?.uid);
+  const isVerified = post.authorRole === 'admin' || post.authorRole === 'super_admin';
 
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)', overflow: 'hidden', boxShadow: 'var(--nh-shadow)' }}>
       <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{(post.authorName || 'A')[0]}</div>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, boxShadow: isVerified ? '0 0 0 2px var(--nh-accent) inset' : 'none' }}>{(post.authorName || 'A')[0]}</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{post.authorName || 'Admin'}</div>
+            <div style={{ fontWeight: 700, fontSize: '.9rem', display: 'flex', alignItems: 'center' }}>
+              {post.authorName || 'Admin'}
+              {isVerified && <BadgeCheck size={14} style={{ marginLeft: 4, color: 'var(--nh-accent)' }} fill="var(--nh-accent-bg)" />}
+            </div>
             <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {post.category}</div>
           </div>
         </div>
@@ -460,24 +503,35 @@ function PostCard({ post, index, isAdmin, user, onLike, onEdit, onDelete, onExpa
       </div>
 
       {isExpanded && (
-        <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
+        <CommentSection 
+          postId={post.id} 
+          comments={comments[post.id] || []} 
+          newComments={newComments} 
+          setNewComments={setNewComments} 
+          handleComment={handleComment} 
+        />
       )}
     </div>
   );
 }
 
 /* ═══════════════════════════════════════════════════════════════
-   SINGLE POST VIEW (For Deep Link / SEO Route)
+   SINGLE POST VIEW 
    ═══════════════════════════════════════════════════════════════ */
 function SinglePostView({ post, comments, isAdmin, user, onLike, onEdit, onDelete, newComments, setNewComments, handleComment }) {
   const hasLiked = post.likedBy?.includes(user?.uid);
+  const isVerified = post.authorRole === 'admin' || post.authorRole === 'super_admin';
+
   return (
     <div className="nh-enter" style={{ background: 'var(--nh-surface)', borderRadius: 16, border: '1px solid var(--nh-border)', overflow: 'hidden', boxShadow: 'var(--nh-shadow)' }}>
       <div style={{ padding: '16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800 }}>{(post.authorName || 'A')[0]}</div>
+          <div style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, boxShadow: isVerified ? '0 0 0 2px var(--nh-accent) inset' : 'none' }}>{(post.authorName || 'A')[0]}</div>
           <div>
-            <div style={{ fontWeight: 700, fontSize: '.9rem' }}>{post.authorName || 'Admin'}</div>
+            <div style={{ fontWeight: 700, fontSize: '.9rem', display: 'flex', alignItems: 'center' }}>
+              {post.authorName || 'Admin'}
+              {isVerified && <BadgeCheck size={14} style={{ marginLeft: 4, color: 'var(--nh-accent)' }} fill="var(--nh-accent-bg)" />}
+            </div>
             <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {post.category}</div>
           </div>
         </div>
@@ -525,16 +579,24 @@ function CommentSection({ postId, comments, newComments, setNewComments, handleC
         </button>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {comments?.length === 0 && <p style={{ fontSize: '.8rem', color: 'var(--nh-text-muted)', textAlign: 'center' }}>No comments yet.</p>}
-        {comments?.map(c => (
-          <div key={c.id} style={{ display: 'flex', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: '50%', background: 'var(--nh-surface-hover)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700, color: 'var(--nh-text-muted)', flexShrink: 0 }}>{c.authorName?.[0] || 'G'}</div>
-            <div style={{ background: 'var(--nh-surface)', borderRadius: 12, padding: '10px 14px', flex: 1 }}>
-              <div style={{ fontSize: '.75rem', fontWeight: 700, marginBottom: 2 }}>{c.authorName || 'Guest'}</div>
-              <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--nh-text)' }}>{c.body}</p>
+        {(comments || []).length === 0 && <p style={{ fontSize: '.8rem', color: 'var(--nh-text-muted)', textAlign: 'center' }}>No comments yet. Be the first to win points!</p>}
+        {(comments || []).map(c => {
+          const isMember = c.authorId && c.authorId !== 'guest';
+          return (
+            <div key={c.id} style={{ display: 'flex', gap: 10 }}>
+              <div style={{ width: 28, height: 28, borderRadius: '50%', background: isMember ? 'var(--nh-accent-bg)' : 'var(--nh-surface-hover)', color: isMember ? 'var(--nh-accent)' : 'var(--nh-text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700, flexShrink: 0, border: isMember ? '1px solid var(--nh-accent)' : '1px solid var(--nh-border)' }}>
+                {c.authorName?.[0] || 'G'}
+              </div>
+              <div style={{ background: 'var(--nh-surface)', borderRadius: 12, padding: '10px 14px', flex: 1, border: '1px solid var(--nh-border)' }}>
+                <div style={{ fontSize: '.75rem', fontWeight: 700, marginBottom: 4, display: 'flex', alignItems: 'center' }}>
+                  {c.authorName || 'Guest'} 
+                  <UserBadge role={c.authorRole || (isMember ? 'user' : 'guest')} />
+                </div>
+                <p style={{ margin: 0, fontSize: '.85rem', color: 'var(--nh-text)' }}>{c.body}</p>
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </div>
   );

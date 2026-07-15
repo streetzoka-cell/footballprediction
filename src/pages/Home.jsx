@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v22.3 — Explicit user data fetch on mount
+// v22.4 — Added Smart News Marquee & Explicit user data fetch on mount
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
@@ -10,7 +10,7 @@ import {
   ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
   Clock, Lock, Crown, Activity, Medal, BarChart3, XCircle,
   ArrowUpRight, Sun, Moon, CloudSun, Timer, Gamepad2,
-  TrendingUp as TrendIcon, ChevronRight
+  TrendingUp as TrendIcon, ChevronRight, Newspaper
 } from 'lucide-react';
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
@@ -21,7 +21,7 @@ import { dataLayer } from '../utils/dataLayer';
 import { todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { db } from '../utils/firebase';
-import { collection, query, limit, getDocs } from 'firebase/firestore';
+import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════
@@ -52,7 +52,6 @@ const dateLabel = (d) => {
   return `${['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getDay()]} ${d.slice(5)}`;
 };
 
-// ★ FIX: Added isPrimary parameter to correctly map Primary vs Backup data shapes
 function normalizeMatch(raw, isPrimary = true) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
@@ -209,6 +208,22 @@ const injectStyles = () => {
 @keyframes v22-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes v22-hero-line{from{transform:scaleX(0)}to{transform:scaleX(1)}}
 
+/* ★ NEWS MARQUEE ANIMATION */
+@keyframes v22-news-marquee {
+  0% { transform: translateX(0%); }
+  100% { transform: translateX(-50%); }
+}
+.v22-news-marquee {
+  display: flex;
+  gap: 14px;
+  animation: v22-news-marquee 40s linear infinite;
+  width: max-content;
+  padding: 4px 0;
+}
+.v22-news-marquee:hover {
+  animation-play-state: paused;
+}
+
 .v22{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
 .v22-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
 
@@ -309,6 +324,70 @@ const injectStyles = () => {
 
 .v22-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
 
+/* ★ NEWS CARDS CSS */
+.v22-newsmini {
+  display: flex;
+  flex-direction: column;
+  min-width: 200px;
+  max-width: 220px;
+  height: 150px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  transition: transform .2s, border-color .2s;
+  position: relative;
+}
+.v22-newsmini:hover {
+  transform: translateY(-2px);
+  border-color: rgba(59,130,246,0.4);
+  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+}
+.v22-news-img {
+  width: 100%;
+  height: 80px;
+  object-fit: cover;
+  background: var(--bg-surface);
+}
+.v22-news-img-ph {
+  width: 100%;
+  height: 80px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02));
+  color: var(--accent);
+}
+.v22-news-body {
+  padding: 8px 10px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow: hidden;
+}
+.v22-news-cat {
+  font-size: 0.55rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  color: var(--accent);
+  letter-spacing: 0.05em;
+}
+.v22-news-title {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media(max-width:640px){
   .v22-stats{grid-template-columns:repeat(2,1fr);gap:8px}
   .v22-chip .val{font-size:.95rem}
@@ -398,7 +477,7 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
           : <span className="v22-vs">VS</span>}
         </div>
         <div className="v22-te aw">
-          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}>
           <span>{pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'}</span>
         </div>
       </div>
@@ -475,7 +554,6 @@ export default function Home() {
   const mounted = useRef(true);
   const greeting = useMemo(() => getGreeting(), []);
 
-  // ★ Use AppDataContext for REACTIVE data (like navbar)
   const appData = useAppData();
   const {
     activePredictions,
@@ -486,10 +564,9 @@ export default function Home() {
     predictionResults,
     userStats,
     loading: ctxLoading,
-    ensureUserData, // ★ FIX: Destructure ensureUserData
+    ensureUserData,
   } = appData;
 
-  // Fixtures (not in context, fetched independently)
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [fxLoading, setFxLoading] = useState(true);
   const [offline, setOffline] = useState(!navigator.onLine);
@@ -497,10 +574,12 @@ export default function Home() {
   const [showMoreZoka, setShowMoreZoka] = useState(false);
   const [showMoreLB, setShowMoreLB] = useState(false);
   const [totalUsers, setTotalUsers] = useState(null);
+  
+  // ★ NEW: State for News Posts
+  const [newsPosts, setNewsPosts] = useState([]);
 
   const { fixtures: backupRaw } = useFootballData();
 
-  // ★ FIX: Explicitly trigger user data fetch on mount to guarantee predictions/results load
   useEffect(() => {
     if (uid) {
       ensureUserData(uid);
@@ -524,6 +603,16 @@ export default function Home() {
     }).catch(() => {});
   }, []);
 
+  // ★ NEW: Fetch Latest News Posts for Marquee
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+    const unsub = onSnapshot(q, (snap) => {
+      if (mounted.current) setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => unsub();
+  }, [db]);
+
   // Fixtures with live polling
   useEffect(() => {
     let mnt = true;
@@ -540,15 +629,10 @@ export default function Home() {
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
       if (!mnt || !lm) return;
       setPrimaryFixtures(prev => prev.map(f => {
-        // Find the fresh match from the poll
         const freshMatch = lm.find(m => String(m.id) === String(f.id));
-        
-        // If we found it, merge the fresh data over the old data.
-        // This guarantees we get the new 'FT' status and scores.
         if (freshMatch) {
           return { ...f, ...freshMatch };
         }
-        
         return f;
       }));
     });
@@ -556,7 +640,6 @@ export default function Home() {
     return () => { mnt = false; if (unsub) unsub(); };
   }, []);
 
-  // ★ DERIVED — All from reactive context, instant updates!
   const allFixtures = useMemo(() => {
     let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)).filter(Boolean);
     const uniqueIds = new Set();
@@ -565,7 +648,6 @@ export default function Home() {
 
   const liveMatches = useMemo(() => allFixtures.filter(f => f.isLive || isLiveStatus(f.status, SPORT.FOOTBALL)), [allFixtures]);
 
-  // Zoka picks (from context for today)
   const zokaFlat = useMemo(() => {
     const matches = zokaPicks?.matches || [];
     return matches.map(m => ({ ...m, _d: getTodayStr() }));
@@ -573,16 +655,13 @@ export default function Home() {
   const zokaVis = showMoreZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
-  // Featured predictions (from context)
   const featFlat = useMemo(() => (activePredictions || []).map(m => ({ ...m, _d: getTodayStr() })), [activePredictions]);
   const featVis = showMoreFeat ? featFlat : featFlat.slice(0, 5);
   const featHidden = Math.max(0, featFlat.length - 5);
 
-  // ★ FIX: Safe Leaderboard fallback to prevent crashes if null
   const lbVis = showMoreLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
   const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
 
-  // User predictions/results maps (from context)
   const userPredMap = useMemo(() => {
     const m = {};
     Object.values(userPredictions || {}).forEach(p => { m[p.predId || p.matchId] = p; });
@@ -595,7 +674,6 @@ export default function Home() {
     return m;
   }, [predictionResults]);
 
-  // ★ Stats — All accurate and reactive
   const myPredicted = useMemo(() => {
     return (activePredictions || []).filter(p => userPredMap[p.id || p.matchId]).length;
   }, [activePredictions, userPredMap]);
@@ -638,7 +716,7 @@ export default function Home() {
           </div>
         )}
 
-        {/* ★ STATS STRIP — Now reactive and accurate */}
+        {/* ★ STATS STRIP */}
         <div className="v22-stats" style={{ animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 100ms both' }}>
           <div className="v22-chip">
             <div className="val"><AnimNum value={totalUsers || dailyStats?.players || 0} delay={200} /></div>
@@ -663,6 +741,33 @@ export default function Home() {
             {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (userStats?.todayPoints || 0) / 5)}%`, background: 'var(--accent)', animationDelay: '600ms' }} /></div>}
           </div>
         </div>
+
+        {/* ★ NEW: LATEST NEWS MARQUEE */}
+        {newsPosts.length > 0 && (
+          <div style={{ margin: '18px 0 22px', animation: 'v22-fade-up .5s cubic-bezier(.22,1,.36,1) 120ms both', overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+              <Newspaper size={14} style={{ color: 'var(--accent)' }} />
+              <span style={{ fontSize: '.74rem', fontWeight: 900, color: 'var(--text-primary)' }}>LATEST NEWS</span>
+              <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
+              <Link to="/highlights" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>Hub <ChevronRight size={11} /></Link>
+            </div>
+            <div className="v22-news-marquee">
+              {[...newsPosts, ...newsPosts].map((post, i) => (
+                <Link to={`/highlights/${post.id}`} key={`${post.id}-${i}`} className="v22-newsmini">
+                  {post.imageUrl ? (
+                    <img src={post.imageUrl} alt={post.title} className="v22-news-img" />
+                  ) : (
+                    <div className="v22-news-img-ph"><Newspaper size={18} /></div>
+                  )}
+                  <div className="v22-news-body">
+                    <span className="v22-news-cat">{post.category}</span>
+                    <h4 className="v22-news-title">{post.title}</h4>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* ZOKA PICKS */}
         {!ctxLoading && zokaFlat.length > 0 && (
@@ -770,10 +875,10 @@ export default function Home() {
             </Link>
             <Link to="/highlights" className="v22-ecard">
               <div className="v22-ecard-accent" style={{ background: '#f97316' }} />
-              <Medal size={20} style={{ color: '#f97316' }} />
+              <Newspaper size={20} style={{ color: '#f97316' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Highlights</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Latest match videos</div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>News Hub</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Official updates & articles</div>
               </div>
             </Link>
             <Link to="/livestream" className="v22-ecard">
