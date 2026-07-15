@@ -201,17 +201,20 @@ const SCHEDULER = Object.freeze({
 //
 // Budget: ~22 football/day, ~12 basketball/day
 // ───────────────────────────────────────────────
+// ═══════════════════════════════════════════════════
+// Live Polling — FREE PLAN OPTIMIZED (100 Calls/Day)
+// ═══════════════════════════════════════════════════
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 20,
-  BASKETBALL_DAILY_LIVE_CAP: 10,
+  FOOTBALL_DAILY_LIVE_CAP: 80,       // Hard cap: 80 live calls/day
+  BASKETBALL_DAILY_LIVE_CAP: 10,     // Hard cap: 10 live calls/day
 
-  ACTIVE_INTERVAL_MS: 300000,
-  NO_LIVE_CHECK_INTERVAL_MS: 1800000,
-  LOW_BUDGET_INTERVAL_MS: 1800000,
-  CRITICAL_INTERVAL_MS: 3600000,
-  CAP_REACHED_INTERVAL_MS: 3600000,
+  ACTIVE_INTERVAL_MS: 120000,        // 2 mins when games ARE live (near-instant scores)
+  NO_LIVE_CHECK_INTERVAL_MS: 3600000,// 1 hour when NO games are live (saves 24 calls/day)
+  LOW_BUDGET_INTERVAL_MS: 3600000,   // 1 hour when budget is low
+  CRITICAL_INTERVAL_MS: 7200000,     // 2 hours when budget is critical
+  CAP_REACHED_INTERVAL_MS: 10800000, // 3 hours when cap is reached
 
-  LOW_BUDGET_THRESHOLD: 30,
+  LOW_BUDGET_THRESHOLD: 25,
   CRITICAL_BUDGET_THRESHOLD: 10,
   MIN_BUDGET_TO_POLL: 3,
 

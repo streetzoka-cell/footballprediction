@@ -294,7 +294,12 @@ export const subscribeToTodayFixtures = (callback) =>
   _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
 
 function _createPollingSubscription(sport, callback, options = {}) {
-  const { activeMs = POLL_INTERVAL.LIVE_ACTIVE, idleMs = POLL_INTERVAL.LIVE_IDLE, includeToday = false } = options;
+  // ★ FIX: Hardcode fast frontend polling (Firestore reads are FREE)
+  // This reads from Firestore every 15s when live, 60s when idle.
+  const activeMs = 15000; 
+  const idleMs = 60000;
+  const includeToday = options.includeToday || false;
+  
   let timer = null, active = false, currentMatches = [], errorCount = 0;
 
   const onVisibilityChange = () => {
@@ -332,12 +337,14 @@ function _createPollingSubscription(sport, callback, options = {}) {
       currentMatches = dedupedMatches;
       const hasLive = liveMatches.length > 0;
       callback({ matches: dedupedMatches, hasLive, liveCount: liveMatches.length, error: null });
+      
+      // If live, poll fast (15s). If not live, poll slow (60s).
       if (active) timer = setTimeout(poll, hasLive ? activeMs : idleMs);
     } catch (err) {
       errorCount++;
       console.warn(`[Poll] ${sport} error (${errorCount}):`, err.message);
       callback({ matches: currentMatches, hasLive: false, liveCount: 0, error: err.message });
-      if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, POLL_INTERVAL.BACKOFF_MAX));
+      if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, 300000)); // Max 5 min backoff
     }
   };
 
