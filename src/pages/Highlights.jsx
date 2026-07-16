@@ -24,6 +24,12 @@ const slugify = (text) => {
   return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
+// ★ NEW: Bots can't read Base64, so we use the Node backend proxy URL
+const getSeoImageUrl = (post) => {
+  if (!post || !post.imageUrl) return "https://zokascore.xyz/logo.png";
+  return `https://zokascore.xyz/api/og-image/${post.id}`;
+};
+
 const formatTimeAgo = (date) => {
   if (!date) return 'Just now';
   const diff = Date.now() - (date.toMillis ? date.toMillis() : new Date(date).getTime());
@@ -133,7 +139,7 @@ export default function Highlights() {
   const [relatedMatch, setRelatedMatch] = useState(null);
   const [savedPosts, setSavedPosts] = useState(() => JSON.parse(localStorage.getItem('nh_saved') || '[]'));
   const [shareData, setShareData] = useState(null);
-  const [lightboxImage, setLightboxImage] = useState(null); // ★ NEW: Lightbox state
+  const [lightboxImage, setLightboxImage] = useState(null);
   
   const [visibleCount, setVisibleCount] = useState(15);
   const [showScrollTop, setShowScrollTop] = useState(false);
@@ -353,7 +359,8 @@ export default function Highlights() {
     if (!post) return null;
     return {
       "@context": "https://schema.org", "@type": "NewsArticle",
-      "headline": post.title, "image": [post.imageUrl || "https://zokascore.xyz/logo.png"],
+      "headline": post.title, 
+      "image": [getSeoImageUrl(post)],
       "datePublished": post.createdAt?.toMillis ? new Date(post.createdAt.toMillis()).toISOString() : new Date().toISOString(),
       "author": [{ "@type": "Person", "name": post.authorName || "Admin" }],
       "publisher": { "@type": "Organization", "name": "ZOKASCORE" },
@@ -370,7 +377,7 @@ export default function Highlights() {
         title={seoPost ? seoPost.title : "Football News Hub | ZOKASCORE"}
         description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
         path={seoPost ? `/highlights/${slugify(seoPost.title)}-${seoPost.id}` : '/highlights'}
-        image={seoPost?.imageUrl}
+        image={getSeoImageUrl(seoPost)}
         type="article"
         structuredData={generateJsonLd(seoPost)}
       />
@@ -421,7 +428,7 @@ export default function Highlights() {
             relatedPosts={posts.filter(p => p.category === activePost.category && p.id !== activePost.id).slice(0, 3)}
             onRelatedClick={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
             onBackToTop={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-            onImageClick={(url) => setLightboxImage(url)} // ★ NEW: Lightbox trigger
+            onImageClick={(url) => setLightboxImage(url)}
             newComments={newComments}
             setNewComments={setNewComments}
             handleComment={handleComment}
@@ -514,7 +521,7 @@ export default function Highlights() {
         </button>
       )}
 
-      {/* ★ NEW: IMAGE LIGHTBOX MODAL */}
+      {/* IMAGE LIGHTBOX MODAL */}
       {lightboxImage && (
         <div onClick={() => setLightboxImage(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.95)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'pointer' }}>
           <img src={lightboxImage} style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} alt="Expanded view" />
@@ -626,7 +633,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
 
       <div style={{ padding: 16 }}>
         
-        {/* ★ FIX: Unified Clickable Content Area (Works for Hero without image AND Normal posts) */}
+        {/* UNIFIED CLICKABLE CONTENT AREA */}
         <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
           {!isHero || !post.imageUrl ? (
             <>
@@ -712,7 +719,7 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       )}
 
-      {/* ★ NEW: Image is now clickable to open Lightbox */}
+      {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
       {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>

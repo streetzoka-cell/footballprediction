@@ -370,6 +370,36 @@ function startServer() {
     }
   });
 
+    // ── Social Media Image Proxy (For Facebook/Twitter OG Tags) ──
+  app.get("/api/og-image/:postId", async (req, res) => {
+    try {
+      const db = getDb();
+      const snap = await db.collection("news_posts").doc(req.params.postId).get();
+      
+      if (!snap.exists) {
+        return res.redirect("https://zokascore.xyz/logo.png"); // Fallback
+      }
+      
+      const { imageUrl } = snap.data();
+      
+      if (imageUrl && imageUrl.startsWith("data:image")) {
+        // It's a base64 string, convert it to a real image file for the bot
+        const base64Data = imageUrl.split(",")[1];
+        const buffer = Buffer.from(base64Data, "base64");
+        res.set("Content-Type", "image/jpeg");
+        res.set("Cache-Control", "public, max-age=86400"); // Cache for 1 day
+        return res.send(buffer);
+      } else if (imageUrl) {
+        // It's already a URL, just redirect
+        return res.redirect(imageUrl);
+      } else {
+        return res.redirect("https://zokascore.xyz/logo.png");
+      }
+    } catch (err) {
+      return res.redirect("https://zokascore.xyz/logo.png");
+    }
+  });
+
   // ── 404 ──
   app.use((req, res) => {
     res.status(404).json({ error: "Not found" });

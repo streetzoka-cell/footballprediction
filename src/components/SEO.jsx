@@ -32,13 +32,16 @@ export default function SEO({
       
       <link rel="canonical" href={url} />
 
-      {/* Open Graph */}
+      {/* Open Graph (Facebook) */}
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
       <meta property="og:image" content={image} />
+      <meta property="og:image:secure_url" content={image} />
+      <meta property="og:image:width" content="1200" />
+      <meta property="og:image:height" content="630" />
       <meta property="og:locale" content={SITE.locale} />
 
       {/* Twitter */}
