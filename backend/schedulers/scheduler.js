@@ -187,17 +187,13 @@ class Scheduler {
 
         let interval;
 
-        if (remaining !== null && remaining <= 0) {
+                if (remaining !== null && remaining <= 0) {
           interval = LIVE_POLLING.CAP_REACHED_INTERVAL_MS;
-        } else if (
-          remaining !== null &&
-          remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL
-        ) {
+        } else if (remaining !== null && remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
           interval = LIVE_POLLING.CRITICAL_INTERVAL_MS;
         } else {
-          // Use 5-min active interval — if games are live,
-          // don't waste time waiting 30 min for first poll
-          interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
+          // Default to idle interval, don't assume games are live
+          interval = LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS; 
         }
 
         logger.info(
@@ -231,16 +227,15 @@ class Scheduler {
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        // Adjust next interval based on result
+                // Adjust next interval based on result
         if (result?.capReached) {
           interval = LIVE_POLLING.CAP_REACHED_INTERVAL_MS;
-        } else if (result?.hasLive === false) {
-          interval = LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS;
-        } else if (
-          nowRemaining === null ||
-          nowRemaining > LIVE_POLLING.LOW_BUDGET_THRESHOLD
-        ) {
+        } else if (result?.hasLive === true) {
+          // Only use active interval if games are strictly live
           interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
+        } else if (nowRemaining === null || nowRemaining > LIVE_POLLING.LOW_BUDGET_THRESHOLD) {
+          // No live games, wait 2 hours before checking again
+          interval = LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS;
         } else if (nowRemaining > LIVE_POLLING.CRITICAL_BUDGET_THRESHOLD) {
           interval = LIVE_POLLING.LOW_BUDGET_INTERVAL_MS;
         } else {

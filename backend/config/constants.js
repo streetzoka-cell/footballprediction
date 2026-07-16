@@ -229,14 +229,14 @@ const SCHEDULER = Object.freeze({
 // Live Polling — FREE PLAN OPTIMIZED (100 Calls/Day)
 // ═══════════════════════════════════════════════════
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 80,       // Hard cap: 80 live calls/day
-  BASKETBALL_DAILY_LIVE_CAP: 10,     // Hard cap: 10 live calls/day
+  FOOTBALL_DAILY_LIVE_CAP: 40,        // Reduced from 80 to 40
+  BASKETBALL_DAILY_LIVE_CAP: 15,      // Reduced from 10 to 15
 
-  ACTIVE_INTERVAL_MS: 120000,        // 2 mins when games ARE live (near-instant scores)
-  NO_LIVE_CHECK_INTERVAL_MS: 3600000,// 1 hour when NO games are live (saves 24 calls/day)
-  LOW_BUDGET_INTERVAL_MS: 3600000,   // 1 hour when budget is low
-  CRITICAL_INTERVAL_MS: 7200000,     // 2 hours when budget is critical
-  CAP_REACHED_INTERVAL_MS: 10800000, // 3 hours when cap is reached
+  ACTIVE_INTERVAL_MS: 300000,         // 5 mins when games ARE live (was 2 mins)
+  NO_LIVE_CHECK_INTERVAL_MS: 7200000, // 2 hours when NO games are live (was 1 hour)
+  LOW_BUDGET_INTERVAL_MS: 7200000,    // 2 hours when budget is low
+  CRITICAL_INTERVAL_MS: 14400000,     // 4 hours when budget is critical
+  CAP_REACHED_INTERVAL_MS: 21600000,  // 6 hours when cap is reached
 
   LOW_BUDGET_THRESHOLD: 25,
   CRITICAL_BUDGET_THRESHOLD: 10,
