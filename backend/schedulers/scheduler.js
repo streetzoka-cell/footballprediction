@@ -1,8 +1,4 @@
-/*
- * scheduler.js
- * Smart scheduler with 3 AM daily run + adaptive live polling.
- */
-
+// schedulers/scheduler.js
 const { SCHEDULER, LIVE_POLLING, API } = require("../config/constants");
 const {
   getRemainingRequests,
@@ -22,15 +18,12 @@ class Scheduler {
     this.pollingControllers = [];
     this.cronTimers = [];
     this.syncStatus = {};
+    this.activeSleepControllers = new Set();
 
     for (const name of Object.keys(services)) {
       this.syncStatus[name] = this._createInitialStatus();
     }
   }
-
-  // ==========================================================
-  // INITIAL SYNC
-  // ==========================================================
 
   async runInitialSync() {
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -38,72 +31,47 @@ class Scheduler {
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
     await this._tryRun("footballLiveFixtures");
-
-    if (isBasketballConfigured) {
-      await this._tryRun("basketballLiveFixtures");
-    }
-
+    if (isBasketballConfigured) await this._tryRun("basketballLiveFixtures");
+    
     await this._tryRun("footballDailyFixtures");
-
-    if (isBasketballConfigured) {
-      await this._tryRun("basketballDailyFixtures");
-    }
+    if (isBasketballConfigured) await this._tryRun("basketballDailyFixtures");
 
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     logger.info(" Initial Sync Complete");
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   }
 
-  // ==========================================================
-  // START
-  // ==========================================================
-
   start() {
     this.running = true;
     logger.info("[Scheduler] Starting smart scheduler...");
 
     this._startLivePolling("football");
-
-    if (isBasketballConfigured) {
-      this._startLivePolling("basketball");
-    }
+    if (isBasketballConfigured) this._startLivePolling("basketball");
 
     this._startCron("footballDailyFixtures", SCHEDULER.FIXTURES_DAILY);
-
-    if (isBasketballConfigured) {
-      this._startCron(
-        "basketballDailyFixtures",
-        SCHEDULER.BASKETBALL_FIXTURES_DAILY
-      );
-    }
+    if (isBasketballConfigured) this._startCron("basketballDailyFixtures", SCHEDULER.BASKETBALL_FIXTURES_DAILY);
 
     this._logSchedule();
     logger.info("[Scheduler] Started.");
   }
 
-  // ==========================================================
-  // STOP
-  // ==========================================================
-
   stop() {
     this.running = false;
 
-    for (const ctrl of this.pollingControllers) {
-      ctrl.stop = true;
-    }
+    for (const ctrl of this.pollingControllers) ctrl.stop = true;
     this.pollingControllers = [];
 
-    for (const timer of this.cronTimers) {
-      clearTimeout(timer);
-    }
+    for (const timer of this.cronTimers) clearTimeout(timer);
     this.cronTimers = [];
+
+    // Cancel all active sleeps immediately for graceful shutdown
+    for (const ctrl of this.activeSleepControllers) {
+      if (!ctrl.signal.aborted) ctrl.abort();
+    }
+    this.activeSleepControllers.clear();
 
     logger.info("[Scheduler] Stopped.");
   }
-
-  // ==========================================================
-  // STATUS
-  // ==========================================================
 
   getStatus() {
     return {
@@ -112,97 +80,73 @@ class Scheduler {
     };
   }
 
-  // ==========================================================
-  // LIVE POLLING LOOP
-  // ==========================================================
-
   _startLivePolling(sport) {
-    const serviceName =
-      sport === "football"
-        ? "footballLiveFixtures"
-        : "basketballLiveFixtures";
-
+    const serviceName = sport === "football" ? "footballLiveFixtures" : "basketballLiveFixtures";
     const service = this.services[serviceName];
+    
     if (!service) {
-      logger.warn(
-        `[Scheduler] ${serviceName} not registered — skipping`
-      );
+      logger.warn(`[Scheduler] ${serviceName} not registered — skipping`);
       return;
     }
 
-    const getBudget =
-      sport === "football"
-        ? getRemainingRequests
-        : getBasketballRemainingRequests;
-
-    const getLiveCount =
-      sport === "football"
-        ? getLiveRequestsToday
-        : getBasketballLiveRequestsToday;
-
-    const getLiveCap =
-      sport === "football"
-        ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP
-        : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
+    const getBudget = sport === "football" ? getRemainingRequests : getBasketballRemainingRequests;
+    const getLiveCount = sport === "football" ? getLiveRequestsToday : getBasketballLiveRequestsToday;
+    const getLiveCap = sport === "football" ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
 
     const controller = { stop: false };
     this.pollingControllers.push(controller);
 
-    this._pollingLoop(
-      serviceName,
-      service,
-      getBudget,
-      getLiveCount,
-      getLiveCap,
-      controller
-    ).catch((err) => {
-      logger.error(
-        `[Scheduler] ${sport} polling crashed: ${err.message}`
-      );
-    });
+    this._pollingLoop(serviceName, service, getBudget, getLiveCount, getLiveCap, controller)
+      .catch((err) => logger.error(`[Scheduler] ${sport} polling crashed: ${err.message}`));
   }
 
-  async _pollingLoop(
-    serviceName,
-    service,
-    getBudget,
-    getLiveCount,
-    getLiveCap,
-    controller
-  ) {
-    const sport = serviceName.includes("basketball")
-      ? "basketball"
-      : "football";
+  /**
+   * Smart State Machine: Determines interval based on Budget Tier and Live Status
+   */
+  _determinePollingState(remaining, hasLive) {
+    let mode = "HEALTHY";
+    let interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
 
+    if (remaining !== null && remaining <= 0) {
+      mode = "EXHAUSTED";
+      interval = LIVE_POLLING.EXHAUSTED_INTERVAL_MS;
+    } else if (remaining !== null && remaining <= LIVE_POLLING.CRITICAL_BUDGET_THRESHOLD) {
+      mode = "CRITICAL";
+      interval = LIVE_POLLING.CRITICAL_INTERVAL_MS;
+    } else if (remaining !== null && remaining <= LIVE_POLLING.LOW_BUDGET_THRESHOLD) {
+      mode = "LOW";
+      interval = LIVE_POLLING.LOW_INTERVAL_MS;
+    } else if (remaining !== null && remaining <= LIVE_POLLING.MEDIUM_BUDGET_THRESHOLD) {
+      mode = "MEDIUM";
+      interval = hasLive ? LIVE_POLLING.MEDIUM_INTERVAL_MS : LIVE_POLLING.LOW_INTERVAL_MS;
+    } else {
+      // Healthy Budget
+      mode = "HEALTHY";
+      interval = hasLive ? LIVE_POLLING.ACTIVE_INTERVAL_MS : LIVE_POLLING.LOW_INTERVAL_MS;
+    }
+
+    return { mode, interval };
+  }
+
+  async _pollingLoop(serviceName, service, getBudget, getLiveCount, getLiveCap, controller) {
+    const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
+    let hasLive = false;
 
-    logger.info(
-      `[Scheduler] ${sport} live polling started`
-    );
+    logger.info(`[Scheduler] ${sport.toUpperCase()} live polling started`);
 
     while (!controller.stop) {
       try {
         const remaining = getBudget();
         const liveUsed = getLiveCount();
-
-        let interval;
-
-                if (remaining !== null && remaining <= 0) {
-          interval = LIVE_POLLING.CAP_REACHED_INTERVAL_MS;
-        } else if (remaining !== null && remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
-          interval = LIVE_POLLING.CRITICAL_INTERVAL_MS;
-        } else {
-          // Default to idle interval, don't assume games are live
-          interval = LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS; 
-        }
+        const { mode, interval } = this._determinePollingState(remaining, hasLive);
 
         logger.info(
-          `[Scheduler] ${sport} next in ${Math.round(interval / 1000)}s ` +
-          `[live: ${liveUsed}/${getLiveCap}, api: ${remaining ?? "???"}/${API.DAILY_BUDGET}]`
+          `[Scheduler] ${sport.toUpperCase()} [${mode}] Next poll in ${Math.round(interval / 60000)}m ` +
+          `[Live: ${liveUsed}/${getLiveCap}, API: ${remaining ?? "???"}/${API.DAILY_BUDGET}]`
         );
 
         await this._sleep(interval);
-
         if (controller.stop) break;
 
         // Re-check guards after sleeping
@@ -210,16 +154,11 @@ class Scheduler {
         const nowLiveUsed = getLiveCount();
 
         if (nowRemaining !== null && nowRemaining <= 0) {
-          logger.warn(
-            `[Scheduler] ${sport} paused — budget 0/${API.DAILY_BUDGET}`
-          );
+          logger.warn(`[Scheduler] ${sport.toUpperCase()} paused — budget 0/${API.DAILY_BUDGET}`);
           continue;
         }
 
-        if (
-          nowRemaining !== null &&
-          nowRemaining < LIVE_POLLING.MIN_BUDGET_TO_POLL
-        ) {
+        if (nowRemaining !== null && nowRemaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
           continue;
         }
 
@@ -227,24 +166,11 @@ class Scheduler {
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-                // Adjust next interval based on result
-        if (result?.capReached) {
-          interval = LIVE_POLLING.CAP_REACHED_INTERVAL_MS;
-        } else if (result?.hasLive === true) {
-          // Only use active interval if games are strictly live
-          interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
-        } else if (nowRemaining === null || nowRemaining > LIVE_POLLING.LOW_BUDGET_THRESHOLD) {
-          // No live games, wait 2 hours before checking again
-          interval = LIVE_POLLING.NO_LIVE_CHECK_INTERVAL_MS;
-        } else if (nowRemaining > LIVE_POLLING.CRITICAL_BUDGET_THRESHOLD) {
-          interval = LIVE_POLLING.LOW_BUDGET_INTERVAL_MS;
-        } else {
-          interval = LIVE_POLLING.CRITICAL_INTERVAL_MS;
-        }
+        hasLive = result?.hasLive === true;
 
         logger.info(
-          `[Scheduler] ${sport} next in ${Math.round(interval / 1000)}s ` +
-          `[live: ${getLiveCount()}/${getLiveCap}, api: ${getBudget() ?? "???"}/${API.DAILY_BUDGET}]`
+          `[Scheduler] ${sport.toUpperCase()} sync done. Live matches: ${hasLive ? "Yes" : "No"}. ` +
+          `Next mode calculated based on budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
         );
 
       } catch (err) {
@@ -252,13 +178,11 @@ class Scheduler {
         this._updateStatus(serviceName, "error", null, err);
 
         logger.error(
-          `[Scheduler] ${sport} error (${consecutiveErrors}/${LIVE_POLLING.MAX_CONSECUTIVE_ERRORS}): ${err.message}`
+          `[Scheduler] ${sport.toUpperCase()} error (${consecutiveErrors}/${LIVE_POLLING.MAX_CONSECUTIVE_ERRORS}): ${err.message}`
         );
 
         if (consecutiveErrors >= LIVE_POLLING.MAX_CONSECUTIVE_ERRORS) {
-          logger.error(
-            `[Scheduler] ${sport} polling stopped — max errors`
-          );
+          logger.error(`[Scheduler] ${sport.toUpperCase()} polling stopped — max errors reached`);
           break;
         }
 
@@ -267,16 +191,10 @@ class Scheduler {
     }
   }
 
-  // ==========================================================
-  // CRON JOBS
-  // ==========================================================
-
   _startCron(serviceName, cronExpr) {
     const service = this.services[serviceName];
     if (!service) {
-      logger.warn(
-        `[Scheduler] ${serviceName} not registered — skipping cron`
-      );
+      logger.warn(`[Scheduler] ${serviceName} not registered — skipping cron`);
       return;
     }
 
@@ -289,9 +207,7 @@ class Scheduler {
         this._updateStatus(serviceName, "success", result);
       } catch (err) {
         this._updateStatus(serviceName, "error", null, err);
-        logger.error(
-          `[Scheduler] Cron ${serviceName} failed: ${err.message}`
-        );
+        logger.error(`[Scheduler] Cron ${serviceName} failed: ${err.message}`);
       }
 
       if (this.running) {
@@ -320,32 +236,21 @@ class Scheduler {
     }
 
     const minMs = next - now;
-
-    logger.info(
-      `[Scheduler] Next "${cronExpr}" in ${Math.round(minMs / 60000)} min`
-    );
+    logger.info(`[Scheduler] Next "${cronExpr}" in ${Math.round(minMs / 60000)} min`);
     return minMs;
   }
-
-  // ==========================================================
-  // HELPERS
-  // ==========================================================
 
   async _tryRun(serviceName) {
     const service = this.services[serviceName];
     if (!service) {
-      logger.warn(
-        `[Scheduler] ${serviceName} not registered — skipping`
-      );
+      logger.warn(`[Scheduler] ${serviceName} not registered — skipping`);
       return;
     }
-
     await this._executeJob(serviceName, service, true);
   }
 
   async _executeJob(name, service, initial = false) {
     const status = this.syncStatus[name];
-
     if (status.status === "running") {
       logger.warn(`[Scheduler] ${name} still running — skip`);
       return;
@@ -353,10 +258,7 @@ class Scheduler {
 
     try {
       status.status = "running";
-      logger.info(
-        `[Scheduler] ${initial ? "Initial" : "Cron"} → ${name}`
-      );
-
+      logger.info(`[Scheduler] ${initial ? "Initial" : "Cron"} → ${name}`);
       const result = await service.run();
       this._updateStatus(name, "success", result);
     } catch (err) {
@@ -409,21 +311,39 @@ class Scheduler {
     };
   }
 
+  /**
+   * Cancellable Sleep. Prevents hanging the event loop during shutdown.
+   */
   _sleep(ms) {
     return new Promise((resolve) => {
-      const timer = setTimeout(resolve, ms);
-      timer.unref();
+      const controller = new AbortController();
+      this.activeSleepControllers.add(controller);
+      
+      const timer = setTimeout(() => {
+        this.activeSleepControllers.delete(controller);
+        resolve();
+      }, ms);
+      
+      // Allow Node to exit if this is the only timer left
+      if (timer.unref) timer.unref();
+
+      controller.signal.addEventListener('abort', () => {
+        clearTimeout(timer);
+        this.activeSleepControllers.delete(controller);
+        resolve();
+      });
     });
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Smart Schedule ═══");
-    logger.info("  Daily Rollover+Fetch: 03:00 AM (1 API call/sport)");
-    logger.info("  Live Polling:        5 min (live) / 30 min (idle)");
-    logger.info("  Football Live Cap:   20/day");
-    logger.info("  Basketball Live Cap: 10/day");
-    logger.info("  Budget Used:         ~22 football, ~12 basketball");
-    logger.info("[Scheduler] ════════════════════════");
+    logger.info("[Scheduler] ═══ Smart Schedule Configuration ═══");
+    logger.info(`  Daily Rollover+Fetch: 03:00 AM UTC (1 API call/sport)`);
+    logger.info(`  Live Polling (Active): ${LIVE_POLLING.ACTIVE_INTERVAL_MS / 60000}m`);
+    logger.info(`  Live Polling (Idle):   ${LIVE_POLLING.LOW_INTERVAL_MS / 60000}m`);
+    logger.info(`  Football Live Cap:     ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
+    logger.info(`  Basketball Live Cap:   ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
+    logger.info(`  Daily API Budget:      ${API.DAILY_BUDGET}`);
+    logger.info("[Scheduler] ═════════════════════════════════════");
   }
 }
 

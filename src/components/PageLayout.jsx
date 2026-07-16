@@ -3,10 +3,13 @@ export default function PageLayout({ title, label, subtitle, children }) {
     <main
       style={{
         maxWidth: 1100,
+        width: "100%",
         margin: "0 auto",
         padding: "52px 20px 100px",
         color: "var(--text-primary, #e2e8f0)",
         position: "relative",
+        boxSizing: "border-box", // Crucial for preventing overflow
+        overflowX: "hidden", // Blocks any accidental horizontal scroll
       }}
     >
       {/* Subtle background gradient */}
@@ -21,7 +24,7 @@ export default function PageLayout({ title, label, subtitle, children }) {
         zIndex: 0,
       }} />
 
-      <div style={{ position: "relative", zIndex: 1, textAlign: "center" }}>
+      <div style={{ position: "relative", zIndex: 1, textAlign: "center", width: "100%" }}>
         {/* Decorative accent line */}
         <div style={{
           width: 48,
@@ -39,7 +42,9 @@ export default function PageLayout({ title, label, subtitle, children }) {
             borderBottom: "1px solid var(--border, rgba(255,255,255,0.08))",
             paddingBottom: 28,
             display: "inline-block",
-            width: "100%"
+            width: "100%",
+            maxWidth: "100%",
+            boxSizing: "border-box"
           }}
         >
           {/* Section label (Kicker) */}
@@ -61,6 +66,7 @@ export default function PageLayout({ title, label, subtitle, children }) {
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
+                flexShrink: 0
               }}>
                 <div style={{
                   width: 10,
@@ -96,6 +102,7 @@ export default function PageLayout({ title, label, subtitle, children }) {
               backgroundClip: "text",
               textFillColor: "transparent",
               display: "inline-block",
+              maxWidth: "100%",
             }}
           >
             {title}
@@ -122,8 +129,8 @@ export default function PageLayout({ title, label, subtitle, children }) {
         </header>
 
         {/* Content with staggered fade-in */}
-        <div style={{ animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) .25s both", textAlign: "left" }}>
-          <div style={{ display: "grid", gap: 36 }}>
+        <div style={{ animation: "v19-fade-up .5s cubic-bezier(0.22,1,0.36,1) .25s both", textAlign: "left", width: "100%", maxWidth: "100%", overflowX: "hidden" }}>
+          <div style={{ display: "grid", gap: 36, width: "100%" }}>
             {children}
           </div>
         </div>

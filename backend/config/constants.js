@@ -1,36 +1,20 @@
-/*
- * constants.js
- * Budget-optimized — smart midnight rollover,
- * tomorrow-only daily fetch, live polling with daily caps.
- */
+// config/constants.js
+// Budget-optimized — smart midnight rollover, tomorrow-only daily fetch, live polling with daily caps.
 
 // ───────────────────────────────────────────────
-// Football Season — always current
+// DATES & SEASONS
 // ───────────────────────────────────────────────
 function getCurrentSeason() {
   const now = new Date();
-  const month = now.getMonth();
-  const year = now.getFullYear();
-  return month >= 7 ? year : year - 1;
+  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
 }
 
-const SEASON = getCurrentSeason();
-
-// ───────────────────────────────────────────────
-// Basketball Season — always current
-// ───────────────────────────────────────────────
 function getCurrentBasketballSeason() {
   const now = new Date();
-  const month = now.getMonth();
   const year = now.getFullYear();
-  return month >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  return now.getMonth() >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
 
-const BASKETBALL_SEASON = getCurrentBasketballSeason();
-
-// ───────────────────────────────────────────────
-// Date Helpers
-// ───────────────────────────────────────────────
 function formatDate(d) {
   return d.toISOString().split("T")[0];
 }
@@ -41,97 +25,89 @@ function getDateOffset(days) {
   return formatDate(d);
 }
 
+const SEASON = getCurrentSeason();
+const BASKETBALL_SEASON = getCurrentBasketballSeason();
 const TODAY = formatDate(new Date());
 const YESTERDAY = getDateOffset(-1);
 const TOMORROW = getDateOffset(1);
 
 // ───────────────────────────────────────────────
-// LEAGUE FILTER TOGGLE
+// LEAGUE CONFIGURATION
 // ───────────────────────────────────────────────
 const TRACK_ALL_LEAGUES = true;
 
-// ───────────────────────────────────────────────
-// Football Leagues
-// ───────────────────────────────────────────────
+// Tier 1: Daily, Live, FT Recovery, Standings, Teams
+// Tier 2: Daily, FT Recovery (No Live)
+// Tier 3: Daily, FT Recovery only (No Live, No Standings)
 const LEAGUES = Object.freeze([
-  // ───────────────────────────────────────────────
-  // ★ TIER 1: Major European Leagues (Return in August)
-  // ───────────────────────────────────────────────
-  { id: 39,  name: "Premier League",         country: "England",  flag: "🏴",  season: SEASON, priority: 1,  active: true },
-  { id: 140, name: "La Liga",                country: "Spain",    flag: "🇪🇸", season: SEASON, priority: 2,  active: true },
-  { id: 135, name: "Serie A",                country: "Italy",    flag: "🇮🇹", season: SEASON, priority: 3,  active: true },
-  { id: 78,  name: "Bundesliga",             country: "Germany",  flag: "🇩🇪", season: SEASON, priority: 4,  active: true },
-  { id: 61,  name: "Ligue 1",                country: "France",   flag: "🇫🇷", season: SEASON, priority: 5,  active: true },
-  
-  // ───────────────────────────────────────────────
-  // ★ TIER 2: European Cups & Qualifications (ACTIVE RIGHT NOW)
-  // ───────────────────────────────────────────────
-  { id: 2,   name: "UEFA Champions League",   country: "World",    flag: "🇪🇺", season: SEASON, priority: 6,  active: true },
-  { id: 3,   name: "UEFA Europa League",     country: "World",    flag: "🇪🇺", season: SEASON, priority: 7,  active: true },
-  { id: 848, name: "UEFA Conference League", country: "World",    flag: "🇪🇺", season: SEASON, priority: 8,  active: true }, // ★ TURNED ON
+  // TIER 1: Major European Leagues & International Tournaments
+  { id: 39,  name: "Premier League",         country: "England",    flag: "🏴",  season: SEASON, priority: 1,  tier: 1, active: true },
+  { id: 140, name: "La Liga",                country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 2,  tier: 1, active: true },
+  { id: 135, name: "Serie A",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 3,  tier: 1, active: true },
+  { id: 78,  name: "Bundesliga",             country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 4,  tier: 1, active: true },
+  { id: 61,  name: "Ligue 1",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 5,  tier: 1, active: true },
+  { id: 2,   name: "UEFA Champions League",  country: "World",      flag: "🇪🇺", season: SEASON, priority: 6,  tier: 1, active: true },
+  { id: 3,   name: "UEFA Europa League",     country: "World",      flag: "🇪🇺", season: SEASON, priority: 7,  tier: 1, active: true },
+  { id: 848, name: "UEFA Conference League", country: "World",      flag: "🇪🇺", season: SEASON, priority: 8,  tier: 1, active: true },
+  { id: 1,   name: "World Cup",              country: "World",      flag: "🌍", season: SEASON, priority: 9,  tier: 1, active: true },
+  { id: 4,   name: "Euro Championship",      country: "World",      flag: "🇪🇺", season: SEASON, priority: 10, tier: 1, active: true },
+  { id: 5,   name: "UEFA Nations League",    country: "World",      flag: "🇪🇺", season: SEASON, priority: 11, tier: 1, active: true },
+  { id: 679, name: "U20 World Cup",          country: "World",      flag: "🌍", season: SEASON, priority: 12, tier: 1, active: true },
 
-  // ───────────────────────────────────────────────
-  // ★ TIER 3: Other Popular European Leagues
-  // ───────────────────────────────────────────────
-  { id: 40,  name: "Championship",           country: "England",  flag: "🏴",  season: SEASON, priority: 9,  active: true },
-  { id: 94,  name: "Primeira Liga",          country: "Portugal", flag: "🇵🇹", season: SEASON, priority: 10, active: true },
-  { id: 88,  name: "Eredivisie",             country: "Netherlands", flag: "🇳🇱", season: SEASON, priority: 11, active: true },
+  // TIER 2: Summer Leagues & Global Active Leagues
+  { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 13, tier: 2, active: true },
+  { id: 72,  name: "Serie B",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 14, tier: 2, active: true },
+  { id: 128, name: "Primera División",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 15, tier: 2, active: true },
+  { id: 129, name: "Primera Nacional",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 16, tier: 2, active: true },
+  { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 17, tier: 2, active: true },
+  { id: 113, name: "Allsvenskan",            country: "Sweden",     flag: "🇸🇪", season: SEASON, priority: 18, tier: 2, active: true },
+  { id: 103, name: "Eliteserien",            country: "Norway",     flag: "🇳🇴", season: SEASON, priority: 19, tier: 2, active: true },
+  { id: 119, name: "Superliga",              country: "Denmark",    flag: "🇩🇰", season: SEASON, priority: 20, tier: 2, active: true },
+  { id: 244, name: "Veikkausliiga",          country: "Finland",    flag: "🇫🇮", season: SEASON, priority: 21, tier: 2, active: true },
+  { id: 98,  name: "J1 League",              country: "Japan",      flag: "🇯🇵", season: SEASON, priority: 22, tier: 2, active: true },
+  { id: 292, name: "K League 1",             country: "South Korea",flag: "🇰🇷", season: SEASON, priority: 23, tier: 2, active: true },
+  { id: 307, name: "Saudi Pro League",       country: "Saudi Arabia",flag: "🇸🇦", season: SEASON, priority: 24, tier: 2, active: true },
+  { id: 169, name: "Chinese Super League",   country: "China",      flag: "🇨🇳", season: SEASON, priority: 25, tier: 2, active: true },
+  { id: 40,  name: "Championship",           country: "England",    flag: "🏴",  season: SEASON, priority: 26, tier: 2, active: true },
+  { id: 94,  name: "Primeira Liga",          country: "Portugal",   flag: "🇵🇹", season: SEASON, priority: 27, tier: 2, active: true },
+  { id: 88,  name: "Eredivisie",             country: "Netherlands",flag: "🇳🇱", season: SEASON, priority: 28, tier: 2, active: true },
+  { id: 203, name: "Süper Lig",              country: "Turkey",     flag: "🇹🇷", season: SEASON, priority: 29, tier: 2, active: true },
 
-  // ───────────────────────────────────────────────
-  // ★ SUMMER LEAGUES & GLOBAL TOURNAMENTS (ACTIVE RIGHT NOW)
-  // ───────────────────────────────────────────────
-  { id: 1,   name: "World Cup",              country: "World",    flag: "🌍", season: SEASON, priority: 12, active: true }, // ★ TURNED ON
-  { id: 679, name: "U20 World Cup",          country: "World",    flag: "🌍", season: SEASON, priority: 13, active: true }, // ★ TURNED ON (World Championship)
-  { id: 71,  name: "Serie A",                country: "Brazil",   flag: "🇧🇷", season: SEASON, priority: 14, active: true },
-  { id: 128, name: "Primera División",       country: "Argentina",flag: "🇦🇷", season: SEASON, priority: 15, active: true },
-  { id: 129, name: "Primera Nacional",       country: "Argentina",flag: "🇦🇷", season: SEASON, priority: 16, active: true }, // ★ TURNED ON
-  { id: 131, name: "Primera B Metropolitana",country: "Argentina",flag: "🇦🇷", season: SEASON, priority: 17, active: true }, // ★ TURNED ON (Primera B)
-  { id: 253, name: "MLS",                    country: "USA",      flag: "🇺🇸", season: SEASON, priority: 18, active: true },
-  { id: 113, name: "Allsvenskan",            country: "Sweden",   flag: "🇸🇪", season: SEASON, priority: 19, active: true },
-  { id: 103, name: "Eliteserien",            country: "Norway",   flag: "🇳🇴", season: SEASON, priority: 20, active: true },
-
-  // ───────────────────────────────────────────────
-  // DISABLED LEAGUES (Cups & Lower Tiers - Cause massive spikes & low interest)
-  // ───────────────────────────────────────────────
-  { id: 4,   name: "Euro Championship",      country: "World",    flag: "🇪🇺", season: SEASON, priority: 21, active: false },
-  { id: 5,   name: "UEFA Nations League",    country: "World",    flag: "🇪🇺", season: SEASON, priority: 22, active: false },
-  { id: 44,  name: "FA Cup",                 country: "England",  flag: "🏴",  season: SEASON, priority: 23, active: false },
-  { id: 45,  name: "League Cup",             country: "England",  flag: "🏴",  season: SEASON, priority: 24, active: false },
-  { id: 143, name: "Copa del Rey",           country: "Spain",    flag: "🇪🇸", season: SEASON, priority: 25, active: false },
-  { id: 137, name: "Coppa Italia",           country: "Italy",    flag: "🇮🇹", season: SEASON, priority: 26, active: false },
-  { id: 81,  name: "DFB Pokal",              country: "Germany",  flag: "🇩🇪", season: SEASON, priority: 27, active: false },
-  { id: 66,  name: "Coupe de France",        country: "France",   flag: "🇫🇷", season: SEASON, priority: 28, active: false },
-  { id: 203, name: "Süper Lig",              country: "Turkey",   flag: "🇹🇷", season: SEASON, priority: 29, active: false },
-  { id: 50,  name: "Premiership",            country: "Scotland", flag: "🏴",  season: SEASON, priority: 30, active: false },
-  { id: 144, name: "First Division A",       country: "Belgium",  flag: "🇧🇪", season: SEASON, priority: 31, active: false },
-  { id: 121, name: "Bundesliga",             country: "Austria",  flag: "🇦🇹", season: SEASON, priority: 32, active: false },
-  { id: 105, name: "Super League",           country: "Greece",   flag: "🇬🇷", season: SEASON, priority: 33, active: false },
-  { id: 41,  name: "League One",             country: "England",  flag: "🏴",  season: SEASON, priority: 34, active: false },
-  { id: 42,  name: "League Two",             country: "England",  flag: "🏴",  season: SEASON, priority: 35, active: false },
-  { id: 43,  name: "National League",        country: "England",  flag: "🏴",  season: SEASON, priority: 36, active: false },
-  { id: 141, name: "Segunda División",       country: "Spain",    flag: "🇪🇸", season: SEASON, priority: 37, active: false },
-  { id: 136, name: "Serie B",                country: "Italy",    flag: "🇮🇹", season: SEASON, priority: 38, active: false },
-  { id: 79,  name: "2. Bundesliga",          country: "Germany",  flag: "🇩🇪", season: SEASON, priority: 39, active: false },
-  { id: 62,  name: "Ligue 2",                country: "France",   flag: "🇫🇷", season: SEASON, priority: 40, active: false },
-  { id: 262, name: "Liga MX",                country: "Mexico",   flag: "🇲🇽", season: SEASON, priority: 41, active: false },
+  // TIER 3: Lower Divisions & Obscure Competitions
+  { id: 131, name: "Primera B Metropolitana",country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 30, tier: 3, active: true },
+  { id: 44,  name: "FA Cup",                 country: "England",    flag: "🏴",  season: SEASON, priority: 31, tier: 3, active: false },
+  { id: 45,  name: "League Cup",             country: "England",    flag: "🏴",  season: SEASON, priority: 32, tier: 3, active: false },
+  { id: 143, name: "Copa del Rey",           country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 33, tier: 3, active: false },
+  { id: 137, name: "Coppa Italia",           country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 34, tier: 3, active: false },
+  { id: 81,  name: "DFB Pokal",              country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 35, tier: 3, active: false },
+  { id: 66,  name: "Coupe de France",        country: "France",     flag: "🇫🇷", season: SEASON, priority: 36, tier: 3, active: false },
+  { id: 50,  name: "Premiership",            country: "Scotland",   flag: "🏴",  season: SEASON, priority: 37, tier: 3, active: false },
+  { id: 144, name: "First Division A",       country: "Belgium",    flag: "🇧🇪", season: SEASON, priority: 38, tier: 3, active: false },
+  { id: 121, name: "Bundesliga",             country: "Austria",    flag: "🇦🇹", season: SEASON, priority: 39, tier: 3, active: false },
+  { id: 105, name: "Super League",           country: "Greece",     flag: "🇬🇷", season: SEASON, priority: 40, tier: 3, active: false },
+  { id: 41,  name: "League One",             country: "England",    flag: "🏴",  season: SEASON, priority: 41, tier: 3, active: false },
+  { id: 42,  name: "League Two",             country: "England",    flag: "🏴",  season: SEASON, priority: 42, tier: 3, active: false },
+  { id: 43,  name: "National League",        country: "England",    flag: "🏴",  season: SEASON, priority: 43, tier: 3, active: false },
+  { id: 141, name: "Segunda División",       country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 44, tier: 3, active: false },
+  { id: 136, name: "Serie B",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 45, tier: 3, active: false },
+  { id: 79,  name: "2. Bundesliga",          country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 46, tier: 3, active: false },
+  { id: 62,  name: "Ligue 2",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 47, tier: 3, active: false },
+  { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 48, tier: 3, active: false },
 ]);
 
-// ───────────────────────────────────────────────
-// Basketball Leagues
-// ───────────────────────────────────────────────
 const BASKETBALL_LEAGUES = Object.freeze([
-  { id: 12, name: "NBA",       country: "USA",      flag: "🇺🇸", season: BASKETBALL_SEASON, priority: 1, active: true },
-  { id: 13, name: "EuroLeague", country: "Europe",   flag: "🇪🇺", season: BASKETBALL_SEASON, priority: 2, active: false },
-  { id: 14, name: "EuroCup",    country: "Europe",   flag: "🇪🇺", season: BASKETBALL_SEASON, priority: 3, active: false },
-  { id: 44, name: "Liga ACB",   country: "Spain",    flag: "🇪🇸", season: BASKETBALL_SEASON, priority: 4, active: false },
-  { id: 34, name: "LBA",        country: "Italy",    flag: "🇮🇹", season: BASKETBALL_SEASON, priority: 5, active: false },
-  { id: 32, name: "BBL",        country: "Germany",  flag: "🇩🇪", season: BASKETBALL_SEASON, priority: 6, active: false },
-  { id: 36, name: "LNB Pro A",  country: "France",   flag: "🇫🇷", season: BASKETBALL_SEASON, priority: 7, active: false },
-  { id: 49, name: "NBL",        country: "Australia", flag: "🇦🇺", season: BASKETBALL_SEASON, priority: 8, active: false },
+  { id: 12, name: "NBA",        country: "USA",      flag: "🇺🇸", season: BASKETBALL_SEASON, priority: 1, tier: 1, active: true },
+  { id: 13, name: "EuroLeague", country: "Europe",   flag: "🇪🇺", season: BASKETBALL_SEASON, priority: 2, tier: 2, active: true },
+  { id: 14, name: "EuroCup",    country: "Europe",   flag: "🇪🇺", season: BASKETBALL_SEASON, priority: 3, tier: 2, active: false },
+  { id: 44, name: "Liga ACB",   country: "Spain",    flag: "🇪🇸", season: BASKETBALL_SEASON, priority: 4, tier: 2, active: false },
+  { id: 34, name: "LBA",        country: "Italy",    flag: "🇮🇹", season: BASKETBALL_SEASON, priority: 5, tier: 3, active: false },
+  { id: 32, name: "BBL",        country: "Germany",  flag: "🇩🇪", season: BASKETBALL_SEASON, priority: 6, tier: 3, active: false },
+  { id: 36, name: "LNB Pro A",  country: "France",   flag: "🇫🇷", season: BASKETBALL_SEASON, priority: 7, tier: 3, active: false },
+  { id: 49, name: "NBL",        country: "Australia",flag: "🇦🇺", season: BASKETBALL_SEASON, priority: 8, tier: 3, active: false },
 ]);
 
 // ───────────────────────────────────────────────
-// Status Codes
+// STATUS CODES
 // ───────────────────────────────────────────────
 const STATUS = Object.freeze({
   NOT_STARTED: "NS", FIRST_HALF: "1H", HALF_TIME: "HT",
@@ -172,7 +148,7 @@ const BASKETBALL_FINISHED_STATUSES = Object.freeze([
 ]);
 
 // ───────────────────────────────────────────────
-// Collections
+// COLLECTIONS & META
 // ───────────────────────────────────────────────
 const COLLECTIONS = Object.freeze({
   LIVE_FIXTURES: "liveFixtures",
@@ -202,45 +178,36 @@ const META_DOCS = Object.freeze({
 });
 
 // ───────────────────────────────────────────────
-// API Config
+// API & SCHEDULER CONFIG
 // ───────────────────────────────────────────────
 const API = Object.freeze({
   PAGE_SIZE: 100,
   DAILY_BUDGET: 100,
 });
 
-// ───────────────────────────────────────────────
-// Cron — 3 AM daily only
-// ───────────────────────────────────────────────
 const SCHEDULER = Object.freeze({
   FIXTURES_DAILY: "0 3 * * *",
   BASKETBALL_FIXTURES_DAILY: "0 3 * * *",
 });
 
 // ───────────────────────────────────────────────
-// Live Polling — FREE PLAN OPTIMIZED
-//
-// Football: 20/day cap
-// Basketball: 10/day cap
-//
-// Budget: ~22 football/day, ~12 basketball/day
+// SMART POLLING & BUDGET STRATEGY
 // ───────────────────────────────────────────────
-// ═══════════════════════════════════════════════════
-// Live Polling — FREE PLAN OPTIMIZED (100 Calls/Day)
-// ═══════════════════════════════════════════════════
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 40,        // Reduced from 80 to 40
-  BASKETBALL_DAILY_LIVE_CAP: 15,      // Reduced from 10 to 15
+  FOOTBALL_DAILY_LIVE_CAP: 40,
+  BASKETBALL_DAILY_LIVE_CAP: 15,
 
-  ACTIVE_INTERVAL_MS: 300000,         // 5 mins when games ARE live (was 2 mins)
-  NO_LIVE_CHECK_INTERVAL_MS: 7200000, // 2 hours when NO games are live (was 1 hour)
-  LOW_BUDGET_INTERVAL_MS: 7200000,    // 2 hours when budget is low
-  CRITICAL_INTERVAL_MS: 14400000,     // 4 hours when budget is critical
-  CAP_REACHED_INTERVAL_MS: 21600000,  // 6 hours when cap is reached
+  ACTIVE_INTERVAL_MS: 600000,         // 10 mins (Healthy budget & Live)
+  MEDIUM_INTERVAL_MS: 1200000,        // 20 mins (Medium budget & Live)
+  LOW_INTERVAL_MS: 3600000,           // 1 hour  (Low budget / Idle)
+  CRITICAL_INTERVAL_MS: 7200000,      // 2 hours (Critical budget)
+  CAP_REACHED_INTERVAL_MS: 21600000,  // 6 hours (Cap reached)
+  EXHAUSTED_INTERVAL_MS: 86400000,    // 24 hours (Budget exhausted)
 
-  LOW_BUDGET_THRESHOLD: 25,
-  CRITICAL_BUDGET_THRESHOLD: 10,
-  MIN_BUDGET_TO_POLL: 3,
+  MEDIUM_BUDGET_THRESHOLD: 70,        // <= 70 requests left
+  LOW_BUDGET_THRESHOLD: 40,           // <= 40 requests left
+  CRITICAL_BUDGET_THRESHOLD: 15,      // <= 15 requests left
+  MIN_BUDGET_TO_POLL: 3,              // Abort if less than 3 requests left
 
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS: 60000,
@@ -268,7 +235,7 @@ const SPORT = Object.freeze({
 });
 
 // ───────────────────────────────────────────────
-// Export
+// EXPORTS
 // ───────────────────────────────────────────────
 module.exports = Object.freeze({
   TODAY, YESTERDAY, TOMORROW, formatDate, getDateOffset,

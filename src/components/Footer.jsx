@@ -96,11 +96,13 @@ const styles = {
     background: "#0a1628",
     borderTop: "1px solid rgba(255,255,255,0.06)",
     marginTop: 60,
+    overflowX: "hidden", // Prevents any rogue horizontal scroll
   },
   container: {
     maxWidth: 1280,
     margin: "0 auto",
     padding: "0 24px",
+    boxSizing: "border-box", // Ensures padding doesn't add to width
   },
   newsletter: {
     borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -126,11 +128,12 @@ const styles = {
   },
   newsletterForm: {
     display: "flex",
-    flex: 1,
+    width: "100%",
     maxWidth: 360,
   },
   newsletterInput: {
     flex: 1,
+    minWidth: 0, // Allows input to shrink properly
     background: "rgba(255,255,255,0.05)",
     border: "1px solid rgba(255,255,255,0.08)",
     borderRight: "none",
@@ -154,9 +157,10 @@ const styles = {
   main: {
     padding: "48px 0",
   },
+  // FIX: Changed from fixed 5 columns to auto-fit to prevent overflow
   grid: {
     display: "grid",
-    gridTemplateColumns: "2fr repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
     gap: 40,
   },
   brandLogo: {
@@ -336,8 +340,8 @@ export default function Footer() {
                       <Link
                         to={link.to}
                         style={styles.link}
-                        onMouseEnter={(e) => (e.target.style.color = "#22c55e")}
-                        onMouseLeave={(e) => (e.target.style.color = "#8899aa")}
+                        onMouseEnter={(e) => (e.currentTarget.style.color = "#22c55e")}
+                        onMouseLeave={(e) => (e.currentTarget.style.color = "#8899aa")}
                       >
                         {link.label}
                       </Link>
