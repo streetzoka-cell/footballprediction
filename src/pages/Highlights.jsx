@@ -24,7 +24,7 @@ const slugify = (text) => {
   return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
-// ★ NEW: Bots can't read Base64, so we use the Node backend proxy URL
+// ★ Bots can't read Base64, so we use the Node backend proxy URL
 const getSeoImageUrl = (post) => {
   if (!post || !post.imageUrl) return "https://zokascore.xyz/logo.png";
   return `https://zokascore.xyz/api/og-image/${post.id}`;
@@ -125,7 +125,6 @@ export default function Highlights() {
   const user = currentUser;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';
   
-  // Extract ID from slug URL (e.g. /highlights/mbappe-injured-123 -> 123)
   const { slugId, author: authorFilter } = useParams();
   const urlPostId = slugId && slugId !== 'author' ? slugId.split('-').pop() : null;
   const navigate = useNavigate();
@@ -134,7 +133,6 @@ export default function Highlights() {
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
-  const [expandedComments, setExpandedComments] = useState({});
   const [activePost, setActivePost] = useState(null);
   const [relatedMatch, setRelatedMatch] = useState(null);
   const [savedPosts, setSavedPosts] = useState(() => JSON.parse(localStorage.getItem('nh_saved') || '[]'));
@@ -154,7 +152,6 @@ export default function Highlights() {
   const [newComments, setNewComments] = useState({});
   const fileInputRef = useRef(null);
 
-  // Scroll Listener for Back to Top
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
     window.addEventListener('scroll', handleScroll);
@@ -203,16 +200,27 @@ export default function Highlights() {
     });
   }, [db, urlPostId, navigate]);
 
-  // Fetch Comments
+  // Fetch Comments for expanded single post OR any post in feed that has comments opened
   useEffect(() => {
-    const targetId = activePost ? activePost.id : Object.keys(expandedComments).find(id => expandedComments[id]);
-    if (!targetId || comments[targetId]) return;
+    // We fetch comments for activePost OR if comments are requested in the feed cards. 
+    // For feed cards, we'll just fetch them on click to save reads.
+    if (!activePost) return;
+    const targetId = activePost.id;
+    if (comments[targetId]) return;
 
     const q = query(collection(db, 'news_posts', targetId, 'comments'), orderBy('createdAt', 'desc'));
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
     });
-  }, [expandedComments, activePost]);
+  }, [activePost]);
+
+  const fetchCommentsForFeed = (postId) => {
+    if (comments[postId]) return; // Already fetched
+    const q = query(collection(db, 'news_posts', postId, 'comments'), orderBy('createdAt', 'desc'));
+    onSnapshot(q, (snap) => {
+      setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+    });
+  };
 
   const toggleSave = (postId) => {
     setSavedPosts(prev => {
@@ -499,6 +507,12 @@ export default function Highlights() {
                       onExpand={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
                       onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
                       isHero={i === 0 && activeFilter === 'All' && !authorFilter}
+                      // ★ Pass comment props down to PostCard for inline fast reactions
+                      comments={comments[post.id] || []}
+                      newComments={newComments}
+                      setNewComments={setNewComments}
+                      handleComment={handleComment}
+                      fetchComments={fetchCommentsForFeed}
                     />
                   ))}
                 </div>
@@ -531,10 +545,10 @@ export default function Highlights() {
         </div>
       )}
 
-      {/* CREATE / EDIT MODAL */}
+      {/* ★ FIXED: CREATE / EDIT MODAL (Strictly aligns to top of screen) */}
       {isFormOpen && (
-        <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)' }}>
-          <div onClick={e => e.stopPropagation()} className="nh-modal-pop" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column' }}>
+        <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)', overflowY: 'auto' }}>
+          <div onClick={e => e.stopPropagation()} className="nh-modal-pop" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column', marginTop: '20px' }}>
             <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--nh-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h2 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800 }}>{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
               <button onClick={() => setIsFormOpen(false)} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text)', padding: 6, borderRadius: 8, border: '1px solid var(--nh-border)' }}><X size={18} /></button>
@@ -609,12 +623,18 @@ export default function Highlights() {
 /* ═══════════════════════════════════════════════════════════════
    POST CARD COMPONENT (For Feed)
    ═══════════════════════════════════════════════════════════════ */
-function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero }) {
+function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero, comments, newComments, setNewComments, handleComment, fetchComments }) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [showComments, setShowComments] = useState(false); // ★ Inline comment toggle
   const isSaved = savedPosts.includes(post.id);
   const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
 
   const heroStyles = isHero ? { border: '1px solid var(--nh-border)', boxShadow: 'var(--nh-shadow)' } : {};
+
+  const toggleComments = () => {
+    if (!showComments) fetchComments(post.id); // Fetch only when opened
+    setShowComments(p => !p);
+  };
 
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
@@ -660,7 +680,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
           )}
         </div>
 
-        {/* ACTIONS */}
+        {/* ACTIONS (FAST REACTIONS ON FEED) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--nh-border)' }}>
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
             {REACTIONS.map(r => {
@@ -674,11 +694,18 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
             })}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            {/* ★ INLINE COMMENT BUTTON */}
+            <button onClick={toggleComments} className="nh-btn" style={{ background: 'none', color: showComments ? 'var(--nh-accent)' : 'var(--nh-text-muted)' }}><MessageCircle size={18} /></button>
             {!isHero && <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'none', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>}
             {!isHero && <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'none', color: 'var(--nh-text-muted)' }}><Share2 size={18} /></button>}
           </div>
         </div>
       </div>
+
+      {/* ★ INLINE COMMENT SECTION (Shown when Comment button is clicked) */}
+      {showComments && (
+        <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
+      )}
     </div>
   );
 }
@@ -720,6 +747,9 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
       )}
 
       {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
+      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
+
+           {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
       {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
@@ -807,4 +837,4 @@ function CommentSection({ postId, comments, newComments, setNewComments, handleC
       </div>
     </div>
   );
-}
+}d
