@@ -24,24 +24,32 @@ const slugify = (text) => {
   return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
-// ★ Bots can't read Base64, so we use the Node backend proxy URL
+// Bots can't read Base64, so we use the Node backend proxy URL
 const getSeoImageUrl = (post) => {
   if (!post || !post.imageUrl) return "https://zokascore.xyz/logo.png";
   return `https://zokascore.xyz/api/og-image/${post.id}`;
 };
 
-const formatTimeAgo = (date) => {
+// ★ NEW: Smart Timestamp Formatter
+const formatTimestamp = (date) => {
   if (!date) return 'Just now';
-  const diff = Date.now() - (date.toMillis ? date.toMillis() : new Date(date).getTime());
-  const sec = Math.floor(diff / 1000);
-  if (sec < 60) return 'Just now';
-  const min = Math.floor(sec / 60);
-  if (min < 60) return `${min}m ago`;
-  const hr = Math.floor(min / 60);
-  if (hr < 24) return `${hr}h ago`;
-  const day = Math.floor(hr / 24);
-  if (day < 7) return `${day}d ago`;
-  return new Date(date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  const now = new Date();
+  const d = new Date(date.toMillis ? date.toMillis() : date);
+  const diff = (now - d) / 1000;
+  
+  if (diff < 60) return 'Just now';
+  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+  
+  const isToday = now.toDateString() === d.toDateString();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+  const isYesterday = yesterday.toDateString() === d.toDateString();
+  
+  const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  
+  if (isToday) return `Today • ${timeStr}`;
+  if (isYesterday) return `Yesterday • ${timeStr}`;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
 const calcReadTime = (body) => {
@@ -83,11 +91,10 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'news-hub-ultimate-css';
   s.textContent = `
-    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; }
-    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; }
+    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; --nh-header-bg: rgba(11, 16, 24, 0.95); }
+    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; --nh-header-bg: rgba(255, 255, 255, 0.95); }
     
     @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes nh_pop { 0% { transform: scale(1); } 50% { transform: scale(1.3); } 100% { transform: scale(1); } }
     @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
     @keyframes nh_modal_pop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     
@@ -112,6 +119,10 @@ const injectStyles = () => {
     .nh-read-more { color: var(--nh-accent); font-weight: 700; cursor: pointer; display: inline-block; margin-top: 4px; font-size: 0.8rem; }
     .nh-load-more { width: 100%; padding: 14px; border-radius: 12px; background: var(--nh-surface); border: 1px solid var(--nh-border); color: var(--nh-text-muted); font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
     .nh-load-more:hover { color: var(--nh-accent); border-color: var(--nh-accent); background: var(--nh-accent-bg); }
+    
+    /* ★ Trending Carousel Snap */
+    .nh-carousel { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
+    .nh-carousel > div { scroll-snap-align: start; }
   `;
   document.head.appendChild(s);
 };
@@ -200,10 +211,8 @@ export default function Highlights() {
     });
   }, [db, urlPostId, navigate]);
 
-  // Fetch Comments for expanded single post OR any post in feed that has comments opened
+  // Fetch Comments
   useEffect(() => {
-    // We fetch comments for activePost OR if comments are requested in the feed cards. 
-    // For feed cards, we'll just fetch them on click to save reads.
     if (!activePost) return;
     const targetId = activePost.id;
     if (comments[targetId]) return;
@@ -215,7 +224,7 @@ export default function Highlights() {
   }, [activePost]);
 
   const fetchCommentsForFeed = (postId) => {
-    if (comments[postId]) return; // Already fetched
+    if (comments[postId]) return; 
     const q = query(collection(db, 'news_posts', postId, 'comments'), orderBy('createdAt', 'desc'));
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
@@ -390,8 +399,8 @@ export default function Highlights() {
         structuredData={generateJsonLd(seoPost)}
       />
 
-      {/* HEADER */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-surface)', borderBottom: '1px solid var(--nh-border)', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+      {/* ★ FIXED: HEADER WITH STRONG CONTRAST */}
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-header-bg)', borderBottom: '2px solid var(--nh-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
         <div style={{ maxWidth: 700, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => { navigate('/highlights'); setActiveFilter('All'); }}>
             {activePost && <ArrowLeft size={18} />}
@@ -470,10 +479,14 @@ export default function Highlights() {
                   <Flame size={16} style={{ color: '#ef4444' }} />
                   <span style={{ fontSize: '.85rem', fontWeight: 800 }}>Trending Now</span>
                 </div>
-                <div className="nh-scroll" style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
+                <div className="nh-carousel nh-scroll">
                   {trendingPosts.map(p => (
-                    <div key={p.id} onClick={() => navigate(`/highlights/${slugify(p.title)}-${p.id}`)} style={{ minWidth: 200, maxWidth: 200, background: 'var(--nh-surface)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)', cursor: 'pointer', transition: 'transform 0.2s' }} className="nh-btn">
-                      <img src={p.imageUrl || 'https://via.placeholder.com/200x100'} style={{ width: '100%', height: 100, objectFit: 'cover' }} alt="" />
+                    <div key={p.id} onClick={() => navigate(`/highlights/${slugify(p.title)}-${p.id}`)} style={{ minWidth: 220, maxWidth: 220, background: 'var(--nh-surface)', borderRadius: 12, overflow: 'hidden', border: '1px solid var(--nh-border)', cursor: 'pointer', transition: 'transform 0.2s', position: 'relative' }} className="nh-btn">
+                      {p.imageUrl && <img src={p.imageUrl} style={{ width: '100%', height: 110, objectFit: 'cover' }} alt="" />}
+                      {!p.imageUrl && <div style={{ width: '100%', height: 110, background: 'var(--nh-accent-bg)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Newspaper size={24} style={{ color: 'var(--nh-accent)' }} /></div>}
+                      <div style={{ position: 'absolute', top: 8, right: 8, background: 'rgba(239,68,68,.9)', color: '#fff', fontSize: '.6rem', fontWeight: 800, padding: '2px 6px', borderRadius: 4, display: 'flex', alignItems: 'center', gap: 3 }}>
+                        <Flame size={8} /> HOT
+                      </div>
                       <div style={{ padding: 10 }}>
                         <div style={{ fontSize: '.6rem', fontWeight: 800, color: BADGES[p.category]?.color || 'var(--nh-text-muted)', marginBottom: 4 }}>{BADGES[p.category]?.label || p.category}</div>
                         <div style={{ fontSize: '.75rem', fontWeight: 700, lineHeight: 1.3, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.title}</div>
@@ -507,7 +520,6 @@ export default function Highlights() {
                       onExpand={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
                       onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
                       isHero={i === 0 && activeFilter === 'All' && !authorFilter}
-                      // ★ Pass comment props down to PostCard for inline fast reactions
                       comments={comments[post.id] || []}
                       newComments={newComments}
                       setNewComments={setNewComments}
@@ -545,7 +557,7 @@ export default function Highlights() {
         </div>
       )}
 
-      {/* ★ FIXED: CREATE / EDIT MODAL (Strictly aligns to top of screen) */}
+      {/* CREATE / EDIT MODAL (Strictly aligns to top of screen) */}
       {isFormOpen && (
         <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)', overflowY: 'auto' }}>
           <div onClick={e => e.stopPropagation()} className="nh-modal-pop" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column', marginTop: '20px' }}>
@@ -625,29 +637,47 @@ export default function Highlights() {
    ═══════════════════════════════════════════════════════════════ */
 function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero, comments, newComments, setNewComments, handleComment, fetchComments }) {
   const [isExpanded, setIsExpanded] = useState(false);
-  const [showComments, setShowComments] = useState(false); // ★ Inline comment toggle
+  const [showComments, setShowComments] = useState(false); 
   const isSaved = savedPosts.includes(post.id);
   const badge = BADGES[post.category] || { color: 'var(--nh-text-muted)', bg: 'var(--nh-surface-hover)', label: post.category };
 
   const heroStyles = isHero ? { border: '1px solid var(--nh-border)', boxShadow: 'var(--nh-shadow)' } : {};
 
   const toggleComments = () => {
-    if (!showComments) fetchComments(post.id); // Fetch only when opened
+    if (!showComments) fetchComments(post.id); 
     setShowComments(p => !p);
+  };
+
+  // ★ FIX: Read more event propagation
+  const handleReadMore = (e) => {
+    e.stopPropagation();
+    setIsExpanded(true);
+  };
+
+  const handleShowLess = (e) => {
+    e.stopPropagation();
+    setIsExpanded(false);
   };
 
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
       
-      {/* HERO IMAGE LAYOUT */}
-      {isHero && post.imageUrl && (
-        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', height: 240, overflow: 'hidden' }}>
+      {/* ★ FIXED: IMAGE BANNER FOR ALL POSTS */}
+      {post.imageUrl && (
+        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', height: isHero ? 240 : 180, overflow: 'hidden' }}>
           <img src={post.imageUrl} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }} loading="lazy" />
-          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.9), transparent 60%)' }} />
-          <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16 }}>
-            <span style={{ display: 'inline-block', padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800, marginBottom: 8 }}>{badge.label}</span>
-            <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{post.title}</h2>
-          </div>
+          <div style={{ position: 'absolute', inset: 0, background: isHero ? 'linear-gradient(to top, rgba(0,0,0,0.9), transparent 60%)' : 'linear-gradient(to top, rgba(0,0,0,0.6), transparent 40%)' }} />
+          
+          {isHero ? (
+            <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16 }}>
+              <span style={{ display: 'inline-block', padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800, marginBottom: 8, backdropFilter: 'blur(4px)' }}>{badge.label}</span>
+              <h2 style={{ margin: 0, fontSize: '1.3rem', fontWeight: 800, color: '#fff', lineHeight: 1.3, textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>{post.title}</h2>
+            </div>
+          ) : (
+            <div style={{ position: 'absolute', top: 10, left: 10 }}>
+              <span style={{ padding: '4px 8px', borderRadius: 4, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>
+            </div>
+          )}
         </div>
       )}
 
@@ -655,28 +685,42 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
         
         {/* UNIFIED CLICKABLE CONTENT AREA */}
         <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
-          {!isHero || !post.imageUrl ? (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
-                <div style={{ flex: 1 }}>
-                  <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-                  <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
-                </div>
-                <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>
+          {/* If NOT hero, or if Hero has NO image, show the header here */}
+          {(!isHero || !post.imageUrl) && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
+              <div style={{ flex: 1 }}>
+                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
+                {/* ★ NEW: Smart Timestamp */}
+                <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
               </div>
-              <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>
-              
-              <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
-                {post.body}
-              </p>
-              {!isExpanded && post.body.length > 100 && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
-              {isExpanded && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
-            </>
-          ) : (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 0 }}>
-              <div onClick={() => onAuthorClick()} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span> • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0}</div>
+              {!post.imageUrl && <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>}
             </div>
+          )}
+
+          {/* If it IS a hero WITH an image, just show author/timestamp below image */}
+          {isHero && post.imageUrl && (
+             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+               <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span></div>
+               <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
+             </div>
+          )}
+
+          {!isHero && <h3 style={{ margin: '0 0 8px', fontSize: '1.1rem', fontWeight: 700, lineHeight: 1.4 }}>{post.title}</h3>}
+          
+          <p style={{ margin: 0, color: 'var(--nh-text-muted)', lineHeight: 1.6, fontSize: '.9rem', display: isExpanded ? 'block' : '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+            {post.body}
+          </p>
+          {!isExpanded && post.body.length > 100 && <span className="nh-read-more" onClick={handleReadMore}>Read more</span>}
+          {isExpanded && <span className="nh-read-more" onClick={handleShowLess}>Show less</span>}
+        </div>
+
+        {/* ★ NEW: ARTICLE ENGAGEMENT METRICS */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Eye size={12} /> {post.views || 0}</span>
+          <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MessageCircle size={12} /> {post.commentsCount || 0}</span>
+          {(post.views > 1000) && (
+            <span style={{ display: 'flex', alignItems: 'center', gap: 4, color: '#ef4444', fontWeight: 700 }}><Flame size={12} /> Trending</span>
           )}
         </div>
 
@@ -694,7 +738,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
             })}
           </div>
           <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-            {/* ★ INLINE COMMENT BUTTON */}
             <button onClick={toggleComments} className="nh-btn" style={{ background: 'none', color: showComments ? 'var(--nh-accent)' : 'var(--nh-text-muted)' }}><MessageCircle size={18} /></button>
             {!isHero && <button onClick={() => onToggleSave(post.id)} className="nh-btn" style={{ background: 'none', color: isSaved ? 'var(--nh-gold)' : 'var(--nh-text-muted)' }}><Bookmark size={18} fill={isSaved ? 'var(--nh-gold)' : 'none'} /></button>}
             {!isHero && <button onClick={() => onShare(post)} className="nh-btn" style={{ background: 'none', color: 'var(--nh-text-muted)' }}><Share2 size={18} /></button>}
@@ -702,7 +745,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
         </div>
       </div>
 
-      {/* ★ INLINE COMMENT SECTION (Shown when Comment button is clicked) */}
+      {/* INLINE COMMENT SECTION */}
       {showComments && (
         <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
       )}
@@ -724,7 +767,7 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
           <div onClick={onAuthorClick} style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
           <div>
             <div onClick={onAuthorClick} style={{ fontWeight: 700, fontSize: '.9rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-            <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimeAgo(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
+            <div style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
           </div>
         </div>
         <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.65rem', fontWeight: 800 }}>{badge.label}</span>
@@ -747,9 +790,6 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
       )}
 
       {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
-      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
-
-           {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
       {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
