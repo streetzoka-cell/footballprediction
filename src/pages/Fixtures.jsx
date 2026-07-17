@@ -669,7 +669,7 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePop
           </div>
           <div className="mg-team-col away">
             <div className="mg-team-row">
-              {m.awayLogo && <img className="mg-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />>}
+              {m.awayLogo && <img className="mg-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
               <span className="mg-team-name">{m.awayName}</span>
             </div>
           </div>
