@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v11.1 Ultimate — Clean Header, Always Visible Search, Pill Filters, Bug Fixes
+// v11.2 Ultimate — Fixed Live Only Button Visibility
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -92,8 +92,9 @@ const injectStyles = () => {
     .mg11-search-static input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:.85em;font-weight:600;font-family:inherit}
     .mg11-search-static input::placeholder{color:#64748b}
 
-    /* Pill Filters (Leagues & Live) */
-    .mg11-pill-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin-bottom:16px;padding-bottom:4px}
+    /* Pill Filters Layout */
+    .mg11-filter-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
+    .mg11-pill-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;flex:1}
     .mg11-pill-scroll::-webkit-scrollbar{display:none}
     .mg11-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:.72em;font-weight:800;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
     .mg11-pill:hover{background:rgba(255,255,255,0.08);color:#fff}
@@ -733,7 +734,6 @@ export default function MasterGames() {
     setCompFilter('ALL');
   }, [selectedDate]);
 
-  // ★ FIX: Create an unfiltered master list to build the filter pills
   const allFixtures = useMemo(() => {
     let list = primaryFixtures.length > 0 ? primaryFixtures : backupFixtures;
     const uniqueIds = new Set();
@@ -745,7 +745,6 @@ export default function MasterGames() {
     });
   }, [primaryFixtures, backupFixtures]);
 
-  // ★ FIX: Build league list from UNFILTERED data so pills don't disappear
   const fixtureCompList = useMemo(() => {
     const map = new Map();
     allFixtures.forEach(m => {
@@ -754,7 +753,6 @@ export default function MasterGames() {
     return [...map.values()].sort((a, b) => getLeaguePriority(a.name) - getLeaguePriority(b.name));
   }, [allFixtures]);
 
-  // ★ FIX: Apply filters to the master list for display
   const displayFixtures = useMemo(() => {
     let list = allFixtures;
     if (compFilter !== 'ALL') list = list.filter(m => String(m.leagueName) === compFilter);
@@ -1093,29 +1091,32 @@ export default function MasterGames() {
               </div>
             )}
 
-            {/* Pill Filters (Leagues + Live Only) */}
+            {/* ★ FIX: Flex Row to separate Leagues (Scroll) and Live Only Button (Static) */}
             {fixtureCompList.length > 0 && (
-              <div className="mg11-pill-scroll">
-                <button 
-                  className={`mg11-pill ${compFilter === 'ALL' ? 'active' : ''}`} 
-                  onClick={() => setCompFilter('ALL')}
-                >
-                  All Leagues
-                </button>
-                {fixtureCompList.map(c => (
+              <div className="mg11-filter-row">
+                <div className="mg11-pill-scroll">
                   <button 
-                    key={c.id} 
-                    className={`mg11-pill ${compFilter === String(c.id) ? 'active' : ''}`} 
-                    onClick={() => setCompFilter(String(c.id))}
+                    className={`mg11-pill ${compFilter === 'ALL' ? 'active' : ''}`} 
+                    onClick={() => setCompFilter('ALL')}
                   >
-                    {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    {c.name}
+                    All Leagues
                   </button>
-                ))}
+                  {fixtureCompList.map(c => (
+                    <button 
+                      key={c.id} 
+                      className={`mg11-pill ${compFilter === String(c.id) ? 'active' : ''}`} 
+                      onClick={() => setCompFilter(String(c.id))}
+                    >
+                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+                
                 <button 
                   className={`mg11-pill ${showLiveOnly ? 'live-active' : ''}`} 
                   onClick={() => setShowLiveOnly(p => !p)}
-                  style={{ marginLeft: 'auto' }}
+                  style={{ flexShrink: 0 }}
                 >
                   {showLiveOnly ? <span className="mg11-dot" style={{ background: '#ef4444' }} /> : <Activity size={14} />}
                   {showLiveOnly ? 'Live Only' : 'Show Live'}
