@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v14.2 — Fixed ProHeader Mobile Overflow, Added Fallback Logo
+// v14.4 — App Logo Integration, Mobile Notif Dropdown, ProHeader Fix
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -20,7 +20,7 @@ import SEO from '../components/SEO';
    ═══════════════════════════════════════════════════ */
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const ADMIN_REMEMBER_KEY = 'nv-admin-remembered';
-const DEFAULT_TEAM_LOGO = '/icons/icon-192.png';
+const APP_LOGO = '/icons/icon-192.png';
 
 let stylesInjected = false;
 const injectBase = () => {
@@ -233,13 +233,6 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 86400000)}d ago`;
 }
 
-const FootballIcon = ({ size = 20, color = '#0a0f1e' }) => (
-  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" style={{ display: 'block' }}>
-    <circle cx="12" cy="12" r="10.5" fill="white" fillOpacity="0.95" />
-    <polygon points="12,4.5 15.2,9.5 20.8,10.8 16.8,14.8 17.8,20.5 12,17.8 6.2,20.5 7.2,14.8 3.2,10.8 8.8,9.5" fill={color} fillOpacity="0.1" stroke={color} strokeWidth="0.7" strokeLinejoin="round" />
-  </svg>
-);
-
 const StatusDot = ({ status, size = 6 }) => {
   if (status === 'live') return <span style={{ width: size, height: size, borderRadius: '50%', background: '#00e676', boxShadow: '0 0 8px rgba(0,230,118,0.8)', animation: 'nvLiveDot 1.2s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }} />;
   if (status === 'ft') return <span style={{ fontSize: '0.58rem', fontWeight: 900, color: 'rgba(255,255,255,0.35)' }}>FT</span>;
@@ -280,19 +273,11 @@ function ProHeader({ matches, liveMatches, nav }) {
   if (!featured) return null;
 
   const m = featured.match;
-  const homeLogo = m.homeTeam?.logo || m.homeTeam?.crest || DEFAULT_TEAM_LOGO;
-  const awayLogo = m.awayTeam?.logo || m.awayTeam?.crest || DEFAULT_TEAM_LOGO;
+  const homeLogo = m.homeTeam?.logo || m.homeTeam?.crest;
+  const awayLogo = m.awayTeam?.logo || m.awayTeam?.crest;
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
   const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : '';
-
-  const handleImgError = (e) => {
-    if (e.target.src !== DEFAULT_TEAM_LOGO) {
-      e.target.src = DEFAULT_TEAM_LOGO;
-    } else {
-      e.target.style.display = 'none';
-    }
-  };
 
   return (
     <div className="nv-pro-wrap" onClick={() => nav(m.matchId ? `/predictions?match=${m.matchId}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
@@ -303,7 +288,7 @@ function ProHeader({ matches, liveMatches, nav }) {
         </div>
         <div className="nv-pro-teams">
           <div className="nv-pro-team">
-            <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={handleImgError} /> 
+            {homeLogo ? <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
             <span>{homeName}</span>
           </div>
           <div className="nv-pro-score-bar">
@@ -320,7 +305,7 @@ function ProHeader({ matches, liveMatches, nav }) {
             )}
           </div>
           <div className="nv-pro-team nv-pro-team-aw">
-            <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={handleImgError} />
+            {awayLogo ? <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
             <span>{awayName}</span>
           </div>
         </div>
@@ -386,6 +371,7 @@ export default function Navbar() {
 
   const searchRef = useRef(null);
   const notifRef = useRef(null);
+  const mobNotifRef = useRef(null);
   const rafRef = useRef(false);
 
   const isHome = location.pathname === '/';
@@ -571,7 +557,9 @@ export default function Navbar() {
     const fn = (e) => {
       if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target)) setNotifOpen(false);
+      if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
     };
     document.addEventListener('keydown', fn);
     document.addEventListener('mousedown', fn);
@@ -708,6 +696,44 @@ export default function Navbar() {
     );
   };
 
+  /* ═══ NOTIFICATION DROPDOWN COMPONENT ═══ */
+  const renderNotifDropdown = () => (
+    <div style={{
+      position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)',
+      background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)',
+      borderRadius: 16, overflow: 'hidden',
+      boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
+      animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both',
+      backdropFilter: 'blur(20px)'
+    }}>
+      <div style={{
+        padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        background: 'linear-gradient(135deg, rgba(0,230,118,0.05) 0%, rgba(168,85,247,0.03) 100%)',
+      }}>
+        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <Bell size={16} style={{ color: '#00e676' }} /> Notifications
+        </span>
+        {predNotifs.length > 0 && (
+          <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#00e676', background: 'rgba(0,230,118,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(0,230,118,0.2)' }}>{predNotifs.length} New</span>
+        )}
+      </div>
+      {predNotifs.length === 0 ? (
+        <div style={{ padding: '40px 24px', textAlign: 'center' }}>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
+            <Target size={28} style={{ color: '#4a5568', opacity: 0.5 }} />
+          </div>
+          <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>No results yet</div>
+          <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5}}>Make predictions and check back<br />after matches end</div>
+        </div>
+      ) : (
+        <div style={{ maxHeight: 400, overflowY: 'auto' }} className="nv-mob-scroll">
+          {predNotifs.map(renderNotifItem)}
+        </div>
+      )}
+    </div>
+  );
+
   /* ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════════════════════════════════════════════════════ */
@@ -794,16 +820,7 @@ export default function Navbar() {
           {/* CENTER: Logo */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} className="nv-logo-link">
-              <div style={{
-                width: 42, height: 42, borderRadius: 12, position: 'relative', overflow: 'hidden', flexShrink: 0,
-                background: 'linear-gradient(145deg, #00e676 0%, #00c853 50%, #059669 100%)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-                boxShadow: '0 0 20px rgba(0,230,118,0.3), 0 4px 12px rgba(0,0,0,0.3)',
-                animation: 'nvGlowBreathe 3s ease-in-out infinite, nvLogoFloat 4s ease-in-out infinite',
-              }}>
-                <FootballIcon size={24} />
-                <div style={{ position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)', animation: 'nvShine 4s ease-in-out 1.5s infinite' }} />
-              </div>
+              <img src={APP_LOGO} alt="ZokaScore Logo" style={{ width: 42, height: 42, borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(0,230,118,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
               <div className="nv-dk" style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
                 <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.02em', color: '#ffffff', whiteSpace: 'nowrap' }}>ZOKA</span>
                 <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.03em', color: '#00e676', whiteSpace: 'nowrap', marginLeft: 2, animation: 'nvScoreGlow 3s ease-in-out infinite' }}>SCORE</span>
@@ -860,42 +877,7 @@ export default function Navbar() {
                     }}>{notifCount > 9 ? '9+' : notifCount}</span>
                   )}
                 </button>
-                {notifOpen && (
-                  <div style={{
-                    position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 360,
-                    background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)',
-                    borderRadius: 16, overflow: 'hidden',
-                    boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-                    animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both',
-                    backdropFilter: 'blur(20px)'
-                  }}>
-                    <div style={{
-                      padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: 'linear-gradient(135deg, rgba(0,230,118,0.05) 0%, rgba(168,85,247,0.03) 100%)',
-                    }}>
-                      <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-                        <Bell size={16} style={{ color: '#00e676' }} /> Notifications
-                      </span>
-                      {predNotifs.length > 0 && (
-                        <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#00e676', background: 'rgba(0,230,118,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(0,230,118,0.2)' }}>{predNotifs.length} New</span>
-                      )}
-                    </div>
-                    {predNotifs.length === 0 ? (
-                      <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-                        <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                          <Target size={28} style={{ color: '#4a5568', opacity: 0.5 }} />
-                        </div>
-                        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>No results yet</div>
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5}}>Make predictions and check back<br />after matches end</div>
-                      </div>
-                    ) : (
-                      <div style={{ maxHeight: 400, overflowY: 'auto' }} className="nv-mob-scroll">
-                        {predNotifs.map(renderNotifItem)}
-                      </div>
-                    )}
-                  </div>
-                )}
+                {notifOpen && renderNotifDropdown()}
               </div>
             )}
 
@@ -962,16 +944,21 @@ export default function Navbar() {
                 <Shield size={18} strokeWidth={2.5} />
               </Link>
             )}
-            {isLoggedIn && notifCount > 0 && (
-              <div className="nv-action-btn" style={{ color: '#ef4444', borderColor: 'rgba(239,68,68,0.2)', background: 'rgba(239,68,68,0.1)' }} onClick={() => { setMobileOpen(true); }}>
-                <Bell size={18} strokeWidth={2.5} />
-                <span style={{
-                  position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
-                  background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #060b14',
-                  boxShadow: '0 0 10px rgba(239,68,68,0.6)',
-                  animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
-                }}>{notifCount > 9 ? '9+' : notifCount}</span>
+            {isLoggedIn && (
+              <div ref={mobNotifRef} style={{ position: 'relative' }}>
+                <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ color: notifCount > 0 ? '#ef4444' : '#64748b', borderColor: notifCount > 0 ? 'rgba(239,68,68,0.2)' : 'transparent', background: notifCount > 0 ? 'rgba(239,68,68,0.1)' : 'transparent', animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
+                  <Bell size={18} strokeWidth={2.5} />
+                  {notifCount > 0 && (
+                    <span style={{
+                      position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
+                      background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #060b14',
+                      boxShadow: '0 0 10px rgba(239,68,68,0.6)',
+                      animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
+                    }}>{notifCount > 9 ? '9+' : notifCount}</span>
+                  )}
+                </button>
+                {notifOpen && renderNotifDropdown()}
               </div>
             )}
             <button onClick={() => setMobileOpen(true)} className="nv-action-btn" aria-label="Open menu">
@@ -992,9 +979,7 @@ export default function Navbar() {
           background: 'rgba(6,11,20,0.9)', backdropFilter: 'blur(10px)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', overflow: 'hidden' }}>
-            <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(145deg, #00e676, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'nvLogoFloat 3s ease-in-out infinite', boxShadow: '0 0 15px rgba(0,230,118,0.3)' }}>
-              <FootballIcon size={20} />
-            </div>
+            <img src={APP_LOGO} alt="ZokaScore" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px rgba(0,230,118,0.3)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
             <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fff', letterSpacing: '0.02em' }}>ZOKA<span style={{ color: '#00e676' }}>SCORE</span></span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="nv-action-btn" style={{ width: '36px', height: '36px' }}>
@@ -1147,9 +1132,7 @@ export default function Navbar() {
           {/* Footer */}
           <div style={{ padding: '28px 20px 40px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
-              <div style={{ width: 24, height: 24, borderRadius: 6, background: 'linear-gradient(145deg, #00e676, #059669)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 12px rgba(0,230,118,0.3)' }}>
-                <FootballIcon size={14} color="#0a0f1e" />
-              </div>
+              <img src={APP_LOGO} alt="ZokaScore Logo" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover' }} />
               <span style={{ fontWeight: 900, fontSize: '0.8rem', color: '#64748b' }}>ZOKA<span style={{ color: '#00e676', opacity: 0.8 }}>SCORE</span></span>
             </div>
             <div style={{ fontSize: '0.65rem', color: '#4a5568', opacity: 0.7, letterSpacing: '0.05em' }}>© {new Date().getFullYear()} ZokaScore. All rights reserved.</div>
