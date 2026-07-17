@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v14.1 — Restructured Nav Links, Added Basketball, Pro Layout
+// v14.2 — Fixed ProHeader Mobile Overflow, Added Fallback Logo
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -20,6 +20,7 @@ import SEO from '../components/SEO';
    ═══════════════════════════════════════════════════ */
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const ADMIN_REMEMBER_KEY = 'nv-admin-remembered';
+const DEFAULT_TEAM_LOGO = '/icons/icon-192.png';
 
 let stylesInjected = false;
 const injectBase = () => {
@@ -52,27 +53,77 @@ const injectBase = () => {
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     
     /* Pro Header (Featured Match) */
-    .nv-pro-wrap { padding: 14px 16px 0; max-width: 1140px; margin: 0 auto; }
+    .nv-pro-wrap { padding: 14px 16px 0; max-width: 1140px; margin: 0 auto; box-sizing: border-box; }
     .nv-pro-inner { 
       background: linear-gradient(145deg, rgba(20,25,40,0.8), rgba(10,12,20,0.9)); 
       border-radius: 14px; padding: 12px 18px; display: flex; flex-direction: column; gap: 8px; 
       position: relative; overflow: hidden; transition: all 0.3s ease; 
       border: 1px solid rgba(255,255,255,0.05);
       box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      box-sizing: border-box;
     }
     .nv-pro-inner:hover { border-color: rgba(0,230,118,0.3); transform: translateY(-2px); box-shadow: 0 15px 40px rgba(0,0,0,0.4); }
-    .nv-pro-tag { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; }
-    .nv-pro-teams { display: flex; align-items: center; gap: 12px; }
-    .nv-pro-team { flex: 1; display: flex; align-items: center; gap: 10px; font-size: 0.95rem; font-weight: 800; color: #f8fafc; overflow: hidden; text-transform: uppercase; letter-spacing: -0.01em; }
-    .nv-pro-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .nv-pro-tag { display: flex; align-items: center; gap: 6px; font-size: 0.65rem; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.1em; min-width: 0; overflow: hidden; }
+    .nv-pro-tag span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    .nv-pro-teams { display: flex; align-items: center; gap: 12px; min-width: 0; }
+
+    .nv-pro-team { 
+      flex: 1 1 0; 
+      min-width: 0; 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      font-size: 0.95rem; 
+      font-weight: 800; 
+      color: #f8fafc; 
+      overflow: hidden; 
+      text-transform: uppercase; 
+      letter-spacing: -0.01em; 
+    }
+    .nv-pro-team span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
     .nv-pro-team-aw { justify-content: flex-end; }
-    .nv-pro-score-bar { display: flex; align-items: center; gap: 10px; padding: 6px 16px; background: rgba(0,0,0,0.4); border-radius: 10px; border: 1px solid rgba(255,255,255,0.05); }
+
+    .nv-pro-score-bar { 
+      flex-shrink: 0; 
+      display: flex; 
+      align-items: center; 
+      gap: 10px; 
+      padding: 6px 16px; 
+      background: rgba(0,0,0,0.4); 
+      border-radius: 10px; 
+      border: 1px solid rgba(255,255,255,0.05); 
+    }
     .nv-pro-score { font-family: 'JetBrains Mono', ui-monospace, monospace; font-weight: 900; font-size: 1.4rem; color: #fff; line-height: 1; }
     .nv-pro-score-live { color: #00e676; text-shadow: 0 0 12px rgba(0,230,118,0.5); }
-    .nv-pro-time { font-size: 0.8rem; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; }
+    .nv-pro-time { font-size: 0.8rem; font-weight: 700; color: #94a3b8; display: flex; align-items: center; gap: 5px; font-family: 'JetBrains Mono', monospace; white-space: nowrap; }
     .nv-pro-vs { font-size: 0.8rem; font-weight: 900; color: #64748b; }
-    .nv-pro-minute { position: absolute; top: 12px; right: 18px; display: flex; align-items: center; gap: 5px; font-size: 0.75rem; font-weight: 900; color: #ef4444; font-family: 'JetBrains Mono', monospace; }
-    .nv-pro-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: nvLiveDot 1.2s infinite; box-shadow: 0 0 10px rgba(239,68,68,0.8); }
+    .nv-pro-minute { position: absolute; top: 12px; right: 18px; display: flex; align-items: center; gap: 5px; font-size: 0.75rem; font-weight: 900; color: #ef4444; font-family: 'JetBrains Mono', monospace; z-index: 2; }
+    .nv-pro-live-dot { width: 8px; height: 8px; border-radius: 50%; background: #ef4444; animation: nvLiveDot 1.2s infinite; box-shadow: 0 0 10px rgba(239,68,68,0.8); flex-shrink: 0; }
+
+    .nv-pro-team-logo { width: 28px; height: 28px; object-fit: contain; flex-shrink: 0; }
+
+    @media (max-width: 520px) {
+      .nv-pro-wrap { padding: 10px 10px 0; }
+      .nv-pro-inner { padding: 10px 12px; gap: 6px; border-radius: 12px; }
+      .nv-pro-teams { gap: 8px; }
+      .nv-pro-team { gap: 6px; font-size: 0.78rem; }
+      .nv-pro-team-logo { width: 22px; height: 22px; }
+      .nv-pro-score-bar { padding: 4px 10px; gap: 6px; }
+      .nv-pro-score { font-size: 1.05rem; }
+      .nv-pro-time { font-size: 0.7rem; }
+      .nv-pro-vs { font-size: 0.7rem; }
+      .nv-pro-tag { font-size: 0.58rem; }
+      .nv-pro-minute { top: 8px; right: 10px; font-size: 0.65rem; }
+    }
+
+    @media (max-width: 360px) {
+      .nv-pro-team { font-size: 0.7rem; gap: 4px; }
+      .nv-pro-team-logo { width: 18px; height: 18px; }
+      .nv-pro-score { font-size: 0.95rem; }
+      .nv-pro-score-bar { padding: 3px 8px; }
+      .nv-pro-teams { gap: 6px; }
+    }
 
     /* Desktop Nav Links */
     .nv-nav-link {
@@ -195,7 +246,6 @@ const StatusDot = ({ status, size = 6 }) => {
   return <Clock size={8} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />;
 };
 
-// ★ RESTRUCTURED LINKS TO MATCH THE NEW UI FLOW
 const LINKS = [
   { to: '/', label: 'Home', emoji: '🏠' },
   { to: '/fixtures', label: 'Fixtures', emoji: '⚽' },
@@ -230,11 +280,19 @@ function ProHeader({ matches, liveMatches, nav }) {
   if (!featured) return null;
 
   const m = featured.match;
-  const homeLogo = m.homeTeam?.logo || m.homeTeam?.crest;
-  const awayLogo = m.awayTeam?.logo || m.awayTeam?.crest;
+  const homeLogo = m.homeTeam?.logo || m.homeTeam?.crest || DEFAULT_TEAM_LOGO;
+  const awayLogo = m.awayTeam?.logo || m.awayTeam?.crest || DEFAULT_TEAM_LOGO;
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
   const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : '';
+
+  const handleImgError = (e) => {
+    if (e.target.src !== DEFAULT_TEAM_LOGO) {
+      e.target.src = DEFAULT_TEAM_LOGO;
+    } else {
+      e.target.style.display = 'none';
+    }
+  };
 
   return (
     <div className="nv-pro-wrap" onClick={() => nav(m.matchId ? `/predictions?match=${m.matchId}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
@@ -245,7 +303,7 @@ function ProHeader({ matches, liveMatches, nav }) {
         </div>
         <div className="nv-pro-teams">
           <div className="nv-pro-team">
-            {homeLogo ? <img src={homeLogo} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} /> : null}
+            <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={handleImgError} /> 
             <span>{homeName}</span>
           </div>
           <div className="nv-pro-score-bar">
@@ -262,7 +320,7 @@ function ProHeader({ matches, liveMatches, nav }) {
             )}
           </div>
           <div className="nv-pro-team nv-pro-team-aw">
-            {awayLogo ? <img src={awayLogo} alt="" style={{ width: 28, height: 28, objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} /> : null}
+            <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={handleImgError} />
             <span>{awayName}</span>
           </div>
         </div>
