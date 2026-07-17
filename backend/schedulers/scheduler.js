@@ -230,11 +230,8 @@ class Scheduler {
     let isNearFinish = false;
 
     // ★ SEED FROM INITIAL SYNC
-    // If runInitialSync already fetched live matches, use its result so 
-    // we don't start at 0 and incorrectly wait 60 minutes for the next poll.
     const initialResult = this.syncStatus[serviceName]?.lastResult;
     if (initialResult && initialResult.polled !== false) {
-      // Use liveCount/nearFT if available, fallback to total/isNearFinish
       liveCount = initialResult.liveCount ?? initialResult.total ?? 0;
       isNearFinish = (initialResult.nearFT ?? 0) > 0 || initialResult.isNearFinish === true;
       
@@ -291,14 +288,9 @@ class Scheduler {
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        // Only update live state if the service actually polled the API.
-        // When capReached=true or budget was too low, the service returns
-        // an empty result without making an API call. In that case we
-        // preserve the last known liveCount/isNearFinish.
         const actuallyPolled = result && result.polled !== false;
 
         if (actuallyPolled) {
-          // ★ Read directly from the verified normalized data returned by service
           liveCount = result.liveCount ?? result.total ?? 0;
           isNearFinish = (result.nearFT ?? 0) > 0 || result.isNearFinish === true;
         }
@@ -314,9 +306,6 @@ class Scheduler {
         );
 
         // ── SMART FT RECOVERY TRIGGER ──
-        // If we HAD live games but now we DON'T, it means games just finished.
-        // Wait 60s and poll again IMMEDIATELY to catch the final score
-        // instead of waiting for the next regular cycle.
         if (
           prevHadLive &&
           liveCount === 0 &&
