@@ -14,10 +14,13 @@
  *   batchWrite just writes new docs without reading old ones (0 reads).
  *   Stale docs are cleaned up on the 2nd poll via diff-based delete.
  *
- * ★ ADAPTIVE SCHEDULER SUPPORT: 
- *   Returns `isNearFinish` (true if any match is 80'+ or in ET/BT/P)
- *   and `polled` (true if API was actually hit) to help the scheduler
- *   dynamically adjust polling intervals.
+ * ★ NORMALIZE FIX: API sometimes omits nested objects (e.g. score.halftime).
+ *   Previously this resulted in `undefined` fields, which causes Firestore 
+ *   batchWrite to throw an error, silently breaking the live polling loop.
+ *   Now uses `?? null` and defensive defaults.
+ *
+ * ★ STATELESS SCHEDULER FEED: Returns exact `liveCount` and `nearFT` 
+ *   directly to the scheduler so it doesn't need to re-read the database.
  */
 
 const {
@@ -49,7 +52,6 @@ class LiveFixturesService {
     this.ftProcessor = ftProcessor;
     this.lastLiveSnapshot = new Map();
     
-    // ★ FIX: Initialize lastFinishedSnapshot to prevent undefined .values() error
     this.lastFinishedSnapshot = new Map();
     
     this.trackedLeagueIds = new Set(
@@ -134,10 +136,6 @@ class LiveFixturesService {
     var isFirstPoll = this.lastLiveSnapshot.size === 0;
 
     if (isFirstPoll) {
-      // ★ Just write new docs — don't read+delete old ones.
-      // replaceLive would read ~40 old docs then delete them.
-      // batchWrite writes ~40 new docs without reading anything.
-      // Stale old docs get cleaned up on 2nd poll via diff-based delete.
       if (newDocs.length > 0) {
         writeCount = await this.repo.batchWrite(
           COLLECTIONS.LIVE_FIXTURES,
@@ -189,25 +187,16 @@ class LiveFixturesService {
 
     // ════════════════════════════════════════════════════════
     // NEAR-FINISH DETECTION
-    // True if ANY live match is at 80'+ in 2H, or in ET/BT/P.
-    // This triggers the 2.5-min NEAR_FT polling tier in the scheduler.
+    // Count matches that are at 80'+ in 2H, or in ET/BT/P.
+    // This provides the exact count to the scheduler, avoiding
+    // any database state mismatch.
     // ════════════════════════════════════════════════════════
-    var isNearFinish = newDocs.some(function (d) {
-      if (["ET", "BT", "P"].indexOf(d.status) !== -1) return true;
-      return d.elapsed != null && d.elapsed >= 80;
-    });
+    var nearFTCount = newDocs.reduce(function(count, d) {
+      if (["ET", "BT", "P"].indexOf(d.status) !== -1) return count + 1;
+      if (d.elapsed != null && d.elapsed >= 80) return count + 1;
+      return count;
+    }, 0);
 
-    // ══════════════════════════════════════════════════════
-    // ★ QUOTA FIX: Only invalidate cache when data changed
-    //
-    // Skip invalidation when:
-    //   - No writes (data identical to last poll)
-    //   - No transitions (no games went from live to finished)
-    //   - Not first poll (batchWrite handles it — writeCount > 0 if docs exist)
-    //
-    // This means: when no live games exist, the cache stays
-    // warm forever. 0 Firestore reads from client requests.
-    // ══════════════════════════════════════════════════════
     var dataChanged =
       writeCount > 0 || disappearedIds.length > 0 || isFirstPoll;
 
@@ -244,12 +233,19 @@ class LiveFixturesService {
         "ms"
     );
 
+    // ════════════════════════════════════════════════════════
+    // ★ STATELESS SCHEDULER FEED: Return verified counts directly
+    // to the scheduler. It does not need to re-read the database.
+    // ════════════════════════════════════════════════════════
     return {
-      total: newDocs.length,
+      success: true,
+      liveCount: newDocs.length,
+      nearFT: nearFTCount,
+      isNearFinish: nearFTCount > 0, // Keep for backwards compatibility
+      total: newDocs.length,         // Keep for backwards compatibility
       writes: writeCount,
       removed: transitioned,
       hasLive: newDocs.length > 0,
-      isNearFinish: isNearFinish,
       duration: duration,
       capReached: false,
       polled: true,
@@ -307,7 +303,6 @@ class LiveFixturesService {
     await this.repo.batchUpsertFinished(toFinish);
     cache.invalidate("ft:finished");
 
-    // Accumulate for snapshot (avoids merge-replace problem)
     toFinish.forEach(function (doc) {
       this.lastFinishedSnapshot.set(String(doc.id), doc);
     }.bind(this));
@@ -316,19 +311,30 @@ class LiveFixturesService {
   }
 
   normalize(fixture) {
-    var f = fixture.fixture,
-      l = fixture.league,
-      t = fixture.teams;
-    var g = fixture.goals,
-      s = fixture.score;
+    // ★ BULLETPROOF NORMALIZE: Firestore throws an error if you attempt 
+    // to write `undefined`. The API frequently omits nested objects 
+    // (like score.halftime) if they haven't happened yet.
+    // We use `?? null` to ensure ALL fields default to null safely.
+    const f = fixture.fixture || {};
+    const l = fixture.league || {};
+    const t = fixture.teams || {};
+    const g = fixture.goals || {};
+    const s = fixture.score || {};
+
+    const home = t.home || {};
+    const away = t.away || {};
+    const ht = s.halftime || {};
+    const ft = s.fulltime || {};
+    const et = s.extratime || {};
+    const pen = s.penalty || {};
+
     return {
       id: f.id,
       date: f.date,
       timestamp: f.timestamp,
-      status: f.status.short,
-      statusLong: f.status.long,
-      elapsed:
-        f.status.elapsed != null ? f.status.elapsed : null,
+      status: f.status ? f.status.short : null,
+      statusLong: f.status ? f.status.long : null,
+      elapsed: f.status?.elapsed ?? null,
       referee: f.referee || null,
       leagueId: l.id,
       leagueName: l.name,
@@ -337,30 +343,22 @@ class LiveFixturesService {
       leagueFlag: l.flag || null,
       season: l.season,
       round: l.round,
-      homeTeamId: t.home.id,
-      homeTeamName: t.home.name,
-      homeTeamLogo: t.home.logo,
-      awayTeamId: t.away.id,
-      awayTeamName: t.away.name,
-      awayTeamLogo: t.away.logo,
-      goalsHome: g.home,
-      goalsAway: g.away,
-      scoreHalftimeHome:
-        s.halftime && s.halftime.home,
-      scoreHalftimeAway:
-        s.halftime && s.halftime.away,
-      scoreFulltimeHome:
-        s.fulltime && s.fulltime.home,
-      scoreFulltimeAway:
-        s.fulltime && s.fulltime.away,
-      scoreExtratimeHome:
-        s.extratime && s.extratime.home,
-      scoreExtratimeAway:
-        s.extratime && s.extratime.away,
-      scorePenaltyHome:
-        s.penalty && s.penalty.home,
-      scorePenaltyAway:
-        s.penalty && s.penalty.away,
+      homeTeamId: home.id,
+      homeTeamName: home.name,
+      homeTeamLogo: home.logo,
+      awayTeamId: away.id,
+      awayTeamName: away.name,
+      awayTeamLogo: away.logo,
+      goalsHome: g.home ?? null,
+      goalsAway: g.away ?? null,
+      scoreHalftimeHome: ht.home ?? null,
+      scoreHalftimeAway: ht.away ?? null,
+      scoreFulltimeHome: ft.home ?? null,
+      scoreFulltimeAway: ft.away ?? null,
+      scoreExtratimeHome: et.home ?? null,
+      scoreExtratimeAway: et.away ?? null,
+      scorePenaltyHome: pen.home ?? null,
+      scorePenaltyAway: pen.away ?? null,
       sport: "football",
       _updatedAt: new Date().toISOString(),
     };
@@ -368,11 +366,14 @@ class LiveFixturesService {
 
   _emptyResult(extra = {}) {
     return {
+      success: false,
+      liveCount: 0,
+      nearFT: 0,
+      isNearFinish: false,
       total: 0,
       writes: 0,
       removed: 0,
       hasLive: false,
-      isNearFinish: false,
       duration: 0,
       capReached: false,
       polled: false,

@@ -238,6 +238,20 @@ class Scheduler {
     let liveCount = 0;
     let isNearFinish = false;
 
+    // ★ SEED FROM INITIAL SYNC
+    // If runInitialSync already fetched live matches, use its result so 
+    // we don't start at 0 and incorrectly wait 60 minutes for the next poll.
+    const initialResult = this.syncStatus[serviceName]?.lastResult;
+    if (initialResult && initialResult.polled !== false) {
+      // Use liveCount/nearFT if available, fallback to total/isNearFinish
+      liveCount = initialResult.liveCount ?? initialResult.total ?? 0;
+      isNearFinish = (initialResult.nearFT ?? 0) > 0 || initialResult.isNearFinish === true;
+      
+      if (liveCount > 0) {
+        logger.info(`[Scheduler] ${sport.toUpperCase()} seeded from initial sync: ${liveCount} live matches`);
+      }
+    }
+
     logger.info(`[Scheduler] ${sport.toUpperCase()} live polling started`);
 
     while (!controller.stop) {
@@ -293,8 +307,9 @@ class Scheduler {
         const actuallyPolled = result && result.polled !== false;
 
         if (actuallyPolled) {
-          liveCount = result.total || 0;
-          isNearFinish = result.isNearFinish === true;
+          // ★ Read directly from the verified normalized data returned by service
+          liveCount = result.liveCount ?? result.total ?? 0;
+          isNearFinish = (result.nearFT ?? 0) > 0 || result.isNearFinish === true;
         }
 
         const recoveredFT = result?.recoveredFT || 0;
@@ -444,6 +459,8 @@ class Scheduler {
         skipped: result.skipped ?? null,
         success: result.success ?? null,
         polled: result.polled ?? null,
+        liveCount: result.liveCount ?? null,
+        nearFT: result.nearFT ?? null,
       };
     }
 

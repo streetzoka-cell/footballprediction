@@ -1,4 +1,3 @@
-// config/constants.js
 // Budget-optimized — smart midnight rollover, dynamic live polling, smart FT recovery.
 
 // ───────────────────────────────────────────────
@@ -244,7 +243,6 @@ const LIVE_POLLING = Object.freeze({
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,
 });
-
 
 // ───────────────────────────────────────────────
 // FT RECOVERY STRATEGY
