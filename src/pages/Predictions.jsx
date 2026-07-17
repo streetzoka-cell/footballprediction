@@ -1,16 +1,16 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v20.4 — Centered Results Modal, Instant Local Results Calculation
+// v20.5 — Share & Earn System, Instant Local Results, Centered Modal
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import {
   Clock, CheckCircle2, TrendingUp, Target, BarChart3,
   Star, Save, Trophy, CalendarDays, Lock,
   LogIn, ChevronDown, ChevronRight, ChevronUp, Minus, X, ArrowRight,
   ChevronLeft, Plus, ArrowLeft, RotateCcw, CircleX, CircleCheck,
-  ThumbsUp, ThumbsDown, Pencil, Filter
+  ThumbsUp, ThumbsDown, Pencil, Filter, Share2
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +21,8 @@ import { eventBus, EVENT } from '../utils/eventBus';
 import { calcPoints, CACHE_KEY, SPORT, isLiveStatus, isFinishedStatus, isScheduledStatus } from '../utils/constants';
 import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
 import { fetchFixtures } from '../utils/api';
+import { db } from '../utils/firebase';
+import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════
@@ -243,6 +245,8 @@ const injectCSS = () => {
 .v20-bsm{padding:5px 10px;font-size:.66rem;min-height:30px;border-radius:7px;gap:4px}
 .v20-bbl{background:transparent;border:1px solid rgba(96,165,250,.2);color:#60a5fa}
 .v20-bbl:hover{background:rgba(96,165,250,.06);border-color:rgba(96,165,250,.35)}
+.v20-bshare{background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.2);color:#a855f7}
+.v20-bshare:hover{background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.35)}
 
 /* Badges */
 .v20-bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.6rem;font-weight:800;white-space:nowrap}
@@ -337,7 +341,7 @@ function SaveToast({ show, score }) {
     <div className="v20-toast">
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(0,230,118,.1)', border: '1.5px solid rgba(0,230,118,.25)', backdropFilter: 'blur(12px)' }}>
         <CircleCheck size={15} style={{ color: 'var(--accent)' }} />
-        <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--accent)' }}>Saved <strong>{score}</strong></span>
+        <span style={{ fontSize: '.82rem', fontWeight: 800, color: 'var(--accent)' }}>{score}</span>
       </div>
     </div>
   );
@@ -444,11 +448,10 @@ function ScoreStepper({ value, onChange }) {
 /* ═══════════════════════════════════════════════════
    ZOKA PICK CARD
    ═══════════════════════════════════════════════════ */
-function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
+function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onShare }) {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
   
-  // ★ INSTANT LOCAL CALCULATION FIX (mapping `type` to `resultType`)
   const res = useMemo(() => {
     if (pick.adminPick && isFin && pick.homeScore != null) {
       const r = calcPoints(pick.adminPick.home, pick.adminPick.away, pick.homeScore, pick.awayScore);
@@ -516,32 +519,28 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
           <span>{awayName}</span>
         </div>
       </div>
-      <div className="v20-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
-        {/* ★ INSTANT RESULT BADGE */}
-        {isFin && res && res.resultType !== 'pending' && <ResultBadge result={res} />}
-        {isFin && (!res || res.resultType === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
-        
-        {!isFin && !isLive && vs.total > 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
-            <button
-              className={`v20-vote${myV === 'agree' ? ' agree-on' : ''}`}
-              onClick={() => onVote(mid, 'agree')}
-              disabled={isVoting}
-            >
-              <ThumbsUp size={11} /> {vs.agree || 0}
-            </button>
-            <div className="v20-vote-bar">
-              <div className="v20-vote-fill" style={{ width: `${vs.total > 0 ? Math.round((vs.agree / vs.total) * 100) : 0}%` }} />
-            </div>
-            <button
-              className={`v20-vote${myV === 'disagree' ? ' disagree-on' : ''}`}
-              onClick={() => onVote(mid, 'disagree')}
-              disabled={isVoting}
-            >
-              <ThumbsDown size={11} /> {vs.disagree || 0}
-            </button>
-          </div>
-        )}
+      <div className="v20-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
+          {isFin && res && res.resultType !== 'pending' && <ResultBadge result={res} />}
+          {isFin && (!res || res.resultType === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
+          
+          {!isFin && !isLive && vs.total > 0 && (
+            <>
+              <button className={`v20-vote${myV === 'agree' ? ' agree-on' : ''}`} onClick={() => onVote(mid, 'agree')} disabled={isVoting}>
+                <ThumbsUp size={11} /> {vs.agree || 0}
+              </button>
+              <div className="v20-vote-bar">
+                <div className="v20-vote-fill" style={{ width: `${vs.total > 0 ? Math.round((vs.agree / vs.total) * 100) : 0}%` }} />
+              </div>
+              <button className={`v20-vote${myV === 'disagree' ? ' disagree-on' : ''}`} onClick={() => onVote(mid, 'disagree')} disabled={isVoting}>
+                <ThumbsDown size={11} /> {vs.disagree || 0}
+              </button>
+            </>
+          )}
+        </div>
+        <button className="v20-b v20-bshare v20-bsm" onClick={() => onShare(pick, true)} style={{ flexShrink: 0 }}>
+          <Share2 size={10} /> Share
+        </button>
       </div>
     </div>
   );
@@ -550,13 +549,12 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
 /* ═══════════════════════════════════════════════════
    PREDICTION CARD (Featured Matches)
    ═══════════════════════════════════════════════════ */
-function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now }) {
+function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
   const mid = pred.id || String(pred.matchId);
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
   
-  // ★ INSTANT LOCAL CALCULATION FIX (mapping `type` to `resultType`)
   const localResult = useMemo(() => {
     if (isFin && hasPred && pred.homeScore != null) {
       const r = calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore);
@@ -565,11 +563,9 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
     return null;
   }, [isFin, hasPred, pred.homeScore, pred.awayScore, userPred]);
     
-  // Use backend result if available, otherwise use localResult
   const effectiveResult = result || localResult;
   const isResolved = !!effectiveResult && effectiveResult.resultType !== 'pending';
 
-  // ★ 1-HOUR LOCK CHECK
   const lockInfo = isMatchLocked(pred, now);
   const isLocked = lockInfo.locked;
 
@@ -655,14 +651,17 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
             ))}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
           {isEditing ? (
             <>
               <button className="v20-b v20-bp v20-bsm" onClick={() => onSave(pred)} disabled={saving || !editH || !editA}><Save size={10} /> Save</button>
               <button className="v20-b v20-bgh v20-bsm" onClick={onCancel}><X size={10} /> Cancel</button>
             </>
           ) : isResolved ? (
-            <ResultBadge result={effectiveResult} />
+            <>
+              <ResultBadge result={effectiveResult} />
+              <button className="v20-b v20-bshare v20-bsm" onClick={() => onShare(pred, false)}><Share2 size={10} /> Share</button>
+            </>
           ) : isFin && !hasPred ? (
             <span className="v20-bdg ms"><CircleX size={8} /> Missed</span>
           ) : isLocked && !isFin ? (
@@ -671,6 +670,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
             <>
               <span className="v20-bdg bl"><CheckCircle2 size={8} /> Saved</span>
               {!isLocked && <button className="v20-b v20-bbl v20-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>}
+              <button className="v20-b v20-bshare v20-bsm" onClick={() => onShare(pred, false)}><Share2 size={10} /> Share</button>
             </>
           ) : lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90 ? (
             <span className="v20-lock-timer"><Clock size={9} /> {formatMinutesLeft(lockInfo.minutesLeft)}</span>
@@ -691,7 +691,6 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
 function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
 
-  // ★ Scroll to top immediately when overlay opens
   useEffect(() => {
     if (overlayBoxRef.current) {
       overlayBoxRef.current.scrollTop = 0;
@@ -720,7 +719,6 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
     predicted++;
     
     let res = resMap.get(String(p.matchId));
-    // ★ INSTANT LOCAL CALCULATION FALLBACK
     if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
       const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
       res = { ...r, resultType: r.type };
@@ -762,7 +760,6 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
             if (!up) return null;
             
             let res = resMap.get(String(p.matchId));
-            // ★ INSTANT LOCAL CALCULATION FALLBACK
             if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
               const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
               res = { ...r, resultType: r.type };
@@ -810,12 +807,12 @@ export default function Predictions() {
   injectCSS();
   const { currentUser, userProfile } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
   const uid = currentUser?.uid;
   const loggedIn = !!uid;
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
   const isAdmin = userProfile?.role === 'admin';
 
-  // ★ Use AppDataContext for REACTIVE data (like navbar)
   const appData = useAppData();
   const {
     activePredictions: featuredPreds,
@@ -842,23 +839,101 @@ export default function Predictions() {
   const [saving, setSaving] = useState(false);
   const [votingId, setVotingId] = useState(null);
   
-  // Non-today date data
   const [nonTodayData, setNonTodayData] = useState({ featured: null, zoka: null, userPreds: {}, results: [], votes: {} });
   const [nonTodayLoading, setNonTodayLoading] = useState(false);
   const mountedRef = useRef(true);
 
-  // ★ LIVE FIXTURES FOR REAL-TIME MERGING
   const [liveFixtures, setLiveFixtures] = useState([]);
   
   const isToday = selDate === todayStr();
 
-  // Update time every second for lock timers
+  /* ═══ SHARE & EARN LOGIC ═══ */
+  const handleShare = useCallback(async (pred, isZoka = false) => {
+    if (!uid) {
+      setShowLogin(true);
+      return;
+    }
+    const baseUrl = window.location.origin;
+    const matchId = pred.matchId || pred.id;
+    const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${uid}`;
+    
+    let homeName = 'Home', awayName = 'Away', scoreText = '';
+    if (typeof pred.homeTeam === 'object') {
+      homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
+      awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
+    } else {
+      homeName = pred.homeTeam || 'Home';
+      awayName = pred.awayTeam || 'Away';
+    }
+
+    if (isZoka) {
+      scoreText = `${pred.adminPick?.home ?? '?'}-${pred.adminPick?.away ?? '?'}`;
+    } else {
+      const up = userPredMap.get(pred.id) || userPredMap.get(String(pred.matchId));
+      if (up) scoreText = `${up.homeScore}-${up.awayScore}`;
+    }
+
+    const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore: ${shareUrl}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'ZokaScore Prediction',
+          text: shareText,
+          url: shareUrl,
+        });
+        setToast('Shared! Earn points when friends visit.');
+      } catch (err) {
+        if (err.name !== 'AbortError') {
+          console.error('Share failed', err);
+        }
+      }
+    } else {
+      try {
+        await navigator.clipboard.writeText(shareText);
+        setToast('Link copied! Earn points when friends visit.');
+      } catch (e) {
+        setToast('Copy failed. Please copy manually.');
+      }
+    }
+  }, [uid, setShowLogin]);
+
+  // ★ REFERRAL VISIT TRACKING
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const referrer = params.get('ref');
+    if (referrer) {
+      // Get or create a unique device ID to prevent counting the same device multiple times
+      let deviceId = localStorage.getItem('zk_device_id');
+      if (!deviceId) {
+        deviceId = 'dev_' + Math.random().toString(36).substring(2, 12) + Date.now().toString(36);
+        localStorage.setItem('zk_device_id', deviceId);
+      }
+      
+      const visitKey = `zk_ref_${referrer}_${deviceId}`;
+      if (!localStorage.getItem(visitKey)) {
+        localStorage.setItem(visitKey, '1');
+        
+        // Record the visit to Firestore safely
+        if (db) {
+          setDoc(doc(db, 'referral_visits', visitKey), {
+            referrerUid: referrer,
+            visitorDeviceId: deviceId,
+            visitorUid: uid || null,
+            visitedAt: serverTimestamp(),
+            status: 'pending' // Admin can process this later to award points
+          }).catch(e => console.error("Referral track err:", e));
+        }
+      }
+    }
+  }, [location.search, uid]);
+
+  /* ═══ EFFECTS ═══ */
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
 
-  // ★ FETCH LIVE FIXTURES FOR TODAY (Every 15s)
   useEffect(() => {
     if (!isToday) return;
     let cancelled = false;
@@ -869,11 +944,10 @@ export default function Predictions() {
       } catch (e) {}
     };
     loadLive();
-    const interval = setInterval(loadLive, 15000); // 15s polling for real-time scores
+    const interval = setInterval(loadLive, 15000); 
     return () => { cancelled = true; clearInterval(interval); };
   }, [isToday]);
 
-  // Load data for non-today dates
   useEffect(() => {
     if (isToday) return;
     let cancelled = false;
@@ -914,7 +988,6 @@ export default function Predictions() {
     return arr;
   }, []);
 
-  // Select correct data source based on date
   const currentFeatured = isToday ? (featuredPreds || []) : (nonTodayData.featured || []);
   const currentZoka = isToday ? (zokaPicks?.matches || []) : (nonTodayData.zoka || []);
   const currentUserPreds = isToday ? (ctxUserPreds || {}) : (nonTodayData.userPreds || {});
@@ -923,7 +996,6 @@ export default function Predictions() {
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
-  // ★ MERGE LIVE FIXTURES INTO PREDICTIONS & ZOKA PICKS FOR INSTANT FT DETECTION
   const mergedFeatured = useMemo(() => {
     if (!isToday || !liveFixtures.length) return currentFeatured;
     return currentFeatured.map(p => {
@@ -960,7 +1032,7 @@ export default function Predictions() {
     });
   }, [currentZoka, liveFixtures, isToday]);
 
-  // ★ ADMIN AUTO-RESOLVER: Automatically distribute points if a match just finished
+  // ★ ADMIN AUTO-RESOLVER
   useEffect(() => {
     if (!isAdmin || !isToday || !liveFixtures.length) return;
     
@@ -971,7 +1043,6 @@ export default function Predictions() {
 
     toResolve.forEach(pred => {
       const fx = liveFixtures.find(f => String(f.id) === String(pred.matchId));
-      // Check if DB hasn't already marked it as finished to avoid spamming the resolver
       const dbPred = currentFeatured.find(p => String(p.matchId) === String(pred.matchId));
       if (dbPred && dbPred.status !== 'finished') {
          console.log(`[AutoResolve] Admin triggering resolution for ${pred.matchId}`);
@@ -979,17 +1050,6 @@ export default function Predictions() {
       }
     });
   }, [isAdmin, isToday, liveFixtures, mergedFeatured, currentFeatured]);
-
-  // Build maps
-  const scoreMap = useMemo(() => {
-    const m = new Map();
-    mergedFeatured.forEach(p => {
-      if (isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
-        m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore });
-      }
-    });
-    return m;
-  }, [mergedFeatured]);
 
   const userPredMap = useMemo(() => {
     const m = new Map();
@@ -1013,14 +1073,12 @@ export default function Predictions() {
     return m;
   }, [currentFeatured, currentZoka, selDate]);
 
-  // ★ Zoka picks: show top 5, then "Show More" button
   const visibleZoka = useMemo(() => {
     if (mergedZoka.length <= ZOKA_VISIBLE_COUNT) return mergedZoka;
     return zokaExpanded ? mergedZoka : mergedZoka.slice(0, ZOKA_VISIBLE_COUNT);
   }, [mergedZoka, zokaExpanded]);
   const hiddenZokaCount = mergedZoka.length - ZOKA_VISIBLE_COUNT;
 
-  // Filter featured predictions
   const deferredFilter = useDeferredValue(filter);
   const filteredPreds = useMemo(() => {
     if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId)));
@@ -1036,7 +1094,6 @@ export default function Predictions() {
     finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
   }), [mergedFeatured, userPredMap]);
 
-  // Day stats (accurate, from context for today)
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
     mergedFeatured.forEach(p => {
@@ -1044,7 +1101,6 @@ export default function Predictions() {
       if (!up) return;
       pred++;
       let res = resultMap.get(String(p.matchId));
-      // ★ INSTANT LOCAL CALCULATION
       if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
         const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
         res = { ...r, resultType: r.type };
@@ -1062,7 +1118,6 @@ export default function Predictions() {
     return dailyEntries.find(u => u.uid === uid) || null;
   }, [dailyEntries, uid]);
 
-  // Actions
   const startEdit = (pred) => {
     const mid = pred.id || String(pred.matchId);
     const existing = userPredMap.get(mid) || userPredMap.get(String(pred.matchId));
@@ -1149,7 +1204,6 @@ export default function Predictions() {
       </div>
 
       <div className="v20-wrap">
-        {/* ★ User Stats (reactive from context) */}
         {loggedIn && (
           <div style={{ marginBottom: 16, animation: 'v20-fade-up .4s ' + SMOOTH + ' both' }}>
             <div className="v20-stats">
@@ -1181,7 +1235,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Filter */}
         <div className="v20-filter">
           {[
             { key: 'all', label: 'All', count: filterCounts.all },
@@ -1195,7 +1248,6 @@ export default function Predictions() {
           ))}
         </div>
 
-        {/* ★ Zoka Picks — Top 5 + Show More */}
         {mergedZoka.length > 0 && (
           <div className="v20-zoka">
             <div className="v20-zoka-hd">
@@ -1216,6 +1268,7 @@ export default function Predictions() {
                 userVote={currentVotes}
                 onVote={handleVote}
                 votingId={votingId}
+                onShare={handleShare}
               />
             ))}
             {hiddenZokaCount > 0 && !zokaExpanded && (
@@ -1231,7 +1284,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* ★ Featured Matches */}
         <div style={{ animation: 'v20-fade-up .3s ' + SMOOTH + ' both' }}>
           <div className="v20-sec">
             <div className="v20-sec-icon" style={{ background: 'rgba(0,230,118,.08)', border: '1.5px solid rgba(0,230,118,.18)', color: 'var(--accent)' }}><Target size={13} /></div>
@@ -1262,6 +1314,7 @@ export default function Predictions() {
                 onLogin={() => setShowLogin(true)}
                 saving={saving}
                 now={now}
+                onShare={handleShare}
               />
             ))
           ) : (
@@ -1273,7 +1326,6 @@ export default function Predictions() {
           )}
         </div>
 
-        {/* All Resolved Banner */}
         {myDayStats.allResolved && myDayStats.pred > 0 && (
           <div className="v20-rank" style={{ marginTop: 16, textAlign: 'center' }}>
             <Trophy size={24} style={{ color: 'var(--accent)', marginBottom: 8 }} />

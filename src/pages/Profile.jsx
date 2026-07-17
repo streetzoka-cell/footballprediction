@@ -5,6 +5,10 @@ import {
   Mail, Star, ArrowRight, Zap, Lock, TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useAppData } from '../context/AppDataContext';
+import { fetchFixtures } from '../utils/api';
+import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
+import { todayStr } from '../utils/dates';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
@@ -91,7 +95,6 @@ const useInView = (threshold = 0.1) => {
   return [ref, visible];
 };
 
-// ✅ FIX: Add the missing helper functions
 const getPredictions = (p) => p?.predictions || 0;
 const getExact = (p) => p?.correctScore || 0;
 const getResult = (p) => p?.correctResult || 0;
@@ -269,14 +272,84 @@ const ProfileSkeleton = () => (
 export default function Profile() {
   injectStyles();
   const { currentUser, userProfile, signOut, authLoading } = useAuth();
+  const appData = useAppData();
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
+  // ★ Fetch Live Fixtures for Real-Time Stat Calculation
+  const [liveFixtures, setLiveFixtures] = useState([]);
+  
+  useEffect(() => {
+    if (isDemo) return;
+    let cancelled = false;
+    const loadLive = async () => {
+      try {
+        const res = await fetchFixtures(todayStr());
+        if (!cancelled) setLiveFixtures(res?.matches || []);
+      } catch (e) {}
+    };
+    loadLive();
+    const interval = setInterval(loadLive, 15000); 
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isDemo]);
+
+  // ★ INSTANT LOCAL CALCULATION: Merge historical profile data with today's live results
+  const liveStats = useMemo(() => {
+    if (isDemo || !currentUser?.uid) return { pts: 0, ex: 0, rs: 0, mi: 0, pred: 0 };
+    const uid = currentUser.uid;
+    const today = todayStr();
+    const userPreds = Object.values(appData.userPredictions || {}).filter(p => p.userId === uid && p.matchDate === today);
+    
+    // Merge active predictions with live fixtures to get latest scores
+    const matchesMap = new Map();
+    (appData.activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
+    liveFixtures.forEach(f => {
+      const matchId = String(f.id);
+      const existing = matchesMap.get(matchId);
+      if (existing) {
+        matchesMap.set(matchId, {
+          ...existing,
+          status: f.status || existing.status,
+          homeScore: f.homeScore ?? existing.homeScore,
+          awayScore: f.awayScore ?? existing.awayScore,
+          isLive: f.isLive || existing.isLive,
+          isFinished: f.isFinished || existing.isFinished,
+        });
+      }
+    });
+
+    let pts = 0, ex = 0, rs = 0, mi = 0, pred = 0;
+    userPreds.forEach(p => {
+      pred++;
+      const match = matchesMap.get(String(p.matchId));
+      if (match && isFinishedStatus(match.status, SPORT.FOOTBALL) && match.homeScore != null) {
+        const r = calcPoints(p.homeScore, p.awayScore, match.homeScore, match.awayScore);
+        if (r.type !== 'pending') {
+          pts += r.points;
+          if (r.type === 'exact') ex++;
+          else if (r.type === 'result') rs++;
+          else mi++;
+        }
+      }
+    });
+    
+    return { pts, ex, rs, mi, pred };
+  }, [isDemo, currentUser, appData.userPredictions, appData.activePredictions, liveFixtures]);
+
   if (authLoading) return <ProfileSkeleton />;
 
-  const profile = userProfile || {
+  const baseProfile = userProfile || {
     displayName: 'Guest', email: 'Sign in to get started',
     points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
+  };
+
+  // ★ Merge historical stats with today's instant stats
+  const profile = {
+    ...baseProfile,
+    points: (baseProfile.points || 0) + liveStats.pts,
+    predictions: (baseProfile.predictions || 0) + liveStats.pred,
+    correctScore: (baseProfile.correctScore || 0) + liveStats.ex,
+    correctResult: (baseProfile.correctResult || 0) + liveStats.rs,
   };
 
   const exact = getExact(profile);
@@ -284,6 +357,7 @@ export default function Profile() {
   const total = getPredictions(profile);
   const points = getPoints(profile);
   const accuracyNum = calculateAccuracy(exact, result, total);
+  
   const initials = useMemo(() => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
   const memberSince = useMemo(
     () => currentUser?.metadata?.creationTime

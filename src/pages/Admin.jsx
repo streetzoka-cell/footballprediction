@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// v15.2 Pro UI — Auto-Failover, User Broadcast, Bulletproof User Loading
+// v15.3 Pro UI — Smart Match Locking, Auto-Failover, Bulletproof Loading
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -17,7 +17,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useFootballData } from '../context/FootballDataContext'; // ★ FIX: Import backup context
+import { useFootballData } from '../context/FootballDataContext'; 
 import { db } from '../utils/firebase';
 import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr, getLocalDateFromUtc, formatTime, formatDateShort } from '../utils/dates';
@@ -128,6 +128,20 @@ const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
 const isLive = m => isLiveStatus(m?.status, m?.sport || 'football') || m?.isLive;
 const isFin = m => isFinishedStatus(m?.status, m?.sport || 'football') || m?.isFinished;
 const getScore = m => m?.score?.fullTime ? {h:m.score.fullTime.home,a:m.score.fullTime.away} : m?.homeScore!=null ? {h:m.homeScore,a:m.awayScore} : {h:null,a:null};
+
+// ★ SMART MATCH LOCKING: Checks status AND kickoff time to prevent adding started matches
+const hasMatchStarted = (m) => {
+  if (!m) return false;
+  if (isLive(m) || isFin(m)) return true;
+  const kickoffStr = m?.utcDate || m?.date || m?.kickoff;
+  if (kickoffStr) {
+    const kickoffTime = new Date(kickoffStr).getTime();
+    if (!isNaN(kickoffTime) && kickoffTime <= Date.now()) {
+      return true; // Kickoff time has passed
+    }
+  }
+  return false;
+};
 
 const fmtTimeAgo = dt => {
   if (!dt) return 'Never';
@@ -495,8 +509,9 @@ export default function Admin() {
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [primaryLoading, setPrimaryLoading] = useState(true);
 
-  // ★ FIX: Import backup context so Admin doesn't lose matches if API fails
   const { fixtures: backupRaw } = useFootballData();
+
+  const showToast = useCallback((message, type = 'ok') => setToast({ message, type }), []);
 
   const defaultDates = useMemo(() => [getLocalDateStr(-1), todayStr(), getLocalDateStr(1)], []);
   const extraDates = useMemo(() => {
@@ -527,7 +542,6 @@ export default function Admin() {
     return () => { mnt = false; };
   }, [date]);
 
-  // ★ FIX: Fallback to backup matches if primary is empty
   const allFixtures = useMemo(() => {
     if (primaryFixtures.length > 0) return primaryFixtures;
     return (backupRaw || []).filter(m => extractDate(m) === date).map(m => normalizeMatch(m, false));
@@ -557,7 +571,7 @@ export default function Admin() {
       () => {}
     );
     return unsub;
-  }, [date]);
+  }, [date, mounted]);
 
   useEffect(() => {
     if (!db) return;
@@ -570,7 +584,7 @@ export default function Admin() {
       () => {}
     );
     return unsub;
-  }, [date]);
+  }, [date, mounted]);
 
   // ★ AUTO-RESOLVE LOGIC
   useEffect(() => {
@@ -615,7 +629,11 @@ export default function Admin() {
 
   const handleFeaturedAdd = async (m) => {
     if (!db) return;
-    if (isLive(m) || isFin(m)) { setToast('Cannot add live or finished matches', 'er'); return; }
+    // ★ SMART LOCK: Prevent adding if match has started
+    if (hasMatchStarted(m)) { 
+      showToast('Match has already started or finished!', 'er'); 
+      return; 
+    }
     const matchDate = date;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
@@ -631,7 +649,7 @@ export default function Admin() {
 
     await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...pred, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updatedPreds, updatedAt: serverTimestamp() }, { merge: true });
-
+    
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
   };
@@ -666,7 +684,7 @@ export default function Admin() {
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
     eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
 
-    if (!isAuto) setToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
+    if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
   };
 
   const handleOverride = async (pred, h, a) => {
@@ -695,7 +713,11 @@ export default function Admin() {
       else if (period === 'weekly') await rebuildPeriodLeaderboard('weekly');
       else if (period === 'monthly') await rebuildPeriodLeaderboard('monthly');
       else if (period === 'all') await rebuildAllLeaderboards();
-    } catch (e) { console.error('[Admin] Rebuild err:', e); }
+      showToast('Rebuild complete!', 'ok');
+    } catch (e) { 
+      console.error('[Admin] Rebuild err:', e); 
+      showToast('Rebuild failed', 'er');
+    }
     setRebuilding(null);
   };
 
@@ -739,23 +761,23 @@ export default function Admin() {
         )}
 
         {tab === 'zoka' && (
-          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={setToast} />
+          <ZokaTab date={date} fixtures={allFixtures} fxLoading={primaryLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />
         )}
 
         {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={primaryLoading} toast={setToast} />
+          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={primaryLoading} toast={showToast} />
         )}
 
         {tab === 'results' && (
-          <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={setToast} />
+          <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={showToast} />
         )}
 
-        {tab === 'broadcast' && <BroadcastTab toast={setToast} />}
-        {tab === 'staff' && <StaffTab toast={setToast} />}
-        {tab === 'users' && <UsersTab toast={setToast} />}
+        {tab === 'broadcast' && <BroadcastTab toast={showToast} />}
+        {tab === 'staff' && <StaffTab toast={showToast} />}
+        {tab === 'users' && <UsersTab toast={showToast} />}
       </div>
 
-      {toast && <Toast message={typeof toast === 'string' ? toast : toast} type={typeof toast === 'string' ? 'ok' : toast} onDone={() => setToast(null)} />}
+      {toast && <Toast message={toast.message} type={toast.type} onDone={() => setToast(null)} />}
       {confirm && <Confirm title={confirm.title} msg={confirm.msg} onYes={confirm.onYes} onNo={() => setConfirm(null)} danger={confirm.danger} />}
     </div>
   );
@@ -843,7 +865,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const [openDay, setOpenDay] = useState(null);
 
   const dayFx = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
-  const selectableFx = useMemo(() => dayFx.filter(m => !isFin(m) && !isLive(m)), [dayFx]);
+  
+  // ★ SMART LOCK: Filter out matches that have started
+  const selectableFx = useMemo(() => dayFx.filter(m => !hasMatchStarted(m)), [dayFx]);
 
   const leagues = useMemo(() => {
     const map = new Map();
@@ -874,7 +898,8 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
 
   const toggle = (m) => {
-    if (isFin(m) || isLive(m)) { toast('Cannot select finished or live matches', 'in'); return; }
+    // ★ SMART LOCK: Prevent selecting if started
+    if (hasMatchStarted(m)) { toast('Cannot select matches that have already started', 'in'); return; }
     const id = String(m.id);
     if (ids.has(id)) {
       setSel(prev => { const n = { ...prev }; delete n[id]; return n; });
@@ -1045,7 +1070,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       )}
 
       {fxLoading ? <Skel n={4} /> : vis.length > 0 ? (
-        <div className={flash ? 'sf' : ''}>
+        <div className={flash ? 'save-flash' : ''}>
           {vis.map((m, i) => {
             const mid = String(m.id);
             const isPublished = pubMap.has(mid);
@@ -1066,7 +1091,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
           <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
-        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'} hint={dayFx.length === 0 ? 'Try a different day' : 'Live and finished matches cannot be selected'} />
+        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'} hint={dayFx.length === 0 ? 'Try a different day' : 'Matches that have started cannot be selected'} />
       )}
 
       <div className="asec" style={{ marginTop: 18 }}>
@@ -1136,14 +1161,16 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    let l = fixtures.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)); 
+    // ★ SMART LOCK: Filter out matches that have started
+    let l = fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m)); 
     if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
     return l;
   }, [fixtures, date, lg]);
 
   const leagues = useMemo(() => {
     const map = new Map();
-    (fixtures?.filter(m => extractDate(m) === date && !isFin(m) && !isLive(m)) || []).forEach(f => {
+    // ★ SMART LOCK applied here too
+    (fixtures?.filter(m => extractDate(m) === date && !hasMatchStarted(m)) || []).forEach(f => {
       const c = f.competition || f.league; if (!c) return;
       const id = String(c.id || c.code || 'x');
       if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
@@ -1466,7 +1493,6 @@ function BroadcastTab({ toast }) {
   const [message, setMessage] = useState('');
   const [sending, setSending] = useState(false);
   
-  // User loading state for personal messages
   const [users, setUsers] = useState([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [search, setSearch] = useState('');
@@ -1476,7 +1502,6 @@ function BroadcastTab({ toast }) {
     if (!db) return;
     setLoadingUsers(true);
     try {
-      // ★ FIX: Removed orderBy('createdAt') which crashes if a user is missing that field
       const snap = await getDocs(query(collection(db, 'users'), limitQ(100)));
       setUsers(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setShowUserList(true);
@@ -1673,12 +1698,10 @@ function UsersTab({ toast }) {
     if (!db) return;
     setLoading(true);
     try {
-      // ★ FIX: Removed orderBy('createdAt') to prevent query from failing if a user is missing the field
       let q = query(collection(db, 'users'), limitQ(50));
       const snap = await getDocs(q);
       if (mounted.current) {
         const newUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-        // Sort client-side by createdAt if it exists
         newUsers.sort((a, b) => {
           const tsA = a.createdAt?.seconds || 0;
           const tsB = b.createdAt?.seconds || 0;
