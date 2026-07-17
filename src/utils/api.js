@@ -161,14 +161,13 @@ function _transformApiFormat(m) {
   };
 }
 
-// ★ FIX: Simplified extraction. We just combine live, finished, and matches arrays.
 function _extractMatchesForDate(snapshot) {
   if (!snapshot) return [];
 
   const allRaw = [
     ...(snapshot.live || []),
     ...(snapshot.finished || []),
-    ...(snapshot.matches || []) // ★ Changed from yesterday/today/tomorrow
+    ...(snapshot.matches || [])
   ];
 
   const uniqueIds = new Set();
@@ -186,23 +185,11 @@ function _emptyResult(error = null) {
   return { matches: [], error, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished: false, isRolloverWindow: isInRolloverWindow() };
 }
 
-// ★ FIX: Fetch the exact date document requested, and reassemble chunks if necessary
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
   try {
-    let snapshot = await dataLayer.fetchFootballSnapshot(date);
+    const snapshot = await dataLayer.fetchFootballSnapshot(date);
     if (!snapshot) return _emptyResult(null);
-    
-    // ★ REASSEMBLE CHUNKS: If the backend split the document, fetch all pieces
-    if (snapshot.isChunked) {
-      const chunkPromises = [];
-      for (let i = 0; i < snapshot.totalChunks; i++) {
-        chunkPromises.push(dataLayer.fetchFootballSnapshot(`${date}_chunk_${i}`));
-      }
-      const chunks = await Promise.all(chunkPromises);
-      snapshot.matches = chunks.flatMap(c => c?.matches || []);
-    }
-
     const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
@@ -256,18 +243,8 @@ function _createPollingSubscription(sport, callback, options = {}) {
       const dateStr = todayStr();
       const prefix = sport === SPORT.BASKETBALL ? 'snap:bb:' : 'snap:ft:';
       dataLayer.invalidate(`${prefix}${dateStr}`);
-      let snapshot = await dataLayer.fetchSnapshot(sport, dateStr);
+      const snapshot = await dataLayer.fetchSnapshot(sport, dateStr);
       errorCount = 0;
-
-      // ★ REASSEMBLE CHUNKS FOR LIVE POLLING
-      if (snapshot?.isChunked) {
-        const chunkPromises = [];
-        for (let i = 0; i < snapshot.totalChunks; i++) {
-          chunkPromises.push(dataLayer.fetchSnapshot(sport, `${dateStr}_chunk_${i}`));
-        }
-        const chunks = await Promise.all(chunkPromises);
-        snapshot.matches = chunks.flatMap(c => c?.matches || []);
-      }
 
       const liveMatches = (snapshot?.live || []).map((d) => transformMatch(d));
       const finishedMatches = (snapshot?.finished || []).map((d) => transformMatch(d));
@@ -308,18 +285,8 @@ function _createPollingSubscription(sport, callback, options = {}) {
 
 export const fetchBasketballFixtures = async (date) => {
   try {
-    let snapshot = await dataLayer.fetchBasketballSnapshot(date);
+    const snapshot = await dataLayer.fetchBasketballSnapshot(date);
     if (!snapshot) return _emptyResult(null);
-    
-    if (snapshot.isChunked) {
-      const chunkPromises = [];
-      for (let i = 0; i < snapshot.totalChunks; i++) {
-        chunkPromises.push(dataLayer.fetchBasketballSnapshot(`${date}_chunk_${i}`));
-      }
-      const chunks = await Promise.all(chunkPromises);
-      snapshot.matches = chunks.flatMap(c => c?.matches || []);
-    }
-
     const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
