@@ -1,13 +1,13 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v9.9 Pro UI — Smart Dropdown, Toggles, Live Only, Accurate Minutes, Started State
+// v10.0 Pro UI — Modern Structure, All-League Tables, Auto-Refresh, Smooth Pop-ins
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
-  RefreshCw, Calendar, AlertTriangle, Activity, ListFilter
+  RefreshCw, Calendar, AlertTriangle, Activity, ListFilter, Share2
 } from 'lucide-react';
 
 // Primary Source (Node Backend)
@@ -27,8 +27,10 @@ const getTomorrowStr = () => getLocalDateStr(1);
 
 import SEO from '../components/SEO';
 
+const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
+
 /* ═══════════════════════════════════════════════════════════════════════
-   LEAGUE PRIORITY MAP (World Cup downwards)
+   LEAGUE PRIORITY MAP
    ═══════════════════════════════════════════════════════════════════════ */
 const LEAGUE_PRIORITY = {
   'FIFA World Cup': 1,
@@ -48,198 +50,196 @@ const LEAGUE_PRIORITY = {
 const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
 
 /* ═══════════════════════════════════════════════════════════════════════
-   STYLE INJECTION — Pro v9.9
+   STYLE INJECTION — Pro v10.0 Modern
    ═══════════════════════════════════════════════════════════════════════ */
 const injectStyles = () => {
-  if (document.getElementById('mg9-css')) return;
+  if (document.getElementById('mg10-css')) return;
   const s = document.createElement('style');
-  s.id = 'mg9-css';
+  s.id = 'mg10-css';
   s.textContent = `
-    @keyframes mg9FadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes mg9SlideIn{from{opacity:0;transform:translateX(-6px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes mg9Pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.6)}}
-    @keyframes mg9ScorePop{0%{transform:scale(1)}40%{transform:scale(1.4);color:#fff}100%{transform:scale(1)}}
-    @keyframes mg9GoalFlash{0%{background:rgba(16,185,129,.2)}100%{background:transparent}}
-    @keyframes mg9LiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2)}50%{box-shadow:0 0 8px 1px rgba(239,68,68,.3)}}
-    @keyframes mg9Expand{from{opacity:0;max-height:0}to{opacity:1;max-height:800px}}
-    @keyframes mg9ToastIn{from{opacity:0;transform:translateY(12px) scale(.95)}to{opacity:1;transform:translateY(0) scale(1)}}
-    @keyframes mg9Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-120px) rotate(720deg);opacity:0}}
-    @keyframes mg9Shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes mg9StatusIn{from{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(.8)}}
-    @keyframes mg9Spin{to{transform:rotate(360deg)}}
-    @keyframes mg9StarPop{0%{transform:scale(1)}50%{transform:scale(1.4) rotate(15deg)}100%{transform:scale(1) rotate(0)}}
-    @keyframes mg9DropDownIn{from{opacity:0;transform:translateY(-5px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-    @keyframes mg9ToggleIn{from{opacity:0;max-height:0}to{opacity:1;max-height:2000px}}
+    @keyframes mg10FadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes mg10SlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    @keyframes mg10Pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.6)}}
+    @keyframes mg10ScorePop{0%{transform:scale(1)}40%{transform:scale(1.5);color:#fff;text-shadow:0 0 10px rgba(255,255,255,.5)}100%{transform:scale(1)}}
+    @keyframes mg10GoalFlash{0%{background:rgba(16,185,129,.2)}100%{background:transparent}}
+    @keyframes mg10LiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2)}50%{box-shadow:0 0 12px 1px rgba(239,68,68,.4)}}
+    @keyframes mg10Expand{from{opacity:0;max-height:0}to{opacity:1;max-height:1000px}}
+    @keyframes mg10ToastIn{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
+    @keyframes mg10ToastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-20px)}}
+    @keyframes mg10Confetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-150px) rotate(720deg);opacity:0}}
+    @keyframes mg10Shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes mg10StatusIn{from{opacity:0;transform:scale(.8)}15%{opacity:1;transform:scale(1.05)}25%{transform:scale(1)}75%{opacity:1}100%{opacity:0;transform:scale(.8)}}
+    @keyframes mg10Spin{to{transform:rotate(360deg)}}
+    @keyframes mg10StarPop{0%{transform:scale(1)}50%{transform:scale(1.4) rotate(15deg)}100%{transform:scale(1) rotate(0)}}
+    @keyframes mg10DropDownIn{from{opacity:0;transform:translateY(-8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
 
-    .mg9-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 100px;position:relative;color:var(--text-primary,#f1f5f9)}
-    .mg9-wrap{max-width:100%;margin:0 auto;padding:0 8px;position:relative;z-index:1}
+    .mg10-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 120px;position:relative;color:var(--text-primary,#f1f5f9)}
+    .mg10-wrap{max-width:560px;margin:0 auto;padding:0 12px;position:relative;z-index:1}
 
-    .mg9-hdr{position:sticky;top:0;z-index:50;background:color-mix(in srgb, var(--bg-deep,#0a0f1a) 92%, transparent);backdrop-filter:blur(12px) saturate(1.5);-webkit-backdrop-filter:blur(12px) saturate(1.5);padding:10px 0;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .mg9-hdr-title{display:flex;flex-direction:column;flex:1;min-width:0}
-    .mg9-hdr-title h1{margin:0;font-size:1rem;font-weight:900;letter-spacing:-.02em;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:4px}
-    .mg9-hdr-title .sub{font-size:.6rem;color:var(--text-muted,#64748b);font-weight:600;margin-top:1px}
-    .mg9-hdr-actions{display:flex;align-items:center;gap:4px}
-    .mg9-hdr-btn{width:32px;height:32px;border-radius:8px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:center;color:var(--text-muted,#64748b);cursor:pointer;transition:all .2s ease;-webkit-tap-highlight-color:transparent}
-    .mg9-hdr-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--border-hover,#334155)}
-    .mg9-hdr-btn.active{color:var(--accent,#10b981);border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)}
-    .mg9-spin{animation:mg9Spin .8s linear infinite}
+    .mg10-hdr{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.85);backdrop-filter:blur(16px) saturate(1.5);-webkit-backdrop-filter:blur(16px) saturate(1.5);padding:12px 0;border-bottom:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:space-between;gap:8px}
+    .mg10-hdr-title{display:flex;flex-direction:column;flex:1;min-width:0}
+    .mg10-hdr-title h1{margin:0;font-size:1.1rem;font-weight:900;letter-spacing:-.02em;color:var(--text-primary,#f1f5f9);display:flex;align-items:center;gap:6px}
+    .mg10-hdr-title .sub{font-size:.65rem;color:var(--text-muted,#64748b);font-weight:600;margin-top:2px}
+    .mg10-hdr-actions{display:flex;align-items:center;gap:6px}
+    .mg10-hdr-btn{width:36px;height:36px;border-radius:10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);display:flex;align-items:center;justify-content:center;color:var(--text-muted,#64748b);cursor:pointer;transition:all .2s ease;-webkit-tap-highlight-color:transparent}
+    .mg10-hdr-btn:hover{color:var(--text-primary,#f1f5f9);border-color:var(--accent,#10b981);transform:translateY(-1px)}
+    .mg10-hdr-btn.active{color:var(--accent,#10b981);border-color:rgba(16,185,129,.3);background:rgba(16,185,129,.05)}
+    .mg10-spin{animation:mg10Spin .8s linear infinite}
 
-    .mg9-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:10px 0}
-    .mg9-schip{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:6px 4px;text-align:center}
-    .mg9-schip .val{font-size:.9rem;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
-    .mg9-schip .val.live-c{color:#ef4444}.mg9-schip .val.total-c{color:var(--accent,#10b981)}.mg9-schip .val.fav-c{color:#f59e0b}
-    .mg9-schip .lbl{font-size:.45rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em;margin-top:2px}
+    .mg10-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:14px 0}
+    .mg10-schip{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:8px 6px;text-align:center;transition:transform .2s}
+    .mg10-schip:hover{transform:translateY(-2px)}
+    .mg10-schip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
+    .mg10-schip .val.live-c{color:#ef4444}.mg10-schip .val.total-c{color:var(--accent,#10b981)}.mg10-schip .val.fav-c{color:#f59e0b}
+    .mg10-schip .lbl{font-size:.5rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em;margin-top:3px}
 
-    .mg9-datenav{display:flex;align-items:center;justify-content:center;gap:2px;margin:0 auto 10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:3px;width:fit-content;position:relative}
-    .mg9-nav-btn{padding:6px 12px;border-radius:7px;border:none;background:transparent;color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s ease;font-family:inherit}
-    .mg9-nav-btn.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.2)}
-    .mg9-more-wrap{position:relative}
-    .mg9-more-btn{display:flex;align-items:center;gap:3px;padding:6px 10px;border-radius:7px;border:none;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);font-size:.66rem;font-weight:600;cursor:pointer;font-family:inherit}
-    .mg9-more-btn.open{background:rgba(16,185,129,.1);color:var(--accent,#10b981)}
-    .mg9-more-dropdown{position:absolute;top:calc(100% + 4px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:4px;z-index:50;min-width:160px;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:300px;overflow-y:auto;animation:mg9DropDownIn .2s ease-out both}
-    .mg9-more-item{display:block;width:100%;text-align:left;padding:6px 10px;border:none;border-radius:6px;background:none;color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
-    .mg9-more-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
-    .mg9-more-label{font-size:.55rem;font-weight:800;text-transform:uppercase;color:var(--text-muted,#64748b);opacity:.6;padding:6px 10px 2px;border-bottom:1px solid var(--border,#1e293b);margin-bottom:2px}
+    .mg10-datenav{display:flex;align-items:center;justify-content:center;gap:4px;margin:0 auto 14px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:4px;width:fit-content;position:relative;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+    .mg10-nav-btn{padding:8px 16px;border-radius:8px;border:none;background:transparent;color:var(--text-muted,#64748b);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .2s ease;font-family:inherit}
+    .mg10-nav-btn.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.3)}
+    .mg10-more-wrap{position:relative}
+    .mg10-more-btn{display:flex;align-items:center;gap:4px;padding:8px 12px;border-radius:8px;border:none;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;font-family:inherit}
+    .mg10-more-btn.open{background:rgba(16,185,129,.1);color:var(--accent,#10b981)}
+    .mg10-more-dropdown{position:absolute;top:calc(100% + 6px);right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:50;min-width:180px;box-shadow:0 12px 32px rgba(0,0,0,.5);max-height:320px;overflow-y:auto;animation:mg10DropDownIn .2s ease-out both}
+    .mg10-more-item{display:block;width:100%;text-align:left;padding:8px 12px;border:none;border-radius:8px;background:none;color:var(--text-muted,#64748b);font-size:.7rem;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+    .mg10-more-item:hover{background:rgba(255,255,255,.04)}
+    .mg10-more-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
+    .mg10-more-label{font-size:.55rem;font-weight:800;text-transform:uppercase;color:var(--text-muted,#64748b);opacity:.6;padding:8px 12px 4px;border-bottom:1px solid var(--border,#1e293b);margin-bottom:4px}
 
-    .mg9-tabs{display:flex;gap:2px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:2px;margin-bottom:10px}
-    .mg9-tab{flex:1;padding:6px 2px;border:none;border-radius:6px;background:transparent;color:var(--text-muted,#64748b);font-size:.62rem;font-weight:700;cursor:pointer;transition:all .2s ease;text-align:center;font-family:inherit;text-transform:uppercase}
-    .mg9-tab.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 6px rgba(16,185,129,.2)}
+    .mg10-tabs{display:flex;gap:4px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:4px;margin-bottom:14px}
+    .mg10-tab{flex:1;padding:8px 4px;border:none;border-radius:8px;background:transparent;color:var(--text-muted,#64748b);font-size:.65rem;font-weight:700;cursor:pointer;transition:all .2s ease;text-align:center;font-family:inherit;text-transform:uppercase}
+    .mg10-tab.active{background:var(--accent,#10b981);color:#fff;box-shadow:0 4px 12px rgba(16,185,129,.25)}
 
-    /* Smart Dropdown Filters */
-    .mg9-filter-wrap{position:relative;margin-bottom:12px;display:flex;gap:8px;align-items:center}
-    .mg9-filter-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:8px 12px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-primary,#f1f5f9);font-size:.7rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit}
-    .mg9-filter-btn:hover{border-color:var(--accent,#10b981)}
-    .mg9-filter-btn .left{display:flex;align-items:center;gap:6px}
-    .mg9-filter-btn .left img{width:14px;height:14px;object-fit:contain}
-    .mg9-filter-panel{position:absolute;top:calc(100% + 4px);left:0;right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:4px;z-index:40;box-shadow:0 8px 24px rgba(0,0,0,.4);max-height:240px;overflow-y:auto;animation:mg9DropDownIn .2s ease-out both}
-    .mg9-filter-item{display:flex;align-items:center;gap:6px;width:100%;text-align:left;padding:8px 10px;border:none;border-radius:6px;background:none;color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;font-family:inherit}
-    .mg9-filter-item:hover{background:rgba(255,255,255,.03)}
-    .mg9-filter-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
-    .mg9-filter-item img{width:14px;height:14px;object-fit:contain}
+    .mg10-filter-wrap{position:relative;margin-bottom:14px;display:flex;gap:8px;align-items:center}
+    .mg10-filter-btn{display:flex;align-items:center;justify-content:space-between;width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827);color:var(--text-primary,#f1f5f9);font-size:.72rem;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit}
+    .mg10-filter-btn:hover{border-color:var(--accent,#10b981)}
+    .mg10-filter-btn .left{display:flex;align-items:center;gap:8px}
+    .mg10-filter-btn .left img{width:16px;height:16px;object-fit:contain}
+    .mg10-filter-panel{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:6px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.5);max-height:280px;overflow-y:auto;animation:mg10DropDownIn .2s ease-out both}
+    .mg10-filter-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;border:none;border-radius:8px;background:none;color:var(--text-muted,#64748b);font-size:.7rem;font-weight:600;cursor:pointer;font-family:inherit}
+    .mg10-filter-item:hover{background:rgba(255,255,255,.03)}
+    .mg10-filter-item.active{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
+    .mg10-filter-item img{width:16px;height:16px;object-fit:contain}
 
-    .mg9-search-wrap{overflow:hidden;transition:max-height .3s ease,opacity .25s ease,margin .3s ease}
-    .mg9-search-wrap.shut{max-height:0;opacity:0;margin-bottom:0}
-    .mg9-search-wrap.open{max-height:50px;opacity:1;margin-bottom:10px}
-    .mg9-search{display:flex;align-items:center;gap:6px;width:100%;padding:8px 10px;border-radius:8px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827)}
-    .mg9-search input{flex:1;background:none;border:none;outline:none;color:var(--text-primary,#f1f5f9);font-size:.75rem;font-weight:500;font-family:inherit}
+    .mg10-search-wrap{overflow:hidden;transition:max-height .3s ease,opacity .25s ease,margin .3s ease}
+    .mg10-search-wrap.shut{max-height:0;opacity:0;margin-bottom:0}
+    .mg10-search-wrap.open{max-height:56px;opacity:1;margin-bottom:12px}
+    .mg10-search{display:flex;align-items:center;gap:8px;width:100%;padding:10px 14px;border-radius:10px;border:1px solid var(--border,#1e293b);background:var(--bg-card,#111827)}
+    .mg10-search input{flex:1;background:none;border:none;outline:none;color:var(--text-primary,#f1f5f9);font-size:.78rem;font-weight:500;font-family:inherit}
 
-    .mg9-rescue{width:100%;padding:8px 10px;border-radius:8px;border:1px solid rgba(251,191,36,.15);background:linear-gradient(135deg,rgba(251,191,36,.04),rgba(251,191,36,.01));margin-bottom:8px;display:flex;align-items:center;gap:8px}
-    .mg9-rescue-icon{width:24px;height:24px;border-radius:6px;background:rgba(251,191,36,.08);display:flex;align-items:center;justify-content:center;color:#fbbf24;flex-shrink:0}
-    .mg9-rescue-title{font-size:.66rem;font-weight:700;color:#fbbf24}
-    .mg9-rescue-sub{font-size:.55rem;color:var(--text-muted,#64748b)}
+    .mg10-rescue{width:100%;padding:10px 14px;border-radius:10px;border:1px solid rgba(251,191,36,.15);background:linear-gradient(135deg,rgba(251,191,36,.04),rgba(251,191,36,.01));margin-bottom:12px;display:flex;align-items:center;gap:10px}
+    .mg10-rescue-icon{width:28px;height:28px;border-radius:8px;background:rgba(251,191,36,.08);display:flex;align-items:center;justify-content:center;color:#fbbf24;flex-shrink:0}
+    .mg10-rescue-title{font-size:.68rem;font-weight:700;color:#fbbf24}
+    .mg10-rescue-sub{font-size:.58rem;color:var(--text-muted,#64748b)}
 
-    .mg9-section{margin-bottom:14px;animation:mg9FadeIn .3s ease both}
-    .mg9-league-hd{display:flex;align-items:center;gap:5px;margin-bottom:5px;padding:0 2px}
-    .mg9-league-hd img{width:12px;height:12px;object-fit:contain;border-radius:2px;flex-shrink:0}
-    .mg9-league-hd span{font-size:.65rem;font-weight:700;color:var(--text-muted,#64748b)}
-    .mg9-league-hd .cnt{margin-left:auto;font-size:.5rem;font-weight:600;color:var(--text-muted,#64748b);opacity:.4}
+    .mg10-section{margin-bottom:16px;animation:mg10FadeIn .4s cubic-bezier(.22,1,.36,1) both}
+    .mg10-league-hd{display:flex;align-items:center;gap:6px;margin-bottom:6px;padding:0 4px}
+    .mg10-league-hd img{width:14px;height:14px;object-fit:contain;border-radius:3px;flex-shrink:0}
+    .mg10-league-hd span{font-size:.68rem;font-weight:800;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.03em}
+    .mg10-league-hd .cnt{margin-left:auto;font-size:.52rem;font-weight:700;color:var(--text-muted,#64748b);opacity:.4;background:rgba(255,255,255,.03);padding:2px 6px;border-radius:4px}
 
-    .mg9-card{position:relative;overflow:hidden;padding:8px 10px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;margin-bottom:4px;transition:all .2s cubic-bezier(.22,1,.36,1);animation:mg9SlideIn .3s ease both;cursor:pointer}
-    .mg9-card:hover{background:rgba(255,255,255,.02);border-color:var(--border-hover,#334155)}
-    .mg9-card.live{border-color:rgba(239,68,68,.2);animation:mg9LiveGlow 2.5s ease-in-out infinite,mg9SlideIn .3s ease both}
-    .mg9-card.finished{opacity:.6}
-    .mg9-card.started{border-color:rgba(245,158,11,.2)}
-    .mg9-card.scheduled{border-left:2px solid rgba(59,130,246,.25)}
-    .mg9-card.expanded{border-radius:10px 10px 0 0;margin-bottom:0;border-color:rgba(16,185,129,.2)}
-    .mg9-card.goal-flash{animation:mg9GoalFlash 2s ease-out both}
-    .mg9-left-bar{position:absolute;left:0;top:0;bottom:0;width:2px;border-radius:0 2px 2px 0}
+    .mg10-card{position:relative;overflow:hidden;padding:10px 12px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;margin-bottom:6px;transition:all .25s cubic-bezier(.22,1,.36,1);animation:mg10SlideIn .3s ease both;cursor:pointer}
+    .mg10-card:hover{background:rgba(255,255,255,.02);border-color:var(--border-hover,#334155);transform:translateY(-1px)}
+    .mg10-card.live{border-color:rgba(239,68,68,.2);animation:mg10LiveGlow 2.5s ease-in-out infinite,mg10SlideIn .3s ease both}
+    .mg10-card.finished{opacity:.65}
+    .mg10-card.started{border-color:rgba(245,158,11,.2)}
+    .mg10-card.scheduled{border-left:3px solid rgba(59,130,246,.25)}
+    .mg10-card.expanded{border-radius:12px 12px 0 0;margin-bottom:0;border-color:rgba(16,185,129,.2)}
+    .mg10-card.goal-flash{animation:mg10GoalFlash 2s ease-out both}
+    .mg10-left-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
 
-    .mg9-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
-    .mg9-status{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:5px;font-size:.5rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
-    .mg9-status.live-s{color:#ef4444;background:rgba(239,68,68,.1)}
-    .mg9-status.ft-s{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
-    .mg9-status.time-s{color:var(--text-muted,#64748b);background:rgba(255,255,255,.04);font-size:.6rem}
-    .mg9-status.started-s{color:#f59e0b;background:rgba(245,158,11,.1);font-size:.55rem}
-    .mg9-dot{width:4px;height:4px;border-radius:50%;background:#ef4444;animation:mg9Pulse 1.2s ease-in-out infinite;flex-shrink:0}
-    .mg9-card-actions{display:flex;align-items:center;gap:2px}
-    .mg9-icon-btn{display:flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:6px;border:none;background:transparent;color:var(--text-muted,#64748b);cursor:pointer;transition:all .15s ease;opacity:.4}
-    .mg9-icon-btn.fav.active{color:#f59e0b;opacity:1;animation:mg9StarPop .4s ease}
+    .mg10-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .mg10-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:.52rem;font-weight:800;letter-spacing:.02em;text-transform:uppercase}
+    .mg10-status.live-s{color:#ef4444;background:rgba(239,68,68,.1)}
+    .mg10-status.ft-s{color:var(--accent,#10b981);background:rgba(16,185,129,.08)}
+    .mg10-status.time-s{color:var(--text-muted,#64748b);background:rgba(255,255,255,.04);font-size:.62rem}
+    .mg10-status.started-s{color:#f59e0b;background:rgba(245,158,11,.1);font-size:.56rem}
+    .mg10-dot{width:5px;height:5px;border-radius:50%;background:#ef4444;animation:mg10Pulse 1.2s ease-in-out infinite;flex-shrink:0}
+    .mg10-card-actions{display:flex;align-items:center;gap:4px}
+    .mg10-icon-btn{display:flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:8px;border:none;background:transparent;color:var(--text-muted,#64748b);cursor:pointer;transition:all .15s ease;opacity:.4}
+    .mg10-icon-btn.fav.active{color:#f59e0b;opacity:1;animation:mg10StarPop .4s ease}
 
-    .mg9-teams{display:flex;align-items:center;gap:4px}
-    .mg9-team-col{flex:1;display:flex;flex-direction:column;gap:1px;min-width:0}
-    .mg9-team-col.home{align-items:flex-end}
-    .mg9-team-col.away{align-items:flex-start}
-    .mg9-team-row{display:flex;align-items:center;gap:4px;min-width:0}
-    .mg9-team-col.home .mg9-team-row{flex-direction:row-reverse}
-    .mg9-crest{width:16px;height:16px;object-fit:contain;flex-shrink:0;border-radius:2px}
-    .mg9-team-name{font-size:.72rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.1}
-    .mg9-team-col.home .mg9-team-name{text-align:right}
+    .mg10-teams{display:flex;align-items:center;gap:6px}
+    .mg10-team-col{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+    .mg10-team-col.home{align-items:flex-end}
+    .mg10-team-col.away{align-items:flex-start}
+    .mg10-team-row{display:flex;align-items:center;gap:6px;min-width:0}
+    .mg10-team-col.home .mg10-team-row{flex-direction:row-reverse}
+    .mg10-crest{width:18px;height:18px;object-fit:contain;flex-shrink:0;border-radius:3px}
+    .mg10-team-name{font-size:.76rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.2}
+    .mg10-team-col.home .mg10-team-name{text-align:right}
     
-    .mg9-score-box{width:50px;flex-shrink:0;text-align:center;display:flex;align-items:center;justify-content:center}
-    .mg9-scores{display:flex;align-items:center;gap:4px}
-    .mg9-score-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:.9rem;font-weight:800;min-width:16px;text-align:center;line-height:1}
-    .mg9-score-num.live-score{color:#ef4444}
-    .mg9-score-num.ft-score{color:var(--accent,#10b981)}
-    .mg9-score-num.pop{animation:mg9ScorePop .45s cubic-bezier(.22,1,.36,1) both}
-    .mg9-sep{color:var(--text-muted,#64748b);font-size:.6rem;font-weight:700;opacity:.35}
-    .mg9-vs{font-size:.6rem;font-weight:800;color:var(--text-muted,#64748b);opacity:.25}
+    .mg10-score-box{width:58px;flex-shrink:0;text-align:center;display:flex;align-items:center;justify-content:center}
+    .mg10-scores{display:flex;align-items:center;gap:5px}
+    .mg10-score-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:1rem;font-weight:900;min-width:18px;text-align:center;line-height:1;transition:color .2s}
+    .mg10-score-num.live-score{color:#ef4444}
+    .mg10-score-num.ft-score{color:var(--accent,#10b981)}
+    .mg10-score-num.pop{animation:mg10ScorePop .5s cubic-bezier(.22,1,.36,1) both}
+    .mg10-sep{color:var(--text-muted,#64748b);font-size:.64rem;font-weight:700;opacity:.35}
+    .mg10-vs{font-size:.62rem;font-weight:800;color:var(--text-muted,#64748b);opacity:.25}
 
-    .mg9-comp-row{display:flex;align-items:center;gap:4px;margin-top:4px;padding-top:3px;border-top:1px solid rgba(255,255,255,.03)}
-    .mg9-comp-row img{width:10px;height:10px;object-fit:contain;flex-shrink:0}
-    .mg9-comp-row span{font-size:.5rem;color:var(--text-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg10-comp-row{display:flex;align-items:center;gap:5px;margin-top:6px;padding-top:4px;border-top:1px solid rgba(255,255,255,.03)}
+    .mg10-comp-row img{width:11px;height:11px;object-fit:contain;flex-shrink:0}
+    .mg10-comp-row span{font-size:.52rem;color:var(--text-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    .mg9-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.5);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px);border-radius:inherit;z-index:3;pointer-events:none}
-    .mg9-overlay-badge{padding:6px 16px;border-radius:8px;color:#fff;font-weight:800;font-size:.7rem;letter-spacing:.05em;display:flex;align-items:center;gap:5px;animation:mg9StatusIn 3s ease both}
+    .mg10-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.6);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-radius:inherit;z-index:3;pointer-events:none}
+    .mg10-overlay-badge{padding:8px 20px;border-radius:10px;color:#fff;font-weight:800;font-size:.72rem;letter-spacing:.05em;display:flex;align-items:center;gap:6px;animation:mg10StatusIn 3s ease both}
 
-    .mg9-expanded{background:var(--bg-surface,#0d1321);border:1px solid var(--border,#1e293b);border-top:none;border-radius:0 0 10px 10px;overflow:hidden;animation:mg9Expand .3s ease-out both}
-    .mg9-exp-section{padding:8px 10px 2px;font-size:.5rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.05em}
-    .mg9-exp-row{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem}
-    .mg9-exp-row:last-child{border-bottom:none}
-    .mg9-exp-label{color:var(--text-muted,#64748b);font-weight:600}
-    .mg9-exp-val{color:var(--text-primary,#f1f5f9);font-weight:700;font-family:var(--font-display,system-ui)}
-    .mg9-stat-row{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:4px 10px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.65rem}
-    .mg9-stat-home{text-align:right;color:var(--text-primary);font-weight:700}
-    .mg9-stat-away{text-align:left;color:var(--text-primary);font-weight:700}
-    .mg9-stat-label{text-align:center;color:var(--text-muted);font-weight:600;font-size:.6rem}
-    .mg9-no-data{padding:10px;text-align:center;color:var(--text-muted,#64748b);font-size:.6rem;opacity:.5}
+    .mg10-expanded{background:var(--bg-surface,#0d1321);border:1px solid var(--border,#1e293b);border-top:none;border-radius:0 0 12px 12px;overflow:hidden;animation:mg10Expand .35s ease-out both}
+    .mg10-exp-section{padding:10px 14px 4px;font-size:.52rem;font-weight:800;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em}
+    .mg10-exp-row{display:flex;justify-content:space-between;align-items:center;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.68rem}
+    .mg10-exp-row:last-child{border-bottom:none}
+    .mg10-exp-label{color:var(--text-muted,#64748b);font-weight:600}
+    .mg10-exp-val{color:var(--text-primary,#f1f5f9);font-weight:700;font-family:var(--font-display,system-ui)}
+    .mg10-stat-row{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:6px 14px;border-bottom:1px solid rgba(255,255,255,.03);font-size:.68rem}
+    .mg10-stat-home{text-align:right;color:var(--text-primary);font-weight:700}
+    .mg10-stat-away{text-align:left;color:var(--text-primary);font-weight:700}
+    .mg10-stat-label{text-align:center;color:var(--text-muted);font-weight:600;font-size:.62rem}
+    .mg10-no-data{padding:14px;text-align:center;color:var(--text-muted,#64748b);font-size:.7rem;opacity:.5}
 
-    .mg9-empty{display:flex;flex-direction:column;align-items:center;gap:6px;padding:30px 20px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;text-align:center}
-    .mg9-empty-icon{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);margin-bottom:2px}
-    .mg9-empty p{color:var(--text-muted,#64748b);font-size:.7rem;margin:0;font-weight:600}
+    .mg10-empty{display:flex;flex-direction:column;align-items:center;gap:10px;padding:40px 24px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:14px;text-align:center}
+    .mg10-empty-icon{width:52px;height:52px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);margin-bottom:4px}
+    .mg10-empty p{color:var(--text-muted,#64748b);font-size:.76rem;margin:0;font-weight:600}
 
-    .mg9-sk{height:40px;border-radius:10px;background:linear-gradient(90deg,var(--bg-surface,#0d1321) 25%,var(--bg-card,#111827) 50%,var(--bg-surface,#0d1321) 75%);background-size:200% 100%;animation:mg9Shimmer 1.5s ease-in-out infinite;margin-bottom:4px}
+    .mg10-sk{height:48px;border-radius:12px;background:linear-gradient(90deg,var(--bg-surface,#0d1321) 25%,var(--bg-card,#111827) 50%,var(--bg-surface,#0d1321) 75%);background-size:200% 100%;animation:mg10Shimmer 1.5s ease-in-out infinite;margin-bottom:6px}
 
-    .mg9-toast-wrap{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:6px;pointer-events:none;width:calc(100% - 20px);max-width:360px}
-    .mg9-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.15);border-radius:10px;padding:8px 12px;color:#fff;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);box-shadow:0 8px 24px rgba(0,0,0,.5);animation:mg9ToastIn .3s cubic-bezier(.22,1,.36,1) both;font-size:.7rem}
-    .mg9-toast-inner{display:flex;align-items:flex-start;gap:6px}
-    .mg9-toast-icon{font-size:1rem;flex-shrink:0;line-height:1}
-    .mg9-toast-title{font-weight:800;font-size:.6rem;text-transform:uppercase;letter-spacing:.03em;margin-bottom:1px}
-    .mg9-toast-msg{font-weight:600;line-height:1.3;opacity:.95}
-    .mg9-toast-detail{font-size:.55rem;opacity:.6;margin-top:1px}
-    .mg9-toast-score{font-family:var(--font-display,system-ui);font-weight:800;font-size:.9rem;flex-shrink:0;margin-left:auto;text-shadow:0 0 8px rgba(255,255,255,.2)}
+    .mg10-toast-wrap{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:8px;pointer-events:none;width:calc(100% - 24px);max-width:380px}
+    .mg10-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.1);border-radius:14px;padding:12px 16px;color:#fff;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);box-shadow:0 10px 30px rgba(0,0,0,.5);animation:mg10ToastIn .35s cubic-bezier(.22,1,.36,1) both;font-size:.74rem}
+    .mg10-toast.out{animation:mg10ToastOut .25s ease both}
+    .mg10-toast-inner{display:flex;align-items:flex-start;gap:10px}
+    .mg10-toast-icon{font-size:1.2rem;flex-shrink:0;line-height:1}
+    .mg10-toast-title{font-weight:800;font-size:.62rem;text-transform:uppercase;letter-spacing:.04em;margin-bottom:2px}
+    .mg10-toast-msg{font-weight:600;line-height:1.3;opacity:.95}
+    .mg10-toast-detail{font-size:.6rem;opacity:.7;margin-top:2px}
+    .mg10-toast-score{font-family:var(--font-display,system-ui);font-weight:800;font-size:1rem;flex-shrink:0;margin-left:auto;text-shadow:0 0 10px rgba(255,255,255,.3)}
 
-    .mg9-confetti{position:fixed;inset:0;pointer-events:none;z-index:400;overflow:hidden}
-    .mg9-confetti-p{position:absolute;width:6px;height:6px;border-radius:2px;animation:mg9Confetti 1.4s ease-out forwards}
+    .mg10-confetti{position:fixed;inset:0;pointer-events:none;z-index:400;overflow:hidden}
+    .mg10-confetti-p{position:absolute;width:8px;height:8px;border-radius:2px;animation:mg10Confetti 1.6s ease-out forwards}
 
-    .mg9-tbl-wrap{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;overflow:hidden;margin-bottom:8px}
-    .mg9-tbl{width:100%;border-collapse:collapse;font-size:.65rem}
-    .mg9-tbl thead{background:rgba(255,255,255,.02)}
-    .mg9-tbl th{padding:6px 4px;font-size:.5rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;text-align:left;border-bottom:1px solid var(--border,#1e293b)}
-    .mg9-tbl th.c{text-align:center;width:20px}
-    .mg9-tbl td{padding:5px 4px;border-bottom:1px solid rgba(255,255,255,.025);vertical-align:middle}
-    .mg9-tbl tr:last-child td{border-bottom:none}
-    .mg9-tbl .pos{font-weight:700;color:var(--text-muted,#64748b);text-align:center;font-variant-numeric:tabular-nums}
-    .mg9-tbl .tc{display:flex;align-items:center;gap:4px;min-width:0}
-    .mg9-tbl .tc img{width:14px;height:14px;object-fit:contain;flex-shrink:0;border-radius:2px}
-    .mg9-tbl .tc span{font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .mg9-tbl .sc{text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-muted,#64748b)}
-    .mg9-tbl .pc{text-align:center;font-weight:800;color:var(--text-primary,#f1f5f9)}
+    .mg10-tbl-wrap{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;overflow:hidden;margin-bottom:12px;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+    .mg10-tbl{width:100%;border-collapse:collapse;font-size:.7rem}
+    .mg10-tbl thead{background:rgba(255,255,255,.02)}
+    .mg10-tbl th{padding:8px 6px;font-size:.52rem;font-weight:800;color:var(--text-muted,#64748b);text-transform:uppercase;text-align:left;border-bottom:1px solid var(--border,#1e293b)}
+    .mg10-tbl th.c{text-align:center;width:24px}
+    .mg10-tbl td{padding:7px 6px;border-bottom:1px solid rgba(255,255,255,.025);vertical-align:middle}
+    .mg10-tbl tr:last-child td{border-bottom:none}
+    .mg10-tbl tr:hover{background:rgba(255,255,255,.02)}
+    .mg10-tbl .pos{font-weight:800;color:var(--text-muted,#64748b);text-align:center;font-variant-numeric:tabular-nums}
+    .mg10-tbl .tc{display:flex;align-items:center;gap:6px;min-width:0}
+    .mg10-tbl .tc img{width:16px;height:16px;object-fit:contain;flex-shrink:0;border-radius:3px}
+    .mg10-tbl .tc span{font-weight:600;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg10-tbl .sc{text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-muted,#64748b)}
+    .mg10-tbl .pc{text-align:center;font-weight:800;color:var(--text-primary,#f1f5f9)}
 
-    .mg9-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(100px,1fr));gap:6px}
-    .mg9-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:10px 6px;text-align:center}
-    .mg9-team-card img{width:28px;height:28px;object-fit:contain;margin:0 auto 4px;display:block}
-    .mg9-team-card .name{font-size:.6rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .mg10-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:8px}
+    .mg10-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:12px 8px;text-align:center;transition:transform .2s}
+    .mg10-team-card:hover{transform:translateY(-2px)}
+    .mg10-team-card img{width:32px;height:32px;object-fit:contain;margin:0 auto 6px;display:block}
+    .mg10-team-card .name{font-size:.64rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
-    .mg9-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px}
-    .mg9-comp-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:10px;padding:10px;display:flex;align-items:center;gap:8px;cursor:pointer}
-    .mg9-comp-card img{width:24px;height:24px;object-fit:contain;flex-shrink:0}
-    .mg9-comp-card .cname{font-size:.7rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .mg9-comp-card .carea{font-size:.5rem;color:var(--text-muted,#64748b)}
+    .mg10-show-more{width:100%;padding:10px;border:none;border-radius:10px;background:rgba(255,255,255,.02);color:var(--text-muted,#64748b);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:6px}
+    .mg10-show-more:hover{background:rgba(16,185,129,.05);color:var(--accent,#10b981)}
 
-    .mg9-show-more{width:100%;padding:10px;border:none;border-radius:10px;background:rgba(255,255,255,.02);color:var(--text-muted,#64748b);font-size:.65rem;font-weight:700;cursor:pointer;transition:all .2s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:4px}
-    .mg9-show-more:hover{background:rgba(16,185,129,.05);color:var(--accent,#10b981)}
-
-    @media(max-width:380px){.mg9-team-name{font-size:.68rem}.mg9-score-num{font-size:.85rem}.mg9-crest{width:14px;height:14px}}
+    @media(max-width:380px){.mg10-team-name{font-size:.72rem}.mg10-score-num{font-size:.92rem}.mg10-crest{width:16px;height:16px}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
   `;
   document.head.appendChild(s);
@@ -296,7 +296,7 @@ function useToasts() {
   const timers = useRef(new Map());
   const add = useCallback(t => {
     const id = ++idRef.current;
-    setToasts(p => [...p.slice(-1), { ...t, id }]);
+    setToasts(p => [...p.slice(-2), { ...t, id }]);
     timers.current.set(id, setTimeout(() => { setToasts(p => p.filter(x => x.id !== id)); timers.current.delete(id); }, t.dur || 3500));
     return id;
   }, []);
@@ -311,7 +311,7 @@ function useToasts() {
 function ToastContainer({ toasts, onDismiss }) {
   if (!toasts.length) return null;
   return (
-    <div className="mg9-toast-wrap">
+    <div className="mg10-toast-wrap">
       {toasts.map(t => {
         const isGoal = t.type === 'goal', isRescue = t.type === 'rescue';
         let bg, icon;
@@ -323,15 +323,15 @@ function ToastContainer({ toasts, onDismiss }) {
           icon = t.st === 'ft' ? '🏁' : t.st === 'ht' ? '⏸️' : '⚡';
         }
         return (
-          <div key={t.id} className="mg9-toast" style={{ background: bg }} onClick={() => onDismiss(t.id)}>
-            <div className="mg9-toast-inner">
-              <span className="mg9-toast-icon">{icon}</span>
+          <div key={t.id} className="mg10-toast" style={{ background: bg }} onClick={() => onDismiss(t.id)}>
+            <div className="mg10-toast-inner">
+              <span className="mg10-toast-icon">{icon}</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="mg9-toast-title">{isRescue ? 'AUTO-SWITCH' : isGoal ? 'GOAL!' : t.st === 'ft' ? 'FULL TIME' : t.st === 'ht' ? 'HALF TIME' : 'KICK OFF'}</div>
-                {t.msg && <div className="mg9-toast-msg">{t.msg}</div>}
-                {t.detail && <div className="mg9-toast-detail">{t.detail}</div>}
+                <div className="mg10-toast-title">{isRescue ? 'AUTO-SWITCH' : isGoal ? 'GOAL!' : t.st === 'ft' ? 'FULL TIME' : t.st === 'ht' ? 'HALF TIME' : 'LIVE ACTION'}</div>
+                {t.msg && <div className="mg10-toast-msg">{t.msg}</div>}
+                {t.detail && <div className="mg10-toast-detail">{t.detail}</div>}
               </div>
-              {t.score && <div className="mg9-toast-score">{t.score}</div>}
+              {t.score && <div className="mg10-toast-score">{t.score}</div>}
             </div>
           </div>
         );
@@ -343,10 +343,10 @@ function ToastContainer({ toasts, onDismiss }) {
 function Confetti({ active }) {
   if (!active) return null;
   const colors = ['#ef4444','#10b981','#f59e0b','#3b82f6','#a855f7','#ec4899'];
-  const p = Array.from({ length: 18 }, (_, i) => ({ left: 8 + Math.random() * 84, bottom: 60, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
+  const p = Array.from({ length: 24 }, (_, i) => ({ left: 8 + Math.random() * 84, bottom: 80, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
   return (
-    <div className="mg9-confetti">
-      {p.map((x, i) => <div key={i} className="mg9-confetti-p" style={{ left: x.left + '%', bottom: x.bottom + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
+    <div className="mg10-confetti">
+      {p.map((x, i) => <div key={i} className="mg10-confetti-p" style={{ left: x.left + '%', bottom: x.bottom + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
     </div>
   );
 }
@@ -378,19 +378,17 @@ function normalizeMatch(raw, isPrimary) {
   if (rawDate) {
     try {
       const dt = new Date(rawDate);
-      kickoff = formatTime(rawDate); // ★ Use global formatTime for consistency
+      kickoff = formatTime(rawDate); 
       timestamp = dt.getTime();
     } catch {}
   } else if (raw.kickoff) {
     kickoff = raw.kickoff;
   }
 
-  // ★ FIX: Inline status checks to avoid dependency scope issues
   const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE');
   const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
   const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN');
   
-  // ★ NEW: Calculate if match has started but has no live coverage
   let isStarted = false;
   if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
     isStarted = true;
@@ -402,8 +400,8 @@ function normalizeMatch(raw, isPrimary) {
   return {
     id, dateStr, kickoff, timestamp,
     status, isLive, isHT, isFinished,
-    minute: raw.minute || raw.elapsed || null, // ★ FIX: Restore minute property
-    isStarted, // ★ NEW: Add isStarted flag
+    minute: raw.minute || raw.elapsed || null, 
+    isStarted, 
     homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
     awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
     homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
@@ -420,13 +418,12 @@ function normalizeMatch(raw, isPrimary) {
    UI COMPONENTS
    ═══════════════════════════════════════════════════════════════════════ */
 function ScoreBreakdown({ match }) {
-  // ★ NEW: Show message if match started but has no live coverage
   if (match.isStarted && !match.isLive) {
     return (
-      <div className="mg9-no-data" style={{ padding: '20px', textAlign: 'center' }}>
-        <Clock size={18} style={{ marginBottom: '8px', color: 'var(--text-muted)' }} />
+      <div className="mg10-no-data" style={{ padding: '24px', textAlign: 'center' }}>
+        <Clock size={20} style={{ marginBottom: '8px', color: 'var(--text-muted)' }} />
         <div style={{ color: 'var(--text-primary)', fontWeight: 700, marginBottom: '4px' }}>Match in Progress</div>
-        <div style={{ color: 'var(--text-muted)', fontSize: '.7rem' }}>Live coverage not available. Results will be shown at Full Time.</div>
+        <div style={{ color: 'var(--text-muted)', fontSize: '.72rem' }}>Live coverage not available. Results will be shown at Full Time.</div>
       </div>
     );
   }
@@ -442,27 +439,27 @@ function ScoreBreakdown({ match }) {
   const hasScoreData = periods.some(p => p.h != null || p.a != null);
   const hasStatsData = stats.length > 0;
   
-  if (!hasScoreData && !hasStatsData) return <div className="mg9-no-data">Details appear once the match begins</div>;
+  if (!hasScoreData && !hasStatsData) return <div className="mg10-no-data">Details appear once the match begins</div>;
   
   return (
-    <div style={{ padding: '4px 0 0' }}>
+    <div style={{ padding: '6px 0 2px' }}>
       {hasScoreData && (
         <>
-          <div className="mg9-exp-section">Score Breakdown</div>
+          <div className="mg10-exp-section">Score Breakdown</div>
           {periods.filter(p => p.h != null || p.a != null).map(p => (
-            <div key={p.l} className="mg9-exp-row"><span className="mg9-exp-label">{p.l}</span><span className="mg9-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
+            <div key={p.l} className="mg10-exp-row"><span className="mg10-exp-label">{p.l}</span><span className="mg10-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
           ))}
         </>
       )}
       
       {hasStatsData && (
         <>
-          <div className="mg9-exp-section">Match Stats</div>
+          <div className="mg10-exp-section">Match Stats</div>
           {stats.map((stat, i) => (
-            <div key={i} className="mg9-stat-row">
-              <span className="mg9-stat-home">{stat.home ?? '-'}</span>
-              <span className="mg9-stat-label">{stat.type}</span>
-              <span className="mg9-stat-away">{stat.away ?? '-'}</span>
+            <div key={i} className="mg10-stat-row">
+              <span className="mg10-stat-home">{stat.home ?? '-'}</span>
+              <span className="mg10-stat-label">{stat.type}</span>
+              <span className="mg10-stat-away">{stat.away ?? '-'}</span>
             </div>
           ))}
         </>
@@ -483,7 +480,7 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
   const sa = statusAnims.get(id);
   const popSide = scorePops.get(id);
 
-  let cls = 'mg9-card';
+  let cls = 'mg10-card';
   if (isLive) cls += ' live';
   else if (isStarted) cls += ' started';
   else if (isFt) cls += ' finished';
@@ -496,60 +493,60 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
 
   return (
     <div>
-      <div className={cls} style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 12 : 10 }} onClick={() => onToggle(isExp ? null : m.id)}>
-        {(isLive || isStarted || isFt) && <div className="mg9-left-bar" style={{ background: barColor }} />}
-        <div className="mg9-card-top">
+      <div className={cls} style={{ animationDelay: idx * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 14 : 12 }} onClick={() => onToggle(isExp ? null : m.id)}>
+        {(isLive || isStarted || isFt) && <div className="mg10-left-bar" style={{ background: barColor }} />}
+        <div className="mg10-card-top">
           <div>
-            {isLive && <span className="mg9-status live-s"><span className="mg9-dot" /> {m.minute != null ? `${m.minute}'` : 'LIVE'}</span>}
-            {isStarted && <span className="mg9-status started-s"><Clock size={8} /> STARTED</span>}
-            {isHT && <span className="mg9-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.08)' }}>HT</span>}
-            {isFt && <span className="mg9-status ft-s">FT</span>}
-            {isSched && <span className="mg9-status time-s">{m.kickoff}</span>}
+            {isLive && <span className="mg10-status live-s"><span className="mg10-dot" /> {m.minute != null ? `${m.minute}'` : 'LIVE'}</span>}
+            {isStarted && <span className="mg10-status started-s"><Clock size={9} /> STARTED</span>}
+            {isHT && <span className="mg10-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.08)' }}>HT</span>}
+            {isFt && <span className="mg10-status ft-s">FT</span>}
+            {isSched && <span className="mg10-status time-s">{m.kickoff}</span>}
           </div>
-          <div className="mg9-card-actions" onClick={e => e.stopPropagation()}>
-            <button className={`mg9-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
-              <Star size={12} fill={isFav ? '#f59e0b' : 'none'} />
+          <div className="mg10-card-actions" onClick={e => e.stopPropagation()}>
+            <button className={`mg10-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
+              <Star size={14} fill={isFav ? '#f59e0b' : 'none'} />
             </button>
           </div>
         </div>
-        <div className="mg9-teams">
-          <div className="mg9-team-col home">
-            <div className="mg9-team-row">
-              {m.homeLogo && <img className="mg9-crest" src={m.homeLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg9-team-name">{m.homeName}</span>
+        <div className="mg10-teams">
+          <div className="mg10-team-col home">
+            <div className="mg10-team-row">
+              {m.homeLogo && <img className="mg10-crest" src={m.homeLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              <span className="mg10-team-name">{m.homeName}</span>
             </div>
           </div>
-          <div className="mg9-score-box">
+          <div className="mg10-score-box">
             {(isLive || isHT || isFt) ? (
-              <div className="mg9-scores">
-                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${m.homeScore}-${popSide}`}>{m.homeScore ?? 0}</span>
-                <span className="mg9-sep">–</span>
-                <span className={`mg9-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${m.awayScore}-${popSide}`}>{m.awayScore ?? 0}</span>
+              <div className="mg10-scores">
+                <span className={`mg10-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${m.homeScore}-${popSide}`}>{m.homeScore ?? 0}</span>
+                <span className="mg10-sep">–</span>
+                <span className={`mg10-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${m.awayScore}-${popSide}`}>{m.awayScore ?? 0}</span>
               </div>
-            ) : <span className="mg9-vs">VS</span>}
+            ) : <span className="mg10-vs">VS</span>}
           </div>
-          <div className="mg9-team-col away">
-            <div className="mg9-team-row">
-              {m.awayLogo && <img className="mg9-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-              <span className="mg9-team-name">{m.awayName}</span>
+          <div className="mg10-team-col away">
+            <div className="mg10-team-row">
+              {m.awayLogo && <img className="mg10-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              <span className="mg10-team-name">{m.awayName}</span>
             </div>
           </div>
         </div>
-        <div className="mg9-comp-row">
+        <div className="mg10-comp-row">
           {m.leagueLogo && <img src={m.leagueLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{m.leagueName}</span>
         </div>
         {sa && (
-          <div className="mg9-overlay">
-            <div className="mg9-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>
-              {sa.type === 'ht' && <><Pause size={12} /> HALF TIME</>}
-              {sa.type === 'ft' && <><Flag size={12} /> FULL TIME</>}
-              {sa.type === 'live' && <><Zap size={12} /> KICK OFF</>}
+          <div className="mg10-overlay">
+            <div className="mg10-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>
+              {sa.type === 'ht' && <><Pause size={14} /> HALF TIME</>}
+              {sa.type === 'ft' && <><Flag size={14} /> FULL TIME</>}
+              {sa.type === 'live' && <><Zap size={14} /> KICK OFF</>}
             </div>
           </div>
         )}
       </div>
-      {isExp && <div className="mg9-expanded"><ScoreBreakdown match={m} /></div>}
+      {isExp && <div className="mg10-expanded"><ScoreBreakdown match={m} /></div>}
     </div>
   );
 }
@@ -560,12 +557,12 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
 export default function MasterGames() {
   injectStyles();
 
-  // Backup Context (always runs silently in the background)
+  // Backup Context
   const { fixtures: backupRaw, liveMatches: backupLive, competitions, loading: backupLoading, lastUpdated, loadDateFixtures, getStandings, getTeams, refreshFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   
-  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg9_favs') || '[]')); } catch { return new Set(); } });
-  const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem('mg9_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
+  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg10_favs') || '[]')); } catch { return new Set(); } });
+  const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem('mg10_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
   const isFav = useCallback(id => favs.has(String(id)), [favs]);
 
   /* ── State ── */
@@ -586,15 +583,19 @@ export default function MasterGames() {
   const [rescued, setRescued] = useState(false);
   const [moreDatesOpen, setMoreDatesOpen] = useState(false);
   const [leagueDropdownOpen, setLeagueDropdownOpen] = useState(false);
-  const [showOtherMatches, setShowOtherMatches] = useState(false);
   const rescueToastSent = useRef(false);
+  const welcomeToastShown = useRef(false);
   const [scorePops, setScorePops] = useState(new Map());
   const [flashGoals, setFlashGoals] = useState(new Set());
   const [statusAnims, setStatusAnims] = useState(new Map());
 
-  // ★ NEW: State for live filter and per-league toggles
   const [showLiveOnly, setShowLiveOnly] = useState(false);
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
+  
+  // Standings/Teams specific state
+  const [selectedCompCode, setSelectedCompCode] = useState(null);
+  const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
+  const [leagueSearchQ, setLeagueSearchQ] = useState('');
 
   /* ── Refs ── */
   const prevScores = useRef(new Map());
@@ -603,14 +604,13 @@ export default function MasterGames() {
   const moreRef = useRef(null);
   const leagueDdRef = useRef(null);
 
-  // Generate 14 past dates (reversed so oldest is at top) and 14 future dates
   const pastDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
-    const d = getLocalDateStr(-(i + 2)); // -2, -3, ..., -15
+    const d = getLocalDateStr(-(i + 2)); 
     return { str: d, label: formatDateShort(d) };
   }).reverse(), []); 
 
   const futureDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
-    const d = getLocalDateStr(i + 2); // +2, +3, ..., +15
+    const d = getLocalDateStr(i + 2); 
     return { str: d, label: formatDateShort(d) };
   }), []);
 
@@ -629,44 +629,47 @@ export default function MasterGames() {
   }, []);
 
   /* ═══════════════════════════════════════════════════════════════
-     1. DATA FETCHING (Primary + Backup)
+     1. DATA FETCHING (Primary + Backup + Auto-Refresh)
      ═══════════════════════════════════════════════════════════════ */
   const isPrimaryDate = [getYesterdayStr(), getTodayStr(), getTomorrowStr()].includes(selectedDate);
 
-  // Fetch Primary (Node Backend)
+  const fetchPrimary = useCallback(async (date, silent = false) => {
+    if (!silent) setPrimaryLoading(true);
+    try {
+      const res = await fetchFixtures(date);
+      const l = Array.isArray(res) ? res : res?.matches || [];
+      setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
+    } catch (e) {
+      setPrimaryFixtures([]);
+    } finally {
+      if (!silent) setPrimaryLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     if (!isPrimaryDate) {
-      setPrimaryFixtures([]); // Clear primary if outside 3-day window
+      setPrimaryFixtures([]);
       setPrimaryLoading(false);
       return;
     }
+    fetchPrimary(selectedDate);
+  }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
-    let mnt = true;
-    setPrimaryLoading(true);
-
-    (async () => {
-      try {
-        const res = await fetchFixtures(selectedDate);
-        if (mnt) {
-          const l = Array.isArray(res) ? res : res?.matches || [];
-          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
-        }
-      } catch (e) {
-        if (mnt) setPrimaryFixtures([]);
-      } finally {
-        if (mnt) setPrimaryLoading(false);
-      }
-    })();
-
-    return () => { mnt = false; };
-  }, [selectedDate, isPrimaryDate]);
-
-  // Fetch Backup (Football-data.org)
+  // Fetch Backup
   useEffect(() => {
     if (selectedDate) loadDateFixtures(selectedDate);
   }, [selectedDate, loadDateFixtures]);
 
-  // Primary Live Polling (Only for Today)
+  // ★ AUTO-REFRESH: Silently fetch every 45s for live scores
+  useEffect(() => {
+    if (!isPrimaryDate) return;
+    const interval = setInterval(() => {
+      fetchPrimary(selectedDate, true);
+    }, 45000);
+    return () => clearInterval(interval);
+  }, [selectedDate, isPrimaryDate, fetchPrimary]);
+
+  // Live Polling Subscription
   useEffect(() => {
     if (selectedDate !== getTodayStr()) return;
 
@@ -676,30 +679,17 @@ export default function MasterGames() {
       
       setPrimaryFixtures(prev => prev.map(f => {
         const freshMatch = liveMap.get(String(f.id));
-        
-        // If we have fresh data, use it entirely
-        if (freshMatch) {
-          return { ...f, ...freshMatch };
-        }
-        
-        // ★ FIX: If a match was live but is no longer in the feed, assume it finished
-        // This prevents matches from being stuck as LIVE forever
+        if (freshMatch) return { ...f, ...freshMatch };
         if (f.isLive) {
           const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-          const now = Date.now();
-          // If kickoff was more than 2 hours ago, it's definitely finished
-          if (ko > 0 && now > ko + (2 * 60 * 60 * 1000)) {
+          if (ko > 0 && Date.now() > ko + (2 * 60 * 60 * 1000)) {
             return { ...f, isLive: false, isFinished: true, status: 'FT' };
           }
         }
-
-        // Only mark as STARTED if not already live/finished
         const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-        const now = Date.now();
-        if (!f.isLive && !f.isStarted && ko > 0 && now > ko && !f.isFinished) {
+        if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
           return { ...f, isStarted: true, status: 'STARTED' };
         }
-        
         return f;
       }));
     });
@@ -708,7 +698,7 @@ export default function MasterGames() {
   }, [selectedDate]);
 
   /* ═══════════════════════════════════════════════════════════════
-     2. SEAMLESS AUTO-FAILOVER BLEND & DEDUPLICATION
+     2. SEAMLESS AUTO-FAILOVER & WELCOME TOAST
      ═══════════════════════════════════════════════════════════════ */
   const backupFixtures = useMemo(() => {
     return (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === selectedDate);
@@ -729,12 +719,26 @@ export default function MasterGames() {
     }
   }, [primaryFixtures.length, backupFixtures.length, primaryLoading, rescued, addToast]);
 
+  // ★ SMOOTH WELCOME TOAST: Pop recent goals on visit
+  useEffect(() => {
+    if (!welcomeToastShown.current && !primaryLoading && primaryFixtures.length > 0) {
+      const live = primaryFixtures.filter(m => m.isLive && (m.homeScore > 0 || m.awayScore > 0));
+      if (live.length > 0) {
+        welcomeToastShown.current = true;
+        setTimeout(() => {
+          addToast({ type: 'status', st: 'live', msg: `${live.length} live match${live.length > 1 ? 'es' : ''} with goals!`, detail: 'Scores updating in real-time', dur: 3500 });
+        }, 800);
+      }
+    }
+  }, [primaryFixtures, primaryLoading, addToast]);
+
   useEffect(() => {
     setRescued(false);
     rescueToastSent.current = false;
+    welcomeToastShown.current = false; // Reset on date change
     setExpanded(null);
-    setShowOtherMatches(false); // Reset toggle on date change
-    setExpandedLeagues(new Set()); // Reset league expansion on date change
+    setShowLiveOnly(false);
+    setExpandedLeagues(new Set());
   }, [selectedDate]);
 
   const displayFixtures = useMemo(() => {
@@ -746,18 +750,16 @@ export default function MasterGames() {
     }
     
     const uniqueIds = new Set();
-    const dedupedList = list.filter(m => {
+    return list.filter(m => {
       const idStr = String(m.id);
       if (uniqueIds.has(idStr)) return false;
       uniqueIds.add(idStr);
       return true;
     });
-    
-    return dedupedList;
   }, [primaryFixtures, backupFixtures, compFilter, searchQ]);
 
   /* ═══════════════════════════════════════════════════════════════
-     3. GROUPING & SORTING (League Priority & Live Status)
+     3. GROUPING & SORTING
      ═══════════════════════════════════════════════════════════════ */
   const grouped = useMemo(() => {
     const map = new Map();
@@ -787,21 +789,15 @@ export default function MasterGames() {
     });
   }, [displayFixtures]);
 
-  // ★ NEW: Split into Top 5 Leagues and Others (with Live Filter)
   const { topLeagues, otherLeagues } = useMemo(() => {
     let groups = [...grouped];
-    
-    // Apply Live Only Filter
     if (showLiveOnly) {
       groups = groups.map(g => ({
         ...g,
         matches: g.matches.filter(m => m.isLive)
       })).filter(g => g.matches.length > 0);
     }
-    
-    const top = groups.slice(0, 5);
-    const others = groups.slice(5); // Keep them grouped by league!
-    return { topLeagues: top, otherLeagues: others };
+    return { topLeagues: groups.slice(0, 5), otherLeagues: groups.slice(5) };
   }, [grouped, showLiveOnly]);
 
   const toggleLeagueExpand = (leagueName) => {
@@ -813,7 +809,8 @@ export default function MasterGames() {
     });
   };
 
-  const compList = useMemo(() => {
+  // For Fixtures Filter
+  const fixtureCompList = useMemo(() => {
     const map = new Map();
     displayFixtures.forEach(m => {
       if (!map.has(m.leagueName)) map.set(m.leagueName, { id: m.leagueName, name: m.leagueName, emblem: m.leagueLogo });
@@ -821,28 +818,67 @@ export default function MasterGames() {
     return [...map.values()].sort((a, b) => getLeaguePriority(a.name) - getLeaguePriority(b.name));
   }, [displayFixtures]);
 
+  // ★ FIX: Global Competitions List for Standings/Teams Tabs
+  const globalCompList = useMemo(() => {
+    return (competitions || []).map(c => ({
+      id: String(c.id),
+      code: c.code,
+      name: c.name,
+      emblem: c.emblem
+    })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [competitions]);
+
+  const topGlobalComps = useMemo(() => globalCompList.filter(c => TOP_5_CODES.includes(c.code)), [globalCompList]);
+  const otherGlobalComps = useMemo(() => globalCompList.filter(c => !TOP_5_CODES.includes(c.code)), [globalCompList]);
+  const filteredOtherComps = useMemo(() => {
+    if (!leagueSearchQ.trim()) return otherGlobalComps;
+    return otherGlobalComps.filter(c => (c.name || '').toLowerCase().includes(leagueSearchQ.toLowerCase()));
+  }, [otherGlobalComps, leagueSearchQ]);
+
   const liveCount = useMemo(() => displayFixtures.filter(m => m.isLive).length, [displayFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(String(m.id))), [displayFixtures, favs]);
 
   /* ═══════════════════════════════════════════════════════════════
-     4. TABS (Standings / Teams)
+     4. STANDINGS & TEAMS FETCHING
      ═══════════════════════════════════════════════════════════════ */
   const handleTabChange = useCallback(async (t) => {
     setTab(t);
-    if (t === 'standings' && !standingsData && !standingsLoading) {
-      setStandingsLoading(true);
-      try { const data = await getStandings(); setStandingsData(data); } catch {}
-      setStandingsLoading(false);
+    if (t === 'standings' || t === 'teams') {
+      if (!selectedCompCode && globalCompList.length > 0) {
+        setSelectedCompCode(globalCompList[0].code || globalCompList[0].id);
+      }
     }
-    if (t === 'teams' && !teamsData && !teamsLoading) {
-      setTeamsLoading(true);
-      try { const data = await getTeams(); setTeamsData(data); } catch {}
-      setTeamsLoading(false);
-    }
-  }, [standingsData, standingsLoading, teamsData, teamsLoading, getStandings, getTeams]);
+  }, [selectedCompCode, globalCompList]);
+
+  const loadStandings = useCallback(async (code, force = false) => {
+    setStandingsLoading(true);
+    try { const data = await getStandings(code, force); setStandingsData(data); } catch {}
+    setStandingsLoading(false);
+  }, [getStandings]);
+
+  const loadTeams = useCallback(async (code, force = false) => {
+    setTeamsLoading(true);
+    try { const data = await getTeams(code, force); setTeamsData(data); } catch {}
+    setTeamsLoading(false);
+  }, [getTeams]);
+
+  useEffect(() => {
+    if (selectedCompCode && tab === 'standings') loadStandings(selectedCompCode);
+    if (selectedCompCode && tab === 'teams') loadTeams(selectedCompCode);
+  }, [selectedCompCode, tab, loadStandings, loadTeams]);
+
+  // Auto-refresh tables every 5 mins
+  useEffect(() => {
+    if (tab !== 'standings' && tab !== 'teams') return;
+    const interval = setInterval(() => {
+      if (tab === 'standings' && selectedCompCode) loadStandings(selectedCompCode, true);
+      if (tab === 'teams' && selectedCompCode) loadTeams(selectedCompCode, true);
+    }, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [tab, selectedCompCode, loadStandings, loadTeams]);
 
   /* ═══════════════════════════════════════════════════════════════
-     5. LIVE CHANGE DETECTION (Unified)
+     5. LIVE CHANGE DETECTION
      ═══════════════════════════════════════════════════════════════ */
   const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET' || s === 'BT' || s === 'LIVE';
 
@@ -908,76 +944,76 @@ export default function MasterGames() {
   /* ═══════════════════════════════════════════════════════════════
      RENDER
      ═══════════════════════════════════════════════════════════════ */
-  const selectedCompData = compList.find(c => c.id === compFilter);
+  const selectedCompData = fixtureCompList.find(c => c.id === compFilter);
 
   return (
-    <div className="mg9-page">
+    <div className="mg10-page">
       <SEO title="Football Fixtures & Live Scores" description="Live football scores, fixtures, and predictions." path="/fixtures" />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
-      <div className="mg9-wrap">
+      <div className="mg10-wrap">
         {/* Header */}
-        <div className="mg9-hdr">
-          <div className="mg9-hdr-title">
-            <h1><Activity size={14} style={{ color: 'var(--accent)' }} /> Master Games</h1>
+        <div className="mg10-hdr">
+          <div className="mg10-hdr-title">
+            <h1><Activity size={16} style={{ color: 'var(--accent)' }} /> Master Games</h1>
             <div className="sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
-          <div className="mg9-hdr-actions">
-            <button className={`mg9-hdr-btn ${searchOpen ? 'active' : ''}`} onClick={() => setSearchOpen(p => !p)} title="Search">
-              {searchOpen ? <X size={14} /> : <Search size={14} />}
+          <div className="mg10-hdr-actions">
+            <button className={`mg10-hdr-btn ${searchOpen ? 'active' : ''}`} onClick={() => setSearchOpen(p => !p)} title="Search">
+              {searchOpen ? <X size={16} /> : <Search size={16} />}
             </button>
-            <button className={`mg9-hdr-btn ${soundOn ? 'active' : ''}`} onClick={() => setSoundOn(p => !p)} title="Sound">
-              {soundOn ? <Volume2 size={14} /> : <VolumeX size={14} />}
+            <button className={`mg10-hdr-btn ${soundOn ? 'active' : ''}`} onClick={() => setSoundOn(p => !p)} title="Sound">
+              {soundOn ? <Volume2 size={16} /> : <VolumeX size={16} />}
             </button>
-            <button className="mg9-hdr-btn" onClick={() => refreshFixtures()} title="Refresh">
-              <RefreshCw size={14} className={primaryLoading || backupLoading ? 'mg9-spin' : ''} />
+            <button className="mg10-hdr-btn" onClick={() => refreshFixtures()} title="Refresh">
+              <RefreshCw size={16} className={primaryLoading || backupLoading ? 'mg10-spin' : ''} />
             </button>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="mg9-stats">
-          <div className="mg9-schip">
+        <div className="mg10-stats">
+          <div className="mg10-schip">
             <div className="val live-c">{liveCount}</div>
             <div className="lbl">Live</div>
           </div>
-          <div className="mg9-schip">
+          <div className="mg10-schip">
             <div className="val total-c">{displayFixtures.length}</div>
             <div className="lbl">Matches</div>
           </div>
-          <div className="mg9-schip">
+          <div className="mg10-schip">
             <div className="val fav-c">{favs.size}</div>
             <div className="lbl">Favourites</div>
           </div>
         </div>
 
         {/* Date Navigation */}
-        <div className="mg9-datenav">
-          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>
+        <div className="mg10-datenav">
+          <button className={`mg10-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>
             Yesterday
           </button>
-          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(0))}>
+          <button className={`mg10-nav-btn ${selectedDate === getLocalDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(0))}>
             Today
           </button>
-          <button className={`mg9-nav-btn ${selectedDate === getLocalDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(1))}>
+          <button className={`mg10-nav-btn ${selectedDate === getLocalDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(1))}>
             Tomorrow
           </button>
-          <div className="mg9-more-wrap" ref={moreRef}>
-            <button className={`mg9-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(p => !p)}>
-              <Calendar size={12} /> More <ChevronDown size={12} />
+          <div className="mg10-more-wrap" ref={moreRef}>
+            <button className={`mg10-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(p => !p)}>
+              <Calendar size={14} /> More <ChevronDown size={14} />
             </button>
             {moreDatesOpen && (
-              <div className="mg9-more-dropdown">
-                <div className="mg9-more-label">Past Dates</div>
+              <div className="mg10-more-dropdown">
+                <div className="mg10-more-label">Past Dates</div>
                 {pastDates.map(d => (
-                  <button key={d.str} className={`mg9-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                  <button key={d.str} className={`mg10-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
                     {d.label}
                   </button>
                 ))}
-                <div className="mg9-more-label" style={{ marginTop: '6px' }}>Future Dates</div>
+                <div className="mg10-more-label" style={{ marginTop: '6px' }}>Future Dates</div>
                 {futureDates.map(d => (
-                  <button key={d.str} className={`mg9-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                  <button key={d.str} className={`mg10-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
                     {d.label}
                   </button>
                 ))}
@@ -987,20 +1023,20 @@ export default function MasterGames() {
         </div>
 
         {/* Tabs */}
-        <div className="mg9-tabs">
+        <div className="mg10-tabs">
           {['fixtures', 'favourites', 'standings', 'teams', 'competitions'].map(t => (
-            <button key={t} className={`mg9-tab ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
+            <button key={t} className={`mg10-tab ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
               {t === 'fixtures' ? 'Fixtures' : t === 'favourites' ? 'Favs' : t === 'standings' ? 'Table' : t === 'teams' ? 'Teams' : 'Leagues'}
             </button>
           ))}
         </div>
 
         {/* Search */}
-        <div className={`mg9-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
-          <div className="mg9-search">
-            <Search size={14} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
+        <div className={`mg10-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
+          <div className="mg10-search">
+            <Search size={16} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
             <input type="text" placeholder="Search teams or leagues..." value={searchQ} onChange={e => setSearchQ(e.target.value)} autoFocus={searchOpen} />
-            {searchQ && <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }} onClick={() => setSearchQ('')}><X size={14} /></button>}
+            {searchQ && <button style={{ background: 'none', border: 'none', color: 'var(--text-muted)', cursor: 'pointer', padding: 0, display: 'flex' }} onClick={() => setSearchQ('')}><X size={16} /></button>}
           </div>
         </div>
 
@@ -1008,21 +1044,21 @@ export default function MasterGames() {
         {tab === 'fixtures' && (
           <>
             {rescued && (
-              <div className="mg9-rescue">
-                <div className="mg9-rescue-icon"><AlertTriangle size={14} /></div>
-                <div className="mg9-rescue-text">
-                  <div className="mg9-rescue-title">Backup Source Active</div>
-                  <div className="mg9-rescue-sub">Showing {backupFixtures.length} games from global feed</div>
+              <div className="mg10-rescue">
+                <div className="mg10-rescue-icon"><AlertTriangle size={16} /></div>
+                <div className="mg10-rescue-text">
+                  <div className="mg10-rescue-title">Backup Source Active</div>
+                  <div className="mg10-rescue-sub">Showing {backupFixtures.length} games from global feed</div>
                 </div>
               </div>
             )}
 
-            <div className="mg9-filter-wrap" ref={leagueDdRef} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {compList.length > 1 && (
+            <div className="mg10-filter-wrap" ref={leagueDdRef} style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {fixtureCompList.length > 1 && (
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <button className="mg9-filter-btn" onClick={() => setLeagueDropdownOpen(p => !p)} style={{ width: '100%' }}>
+                  <button className="mg10-filter-btn" onClick={() => setLeagueDropdownOpen(p => !p)} style={{ width: '100%' }}>
                     <div className="left">
-                      <ListFilter size={12} />
+                      <ListFilter size={14} />
                       {compFilter === 'ALL' ? 'All Leagues' : (
                         <>
                           {selectedCompData?.emblem && <img src={selectedCompData.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1030,15 +1066,15 @@ export default function MasterGames() {
                         </>
                       )}
                     </div>
-                    <ChevronDown size={12} style={{ opacity: 0.6 }} />
+                    <ChevronDown size={14} style={{ opacity: 0.6 }} />
                   </button>
                   {leagueDropdownOpen && (
-                    <div className="mg9-filter-panel">
-                      <button className={`mg9-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setLeagueDropdownOpen(false); }}>
+                    <div className="mg10-filter-panel">
+                      <button className={`mg10-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setLeagueDropdownOpen(false); }}>
                         All Leagues
                       </button>
-                      {compList.map(c => (
-                        <button key={c.id} className={`mg9-filter-item ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.id)); setLeagueDropdownOpen(false); }}>
+                      {fixtureCompList.map(c => (
+                        <button key={c.id} className={`mg10-filter-item ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.id)); setLeagueDropdownOpen(false); }}>
                           {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                           {c.name}
                         </button>
@@ -1048,43 +1084,41 @@ export default function MasterGames() {
                 </div>
               )}
               
-              {/* ★ NEW: Live Only Button */}
               <button 
-                className="mg9-filter-btn" 
+                className="mg10-filter-btn" 
                 onClick={() => setShowLiveOnly(p => !p)} 
                 style={{ 
-                  width: '130px', 
+                  width: '140px', 
                   flexShrink: 0,
                   background: showLiveOnly ? 'rgba(239,68,68,.1)' : 'var(--bg-card,#111827)', 
                   borderColor: showLiveOnly ? 'rgba(239,68,68,.3)' : 'var(--border,#1e293b)', 
                   color: showLiveOnly ? '#ef4444' : 'var(--text-muted,#64748b)',
-                  boxShadow: showLiveOnly ? '0 0 10px rgba(239,68,68,.1)' : 'none'
+                  boxShadow: showLiveOnly ? '0 0 12px rgba(239,68,68,.1)' : 'none'
                 }}
               >
                 <div className="left" style={{ justifyContent: 'center', width: '100%' }}>
-                  {showLiveOnly ? <span className="mg9-dot" style={{ background: '#ef4444' }} /> : <Activity size={12} />}
+                  {showLiveOnly ? <span className="mg10-dot" style={{ background: '#ef4444' }} /> : <Activity size={14} />}
                   {showLiveOnly ? 'Live Only' : 'Show Live'}
                 </div>
               </button>
             </div>
 
             {primaryLoading && isPrimaryDate ? (
-              <div>{[1,2,3,4,5].map(i => <div key={i} className="mg9-sk" style={{ animationDelay: i * 80 + 'ms' }} />)}</div>
+              <div>{[1,2,3,4,5].map(i => <div key={i} className="mg10-sk" style={{ animationDelay: i * 80 + 'ms' }} />)}</div>
             ) : displayFixtures.length === 0 ? (
-              <div className="mg9-empty">
-                <div className="mg9-empty-icon"><Search size={20} /></div>
+              <div className="mg10-empty">
+                <div className="mg10-empty-icon"><Search size={24} /></div>
                 <p>No matches found for this date</p>
               </div>
             ) : (
               <>
                 {favMatches.length > 0 && (
-                  <div className="mg9-section">
-                    <div className="mg9-league-hd"><Star size={14} style={{ color: '#f59e0b' }} /><span>Favourites</span></div>
+                  <div className="mg10-section">
+                    <div className="mg10-league-hd"><Star size={16} style={{ color: '#f59e0b' }} /><span>Favourites</span></div>
                     {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
                   </div>
                 )}
 
-                {/* Render Top 5 Leagues (5 matches max, rest in toggler) */}
                 {topLeagues.map(g => {
                   const isExpanded = expandedLeagues.has(g.name);
                   const limit = 5;
@@ -1092,8 +1126,8 @@ export default function MasterGames() {
                   const hiddenCount = g.matches.length - limit;
                   
                   return (
-                    <div key={g.name} className="mg9-section">
-                      <div className="mg9-league-hd">
+                    <div key={g.name} className="mg10-section">
+                      <div className="mg10-league-hd">
                         {g.logo && <img src={g.logo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                         <span>{g.name}</span>
                         <span className="cnt">{g.matches.length}</span>
@@ -1102,8 +1136,8 @@ export default function MasterGames() {
                         <MatchCard key={`${g.name}-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
                       )}
                       {hiddenCount > 0 && (
-                        <button className="mg9-show-more" onClick={() => toggleLeagueExpand(g.name)}>
-                          {isExpanded ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                        <button className="mg10-show-more" onClick={() => toggleLeagueExpand(g.name)}>
+                          {isExpanded ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                           {isExpanded ? 'Show less' : `Show ${hiddenCount} more matches`}
                         </button>
                       )}
@@ -1111,7 +1145,6 @@ export default function MasterGames() {
                   );
                 })}
 
-                {/* Render Other Leagues (1 match max, rest in toggler) */}
                 {otherLeagues.map(g => {
                   const isExpanded = expandedLeagues.has(g.name);
                   const limit = 1;
@@ -1119,8 +1152,8 @@ export default function MasterGames() {
                   const hiddenCount = g.matches.length - limit;
                   
                   return (
-                    <div key={g.name} className="mg9-section">
-                      <div className="mg9-league-hd">
+                    <div key={g.name} className="mg10-section">
+                      <div className="mg10-league-hd">
                         {g.logo && <img src={g.logo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                         <span>{g.name}</span>
                         <span className="cnt">{g.matches.length}</span>
@@ -1129,8 +1162,8 @@ export default function MasterGames() {
                         <MatchCard key={`${g.name}-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
                       )}
                       {hiddenCount > 0 && (
-                        <button className="mg9-show-more" onClick={() => toggleLeagueExpand(g.name)}>
-                          {isExpanded ? <ChevronRight size={12} /> : <ChevronDown size={12} />}
+                        <button className="mg10-show-more" onClick={() => toggleLeagueExpand(g.name)}>
+                          {isExpanded ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
                           {isExpanded ? 'Show less' : `Show ${hiddenCount} more matches`}
                         </button>
                       )}
@@ -1146,107 +1179,173 @@ export default function MasterGames() {
         {tab === 'favourites' && (
           <>
             {favMatches.length > 0 ? (
-              <div className="mg9-section">
-                <div className="mg9-league-hd"><Star size={14} style={{ color: '#f59e0b' }} /><span>Favourites ({favMatches.length})</span></div>
+              <div className="mg10-section">
+                <div className="mg10-league-hd"><Star size={16} style={{ color: '#f59e0b' }} /><span>Favourites ({favMatches.length})</span></div>
                 {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={setExpanded} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
               </div>
             ) : (
-              <div className="mg9-empty">
-                <div className="mg9-empty-icon"><Star size={20} /></div>
+              <div className="mg10-empty">
+                <div className="mg10-empty-icon"><Star size={24} /></div>
                 <p>No favourite matches found for this date</p>
               </div>
             )}
           </>
         )}
 
-        {/* ═══ Standings Tab ═══ */}
+        {/* ═══ Standings Tab (ALL LEAGUES) ═══ */}
         {tab === 'standings' && (
-          standingsLoading ? (
-            <div>{[1, 2, 3].map(i => <div key={i} className="mg9-sk" style={{ height: '250px', marginBottom: '10px', animationDelay: i * 80 + 'ms' }} />)}</div>
-          ) : standingsData && standingsData.length > 0 ? (
-            <div className="mg9-section">
-              {standingsData.map((league, i) => (
-                <div key={i} style={{ marginBottom: '20px' }}>
-                  <div className="mg9-league-hd">
-                    {league.area?.ensignUrl || league.league?.emblem && <img src={league.area?.ensignUrl || league.league?.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{league.league?.name || 'League Table'}</span>
-                  </div>
-                  <div className="mg9-tbl-wrap">
-                    <table className="mg9-tbl">
-                      <thead>
-                        <tr>
-                          <th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="p">Pts</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {league.standings?.[0]?.map(row => (
-                          <tr key={row.team?.id || row.position}>
-                            <td className="pos">{row.position}</td>
-                            <td>
-                              <div className="tc">
-                                {row.team?.crest && <img src={row.team?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                                <span>{row.team?.shortName || row.team?.name || 'TBD'}</span>
-                              </div>
-                            </td>
-                            <td className="sc">{row.playedGames}</td>
-                            <td className="sc">{row.won}</td>
-                            <td className="sc">{row.draw}</td>
-                            <td className="sc">{row.lost}</td>
-                            <td className="pc">{row.points}</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
+          <>
+            {/* League Selector */}
+            <div style={{ marginBottom: '16px', position: 'relative' }}>
+              <div className="mg10-filter-wrap" style={{ marginBottom: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {topGlobalComps.map(c => (
+                  <button key={c.id} className="mg10-filter-btn" style={{ width: 'auto', flexShrink: 0, background: selectedCompCode === c.code ? 'rgba(16,185,129,.08)' : 'var(--bg-card)', borderColor: selectedCompCode === c.code ? 'rgba(16,185,129,.3)' : 'var(--border)', color: selectedCompCode === c.code ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setSelectedCompCode(c.code)}>
+                    <div className="left">
+                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {c.code || c.name}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button className="mg10-filter-btn" style={{ width: '100%' }} onClick={() => setLeagueSearchOpen(p => !p)}>
+                <div className="left">
+                  <Search size={14} />
+                  {leagueSearchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
                 </div>
-              ))}
+                <ChevronDown size={14} style={{ opacity: 0.6 }} />
+              </button>
+              {leagueSearchOpen && (
+                <div className="mg10-filter-panel" style={{ position: 'static', marginTop: '8px', maxHeight: '300px' }}>
+                  <input className="mg10-search" style={{ width: '100%', marginBottom: '8px' }} placeholder="Type league name..." value={leagueSearchQ} onChange={e => setLeagueSearchQ(e.target.value)} />
+                  {filteredOtherComps.length === 0 && <div className="mg10-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
+                  {filteredOtherComps.map(c => (
+                    <button key={c.id} className={`mg10-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
+                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Trophy size={20} /></div>
-              <p>No standings data available</p>
-            </div>
-          )
+
+            {/* Standings Table */}
+            {standingsLoading ? (
+              <div>{[1, 2, 3].map(i => <div key={i} className="mg10-sk" style={{ height: '280px', marginBottom: '12px', animationDelay: i * 80 + 'ms' }} />)}</div>
+            ) : standingsData && standingsData.standings ? (
+              <div className="mg10-section">
+                {standingsData.standings.map((group, i) => (
+                  <div key={i} style={{ marginBottom: '20px' }}>
+                    {group.group && <div className="mg10-league-hd"><span>{group.group}</span></div>}
+                    <div className="mg10-tbl-wrap">
+                      <table className="mg10-tbl">
+                        <thead>
+                          <tr>
+                            <th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="c">Pts</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {group.table?.map(row => (
+                            <tr key={row.team?.id || row.position}>
+                              <td className="pos">{row.position}</td>
+                              <td>
+                                <div className="tc">
+                                  {row.team?.crest && <img src={row.team?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                                  <span>{row.team?.shortName || row.team?.name || 'TBD'}</span>
+                                </div>
+                              </td>
+                              <td className="sc">{row.playedGames}</td>
+                              <td className="sc">{row.won}</td>
+                              <td className="sc">{row.draw}</td>
+                              <td className="sc">{row.lost}</td>
+                              <td className="sc" style={{ fontWeight: 800, color: 'var(--text-primary)' }}>{row.points}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mg10-empty">
+                <div className="mg10-empty-icon"><Trophy size={24} /></div>
+                <p>Select a competition above to view table</p>
+              </div>
+            )}
+          </>
         )}
 
-        {/* ═══ Teams Tab ═══ */}
+        {/* ═══ Teams Tab (ALL LEAGUES) ═══ */}
         {tab === 'teams' && (
-          teamsLoading ? (
-            <div>{[1, 2, 3, 4, 5].map(i => <div key={i} className="mg9-sk" style={{ height: '100px', marginBottom: '10px', animationDelay: i * 80 + 'ms' }} />)}</div>
-          ) : teamsData && teamsData.length > 0 ? (
-            <div className="mg9-teams-grid">
-              {teamsData.map(t => (
-                <div key={t.id} className="mg9-team-card">
-                  {t.crest && <img src={t.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  <div className="name">{t.shortName || t.name}</div>
+          <>
+            {/* League Selector */}
+            <div style={{ marginBottom: '16px', position: 'relative' }}>
+              <div className="mg10-filter-wrap" style={{ marginBottom: '8px', overflowX: 'auto', scrollbarWidth: 'none' }}>
+                {topGlobalComps.map(c => (
+                  <button key={c.id} className="mg10-filter-btn" style={{ width: 'auto', flexShrink: 0, background: selectedCompCode === c.code ? 'rgba(16,185,129,.08)' : 'var(--bg-card)', borderColor: selectedCompCode === c.code ? 'rgba(16,185,129,.3)' : 'var(--border)', color: selectedCompCode === c.code ? 'var(--accent)' : 'var(--text-muted)' }} onClick={() => setSelectedCompCode(c.code)}>
+                    <div className="left">
+                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {c.code || c.name}
+                    </div>
+                  </button>
+                ))}
+              </div>
+              <button className="mg10-filter-btn" style={{ width: '100%' }} onClick={() => setLeagueSearchOpen(p => !p)}>
+                <div className="left">
+                  <Search size={14} />
+                  {leagueSearchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
                 </div>
-              ))}
+                <ChevronDown size={14} style={{ opacity: 0.6 }} />
+              </button>
+              {leagueSearchOpen && (
+                <div className="mg10-filter-panel" style={{ position: 'static', marginTop: '8px', maxHeight: '300px' }}>
+                  <input className="mg10-search" style={{ width: '100%', marginBottom: '8px' }} placeholder="Type league name..." value={leagueSearchQ} onChange={e => setLeagueSearchQ(e.target.value)} />
+                  {filteredOtherComps.length === 0 && <div className="mg10-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
+                  {filteredOtherComps.map(c => (
+                    <button key={c.id} className={`mg10-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
+                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {c.name}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
-          ) : (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Users size={20} /></div>
-              <p>No teams data available</p>
-            </div>
-          )
+
+            {/* Teams Grid */}
+            {teamsLoading ? (
+              <div>{[1, 2, 3, 4, 5].map(i => <div key={i} className="mg10-sk" style={{ height: '110px', marginBottom: '8px', animationDelay: i * 80 + 'ms' }} />)}</div>
+            ) : teamsData && teamsData.teams ? (
+              <div className="mg10-teams-grid">
+                {teamsData.teams.map(t => (
+                  <div key={t.id} className="mg10-team-card">
+                    {t.crest && <img src={t.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    <div className="name">{t.shortName || t.name}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="mg10-empty">
+                <div className="mg10-empty-icon"><Users size={24} /></div>
+                <p>Select a competition above to view teams</p>
+              </div>
+            )}
+          </>
         )}
 
         {/* ═══ Competitions Tab ═══ */}
         {tab === 'competitions' && (
           competitions && competitions.length > 0 ? (
-            <div className="mg9-comp-grid">
-              {competitions.map(c => (
-                <div key={c.id} className="mg9-comp-card">
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  <div className="info">
-                    <div className="cname">{c.name}</div>
-                    <div className="carea">{c.area?.name || ''}</div>
-                  </div>
+            <div className="mg10-teams-grid">
+              {globalCompList.map(c => (
+                <div key={c.id} className="mg10-team-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '8px', textAlign: 'left' }}>
+                  {c.emblem && <img src={c.emblem} alt="" style={{ width: '28px', height: '28px', margin: 0 }} onError={e => { e.target.style.display = 'none'; }} />}
+                  <div className="name">{c.name}</div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="mg9-empty">
-              <div className="mg9-empty-icon"><Trophy size={20} /></div>
+            <div className="mg10-empty">
+              <div className="mg10-empty-icon"><Trophy size={24} /></div>
               <p>No competitions data available</p>
             </div>
           )
