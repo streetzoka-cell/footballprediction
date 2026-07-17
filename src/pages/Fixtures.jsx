@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v13.0 Ultimate — 10/10 Production-Ready Architecture
+// v14.0 Ultimate — Smart Top Matches Detection
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, lazy, Suspense } from 'react';
@@ -8,7 +8,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
-  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight
+  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight, Flame
 } from 'lucide-react';
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
@@ -23,12 +23,27 @@ const STORAGE_KEY_FONT = "mg11_fontscale";
 const LIVE_REFRESH = 45000;
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
 
+// ★ NEW: Top Teams Dictionary (Lowercase for smart matching)
+const TOP_TEAMS_LIST = [
+  'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
+  'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
+  'bayern munich', 'borussia dortmund', 'rb leipzig', 'bayer leverkusen',
+  'paris saint germain', 'psg', 'marseille', 'lyon',
+  'juventus', 'inter', 'ac milan', 'napoli', 'roma', 'lazio', 'atalanta',
+  'benfica', 'porto', 'sporting cp',
+  'ajax', 'psv eindhoven', 'feyenoord',
+  'celtic', 'rangers',
+  'flamengo', 'palmeiras', 'corinthians', 'sao paulo',
+  'boca juniors', 'river plate'
+];
+const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
+
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 
 const injectStyles = () => {
-  if (document.getElementById('mg13-css')) return;
+  if (document.getElementById('mg14-css')) return;
   const s = document.createElement('style');
-  s.id = 'mg13-css';
+  s.id = 'mg14-css';
   s.textContent = `
     @keyframes mgFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes mgSlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
@@ -654,7 +669,7 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePop
           </div>
           <div className="mg-team-col away">
             <div className="mg-team-row">
-              {m.awayLogo && <img className="mg-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              {m.awayLogo && <img className="mg-crest" src={m.awayLogo} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />>}
               <span className="mg-team-name">{m.awayName}</span>
             </div>
           </div>
@@ -963,10 +978,29 @@ export default function MasterGames() {
     return list;
   }, [allFixtures, compFilter, showLiveOnly, normalizedSearch]);
 
+  // ★ NEW: Top Matches Detection Logic
+  const topMatches = useMemo(() => {
+    return allFixtures.filter(m => {
+      const home = norm(m.homeName);
+      const away = norm(m.awayName);
+      const isTopHome = [...TOP_TEAMS_SET].some(t => home.includes(t));
+      const isTopAway = [...TOP_TEAMS_SET].some(t => away.includes(t));
+      return isTopHome || isTopAway;
+    }).sort((a, b) => {
+      // Sort live first, then by time
+      if (a.isLive && !b.isLive) return -1;
+      if (!a.isLive && b.isLive) return 1;
+      return (a.timestamp || 0) - (b.timestamp || 0);
+    });
+  }, [allFixtures]);
+
+  const topMatchIds = useMemo(() => new Set(topMatches.map(m => String(m.id))), [topMatches]);
+
   const grouped = useMemo(() => {
     const map = new Map();
     displayFixtures.forEach(m => {
       if (favs.has(String(m.id))) return; 
+      if (topMatchIds.has(String(m.id))) return; // ★ Skip top matches so they don't duplicate
       
       const key = m.leagueName || 'Other';
       if (!map.has(key)) map.set(key, { name: key, logo: m.leagueLogo, matches: [] });
@@ -995,7 +1029,7 @@ export default function MasterGames() {
       if (lA !== lB) return lA - lB;
       return a.name.localeCompare(b.name);
     });
-  }, [displayFixtures, favs, leaguePriorityMap, pinnedLeagues]);
+  }, [displayFixtures, favs, leaguePriorityMap, pinnedLeagues, topMatchIds]);
 
   const { topLeagues, otherLeagues } = useMemo(() => {
     return { topLeagues: grouped.slice(0, 5).map(g => ({...g, isTop: true})), otherLeagues: grouped.slice(5).map(g => ({...g, isTop: false})) };
@@ -1080,7 +1114,6 @@ export default function MasterGames() {
     addToast
   });
 
-  // Point 1: Don't navigate when expanding
   const handleMatchToggle = useCallback((matchId) => {
     setExpanded(prev => prev === matchId ? null : matchId);
   }, []);
@@ -1215,6 +1248,19 @@ export default function MasterGames() {
                   <div className="mg-rescue-title">Backup Source Active</div>
                   <div className="mg-rescue-sub">Showing {backupFixtures.length} games from global feed</div>
                 </div>
+              </div>
+            )}
+
+            {/* ★ NEW: Top Matches Section (Smart Detection) */}
+            {topMatches.length > 0 && !searchQ && (
+              <div className="mg-section">
+                <div className="mg-league-hd">
+                  <Flame size={18} style={{ color: '#f59e0b' }} />
+                  <span className="mg-league-name">Top Matches</span>
+                </div>
+                {topMatches.map((m, i) => 
+                  <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
+                )}
               </div>
             )}
 
