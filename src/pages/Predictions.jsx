@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v21.1 — Fixed initialization order + Glass UI + Viral Share & Earn
+// v21.2 — Glass UI + Viral Share & Earn (Unique Links + Embedded Message)
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue } from 'react';
@@ -873,11 +873,13 @@ export default function Predictions() {
     return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
   }, [mergedFeatured, userPredMap, resultMap]);
 
-  /* ═══ SHARE & EARN LOGIC ═══ */
+  /* ═══ SHARE & EARN LOGIC (UNIQUE LINK + EMBEDDED MESSAGE) ═══ */
   const handleShare = useCallback(async (pred, isZoka = false) => {
     if (!uid) { setShowLogin(true); return; }
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
+    
+    // 1. Generate unique link with matchId and user's referral ID
     const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${uid}`;
 
     let homeName = 'Home', awayName = 'Away', scoreText = '';
@@ -895,6 +897,7 @@ export default function Predictions() {
       if (up) scoreText = `${up.homeScore}-${up.awayScore}`;
     }
 
+    // 2. Combine the message AND the unique link into one string
     const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore: ${shareUrl}`;
 
     if (navigator.share) {
@@ -911,21 +914,30 @@ export default function Predictions() {
     }
   }, [uid, setShowLogin, userPredMap]);
 
-  // ★ VIRAL BANNER SHARE (overall stats)
+  // ★ VIRAL BANNER SHARE (Unique Link + Embedded Message)
   const handleBannerShare = useCallback(async () => {
+    if (!uid) {
+      setShowLogin(true);
+      return;
+    }
+
     const total = userStats?.predicted || myDayStats.pred || 0;
     const correct = (userStats?.exact || myDayStats.ex || 0) + (userStats?.result || myDayStats.rs || 0);
     const points = userStats?.points || myDayStats.pts || 0;
 
+    // 1. Generate unique link with user's referral ID
+    const shareUrl = `${window.location.origin}/predictions?ref=${uid}`;
+
+    // 2. Combine the message AND the unique link into one string
     let shareText;
     if (total > 0) {
-      shareText = `🔥 I predicted ${correct}/${total} matches and scored ${points} points! Think you can beat me?\n\nJoin me on ZOKASCORE: https://zokascore.xyz`;
+      shareText = `🔥 I predicted ${correct}/${total} matches and scored ${points} points! Think you can beat me?\n\nJoin me on ZOKASCORE: ${shareUrl}`;
     } else {
-      shareText = `I'm predicting football matches live on ZOKASCORE! Think you can beat me?\n\nJoin now: https://zokascore.xyz`;
+      shareText = `I'm predicting football matches live on ZOKASCORE! Think you can beat me?\n\nJoin now: ${shareUrl}`;
     }
 
     if (navigator.share) {
-      try { await navigator.share({ title: 'ZOKASCORE', text: shareText, url: 'https://zokascore.xyz' }); }
+      try { await navigator.share({ title: 'ZOKASCORE', text: shareText, url: shareUrl }); }
       catch (err) { /* cancelled */ }
     } else {
       try {
@@ -934,9 +946,9 @@ export default function Predictions() {
         setTimeout(() => setCopyToast(false), 3000);
       } catch (e) {}
     }
-  }, [userStats, myDayStats]);
+  }, [uid, userStats, myDayStats, setShowLogin]);
 
-  // ★ REFERRAL VISIT TRACKING
+  // ★ REFERRAL VISIT TRACKING (Records the visit in Firestore)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const referrer = params.get('ref');
