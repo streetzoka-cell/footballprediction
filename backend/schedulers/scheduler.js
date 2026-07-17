@@ -114,9 +114,8 @@ class Scheduler {
   //   2. BUDGET TIER — how many total API calls remain today
   //   3. CAP TIER    — how many live-polling calls remain today
   //
-  // Plus DAY-PACING: spreads remaining cap calls across remaining
-  // hours so we NEVER deplete before midnight UTC reset, even on a
-  // 1k-match day.
+  // Plus DAY-PACING: spreads remaining cap calls across a rolling 
+  // 8-hour active window so we NEVER deplete before midnight UTC reset.
   //
   // Final interval = max(desired, budgetFloor, capFloor, pacingFloor)
   // ═══════════════════════════════════════════════════════════════
@@ -149,18 +148,17 @@ class Scheduler {
     if (remaining !== null) {
       if (remaining <= 0) {
         budgetTier = "EXHAUSTED";
-        budgetFloor = Infinity; // Will be handled by continue in loop
+        budgetFloor = Infinity; 
       } else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) {
-        budgetTier = "RESERVE";       // < 10
+        budgetTier = "RESERVE";       
         budgetFloor = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS;
       } else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) {
-        budgetTier = "CRITICAL";      // 10–20
+        budgetTier = "CRITICAL";      
         budgetFloor = LIVE_POLLING.BUDGET_CRITICAL_FLOOR_MS;
       } else if (remaining <= LIVE_POLLING.BUDGET_HEALTHY_THRESHOLD) {
-        budgetTier = "NORMAL";        // 20–50
+        budgetTier = "NORMAL";        
         budgetFloor = LIVE_POLLING.BUDGET_NORMAL_FLOOR_MS;
       }
-      // else HEALTHY — no floor
     }
 
     // ── 3. Cap tier floor ──
@@ -172,28 +170,31 @@ class Scheduler {
       capTier = "EXHAUSTED";
       capFloor = LIVE_POLLING.CAP_EXHAUSTED_INTERVAL_MS;  // 1 hour
     } else if (capRemaining <= LIVE_POLLING.CAP_CRITICAL_REMAINING) {
-      capTier = "CRITICAL";   // 1–5 left
+      capTier = "CRITICAL";   
       capFloor = LIVE_POLLING.CAP_CRITICAL_FLOOR_MS;
     } else if (capRemaining <= LIVE_POLLING.CAP_NORMAL_REMAINING) {
-      capTier = "LOW";        // 6–15 left
+      capTier = "LOW";        
       capFloor = LIVE_POLLING.CAP_LOW_FLOOR_MS;
     }
 
     // ── 4. Day-pacing floor ──
-    // Spread remaining cap calls across remaining hours until midnight UTC.
-    // This is the SAFETY NET that prevents depletion on busy days.
-    // Reserve CAP_FT_RESERVE calls for end-of-day FT recovery.
+    // Spread remaining cap calls across a rolling 8-hour active window.
+    // Previously, this spread calls across the *entire* day (e.g., 22 hours to midnight),
+    // which forced unnecessarily long intervals (e.g., 24m) early in the day.
+    // Now, we assume peak load lasts at most 8 hours, allowing much faster polling
+    // when matches are live, while still preventing depletion.
     let pacingFloor = 0;
     let isPacing = false;
 
     if (capRemaining > LIVE_POLLING.CAP_FT_RESERVE && budgetTier !== "EXHAUSTED") {
       const now = new Date();
-      const hoursLeft =
-        24 - now.getUTCHours() - now.getUTCMinutes() / 60 - now.getUTCSeconds() / 3600;
+      const hoursToMidnight = 24 - now.getUTCHours() - now.getUTCMinutes() / 60;
+      const activeWindowHours = Math.min(8, hoursToMidnight);
+      
       const effectiveCap = capRemaining - LIVE_POLLING.CAP_FT_RESERVE;
 
-      // Minimum interval to spread `effectiveCap` calls across `hoursLeft` hours
-      pacingFloor = (Math.max(0.01, hoursLeft) * 3600000) / effectiveCap;
+      // Calculate the minimum interval required to avoid depletion
+      pacingFloor = (Math.max(0.01, activeWindowHours) * 3600000) / effectiveCap;
 
       if (pacingFloor > desired) {
         isPacing = true;
@@ -203,7 +204,7 @@ class Scheduler {
     // ── 5. Final interval = max of all constraints ──
     let interval;
     if (budgetTier === "EXHAUSTED") {
-      interval = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS; // 2h — keep checking for budget reset
+      interval = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS; 
     } else {
       interval = Math.max(desired, budgetFloor, capFloor, pacingFloor);
     }
@@ -243,7 +244,6 @@ class Scheduler {
     // we don't start at 0 and incorrectly wait 60 minutes for the next poll.
     const initialResult = this.syncStatus[serviceName]?.lastResult;
     if (initialResult && initialResult.polled !== false) {
-      // Use liveCount/nearFT if available, fallback to total/isNearFinish
       liveCount = initialResult.liveCount ?? initialResult.total ?? 0;
       isNearFinish = (initialResult.nearFT ?? 0) > 0 || initialResult.isNearFinish === true;
       
@@ -300,14 +300,9 @@ class Scheduler {
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        // Only update live state if the service actually polled the API.
-        // When capReached=true or budget was too low, the service returns
-        // an empty result without making an API call. In that case we
-        // preserve the last known liveCount/isNearFinish.
         const actuallyPolled = result && result.polled !== false;
 
         if (actuallyPolled) {
-          // ★ Read directly from the verified normalized data returned by service
           liveCount = result.liveCount ?? result.total ?? 0;
           isNearFinish = (result.nearFT ?? 0) > 0 || result.isNearFinish === true;
         }
@@ -323,9 +318,6 @@ class Scheduler {
         );
 
         // ── SMART FT RECOVERY TRIGGER ──
-        // If we HAD live games but now we DON'T, it means games just finished.
-        // Wait 60s and poll again IMMEDIATELY to catch the final score
-        // instead of waiting for the next regular cycle.
         if (
           prevHadLive &&
           liveCount === 0 &&
@@ -513,16 +505,16 @@ class Scheduler {
     logger.info(`    16+ live    →  5 min   (LIVE_HIGH)`);
     logger.info(`    80'+ / ET   → 2.5 min  (NEAR_FT)`);
     logger.info("  Budget Tiers (slowdown floors):");
-    logger.info(`    > 50 left   → HEALTHY  (no floor)`);
-    logger.info(`    20–50 left  → NORMAL   (≥ 30 min floor)`);
-    logger.info(`    10–20 left  → CRITICAL (≥ 1 h floor)`);
-    logger.info(`    < 10 left   → RESERVE  (≥ 2 h floor)`);
+    logger.info(`    > 30 left   → HEALTHY  (no floor)`);
+    logger.info(`    15–30 left  → NORMAL   (≥ 15 min floor)`);
+    logger.info(`    8–15 left   → CRITICAL (≥ 30 min floor)`);
+    logger.info(`    < 8 left    → RESERVE  (≥ 1 h floor)`);
     logger.info("  Cap Tiers (live-polling-cap floors):");
     logger.info(`    > 15 left   → OK       (no floor)`);
     logger.info(`    6–15 left   → LOW      (≥ 15 min floor)`);
     logger.info(`    1–5 left    → CRITICAL (≥ 30 min floor)`);
     logger.info(`    0 left      → EXHAUSTED (1 h, 0 API cost)`);
-    logger.info("  Day-Pacing: spreads remaining cap across hours until midnight UTC");
+    logger.info("  Day-Pacing: spreads remaining cap across an 8-hour active window");
     logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);
