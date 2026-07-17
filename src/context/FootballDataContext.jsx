@@ -23,7 +23,6 @@ export function FootballDataProvider({ children }) {
     return () => { mountedRef.current = false; };
   }, []);
 
-  // ─── Fixtures: fetch for a specific date and merge ───
   const fetchFixturesForDate = useCallback(async (dateStr, { force = false } = {}) => {
     if (!force && loadedDatesRef.current.has(dateStr)) return;
     try {
@@ -43,11 +42,9 @@ export function FootballDataProvider({ children }) {
     }
   }, []);
 
-  // ─── Initial load: today +/- 7 days ───
-    const fetchInitialFixtures = useCallback(async () => {
+  const fetchInitialFixtures = useCallback(async () => {
     const dates = [];
-    for (let i = -14; i <= 14; i++) dates.push(getLocalDateStr(i)); // Changed to -14 / +14
-  
+    for (let i = -14; i <= 14; i++) dates.push(getLocalDateStr(i));
     try {
       const results = await ffs.getFixturesForDates(dates);
       if (mountedRef.current) {
@@ -68,7 +65,6 @@ export function FootballDataProvider({ children }) {
     }
   }, []);
 
-  // ─── Refresh today's fixtures ───
   const refreshTodayFixtures = useCallback(async () => {
     const todayStr = getLocalDateStr(0);
     ffs.clearEntry('fx_' + todayStr);
@@ -76,13 +72,11 @@ export function FootballDataProvider({ children }) {
     await fetchFixturesForDate(todayStr, { force: true });
   }, [fetchFixturesForDate]);
 
-  // ─── Load fixtures for a new date on demand ───
   const loadDateFixtures = useCallback(async (dateStr) => {
     if (loadedDatesRef.current.has(dateStr)) return;
     await fetchFixturesForDate(dateStr);
   }, [fetchFixturesForDate]);
 
-  // ─── Live: onSnapshot (real-time, 1 doc) ───
   useEffect(() => {
     const unsubscribe = ffs.subscribeLive(
       (result) => {
@@ -91,14 +85,11 @@ export function FootballDataProvider({ children }) {
           if (result.lastUpdated) setLastUpdated(result.lastUpdated);
         }
       },
-      (err) => {
-        console.error("[FootballData] Live error:", err.message);
-      }
+      (err) => console.error("[FootballData] Live error:", err.message)
     );
     return unsubscribe;
   }, []);
 
-  // ─── Competitions ───
   const fetchCompetitions = useCallback(async () => {
     try {
       const res = await ffs.getCompetitions();
@@ -108,18 +99,14 @@ export function FootballDataProvider({ children }) {
     }
   }, []);
 
-  // ─── Initial data load ───
   useEffect(() => {
     let cancelled = false;
     async function init() {
       try {
         await Promise.all([fetchInitialFixtures(), fetchCompetitions()]);
       } catch (e) {
-        console.error("[FootballData] Init failed, but app will continue loading.", e.message);
-        // We don't crash the app. We just log the error and move on.
+        console.error("[FootballData] Init failed:", e.message);
       } finally {
-        // ALWAYS stop loading, even if the football database failed.
-        // This un-freezes your login page!
         if (!cancelled) setLoading(false); 
       }
     }
@@ -127,17 +114,16 @@ export function FootballDataProvider({ children }) {
     return () => { cancelled = true; };
   }, [fetchInitialFixtures, fetchCompetitions]);
 
-  // ─── Periodic refresh: fixtures every 5 min ───
   useEffect(() => {
     const timer = setInterval(refreshTodayFixtures, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [refreshTodayFixtures]);
 
-  // ─── Standings (on demand, cached) ───
-  const getStandings = useCallback(async (code) => {
-    if (standings[code]) return standings[code];
+  // Added force parameter for regular background updates
+  const getStandings = useCallback(async (code, force = false) => {
+    if (!force && standings[code]) return standings[code];
     try {
-      const res = await ffs.getStandings(code);
+      const res = await ffs.getStandings(code, { force });
       if (res.data) {
         const data = { standings: res.data, competitionCode: code, fetchedAt: res.lastUpdated };
         if (mountedRef.current) setStandings(prev => ({ ...prev, [code]: data }));
@@ -149,11 +135,11 @@ export function FootballDataProvider({ children }) {
     return null;
   }, [standings]);
 
-  // ─── Teams (on demand, cached) ───
-  const getTeams = useCallback(async (code) => {
-    if (teams[code]) return teams[code];
+  // Added force parameter for regular background updates
+  const getTeams = useCallback(async (code, force = false) => {
+    if (!force && teams[code]) return teams[code];
     try {
-      const res = await ffs.getTeams(code);
+      const res = await ffs.getTeams(code, { force });
       if (res.data) {
         const data = { teams: res.data, competitionCode: code, fetchedAt: res.lastUpdated };
         if (mountedRef.current) setTeams(prev => ({ ...prev, [code]: data }));
@@ -177,20 +163,8 @@ export function FootballDataProvider({ children }) {
   }, [fixtures]);
 
   const value = {
-    fixtures,
-    liveMatches,
-    competitions,
-    standings,
-    teams,
-    loading,
-    lastUpdated,
-    error,
-    getStandings,
-    getTeams,
-    fixturesByDate,
-    refreshFixtures: refreshTodayFixtures,
-    refreshLive: () => {},
-    loadDateFixtures,
+    fixtures, liveMatches, competitions, standings, teams, loading, lastUpdated, error,
+    getStandings, getTeams, fixturesByDate, refreshFixtures: refreshTodayFixtures, refreshLive: () => {}, loadDateFixtures,
   };
 
   return (

@@ -1,20 +1,16 @@
-﻿// FILE: src/pages/MasterGames.jsx
-// v8 — Clean, professional, mobile-first. Favourites, notifications, smart date nav.
-// INTEGRATED: Firestore direct reads + lazy date loading
-
+﻿// src/pages/MasterGames.jsx
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown, Bell, BellOff,
-  RefreshCw, Calendar, Heart, Filter
+  RefreshCw, Calendar, Heart, Filter, Share2, Info, Globe, MapPin
 } from 'lucide-react';
 import { useFootballData } from '../context/FootballDataContext';
 import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, relativeDateLabel } from '../utils/dates';
 import SEO from '../components/SEO';
 
-/* -----------------------------------------------------------------------
-   STYLE INJECTION — Master v8 Clean
-   ----------------------------------------------------------------------- */
+const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; // Premier League, La Liga, Serie A, Bundesliga, Ligue 1
+
 const injectStyles = () => {
   if (document.getElementById('mg8-css')) return;
   const s = document.createElement('style');
@@ -35,15 +31,12 @@ const injectStyles = () => {
 
     .mg8-page{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding:0 0 100px;position:relative}
     .mg8-wrap{max-width:640px;margin:0 auto;padding:0 16px;position:relative;z-index:1}
-
     .mg8-header{text-align:center;padding:24px 0 0}
     .mg8-header h1{margin:0 0 4px;font-size:1.3rem;font-weight:800;color:var(--text-primary,#f1f5f9);letter-spacing:-.02em}
     .mg8-header .sub{font-size:.7rem;color:var(--text-muted,#64748b);font-weight:500}
-
     .mg8-stats{display:flex;justify-content:center;gap:24px;margin:16px 0 20px}
     .mg8-stat-val{font-size:1.1rem;font-weight:800;color:var(--text-primary,#f1f5f9);line-height:1;font-family:var(--font-display,system-ui)}
-    .mg8-stat-val.live-c{color:#ef4444}
-    .mg8-stat-val.total-c{color:var(--accent,#10b981)}
+    .mg8-stat-val.live-c{color:#ef4444}.mg8-stat-val.total-c{color:var(--accent,#10b981)}
     .mg8-stat-label{font-size:.55rem;font-weight:600;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em;margin-top:2px}
 
     .mg8-datenav{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:16px;flex-wrap:wrap}
@@ -98,14 +91,11 @@ const injectStyles = () => {
     .mg8-card{position:relative;overflow:hidden;padding:12px 14px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;margin-bottom:5px;transition:all .2s ease;animation:mg8SlideIn .25s ease both;cursor:pointer}
     .mg8-card:hover{background:rgba(255,255,255,.02);transform:translateY(-1px)}
     .mg8-card.live{border-color:rgba(239,68,68,.2);animation:mg8LivePulse 2s ease-in-out infinite,mg8SlideIn .25s ease both}
-    .mg8-card.live:hover{border-color:rgba(239,68,68,.35)}
     .mg8-card.finished{opacity:.6}
     .mg8-card.scheduled{border-left:3px solid rgba(59,130,246,.25)}
     .mg8-card.expanded{border-radius:12px 12px 0 0;margin-bottom:0;border-color:rgba(16,185,129,.2)}
     .mg8-card.goal-flash{animation:mg8GoalFlash 2s ease-out both}
-    .mg8-card.ft-settle{animation:mg8GoalFlash 1.5s ease-out both}
     .mg8-left-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
-
     .mg8-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
     .mg8-status{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:5px;font-size:.58rem;font-weight:700;letter-spacing:.02em;text-transform:uppercase}
     .mg8-status.live-s{color:#ef4444;background:rgba(239,68,68,.1)}
@@ -136,13 +126,9 @@ const injectStyles = () => {
     .mg8-score-num.pop{animation:mg8ScorePop .45s cubic-bezier(.22,1,.36,1) both}
     .mg8-sep{color:var(--text-muted,#64748b);font-size:.7rem;font-weight:700;opacity:.35}
     .mg8-vs{font-size:.68rem;font-weight:800;color:var(--text-muted,#64748b);opacity:.25;letter-spacing:.08em}
-
     .mg8-comp-row{display:flex;align-items:center;gap:5px;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,.03)}
     .mg8-comp-row img{width:12px;height:12px;object-fit:contain;flex-shrink:0}
     .mg8-comp-row span{font-size:.58rem;color:var(--text-muted,#64748b);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-    .mg8-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-radius:inherit;z-index:3;pointer-events:none}
-    .mg8-overlay-badge{padding:8px 22px;border-radius:10px;color:#fff;font-weight:700;font-size:.85rem;letter-spacing:.05em;display:flex;align-items:center;gap:7px;animation:mg8StatusIn 3s ease both}
 
     .mg8-expanded{background:var(--bg-surface,#0d1321);border:1px solid var(--border,#1e293b);border-top:none;border-radius:0 0 12px 12px;overflow:hidden;animation:mg8Expand .3s ease-out both}
     .mg8-exp-section{padding:10px 14px 4px;font-size:.55rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;letter-spacing:.06em}
@@ -150,25 +136,6 @@ const injectStyles = () => {
     .mg8-exp-row:last-child{border-bottom:none}
     .mg8-exp-label{color:var(--text-muted,#64748b);font-weight:600}
     .mg8-exp-val{color:var(--text-primary,#f1f5f9);font-weight:700;font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums}
-    .mg8-goal-row{display:flex;align-items:center;gap:6px;padding:5px 14px;border-bottom:1px solid rgba(255,255,255,.02);font-size:.7rem}
-    .mg8-goal-row:last-child{border-bottom:none}
-    .mg8-goal-min{font-weight:700;color:var(--text-muted,#64748b);min-width:26px;font-variant-numeric:tabular-nums;font-family:var(--font-display,system-ui)}
-    .mg8-goal-icon{color:var(--accent,#10b981);font-size:.6rem}
-    .mg8-goal-scorer{font-weight:600;color:var(--text-primary,#f1f5f9);flex:1}
-    .mg8-goal-assist{font-size:.58rem;color:var(--text-muted,#64748b)}
-    .mg8-card-row{display:flex;align-items:center;gap:5px;padding:5px 14px;border-bottom:1px solid rgba(255,255,255,.02);font-size:.68rem}
-    .mg8-card-row:last-child{border-bottom:none}
-    .mg8-card-player{flex:1;font-weight:600;color:var(--text-primary,#f1f5f9)}
-    .mg8-card-min{font-weight:700;color:var(--text-muted,#64748b);font-variant-numeric:tabular-nums;font-family:var(--font-display,system-ui);min-width:26px;text-align:right}
-    .mg8-corner-row{display:flex;align-items:center;justify-content:space-around;padding:10px 14px;font-size:.75rem;font-weight:700}
-    .mg8-corner-side{display:flex;align-items:center;gap:6px}
-    .mg8-corner-side img{width:16px;height:16px;object-fit:contain;border-radius:3px}
-    .mg8-corner-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:1.05rem;font-weight:800}
-    .mg8-ref-row{display:flex;align-items:center;gap:7px;padding:5px 14px;font-size:.68rem}
-    .mg8-ref-role{font-size:.55rem;font-weight:700;color:var(--text-muted,#64748b);text-transform:uppercase;min-width:52px;letter-spacing:.04em}
-    .mg8-ref-name{font-weight:600;color:var(--text-primary,#f1f5f9)}
-    .mg8-ref-nat{font-size:.56rem;color:var(--text-muted,#64748b);margin-left:auto}
-    .mg8-no-data{padding:14px;text-align:center;color:var(--text-muted,#64748b);font-size:.7rem;opacity:.5}
 
     .mg8-fav-header{display:flex;align-items:center;gap:6px;padding:0 2px;margin-bottom:8px}
     .mg8-fav-header svg{color:#f59e0b}
@@ -189,24 +156,30 @@ const injectStyles = () => {
     .mg8-tbl .num-cell{text-align:center;font-variant-numeric:tabular-nums;font-weight:600;color:var(--text-muted,#64748b)}
     .mg8-tbl .pts-cell{text-align:center;font-weight:800;color:var(--text-primary,#f1f5f9);font-size:.74rem}
     .mg8-tbl .gd-pos{color:var(--accent,#10b981)}.mg8-tbl .gd-neg{color:#ef4444}
-    .mg8-tbl .z-ucl{border-left:3px solid #3b82f6}.mg8-tbl .z-uel{border-left:3px solid #f97316}.mg8-tbl .z-uecl{border-left:3px solid #22c55e}.mg8-tbl .z-rel{border-left:3px solid #ef4444}
+    .mg8-form-cell{display:flex;gap:3px;justify-content:center;align-items:center}
+    .mg8-form-dot{width:6px;height:6px;border-radius:50%;display:inline-block}
+    .mg8-form-dot.fw{background:#10b981}.mg8-form-dot.fd{background:#64748b}.mg8-form-dot.fl{background:#ef4444}
+    .mg8-z-ucl{border-left:3px solid #3b82f6}.mg8-z-uel{border-left:3px solid #f97316}.mg8-z-uecl{border-left:3px solid #22c55e}.mg8-z-rel{border-left:3px solid #ef4444}
     .mg8-zone-bar{display:flex;gap:0;margin-bottom:5px;padding:0 3px}
     .mg8-zone-item{flex:1;padding:3px 4px;border-radius:3px 3px 0 0;font-size:.46rem;font-weight:700;text-transform:uppercase;letter-spacing:.03em;text-align:center}
 
     .mg8-teams-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
-    .mg8-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:11px;padding:14px 8px;text-align:center;transition:all .2s ease}
+    .mg8-team-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:11px;padding:14px 8px;text-align:center;transition:all .2s ease;cursor:pointer}
     .mg8-team-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
     .mg8-team-card img{width:32px;height:32px;object-fit:contain;margin:0 auto 5px;display:block}
     .mg8-team-card .name{font-size:.68rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
     .mg8-team-card .tla{font-size:.52rem;font-weight:600;color:var(--text-muted,#64748b);margin-top:1px}
 
-    .mg8-comp-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:16px}
-    .mg8-comp-card{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:12px;padding:14px;display:flex;align-items:center;gap:11px;transition:all .2s ease;cursor:pointer}
-    .mg8-comp-card:hover{background:rgba(255,255,255,.03);transform:translateY(-1px)}
-    .mg8-comp-card img{width:28px;height:28px;object-fit:contain;flex-shrink:0}
-    .mg8-comp-card .info{flex:1;min-width:0}
-    .mg8-comp-card .cname{font-size:.76rem;font-weight:700;color:var(--text-primary,#f1f5f9);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .mg8-comp-card .carea{font-size:.54rem;color:var(--text-muted,#64748b);margin-top:1px}
+    .mg8-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:600;display:flex;align-items:center;justify-content:center;padding:20px;animation:mg8FadeIn .2s ease}
+    .mg8-modal{background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:16px;max-width:400px;width:100%;padding:24px;position:relative;animation:mg8SlideIn .3s ease;max-height:80vh;overflow-y:auto}
+    .mg8-modal-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-muted);cursor:pointer}
+    .mg8-modal-img{width:64px;height:64px;margin:0 auto 12px;display:block}
+    .mg8-modal-name{text-align:center;font-size:1.2rem;font-weight:800;color:var(--text-primary);margin-bottom:4px}
+    .mg8-modal-tla{text-align:center;font-size:.8rem;color:var(--text-muted);margin-bottom:16px}
+    .mg8-modal-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border,#1e293b);font-size:.8rem}
+    .mg8-modal-row:last-child{border-bottom:none}
+    .mg8-modal-label{color:var(--text-muted);font-weight:600;min-width:80px;display:flex;align-items:center;gap:6px}
+    .mg8-modal-val{color:var(--text-primary);font-weight:600;text-align:right;flex:1}
 
     .mg8-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:40px 20px;background:var(--bg-card,#111827);border:1px solid var(--border,#1e293b);border-radius:14px;text-align:center}
     .mg8-empty-icon{width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,.03);color:var(--text-muted,#64748b);margin-bottom:2px}
@@ -225,74 +198,73 @@ const injectStyles = () => {
     .mg8-toast-detail{font-size:.6rem;opacity:.6;margin-top:1px}
     .mg8-toast-score{font-family:var(--font-display,system-ui);font-weight:800;font-size:.95rem;flex-shrink:0;margin-left:auto;text-shadow:0 0 8px rgba(255,255,255,.2)}
 
-    .mg8-confetti{position:fixed;inset:0;pointer-events:none;z-index:400;overflow:hidden}
-    .mg8-confetti-p{position:absolute;width:7px;height:7px;border-radius:2px;animation:mg8Confetti 1.4s ease-out forwards}
-
-    .mg8-notif-banner{position:fixed;bottom:0;left:0;right:0;z-index:100;background:linear-gradient(180deg,transparent,rgba(10,15,26,.95) 30%);padding:30px 16px 20px;text-align:center}
-    .mg8-notif-btn{display:inline-flex;align-items:center;gap:7px;padding:11px 24px;border-radius:12px;border:none;background:var(--accent,#10b981);color:#fff;font-size:.78rem;font-weight:700;cursor:pointer;transition:all .2s ease;font-family:inherit;box-shadow:0 4px 16px rgba(16,185,129,.3)}
-    .mg8-notif-btn:hover{transform:translateY(-1px);box-shadow:0 6px 20px rgba(16,185,129,.4)}
-
     @media(min-width:500px){.mg8-team-name{font-size:.84rem}.mg8-score-num{font-size:1.12rem}.mg8-score-box{width:72px}.mg8-teams-grid{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}}
-    @media(max-width:380px){.mg8-team-name{font-size:.72rem}.mg8-score-num{font-size:.95rem}.mg8-score-box{width:56px}.mg8-crest{width:17px;height:17px}.mg8-card{padding:10px 10px 11px}.mg8-teams-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}.mg8-comp-grid{grid-template-columns:1fr}.mg8-datenav{gap:5px}.mg8-date-btn{padding:8px 11px;font-size:.7rem}.mg8-date-today{padding:9px 16px;font-size:.75rem}}
+    @media(max-width:380px){.mg8-team-name{font-size:.72rem}.mg8-score-num{font-size:.95rem}.mg8-score-box{width:56px}.mg8-crest{width:17px;height:17px}.mg8-card{padding:10px 10px 11px}.mg8-teams-grid{grid-template-columns:repeat(auto-fill,minmax(100px,1fr))}.mg8-datenav{gap:5px}.mg8-date-btn{padding:8px 11px;font-size:.7rem}.mg8-date-today{padding:9px 16px;font-size:.75rem}}
     @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
   `;
   document.head.appendChild(s);
 };
 
-/* -----------------------------------------------------------------------
-   SOUND
-   ----------------------------------------------------------------------- */
-const Sound = {
-  ctx: null, on: true, _lg: 0, _lc: 0, _lw: 0,
-  _init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return false; } } if (this.ctx.state === 'suspended') this.ctx.resume(); return !!this.ctx; },
-  _t() { return this.ctx ? this.ctx.currentTime : 0; },
-  goal() {
-    if (!this.on || !this._init()) return; if (Date.now() - this._lg < 2000) return; this._lg = Date.now();
-    try { navigator.vibrate?.([80,40,80,40,120]); } catch {}
-    const t = this._t(), w = this.ctx.createOscillator(), g = this.ctx.createGain();
-    w.type='sawtooth'; w.frequency.setValueAtTime(180,t); w.frequency.exponentialRampToValueAtTime(600,t+.12);
-    g.gain.setValueAtTime(.04,t); g.gain.exponentialRampToValueAtTime(.001,t+.18);
-    w.connect(g); g.connect(this.ctx.destination); w.start(t); w.stop(t+.2);
-    [523.25,659.25,783.99,1046.5].forEach((f,i)=>{const o=this.ctx.createOscillator(),gn=this.ctx.createGain();o.type='sine';o.frequency.value=f;const s=t+.14+i*.085;gn.gain.setValueAtTime(0,s);gn.gain.linearRampToValueAtTime(.15,s+.035);gn.gain.exponentialRampToValueAtTime(.001,s+.55);o.connect(gn);gn.connect(this.ctx.destination);o.start(s);o.stop(s+.6);});
-  },
-  card() {
-    if (!this.on || !this._init()) return; if (Date.now() - this._lc < 1500) return; this._lc = Date.now();
-    try { navigator.vibrate?.([50,30,50]); } catch {}
-    const t = this._t(); [0,.15].forEach(off=>{const o=this.ctx.createOscillator(),g=this.ctx.createGain();o.type='square';o.frequency.value=880;g.gain.setValueAtTime(.04,t+off);g.gain.exponentialRampToValueAtTime(.001,t+off+.1);o.connect(g);g.connect(this.ctx.destination);o.start(t+off);o.stop(t+off+.12);});
-  },
-  whistle(type='ft') {
-    if (!this.on || !this._init()) return; if (Date.now() - this._lw < 3000) return; this._lw = Date.now();
-    const t = this._t(), freq = type==='ht'?2800:3200, dur = type==='ht'?.6:.9;
-    const play=(start)=>{const o=this.ctx.createOscillator(),g=this.ctx.createGain(),lfo=this.ctx.createOscillator(),lg=this.ctx.createGain();o.type='sine';o.frequency.value=freq;lfo.type='sine';lfo.frequency.value=6;lg.gain.value=80;lfo.connect(lg);lg.connect(o.frequency);g.gain.setValueAtTime(0,start);g.gain.linearRampToValueAtTime(.08,start+.05);g.gain.setValueAtTime(.08,start+dur-.1);g.gain.exponentialRampToValueAtTime(.001,start+dur);o.connect(g);g.connect(this.ctx.destination);o.start(start);o.stop(start+dur+.05);lfo.start(start);lfo.stop(start+dur+.05);};
-    play(t); if(type==='ft') play(t+dur+.15);
-  },
-  kickoff() {
-    if (!this.on || !this._init()) return;
-    const t = this._t(), bs = this.ctx.sampleRate*.15, buf = this.ctx.createBuffer(1,bs,this.ctx.sampleRate), d = buf.getChannelData(0);
-    for(let i=0;i<bs;i++) d[i]=(Math.random()*2-1)*(1-i/bs);
-    const src=this.ctx.createBufferSource(),flt=this.ctx.createBiquadFilter(),g=this.ctx.createGain();
-    src.buffer=buf; flt.type='bandpass'; flt.frequency.setValueAtTime(2000,t); flt.frequency.exponentialRampToValueAtTime(500,t+.15); flt.Q.value=2;
-    g.gain.setValueAtTime(.06,t); g.gain.exponentialRampToValueAtTime(.001,t+.15);
-    src.connect(flt); flt.connect(g); g.connect(this.ctx.destination); src.start(t);
-  },
-};
+// Helper to extract Form string into dots
+function FormDots({ formStr }) {
+  if (!formStr) return <span style={{ color: 'var(--text-muted)', opacity: 0.5 }}>-</span>;
+  const forms = formStr.split('').slice(-5); // Last 5 matches
+  return (
+    <div className="mg8-form-cell">
+      {forms.map((f, i) => (
+        <span key={i} className={`mg8-form-dot ${f === 'W' ? 'fw' : f === 'L' ? 'fl' : 'fd'}`} />
+      ))}
+    </div>
+  );
+}
 
-/* -----------------------------------------------------------------------
-   COMMENTARY
-   ----------------------------------------------------------------------- */
-const CMT = {
-  goal:["GOOOAL! The stadium erupts!","What a strike! Net ripped!","Pure football magic!","The ball is in the back of the net!","Somebody call the fire department!"],
-  card:["Yellow card shown!","Into the book!","Walking on thin ice now!"],
-  redCard:["RED CARD! Early shower!","Straight red! Game changer!"],
-  ft:["Full Time! What a match!","Final whistle!"],
-  ht:["Half Time! Regrouping...","HT — Manager's talk incoming!"],
-  kickoff:["Kick Off! We're underway!","And we're off! Game on!"],
-};
-const pick = (a) => a[Math.floor(Math.random()*a.length)];
+// Team Detail Modal
+function TeamModal({ team, onClose }) {
+  if (!team) return null;
+  return (
+    <div className="mg8-modal-overlay" onClick={onClose}>
+      <div className="mg8-modal" onClick={e => e.stopPropagation()}>
+        <button className="mg8-modal-close" onClick={onClose}><X size={18} /></button>
+        {team.crest && <img src={team.crest} alt={team.name} className="mg8-modal-img" onError={e => { e.target.style.display = 'none'; }} />}
+        <div className="mg8-modal-name">{team.name}</div>
+        {team.tla && <div className="mg8-modal-tla">{team.tla} · Founded {team.founded || 'N/A'}</div>}
+        
+        <div className="mg8-modal-row">
+          <span className="mg8-modal-label"><MapPin size={14} /> Venue</span>
+          <span className="mg8-modal-val">{team.venue || 'N/A'}</span>
+        </div>
+        {team.website && (
+          <div className="mg8-modal-row">
+            <span className="mg8-modal-label"><Globe size={14} /> Website</span>
+            <a href={team.website} target="_blank" rel="noreferrer" className="mg8-modal-val" style={{ color: 'var(--accent)', textDecoration: 'none' }}>Visit Official Site</a>
+          </div>
+        )}
+        {team.coach && (
+          <div className="mg8-modal-row">
+            <span className="mg8-modal-label"><Users size={14} /> Coach</span>
+            <span className="mg8-modal-val">{team.coach.name || 'N/A'}</span>
+          </div>
+        )}
 
-/* -----------------------------------------------------------------------
-   TOAST SYSTEM
-   ----------------------------------------------------------------------- */
+        {team.squad && team.squad.length > 0 && (
+          <div style={{ marginTop: 16 }}>
+            <div className="mg8-exp-section">Squad & Staff ({team.squad.length})</div>
+            <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+              {team.squad.map(p => (
+                <div key={p.id} className="mg8-modal-row" style={{ borderBottom: '1px solid rgba(255,255,255,.03)' }}>
+                  <span className="mg8-exp-label" style={{ color: 'var(--text-muted)', fontSize: '.7rem' }}>{p.position || 'Staff'}</span>
+                  <span className="mg8-exp-val" style={{ color: 'var(--text-primary)', fontSize: '.75rem' }}>{p.name}</span>
+                  <span className="mg8-exp-label" style={{ marginLeft: 8, fontSize: '.6rem' }}>{p.nationality || ''}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const idRef = useRef(0);
@@ -346,39 +318,30 @@ function ToastContainer({ toasts, onDismiss }) {
   );
 }
 
-/* -----------------------------------------------------------------------
-   CONFETTI
-   ----------------------------------------------------------------------- */
 function Confetti({ active }) {
   if (!active) return null;
   const colors = ['#ef4444','#10b981','#f59e0b','#3b82f6','#a855f7','#ec4899'];
   const p = Array.from({ length: 18 }, (_, i) => ({ left: 8 + Math.random() * 84, top: -8, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
   return (
-    <div className="mg8-confetti">
-      {p.map((x, i) => <div key={i} className="mg8-confetti-p" style={{ left: x.left + '%', top: x.top + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
+    <div className="mg8-confetti" style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 400, overflow: 'hidden' }}>
+      {p.map((x, i) => <div key={i} style={{ position: 'absolute', width: 7, height: 7, borderRadius: 2, left: x.left + '%', top: x.top + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)`, animation: 'mg8Confetti 1.4s ease-out forwards' }} />)}
     </div>
   );
 }
 
-/* -----------------------------------------------------------------------
-   HELPERS
-   ----------------------------------------------------------------------- */
 function matchQ(m, terms) {
   const str = ((m.homeTeam?.shortName || m.homeTeam?.name || '') + ' ' + (m.awayTeam?.shortName || m.awayTeam?.name || '') + ' ' + (m.competition?.name || '')).toLowerCase();
   return terms.every(t => str.includes(t));
 }
 
 function zoneCls(pos, total) {
-  if (pos <= 4) return 'z-ucl';
-  if (pos <= 6) return 'z-uel';
-  if (pos === 7) return 'z-uecl';
-  if (pos > total - 3) return 'z-rel';
+  if (pos <= 4) return 'mg8-z-ucl';
+  if (pos <= 6) return 'mg8-z-uel';
+  if (pos === 7) return 'mg8-z-uecl';
+  if (pos > total - 3) return 'mg8-z-rel';
   return '';
 }
 
-/* -----------------------------------------------------------------------
-   NOTIFICATIONS & FAVOURITES PERSISTENCE
-   ----------------------------------------------------------------------- */
 function useNotifications() {
   const [notifs, setNotifs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem('mg8_notifs') || '[]')); } catch { return new Set(); } });
   const [globalEnabled, setGlobalEnabled] = useState(() => { try { return localStorage.getItem('mg8_notif_global') === 'true'; } catch { return false; } });
@@ -408,9 +371,6 @@ function sendBrowserNotif(title, body, icon) {
   try { new Notification(title, { body, icon: icon || '', badge: icon || '', vibrate: [80, 40, 80], tag: 'mg8-' + Date.now() }); } catch {}
 }
 
-/* -----------------------------------------------------------------------
-   SCORE BREAKDOWN PANEL
-   ----------------------------------------------------------------------- */
 function ScoreBreakdown({ match }) {
   const s = match.score || {};
   const periods = [
@@ -421,23 +381,18 @@ function ScoreBreakdown({ match }) {
   ];
   const goals = s.goals || [], cards = s.cards || [], corners = s.corners, refs = match.referees || [];
   const hasData = periods.some(p => p.h != null || p.a != null) || goals.length || cards.length || corners || refs.length;
-  if (!hasData) return <div className="mg8-no-data">Details appear once the match begins</div>;
+  if (!hasData) return <div style={{ padding: 14, textAlign: 'center', color: 'var(--text-muted)', fontSize: '.7rem', opacity: .5 }}>Details appear once the match begins</div>;
   return (
     <div style={{ padding: '6px 0 2px' }}>
       {periods.some(p => p.h != null || p.a != null) && <><div className="mg8-exp-section">Score Breakdown</div>
       {periods.filter(p => p.h != null || p.a != null).map(p => (<div key={p.l} className="mg8-exp-row"><span className="mg8-exp-label">{p.l}</span><span className="mg8-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>))}</>}
-      {goals.length > 0 && <><div className="mg8-exp-section">Goals ({goals.length})</div>{goals.map((g, i) => (<div key={i} className="mg8-goal-row"><span className="mg8-goal-min">{g.minute != null ? g.minute + "'" : ''}</span><span className="mg8-goal-icon">⚽</span><span className="mg8-goal-scorer">{g.scorer?.name || 'Unknown'}</span>{g.assist?.name && <span className="mg8-goal-assist">(ast. {g.assist.name})</span>}</div>))}</>}
-      {cards.length > 0 && <><div className="mg8-exp-section">Cards ({cards.length})</div>{cards.map((c, i) => (<div key={i} className="mg8-card-row"><span>{c.type === 'YELLOW_CARD' ? '🟨' : c.type === 'RED_CARD' ? '🟥' : '⚠️'}</span><span className="mg8-card-player">{c.player?.name || 'Unknown'}</span><span className="mg8-card-min">{c.minute != null ? c.minute + "'" : ''}</span></div>))}</>}
-      {corners && (corners.home != null || corners.away != null) && <><div className="mg8-exp-section">Corners</div><div className="mg8-corner-row"><div className="mg8-corner-side">{match.homeTeam?.crest && <img src={match.homeTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-corner-num">{corners.home ?? 0}</span></div><span style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>vs</span><div className="mg8-corner-side"><span className="mg8-corner-num">{corners.away ?? 0}</span>{match.awayTeam?.crest && <img src={match.awayTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}</div></div></>}
-      {refs.length > 0 && <><div className="mg8-exp-section">Officials</div>{refs.map((r, i) => (<div key={i} className="mg8-ref-row"><span className="mg8-ref-role">{r.role || 'Referee'}</span><span className="mg8-ref-name">{r.name || '–'}</span>{r.nationality && <span className="mg8-ref-nat">{r.nationality}</span>}</div>))}</>}
+      {goals.length > 0 && <><div className="mg8-exp-section">Goals ({goals.length})</div>{goals.map((g, i) => (<div key={i} className="mg8-exp-row"><span className="mg8-exp-label">{g.minute != null ? g.minute + "'" : ''}</span><span className="mg8-exp-val">⚽ {g.scorer?.name || 'Unknown'}</span></div>))}</>}
+      {cards.length > 0 && <><div className="mg8-exp-section">Cards ({cards.length})</div>{cards.map((c, i) => (<div key={i} className="mg8-exp-row"><span className="mg8-exp-label">{c.minute != null ? c.minute + "'" : ''}</span><span className="mg8-exp-val">{c.type === 'YELLOW_CARD' ? '🟨' : c.type === 'RED_CARD' ? '🟥' : '⚠️'} {c.player?.name || 'Unknown'}</span></div>))}</>}
     </div>
   );
 }
 
-/* -----------------------------------------------------------------------
-   MATCH CARD
-   ----------------------------------------------------------------------- */
-function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav, isNotif, onNotif }) {
+function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif }) {
   const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
   const isFt = m.status === 'FINISHED';
   const isSched = m.status === 'SCHEDULED' || m.status === 'TIMED';
@@ -445,16 +400,11 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
   const time = m.utcDate ? new Date(m.utcDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   const isExp = expanded === m.id;
   const id = String(m.id);
-  const isFlash = flashGoals.has(id);
-  const sa = statusAnims.get(id);
-  const popSide = scorePops.get(id);
 
   let cls = 'mg8-card';
   if (isLive) cls += ' live';
   else if (isFt) cls += ' finished';
   else if (isSched) cls += ' scheduled';
-  if (isFlash) cls += ' goal-flash';
-  if (sa?.type === 'ft') cls += ' ft-settle';
   if (isExp) cls += ' expanded';
 
   const barColor = isLive ? '#ef4444' : isFt ? 'var(--accent,#10b981)' : 'transparent';
@@ -477,21 +427,17 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
         <div className="mg8-teams">
           <div className="mg8-team-col home"><div className="mg8-team-row">{m.homeTeam?.crest && <img className="mg8-crest" src={m.homeTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-team-name">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span></div></div>
           <div className="mg8-score-box">
-            {(isLive || isFt) ? (<div className="mg8-scores"><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'home' ? 'pop' : ''}`} key={`h-${m.id}-${sh?.home}-${popSide}`}>{sh?.home ?? 0}</span><span className="mg8-sep">–</span><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${popSide === 'away' ? 'pop' : ''}`} key={`a-${m.id}-${sh?.away}-${popSide}`}>{sh?.away ?? 0}</span></div>) : <span className="mg8-vs">VS</span>}
+            {(isLive || isFt) ? (<div className="mg8-scores"><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`} key={`h-${m.id}-${sh?.home}`}>{sh?.home ?? 0}</span><span className="mg8-sep">–</span><span className={`mg8-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`} key={`a-${m.id}-${sh?.away}`}>{sh?.away ?? 0}</span></div>) : <span className="mg8-vs">VS</span>}
           </div>
           <div className="mg8-team-col away"><div className="mg8-team-row">{m.awayTeam?.crest && <img className="mg8-crest" src={m.awayTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span className="mg8-team-name">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span></div></div>
         </div>
         <div className="mg8-comp-row">{m.competition?.emblem && <img src={m.competition.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}<span>{m.competition?.name || ''}</span></div>
-        {sa && (<div className="mg8-overlay"><div className="mg8-overlay-badge" style={{ background: sa.type === 'ht' ? 'rgba(249,115,22,.88)' : sa.type === 'ft' ? 'rgba(16,185,129,.88)' : 'rgba(239,68,68,.88)' }}>{sa.type === 'ht' && <><Pause size={15} /> HALF TIME</>}{sa.type === 'ft' && <><Flag size={15} /> FULL TIME</>}{sa.type === 'live' && <><Zap size={15} /> KICK OFF</>}</div></div>)}
       </div>
       {isExp && <div className="mg8-expanded"><ScoreBreakdown match={m} /></div>}
     </div>
   );
 }
 
-/* -----------------------------------------------------------------------
-   STANDINGS TABLE
-   ----------------------------------------------------------------------- */
 function StandingsTable({ standings }) {
   if (!standings?.length) return null;
   return (
@@ -504,8 +450,8 @@ function StandingsTable({ standings }) {
             {hasZ && <div className="mg8-zone-bar"><div className="mg8-zone-item" style={{ background: 'rgba(59,130,246,.1)', color: '#3b82f6' }}>UCL</div><div className="mg8-zone-item" style={{ background: 'rgba(249,115,22,.08)', color: '#f97316' }}>UEL</div><div className="mg8-zone-item" style={{ background: 'rgba(34,197,94,.06)', color: '#22c55e' }}>UECL</div><div className="mg8-zone-item" style={{ background: 'rgba(239,68,68,.06)', color: '#ef4444' }}>REL</div></div>}
             <div className="mg8-tbl-wrap">
               <table className="mg8-tbl">
-                <thead><tr><th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="c">GD</th><th className="pts">Pts</th></tr></thead>
-                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '–'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
+                <thead><tr><th className="c">#</th><th>Team</th><th className="c">P</th><th className="c">W</th><th className="c">D</th><th className="c">L</th><th className="c">GD</th><th className="c">Form</th><th className="pts">Pts</th></tr></thead>
+                <tbody>{t.map(r => { const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); return (<tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}><td className="pos">{r.position}</td><td><div className="team-cell">{r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<span>{r.team?.shortName || r.team?.name || '–'}</span></div></td><td className="num-cell">{r.playedGames}</td><td className="num-cell">{r.won}</td><td className="num-cell">{r.draw}</td><td className="num-cell">{r.lost}</td><td className={`num-cell ${gd > 0 ? 'gd-pos' : gd < 0 ? 'gd-neg' : ''}`}>{gd > 0 ? '+' : ''}{gd}</td><td><FormDots formStr={r.form} /></td><td className="pts-cell">{r.points}</td></tr>); })}</tbody>
               </table>
             </div>
           </div>
@@ -515,21 +461,21 @@ function StandingsTable({ standings }) {
   );
 }
 
-/* -----------------------------------------------------------------------
-   TEAMS GRID
-   ----------------------------------------------------------------------- */
-function TeamsGrid({ teams }) {
+function TeamsGrid({ teams, onSelectTeam }) {
   if (!teams?.length) return null;
   return (
     <div className="mg8-teams-grid">
-      {teams.map(t => (<div key={t.id} className="mg8-team-card">{t.crest && <img src={t.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}<div className="name">{t.shortName || t.name}</div>{t.tla && <div className="tla">{t.tla}</div>}</div>))}
+      {teams.map(t => (
+        <div key={t.id} className="mg8-team-card" onClick={() => onSelectTeam(t)}>
+          {t.crest && <img src={t.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+          <div className="name">{t.shortName || t.name}</div>
+          {t.tla && <div className="tla">{t.tla}</div>}
+        </div>
+      ))}
     </div>
   );
 }
 
-/* -----------------------------------------------------------------------
-   MAIN COMPONENT
-   ----------------------------------------------------------------------- */
 export default function MasterGames() {
   injectStyles();
 
@@ -540,215 +486,85 @@ export default function MasterGames() {
 
   /* -- State -- */
   const [tab, setTab] = useState('fixtures');
-  const [compFilter, setCompFilter] = useState('ALL');
   const [selectedDate, setSelectedDate] = useState(getLocalDateStr(0));
   const [expanded, setExpanded] = useState(null);
   const [searchQ, setSearchQ] = useState('');
   const [searchOpen, setSearchOpen] = useState(false);
-  const [soundOn, setSoundOn] = useState(true);
   const [standingsData, setStandingsData] = useState(null);
   const [teamsData, setTeamsData] = useState(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [confettiKey, setConfettiKey] = useState(0);
-  const [moreDatesOpen, setMoreDatesOpen] = useState(false);
-  const [notifBannerDismissed, setNotifBannerDismissed] = useState(() => { try { return localStorage.getItem('mg8_notif_banner_dismissed') === 'true'; } catch { return false; } });
   const [selectedCompCode, setSelectedCompCode] = useState(null);
+  const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
+  const [leagueSearchQ, setLeagueSearchQ] = useState('');
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
-  const [scorePops, setScorePops] = useState(new Map());
-  const [flashGoals, setFlashGoals] = useState(new Set());
-  const [statusAnims, setStatusAnims] = useState(new Map());
-
-  /* -- Refs -- */
-  const prevScores = useRef(new Map());
-  const prevStatuses = useRef(new Map());
-  const timeouts = useRef(new Map());
-  const moreRef = useRef(null);
-
-  useEffect(() => { Sound.on = soundOn; }, [soundOn]);
-  const clearTO = (k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } };
-  const setTO = (k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); };
-
-  /* ── FIRESTORE INTEGRATION: Load fixtures for the selected date on demand ── */
+  /* -- Deep Linking Logic -- */
+  // 1. Read from URL on initial mount
   useEffect(() => {
-    if (selectedDate) {
-      loadDateFixtures(selectedDate);
-    }
-  }, [selectedDate, loadDateFixtures]);
-
-  /* Close more-dates dropdown on outside click */
-  useEffect(() => {
-    const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setMoreDatesOpen(false); };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab');
+    const c = params.get('comp');
+    if (t && ['fixtures', 'live', 'favourites', 'standings', 'teams'].includes(t)) setTab(t);
+    if (c) setSelectedCompCode(c);
   }, []);
 
-  /* ── LIVE & SCORE CHANGE DETECTION ── */
+  // 2. Update URL when state changes
   useEffect(() => {
-    const allMatches = [...fixtures, ...liveMatches];
-    const newPops = new Map();
-    const newFlashes = new Set();
-    const newAnims = new Map();
-
-    allMatches.forEach(m => {
-      const id = String(m.id);
-      const ft = m.score?.fullTime;
-      const curScore = ft ? `${ft.home}-${ft.away}` : '-';
-      const curStatus = m.status;
-
-      // Score change detection
-      if (prevScores.current.has(id) && prevScores.current.get(id) !== curScore && curScore !== '-') {
-        const prev = prevScores.current.get(id);
-        const [ph, pa] = prev.split('-').map(Number);
-        const [ch, ca] = curScore.split('-').map(Number);
-        if (ch > ph) newPops.set(id, 'home');
-        if (ca > pa) newPops.set(id, 'away');
-
-        if (ch > ph || ca > pa) {
-          newFlashes.add(id);
-          Sound.goal();
-          const team = ch > ph ? m.homeTeam : m.awayTeam;
-          addToast({
-            type: 'goal',
-            msg: `${team?.shortName || team?.name} scores!`,
-            detail: pick(CMT.goal),
-            score: curScore,
-            dur: 4000,
-          });
-          if (isNotif(id)) sendBrowserNotif('⚽ GOAL!', `${team?.shortName || team?.name} scored! ${curScore}`, team?.crest);
-          setConfettiKey(k => k + 1);
-          setTO('flash-' + id, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 2500);
-        }
-      }
-
-      // Status change detection
-      if (prevStatuses.current.has(id) && prevStatuses.current.get(id) !== curStatus) {
-        const prevSt = prevStatuses.current.get(id);
-        if ((prevSt === 'SCHEDULED' || prevSt === 'TIMED') && (curStatus === 'IN_PLAY')) {
-          newAnims.set(id, { type: 'live' });
-          Sound.kickoff();
-          addToast({ type: 'status', st: 'live', msg: `${m.homeTeam?.shortName} vs ${m.awayTeam?.shortName}`, detail: pick(CMT.kickoff), dur: 3000 });
-        }
-        if (curStatus === 'PAUSED' && prevSt === 'IN_PLAY') {
-          newAnims.set(id, { type: 'ht' });
-          Sound.whistle('ht');
-          addToast({ type: 'status', st: 'ht', msg: `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, detail: pick(CMT.ht), dur: 3500 });
-        }
-        if (curStatus === 'FINISHED' && prevSt !== 'FINISHED') {
-          newAnims.set(id, { type: 'ft' });
-          Sound.whistle('ft');
-          addToast({ type: 'status', st: 'ft', msg: `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, detail: pick(CMT.ft), dur: 4000 });
-          if (isNotif(id)) sendBrowserNotif('🏁 Full Time', `${m.homeTeam?.shortName} ${ft?.home}-${ft?.away} ${m.awayTeam?.shortName}`, m.homeTeam?.crest);
-        }
-      }
-
-      prevScores.current.set(id, curScore);
-      prevStatuses.current.set(id, curStatus);
-    });
-
-    if (newPops.size) setScorePops(newPops);
-    if (newFlashes.size) setFlashGoals(newFlashes);
-    if (newAnims.size) {
-      setStatusAnims(newAnims);
-      newAnims.forEach((_, id) => {
-        setTO('anim-' + id, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-      });
+    const params = new URLSearchParams(window.location.search);
+    let changed = false;
+    if (params.get('tab') !== tab) { params.set('tab', tab); changed = true; }
+    if (tab === 'standings' || tab === 'teams') {
+      if (selectedCompCode && params.get('comp') !== selectedCompCode) { params.set('comp', selectedCompCode); changed = true; }
+    } else {
+      if (params.get('comp')) { params.delete('comp'); changed = true; }
     }
-  }, [fixtures, liveMatches, addToast, isNotif]);
-
-  /* -- Dates -- */
-  const todayStr = getLocalDateStr(0);
-  const yesterdayStr = getLocalDateStr(-1);
-  const tomorrowStr = getLocalDateStr(1);
-  const otherDates = useMemo(() => {
-    const arr = [];
-    for (let i = -14; i <= 14; i++) { // Changed from -7 / +7 to -14 / +14
-      if (i >= -1 && i <= 1) continue; 
-      const str = getLocalDateStr(i);
-      arr.push({ str, label: formatDateShort(str) });
+    if (changed) {
+      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
     }
-    return arr;
-  }, []);
-  
-  /* -- Filtered fixtures -- */
-  const filteredFixtures = useMemo(() => {
-    let list = (fixtures || []).filter(m => {
-      const mLocalDate = getLocalDateFromUtc(m.utcDate);
-      return mLocalDate === selectedDate;
-    });
-    if (compFilter !== 'ALL') list = list.filter(m => String(m.competition?.id) === compFilter);
-    if (searchQ.trim()) {
-      const terms = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
-      if (terms.length) list = list.filter(m => matchQ(m, terms));
+  }, [tab, selectedCompCode]);
+
+  // 3. Share Handler
+  const handleShare = async () => {
+    const url = window.location.href;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'ZOKASCORE Football', text: 'Check out this football data on ZOKASCORE!', url });
+        addToast({ type: 'status', st: 'live', msg: 'Shared successfully!', dur: 2000 });
+      } catch (err) { /* User cancelled */ }
+    } else {
+      navigator.clipboard.writeText(url);
+      addToast({ type: 'status', st: 'live', msg: 'Link copied to clipboard!', dur: 2000 });
     }
-    return list;
-  }, [fixtures, selectedDate, compFilter, searchQ]);
+  };
 
-  /* -- Grouped by competition -- */
-  const grouped = useMemo(() => {
-    const map = new Map();
-    filteredFixtures.forEach(m => {
-      const key = m.competition?.name || 'Other';
-      if (!map.has(key)) map.set(key, { comp: m.competition, matches: [] });
-      map.get(key).matches.push(m);
-    });
-    
-    // Sort matches within each competition: Live first, then Scheduled, then Finished pushed to bottom
-    const statusOrder = (s) => {
-      if (s === 'IN_PLAY' || s === 'PAUSED') return 0;   // Live — top
-      if (s === 'SCHEDULED' || s === 'TIMED') return 1;   // Upcoming — middle
-      if (s === 'FINISHED') return 2;                      // Finished — pushed back
-      if (s === 'POSTPONED' || s === 'CANCELLED' || s === 'SUSPENDED') return 3;
-      return 4;
-    };
-    
-    map.forEach(g => {
-      g.matches.sort((a, b) => {
-        const so = statusOrder(a.status) - statusOrder(b.status);
-        // Within same status, sort by date/time
-        if (so !== 0) return so;
-        return (a.utcDate || '').localeCompare(b.utcDate || '');
-      });
-    });
-    
-    return [...map.values()];
-  }, [filteredFixtures]);
-
-
-  /* -- Competitions for filter -- */
-  const compList = useMemo(() => {
-    const map = new Map();
-    (fixtures || []).forEach(m => { if (m.competition) map.set(String(m.competition.id), m.competition); });
-    return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [fixtures]);
-
-  /* -- Live count -- */
-  const liveCount = useMemo(() => liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [liveMatches]);
-
-  /* -- Favourites for selected date -- */
-  const favMatches = useMemo(() => filteredFixtures.filter(m => isFav(String(m.id))), [filteredFixtures, isFav]);
-
-  /* -- Standings & Teams fetch -- */
-  const loadStandings = useCallback(async (code) => {
+  /* -- Data Fetching -- */
+  const loadStandings = useCallback(async (code, force = false) => {
     setStandingsLoading(true);
-    const data = await getStandings(code);
+    const data = await getStandings(code, force);
     setStandingsData(data);
     setStandingsLoading(false);
   }, [getStandings]);
 
-  const loadTeams = useCallback(async (code) => {
+  const loadTeams = useCallback(async (code, force = false) => {
     setTeamsLoading(true);
-    const data = await getTeams(code);
+    const data = await getTeams(code, force);
     setTeamsData(data);
     setTeamsLoading(false);
   }, [getTeams]);
 
+  // Sync URL state if empty
   useEffect(() => {
-    if (tab === 'standings' && compList.length > 0 && !selectedCompCode) {
-      setSelectedCompCode(compList[0].code || compList[0].id);
+    if (!selectedCompCode && competitions.length > 0) {
+      const params = new URLSearchParams(window.location.search);
+      const c = params.get('comp');
+      if (c) setSelectedCompCode(c);
+      else if (tab === 'standings' || tab === 'teams') setSelectedCompCode(competitions[0].code || competitions[0].id);
     }
-  }, [tab, compList, selectedCompCode]);
+  }, [competitions, selectedCompCode, tab]);
 
+  // Fetch data when tab or comp changes
   useEffect(() => {
     if (selectedCompCode && (tab === 'standings' || tab === 'teams')) {
       if (tab === 'standings') loadStandings(selectedCompCode);
@@ -756,17 +572,87 @@ export default function MasterGames() {
     }
   }, [selectedCompCode, tab, loadStandings, loadTeams]);
 
-  /* ── RENDER ── */
-  const totalFixtures = filteredFixtures.length;
+  // Auto-refresh tables/teams every 5 minutes
+  useEffect(() => {
+    if (tab !== 'standings' && tab !== 'teams') return;
+    const interval = setInterval(() => {
+      if (tab === 'standings' && selectedCompCode) loadStandings(selectedCompCode, true);
+      if (tab === 'teams' && selectedCompCode) loadTeams(selectedCompCode, true);
+    }, 5 * 60 * 1000); // 5 mins
+    return () => clearInterval(interval);
+  }, [tab, selectedCompCode, loadStandings, loadTeams]);
+
+  /* -- Load Fixtures on demand -- */
+  useEffect(() => {
+    if (selectedDate) loadDateFixtures(selectedDate);
+  }, [selectedDate, loadDateFixtures]);
+
+  /* -- Filtering & Grouping -- */
+  const todayStr = getLocalDateStr(0);
+  const yesterdayStr = getLocalDateStr(-1);
+  const tomorrowStr = getLocalDateStr(1);
+  const otherDates = useMemo(() => {
+    const arr = [];
+    for (let i = -14; i <= 14; i++) {
+      if (i >= -1 && i <= 1) continue;
+      const str = getLocalDateStr(i);
+      arr.push({ str, label: formatDateShort(str) });
+    }
+    return arr;
+  }, []);
+
+  const filteredFixtures = useMemo(() => {
+    let list = (fixtures || []).filter(m => getLocalDateFromUtc(m.utcDate) === selectedDate);
+    if (searchQ.trim()) {
+      const terms = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean);
+      if (terms.length) list = list.filter(m => matchQ(m, terms));
+    }
+    return list;
+  }, [fixtures, selectedDate, searchQ]);
+
+  const grouped = useMemo(() => {
+    const map = new Map();
+    filteredFixtures.forEach(m => {
+      const key = m.competition?.name || 'Other';
+      if (!map.has(key)) map.set(key, { comp: m.competition, matches: [] });
+      map.get(key).matches.push(m);
+    });
+    const statusOrder = (s) => {
+      if (s === 'IN_PLAY' || s === 'PAUSED') return 0;
+      if (s === 'SCHEDULED' || s === 'TIMED') return 1;
+      if (s === 'FINISHED') return 2;
+      return 3;
+    };
+    map.forEach(g => g.matches.sort((a, b) => {
+      const so = statusOrder(a.status) - statusOrder(b.status);
+      return so !== 0 ? so : (a.utcDate || '').localeCompare(b.utcDate || '');
+    }));
+    return [...map.values()];
+  }, [filteredFixtures]);
+
+  const compList = useMemo(() => {
+    const map = new Map();
+    (fixtures || []).forEach(m => { if (m.competition) map.set(String(m.competition.id), m.competition); });
+    return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [fixtures]);
+
+  // Split into Top 5 and Others
+  const topComps = useMemo(() => compList.filter(c => TOP_5_CODES.includes(c.code)), [compList]);
+  const otherComps = useMemo(() => compList.filter(c => !TOP_5_CODES.includes(c.code)), [compList]);
+  const filteredOtherComps = useMemo(() => {
+    if (!leagueSearchQ.trim()) return otherComps;
+    return otherComps.filter(c => (c.name || '').toLowerCase().includes(leagueSearchQ.toLowerCase()));
+  }, [otherComps, leagueSearchQ]);
+
+  const liveCount = useMemo(() => liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [liveMatches]);
+  const favMatches = useMemo(() => filteredFixtures.filter(m => isFav(String(m.id))), [filteredFixtures, isFav]);
 
   return (
     <div className="mg8-page">
       <SEO
         title="Master Games & Premium Predictions | ZOKASCORE"
-        description="Join the Master Games at ZOKASCORE for premium football predictions and high-stakes competition. Test your skills against top predictors and win big."
-        keywords="master games, premium predictions, football tips, high stakes, expert predictions"
+        description="Join the Master Games at ZOKASCORE for premium football predictions and high-stakes competition."
         path="/mastergames"
-        robots="index,follow"
       />
 
       <div className="mg8-wrap">
@@ -781,7 +667,7 @@ export default function MasterGames() {
             <div className="mg8-stat-label">Live</div>
           </div>
           <div style={{ textAlign: 'center' }}>
-            <div className="mg8-stat-val total-c">{totalFixtures}</div>
+            <div className="mg8-stat-val total-c">{filteredFixtures.length}</div>
             <div className="mg8-stat-label">Fixtures</div>
           </div>
           <div style={{ textAlign: 'center' }}>
@@ -795,19 +681,10 @@ export default function MasterGames() {
           <button className={`mg8-date-btn ${selectedDate === yesterdayStr ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr)}>Yesterday</button>
           <button className={`mg8-date-btn mg8-date-today ${selectedDate === todayStr ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr)}>Today</button>
           <button className={`mg8-date-btn ${selectedDate === tomorrowStr ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr)}>Tomorrow</button>
-          <div className="mg8-more-wrap" ref={moreRef}>
-            <button className={`mg8-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(!moreDatesOpen)}>
-              <Calendar size={13} /> More <ChevronDown size={12} />
+          <div className="mg8-more-wrap">
+            <button className="mg8-more-btn" onClick={() => alert('DatePicker functionality goes here')}>
+              <Calendar size={13} /> More
             </button>
-            {moreDatesOpen && (
-              <div className="mg8-more-dropdown">
-                {otherDates.map(d => (
-                  <button key={d.str} className={`mg8-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
-                    {d.label}
-                  </button>
-                ))}
-              </div>
-            )}
           </div>
         </div>
 
@@ -822,15 +699,9 @@ export default function MasterGames() {
 
         {/* Actions */}
         <div className="mg8-actions">
-          <button className={`mg8-act ${soundOn ? 'on' : ''}`} onClick={() => setSoundOn(!soundOn)}>
-            {soundOn ? <Volume2 size={13} /> : <VolumeX size={13} />} Sound
-          </button>
-          <button className="mg8-act" onClick={refreshFixtures}>
-            <RefreshCw size={13} /> Refresh
-          </button>
-          <button className={`mg8-act ${searchOpen ? 'on' : ''}`} onClick={() => setSearchOpen(!searchOpen)}>
-            <Search size={13} /> Search
-          </button>
+          <button className="mg8-act" onClick={refreshFixtures}><RefreshCw size={13} /> Refresh</button>
+          <button className={`mg8-act ${searchOpen ? 'on' : ''}`} onClick={() => setSearchOpen(!searchOpen)}><Search size={13} /> Search</button>
+          <button className="mg8-act" onClick={handleShare}><Share2 size={13} /> Share</button>
           {globalEnabled ? (
             <button className="mg8-act on" onClick={toggleGlobal}><Bell size={13} /> On</button>
           ) : (
@@ -838,7 +709,7 @@ export default function MasterGames() {
           )}
         </div>
 
-        {/* Search */}
+        {/* Match Search */}
         <div className={`mg8-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
           <div className="mg8-search">
             <Search size={15} style={{ opacity: .4, flexShrink: 0 }} />
@@ -847,44 +718,41 @@ export default function MasterGames() {
           </div>
         </div>
 
-        {/* Competition Filters (Fixtures tab only) */}
-        {tab === 'fixtures' && compList.length > 1 && (
-          <div className="mg8-filters">
-            <button className={`mg8-filter ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => setCompFilter('ALL')}>All</button>
-            {compList.map(c => (
-              <button key={c.id} className={`mg8-filter ${compFilter === String(c.id) ? 'active' : ''}`} onClick={() => setCompFilter(String(c.id))}>
-                {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
-              </button>
-            ))}
-          </div>
-        )}
-
         {/* Competition Picker (Standings/Teams tabs) */}
         {(tab === 'standings' || tab === 'teams') && compList.length > 0 && (
-          <div className="mg8-filters">
-            {compList.map(c => (
-              <button key={c.id} className={`mg8-filter ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code || String(c.id))}>
-                {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
-              </button>
-            ))}
+          <div style={{ marginBottom: 14, position: 'relative' }}>
+            <div className="mg8-filters">
+              {topComps.map(c => (
+                <button key={c.id} className={`mg8-filter ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code || String(c.id))}>
+                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
+                </button>
+              ))}
+            </div>
+            <button className="mg8-more-btn" style={{ width: '100%', marginTop: 6, justifyContent: 'center' }} onClick={() => setLeagueSearchOpen(!leagueSearchOpen)}>
+              <Search size={13} /> {leagueSearchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
+            </button>
+            {leagueSearchOpen && (
+              <div className="mg8-more-dropdown" style={{ position: 'static', transform: 'none', width: '100%', marginTop: 6, maxHeight: 300, overflowY: 'auto' }}>
+                <input className="mg8-search" style={{ width: '100%', marginBottom: 6 }} placeholder="Type league name..." value={leagueSearchQ} onChange={e => setLeagueSearchQ(e.target.value)} />
+                {filteredOtherComps.length === 0 && <div className="mg8-empty" style={{ padding: 10 }}><p>No leagues found</p></div>}
+                {filteredOtherComps.map(c => (
+                  <button key={c.id} className={`mg8-more-item ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code || String(c.id)); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
+                    {c.emblem && <img src={c.emblem} alt="" style={{width:14, height:14, marginRight:6, verticalAlign: 'middle'}} onError={e => { e.target.style.display = 'none'; }} />} {c.name}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
         {/* ── CONTENT ── */}
         {loading && !fixtures.length ? (
-          <div style={{ marginTop: 20 }}>
-            {[1,2,3,4,5].map(i => <div key={i} className="mg8-sk" />)}
-          </div>
+          <div style={{ marginTop: 20 }}>{[1,2,3,4,5].map(i => <div key={i} className="mg8-sk" />)}</div>
         ) : (
           <>
-            {/* FIXTURES TAB */}
             {tab === 'fixtures' && (
               grouped.length === 0 ? (
-                <div className="mg8-empty">
-                  <div className="mg8-empty-icon"><Calendar size={22} /></div>
-                  <p>No fixtures found</p>
-                  <div className="hint">Try a different date or filter</div>
-                </div>
+                <div className="mg8-empty"><div className="mg8-empty-icon"><Calendar size={22} /></div><p>No fixtures found</p></div>
               ) : (
                 grouped.map(g => (
                   <div key={g.comp?.id || g.comp?.name} className="mg8-section">
@@ -894,105 +762,46 @@ export default function MasterGames() {
                       <span className="cnt">{g.matches.length}</span>
                     </div>
                     {g.matches.map((m, i) => (
-                      <MatchCard
-                        key={m.id} m={m} idx={i}
-                        expanded={expanded} onToggle={setExpanded}
-                        scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
-                        isFav={isFav(String(m.id))} onFav={toggleFav}
-                        isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
-                      />
+                      <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />
                     ))}
                   </div>
                 ))
               )
             )}
 
-            {/* LIVE TAB */}
             {tab === 'live' && (
-              <>
-                {liveCount > 0 && (
-                  <div className="mg8-live-hd">
-                    <span className="mg8-live-dot" />
-                    <span className="mg8-live-txt">Live Now</span>
-                    <span className="mg8-live-cnt">{liveCount} matches</span>
-                  </div>
-                )}
-                {liveMatches.length === 0 ? (
-                  <div className="mg8-empty">
-                    <div className="mg8-empty-icon"><Zap size={22} /></div>
-                    <p>No live matches</p>
-                    <div className="hint">Check back when matches kick off</div>
-                  </div>
-                ) : (
-                  liveMatches.map((m, i) => (
-                    <MatchCard
-                      key={m.id} m={m} idx={i}
-                      expanded={expanded} onToggle={setExpanded}
-                      scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
-                      isFav={isFav(String(m.id))} onFav={toggleFav}
-                      isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
-                    />
-                  ))
-                )}
-              </>
+              liveMatches.length === 0 ? (
+                <div className="mg8-empty"><div className="mg8-empty-icon"><Zap size={22} /></div><p>No live matches</p></div>
+              ) : (
+                liveMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />)
+              )
             )}
 
-            {/* FAVOURITES TAB */}
             {tab === 'favourites' && (
-              <>
-                <div className="mg8-fav-header"><Star size={16} fill="#f59e0b" /><span>Your Favourites</span></div>
-                {favMatches.length === 0 ? (
-                  <div className="mg8-empty">
-                    <div className="mg8-empty-icon"><Heart size={22} /></div>
-                    <p>No favourited matches</p>
-                    <div className="hint">Star a match to track it here</div>
-                  </div>
-                ) : (
-                  favMatches.map((m, i) => (
-                    <MatchCard
-                      key={m.id} m={m} idx={i}
-                      expanded={expanded} onToggle={setExpanded}
-                      scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims}
-                      isFav={isFav(String(m.id))} onFav={toggleFav}
-                      isNotif={isNotif(String(m.id))} onNotif={toggleNotif}
-                    />
-                  ))
-                )}
-              </>
+              favMatches.length === 0 ? (
+                <div className="mg8-empty"><div className="mg8-empty-icon"><Heart size={22} /></div><p>No favourited matches</p></div>
+              ) : (
+                favMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />)
+              )
             )}
 
-            {/* STANDINGS TAB */}
             {tab === 'standings' && (
               standingsLoading ? <div className="mg8-sk" /> :
               standingsData ? <StandingsTable standings={standingsData.standings} /> :
               <div className="mg8-empty"><div className="mg8-empty-icon"><Trophy size={22} /></div><p>Select a competition above</p></div>
             )}
 
-            {/* TEAMS TAB */}
             {tab === 'teams' && (
               teamsLoading ? <div className="mg8-sk" /> :
-              teamsData ? <TeamsGrid teams={teamsData.teams} /> :
+              teamsData ? <TeamsGrid teams={teamsData.teams} onSelectTeam={setSelectedTeam} /> :
               <div className="mg8-empty"><div className="mg8-empty-icon"><Users size={22} /></div><p>Select a competition above</p></div>
             )}
           </>
         )}
-
       </div>
 
-      {/* Notification Banner */}
-      {!notifBannerDismissed && !globalEnabled && (
-        <div className="mg8-notif-banner">
-          <button className="mg8-notif-btn" onClick={async () => {
-            const ok = await requestNotifPermission();
-            if (ok) { toggleGlobal(); setNotifBannerDismissed(true); try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {} }
-          }}>
-            <Bell size={16} /> Enable Goal Notifications
-          </button>
-          <button style={{ marginTop: 8, background: 'none', border: 'none', color: 'var(--text-muted)', fontSize: '.68rem', cursor: 'pointer', fontFamily: 'inherit' }} onClick={() => { setNotifBannerDismissed(true); try { localStorage.setItem('mg8_notif_banner_dismissed', 'true'); } catch {} }}>
-            Not now
-          </button>
-        </div>
-      )}
+      {/* Team Modal */}
+      {selectedTeam && <TeamModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
 
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <Confetti active={confettiKey > 0} key={confettiKey} />
