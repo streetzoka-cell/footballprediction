@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import SEO from '../components/SEO';
-import { fetchFixtures } from "../utils/api";
+import { fetchFixtures, fetchYesterdayFixtures, fetchTomorrowFixtures } from "../utils/api";
 import { todayStr as getTodayStr } from "../utils/dates";
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
@@ -13,12 +14,23 @@ export default function MatchDetails() {
   useEffect(() => {
     const getMatch = async () => {
       try {
-        const res = await fetchFixtures(getTodayStr());
-        const list = Array.isArray(res) ? res : res?.matches || [];
-        const found = list.find(m => String(m.id) === String(matchId));
+        // ★ FIX: Fetch all 3 days to ensure we find the match regardless of its schedule
+        const [yRes, tRes, tmRes] = await Promise.all([
+          fetchYesterdayFixtures(),
+          fetchFixtures(getTodayStr()),
+          fetchTomorrowFixtures()
+        ]);
+        
+        const allMatches = [
+          ...(yRes?.matches || []),
+          ...(tRes?.matches || []),
+          ...(tmRes?.matches || [])
+        ];
+        
+        const found = allMatches.find(m => String(m.id) === String(matchId));
         setMatch(found);
       } catch (e) {
-        console.error("Match not found");
+        console.error("Match fetch error:", e);
       } finally {
         setLoading(false);
       }
@@ -26,8 +38,24 @@ export default function MatchDetails() {
     getMatch();
   }, [matchId]);
 
-  if (loading) return <div className="p-4 text-center text-white">Loading match...</div>;
-  if (!match) return <div className="p-4 text-center text-white">Match not found.</div>;
+  if (loading) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        Loading match...
+      </div>
+    );
+  }
+
+  if (!match) {
+    return (
+      <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#fff', padding: '24px', textAlign: 'center' }}>
+        <div style={{ marginBottom: '20px', fontWeight: 800, fontSize: '1.2rem' }}>Match not found.</div>
+        <Link to="/mastergames" style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none' }}>
+          ← Back to Fixtures
+        </Link>
+      </div>
+    );
+  }
 
   const homeName = match.homeTeam?.name || 'Home Team';
   const awayName = match.awayTeam?.name || 'Away Team';
@@ -35,7 +63,6 @@ export default function MatchDetails() {
   const title = `${homeName} vs ${awayName} - Live Score & Predictions | ZOKASCORE`;
   const description = `Watch ${homeName} vs ${awayName} live. Get real-time scores, match stats, and expert predictions for this ${leagueName} match on ZokaScore.`;
 
-  // JSON-LD Structured Data for Google Search Console
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -54,7 +81,7 @@ export default function MatchDetails() {
   const isFin = isFinishedStatus(match.status, SPORT.FOOTBALL);
 
   return (
-    <div className="v21-wrap" style={{ paddingTop: '24px', paddingBottom: '40px' }}>
+    <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#f8fafc', padding: '24px 16px' }}>
       <SEO 
         title={title}
         description={description}
@@ -63,24 +90,83 @@ export default function MatchDetails() {
         structuredData={structuredData}
       />
       
-      <div style={{ textAlign: 'center', marginBottom: '24px' }}>
-        <h1 style={{ fontSize: '1.5rem', fontWeight: 900, color: 'var(--text-primary)' }}>
-          {homeName} <span style={{ color: 'var(--text-muted)' }}>vs</span> {awayName}
-        </h1>
-        <p style={{ color: 'var(--text-muted)', fontSize: '.8rem' }}>{leagueName}</p>
-      </div>
-
-      <div className="v21-mc" style={{ background: 'var(--bg-surface)', padding: '20px', borderRadius: '12px', textAlign: 'center' }}>
-        <div style={{ fontSize: '2rem', fontWeight: 900, color: isLive ? '#ef4444' : isFin ? 'var(--accent)' : 'var(--text-primary)' }}>
-          {match.homeScore ?? 0} - {match.awayScore ?? 0}
-        </div>
-        <p style={{ color: 'var(--text-muted)', fontSize: '.8rem', marginTop: '8px' }}>
-          Status: {isLive ? 'LIVE' : isFin ? 'Finished' : 'Scheduled'}
-        </p>
-        
-        <Link to="/predictions" style={{ display: 'inline-block', marginTop: '20px', padding: '10px 24px', background: 'var(--accent)', color: '#fff', borderRadius: '8px', fontWeight: 800, textDecoration: 'none' }}>
-          Make Predictions
+      <div style={{ maxWidth: '600px', margin: '0 auto' }}>
+        {/* ★ FIX: Smooth Back Button */}
+        <Link 
+          to="/mastergames" 
+          style={{ 
+            display: 'inline-flex', 
+            alignItems: 'center', 
+            gap: '6px', 
+            color: '#94a3b8', 
+            fontWeight: 700, 
+            marginBottom: '24px', 
+            textDecoration: 'none',
+            background: 'rgba(255,255,255,0.05)',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            border: '1px solid rgba(255,255,255,0.08)'
+          }}
+        >
+          <ArrowLeft size={16} /> Back to Fixtures
         </Link>
+
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+          <h1 style={{ fontSize: '1.8rem', fontWeight: 900, color: '#fff', margin: 0 }}>
+            {homeName} <span style={{ color: '#64748b', fontSize: '1.2rem' }}>vs</span> {awayName}
+          </h1>
+          <p style={{ color: '#94a3b8', fontSize: '.85rem', marginTop: '8px', fontWeight: 600 }}>{leagueName}</p>
+        </div>
+
+        <div style={{ 
+          background: 'rgba(30,41,59,0.4)', 
+          backdropFilter: 'blur(12px)',
+          padding: '32px 20px', 
+          borderRadius: '16px', 
+          textAlign: 'center',
+          border: '1px solid rgba(255,255,255,0.06)'
+        }}>
+          <div style={{ 
+            fontSize: '3rem', 
+            fontWeight: 900, 
+            color: isLive ? '#ef4444' : isFin ? '#10b981' : '#fff',
+            fontFamily: 'system-ui, sans-serif'
+          }}>
+            {match.homeScore ?? 0} - {match.awayScore ?? 0}
+          </div>
+          
+          <div style={{ 
+            display: 'inline-block',
+            marginTop: '12px',
+            padding: '4px 12px',
+            borderRadius: '6px',
+            fontSize: '.7rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            background: isLive ? 'rgba(239,68,68,0.15)' : isFin ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.06)',
+            color: isLive ? '#ef4444' : isFin ? '#10b981' : '#94a3b8'
+          }}>
+            {isLive ? `LIVE ${match.minute ? `(${match.minute}')` : ''}` : isFin ? 'Finished' : 'Scheduled'}
+          </div>
+          
+          <div style={{ marginTop: '32px' }}>
+            <Link 
+              to="/predictions" 
+              style={{ 
+                display: 'inline-block', 
+                padding: '12px 32px', 
+                background: '#10b981', 
+                color: '#fff', 
+                borderRadius: '10px', 
+                fontWeight: 800, 
+                textDecoration: 'none',
+                boxShadow: '0 4px 12px rgba(16,185,129,0.25)'
+              }}
+            >
+              Make Predictions
+            </Link>
+          </div>
+        </div>
       </div>
     </div>
   );
