@@ -1,10 +1,10 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v11.2 Ultimate — Fixed Live Only Button Visibility
+// v12.0 Ultimate — Refactored for 10/10 Performance & Readability
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
@@ -14,11 +14,10 @@ import {
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { useFootballData } from '../context/FootballDataContext';
 import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime } from '../utils/dates';
+import SEO from '../components/SEO';
 
 const getYesterdayStr = () => getLocalDateStr(-1);
 const getTomorrowStr = () => getLocalDateStr(1);
-
-import SEO from '../components/SEO';
 
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
@@ -53,7 +52,6 @@ const injectStyles = () => {
     .mg11-page{min-height:100vh;background:radial-gradient(circle at top right, #1e293b, #0a0f1a);padding:0 0 120px;position:relative;color:#f8fafc;font-weight:600;overflow-x:hidden}
     .mg11-wrap{max-width:560px;margin:0 auto;padding:0 12px;position:relative;z-index:1}
 
-    /* Clean Glass Header */
     .mg11-hdr{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.75);backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;gap:8px}
     .mg11-hdr-title{display:flex;flex-direction:column;flex:1;min-width:0}
     .mg11-hdr-title h1{margin:0;font-size:1.2em;font-weight:900;letter-spacing:-.02em;color:#fff;display:flex;align-items:center;gap:6px}
@@ -87,12 +85,10 @@ const injectStyles = () => {
     .mg11-tab{flex:1;padding:10px 4px;border:none;border-radius:10px;background:transparent;color:#94a3b8;font-size:.7em;font-weight:800;cursor:pointer;transition:all .2s ease;text-align:center;font-family:inherit;text-transform:uppercase}
     .mg11-tab.active{background:#10b981;color:#fff;box-shadow:0 4px 12px rgba(16,185,129,.25)}
 
-    /* Always Visible Search */
     .mg11-search-static{display:flex;align-items:center;gap:8px;width:100%;padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);backdrop-filter:blur(8px);margin-bottom:16px}
     .mg11-search-static input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:.85em;font-weight:600;font-family:inherit}
     .mg11-search-static input::placeholder{color:#64748b}
 
-    /* Pill Filters Layout */
     .mg11-filter-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
     .mg11-pill-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;flex:1}
     .mg11-pill-scroll::-webkit-scrollbar{display:none}
@@ -103,14 +99,12 @@ const injectStyles = () => {
     .mg11-pill img{width:16px;height:16px;object-fit:contain}
     .mg11-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:mg11Pulse 1.2s ease-in-out infinite;flex-shrink:0}
 
-    /* Standings/Teams League Search Dropdown */
     .mg11-filter-panel{background:rgba(15,23,42,0.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.5);max-height:300px;overflow-y:auto;animation:mg11DropDownIn .2s ease-out both;margin-top:10px}
     .mg11-filter-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;border:none;border-radius:8px;background:none;color:#e2e8f0;font-size:.75em;font-weight:700;cursor:pointer;font-family:inherit}
     .mg11-filter-item:hover{background:rgba(255,255,255,0.05)}
     .mg11-filter-item.active{color:#10b981;background:rgba(16,185,129,.1)}
     .mg11-filter-item img{width:18px;height:18px;object-fit:contain}
 
-    /* Glass Cards */
     .mg11-card{position:relative;overflow:hidden;padding:14px 16px;background:rgba(30,41,59,0.4);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);border-radius:14px;margin-bottom:8px;transition:all .25s cubic-bezier(.22,1,.36,1);animation:mg11SlideIn .3s ease both;cursor:pointer}
     .mg11-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.12);transform:translateY(-1px)}
     .mg11-card.live{border-color:rgba(239,68,68,.3);animation:mg11LiveGlow 2.5s ease-in-out infinite,mg11SlideIn .3s ease both}
@@ -157,7 +151,6 @@ const injectStyles = () => {
     .mg11-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.7);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);border-radius:inherit;z-index:3;pointer-events:none}
     .mg11-overlay-badge{padding:10px 24px;border-radius:12px;color:#fff;font-weight:900;font-size:.8em;letter-spacing:.05em;display:flex;align-items:center;gap:8px;animation:mg11StatusIn 3s ease both}
 
-    /* Expanded Match Details */
     .mg11-expanded{background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);border-top:none;border-radius:0 0 14px 14px;overflow:hidden;animation:mg11Expand .35s ease-out both}
     .mg11-exp-section{padding:12px 16px 4px;font-size:.6em;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
     .mg11-exp-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
@@ -165,7 +158,6 @@ const injectStyles = () => {
     .mg11-exp-label{color:#94a3b8;font-weight:700}
     .mg11-exp-val{color:#fff;font-weight:800;font-family:var(--font-display,system-ui)}
     
-    /* Event Rows (Goals/Cards) */
     .mg11-event-row{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
     .mg11-event-min{font-weight:900;color:#cbd5e1;min-width:30px;font-variant-numeric:tabular-nums;font-family:var(--font-display,system-ui)}
     .mg11-event-icon{font-size:1.1em;flex-shrink:0}
@@ -269,6 +261,7 @@ const CMT = {
 };
 const pick = (a) => a[Math.floor(Math.random()*a.length)];
 
+// ═══ Custom Hooks for Clean Logic ═══
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const idRef = useRef(0);
@@ -287,7 +280,80 @@ function useToasts() {
   return { toasts, add, dismiss };
 }
 
-function ToastContainer({ toasts, onDismiss }) {
+function useNotifications({ liveMatches, isFav, tab, addToast }) {
+  const prevScores = useRef(new Map());
+  const prevStatuses = useRef(new Map());
+  const timeouts = useRef(new Map());
+  
+  const [scorePops, setScorePops] = useState(new Map());
+  const [flashGoals, setFlashGoals] = useState(new Set());
+  const [statusAnims, setStatusAnims] = useState(new Map());
+  const [confettiKey, setConfettiKey] = useState(0);
+
+  const clearTO = useCallback((k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } }, []);
+  const setTO = useCallback((k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); }, [clearTO]);
+
+  const isLiveStatus = useCallback((s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET' || s === 'BT' || s === 'LIVE', []);
+
+  useEffect(() => {
+    liveMatches.forEach(m => {
+      const id = String(m.id);
+      const shouldNotify = isFav(id) || tab === 'fixtures';
+      const prev = prevScores.current.get(id);
+      const h = m.homeScore, a = m.awayScore;
+      
+      if (prev) {
+        if (h != null && prev.h != null && h > prev.h) {
+          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'home']]));
+          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
+          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
+        }
+        if (a != null && prev.a != null && a > prev.a) {
+          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'away']]));
+          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
+          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
+        }
+      }
+      prevScores.current.set(id, { h, a });
+    });
+
+    liveMatches.forEach(m => {
+      const id = String(m.id);
+      const shouldNotify = isFav(id) || tab === 'fixtures';
+      const prev = prevStatuses.current.get(id);
+      const curr = m.status || '';
+      if (prev && prev !== curr) {
+        if (!isLiveStatus(prev) && isLiveStatus(curr)) {
+          if (shouldNotify) addToast({ type: 'status', st: 'live', msg: pick(CMT.kickoff), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
+          if (Sound.on) Sound.kickoff();
+          setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
+          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
+        }
+        if (isLiveStatus(prev) && (curr === 'FINISHED' || curr === 'FT')) {
+          const score = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
+          if (shouldNotify) addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeName} vs ${m.awayName}`, score, dur: 4000 });
+          if (Sound.on) Sound.whistle('ft');
+          setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
+          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
+        }
+        if ((curr === 'HALF_TIME' || curr === 'HT') && prev !== 'HALF_TIME' && prev !== 'HT') {
+          if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
+          if (Sound.on) Sound.whistle('ht');
+          setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
+          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
+        }
+      }
+      prevStatuses.current.set(id, curr);
+    });
+  }, [liveMatches, addToast, isFav, tab, isLiveStatus, setTO]);
+
+  return { scorePops, flashGoals, statusAnims, confettiKey };
+}
+
+// ═══ Memoized UI Components ═══
+const ToastContainer = React.memo(({ toasts, onDismiss }) => {
   if (!toasts.length) return null;
   return (
     <div className="mg11-toast-wrap">
@@ -317,9 +383,9 @@ function ToastContainer({ toasts, onDismiss }) {
       })}
     </div>
   );
-}
+});
 
-function Confetti({ active }) {
+const Confetti = React.memo(({ active }) => {
   if (!active) return null;
   const colors = ['#ef4444','#10b981','#f59e0b','#3b82f6','#a855f7','#ec4899'];
   const p = Array.from({ length: 24 }, (_, i) => ({ left: 8 + Math.random() * 84, bottom: 80, color: colors[i % colors.length], delay: Math.random() * .3, rot: Math.random() * 360 }));
@@ -328,69 +394,9 @@ function Confetti({ active }) {
       {p.map((x, i) => <div key={i} className="mg11-confetti-p" style={{ left: x.left + '%', bottom: x.bottom + 'px', background: x.color, animationDelay: x.delay + 's', transform: `rotate(${x.rot}deg)` }} />)}
     </div>
   );
-}
+});
 
-const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
-
-function extractMatchDate(m) {
-  if (!m) return '';
-  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
-  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
-  if (m.date) return m.date;
-  return '';
-}
-
-function normalizeMatch(raw, isPrimary) {
-  if (!raw) return null;
-  const id = String(raw.id || raw.matchId);
-  const status = raw.status || '';
-  
-  let dateStr = extractMatchDate(raw);
-  let kickoff = 'TBD';
-  let timestamp = 0;
-
-  const rawDate = raw.utcDate || raw.date;
-  if (rawDate) {
-    try {
-      const dt = new Date(rawDate);
-      kickoff = formatTime(rawDate); 
-      timestamp = dt.getTime();
-    } catch {}
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
-  }
-
-  const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE');
-  const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN');
-  
-  let isStarted = false;
-  if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
-    isStarted = true;
-  }
-
-  const homeScore = isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
-  const awayScore = isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
-
-  return {
-    id, dateStr, kickoff, timestamp,
-    status, isLive, isHT, isFinished,
-    minute: raw.minute || raw.elapsed || null, 
-    isStarted, 
-    homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
-    awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
-    homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
-    awayLogo: isPrimary ? raw.awayLogo : raw.awayTeam?.crest,
-    homeScore, awayScore,
-    leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
-    leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
-    score: raw.score, // Preserve score object for goals/cards
-    stats: raw.stats || raw.matchStats || [],
-  };
-}
-
-function ScoreBreakdown({ match }) {
+const ScoreBreakdown = React.memo(({ match }) => {
   if (match.isStarted && !match.isLive) {
     return (
       <div className="mg11-no-data" style={{ padding: '30px', textAlign: 'center' }}>
@@ -471,9 +477,9 @@ function ScoreBreakdown({ match }) {
       )}
     </div>
   );
-}
+});
 
-function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav }) {
+const MatchCard = React.memo(({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav }) => {
   const isLive = m.isLive;
   const isHT = m.isHT;
   const isFt = m.isFinished;
@@ -554,8 +560,95 @@ function MatchCard({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAn
       {isExp && <div className="mg11-expanded"><ScoreBreakdown match={m} /></div>}
     </div>
   );
+});
+
+const LeagueSection = React.memo(({ group, expanded, onToggle, isExpanded, toggleLeagueExpand }) => {
+  const limit = group.isTop ? 5 : 1;
+  const visibleMatches = isExpanded ? group.matches : group.matches.slice(0, limit);
+  const hiddenCount = group.matches.length - limit;
+  
+  return (
+    <div className="mg11-section" style={{ marginBottom: '20px' }}>
+      <div className="mg11-league-hd" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
+        {group.logo && <img src={group.logo} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px' }} onError={e => { e.target.style.display = 'none'; }} />}
+        <span style={{ fontSize: '.75em', fontWeight: 900, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{group.name}</span>
+        <span style={{ marginLeft: 'auto', fontSize: '.55em', fontWeight: 700, color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{group.matches.length}</span>
+      </div>
+      {visibleMatches.map((m, i) => 
+        <MatchCard key={`${group.name}-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={onToggle} isFav={false} onFav={() => {}} />
+      )}
+      {hiddenCount > 0 && (
+        <button className="mg11-show-more" onClick={() => toggleLeagueExpand(group.name)}>
+          {isExpanded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+          {isExpanded ? 'Show less' : `Show ${hiddenCount} more matches`}
+        </button>
+      )}
+    </div>
+  );
+});
+
+// ═══ Helper Functions ═══
+const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
+
+function extractMatchDate(m) {
+  if (!m) return '';
+  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
+  if (m.date && m.date.includes('T')) return m.date.split('T')[0];
+  if (m.date) return m.date;
+  return '';
 }
 
+function normalizeMatch(raw, isPrimary) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  
+  let dateStr = extractMatchDate(raw);
+  let kickoff = 'TBD';
+  let timestamp = 0;
+
+  const rawDate = raw.utcDate || raw.date;
+  if (rawDate) {
+    try {
+      const dt = new Date(rawDate);
+      kickoff = formatTime(rawDate); 
+      timestamp = dt.getTime();
+    } catch {}
+  } else if (raw.kickoff) {
+    kickoff = raw.kickoff;
+  }
+
+  const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE');
+  const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
+  const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN');
+  
+  let isStarted = false;
+  if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
+    isStarted = true;
+  }
+
+  const homeScore = isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
+  const awayScore = isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
+
+  return {
+    id, dateStr, kickoff, timestamp,
+    status, isLive, isHT, isFinished,
+    minute: raw.minute || raw.elapsed || null, 
+    isStarted, 
+    homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
+    awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
+    homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
+    awayLogo: isPrimary ? raw.awayLogo : raw.awayTeam?.crest,
+    homeScore, awayScore,
+    leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
+    leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
+    score: raw.score, 
+    stats: raw.stats || raw.matchStats || [],
+  };
+}
+
+// ═══ Main Component ═══
 export default function MasterGames() {
   injectStyles();
 
@@ -570,7 +663,6 @@ export default function MasterGames() {
   const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem('mg11_favs', JSON.stringify([...n])); } catch {} return n; }); }, []);
   const isFav = useCallback(id => favs.has(String(id)), [favs]);
 
-  /* ── State ── */
   const [tab, setTab] = useState('fixtures');
   const [compFilter, setCompFilter] = useState('ALL');
   const [selectedDate, setSelectedDate] = useState(getTodayStr());
@@ -583,17 +675,12 @@ export default function MasterGames() {
   const [teamsData, setTeamsData] = useState(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(false);
-  const [confettiKey, setConfettiKey] = useState(0);
   const [rescued, setRescued] = useState(false);
   const [moreDatesOpen, setMoreDatesOpen] = useState(false);
   const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
   const [leagueSearchQ, setLeagueSearchQ] = useState('');
   const rescueToastSent = useRef(false);
   const welcomeToastShown = useRef(false);
-  const [scorePops, setScorePops] = useState(new Map());
-  const [flashGoals, setFlashGoals] = useState(new Set());
-  const [statusAnims, setStatusAnims] = useState(new Map());
-
   const [showLiveOnly, setShowLiveOnly] = useState(false);
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   
@@ -601,11 +688,6 @@ export default function MasterGames() {
   useEffect(() => { try { localStorage.setItem('mg11_fontscale', String(fontScale)); } catch {} }, [fontScale]);
   
   const [selectedCompCode, setSelectedCompCode] = useState(null);
-
-  /* ── Refs ── */
-  const prevScores = useRef(new Map());
-  const prevStatuses = useRef(new Map());
-  const timeouts = useRef(new Map());
   const moreRef = useRef(null);
 
   const pastDates = useMemo(() => Array.from({ length: 14 }, (_, i) => {
@@ -619,8 +701,6 @@ export default function MasterGames() {
   }), []);
 
   useEffect(() => { Sound.on = soundOn; }, [soundOn]);
-  const clearTO = (k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } };
-  const setTO = (k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); };
 
   useEffect(() => {
     const handler = (e) => {
@@ -793,17 +873,17 @@ export default function MasterGames() {
   }, [displayFixtures]);
 
   const { topLeagues, otherLeagues } = useMemo(() => {
-    return { topLeagues: grouped.slice(0, 5), otherLeagues: grouped.slice(5) };
+    return { topLeagues: grouped.slice(0, 5).map(g => ({...g, isTop: true})), otherLeagues: grouped.slice(5).map(g => ({...g, isTop: false})) };
   }, [grouped]);
 
-  const toggleLeagueExpand = (leagueName) => {
+  const toggleLeagueExpand = useCallback((leagueName) => {
     setExpandedLeagues(prev => {
       const n = new Set(prev);
       if (n.has(leagueName)) n.delete(leagueName);
       else n.add(leagueName);
       return n;
     });
-  };
+  }, []);
 
   const globalCompList = useMemo(() => {
     return (competitions || []).map(c => ({
@@ -859,79 +939,34 @@ export default function MasterGames() {
     return () => clearInterval(interval);
   }, [tab, selectedCompCode, loadStandings, loadTeams]);
 
-  const isLiveStatus = (s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET' || s === 'BT' || s === 'LIVE';
-
   const liveMatches = useMemo(() => {
     if (primaryFixtures.length > 0) return primaryFixtures.filter(m => m.isLive);
     return (backupLive || []).map(m => normalizeMatch(m, false)).filter(m => m.isLive);
   }, [primaryFixtures, backupLive]);
 
-  useEffect(() => {
-    liveMatches.forEach(m => {
-      const id = String(m.id);
-      const shouldNotify = isFav(id) || tab === 'fixtures';
-      const prev = prevScores.current.get(id);
-      const h = m.homeScore, a = m.awayScore;
-      
-      if (prev) {
-        if (h != null && prev.h != null && h > prev.h) {
-          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
-          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'home']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
-          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-        }
-        if (a != null && prev.a != null && a > prev.a) {
-          if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
-          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'away']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
-          setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
-        }
-      }
-      prevScores.current.set(id, { h, a });
-    });
+  // Use the custom hook for notifications
+  const { scorePops, flashGoals, statusAnims, confettiKey } = useNotifications({
+    liveMatches,
+    isFav,
+    tab,
+    addToast
+  });
 
-    liveMatches.forEach(m => {
-      const id = String(m.id);
-      const shouldNotify = isFav(id) || tab === 'fixtures';
-      const prev = prevStatuses.current.get(id);
-      const curr = m.status || '';
-      if (prev && prev !== curr) {
-        if (!isLiveStatus(prev) && isLiveStatus(curr)) {
-          if (shouldNotify) addToast({ type: 'status', st: 'live', msg: pick(CMT.kickoff), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
-          if (Sound.on) Sound.kickoff();
-          setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-        }
-        if (isLiveStatus(prev) && (curr === 'FINISHED' || curr === 'FT')) {
-          const score = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
-          if (shouldNotify) addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeName} vs ${m.awayName}`, score, dur: 4000 });
-          if (Sound.on) Sound.whistle('ft');
-          setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-        }
-        if ((curr === 'HALF_TIME' || curr === 'HT') && prev !== 'HALF_TIME' && prev !== 'HT') {
-          if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
-          if (Sound.on) Sound.whistle('ht');
-          setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
-          setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
-        }
-      }
-      prevStatuses.current.set(id, curr);
-    });
-  }, [liveMatches, addToast, isFav, tab]);
+    const navigate = useNavigate();
 
-  const handleMatchToggle = (matchId) => {
+  const handleMatchToggle = useCallback((matchId) => {
     if (matchId) {
-      const m = displayFixtures.find(x => x.id === matchId);
+      const m = displayFixtures.find(x => String(x.id) === String(matchId));
       if (m) {
-        const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}-${m.id}`;
-        setSearchParams({ match: slug });
+        // Create the clean slug (without the ID at the end, since ID is a route param)
+        const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}`;
+        // Navigate to the dedicated MatchDetails route
+        navigate(`/match/${m.id}/${slug}`);
       }
     } else {
-      setSearchParams({}); 
+      setExpanded(null);
     }
-    setExpanded(matchId);
-  };
+  }, [displayFixtures, navigate]);
 
   useEffect(() => {
     if (activeMatchId && displayFixtures.length > 0) {
@@ -1091,7 +1126,6 @@ export default function MasterGames() {
               </div>
             )}
 
-            {/* ★ FIX: Flex Row to separate Leagues (Scroll) and Live Only Button (Static) */}
             {fixtureCompList.length > 0 && (
               <div className="mg11-filter-row">
                 <div className="mg11-pill-scroll">
@@ -1143,65 +1177,50 @@ export default function MasterGames() {
                   </div>
                 )}
 
-                {topLeagues.map(g => {
-                  const isExpanded = expandedLeagues.has(g.name);
-                  const limit = 5;
-                  const visibleMatches = isExpanded ? g.matches : g.matches.slice(0, limit);
-                  const hiddenCount = g.matches.length - limit;
-                  
-                  return (
-                    <div key={g.name} className="mg11-section" style={{ marginBottom: '20px' }}>
-                      <div className="mg11-league-hd" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
-                        {g.logo && <img src={g.logo} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px' }} onError={e => { e.target.style.display = 'none'; }} />}
-                        <span style={{ fontSize: '.75em', fontWeight: 900, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{g.name}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: '.55em', fontWeight: 700, color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{g.matches.length}</span>
-                      </div>
-                      {visibleMatches.map((m, i) => 
-                        <MatchCard key={`${g.name}-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
-                      )}
-                      {hiddenCount > 0 && (
-                        <button className="mg11-show-more" onClick={() => toggleLeagueExpand(g.name)}>
-                          {isExpanded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                          {isExpanded ? 'Show less' : `Show ${hiddenCount} more matches`}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {topLeagues.map(g => (
+                  <LeagueSection 
+                    key={g.name} 
+                    group={g} 
+                    expanded={expanded} 
+                    onToggle={handleMatchToggle} 
+                    isExpanded={expandedLeagues.has(g.name)} 
+                    toggleLeagueExpand={toggleLeagueExpand}
+                    scorePops={scorePops}
+                    flashGoals={flashGoals}
+                    statusAnims={statusAnims}
+                    isFav={isFav}
+                    onFav={toggleFav}
+                  />
+                ))}
 
-                {otherLeagues.map(g => {
-                  const isExpanded = expandedLeagues.has(g.name);
-                  const limit = 1;
-                  const visibleMatches = isExpanded ? g.matches : g.matches.slice(0, limit);
-                  const hiddenCount = g.matches.length - limit;
-                  
-                  return (
-                    <div key={g.name} className="mg11-section" style={{ marginBottom: '20px' }}>
-                      <div className="mg11-league-hd" style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px', padding: '0 4px' }}>
-                        {g.logo && <img src={g.logo} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px' }} onError={e => { e.target.style.display = 'none'; }} />}
-                        <span style={{ fontSize: '.75em', fontWeight: 900, color: '#cbd5e1', textTransform: 'uppercase', letterSpacing: '0.03em' }}>{g.name}</span>
-                        <span style={{ marginLeft: 'auto', fontSize: '.55em', fontWeight: 700, color: '#64748b', background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: '4px' }}>{g.matches.length}</span>
-                      </div>
-                      {visibleMatches.map((m, i) => 
-                        <MatchCard key={`${g.name}-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
-                      )}
-                      {hiddenCount > 0 && (
-                        <button className="mg11-show-more" onClick={() => toggleLeagueExpand(g.name)}>
-                          {isExpanded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
-                          {isExpanded ? 'Show less' : `Show ${hiddenCount} more matches`}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+                {otherLeagues.map(g => (
+                  <LeagueSection 
+                    key={g.name} 
+                    group={g} 
+                    expanded={expanded} 
+                    onToggle={handleMatchToggle} 
+                    isExpanded={expandedLeagues.has(g.name)} 
+                    toggleLeagueExpand={toggleLeagueExpand}
+                    scorePops={scorePops}
+                    flashGoals={flashGoals}
+                    statusAnims={statusAnims}
+                    isFav={isFav}
+                    onFav={toggleFav}
+                  />
+                ))}
 
-                {/* SEO Crawlable Links Footer */}
+                                {/* SEO Crawlable Links Footer */}
                 <div className="mg11-seo-links">
                   <h3>Today's Match Links</h3>
                   {displayFixtures.slice(0, 50).map(m => {
-                    const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}-${m.id}`;
+                    // Slug no longer needs the ID appended to it
+                    const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}`;
                     return (
-                      <Link key={m.id} to={`/mastergames?match=${slug}`} className="mg11-seo-link" onClick={() => handleMatchToggle(m.id)}>
+                      <Link 
+                        key={m.id} 
+                        to={`/match/${m.id}/${slug}`} 
+                        className="mg11-seo-link"
+                      >
                         {m.homeName} vs {m.awayName}
                       </Link>
                     );
