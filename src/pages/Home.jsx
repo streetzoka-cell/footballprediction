@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v23.1 — Reactive Architecture, Smart Live Merging, Clean UI
+// v23.2 — Reactive Architecture, Smart Live Merging, SEO Internal Links
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -90,7 +90,7 @@ function AnimNum({ value, duration = 600, delay = 0, suffix = '' }) {
       if (p < 1) raf.current = requestAnimationFrame(run);
     };
     raf.current = requestAnimationFrame(run);
-    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+    return () => { if (raf) cancelAnimationFrame(raf.current); };
   }, [value, duration, delay]);
   return <>{display.toLocaleString()}{suffix}</>;
 }
@@ -789,33 +789,84 @@ export default function Home() {
           )}
         </div>
 
-        {/* EXPLORE GRID */}
+        {/* EXPLORE GRID & LEAGUE TABLES (SEO LINKS) */}
         <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
+          <div className="v23-sech">
+            <Trophy size={14} style={{ color: 'var(--gold)' }} />
+            <h2>League Tables</h2>
+            <div className="v23-sech-line" />
+          </div>
+          <div className="v23-explore">
+            <Link to="/mastergames?tab=standings&comp=PL" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: '#3b82f6' }} />
+              <Trophy size={20} style={{ color: '#3b82f6' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Premier League</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+              </div>
+            </Link>
+            <Link to="/mastergames?tab=standings&comp=PD" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: '#f97316' }} />
+              <Trophy size={20} style={{ color: '#f97316' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>La Liga</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+              </div>
+            </Link>
+            <Link to="/mastergames?tab=standings&comp=SA" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: '#22c55e' }} />
+              <Trophy size={20} style={{ color: '#22c55e' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Serie A</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+              </div>
+            </Link>
+            <Link to="/mastergames?tab=standings&comp=BL1" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: '#ef4444' }} />
+              <Trophy size={20} style={{ color: '#ef4444' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Bundesliga</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+              </div>
+            </Link>
+            <Link to="/mastergames?tab=standings&comp=FL1" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: '#8b5cf6' }} />
+              <Trophy size={20} style={{ color: '#8b5cf6' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Ligue 1</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+              </div>
+            </Link>
+            <Link to="/mastergames" className="v23-ecard">
+              <div className="v23-ecard-accent" style={{ background: 'var(--accent)' }} />
+              <Activity size={20} style={{ color: 'var(--accent)' }} />
+              <div>
+                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>All Leagues</div>
+                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Fixtures & Live Scores</div>
+              </div>
+            </Link>
+          </div>
+        </div>
+
+        {/* EXPLORE GRID */}
+        <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 400ms both' }}>
           <div className="v23-sech">
             <Gamepad2 size={14} style={{ color: 'var(--accent)' }} />
             <h2>Explore</h2>
             <div className="v23-sech-line" />
           </div>
           <div className="v23-explore">
-            <Link to="/mastergames" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: 'var(--accent)' }} />
-              <Activity size={20} style={{ color: 'var(--accent)' }} />
-              <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Master Games</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>All fixtures & live scores</div>
-              </div>
-            </Link>
             <Link to="/highlights" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#f97316' }} />
-              <Newspaper size={20} style={{ color: '#f97316' }} />
+              <div className="v23-ecard-accent" style={{ background: '#f59e0b' }} />
+              <Newspaper size={20} style={{ color: '#f59e0b' }} />
               <div>
                 <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>News Hub</div>
                 <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Official updates & articles</div>
               </div>
             </Link>
             <Link to="/livestream" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#ef4444' }} />
-              <Zap size={20} style={{ color: '#ef4444' }} />
+              <div className="v23-ecard-accent" style={{ background: '#06b6d4' }} />
+              <Zap size={20} style={{ color: '#06b6d4' }} />
               <div>
                 <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
                 <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Watch matches live</div>
@@ -834,7 +885,7 @@ export default function Home() {
 
         {/* CTA */}
         {!isLoggedIn && (
-          <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 400ms both' }}>
+          <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 450ms both' }}>
             <Link to="/login" className="v23-cta"><LogIn size={16} /> Sign In to Predict & Win</Link>
           </div>
         )}

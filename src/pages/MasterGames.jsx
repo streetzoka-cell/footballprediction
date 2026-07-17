@@ -11,6 +11,12 @@ import SEO from '../components/SEO';
 
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; // Premier League, La Liga, Serie A, Bundesliga, Ligue 1
 
+// Static map for SEO so search engines read it instantly before API loads
+const COMP_NAMES_SEO = {
+  PL: "Premier League", PD: "La Liga", SA: "Serie A", BL1: "Bundesliga", FL1: "Ligue 1",
+  CL: "Champions League", EC: "European Championship", WC: "World Cup"
+};
+
 const injectStyles = () => {
   if (document.getElementById('mg8-css')) return;
   const s = document.createElement('style');
@@ -501,7 +507,6 @@ export default function MasterGames() {
   const [selectedTeam, setSelectedTeam] = useState(null);
 
   /* -- Deep Linking Logic -- */
-  // 1. Read from URL on initial mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab');
@@ -510,7 +515,6 @@ export default function MasterGames() {
     if (c) setSelectedCompCode(c);
   }, []);
 
-  // 2. Update URL when state changes
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     let changed = false;
@@ -520,19 +524,13 @@ export default function MasterGames() {
     } else {
       if (params.get('comp')) { params.delete('comp'); changed = true; }
     }
-    if (changed) {
-      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
-    }
+    if (changed) window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   }, [tab, selectedCompCode]);
 
-  // 3. Share Handler
   const handleShare = async () => {
     const url = window.location.href;
     if (navigator.share) {
-      try {
-        await navigator.share({ title: 'ZOKASCORE Football', text: 'Check out this football data on ZOKASCORE!', url });
-        addToast({ type: 'status', st: 'live', msg: 'Shared successfully!', dur: 2000 });
-      } catch (err) { /* User cancelled */ }
+      try { await navigator.share({ title: 'ZOKASCORE Football', text: 'Check out this football data on ZOKASCORE!', url }); } catch (err) {}
     } else {
       navigator.clipboard.writeText(url);
       addToast({ type: 'status', st: 'live', msg: 'Link copied to clipboard!', dur: 2000 });
@@ -554,7 +552,6 @@ export default function MasterGames() {
     setTeamsLoading(false);
   }, [getTeams]);
 
-  // Sync URL state if empty
   useEffect(() => {
     if (!selectedCompCode && competitions.length > 0) {
       const params = new URLSearchParams(window.location.search);
@@ -564,7 +561,6 @@ export default function MasterGames() {
     }
   }, [competitions, selectedCompCode, tab]);
 
-  // Fetch data when tab or comp changes
   useEffect(() => {
     if (selectedCompCode && (tab === 'standings' || tab === 'teams')) {
       if (tab === 'standings') loadStandings(selectedCompCode);
@@ -572,35 +568,22 @@ export default function MasterGames() {
     }
   }, [selectedCompCode, tab, loadStandings, loadTeams]);
 
-  // Auto-refresh tables/teams every 5 minutes
   useEffect(() => {
     if (tab !== 'standings' && tab !== 'teams') return;
     const interval = setInterval(() => {
       if (tab === 'standings' && selectedCompCode) loadStandings(selectedCompCode, true);
       if (tab === 'teams' && selectedCompCode) loadTeams(selectedCompCode, true);
-    }, 5 * 60 * 1000); // 5 mins
+    }, 5 * 60 * 1000); 
     return () => clearInterval(interval);
   }, [tab, selectedCompCode, loadStandings, loadTeams]);
 
-  /* -- Load Fixtures on demand -- */
-  useEffect(() => {
-    if (selectedDate) loadDateFixtures(selectedDate);
-  }, [selectedDate, loadDateFixtures]);
+  useEffect(() => { if (selectedDate) loadDateFixtures(selectedDate); }, [selectedDate, loadDateFixtures]);
 
   /* -- Filtering & Grouping -- */
   const todayStr = getLocalDateStr(0);
   const yesterdayStr = getLocalDateStr(-1);
   const tomorrowStr = getLocalDateStr(1);
-  const otherDates = useMemo(() => {
-    const arr = [];
-    for (let i = -14; i <= 14; i++) {
-      if (i >= -1 && i <= 1) continue;
-      const str = getLocalDateStr(i);
-      arr.push({ str, label: formatDateShort(str) });
-    }
-    return arr;
-  }, []);
-
+  
   const filteredFixtures = useMemo(() => {
     let list = (fixtures || []).filter(m => getLocalDateFromUtc(m.utcDate) === selectedDate);
     if (searchQ.trim()) {
@@ -630,13 +613,16 @@ export default function MasterGames() {
     return [...map.values()];
   }, [filteredFixtures]);
 
+  // ★ FIX: Pull from ALL competitions in the database, not just today's fixtures.
   const compList = useMemo(() => {
-    const map = new Map();
-    (fixtures || []).forEach(m => { if (m.competition) map.set(String(m.competition.id), m.competition); });
-    return [...map.values()].sort((a, b) => (a.name || '').localeCompare(b.name || ''));
-  }, [fixtures]);
+    return (competitions || []).map(c => ({
+      id: String(c.id),
+      code: c.code,
+      name: c.name,
+      emblem: c.emblem
+    })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }, [competitions]);
 
-  // Split into Top 5 and Others
   const topComps = useMemo(() => compList.filter(c => TOP_5_CODES.includes(c.code)), [compList]);
   const otherComps = useMemo(() => compList.filter(c => !TOP_5_CODES.includes(c.code)), [compList]);
   const filteredOtherComps = useMemo(() => {
@@ -647,12 +633,73 @@ export default function MasterGames() {
   const liveCount = useMemo(() => liveMatches.filter(m => m.status === 'IN_PLAY' || m.status === 'PAUSED').length, [liveMatches]);
   const favMatches = useMemo(() => filteredFixtures.filter(m => isFav(String(m.id))), [filteredFixtures, isFav]);
 
+  // ★ NEW: DYNAMIC SEO LOGIC FOR GOOGLE SEARCH
+  const currentCompName = useMemo(() => {
+    if (!selectedCompCode) return "Top Football Leagues";
+    const comp = compList.find(c => (c.code || String(c.id)) === selectedCompCode);
+    return comp ? comp.name : (COMP_NAMES_SEO[selectedCompCode] || "Football");
+  }, [selectedCompCode, compList]);
+
+  const pageTitle = useMemo(() => {
+    if (tab === 'standings') return `${currentCompName} Table & Standings | ZOKASCORE`;
+    if (tab === 'teams') return `${currentCompName} Teams & Squads | ZOKASCORE`;
+    if (tab === 'live') return "Live Football Scores & Matches | ZOKASCORE";
+    if (tab === 'favourites') return "My Favourite Football Matches | ZOKASCORE";
+    return "Football Fixtures, Live Scores & Predictions | ZOKASCORE";
+  }, [tab, currentCompName]);
+
+  const pageDescription = useMemo(() => {
+    if (tab === 'standings') return `Live ${currentCompName} standings, table, points, goals, and match results. Follow up-to-date football league tables on ZOKASCORE.`;
+    if (tab === 'teams') return `View all ${currentCompName} teams, clubs, and squad details on ZOKASCORE.`;
+    if (tab === 'live') return `Watch live football scores, in-play matches, and real-time updates on ZOKASCORE.`;
+    return `Get the latest football fixtures, live scores, and premium predictions on ZOKASCORE.`;
+  }, [tab, currentCompName]);
+
+  const structuredData = useMemo(() => {
+    if (tab === 'standings' && standingsData?.standings?.[0]?.table) {
+      return {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": `${currentCompName} Standings`,
+        "itemListElement": standingsData.standings[0].table.map((row, index) => ({
+          "@type": "ListItem",
+          "position": index + 1,
+          "item": {
+            "@type": "SportsTeam",
+            "name": row.team?.name || "Unknown",
+            "sport": "Soccer"
+          }
+        }))
+      };
+    }
+    if (tab === 'teams' && teamsData?.teams) {
+      return {
+        "@context": "https://schema.org",
+        "@type": "ItemList",
+        "name": `${currentCompName} Teams`,
+        "itemListElement": teamsData.teams.map((team, index) => ({
+          "@type": "ListItem",
+          "position": index + 1,
+          "item": {
+            "@type": "SportsTeam",
+            "name": team.name,
+            "sport": "Soccer"
+          }
+        }))
+      };
+    }
+    return null;
+  }, [tab, standingsData, teamsData, currentCompName]);
+
   return (
     <div className="mg8-page">
       <SEO
-        title="Master Games & Premium Predictions | ZOKASCORE"
-        description="Join the Master Games at ZOKASCORE for premium football predictions and high-stakes competition."
-        path="/mastergames"
+        title={pageTitle}
+        description={pageDescription}
+        keywords={`${currentCompName}, football table, ${currentCompName} standings, live scores, football fixtures, ZOKASCORE`}
+        path={`/mastergames?tab=${tab}${selectedCompCode ? `&comp=${selectedCompCode}` : ''}`}
+        robots="index,follow"
+        structuredData={structuredData}
       />
 
       <div className="mg8-wrap">
@@ -709,7 +756,6 @@ export default function MasterGames() {
           )}
         </div>
 
-        {/* Match Search */}
         <div className={`mg8-search-wrap ${searchOpen ? 'open' : 'shut'}`}>
           <div className="mg8-search">
             <Search size={15} style={{ opacity: .4, flexShrink: 0 }} />
@@ -718,7 +764,6 @@ export default function MasterGames() {
           </div>
         </div>
 
-        {/* Competition Picker (Standings/Teams tabs) */}
         {(tab === 'standings' || tab === 'teams') && compList.length > 0 && (
           <div style={{ marginBottom: 14, position: 'relative' }}>
             <div className="mg8-filters">
@@ -745,7 +790,6 @@ export default function MasterGames() {
           </div>
         )}
 
-        {/* ── CONTENT ── */}
         {loading && !fixtures.length ? (
           <div style={{ marginTop: 20 }}>{[1,2,3,4,5].map(i => <div key={i} className="mg8-sk" />)}</div>
         ) : (
@@ -800,9 +844,7 @@ export default function MasterGames() {
         )}
       </div>
 
-      {/* Team Modal */}
       {selectedTeam && <TeamModal team={selectedTeam} onClose={() => setSelectedTeam(null)} />}
-
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
       <Confetti active={confettiKey > 0} key={confettiKey} />
     </div>
