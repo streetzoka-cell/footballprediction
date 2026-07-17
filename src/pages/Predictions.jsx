@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v20.2 — Smart Live Merging, Instant Results, Admin Auto-Resolver
+// v20.3 — Instant Local Results Calculation, Overlay Scroll Fix
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue } from 'react';
@@ -445,14 +445,17 @@ function ScoreStepper({ value, onChange }) {
    ZOKA PICK CARD
    ═══════════════════════════════════════════════════ */
 function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
-  // ★ Smart check: Use pick.status and pick.homeScore directly (merged with live data)
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
   
-  // Calculate result locally based on merged score
-  const res = pick.adminPick && isFin && pick.homeScore != null 
-    ? calcPoints(pick.adminPick.home, pick.adminPick.away, pick.homeScore, pick.awayScore) 
-    : null;
+  // ★ INSTANT LOCAL CALCULATION FIX (mapping `type` to `resultType`)
+  const res = useMemo(() => {
+    if (pick.adminPick && isFin && pick.homeScore != null) {
+      const r = calcPoints(pick.adminPick.home, pick.adminPick.away, pick.homeScore, pick.awayScore);
+      return { ...r, resultType: r.type };
+    }
+    return null;
+  }, [pick.adminPick, isFin, pick.homeScore, pick.awayScore]);
     
   const vs = voteStats[String(pick.matchId)] || { agree: 0, disagree: 0, total: 0 };
   const myV = userVote[String(pick.matchId)];
@@ -466,9 +469,9 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
   const awayName = typeof pick.awayTeam === 'object' ? (pick.awayTeam?.shortName || pick.awayTeam?.name || 'Away') : (pick.awayTeam || 'Away');
 
   let leftColor = 'rgba(245,197,66,.12)';
-  if (res?.type === 'exact') leftColor = 'var(--accent)';
-  else if (res?.type === 'result') leftColor = 'var(--gold)';
-  else if (res?.type === 'miss') leftColor = '#ef4444';
+  if (res?.resultType === 'exact') leftColor = 'var(--accent)';
+  else if (res?.resultType === 'result') leftColor = 'var(--gold)';
+  else if (res?.resultType === 'miss') leftColor = '#ef4444';
   else if (isFin) leftColor = 'rgba(0,230,118,.2)';
 
   const cardCls = `v20-mc zoka${!isFin && !isLive ? ' pending' : ''}${isLive ? ' live' : ''}${isFin ? ' finished' : ''}`;
@@ -515,8 +518,8 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
       </div>
       <div className="v20-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
         {/* ★ INSTANT RESULT BADGE */}
-        {isFin && res && res.type !== 'pending' && <ResultBadge result={res} />}
-        {isFin && (!res || res.type === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
+        {isFin && res && res.resultType !== 'pending' && <ResultBadge result={res} />}
+        {isFin && (!res || res.resultType === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
         
         {!isFin && !isLive && vs.total > 0 && (
           <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
@@ -553,10 +556,14 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
   
-  // ★ FIX: If backend hasn't resolved yet, calculate locally for instant feedback using MERGED data
-  const localResult = (isFin && hasPred && pred.homeScore != null) 
-    ? calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore) 
-    : null;
+  // ★ INSTANT LOCAL CALCULATION FIX (mapping `type` to `resultType`)
+  const localResult = useMemo(() => {
+    if (isFin && hasPred && pred.homeScore != null) {
+      const r = calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore);
+      return { ...r, resultType: r.type };
+    }
+    return null;
+  }, [isFin, hasPred, pred.homeScore, pred.awayScore, userPred]);
     
   // Use backend result if available, otherwise use localResult
   const effectiveResult = result || localResult;
@@ -682,6 +689,15 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
    RESULTS OVERLAY
    ═══════════════════════════════════════════════════ */
 function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
+  const overlayBoxRef = useRef(null);
+
+  // ★ Scroll to top immediately when overlay opens
+  useEffect(() => {
+    if (overlayBoxRef.current) {
+      overlayBoxRef.current.scrollTop = 0;
+    }
+  }, []);
+
   const upMap = useMemo(() => {
     const m = new Map();
     Object.values(userPredsObj || {}).forEach(p => {
@@ -690,6 +706,7 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
     });
     return m;
   }, [userPredsObj]);
+  
   const resMap = useMemo(() => {
     const m = new Map();
     (results || []).forEach(r => m.set(String(r.matchId), r));
@@ -701,7 +718,14 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
     const up = upMap.get(p.id) || upMap.get(String(p.matchId));
     if (!up) return;
     predicted++;
-    const res = resMap.get(String(p.matchId));
+    
+    let res = resMap.get(String(p.matchId));
+    // ★ INSTANT LOCAL CALCULATION FALLBACK
+    if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+      const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
+      res = { ...r, resultType: r.type };
+    }
+
     if (!res || res.resultType === 'pending') { pending++; return; }
     if (res.resultType === 'exact') { exact++; totalPts += (res.points || 10); }
     else if (res.resultType === 'result') { result++; totalPts += (res.points || 3); }
@@ -712,7 +736,7 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
 
   return (
     <div className="v20-overlay" onClick={onClose}>
-      <div className="v20-overlay-box" onClick={e => e.stopPropagation()}>
+      <div className="v20-overlay-box" ref={overlayBoxRef} onClick={e => e.stopPropagation()}>
         <div className="v20-overlay-handle" />
         <div style={{ padding: '16px 18px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
@@ -736,8 +760,15 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
           {preds.map((p, i) => {
             const up = upMap.get(p.id) || upMap.get(String(p.matchId));
             if (!up) return null;
-            const res = resMap.get(String(p.matchId));
+            
+            let res = resMap.get(String(p.matchId));
+            // ★ INSTANT LOCAL CALCULATION FALLBACK
+            if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+              const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
+              res = { ...r, resultType: r.type };
+            }
             const rType = res?.resultType;
+            
             return (
               <div key={p.id} className="v20-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--accent)' : rType === 'result' ? '3px solid var(--gold)' : rType === 'miss' ? '3px solid #ef4444' : '3px solid var(--border)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
@@ -1012,7 +1043,12 @@ export default function Predictions() {
       const up = userPredMap.get(p.id) || userPredMap.get(String(p.matchId));
       if (!up) return;
       pred++;
-      const res = resultMap.get(String(p.matchId));
+      let res = resultMap.get(String(p.matchId));
+      // ★ INSTANT LOCAL CALCULATION
+      if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+        const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
+        res = { ...r, resultType: r.type };
+      }
       if (!res || res.resultType === 'pending') { pn++; return; }
       if (res.resultType === 'exact') { ex++; pts += (res.points || 10); }
       else if (res.resultType === 'result') { rs++; pts += (res.points || 3); }

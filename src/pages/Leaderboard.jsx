@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v20.2 — Bulletproof historical fetching & reactive context
+// v20.3 — 1-Player Podium, Live Merge for Weekly/Monthly
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition } from 'react';
@@ -225,25 +225,6 @@ function PodiumUser({ user, position, delay }) {
   );
 }
 
-function StaleState({ period }) {
-  const label = PERIOD_LABEL[period] || period;
-  const desc = {
-    weekly: 'Covers Monday through Sunday. Updated after matches finish.',
-    monthly: 'Covers the current calendar month. Updated periodically.',
-    goat: 'All-time rankings by lifetime points.',
-  }[period] || '';
-  return (
-    <div className="lb-stale">
-      <div className="lb-stale-icon"><Database size={20} /></div>
-      <div style={{ fontWeight: 800, color: 'var(--text-primary)', fontSize: '.95rem' }}>{label} Leaderboard Not Ready</div>
-      <div style={{ fontSize: '.78rem', color: 'var(--text-muted)', maxWidth: 340, lineHeight: 1.5, fontWeight: 600 }}>{desc}</div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600, opacity: .6 }}>
-        <Clock size={10} /> Check back later
-      </div>
-    </div>
-  );
-}
-
 function ErrorState({ error, onRetry }) {
   return (
     <div className="lb-error">
@@ -316,19 +297,72 @@ export default function Leaderboard() {
   const historicalData = !isDaily ? (appData.historicalLeaderboards?.[tab] || null) : null;
   const isLoadingHistorical = !isDaily && !historicalData;
 
+  const isStale = !isDaily && historicalData ? (historicalData.stale ?? true) : false;
+
+  // ★ MERGE LOGIC: Combine historical data with today's live data if stale
   const entries = useMemo(() => {
     if (isDaily) return appData.dailyEntries || [];
-    return historicalData?.entries || [];
-  }, [isDaily, appData.dailyEntries, historicalData]);
+    
+    const histEntries = historicalData?.entries || [];
+    const todayEntries = appData.dailyEntries || [];
+    
+    // If not stale, backend has processed today's matches. Use as is to avoid double counting.
+    if (!isStale) return histEntries;
+    
+    // If stale, merge today's live data into historical data
+    const map = new Map();
+    histEntries.forEach(e => map.set(e.uid, { ...e }));
+    
+    todayEntries.forEach(today => {
+      const hist = map.get(today.uid);
+      if (hist) {
+        const newPreds = (hist.predictions || 0) + (today.predictions || 0);
+        const histAccPreds = (hist.accuracy || 0) / 100 * (hist.predictions || 0);
+        const todayAccPreds = (today.accuracy || 0) / 100 * (today.predictions || 0);
+        const newAcc = newPreds > 0 ? Math.round((histAccPreds + todayAccPreds) / newPreds * 100) : 0;
+        
+        map.set(today.uid, {
+          ...hist,
+          points: (hist.points || 0) + (today.points || 0),
+          exact: (hist.exact || 0) + (today.exact || 0),
+          predictions: newPreds,
+          accuracy: newAcc
+        });
+      } else {
+        map.set(today.uid, { ...today });
+      }
+    });
+    
+    const merged = Array.from(map.values());
+    merged.sort((a, b) => (b.points || 0) - (a.points || 0));
+    merged.forEach((u, i) => { u.rank = i + 1; });
+    
+    return merged;
+  }, [isDaily, appData.dailyEntries, historicalData, isStale]);
 
+  // ★ MERGE STATS: Recalculate stats if we merged data
   const stats = useMemo(() => {
     if (isDaily) return appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
-    return historicalData?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
-  }, [isDaily, appData.dailyStats, historicalData]);
+    
+    const histStats = historicalData?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
+    if (!isStale) return histStats;
+    
+    const todayStats = appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
+    const totalPlayers = entries.length; // Use merged entries length
+    const totalPreds = (histStats.preds || 0) + (todayStats.preds || 0);
+    const totalExact = (histStats.exact || 0) + (todayStats.exact || 0);
+    const avg = totalPreds > 0 ? (((histStats.avg || 0) * (histStats.preds || 0) + (todayStats.avg || 0) * (todayStats.preds || 0)) / totalPreds) : 0;
+    
+    return {
+      players: totalPlayers,
+      preds: totalPreds,
+      exact: totalExact,
+      avg: avg.toFixed(1)
+    };
+  }, [isDaily, appData.dailyStats, historicalData, isStale, entries]);
 
   const loading = isDaily ? appData.loading : isLoadingHistorical;
   const error = isDaily ? null : (historicalData?.error || null);
-  const isStale = !isDaily && historicalData ? (historicalData.stale ?? true) : false;
 
   const myEntry = useMemo(() => {
     if (!uid) return null;
@@ -422,157 +456,158 @@ export default function Leaderboard() {
           <>
             <TabBar tabs={TABS} active={tab} onChange={handleTabChange} />
 
-            {isStale && !loading ? (
-              <StaleState period={tab} />
-            ) : (
-              <>
-                {/* Stats Grid */}
-                <div className="lb-stats">
-                  <StatCard icon={<Flame size={16} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(245,197,66,.05)" delay={0} />
-                  <StatCard icon={<Users size={16} />} label="Players" value={stats.players || 0} color="#60a5fa" bg="rgba(59,130,246,.05)" delay={50} />
-                  <StatCard icon={<Target size={16} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--accent)" bg="rgba(0,230,118,.04)" delay={100} />
-                  <StatCard icon={<Award size={16} />} label="Exact Scores" value={stats.exact || 0} color="#f97316" bg="rgba(249,115,22,.05)" delay={150} />
+            {/* Live Merge Indicator */}
+            {isStale && !loading && (
+              <div style={{ textAlign: 'center', marginBottom: 12, fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span className="lb-live" /> Merging live daily results...
+              </div>
+            )}
+
+            {/* Stats Grid */}
+            <div className="lb-stats">
+              <StatCard icon={<Flame size={16} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(245,197,66,.05)" delay={0} />
+              <StatCard icon={<Users size={16} />} label="Players" value={stats.players || 0} color="#60a5fa" bg="rgba(59,130,246,.05)" delay={50} />
+              <StatCard icon={<Target size={16} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--accent)" bg="rgba(0,230,118,.04)" delay={100} />
+              <StatCard icon={<Award size={16} />} label="Exact Scores" value={stats.exact || 0} color="#f97316" bg="rgba(249,115,22,.05)" delay={150} />
+            </div>
+
+            {/* Daily Podium */}
+            {isDaily && (
+              loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 40, padding: '32px 0' }}>
+                  {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
                 </div>
+              ) : filteredTop3.length >= 1 ? (
+                <div className="lb-podium">{filteredTop3.slice(0, 3).map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
+              ) : (
+                <div className="lb-empty" style={{ marginBottom: 40 }}>No predictions yet — be the first!</div>
+              )
+            )}
 
-                {/* Daily Podium */}
-                {isDaily && (
-                  loading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 40, padding: '32px 0' }}>
-                      {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
-                    </div>
-                  ) : filteredTop3.length >= 3 ? (
-                    <div className="lb-podium">{filteredTop3.map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
-                  ) : (
-                    <div className="lb-empty" style={{ marginBottom: 40 }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Need at least 3 players for podium'}</div>
-                  )
-                )}
-
-                {/* Non-Daily Top 3 */}
-                {!isDaily && (
-                  loading ? (
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 28 }}>
-                      {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 50, height: 50, borderRadius: '50%', animationDelay: `${i * 70}ms` }} />)}
-                    </div>
-                  ) : filteredTop3.length >= 1 ? (
-                    <div className="lb-top3">
-                      {filteredTop3.slice(0, 3).map((u, i) => {
-                        const colors = ['var(--gold)', '#94a3b8', '#d97706'];
-                        return (
-                          <div key={u.uid} className="lb-top3-item" style={{ animationDelay: `${i * 70}ms` }}>
-                            <div style={{ position: 'relative' }}>
-                              {i === 0 && <Crown size={16} style={{ color: 'var(--gold)', position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)' }} />}
-                              <div className="lb-top3-avatar" style={{ background: `linear-gradient(135deg,${colors[i]}25,${colors[i]}08)`, border: `2px solid ${colors[i]}`, color: colors[i], boxShadow: `0 0 16px ${colors[i]}12` }}>
-                                {(u.displayName || '??').slice(0, 2).toUpperCase()}
-                              </div>
-                            </div>
-                            <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName}</span>
-                            <span style={{ fontSize: '.68rem', fontWeight: 800, color: colors[i], fontFamily: 'var(--font-display)' }}>{u.points} pts</span>
+            {/* Non-Daily Top 3 */}
+            {!isDaily && (
+              loading ? (
+                <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 28 }}>
+                  {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 50, height: 50, borderRadius: '50%', animationDelay: `${i * 70}ms` }} />)}
+                </div>
+              ) : filteredTop3.length >= 1 ? (
+                <div className="lb-top3">
+                  {filteredTop3.slice(0, 3).map((u, i) => {
+                    const colors = ['var(--gold)', '#94a3b8', '#d97706'];
+                    return (
+                      <div key={u.uid} className="lb-top3-item" style={{ animationDelay: `${i * 70}ms` }}>
+                        <div style={{ position: 'relative' }}>
+                          {i === 0 && <Crown size={16} style={{ color: 'var(--gold)', position: 'absolute', top: -14, left: '50%', transform: 'translateX(-50%)' }} />}
+                          <div className="lb-top3-avatar" style={{ background: `linear-gradient(135deg,${colors[i]}25,${colors[i]}08)`, border: `2px solid ${colors[i]}`, color: colors[i], boxShadow: `0 0 16px ${colors[i]}12` }}>
+                            {(u.displayName || '??').slice(0, 2).toUpperCase()}
                           </div>
-                        );
-                      })}
-                    </div>
-                  ) : null
-                )}
-
-                {/* Search */}
-                <div className="lb-search-wrap">
-                  <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--accent)' : 'var(--text-muted)', transition: 'color .15s', pointerEvents: 'none', zIndex: 1 }} />
-                  <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" />
-                  {search && <button className="lb-search-clear" onClick={handleClear}><X size={11} /></button>}
+                        </div>
+                        <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName}</span>
+                        <span style={{ fontSize: '.68rem', fontWeight: 800, color: colors[i], fontFamily: 'var(--font-display)' }}>{u.points} pts</span>
+                      </div>
+                    );
+                  })}
                 </div>
-                {search.trim() && <div className="lb-search-count">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>}
+              ) : null
+            )}
 
-                {/* Table */}
-                <div className="lb-table-wrap">
-                  <div className="lb-table-scroll">
-                    <table className="lb-table">
-                      <thead>
-                        <tr>
-                          <th className="lb-th" style={{ width: 48 }}>Rank</th>
-                          <th className="lb-th">Player</th>
-                          <th className="lb-th" style={{ minWidth: 95 }}>Accuracy</th>
-                          <th className="lb-th r" style={{ width: 60 }}>Points</th>
-                          <th className="lb-th r" style={{ width: 56 }}>Preds</th>
-                          <th className="lb-th r" style={{ width: 48 }}>Exact</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {loading ? (
-                          Array.from({ length: 6 }).map((_, i) => (
-                            <tr key={i}><td colSpan={6} style={{ padding: 0, borderBottom: '1px solid var(--border)' }}>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
-                                <div className="lb-skel" style={{ width: 24, height: 10, borderRadius: 3, animationDelay: `${i * 40}ms` }} />
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                                  <div className="lb-skel" style={{ width: 30, height: 30, borderRadius: 7, animationDelay: `${i * 40 + 25}ms` }} />
-                                  <div className="lb-skel" style={{ width: 80, height: 10, borderRadius: 3, animationDelay: `${i * 40 + 50}ms` }} />
+            {/* Search */}
+            <div className="lb-search-wrap">
+              <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--accent)' : 'var(--text-muted)', transition: 'color .15s', pointerEvents: 'none', zIndex: 1 }} />
+              <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" />
+              {search && <button className="lb-search-clear" onClick={handleClear}><X size={11} /></button>}
+            </div>
+            {search.trim() && <div className="lb-search-count">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>}
+
+            {/* Table */}
+            <div className="lb-table-wrap">
+              <div className="lb-table-scroll">
+                <table className="lb-table">
+                  <thead>
+                    <tr>
+                      <th className="lb-th" style={{ width: 48 }}>Rank</th>
+                      <th className="lb-th">Player</th>
+                      <th className="lb-th" style={{ minWidth: 95 }}>Accuracy</th>
+                      <th className="lb-th r" style={{ width: 60 }}>Points</th>
+                      <th className="lb-th r" style={{ width: 56 }}>Preds</th>
+                      <th className="lb-th r" style={{ width: 48 }}>Exact</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {loading ? (
+                      Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i}><td colSpan={6} style={{ padding: 0, borderBottom: '1px solid var(--border)' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
+                            <div className="lb-skel" style={{ width: 24, height: 10, borderRadius: 3, animationDelay: `${i * 40}ms` }} />
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                              <div className="lb-skel" style={{ width: 30, height: 30, borderRadius: 7, animationDelay: `${i * 40 + 25}ms` }} />
+                              <div className="lb-skel" style={{ width: 80, height: 10, borderRadius: 3, animationDelay: `${i * 40 + 50}ms` }} />
+                            </div>
+                            <div className="lb-skel" style={{ width: 60, height: 8, borderRadius: 3, animationDelay: `${i * 40 + 75}ms` }} />
+                          </div>
+                        </td></tr>
+                      ))
+                    ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
+                      <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</td></tr>
+                    ) : visibleRest.length === 0 && search.trim() ? (
+                      <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>No players found matching "{deferredSearch}"</td></tr>
+                    ) : (
+                      visibleRest.map((user, i) => {
+                        const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
+                        const isMe = uid === user.uid;
+                        const delay = Math.min(i * 25, 250);
+                        const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
+                        const exactColor = (user.exact || 0) >= 15 ? 'var(--accent)' : (user.exact || 0) >= 10 ? 'var(--gold)' : 'var(--text-primary)';
+
+                        return (
+                          <tr key={user.uid} className={`lb-row${isMe ? ' me' : ''}`} style={{ animationDelay: `${delay}ms` }}>
+                            <td className="lb-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>#{rank}</td>
+                            <td className="lb-td">
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <div style={{ width: 32, height: 32, borderRadius: 8, background: avColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 800, color: '#fff', flexShrink: 0, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
+                                  {(user.displayName || '??').slice(0, 2).toUpperCase()}
                                 </div>
-                                <div className="lb-skel" style={{ width: 60, height: 8, borderRadius: 3, animationDelay: `${i * 40 + 75}ms` }} />
-                              </div>
-                            </td></tr>
-                          ))
-                        ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
-                          <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</td></tr>
-                        ) : visibleRest.length === 0 && search.trim() ? (
-                          <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>No players found matching "{deferredSearch}"</td></tr>
-                        ) : (
-                          visibleRest.map((user, i) => {
-                            const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
-                            const isMe = uid === user.uid;
-                            const delay = Math.min(i * 25, 250);
-                            const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
-                            const exactColor = (user.exact || 0) >= 15 ? 'var(--accent)' : (user.exact || 0) >= 10 ? 'var(--gold)' : 'var(--text-primary)';
-
-                            return (
-                              <tr key={user.uid} className={`lb-row${isMe ? ' me' : ''}`} style={{ animationDelay: `${delay}ms` }}>
-                                <td className="lb-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>#{rank}</td>
-                                <td className="lb-td">
-                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                                    <div style={{ width: 32, height: 32, borderRadius: 8, background: avColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 800, color: '#fff', flexShrink: 0, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
-                                      {(user.displayName || '??').slice(0, 2).toUpperCase()}
-                                    </div>
-                                    <div style={{ minWidth: 0 }}>
-                                      <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                        {user.displayName || 'Anonymous'}
-                                        {isMe && <span style={{ marginLeft: 4, fontSize: '.56rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.07)', padding: '2px 6px', borderRadius: 4 }}>YOU</span>}
-                                      </div>
-                                      <div style={{ fontSize: '.56rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{user.predictions || 0} predictions</div>
-                                    </div>
+                                <div style={{ minWidth: 0 }}>
+                                  <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                    {user.displayName || 'Anonymous'}
+                                    {isMe && <span style={{ marginLeft: 4, fontSize: '.56rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.07)', padding: '2px 6px', borderRadius: 4 }}>YOU</span>}
                                   </div>
-                                </td>
-                                <td className="lb-td"><AccBar value={user.accuracy || 0} delay={delay + 60} /></td>
-                                <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#a855f7', fontSize: '.88rem' }}>{user.points || 0}</td>
-                                <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-muted)', fontSize: '.78rem' }}>{user.predictions || 0}</td>
-                                <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: exactColor, fontSize: '.78rem' }}>{user.exact || 0}</td>
-                              </tr>
-                            );
-                          })
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+                                  <div style={{ fontSize: '.56rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{user.predictions || 0} predictions</div>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="lb-td"><AccBar value={user.accuracy || 0} delay={delay + 60} /></td>
+                            <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#a855f7', fontSize: '.88rem' }}>{user.points || 0}</td>
+                            <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-muted)', fontSize: '.78rem' }}>{user.predictions || 0}</td>
+                            <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: exactColor, fontSize: '.78rem' }}>{user.exact || 0}</td>
+                          </tr>
+                        );
+                      })
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
 
-                {/* Show More */}
-                {hasMore && !loading && (
-                  <button className="lb-more" onClick={() => setShowCount(p => Math.min(p + 15, 200))}>
-                    <ChevronDown size={12} /> Show more ({filteredRest.length - visibleRest.length} remaining)
-                  </button>
-                )}
+            {/* Show More */}
+            {hasMore && !loading && (
+              <button className="lb-more" onClick={() => setShowCount(p => Math.min(p + 15, 200))}>
+                <ChevronDown size={12} /> Show more ({filteredRest.length - visibleRest.length} remaining)
+              </button>
+            )}
 
-                {/* Empty Refresh */}
-                {entries.length === 0 && !loading && !isStale && !error && (
-                  <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                    <button className="lb-refresh" onClick={handleRefresh}><RotateCcw size={12} /> Refresh</button>
-                  </div>
-                )}
+            {/* Empty Refresh */}
+            {entries.length === 0 && !loading && !error && (
+              <div style={{ textAlign: 'center', padding: '24px 0' }}>
+                <button className="lb-refresh" onClick={handleRefresh}><RotateCcw size={12} /> Refresh</button>
+              </div>
+            )}
 
-                {/* CTA */}
-                {entries.length > 0 && (
-                  <div style={{ textAlign: 'center', marginTop: 20, padding: '16px 0' }}>
-                    <button className="lb-cta" onClick={() => nav('/predictions')}><Target size={14} /> Make Predictions <ChevronRight size={13} /></button>
-                  </div>
-                )}
-              </>
+            {/* CTA */}
+            {entries.length > 0 && (
+              <div style={{ textAlign: 'center', marginTop: 20, padding: '16px 0' }}>
+                <button className="lb-cta" onClick={() => nav('/predictions')}><Target size={14} /> Make Predictions <ChevronRight size={13} /></button>
+              </div>
             )}
           </>
         )}
