@@ -114,7 +114,7 @@ export default function MatchDetails() {
       
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         <Link 
-          to="/mastergames" 
+          to="/fixtures" 
           style={{ 
             display: 'inline-flex', 
             alignItems: 'center', 
