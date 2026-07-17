@@ -209,19 +209,20 @@ const LIVE_POLLING = Object.freeze({
   NEAR_FINISH_INTERVAL_MS: 150000,   // 2.5 min — any match at 80'+ or ET/BT/P
 
   // ── BUDGET-TIER FLOORS (override desired interval when budget tightens) ──
-  // > 50 remaining        → HEALTHY  (no floor — use desired interval)
-  // 20–50 remaining       → NORMAL   (floor: 30 min)
-  // 10–20 remaining       → CRITICAL (floor: 1 hour)
-  // < 10 remaining        → RESERVE  (floor: 2 hours)
+  // Adjusted to be less conservative. 47/100 is plenty of budget.
+  // > 30 remaining        → HEALTHY  (no floor — use desired interval)
+  // 15–30 remaining       → NORMAL   (floor: 15 min)
+  // 8–15 remaining        → CRITICAL (floor: 30 min)
+  // < 8 remaining         → RESERVE  (floor: 1 hour)
   // 0 remaining           → EXHAUSTED (skip entirely)
-  BUDGET_HEALTHY_THRESHOLD:  50,
-  BUDGET_NORMAL_THRESHOLD:   20,
-  BUDGET_CRITICAL_THRESHOLD: 10,
+  BUDGET_HEALTHY_THRESHOLD:  30,
+  BUDGET_NORMAL_THRESHOLD:   15,
+  BUDGET_CRITICAL_THRESHOLD: 8,
   MIN_BUDGET_TO_POLL:        3,
 
-  BUDGET_NORMAL_FLOOR_MS:    1800000,  // 30 min
-  BUDGET_CRITICAL_FLOOR_MS:  3600000,  // 1 hour
-  BUDGET_RESERVE_FLOOR_MS:   7200000,  // 2 hours
+  BUDGET_NORMAL_FLOOR_MS:    900000,   // 15 min
+  BUDGET_CRITICAL_FLOOR_MS:  1800000,  // 30 min
+  BUDGET_RESERVE_FLOOR_MS:   3600000,  // 1 hour
 
   // ── CAP-TIER FLOORS (override when daily live-cap is nearly exhausted) ──
   // > 15 cap calls left    → OK       (no floor)
