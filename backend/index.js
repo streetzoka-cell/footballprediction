@@ -1,4 +1,3 @@
-// index.js
 const express = require("express");
 
 const { initializeFirebase, getDb } = require("./config/firebase");

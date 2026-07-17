@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Clock, Users, BarChart3, Calendar, MapPin } from 'lucide-react';
+import { ArrowLeft, Calendar, MapPin, Users, Trophy, Clock } from 'lucide-react';
 import SEO from '../components/SEO';
 import { fetchFixtures, fetchYesterdayFixtures, fetchTomorrowFixtures } from "../utils/api";
 import { todayStr as getTodayStr, formatTime } from "../utils/dates";
@@ -9,14 +9,18 @@ import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 export default function MatchDetails() {
   const { matchId, slug } = useParams();
   const [match, setMatch] = useState(null);
-  const [details, setDetails] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('timeline');
+  const [currentTime, setCurrentTime] = useState(Date.now());
+
+  // Tick the clock every second for live time estimation
+  useEffect(() => {
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   useEffect(() => {
     const getMatch = async () => {
       try {
-        // 1. Fetch basic match info from cache
         const [yRes, tRes, tmRes] = await Promise.all([
           fetchYesterdayFixtures(),
           fetchFixtures(getTodayStr()),
@@ -31,18 +35,6 @@ export default function MatchDetails() {
         
         const found = allMatches.find(m => String(m.id) === String(matchId));
         setMatch(found);
-
-        // 2. Fetch detailed info (events, lineups, stats) from backend
-        try {
-          const res = await fetch(`/api/match/${matchId}`);
-          if (res.ok) {
-            const data = await res.json();
-            setDetails(data);
-          }
-        } catch (err) {
-          console.warn("Could not fetch detailed match info");
-        }
-
       } catch (e) {
         console.error("Match fetch error:", e);
       } finally {
@@ -74,8 +66,8 @@ export default function MatchDetails() {
   const homeName = match.homeTeam?.name || 'Home Team';
   const awayName = match.awayTeam?.name || 'Away Team';
   const leagueName = match.league?.name || 'Football';
-  const title = `${homeName} vs ${awayName} - Live Score & Predictions | ZOKASCORE`;
-  const description = `Watch ${homeName} vs ${awayName} live. Get real-time scores, match stats, and expert predictions for this ${leagueName} match on ZokaScore.`;
+  const title = `${homeName} vs ${awayName} - Live Score | ZOKASCORE`;
+  const description = `Follow ${homeName} vs ${awayName} live. Get real-time scores and expert predictions for this ${leagueName} match on ZokaScore.`;
 
   const structuredData = {
     "@context": "https://schema.org",
@@ -91,16 +83,41 @@ export default function MatchDetails() {
   const isLive = isLiveStatus(match.status, SPORT.FOOTBALL);
   const isFin = isFinishedStatus(match.status, SPORT.FOOTBALL);
 
-  // Parse details
-  const events = details?.events || [];
-  const lineups = details?.lineups || [];
-  const statistics = details?.statistics || [];
+  // ── SMART TIME ESTIMATION LOGIC ──
+  const kickoffTime = match.date ? new Date(match.date).getTime() : 0;
+  const elapsedMs = currentTime - kickoffTime;
+  const elapsedMins = Math.floor(elapsedMs / 60000);
 
-  const homeLineup = lineups.find(l => l.team?.id === match.homeId) || lineups[0];
-  const awayLineup = lineups.find(l => l.team?.id === match.awayId) || lineups[1];
+  let phase = 'Scheduled';
+  let displayMinute = match.minute || 0;
+  let timelineProgress = 0; // 0 to 100%
 
-  const homeStats = statistics.find(s => s.team?.id === match.homeId)?.statistics || [];
-  const awayStats = statistics.find(s => s.team?.id === match.awayId)?.statistics || [];
+  if (isLive) {
+    if (match.status === '1H') {
+      phase = 'First Half';
+      displayMinute = match.minute || Math.min(elapsedMins, 45);
+      timelineProgress = (displayMinute / 90) * 100;
+    } else if (match.status === 'HT') {
+      phase = 'Half Time';
+      displayMinute = 45;
+      timelineProgress = 50;
+    } else if (match.status === '2H' || match.status === 'ET' || match.status === 'P') {
+      phase = match.status === 'ET' ? 'Extra Time' : match.status === 'P' ? 'Penalties' : 'Second Half';
+      // 2nd half starts at kickoff + 60 mins (45 min play + 15 min break)
+      const secondHalfMins = Math.max(0, elapsedMins - 60);
+      displayMinute = match.minute || Math.min(45 + secondHalfMins, 90);
+      timelineProgress = Math.min((displayMinute / 90) * 100, 100);
+    }
+  } else if (isFin) {
+    phase = 'Full Time';
+    displayMinute = 90;
+    timelineProgress = 100;
+  } else if (kickoffTime > currentTime) {
+    phase = 'Scheduled';
+    const diffMins = Math.floor((kickoffTime - currentTime) / 60000);
+    if (diffMins < 60) phase = `Starts in ${diffMins}m`;
+    else phase = `Starts in ${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#f8fafc', padding: '24px 16px', paddingBottom: '60px' }}>
@@ -114,7 +131,7 @@ export default function MatchDetails() {
       
       <div style={{ maxWidth: '600px', margin: '0 auto' }}>
         <Link 
-          to="/fixtures" 
+          to="/mastergames" 
           style={{ 
             display: 'inline-flex', 
             alignItems: 'center', 
@@ -133,15 +150,15 @@ export default function MatchDetails() {
         </Link>
 
         {/* Header */}
-        <div style={{ textAlign: 'center', marginBottom: '24px' }}>
+        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
           <p style={{ color: '#94a3b8', fontSize: '.75rem', marginTop: '0', marginBottom: '12px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             {leagueName}
           </p>
-          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px' }}>
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '16px', marginBottom: '12px' }}>
             <div style={{ flex: 1, textAlign: 'right' }}>
               <h1 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', margin: 0 }}>{homeName}</h1>
             </div>
-            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.08)', minWidth: '80px' }}>
               <div style={{ fontSize: '1.8rem', fontWeight: 900, color: isLive ? '#ef4444' : isFin ? '#10b981' : '#fff' }}>
                 {match.homeScore ?? 0} - {match.awayScore ?? 0}
               </div>
@@ -150,156 +167,77 @@ export default function MatchDetails() {
               <h1 style={{ fontSize: '1.4rem', fontWeight: 900, color: '#fff', margin: 0 }}>{awayName}</h1>
             </div>
           </div>
-          <div style={{ marginTop: '12px', display: 'inline-block', padding: '4px 12px', borderRadius: '6px', fontSize: '.7rem', fontWeight: 800, textTransform: 'uppercase', background: isLive ? 'rgba(239,68,68,0.15)' : isFin ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.06)', color: isLive ? '#ef4444' : isFin ? '#10b981' : '#94a3b8' }}>
-            {isLive ? `LIVE ${match.minute ? `(${match.minute}')` : ''}` : isFin ? 'Finished' : formatTime(match.date)}
+          
+          {/* Status Badge */}
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '6px 14px', borderRadius: '20px', fontSize: '.75rem', fontWeight: 800, textTransform: 'uppercase', background: isLive ? 'rgba(239,68,68,0.15)' : isFin ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.06)', color: isLive ? '#ef4444' : isFin ? '#10b981' : '#94a3b8' }}>
+            {isLive && <span style={{ width: '8px', height: '8px', background: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span>}
+            {isLive ? `${phase} ${displayMinute ? `(${displayMinute}')` : ''}` : phase}
           </div>
         </div>
 
+        {/* Smart Visual Timeline (Only for Live/Finished) */}
+        {(isLive || isFin) && (
+          <div style={{ background: 'rgba(30,41,59,0.4)', backdropFilter: 'blur(12px)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', marginBottom: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <span style={{ color: '#94a3b8', fontSize: '.75rem', fontWeight: 700 }}>Kickoff</span>
+              <span style={{ color: '#94a3b8', fontSize: '.75rem', fontWeight: 700 }}>Half Time</span>
+              <span style={{ color: '#94a3b8', fontSize: '.75rem', fontWeight: 700 }}>Full Time</span>
+            </div>
+            
+            {/* Timeline Track */}
+            <div style={{ position: 'relative', height: '8px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', marginBottom: '12px' }}>
+              {/* Halftime Marker */}
+              <div style={{ position: 'absolute', left: '50%', top: '-4px', width: '2px', height: '16px', background: '#64748b', borderRadius: '1px' }}></div>
+              
+              {/* Progress Fill */}
+              <div style={{ 
+                width: `${timelineProgress}%`, 
+                height: '100%', 
+                background: isLive ? 'linear-gradient(90deg, #10b981, #ef4444)' : '#10b981', 
+                borderRadius: '4px',
+                transition: 'width 1s linear'
+              }}></div>
+              
+              {/* Live Marker Dot */}
+              {isLive && (
+                <div style={{ 
+                  position: 'absolute', 
+                  left: `calc(${timelineProgress}% - 6px)`, 
+                  top: '-4px', 
+                  width: '16px', 
+                  height: '16px', 
+                  background: '#ef4444', 
+                  border: '2px solid #fff', 
+                  borderRadius: '50%',
+                  boxShadow: '0 0 8px rgba(239, 68, 68, 0.8)',
+                  transition: 'left 1s linear'
+                }}></div>
+              )}
+            </div>
+            
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', fontSize: '.7rem', color: '#64748b' }}>
+              <span>0'</span>
+              <span>45'</span>
+              <span>90'</span>
+            </div>
+          </div>
+        )}
+
         {/* Match Info Bar */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '16px', marginBottom: '24px', fontSize: '.75rem', color: '#64748b' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '16px', marginBottom: '24px', fontSize: '.75rem', color: '#64748b' }}>
           {match.date && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Calendar size={12} /> {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}</span>}
           {match.venue?.name && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><MapPin size={12} /> {match.venue.name}</span>}
           {match.referee && <span style={{ display: 'flex', alignItems: 'center', gap: '4px' }}><Users size={12} /> {match.referee}</span>}
         </div>
 
-        {/* Tabs */}
-        <div style={{ display: 'flex', gap: '8px', marginBottom: '24px', background: 'rgba(255,255,255,0.03)', padding: '4px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-          {[
-            { key: 'timeline', label: 'Timeline', icon: Clock },
-            { key: 'lineups', label: 'Lineups', icon: Users },
-            { key: 'stats', label: 'Stats', icon: BarChart3 }
-          ].map(t => (
-            <button 
-              key={t.key} 
-              onClick={() => setActiveTab(t.key)}
-              style={{ 
-                flex: 1, 
-                padding: '10px', 
-                borderRadius: '8px', 
-                border: 'none', 
-                background: activeTab === t.key ? '#10b981' : 'transparent', 
-                color: activeTab === t.key ? '#fff' : '#94a3b8', 
-                fontWeight: 700, 
-                fontSize: '.8rem',
-                cursor: 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '6px',
-                transition: 'all 0.2s'
-              }}
-            >
-              <t.icon size={14} /> {t.label}
-            </button>
-          ))}
-        </div>
-
-        {/* Tab Content */}
-        <div style={{ background: 'rgba(30,41,59,0.4)', backdropFilter: 'blur(12px)', padding: '16px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
-          
-          {/* TIMELINE TAB */}
-          {activeTab === 'timeline' && (
-            <div>
-              {events.length > 0 ? (
-                events.map((e, i) => {
-                  const isHome = e.team?.id === match.homeId;
-                  const icon = e.type === 'Goal' ? '⚽' : e.detail?.includes('Red') ? '🟥' : e.detail?.includes('Yellow') ? '🟨' : e.type === 'subst' ? '🔄' : '⚠️';
-                  return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 0', borderBottom: '1px solid rgba(255,255,255,0.04)', flexDirection: isHome ? 'row' : 'row-reverse', textAlign: isHome ? 'left' : 'right' }}>
-                      <div style={{ fontWeight: 800, color: '#94a3b8', width: '40px', fontSize: '.85rem' }}>
-                        {e.time?.elapsed}'
-                      </div>
-                      <div style={{ fontSize: '1.2rem' }}>{icon}</div>
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 700, color: '#fff', fontSize: '.9rem' }}>{e.player?.name || 'Unknown'}</div>
-                        <div style={{ fontSize: '.75rem', color: '#64748b' }}>{e.detail || e.type}</div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>No events recorded yet.</div>
-              )}
-            </div>
-          )}
-
-          {/* LINEUPS TAB */}
-          {activeTab === 'lineups' && (
-            <div>
-              {homeLineup && awayLineup ? (
-                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
-                  {[homeLineup, awayLineup].map((lineup, idx) => (
-                    <div key={idx}>
-                      <h3 style={{ fontSize: '.9rem', fontWeight: 800, color: '#10b981', marginBottom: '12px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: '8px' }}>
-                        {lineup.team?.name} ({lineup.formation})
-                      </h3>
-                      <div style={{ marginBottom: '16px' }}>
-                        <div style={{ fontSize: '.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 700 }}>Starting XI</div>
-                        {lineup.startXI?.map((p, i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontSize: '.85rem', color: '#fff' }}>
-                            <span style={{ width: '20px', height: '20px', background: 'rgba(255,255,255,0.1)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700 }}>{p.player?.number}</span>
-                            {p.player?.name}
-                          </div>
-                        ))}
-                      </div>
-                      <div>
-                        <div style={{ fontSize: '.7rem', color: '#64748b', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 700 }}>Substitutes</div>
-                        {lineup.substitutes?.map((p, i) => (
-                          <div key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px', fontSize: '.85rem', color: '#94a3b8' }}>
-                            <span style={{ width: '20px', height: '20px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.7rem', fontWeight: 700 }}>{p.player?.number}</span>
-                            {p.player?.name}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>Lineups are not available yet.</div>
-              )}
-            </div>
-          )}
-
-          {/* STATS TAB */}
-          {activeTab === 'stats' && (
-            <div>
-              {homeStats.length > 0 ? (
-                homeStats.map((stat, i) => {
-                  const homeVal = stat.value;
-                  const awayVal = awayStats[i]?.value;
-                  
-                  const parseVal = (v) => {
-                    if (!v) return 0;
-                    if (v.includes('%')) return parseInt(v);
-                    const num = parseInt(v);
-                    return isNaN(num) ? 0 : num;
-                  };
-                  
-                  const hNum = parseVal(homeVal);
-                  const aNum = parseVal(awayVal);
-                  const total = hNum + aNum;
-                  const hPct = total > 0 ? (hNum / total) * 100 : 50;
-                  const aPct = total > 0 ? (aNum / total) * 100 : 50;
-
-                  return (
-                    <div key={i} style={{ marginBottom: '16px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px', fontSize: '.8rem', fontWeight: 700, color: '#fff' }}>
-                        <span>{homeVal || '-'}</span>
-                        <span style={{ color: '#64748b' }}>{stat.type}</span>
-                        <span>{awayVal || '-'}</span>
-                      </div>
-                      <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', background: 'rgba(255,255,255,0.05)' }}>
-                        <div style={{ width: `${hPct}%`, background: '#10b981', transition: 'width 0.3s' }}></div>
-                        <div style={{ width: `${aPct}%`, background: '#ef4444', transition: 'width 0.3s' }}></div>
-                      </div>
-                    </div>
-                  );
-                })
-              ) : (
-                <div style={{ textAlign: 'center', color: '#64748b', padding: '24px' }}>Statistics are not available yet.</div>
-              )}
-            </div>
-          )}
+        {/* Info Card */}
+        <div style={{ background: 'rgba(30,41,59,0.4)', backdropFilter: 'blur(12px)', padding: '24px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)', textAlign: 'center' }}>
+          <Trophy size={28} style={{ color: '#10b981', margin: '0 auto 12px' }} />
+          <h2 style={{ fontSize: '1.1rem', fontWeight: 800, color: '#fff', margin: '0 0 8px' }}>Match Center</h2>
+          <p style={{ fontSize: '.8rem', color: '#94a3b8', margin: '0', lineHeight: 1.5 }}>
+            Scores update in real-time here when the match goes live. 
+            <br/>Check the fixtures page for live updates across all matches!
+          </p>
         </div>
 
         {/* Prediction CTA */}
