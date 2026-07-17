@@ -13,6 +13,11 @@
  *   replaceLive reads ALL old docs then deletes them (~40 reads).
  *   batchWrite just writes new docs without reading old ones (0 reads).
  *   Stale docs are cleaned up on the 2nd poll via diff-based delete.
+ *
+ * ★ ADAPTIVE SCHEDULER SUPPORT: 
+ *   Returns `isNearFinish` (true if any match is 80'+ or in ET/BT/P)
+ *   and `polled` (true if API was actually hit) to help the scheduler
+ *   dynamically adjust polling intervals.
  */
 
 const {
@@ -182,6 +187,16 @@ class LiveFixturesService {
       }.bind(this)
     );
 
+    // ════════════════════════════════════════════════════════
+    // NEAR-FINISH DETECTION
+    // True if ANY live match is at 80'+ in 2H, or in ET/BT/P.
+    // This triggers the 2.5-min NEAR_FT polling tier in the scheduler.
+    // ════════════════════════════════════════════════════════
+    var isNearFinish = newDocs.some(function (d) {
+      if (["ET", "BT", "P"].indexOf(d.status) !== -1) return true;
+      return d.elapsed != null && d.elapsed >= 80;
+    });
+
     // ══════════════════════════════════════════════════════
     // ★ QUOTA FIX: Only invalidate cache when data changed
     //
@@ -234,8 +249,10 @@ class LiveFixturesService {
       writes: writeCount,
       removed: transitioned,
       hasLive: newDocs.length > 0,
+      isNearFinish: isNearFinish,
       duration: duration,
       capReached: false,
+      polled: true,
     };
   }
 
@@ -350,16 +367,18 @@ class LiveFixturesService {
   }
 
   _emptyResult(extra = {}) {
-  return {
-    total: 0,
-    writes: 0,
-    removed: 0,
-    hasLive: false,
-    duration: 0,
-    capReached: false,
-    ...extra,
-  };
-}
+    return {
+      total: 0,
+      writes: 0,
+      removed: 0,
+      hasLive: false,
+      isNearFinish: false,
+      duration: 0,
+      capReached: false,
+      polled: false,
+      ...extra,
+    };
+  }
 }
 
 module.exports = LiveFixturesService;

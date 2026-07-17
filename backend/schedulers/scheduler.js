@@ -1,4 +1,3 @@
-// schedulers/scheduler.js
 const { SCHEDULER, LIVE_POLLING, FT_RECOVERY, API } = require("../config/constants");
 const {
   getRemainingRequests,
@@ -19,7 +18,6 @@ class Scheduler {
     this.cronTimers = [];
     this.syncStatus = {};
     this.activeSleepControllers = new Set();
-    this.lastFtRecovery = {}; // Tracks lastFtRecovery per sport
 
     for (const name of Object.keys(services)) {
       this.syncStatus[name] = this._createInitialStatus();
@@ -33,7 +31,7 @@ class Scheduler {
 
     await this._tryRun("footballLiveFixtures");
     if (isBasketballConfigured) await this._tryRun("basketballLiveFixtures");
-    
+
     await this._tryRun("footballDailyFixtures");
     if (isBasketballConfigured) await this._tryRun("basketballDailyFixtures");
 
@@ -50,7 +48,8 @@ class Scheduler {
     if (isBasketballConfigured) this._startLivePolling("basketball");
 
     this._startCron("footballDailyFixtures", SCHEDULER.FIXTURES_DAILY);
-    if (isBasketballConfigured) this._startCron("basketballDailyFixtures", SCHEDULER.BASKETBALL_FIXTURES_DAILY);
+    if (isBasketballConfigured)
+      this._startCron("basketballDailyFixtures", SCHEDULER.BASKETBALL_FIXTURES_DAILY);
 
     this._logSchedule();
     logger.info("[Scheduler] Started.");
@@ -65,7 +64,6 @@ class Scheduler {
     for (const timer of this.cronTimers) clearTimeout(timer);
     this.cronTimers = [];
 
-    // Cancel all active sleeps immediately for graceful shutdown
     for (const ctrl of this.activeSleepControllers) {
       if (!ctrl.signal.aborted) ctrl.abort();
     }
@@ -82,62 +80,162 @@ class Scheduler {
   }
 
   _startLivePolling(sport) {
-    const serviceName = sport === "football" ? "footballLiveFixtures" : "basketballLiveFixtures";
+    const serviceName =
+      sport === "football" ? "footballLiveFixtures" : "basketballLiveFixtures";
     const service = this.services[serviceName];
-    
+
     if (!service) {
       logger.warn(`[Scheduler] ${serviceName} not registered — skipping`);
       return;
     }
 
-    const getBudget = sport === "football" ? getRemainingRequests : getBasketballRemainingRequests;
-    const getLiveCount = sport === "football" ? getLiveRequestsToday : getBasketballLiveRequestsToday;
-    const getLiveCap = sport === "football" ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
+    const getBudget =
+      sport === "football" ? getRemainingRequests : getBasketballRemainingRequests;
+    const getLiveCount =
+      sport === "football" ? getLiveRequestsToday : getBasketballLiveRequestsToday;
+    const liveCap =
+      sport === "football"
+        ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP
+        : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
 
     const controller = { stop: false };
     this.pollingControllers.push(controller);
 
-    this._pollingLoop(serviceName, service, getBudget, getLiveCount, getLiveCap, controller)
-      .catch((err) => logger.error(`[Scheduler] ${sport} polling crashed: ${err.message}`));
+    this._pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller).catch(
+      (err) => logger.error(`[Scheduler] ${sport} polling crashed: ${err.message}`)
+    );
   }
 
-  /**
-   * Smart State Machine: Determines interval based on Budget Tier, Live Status, and Near-Finish logic
-   */
-  _determinePollingState(remaining, hasLive, isNearFinish) {
-    let mode = "HEALTHY";
-    let interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
+  // ═══════════════════════════════════════════════════════════════
+  // SMART STATE MACHINE
+  // Combines three dimensions to pick the safest interval:
+  //
+  //   1. LIVE TIER   — how many matches are live right now
+  //   2. BUDGET TIER — how many total API calls remain today
+  //   3. CAP TIER    — how many live-polling calls remain today
+  //
+  // Plus DAY-PACING: spreads remaining cap calls across remaining
+  // hours so we NEVER deplete before midnight UTC reset, even on a
+  // 1k-match day.
+  //
+  // Final interval = max(desired, budgetFloor, capFloor, pacingFloor)
+  // ═══════════════════════════════════════════════════════════════
+  _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap) {
+    // ── 1. Desired interval from live match count ──
+    let liveTier;
+    let desired;
 
-    if (remaining !== null && remaining <= 0) {
-      mode = "EXHAUSTED";
-      interval = LIVE_POLLING.EXHAUSTED_INTERVAL_MS;
-    } else if (remaining !== null && remaining <= LIVE_POLLING.CRITICAL_BUDGET_THRESHOLD) {
-      mode = "CRITICAL";
-      interval = LIVE_POLLING.CRITICAL_INTERVAL_MS;
-    } else if (remaining !== null && remaining <= LIVE_POLLING.LOW_BUDGET_THRESHOLD) {
-      mode = "LOW";
-      interval = LIVE_POLLING.LOW_INTERVAL_MS;
-    } else if (remaining !== null && remaining <= LIVE_POLLING.MEDIUM_BUDGET_THRESHOLD) {
-      mode = "MEDIUM";
-      interval = hasLive ? LIVE_POLLING.MEDIUM_INTERVAL_MS : LIVE_POLLING.LOW_INTERVAL_MS;
+    if (isNearFinish && liveCount > 0) {
+      liveTier = "NEAR_FT";
+      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2.5 min
+    } else if (liveCount === 0) {
+      liveTier = "IDLE";
+      desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 60 min
+    } else if (liveCount <= 5) {
+      liveTier = "LIVE_LOW";
+      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
+    } else if (liveCount <= 15) {
+      liveTier = "LIVE_MED";
+      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
     } else {
-      // Healthy Budget
-      mode = "HEALTHY";
-      if (hasLive) {
-        interval = isNearFinish ? LIVE_POLLING.NEAR_FINISH_INTERVAL_MS : LIVE_POLLING.ACTIVE_INTERVAL_MS;
-        if (isNearFinish) mode = "NEAR_FINISH";
-      } else {
-        interval = LIVE_POLLING.LOW_INTERVAL_MS; // Idle
+      liveTier = "LIVE_HIGH";
+      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
+    }
+
+    // ── 2. Budget tier floor ──
+    let budgetTier = "HEALTHY";
+    let budgetFloor = 0;
+
+    if (remaining !== null) {
+      if (remaining <= 0) {
+        budgetTier = "EXHAUSTED";
+        budgetFloor = Infinity; // Will be handled by continue in loop
+      } else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) {
+        budgetTier = "RESERVE";       // < 10
+        budgetFloor = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS;
+      } else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) {
+        budgetTier = "CRITICAL";      // 10–20
+        budgetFloor = LIVE_POLLING.BUDGET_CRITICAL_FLOOR_MS;
+      } else if (remaining <= LIVE_POLLING.BUDGET_HEALTHY_THRESHOLD) {
+        budgetTier = "NORMAL";        // 20–50
+        budgetFloor = LIVE_POLLING.BUDGET_NORMAL_FLOOR_MS;
+      }
+      // else HEALTHY — no floor
+    }
+
+    // ── 3. Cap tier floor ──
+    const capRemaining = liveCap - liveUsed;
+    let capTier = "OK";
+    let capFloor = 0;
+
+    if (capRemaining <= 0) {
+      capTier = "EXHAUSTED";
+      capFloor = LIVE_POLLING.CAP_EXHAUSTED_INTERVAL_MS;  // 1 hour
+    } else if (capRemaining <= LIVE_POLLING.CAP_CRITICAL_REMAINING) {
+      capTier = "CRITICAL";   // 1–5 left
+      capFloor = LIVE_POLLING.CAP_CRITICAL_FLOOR_MS;
+    } else if (capRemaining <= LIVE_POLLING.CAP_NORMAL_REMAINING) {
+      capTier = "LOW";        // 6–15 left
+      capFloor = LIVE_POLLING.CAP_LOW_FLOOR_MS;
+    }
+
+    // ── 4. Day-pacing floor ──
+    // Spread remaining cap calls across remaining hours until midnight UTC.
+    // This is the SAFETY NET that prevents depletion on busy days.
+    // Reserve CAP_FT_RESERVE calls for end-of-day FT recovery.
+    let pacingFloor = 0;
+    let isPacing = false;
+
+    if (capRemaining > LIVE_POLLING.CAP_FT_RESERVE && budgetTier !== "EXHAUSTED") {
+      const now = new Date();
+      const hoursLeft =
+        24 - now.getUTCHours() - now.getUTCMinutes() / 60 - now.getUTCSeconds() / 3600;
+      const effectiveCap = capRemaining - LIVE_POLLING.CAP_FT_RESERVE;
+
+      // Minimum interval to spread `effectiveCap` calls across `hoursLeft` hours
+      pacingFloor = (Math.max(0.01, hoursLeft) * 3600000) / effectiveCap;
+
+      if (pacingFloor > desired) {
+        isPacing = true;
       }
     }
 
-    return { mode, interval };
+    // ── 5. Final interval = max of all constraints ──
+    let interval;
+    if (budgetTier === "EXHAUSTED") {
+      interval = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS; // 2h — keep checking for budget reset
+    } else {
+      interval = Math.max(desired, budgetFloor, capFloor, pacingFloor);
+    }
+
+    // ── 6. Human-readable mode label ──
+    let mode = liveTier;
+
+    if (budgetTier === "EXHAUSTED") {
+      mode = "BUDGET_EXHAUSTED";
+    } else if (capTier === "EXHAUSTED") {
+      mode = `CAP_DONE+${liveTier}`;
+    } else if (budgetTier === "RESERVE") {
+      mode = `BUDGET_RESERVE+${liveTier}`;
+    } else if (capTier === "CRITICAL") {
+      mode = `CAP_CRIT+${liveTier}`;
+    } else if (isPacing) {
+      mode = `PACING+${liveTier}`;
+    } else if (budgetTier === "CRITICAL") {
+      mode = `BUDGET_CRIT+${liveTier}`;
+    } else if (capTier === "LOW") {
+      mode = `CAP_LOW+${liveTier}`;
+    } else if (budgetTier === "NORMAL") {
+      mode = `BUDGET_NORMAL+${liveTier}`;
+    }
+
+    return { mode, interval, liveTier, budgetTier, capTier, isPacing };
   }
 
-  async _pollingLoop(serviceName, service, getBudget, getLiveCount, getLiveCap, controller) {
+  async _pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller) {
     const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
-    let hasLive = false;
+    let liveCount = 0;
     let isNearFinish = false;
 
     logger.info(`[Scheduler] ${sport.toUpperCase()} live polling started`);
@@ -146,62 +244,99 @@ class Scheduler {
       try {
         const remaining = getBudget();
         const liveUsed = getLiveCount();
-        const { mode, interval } = this._determinePollingState(remaining, hasLive, isNearFinish);
-
-        logger.info(
-          `[Scheduler] ${sport.toUpperCase()} [${mode}] Next poll in ${Math.round(interval / 60000)}m ` +
-          `[Live: ${liveUsed}/${getLiveCap}, API: ${remaining ?? "???"}/${API.DAILY_BUDGET}]`
+        const state = this._determinePollingState(
+          remaining,
+          liveCount,
+          isNearFinish,
+          liveUsed,
+          liveCap
         );
 
-        await this._sleep(interval);
+        const intervalMin = Math.round(state.interval / 60000);
+        logger.info(
+          `[Scheduler] ${sport.toUpperCase()} [${state.mode}] Next poll in ${intervalMin}m ` +
+            `[Live: ${liveUsed}/${liveCap} cap, API: ${remaining ?? "???"}/${API.DAILY_BUDGET}, ` +
+            `LiveMatches: ${liveCount}, NearFT: ${isNearFinish ? "Y" : "N"}]`
+        );
+
+        await this._sleep(state.interval);
         if (controller.stop) break;
 
-        // Re-check guards after sleeping
+        // ── Re-check guards after sleeping ──
         const nowRemaining = getBudget();
         const nowLiveUsed = getLiveCount();
 
         if (nowRemaining !== null && nowRemaining <= 0) {
-          logger.warn(`[Scheduler] ${sport.toUpperCase()} paused — budget 0/${API.DAILY_BUDGET}`);
+          logger.warn(
+            `[Scheduler] ${sport.toUpperCase()} paused — budget 0/${API.DAILY_BUDGET}`
+          );
           continue;
         }
 
         if (nowRemaining !== null && nowRemaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
+          logger.warn(
+            `[Scheduler] ${sport.toUpperCase()} skipped — budget below MIN_BUDGET_TO_POLL`
+          );
           continue;
         }
 
-        const prevHasLive = hasLive;
+        // ── Execute poll ──
+        const prevHadLive = liveCount > 0;
         const result = await service.run();
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        hasLive = result?.hasLive === true;
-        isNearFinish = result?.isNearFinish === true; // Service should return this boolean
-        const recoveredFT = result?.recoveredFT || 0;
+        // Only update live state if the service actually polled the API.
+        // When capReached=true or budget was too low, the service returns
+        // an empty result without making an API call. In that case we
+        // preserve the last known liveCount/isNearFinish.
+        const actuallyPolled = result && result.polled !== false;
 
-        logger.info(
-          `[Scheduler] ${sport.toUpperCase()} sync done. Live: ${hasLive ? "Yes" : "No"}. Near FT: ${isNearFinish ? "Yes" : "No"}. ` +
-          `FT Recovered: ${recoveredFT}. Budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
-        );
-
-        // SMART FT RECOVERY TRIGGER
-        // If we HAD live games, but now we DON'T, it means games just finished.
-        // We wait 60 seconds and poll again IMMEDIATELY to catch the final score 
-        // instead of waiting for the next 1-hour idle cycle.
-        if (prevHasLive && !hasLive && FT_RECOVERY.ENABLED && nowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH) {
-          logger.info(`[Scheduler] ${sport.toUpperCase()} live session ended. Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`);
-          await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
+        if (actuallyPolled) {
+          liveCount = result.total || 0;
+          isNearFinish = result.isNearFinish === true;
         }
 
+        const recoveredFT = result?.recoveredFT || 0;
+        const capReached = result?.capReached === true;
+
+        logger.info(
+          `[Scheduler] ${sport.toUpperCase()} sync done. ` +
+            `Live: ${liveCount} match(es). NearFT: ${isNearFinish ? "Yes" : "No"}. ` +
+            `FT→: ${recoveredFT}. Cap: ${nowLiveUsed}/${liveCap}${capReached ? " (REACHED)" : ""}. ` +
+            `Budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
+        );
+
+        // ── SMART FT RECOVERY TRIGGER ──
+        // If we HAD live games but now we DON'T, it means games just finished.
+        // Wait 60s and poll again IMMEDIATELY to catch the final score
+        // instead of waiting for the next regular cycle.
+        if (
+          prevHadLive &&
+          liveCount === 0 &&
+          actuallyPolled &&
+          FT_RECOVERY.ENABLED &&
+          nowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH
+        ) {
+          logger.info(
+            `[Scheduler] ${sport.toUpperCase()} live session ended. ` +
+              `Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`
+          );
+          await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
+        }
       } catch (err) {
         consecutiveErrors++;
         this._updateStatus(serviceName, "error", null, err);
 
         logger.error(
-          `[Scheduler] ${sport.toUpperCase()} error (${consecutiveErrors}/${LIVE_POLLING.MAX_CONSECUTIVE_ERRORS}): ${err.message}`
+          `[Scheduler] ${sport.toUpperCase()} error ` +
+            `(${consecutiveErrors}/${LIVE_POLLING.MAX_CONSECUTIVE_ERRORS}): ${err.message}`
         );
 
         if (consecutiveErrors >= LIVE_POLLING.MAX_CONSECUTIVE_ERRORS) {
-          logger.error(`[Scheduler] ${sport.toUpperCase()} polling stopped — max errors reached`);
+          logger.error(
+            `[Scheduler] ${sport.toUpperCase()} polling stopped — max errors reached`
+          );
           break;
         }
 
@@ -308,6 +443,7 @@ class Scheduler {
         recoveredFT: result.recoveredFT ?? null,
         skipped: result.skipped ?? null,
         success: result.success ?? null,
+        polled: result.polled ?? null,
       };
     }
 
@@ -331,23 +467,19 @@ class Scheduler {
     };
   }
 
-  /**
-   * Cancellable Sleep. Prevents hanging the event loop during shutdown.
-   */
   _sleep(ms) {
     return new Promise((resolve) => {
       const controller = new AbortController();
       this.activeSleepControllers.add(controller);
-      
+
       const timer = setTimeout(() => {
         this.activeSleepControllers.delete(controller);
         resolve();
       }, ms);
-      
-      // Allow Node to exit if this is the only timer left
+
       if (timer.unref) timer.unref();
 
-      controller.signal.addEventListener('abort', () => {
+      controller.signal.addEventListener("abort", () => {
         clearTimeout(timer);
         this.activeSleepControllers.delete(controller);
         resolve();
@@ -356,14 +488,28 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Smart Schedule Configuration ═══");
-    logger.info(`  Daily Rollover+Fetch: 03:00 AM UTC (1 API call/sport)`);
-    logger.info(`  Live Polling (Active): ${LIVE_POLLING.ACTIVE_INTERVAL_MS / 60000}m`);
-    logger.info(`  Live Polling (Near FT): ${LIVE_POLLING.NEAR_FINISH_INTERVAL_MS / 60000}m`);
-    logger.info(`  Live Polling (Idle):   ${LIVE_POLLING.LOW_INTERVAL_MS / 60000}m`);
-    logger.info(`  Football Live Cap:     ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
-    logger.info(`  Basketball Live Cap:   ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
-    logger.info(`  Daily API Budget:      ${API.DAILY_BUDGET}`);
+    logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
+    logger.info("  Live-Count Tiers (desired intervals):");
+    logger.info(`    0 live      → 60 min   (IDLE)`);
+    logger.info(`    1–5 live    → 15 min   (LIVE_LOW)`);
+    logger.info(`    6–15 live   → 10 min   (LIVE_MED)`);
+    logger.info(`    16+ live    →  5 min   (LIVE_HIGH)`);
+    logger.info(`    80'+ / ET   → 2.5 min  (NEAR_FT)`);
+    logger.info("  Budget Tiers (slowdown floors):");
+    logger.info(`    > 50 left   → HEALTHY  (no floor)`);
+    logger.info(`    20–50 left  → NORMAL   (≥ 30 min floor)`);
+    logger.info(`    10–20 left  → CRITICAL (≥ 1 h floor)`);
+    logger.info(`    < 10 left   → RESERVE  (≥ 2 h floor)`);
+    logger.info("  Cap Tiers (live-polling-cap floors):");
+    logger.info(`    > 15 left   → OK       (no floor)`);
+    logger.info(`    6–15 left   → LOW      (≥ 15 min floor)`);
+    logger.info(`    1–5 left    → CRITICAL (≥ 30 min floor)`);
+    logger.info(`    0 left      → EXHAUSTED (1 h, 0 API cost)`);
+    logger.info("  Day-Pacing: spreads remaining cap across hours until midnight UTC");
+    logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
+    logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
+    logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);
+    logger.info(`  FT Reserve:          ${LIVE_POLLING.CAP_FT_RESERVE} calls held for FT recovery`);
     logger.info("[Scheduler] ═════════════════════════════════════");
   }
 }

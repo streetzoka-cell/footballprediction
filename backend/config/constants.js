@@ -194,27 +194,57 @@ const SCHEDULER = Object.freeze({
 // SMART POLLING & BUDGET STRATEGY
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 40,
+  // ── DAILY CAPS ──
+  // Football: 60 (↑ from 40). Leaves ~40 for basketball(15) + daily(2) +
+  // yesterday backfill(1) + retries + manual refresh + safety margin.
+  // Even on a 1k-match day, pacing prevents depletion.
+  FOOTBALL_DAILY_LIVE_CAP: 60,
   BASKETBALL_DAILY_LIVE_CAP: 15,
 
-  NEAR_FINISH_INTERVAL_MS: 180000,     // 3 mins (Games approaching 85'+)
-  ACTIVE_INTERVAL_MS: 600000,          // 10 mins (Healthy budget & Live)
-  MEDIUM_INTERVAL_MS: 1200000,         // 20 mins (Medium budget & Live)
-  LOW_INTERVAL_MS: 3600000,            // 1 hour  (Low budget / Idle)
-  CRITICAL_INTERVAL_MS: 7200000,       // 2 hours (Critical budget)
-  CAP_REACHED_INTERVAL_MS: 21600000,   // 6 hours (Cap reached)
-  EXHAUSTED_INTERVAL_MS: 86400000,     // 24 hours (Budget exhausted)
+  // ── LIVE-COUNT-BASED INTERVALS (desired, used when budget is healthy) ──
+  // These are the "ideal" intervals per the user's spec.
+  IDLE_INTERVAL_MS:        3600000,  // 60 min  — no live matches
+  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–5 live
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 6–15 live
+  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 16+ live
+  NEAR_FINISH_INTERVAL_MS: 150000,   // 2.5 min — any match at 80'+ or ET/BT/P
 
-  FT_CONFIRMATION_DELAY_MS: 60000,     // 1 min delay before checking if a game just finished
+  // ── BUDGET-TIER FLOORS (override desired interval when budget tightens) ──
+  // > 50 remaining        → HEALTHY  (no floor — use desired interval)
+  // 20–50 remaining       → NORMAL   (floor: 30 min)
+  // 10–20 remaining       → CRITICAL (floor: 1 hour)
+  // < 10 remaining        → RESERVE  (floor: 2 hours)
+  // 0 remaining           → EXHAUSTED (skip entirely)
+  BUDGET_HEALTHY_THRESHOLD:  50,
+  BUDGET_NORMAL_THRESHOLD:   20,
+  BUDGET_CRITICAL_THRESHOLD: 10,
+  MIN_BUDGET_TO_POLL:        3,
 
-  MEDIUM_BUDGET_THRESHOLD: 70,         // <= 70 requests left
-  LOW_BUDGET_THRESHOLD: 40,            // <= 40 requests left
-  CRITICAL_BUDGET_THRESHOLD: 15,       // <= 15 requests left
-  MIN_BUDGET_TO_POLL: 3,               // Abort if less than 3 requests left
+  BUDGET_NORMAL_FLOOR_MS:    1800000,  // 30 min
+  BUDGET_CRITICAL_FLOOR_MS:  3600000,  // 1 hour
+  BUDGET_RESERVE_FLOOR_MS:   7200000,  // 2 hours
 
+  // ── CAP-TIER FLOORS (override when daily live-cap is nearly exhausted) ──
+  // > 15 cap calls left    → OK       (no floor)
+  // 6–15 cap calls left    → LOW      (floor: 15 min)
+  // 1–5 cap calls left     → CRITICAL (floor: 30 min)
+  // 0 cap calls left       → EXHAUSTED (poll every 1 hour — free, no API call)
+  CAP_NORMAL_REMAINING:    15,
+  CAP_CRITICAL_REMAINING:  5,
+  CAP_FT_RESERVE:          4,  // Always hold 4 calls for FT recovery sweeps
+
+  CAP_LOW_FLOOR_MS:          900000,   // 15 min
+  CAP_CRITICAL_FLOOR_MS:     1800000,  // 30 min
+  CAP_EXHAUSTED_INTERVAL_MS: 3600000,  // 1 hour (service short-circuits — 0 API cost)
+
+  // ── FT RECOVERY ──
+  FT_CONFIRMATION_DELAY_MS: 60000,  // 1 min — immediate re-poll after last live game ends
+
+  // ── ERROR HANDLING ──
   MAX_CONSECUTIVE_ERRORS: 3,
-  ERROR_BACKOFF_MS: 60000,
+  ERROR_BACKOFF_MS:       60000,
 });
+
 
 // ───────────────────────────────────────────────
 // FT RECOVERY STRATEGY
