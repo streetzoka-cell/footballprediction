@@ -199,11 +199,11 @@ const StatusDot = ({ status, size = 6 }) => {
 const LINKS = [
   { to: '/', label: 'Home', emoji: '🏠' },
   { to: '/fixtures', label: 'Fixtures', emoji: '⚽' },
-  { to: '/highlights', label: 'Highlights', emoji: '🎬' },
-  { to: '/predictions', label: 'Predict', emoji: '🎯', badge: 'NEW' },
+  { to: '/highlights', label: 'Highlights & NEWS', emoji: '🎬' },
+  { to: '/predictions', label: 'Predictions', emoji: '🎯', badge: 'NEW' },
   { to: '/basketball', label: 'Hoops', emoji: '🏀' },
   { to: '/leaderboard', label: 'Ranks', emoji: '🏆' },
-  { to: '/mastergames', label: 'Games', emoji: '🎮' },
+  { to: '/mastergames', label: 'other Games', emoji: '🎮' },
   { to: '/livestream', label: 'Stream', emoji: '📡', isLive: true },
 ];
 
