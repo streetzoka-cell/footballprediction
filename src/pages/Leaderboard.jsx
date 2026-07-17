@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v20.3 — 1-Player Podium, Live Merge for Weekly/Monthly
+// v20.4 — Instant Local Rank Calculation, 1-Player Podium, Live Merge
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition } from 'react';
@@ -14,8 +14,11 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
-import { PERIOD, PERIOD_LABEL } from '../utils/constants';
+import { PERIOD, PERIOD_LABEL, calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
+import { db } from '../utils/firebase';
+import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { fetchFixtures } from '../utils/api';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════
@@ -138,8 +141,6 @@ const injectCSS = () => {
 .lb-more:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.02)}
 .lb-more:active{transform:scale(.98)}
 
-.lb-stale{display:flex;flex-direction:column;align-items:center;gap:12px;padding:36px 24px;background:var(--bg-card);border:2px dashed rgba(245,197,66,.1);border-radius:14px;text-align:center;margin-bottom:20px;animation:lb-fade-up .4s ${SMOOTH} both}
-.lb-stale-icon{width:48px;height:48px;border-radius:13px;background:rgba(245,197,66,.05);border:1px solid rgba(245,197,66,.1);display:flex;align-items:center;justify-content:center;color:var(--gold)}
 .lb-error{display:flex;flex-direction:column;align-items:center;gap:12px;padding:36px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;text-align:center;margin-bottom:20px;animation:lb-fade-up .4s ${SMOOTH} both}
 .lb-error-icon{width:48px;height:48px;border-radius:13px;background:rgba(239,68,68,.05);border:1px solid rgba(239,68,68,.1);display:flex;align-items:center;justify-content:center;color:#ef4444}
 .lb-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:300% 100%;animation:lb-shim 1.2s ease-in-out infinite;border-radius:10px}
@@ -282,9 +283,36 @@ export default function Leaderboard() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showCount, setShowCount] = useState(15);
 
-  const deferredSearch = useDeferredValue(search);
+  // ★ LOCAL INSTANT DATA: Fetch all predictions and live fixtures directly
+  const [allUserPreds, setAllUserPreds] = useState([]);
+  const [liveFixtures, setLiveFixtures] = useState([]);
 
+  const deferredSearch = useDeferredValue(search);
   const isDaily = tab === PERIOD.DAILY;
+
+  // 1. Fetch ALL user predictions for today directly from Firestore
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
+    const unsub = onSnapshot(q, snap => {
+      setAllUserPreds(snap.docs.map(d => d.data()));
+    }, () => {});
+    return () => unsub();
+  }, []);
+
+  // 2. Fetch LIVE FIXTURES FOR TODAY (Every 15s)
+  useEffect(() => {
+    let cancelled = false;
+    const loadLive = async () => {
+      try {
+        const res = await fetchFixtures(todayStr());
+        if (!cancelled) setLiveFixtures(res?.matches || []);
+      } catch (e) {}
+    };
+    loadLive();
+    const interval = setInterval(loadLive, 15000); 
+    return () => { cancelled = true; clearInterval(interval); };
+  }, []);
 
   // ★ Trigger fetch for historical tabs if not already loaded
   useEffect(() => {
@@ -293,20 +321,85 @@ export default function Leaderboard() {
     }
   }, [tab, isDaily, appData]);
 
-  // ★ Safe extraction of historical data
   const historicalData = !isDaily ? (appData.historicalLeaderboards?.[tab] || null) : null;
   const isLoadingHistorical = !isDaily && !historicalData;
-
   const isStale = !isDaily && historicalData ? (historicalData.stale ?? true) : false;
 
-  // ★ MERGE LOGIC: Combine historical data with today's live data if stale
+  // ★ INSTANT DAILY CALCULATION: Compute points and ranks locally for immediate update
+  const localDailyEntries = useMemo(() => {
+    if (allUserPreds.length === 0) return [];
+    
+    // Merge active predictions with live fixtures to get latest scores
+    const matchesMap = new Map();
+    (appData.activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
+    liveFixtures.forEach(f => {
+      const matchId = String(f.id);
+      const existing = matchesMap.get(matchId);
+      if (existing) {
+        matchesMap.set(matchId, {
+          ...existing,
+          status: f.status || existing.status,
+          homeScore: f.homeScore ?? existing.homeScore,
+          awayScore: f.awayScore ?? existing.awayScore,
+          isLive: f.isLive || existing.isLive,
+          isFinished: f.isFinished || existing.isFinished,
+        });
+      }
+    });
+    
+    // Group predictions by user
+    const userMap = new Map();
+    allUserPreds.forEach(p => {
+      if (!userMap.has(p.userId)) {
+        userMap.set(p.userId, {
+          uid: p.userId,
+          displayName: p.displayName || 'Anonymous',
+          points: 0,
+          exact: 0,
+          result: 0,
+          miss: 0,
+          predictions: 0,
+          correctPreds: 0
+        });
+      }
+      const u = userMap.get(p.userId);
+      u.predictions++;
+      
+      const match = matchesMap.get(String(p.matchId));
+      if (match && isFinishedStatus(match.status, SPORT.FOOTBALL) && match.homeScore != null) {
+        const r = calcPoints(p.homeScore, p.awayScore, match.homeScore, match.awayScore);
+        if (r.type !== 'pending') {
+          u.points += r.points;
+          if (r.type === 'exact') { u.exact++; u.correctPreds++; }
+          else if (r.type === 'result') { u.result++; u.correctPreds++; }
+          else { u.miss++; }
+        }
+      }
+    });
+    
+    // Calculate accuracy and sort
+    const entries = Array.from(userMap.values()).map(u => ({
+      ...u,
+      accuracy: u.predictions > 0 ? Math.round((u.correctPreds / u.predictions) * 100) : 0
+    }));
+    
+    entries.sort((a, b) => b.points - a.points || b.exact - a.exact || b.accuracy - a.accuracy);
+    entries.forEach((u, i) => { u.rank = i + 1; });
+    
+    return entries;
+  }, [allUserPreds, appData.activePredictions, liveFixtures]);
+
+  // ★ MERGE LOGIC: Combine historical data with local daily data
   const entries = useMemo(() => {
-    if (isDaily) return appData.dailyEntries || [];
+    if (isDaily) {
+      // Prefer local instant entries if they have data, otherwise fallback to context
+      return localDailyEntries.length > 0 ? localDailyEntries : (appData.dailyEntries || []);
+    }
     
     const histEntries = historicalData?.entries || [];
-    const todayEntries = appData.dailyEntries || [];
+    const todayEntries = localDailyEntries; // Use local instant entries for merge!
     
-    // If not stale, backend has processed today's matches. Use as is to avoid double counting.
+    // If not stale, backend has already processed today. Use as is.
     if (!isStale) return histEntries;
     
     // If stale, merge today's live data into historical data
@@ -338,20 +431,34 @@ export default function Leaderboard() {
     merged.forEach((u, i) => { u.rank = i + 1; });
     
     return merged;
-  }, [isDaily, appData.dailyEntries, historicalData, isStale]);
+  }, [isDaily, localDailyEntries, appData.dailyEntries, historicalData, isStale]);
 
   // ★ MERGE STATS: Recalculate stats if we merged data
   const stats = useMemo(() => {
-    if (isDaily) return appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
+    if (isDaily) {
+      const list = localDailyEntries.length > 0 ? localDailyEntries : (appData.dailyEntries || []);
+      const players = list.length;
+      const preds = list.reduce((sum, e) => sum + (e.predictions || 0), 0);
+      const exact = list.reduce((sum, e) => sum + (e.exact || 0), 0);
+      const avgAcc = players > 0 ? (list.reduce((sum, e) => sum + (e.accuracy || 0), 0) / players).toFixed(1) : '0.0';
+      return { players, preds, exact, avg: avgAcc };
+    }
     
     const histStats = historicalData?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
     if (!isStale) return histStats;
     
-    const todayStats = appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
-    const totalPlayers = entries.length; // Use merged entries length
+    const todayList = localDailyEntries;
+    const todayStats = {
+      players: todayList.length,
+      preds: todayList.reduce((s, e) => s + (e.predictions || 0), 0),
+      exact: todayList.reduce((s, e) => s + (e.exact || 0), 0),
+      avg: todayList.length > 0 ? (todayList.reduce((s, e) => s + (e.accuracy || 0), 0) / todayList.length) : 0
+    };
+    
+    const totalPlayers = entries.length; 
     const totalPreds = (histStats.preds || 0) + (todayStats.preds || 0);
     const totalExact = (histStats.exact || 0) + (todayStats.exact || 0);
-    const avg = totalPreds > 0 ? (((histStats.avg || 0) * (histStats.preds || 0) + (todayStats.avg || 0) * (todayStats.preds || 0)) / totalPreds) : 0;
+    const avg = totalPreds > 0 ? (((histStats.avg || 0) * (histStats.preds || 0) + (parseFloat(todayStats.avg) || 0) * (todayStats.preds || 0)) / totalPreds) : 0;
     
     return {
       players: totalPlayers,
@@ -359,7 +466,7 @@ export default function Leaderboard() {
       exact: totalExact,
       avg: avg.toFixed(1)
     };
-  }, [isDaily, appData.dailyStats, historicalData, isStale, entries]);
+  }, [isDaily, localDailyEntries, appData.dailyEntries, historicalData, isStale, entries]);
 
   const loading = isDaily ? appData.loading : isLoadingHistorical;
   const error = isDaily ? null : (historicalData?.error || null);
@@ -457,7 +564,7 @@ export default function Leaderboard() {
             <TabBar tabs={TABS} active={tab} onChange={handleTabChange} />
 
             {/* Live Merge Indicator */}
-            {isStale && !loading && (
+            {isStale && !loading && localDailyEntries.length > 0 && (
               <div style={{ textAlign: 'center', marginBottom: 12, fontSize: '0.7rem', color: 'var(--accent)', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
                 <span className="lb-live" /> Merging live daily results...
               </div>
