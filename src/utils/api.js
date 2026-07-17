@@ -6,8 +6,7 @@ import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { dataLayer } from './dataLayer';
-// ★ FIX: Import getLocalDateFromUtc to handle timezone filtering
-import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow, getDateRange, getLocalDateFromUtc } from './dates';
+import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow, getDateRange } from './dates';
 
 import { eventBus, EVENT } from './eventBus';
 
@@ -19,7 +18,6 @@ import {
   calcPoints, RESULT_TYPE, POINTS,
 } from './constants';
 
-// FIX: Export native names directly for consistency across the app
 export { todayStr, yesterdayStr, tomorrowStr, getDateRange };
 
 let isUserAuthenticated = false;
@@ -33,7 +31,6 @@ if (auth) {
     authReady = true;
     authWaiters.forEach((resolve) => resolve());
     authWaiters.length = 0;
-
     if (user && !wasAuthenticated) eventBus.emit(EVENT.USER_SIGNIN, { uid: user.uid });
     else if (!user && wasAuthenticated) eventBus.emit(EVENT.USER_SIGNOUT, {});
   });
@@ -41,9 +38,7 @@ if (auth) {
   authReady = true;
 }
 
-export const waitForAuth = () =>
-  authReady ? Promise.resolve() : new Promise((resolve) => authWaiters.push(resolve));
-
+export const waitForAuth = () => authReady ? Promise.resolve() : new Promise((resolve) => authWaiters.push(resolve));
 export const isAuthenticated = () => isUserAuthenticated;
 
 const getDeviceId = () => {
@@ -55,38 +50,19 @@ const getDeviceId = () => {
   return id;
 };
 
-const lsGet = (key, fallback) => {
-  try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; }
-  catch { return fallback; }
-};
-
-const lsSet = (key, value) => {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* full */ }
-};
+const lsGet = (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch { return fallback; } };
+const lsSet = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 
 export const getFavs = () => lsGet('fx_favs', []);
 export const setFavs = (favs) => { lsSet('fx_favs', favs); pushToFb('favorites', favs); };
 export const getPrefs = () => lsGet('fx_prefs', { sound: true, goals: true, cards: true, kickoff: true, lineups: true, notifications: false });
 export const setPrefs = (prefs) => { lsSet('fx_prefs', prefs); pushToFb('prefs', prefs); };
-export const addFav = (team) => {
-  const favs = getFavs();
-  if (!favs.find((t) => t.id === team.id)) { favs.unshift({ ...team, addedAt: Date.now() }); setFavs(favs); }
-};
+export const addFav = (team) => { const favs = getFavs(); if (!favs.find((t) => t.id === team.id)) { favs.unshift({ ...team, addedAt: Date.now() }); setFavs(favs); } };
 export const removeFav = (id) => setFavs(getFavs().filter((t) => t.id !== id));
 export const isFav = (id) => getFavs().some((t) => t.id === id);
 
-const getUserId = () => {
-  const user = auth?.currentUser;
-  return user ? user.uid : getDeviceId();
-};
-
-const pushToFb = async (key, value) => {
-  if (!db) return;
-  await waitForAuth();
-  try {
-    await setDoc(doc(db, 'users', getUserId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true });
-  } catch (err) { console.warn('[Firestore] Push failed:', err.message); }
-};
+const getUserId = () => { const user = auth?.currentUser; return user ? user.uid : getDeviceId(); };
+const pushToFb = async (key, value) => { if (!db) return; await waitForAuth(); try { await setDoc(doc(db, 'users', getUserId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true }); } catch (err) {} };
 
 export const initFirebaseSync = async () => {
   if (!db) return;
@@ -97,19 +73,15 @@ export const initFirebaseSync = async () => {
     const data = snap.data();
     if (data.favorites?.length > getFavs().length) lsSet('fx_favs', data.favorites);
     if (data.prefs) lsSet('fx_prefs', data.prefs);
-  } catch (err) { console.warn('[Firestore] Sync read failed:', err.message); }
+  } catch (err) {}
 };
 
-export function formatDate(dateStr) {
-  return new Date(dateStr).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
-}
+export function formatDate(dateStr) { return new Date(dateStr).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
 
 export function transformMatch(m) {
   if (!m) return null;
   if (m.fixture) return _transformApiFormat(m);
-  if (m.sport === SPORT.BASKETBALL || m.pointsHome !== undefined || m.q1Home !== undefined) {
-    return _transformBasketballFormat(m);
-  }
+  if (m.sport === SPORT.BASKETBALL || m.pointsHome !== undefined || m.q1Home !== undefined) return _transformBasketballFormat(m);
   return _transformFootballFormat(m);
 }
 
@@ -117,18 +89,12 @@ function _transformFootballFormat(m) {
   const id = String(m.id || '');
   const s = m.status || '';
   return {
-    id, sport: SPORT.FOOTBALL, date: m.date || null, kickoff: formatTime(m.date),
-    timestamp: m.timestamp || null,
+    id, sport: SPORT.FOOTBALL, date: m.date || null, kickoff: formatTime(m.date), timestamp: m.timestamp || null,
     homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
     awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
     homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''),
     homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
-    league: {
-      id: String(m.leagueId || ''), name: m.leagueName || 'Other',
-      color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null,
-      country: m.leagueCountry || '', flag: m.leagueFlag || null,
-      type: 'League', season: m.season || null, round: m.round || null,
-    },
+    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: m.leagueFlag || null, type: 'League', season: m.season || null, round: m.round || null },
     leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '',
     status: s, rawStatus: s, statusLong: m.statusLong || '',
     homeScore: m.goalsHome ?? null, awayScore: m.goalsAway ?? null,
@@ -139,9 +105,7 @@ function _transformFootballFormat(m) {
       extraTime: { home: m.scoreExtratimeHome ?? null, away: m.scoreExtratimeAway ?? null },
       penalties: { home: m.scorePenaltyHome ?? null, away: m.scorePenaltyAway ?? null },
     },
-    isLive: isLiveStatus(s, SPORT.FOOTBALL),
-    isFinished: isFinishedStatus(s, SPORT.FOOTBALL),
-    isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
+    isLive: isLiveStatus(s, SPORT.FOOTBALL), isFinished: isFinishedStatus(s, SPORT.FOOTBALL), isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
     minute: m.elapsed ?? null, venue: null, referee: m.referee || null,
   };
 }
@@ -152,34 +116,21 @@ function _transformBasketballFormat(m) {
   const periodMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4', 5: 'OT' };
   const minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
   return {
-    id, sport: SPORT.BASKETBALL, date: m.date || null, kickoff: formatTime(m.date),
-    timestamp: m.timestamp || null,
+    id, sport: SPORT.BASKETBALL, date: m.date || null, kickoff: formatTime(m.date), timestamp: m.timestamp || null,
     homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
     awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
     homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''),
     homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
-    league: {
-      id: String(m.leagueId || ''), name: m.leagueName || 'Other',
-      color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null,
-      country: m.leagueCountry || '', flag: null,
-      type: 'League', season: m.season || null, round: null,
-    },
+    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: null, type: 'League', season: m.season || null, round: null },
     leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '',
     status: s, rawStatus: s, statusLong: m.statusLong || '',
     homeScore: m.pointsHome ?? null, awayScore: m.pointsAway ?? null,
     score: {
-      home: m.pointsHome ?? null, away: m.pointsAway ?? null,
-      halfTime: null, fullTime: { home: m.pointsHome ?? null, away: m.pointsAway ?? null },
-      extraTime: null, penalties: null,
-      q1: { home: m.q1Home ?? null, away: m.q1Away ?? null },
-      q2: { home: m.q2Home ?? null, away: m.q2Away ?? null },
-      q3: { home: m.q3Home ?? null, away: m.q3Away ?? null },
-      q4: { home: m.q4Home ?? null, away: m.q4Away ?? null },
-      ot: { home: m.otHome ?? null, away: m.otAway ?? null },
+      home: m.pointsHome ?? null, away: m.pointsAway ?? null, halfTime: null, fullTime: { home: m.pointsHome ?? null, away: m.pointsAway ?? null }, extraTime: null, penalties: null,
+      q1: { home: m.q1Home ?? null, away: m.q1Away ?? null }, q2: { home: m.q2Home ?? null, away: m.q2Away ?? null },
+      q3: { home: m.q3Home ?? null, away: m.q3Away ?? null }, q4: { home: m.q4Home ?? null, away: m.q4Away ?? null }, ot: { home: m.otHome ?? null, away: m.otAway ?? null },
     },
-    isLive: isLiveStatus(s, SPORT.BASKETBALL),
-    isFinished: isFinishedStatus(s, SPORT.BASKETBALL),
-    isScheduled: isScheduledStatus(s, SPORT.BASKETBALL),
+    isLive: isLiveStatus(s, SPORT.BASKETBALL), isFinished: isFinishedStatus(s, SPORT.BASKETBALL), isScheduled: isScheduledStatus(s, SPORT.BASKETBALL),
     minute, venue: null, referee: null,
   };
 }
@@ -190,17 +141,11 @@ function _transformApiFormat(m) {
   const awayId = String(teams.away?.id || '');
   const s = fixture.status?.short || '';
   return {
-    id: String(fixture.id), date: fixture.date, kickoff: formatTime(fixture.date),
-    timestamp: fixture.timestamp || null, sport: SPORT.FOOTBALL,
+    id: String(fixture.id), date: fixture.date, kickoff: formatTime(fixture.date), timestamp: fixture.timestamp || null, sport: SPORT.FOOTBALL,
     homeTeam: { id: homeId, name: teams.home?.name || 'TBD', abbr: teams.home?.code || '', color: '#333' },
     awayTeam: { id: awayId, name: teams.away?.name || 'TBD', abbr: teams.away?.code || '', color: '#333' },
     homeId, awayId, homeLogo: teams.home?.logo || null, awayLogo: teams.away?.logo || null,
-    league: {
-      id: String(league.id || ''), name: league.name || 'Other',
-      color: getLeagueColor(league.id), emblem: league.logo || null,
-      country: league.country || '', flag: league.flag || null,
-      type: league.type || 'League', season: league.season || null, round: league.round || null,
-    },
+    league: { id: String(league.id || ''), name: league.name || 'Other', color: getLeagueColor(league.id), emblem: league.logo || null, country: league.country || '', flag: league.flag || null, type: league.type || 'League', season: league.season || null, round: league.round || null },
     leagueKey: String(league.id || 'OTHER'), leagueCountry: league.country || '',
     status: s, rawStatus: s, statusLong: fixture.status?.long || '',
     homeScore: goals.home, awayScore: goals.away,
@@ -211,30 +156,21 @@ function _transformApiFormat(m) {
       extraTime: { home: score.extratime?.home ?? null, away: score.extratime?.away ?? null },
       penalties: { home: score.penalty?.home ?? null, away: score.penalty?.away ?? null },
     },
-    isLive: isLiveStatus(s, SPORT.FOOTBALL),
-    isFinished: isFinishedStatus(s, SPORT.FOOTBALL),
-    isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
-    minute: fixture.status?.elapsed || null,
-    venue: fixture.venue?.name || null, referee: fixture.referee || null,
+    isLive: isLiveStatus(s, SPORT.FOOTBALL), isFinished: isFinishedStatus(s, SPORT.FOOTBALL), isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
+    minute: fixture.status?.elapsed || null, venue: fixture.venue?.name || null, referee: fixture.referee || null,
   };
 }
 
-// ★ FIX: New timezone-aware extraction function
-function _extractMatchesForDate(snapshot, date) {
+// ★ FIX: Simplified extraction. We just combine live, finished, and matches arrays.
+function _extractMatchesForDate(snapshot) {
   if (!snapshot) return [];
 
-  // 1. Combine all daily arrays AND live/finished arrays into one flat list.
-  // We must check all 3 days because a UTC match from "yesterday" array 
-  // might actually be "today" in Kenyan time (EAT).
   const allRaw = [
     ...(snapshot.live || []),
     ...(snapshot.finished || []),
-    ...(snapshot.yesterday || []),
-    ...(snapshot.today || []),
-    ...(snapshot.tomorrow || [])
+    ...(snapshot.matches || []) // ★ Changed from yesterday/today/tomorrow
   ];
 
-  // 2. Deduplicate keeping the FIRST occurrence (Live/Finished take priority)
   const uniqueIds = new Set();
   const deduped = allRaw.filter(m => {
     const id = String(m.id || m.matchId);
@@ -243,33 +179,23 @@ function _extractMatchesForDate(snapshot, date) {
     return true;
   });
 
-  // 3. Transform raw API/DB format into frontend format
-  const allMatches = deduped.map((d) => transformMatch(d));
-
-  // 4. Filter by LOCAL DATE (e.g. EAT). 
-  // This ensures we only get matches that actually belong to the requested Kenyan day.
-  const matchesForLocalDate = allMatches.filter(m => {
-    const localDate = getLocalDateFromUtc(m.date || m.utcDate);
-    return localDate === date;
-  });
-
-  return matchesForLocalDate;
+  return deduped.map((d) => transformMatch(d));
 }
 
 function _emptyResult(error = null) {
   return { matches: [], error, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished: false, isRolloverWindow: isInRolloverWindow() };
 }
 
+// ★ FIX: Fetch the exact date document requested
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
+    const snapshot = await dataLayer.fetchFootballSnapshot(date);
     if (!snapshot) return _emptyResult(null);
-    const matches = _extractMatchesForDate(snapshot, date);
+    const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
   } catch (err) {
-    console.warn('[Data] fetchFixtures error:', err.message);
     return _emptyResult('FIRESTORE');
   }
 };
@@ -324,7 +250,7 @@ function _createPollingSubscription(sport, callback, options = {}) {
 
       const liveMatches = (snapshot?.live || []).map((d) => transformMatch(d));
       const finishedMatches = (snapshot?.finished || []).map((d) => transformMatch(d));
-      const todayMatches = includeToday ? (snapshot?.today || []).map((d) => transformMatch(d)) : [];
+      const todayMatches = includeToday ? (snapshot?.matches || []).map((d) => transformMatch(d)) : []; // ★ Changed
 
       const allMatches = [...liveMatches, ...finishedMatches, ...todayMatches];
 
@@ -343,7 +269,6 @@ function _createPollingSubscription(sport, callback, options = {}) {
       if (active) timer = setTimeout(poll, hasLive ? activeMs : idleMs);
     } catch (err) {
       errorCount++;
-      console.warn(`[Poll] ${sport} error (${errorCount}):`, err.message);
       callback({ matches: currentMatches, hasLive: false, liveCount: 0, error: err.message });
       if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, 300000));
     }
@@ -364,11 +289,10 @@ export const fetchBasketballFixtures = async (date) => {
   try {
     const snapshot = await dataLayer.fetchBasketballSnapshot(date);
     if (!snapshot) return _emptyResult(null);
-    const matches = _extractMatchesForDate(snapshot, date);
+    const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
   } catch (err) {
-    console.warn('[Data] fetchBasketballFixtures error:', err.message);
     return _emptyResult('FIRESTORE');
   }
 };
@@ -422,7 +346,7 @@ export async function fetchTeamFixtures(teamId) {
       dataLayer.fetchFootballSnapshot(tomorrowStr()),
     ]);
     const tid = String(teamId);
-    const allRaw = [...(ySnap?.yesterday || []), ...(tSnap?.today || []), ...(tSnap?.live || []), ...(tSnap?.finished || []), ...(tmSnap?.tomorrow || [])];
+    const allRaw = [...(ySnap?.matches || []), ...(tSnap?.matches || []), ...(tSnap?.live || []), ...(tSnap?.finished || []), ...(tmSnap?.matches || [])]; // ★ Changed
     return allRaw.filter((m) => String(m.homeTeamId) === tid || String(m.awayTeamId) === tid).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10);
   } catch { return []; }
 }
@@ -435,7 +359,7 @@ export async function fetchBasketballTeamFixtures(teamId) {
       dataLayer.fetchBasketballSnapshot(tomorrowStr()),
     ]);
     const tid = String(teamId);
-    const allRaw = [...(ySnap?.yesterday || []), ...(tSnap?.today || []), ...(tSnap?.live || []), ...(tSnap?.finished || []), ...(tmSnap?.tomorrow || [])];
+    const allRaw = [...(ySnap?.matches || []), ...(tSnap?.matches || []), ...(tSnap?.live || []), ...(tSnap?.finished || []), ...(tmSnap?.matches || [])]; // ★ Changed
     return allRaw.filter((m) => String(m.homeTeamId) === tid || String(m.awayTeamId) === tid).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10);
   } catch { return []; }
 }
