@@ -56,7 +56,7 @@ export default function MatchDetails() {
     return (
       <div style={{ minHeight: '100vh', background: '#0a0f1a', color: '#fff', padding: '24px', textAlign: 'center' }}>
         <div style={{ marginBottom: '20px', fontWeight: 800, fontSize: '1.2rem' }}>Match not found.</div>
-        <Link to="/mastergames" style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none' }}>
+        <Link to="/fixtures" style={{ color: '#10b981', fontWeight: 700, textDecoration: 'none' }}>
           ← Back to Fixtures
         </Link>
       </div>
