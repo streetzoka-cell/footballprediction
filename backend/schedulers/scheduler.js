@@ -107,17 +107,13 @@ class Scheduler {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // SMART STATE MACHINE
-  // Combines three dimensions to pick the safest interval:
+  // SMART STATE MACHINE (Priority-Based)
+  // 
+  // 1. Live Tier (Desired Interval based on match state)
+  // 2. Hard Limits (Budget & Cap Floors)
+  // 3. Day-Pacing (Spread calls across a 3-hour active window)
   //
-  //   1. LIVE TIER   — how many matches are live right now
-  //   2. BUDGET TIER — how many total API calls remain today
-  //   3. CAP TIER    — how many live-polling calls remain today
-  //
-  // Plus DAY-PACING: spreads remaining cap calls across a rolling 
-  // 8-hour active window so we NEVER deplete before midnight UTC reset.
-  //
-  // Final interval = max(desired, budgetFloor, capFloor, pacingFloor)
+  // Final interval = shortest interval that doesn't violate a hard limit
   // ═══════════════════════════════════════════════════════════════
   _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap) {
     // ── 1. Desired interval from live match count ──
@@ -141,7 +137,7 @@ class Scheduler {
       desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
     }
 
-    // ── 2. Budget tier floor ──
+    // ── 2. Hard limit floors (Budget & Cap) ──
     let budgetTier = "HEALTHY";
     let budgetFloor = 0;
 
@@ -161,7 +157,6 @@ class Scheduler {
       }
     }
 
-    // ── 3. Cap tier floor ──
     const capRemaining = liveCap - liveUsed;
     let capTier = "OK";
     let capFloor = 0;
@@ -177,31 +172,26 @@ class Scheduler {
       capFloor = LIVE_POLLING.CAP_LOW_FLOOR_MS;
     }
 
-    // ── 4. Day-pacing floor ──
-    // Spread remaining cap calls across a rolling 8-hour active window.
-    // Previously, this spread calls across the *entire* day (e.g., 22 hours to midnight),
-    // which forced unnecessarily long intervals (e.g., 24m) early in the day.
-    // Now, we assume peak load lasts at most 8 hours, allowing much faster polling
-    // when matches are live, while still preventing depletion.
+    // ── 3. Pacing floor ──
+    // Spread remaining cap calls across a rolling 3-hour active window.
+    // Matches rarely last longer than 2-3 hours, so we don't need to save 
+    // calls for 12 hours from now—only for the current live block.
     let pacingFloor = 0;
     let isPacing = false;
 
     if (capRemaining > LIVE_POLLING.CAP_FT_RESERVE && budgetTier !== "EXHAUSTED") {
-      const now = new Date();
-      const hoursToMidnight = 24 - now.getUTCHours() - now.getUTCMinutes() / 60;
-      const activeWindowHours = Math.min(8, hoursToMidnight);
-      
+      const activeWindowHours = 3; 
       const effectiveCap = capRemaining - LIVE_POLLING.CAP_FT_RESERVE;
 
-      // Calculate the minimum interval required to avoid depletion
-      pacingFloor = (Math.max(0.01, activeWindowHours) * 3600000) / effectiveCap;
+      // Calculate the minimum interval required to avoid depletion during the 3h window
+      pacingFloor = (activeWindowHours * 3600000) / effectiveCap;
 
       if (pacingFloor > desired) {
         isPacing = true;
       }
     }
 
-    // ── 5. Final interval = max of all constraints ──
+    // ── 4. Final interval = Math.max(desired, hardLimits) ──
     let interval;
     if (budgetTier === "EXHAUSTED") {
       interval = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS; 
@@ -209,7 +199,7 @@ class Scheduler {
       interval = Math.max(desired, budgetFloor, capFloor, pacingFloor);
     }
 
-    // ── 6. Human-readable mode label ──
+    // ── 5. Human-readable mode label ──
     let mode = liveTier;
 
     if (budgetTier === "EXHAUSTED") {
@@ -244,6 +234,7 @@ class Scheduler {
     // we don't start at 0 and incorrectly wait 60 minutes for the next poll.
     const initialResult = this.syncStatus[serviceName]?.lastResult;
     if (initialResult && initialResult.polled !== false) {
+      // Use liveCount/nearFT if available, fallback to total/isNearFinish
       liveCount = initialResult.liveCount ?? initialResult.total ?? 0;
       isNearFinish = (initialResult.nearFT ?? 0) > 0 || initialResult.isNearFinish === true;
       
@@ -266,7 +257,7 @@ class Scheduler {
           liveCap
         );
 
-        const intervalMin = Math.round(state.interval / 60000);
+        const intervalMin = (state.interval / 60000).toFixed(1);
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} [${state.mode}] Next poll in ${intervalMin}m ` +
             `[Live: ${liveUsed}/${liveCap} cap, API: ${remaining ?? "???"}/${API.DAILY_BUDGET}, ` +
@@ -300,9 +291,14 @@ class Scheduler {
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
+        // Only update live state if the service actually polled the API.
+        // When capReached=true or budget was too low, the service returns
+        // an empty result without making an API call. In that case we
+        // preserve the last known liveCount/isNearFinish.
         const actuallyPolled = result && result.polled !== false;
 
         if (actuallyPolled) {
+          // ★ Read directly from the verified normalized data returned by service
           liveCount = result.liveCount ?? result.total ?? 0;
           isNearFinish = (result.nearFT ?? 0) > 0 || result.isNearFinish === true;
         }
@@ -318,6 +314,9 @@ class Scheduler {
         );
 
         // ── SMART FT RECOVERY TRIGGER ──
+        // If we HAD live games but now we DON'T, it means games just finished.
+        // Wait 60s and poll again IMMEDIATELY to catch the final score
+        // instead of waiting for the next regular cycle.
         if (
           prevHadLive &&
           liveCount === 0 &&
@@ -514,7 +513,7 @@ class Scheduler {
     logger.info(`    6–15 left   → LOW      (≥ 15 min floor)`);
     logger.info(`    1–5 left    → CRITICAL (≥ 30 min floor)`);
     logger.info(`    0 left      → EXHAUSTED (1 h, 0 API cost)`);
-    logger.info("  Day-Pacing: spreads remaining cap across an 8-hour active window");
+    logger.info("  Day-Pacing: Spreads remaining cap across a 3-hour active window");
     logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);
