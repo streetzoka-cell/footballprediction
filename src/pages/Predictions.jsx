@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v20.3 — Instant Local Results Calculation, Overlay Scroll Fix
+// v20.4 — Centered Results Modal, Instant Local Results Calculation
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue } from 'react';
@@ -289,9 +289,9 @@ const injectCSS = () => {
 /* Toast */
 .v20-toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;animation:v20-toast 2.5s ${SMOOTH} both;pointer-events:none}
 
-/* Overlay */
-.v20-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:flex;align-items:flex-end;justify-content:center;animation:v20-overlay .2s ease}
-.v20-overlay-box{background:var(--bg-card);border:1px solid var(--border);border-radius:20px 20px 0 0;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;animation:v20-box-up .3s ${SPRING} both;scrollbar-width:none}
+/* Overlay - Centered Modal */
+.v20-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.6);backdrop-filter:blur(6px);display:flex;align-items:center;justify-content:center;animation:v20-overlay .2s ease;padding:16px}
+.v20-overlay-box{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;animation:v20-box-up .3s ${SPRING} both;scrollbar-width:none}
 .v20-overlay-box::-webkit-scrollbar{display:none}
 .v20-overlay-handle{width:36px;height:4px;border-radius:2px;background:var(--border);margin:10px auto 0}
 .v20-res-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px}
@@ -686,7 +686,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
 }
 
 /* ═══════════════════════════════════════════════════
-   RESULTS OVERLAY
+   RESULTS OVERLAY (Centered Modal)
    ═══════════════════════════════════════════════════ */
 function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
