@@ -2,25 +2,10 @@
  * liveFixtures.js
  *
  * ★ QUOTA FIX: Only invalidate cache when data ACTUALLY changed.
- *   Previous version invalidated ft:live on EVERY poll, even when
- *   no games were live and data was identical. That caused a
- *   Firestore read on every poll cycle.
- *
- *   Now: skip invalidation when writeCount=0 and no transitions.
- *   Result: 0 Firestore reads when no live games exist.
- *
  * ★ FIRST POLL FIX: Uses batchWrite instead of replaceLive.
- *   replaceLive reads ALL old docs then deletes them (~40 reads).
- *   batchWrite just writes new docs without reading old ones (0 reads).
- *   Stale docs are cleaned up on the 2nd poll via diff-based delete.
- *
- * ★ NORMALIZE FIX: API sometimes omits nested objects (e.g. score.halftime).
- *   Previously this resulted in `undefined` fields, which causes Firestore 
- *   batchWrite to throw an error, silently breaking the live polling loop.
- *   Now uses `?? null` and defensive defaults.
- *
- * ★ STATELESS SCHEDULER FEED: Returns exact `liveCount` and `nearFT` 
- *   directly to the scheduler so it doesn't need to re-read the database.
+ * ★ NORMALIZE FIX: Defensive defaults to prevent Firestore undefined errors.
+ * ★ STATELESS SCHEDULER FEED: Returns exact liveCount and nearFT directly.
+ * ★ TIMEZONE FIX: Uses synced TODAY constant from constants.js (UTC+3).
  */
 
 const {
@@ -35,6 +20,7 @@ const {
   LIVE_POLLING,
   TRACK_ALL_LEAGUES,
   COLLECTIONS,
+  TODAY, // ★ IMPORT TODAY
 } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const { batchWrite, deleteByIds } = require("../config/firebase");
@@ -185,12 +171,6 @@ class LiveFixturesService {
       }.bind(this)
     );
 
-    // ════════════════════════════════════════════════════════
-    // NEAR-FINISH DETECTION
-    // Count matches that are at 80'+ in 2H, or in ET/BT/P.
-    // This provides the exact count to the scheduler, avoiding
-    // any database state mismatch.
-    // ════════════════════════════════════════════════════════
     var nearFTCount = newDocs.reduce(function(count, d) {
       if (["ET", "BT", "P"].indexOf(d.status) !== -1) return count + 1;
       if (d.elapsed != null && d.elapsed >= 80) return count + 1;
@@ -208,8 +188,9 @@ class LiveFixturesService {
 
       // ── Write snapshot for frontend ──
       try {
+        // ★ FIX: Use TODAY (UTC+3) instead of new Date().toISOString().slice(0, 10)
         await snapshotWriter.writeFootballSnapshot(
-          new Date().toISOString().slice(0, 10),
+          TODAY,
           {
             live: newDocs,
             finished: Array.from(this.lastFinishedSnapshot.values()),
@@ -233,16 +214,12 @@ class LiveFixturesService {
         "ms"
     );
 
-    // ════════════════════════════════════════════════════════
-    // ★ STATELESS SCHEDULER FEED: Return verified counts directly
-    // to the scheduler. It does not need to re-read the database.
-    // ════════════════════════════════════════════════════════
     return {
       success: true,
       liveCount: newDocs.length,
       nearFT: nearFTCount,
-      isNearFinish: nearFTCount > 0, // Keep for backwards compatibility
-      total: newDocs.length,         // Keep for backwards compatibility
+      isNearFinish: nearFTCount > 0,
+      total: newDocs.length,
       writes: writeCount,
       removed: transitioned,
       hasLive: newDocs.length > 0,
@@ -311,10 +288,6 @@ class LiveFixturesService {
   }
 
   normalize(fixture) {
-    // ★ BULLETPROOF NORMALIZE: Firestore throws an error if you attempt 
-    // to write `undefined`. The API frequently omits nested objects 
-    // (like score.halftime) if they haven't happened yet.
-    // We use `?? null` to ensure ALL fields default to null safely.
     const f = fixture.fixture || {};
     const l = fixture.league || {};
     const t = fixture.teams || {};

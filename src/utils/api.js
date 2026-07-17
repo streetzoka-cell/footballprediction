@@ -6,7 +6,8 @@ import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 import { dataLayer } from './dataLayer';
-import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow, getDateRange } from './dates';
+// ★ FIX: Import getLocalDateFromUtc to handle timezone filtering
+import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow, getDateRange, getLocalDateFromUtc } from './dates';
 
 import { eventBus, EVENT } from './eventBus';
 
@@ -218,35 +219,41 @@ function _transformApiFormat(m) {
   };
 }
 
-// ★ FIX: Prioritize live and finished arrays over the daily 'today' array
+// ★ FIX: New timezone-aware extraction function
 function _extractMatchesForDate(snapshot, date) {
-  const raw = [];
-  const yd = yesterdayStr();
-  const tm = tomorrowStr();
+  if (!snapshot) return [];
 
-  // 1. Push live and finished FIRST so they override the daily 'NS' status
-  (snapshot.live || []).forEach((m) => {
-    if (m.date?.split('T')[0] === date) raw.push(m);
-  });
-  (snapshot.finished || []).forEach((m) => {
-    if (m.date?.split('T')[0] === date) raw.push(m);
-  });
+  // 1. Combine all daily arrays AND live/finished arrays into one flat list.
+  // We must check all 3 days because a UTC match from "yesterday" array 
+  // might actually be "today" in Kenyan time (EAT).
+  const allRaw = [
+    ...(snapshot.live || []),
+    ...(snapshot.finished || []),
+    ...(snapshot.yesterday || []),
+    ...(snapshot.today || []),
+    ...(snapshot.tomorrow || [])
+  ];
 
-  // 2. Push the daily arrays LAST
-  if (date === yd) raw.push(...(snapshot.yesterday || []));
-  else if (date === tm) raw.push(...(snapshot.tomorrow || []));
-  else raw.push(...(snapshot.today || []));
-
-  // 3. Deduplicate keeping the FIRST occurrence (which is now live/finished)
+  // 2. Deduplicate keeping the FIRST occurrence (Live/Finished take priority)
   const uniqueIds = new Set();
-  const deduped = raw.filter(m => {
+  const deduped = allRaw.filter(m => {
     const id = String(m.id || m.matchId);
     if (uniqueIds.has(id)) return false;
     uniqueIds.add(id);
     return true;
   });
 
-  return deduped.map((d) => transformMatch(d));
+  // 3. Transform raw API/DB format into frontend format
+  const allMatches = deduped.map((d) => transformMatch(d));
+
+  // 4. Filter by LOCAL DATE (e.g. EAT). 
+  // This ensures we only get matches that actually belong to the requested Kenyan day.
+  const matchesForLocalDate = allMatches.filter(m => {
+    const localDate = getLocalDateFromUtc(m.date || m.utcDate);
+    return localDate === date;
+  });
+
+  return matchesForLocalDate;
 }
 
 function _emptyResult(error = null) {
@@ -286,7 +293,6 @@ export const fetchLiveScores = async () => {
   } catch (err) { return { matches: [], error: err.message }; }
 };
 
-// ★ FIX: includeToday: true AND deduplication logic inside poll
 export const subscribeToLiveFixtures = (callback) =>
   _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
 
@@ -294,8 +300,6 @@ export const subscribeToTodayFixtures = (callback) =>
   _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
 
 function _createPollingSubscription(sport, callback, options = {}) {
-  // ★ FIX: Hardcode fast frontend polling (Firestore reads are FREE)
-  // This reads from Firestore every 15s when live, 60s when idle.
   const activeMs = 15000; 
   const idleMs = 60000;
   const includeToday = options.includeToday || false;
@@ -322,10 +326,8 @@ function _createPollingSubscription(sport, callback, options = {}) {
       const finishedMatches = (snapshot?.finished || []).map((d) => transformMatch(d));
       const todayMatches = includeToday ? (snapshot?.today || []).map((d) => transformMatch(d)) : [];
 
-      // ★ FIX: Order matters! Live and Finished must be first to override the 'NS' status from todayMatches
       const allMatches = [...liveMatches, ...finishedMatches, ...todayMatches];
 
-      // Deduplicate keeping the first occurrence (Live/Finished)
       const uniqueIds = new Set();
       const dedupedMatches = allMatches.filter(m => {
         const id = String(m.id);
@@ -338,13 +340,12 @@ function _createPollingSubscription(sport, callback, options = {}) {
       const hasLive = liveMatches.length > 0;
       callback({ matches: dedupedMatches, hasLive, liveCount: liveMatches.length, error: null });
       
-      // If live, poll fast (15s). If not live, poll slow (60s).
       if (active) timer = setTimeout(poll, hasLive ? activeMs : idleMs);
     } catch (err) {
       errorCount++;
       console.warn(`[Poll] ${sport} error (${errorCount}):`, err.message);
       callback({ matches: currentMatches, hasLive: false, liveCount: 0, error: err.message });
-      if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, 300000)); // Max 5 min backoff
+      if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, 300000));
     }
   };
 

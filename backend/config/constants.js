@@ -5,17 +5,24 @@
 // ───────────────────────────────────────────────
 function getCurrentSeason() {
   const now = new Date();
-  return now.getMonth() >= 7 ? now.getFullYear() : now.getFullYear() - 1;
+  // ★ FIX: Adjust to UTC+3 (East Africa Time) so season matches frontend
+  const eat = new Date(now.getTime() + 3 * 3600000); 
+  return eat.getUTCMonth() >= 7 ? eat.getUTCFullYear() : eat.getUTCFullYear() - 1;
 }
 
 function getCurrentBasketballSeason() {
   const now = new Date();
-  const year = now.getFullYear();
-  return now.getMonth() >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  // ★ FIX: Adjust to UTC+3
+  const eat = new Date(now.getTime() + 3 * 3600000);
+  const year = eat.getUTCFullYear();
+  return eat.getUTCMonth() >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
 
 function formatDate(d) {
-  return d.toISOString().split("T")[0];
+  // ★ FIX: Use UTC+3 (East Africa Time) to match frontend local time
+  // This prevents the backend from writing to yesterday's snapshot when UTC is behind.
+  const eat = new Date(d.getTime() + 3 * 3600000);
+  return eat.toISOString().split("T")[0];
 }
 
 function getDateOffset(days) {
@@ -193,28 +200,15 @@ const SCHEDULER = Object.freeze({
 // SMART POLLING & BUDGET STRATEGY
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
-  // ── DAILY CAPS ──
-  // Football: 60 (↑ from 40). Leaves ~40 for basketball(15) + daily(2) +
-  // yesterday backfill(1) + retries + manual refresh + safety margin.
-  // Even on a 1k-match day, pacing prevents depletion.
   FOOTBALL_DAILY_LIVE_CAP: 60,
   BASKETBALL_DAILY_LIVE_CAP: 15,
 
-  // ── LIVE-COUNT-BASED INTERVALS (desired, used when budget is healthy) ──
-  // These are the "ideal" intervals per the user's spec.
-  IDLE_INTERVAL_MS:        3600000,  // 60 min  — no live matches
-  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–5 live
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 6–15 live
-  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 16+ live
-  NEAR_FINISH_INTERVAL_MS: 150000,   // 2.5 min — any match at 80'+ or ET/BT/P
+  IDLE_INTERVAL_MS:        3600000,  // 60 min
+  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min
+  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min
+  NEAR_FINISH_INTERVAL_MS: 150000,   // 2.5 min
 
-  // ── BUDGET-TIER FLOORS (override desired interval when budget tightens) ──
-  // Adjusted to be less conservative. 47/100 is plenty of budget.
-  // > 30 remaining        → HEALTHY  (no floor — use desired interval)
-  // 15–30 remaining       → NORMAL   (floor: 15 min)
-  // 8–15 remaining        → CRITICAL (floor: 30 min)
-  // < 8 remaining         → RESERVE  (floor: 1 hour)
-  // 0 remaining           → EXHAUSTED (skip entirely)
   BUDGET_HEALTHY_THRESHOLD:  30,
   BUDGET_NORMAL_THRESHOLD:   15,
   BUDGET_CRITICAL_THRESHOLD: 8,
@@ -224,23 +218,16 @@ const LIVE_POLLING = Object.freeze({
   BUDGET_CRITICAL_FLOOR_MS:  1800000,  // 30 min
   BUDGET_RESERVE_FLOOR_MS:   3600000,  // 1 hour
 
-  // ── CAP-TIER FLOORS (override when daily live-cap is nearly exhausted) ──
-  // > 15 cap calls left    → OK       (no floor)
-  // 6–15 cap calls left    → LOW      (floor: 15 min)
-  // 1–5 cap calls left     → CRITICAL (floor: 30 min)
-  // 0 cap calls left       → EXHAUSTED (poll every 1 hour — free, no API call)
   CAP_NORMAL_REMAINING:    15,
   CAP_CRITICAL_REMAINING:  5,
-  CAP_FT_RESERVE:          4,  // Always hold 4 calls for FT recovery sweeps
+  CAP_FT_RESERVE:          4,
 
   CAP_LOW_FLOOR_MS:          900000,   // 15 min
   CAP_CRITICAL_FLOOR_MS:     1800000,  // 30 min
-  CAP_EXHAUSTED_INTERVAL_MS: 3600000,  // 1 hour (service short-circuits — 0 API cost)
+  CAP_EXHAUSTED_INTERVAL_MS: 3600000,  // 1 hour
 
-  // ── FT RECOVERY ──
-  FT_CONFIRMATION_DELAY_MS: 60000,  // 1 min — immediate re-poll after last live game ends
+  FT_CONFIRMATION_DELAY_MS: 60000,
 
-  // ── ERROR HANDLING ──
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,
 });
@@ -251,7 +238,7 @@ const LIVE_POLLING = Object.freeze({
 const FT_RECOVERY = Object.freeze({
   ENABLED: true,
   MIN_BUDGET_TO_FETCH: 5,
-  COOLDOWN_MS: 900000, // 15 mins between bulk FT recovery sweeps
+  COOLDOWN_MS: 900000,
   DEDUP_KEY: "ftRecoveredAt",
 });
 
