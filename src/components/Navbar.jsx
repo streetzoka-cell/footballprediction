@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v14.0 — Modern, Bold, Football Vibes, Enhanced Animations
+// v14.1 — Restructured Nav Links, Added Basketball, Pro Layout
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -42,7 +42,7 @@ const injectBase = () => {
     @keyframes nvMobUserIn{from{opacity:0;transform:translateY(15px)}to{opacity:1;transform:translateY(0)}}
     @keyframes nvMobStatPop{0%{transform:scale(.8);opacity:0}60%{transform:scale(1.1)}100%{transform:scale(1);opacity:1}}
     @keyframes nvPulseGreen{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.4)}50%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
-    @keyframes nvPointsCount{0%{transform:scale(1)}50%{transform:scale(1.15) rotate(5deg)}100%{transform:scale(1)}}]
+    @keyframes nvPointsCount{0%{transform:scale(1)}50%{transform:scale(1.15) rotate(5deg)}100%{transform:scale(1)}}
     @keyframes nvLogoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-2px)}}
     @keyframes nvNotifHeaderGlow{0%{background-position:0% 50%}50%{background-position:100% 50%}100%{background-position:0% 50%}}
     @keyframes nvInfoExpand{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
@@ -76,9 +76,9 @@ const injectBase = () => {
 
     /* Desktop Nav Links */
     .nv-nav-link {
-      position: relative; display: flex; align-items: center; height: 100%; padding: 8px 16px;
-      font-size: 0.75rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;
-      cursor: pointer; text-decoration: none; transition: all 0.3s ease; white-space: nowrap; gap: 6px;
+      position: relative; display: flex; align-items: center; height: 100%; padding: 8px 12px;
+      font-size: 0.72rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;
+      cursor: pointer; text-decoration: none; transition: all 0.3s ease; white-space: nowrap; gap: 5px;
       border-radius: 8px; margin: 0 2px;
     }
     .nv-nav-link:hover { color: #fff; background: rgba(255,255,255,0.04); }
@@ -91,6 +91,8 @@ const injectBase = () => {
       content: ''; position: absolute; bottom: -12px; left: 50%; transform: translateX(-50%);
       width: 4px; height: 4px; border-radius: 50%; background: #00e676; box-shadow: 0 0 8px #00e676;
     }
+    .nv-dk-links-container { display: flex; align-items: center; height: 100%; margin-left: 10px; overflow-x: auto; scrollbar-width: none; }
+    .nv-dk-links-container::-webkit-scrollbar { display: none; }
 
     /* Action Buttons (Icons) */
     .nv-action-btn {
@@ -193,14 +195,16 @@ const StatusDot = ({ status, size = 6 }) => {
   return <Clock size={8} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />;
 };
 
+// ★ RESTRUCTURED LINKS TO MATCH THE NEW UI FLOW
 const LINKS = [
-  { to: '/', label: 'Home', emoji: '🏠', pro: true },
+  { to: '/', label: 'Home', emoji: '🏠' },
   { to: '/fixtures', label: 'Fixtures', emoji: '⚽' },
-  { to: '/mastergames', label: 'Master Games', emoji: '🎮' },
-  { to: '/predictions', label: 'Predictions', emoji: '🎯', badge: 'NEW' },
-  { to: '/leaderboard', label: 'Leaderboard', emoji: '🏆' },
   { to: '/highlights', label: 'Highlights', emoji: '🎬' },
-  { to: '/livestream', label: 'Live Stream', emoji: '📡', isLive: true },
+  { to: '/predictions', label: 'Predict', emoji: '🎯', badge: 'NEW' },
+  { to: '/basketball', label: 'Hoops', emoji: '🏀' },
+  { to: '/leaderboard', label: 'Ranks', emoji: '🏆' },
+  { to: '/mastergames', label: 'Games', emoji: '🎮' },
+  { to: '/livestream', label: 'Stream', emoji: '📡', isLive: true },
 ];
 
 const infoSections = [
@@ -850,7 +854,7 @@ export default function Navbar() {
             )}
 
             {/* Desktop nav links */}
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: '100%', marginLeft: 10 }}>
+            <div className="nv-dk-links-container">
               {LINKS.map((link) => {
                 const active = isActive(link.to);
                 return (
