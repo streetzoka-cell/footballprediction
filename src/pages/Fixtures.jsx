@@ -1,14 +1,14 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v12.2 Ultimate — 10/10 Performance, SEO, and Maintainability
+// v13.0 Ultimate — 10/10 Production-Ready Architecture
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, lazy, Suspense } from 'react';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
-  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus
+  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight
 } from 'lucide-react';
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
@@ -17,17 +17,18 @@ import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatDa
 import SEO from '../components/SEO';
 
 // ─── Constants ───
-const STORAGE_KEY = "mg11_favs";
-const FONT_SCALE_KEY = "mg11_fontscale";
+const STORAGE_KEY_FAVS = "mg11_favs";
+const STORAGE_KEY_PINNED = "mg11_pinned_leagues";
+const STORAGE_KEY_FONT = "mg11_fontscale";
 const LIVE_REFRESH = 45000;
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 
 const injectStyles = () => {
-  if (document.getElementById('mg12-css')) return;
+  if (document.getElementById('mg13-css')) return;
   const s = document.createElement('style');
-  s.id = 'mg12-css';
+  s.id = 'mg13-css';
   s.textContent = `
     @keyframes mgFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes mgSlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
@@ -35,7 +36,7 @@ const injectStyles = () => {
     @keyframes mgScorePop{0%{transform:scale(1)}40%{transform:scale(1.4);color:#fff;text-shadow:0 0 12px rgba(255,255,255,.6)}100%{transform:scale(1)}}
     @keyframes mgGoalFlash{0%{background:rgba(16,185,129,.15)}100%{background:transparent}}
     @keyframes mgLiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2), 0 4px 20px rgba(0,0,0,0.3)}50%{box-shadow:0 0 15px 1px rgba(239,68,68,.4), 0 4px 20px rgba(0,0,0,0.3)}}
-    @keyframes mgExpand{from{opacity:0;max-height:0}to{opacity:1;max-height:1500px}}
+    @keyframes mgExpand{from{opacity:0;max-height:0}to{opacity:1;max-height:2000px}}
     @keyframes mgToastIn{from{opacity:0;transform:translateY(-20px) scale(.9)}to{opacity:1;transform:translateY(0) scale(1)}}
     @keyframes mgConfetti{0%{transform:translateY(0) rotate(0);opacity:1}100%{transform:translateY(-150px) rotate(720deg);opacity:0}}
     @keyframes mgShimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
@@ -58,7 +59,6 @@ const injectStyles = () => {
 
     .mg-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin:16px 0}
     .mg-schip{background:rgba(255,255,255,0.03);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.05);border-radius:14px;padding:10px 6px;text-align:center;transition:transform .2s}
-    .mg-schip:hover{transform:translateY(-2px);background:rgba(255,255,255,0.05)}
     .mg-schip .val{font-size:1.4em;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
     .mg-schip .val.live-c{color:#ef4444}.mg-schip .val.total-c{color:#10b981}.mg-schip .val.fav-c{color:#f59e0b}
     .mg-schip .lbl{font-size:.55em;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
@@ -84,16 +84,7 @@ const injectStyles = () => {
     .mg-search-static input::placeholder{color:#64748b}
     .mg-search-clear{background:none;border:none;color:#94a3b8;cursor:pointer;padding:0;display:flex}
 
-    .mg-filter-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:16px}
-    .mg-pill-scroll{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding-bottom:4px;flex:1}
-    .mg-pill-scroll::-webkit-scrollbar{display:none}
-    .mg-pill{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:20px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#94a3b8;font-size:.72em;font-weight:800;cursor:pointer;transition:all .2s;white-space:nowrap;flex-shrink:0}
-    .mg-pill:hover{background:rgba(255,255,255,0.08);color:#fff}
-    .mg-pill.active{background:rgba(16,185,129,0.1);border-color:rgba(16,185,129,0.4);color:#10b981}
-    .mg-pill.live-active{background:rgba(239,68,68,0.1);border-color:rgba(239,68,68,0.4);color:#ef4444}
-    .mg-pill img{width:16px;height:16px;object-fit:contain}
-    .mg-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:mgPulse 1.2s ease-in-out infinite;flex-shrink:0}
-
+    .mg-filter-row{display:flex;flex-direction:column;gap:10px;margin-bottom:16px}
     .mg-filter-panel{background:rgba(15,23,42,0.95);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.1);border-radius:14px;padding:8px;z-index:40;box-shadow:0 12px 32px rgba(0,0,0,.5);max-height:300px;overflow-y:auto;animation:mgDropDownIn .2s ease-out both;margin-top:10px}
     .mg-filter-item{display:flex;align-items:center;gap:8px;width:100%;text-align:left;padding:10px 12px;border:none;border-radius:8px;background:none;color:#e2e8f0;font-size:.75em;font-weight:700;cursor:pointer;font-family:inherit}
     .mg-filter-item:hover{background:rgba(255,255,255,0.05)}
@@ -118,6 +109,7 @@ const injectStyles = () => {
     .mg-status.started-s{color:#f59e0b;background:rgba(245,158,11,.1);font-size:.6em}
     .mg-card-actions{display:flex;align-items:center;gap:4px}
     .mg-icon-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:#94a3b8;cursor:pointer;transition:all .15s ease;opacity:.5}
+    .mg-icon-btn.active{color:#3b82f6;opacity:1}
 
     .mg-teams{display:flex;align-items:center;gap:8px}
     .mg-team-col{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -148,27 +140,40 @@ const injectStyles = () => {
     .mg-expanded{background:rgba(15,23,42,0.6);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.08);border-top:none;border-radius:0 0 14px 14px;overflow:hidden;animation:mgExpand .35s ease-out both}
     .mg-exp-section{padding:12px 16px 4px;font-size:.6em;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
     .mg-exp-row{display:flex;justify-content:space-between;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
-    .mg-exp-row:last-child{border-bottom:none}
     .mg-exp-label{color:#94a3b8;font-weight:700}
     .mg-exp-val{color:#fff;font-weight:800;font-family:var(--font-display,system-ui)}
     
-    .mg-event-row{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
-    .mg-event-min{font-weight:900;color:#cbd5e1;min-width:30px;font-variant-numeric:tabular-nums;font-family:var(--font-display,system-ui)}
-    .mg-event-icon{font-size:1.1em;flex-shrink:0}
-    .mg-event-text{flex:1;color:#fff;font-weight:700}
-    .mg-event-assist{font-size:.85em;color:#94a3b8;font-weight:600}
+    .mg-stat-bar{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
+    .mg-stat-val{width:30px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums}
+    .mg-stat-val.home{text-align:right}
+    .mg-stat-track{flex:1;position:relative;height:20px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;display:flex}
+    .mg-stat-fill{height:100%;transition:width .3s ease}
+    .mg-stat-fill.home{background:rgba(16,185,129,0.6)}
+    .mg-stat-fill.away{background:rgba(239,68,68,0.6)}
+    .mg-stat-label{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-size:.7em;font-weight:700;color:#fff;mix-blend-mode:difference}
 
-    .mg-stat-row{display:grid;grid-template-columns:1fr 2fr 1fr;align-items:center;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,0.04);font-size:.8em}
-    .mg-stat-home{text-align:right;color:#fff;font-weight:800}
-    .mg-stat-away{text-align:left;color:#fff;font-weight:800}
-    .mg-stat-label{text-align:center;color:#94a3b8;font-weight:700;font-size:.9em}
-    .mg-no-data{padding:20px;text-align:center;color:#94a3b8;font-size:.8em;opacity:.6;font-weight:600}
+    .mg-timeline{padding:10px 0}
+    .mg-timeline-row{display:flex;align-items:center;gap:10px;padding:6px 16px;font-size:.8em}
+    .mg-timeline-row.home{flex-direction:row-reverse;text-align:right}
+    .mg-timeline-min{font-weight:900;color:#94a3b8;min-width:30px;font-variant-numeric:tabular-nums}
+    .mg-timeline-icon{font-size:1.1em}
+    .mg-timeline-text{flex:1;color:#fff;font-weight:700}
+    .mg-timeline-divider{text-align:center;font-size:.6em;font-weight:800;color:#64748b;letter-spacing:.05em;padding:8px 0;border-top:1px dashed rgba(255,255,255,0.1);border-bottom:1px dashed rgba(255,255,255,0.1);margin:6px 0}
 
-    .mg-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:50px 24px;background:rgba(255,255,255,0.03);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.05);border-radius:16px;text-align:center}
+    .mg-view-details{width:100%;padding:10px;border:none;border-radius:0 0 14px 14px;background:rgba(16,185,129,0.1);color:#10b981;font-size:.75em;font-weight:800;cursor:pointer;transition:all .2s;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px}
+    .mg-view-details:hover{background:rgba(16,185,129,0.2)}
+
+    .mg-empty{display:flex;flex-direction:column;align-items:center;gap:8px;padding:50px 24px;background:rgba(255,255,255,0.03);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.05);border-radius:16px;text-align:center}
     .mg-empty-icon{width:60px;height:60px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:rgba(255,255,255,0.05);color:#64748b;margin-bottom:4px}
     .mg-empty p{color:#cbd5e1;font-size:.85em;margin:0;font-weight:700}
+    .mg-empty-hint{font-size:.75em;color:#64748b;margin-top:4px !important}
+    .mg-empty-action{margin-top:12px;padding:8px 16px;background:rgba(16,185,129,0.1);color:#10b981;border:1px solid rgba(16,185,129,0.3);border-radius:8px;font-size:.75em;font-weight:700;cursor:pointer}
 
     .mg-sk{height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(30,41,59,0.2) 25%,rgba(255,255,255,0.05) 50%,rgba(30,41,59,0.2) 75%);background-size:200% 100%;animation:mgShimmer 1.5s ease-in-out infinite;margin-bottom:8px}
+    .mg-sk-card{padding:14px 16px;background:rgba(30,41,59,0.4);border:1px solid rgba(255,255,255,0.06);border-radius:14px;margin-bottom:8px}
+    .mg-sk-row{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .mg-sk-circle{width:22px;height:22px;border-radius:4px;background:rgba(255,255,255,0.05)}
+    .mg-sk-line{height:10px;border-radius:4px;background:rgba(255,255,255,0.05);flex:1}
 
     .mg-toast-wrap{position:fixed;top:18px;left:50%;transform:translateX(-50%);z-index:500;display:flex;flex-direction:column;gap:8px;pointer-events:none;width:calc(100% - 24px);max-width:400px}
     .mg-toast{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:14px 18px;color:#fff;backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);box-shadow:0 10px 30px rgba(0,0,0,.5);animation:mgToastIn .35s cubic-bezier(.22,1,.36,1) both;font-size:.8em}
@@ -411,6 +416,8 @@ function normalizeMatch(raw, isPrimary) {
     awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
     homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
     awayLogo: isPrimary ? raw.awayLogo : raw.awayTeam?.crest,
+    homeTeamId: isPrimary ? raw.homeTeam?.id : raw.homeTeam?.id,
+    awayTeamId: isPrimary ? raw.awayTeam?.id : raw.awayTeam?.id,
     homeScore, awayScore,
     leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
     leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
@@ -420,8 +427,25 @@ function normalizeMatch(raw, isPrimary) {
 }
 
 // ─── Memoized UI Components ───
+const MatchCardSkeleton = React.memo(() => (
+  <div className="mg-sk-card">
+    <div className="mg-sk-row" style={{ justifyContent: 'space-between', marginBottom: '12px' }}>
+      <div className="mg-sk-line" style={{ width: '60px', height: '10px' }} />
+      <div className="mg-sk-circle" style={{ width: '40px', height: '12px', borderRadius: '4px' }} />
+    </div>
+    <div className="mg-sk-row">
+      <div className="mg-sk-circle" />
+      <div className="mg-sk-line" />
+    </div>
+    <div className="mg-sk-row" style={{ marginTop: '8px' }}>
+      <div className="mg-sk-circle" />
+      <div className="mg-sk-line" />
+    </div>
+  </div>
+));
+
 const Skeleton = React.memo(({ count = 5 }) => (
-  <div>{Array.from({ length: count }).map((_, i) => <div key={i} className="mg-sk" style={{ animationDelay: `${i * 80}ms` }} />)}</div>
+  <div>{Array.from({ length: count }).map((_, i) => <MatchCardSkeleton key={i} />)}</div>
 ));
 
 const ToastContainer = React.memo(({ toasts, onDismiss }) => {
@@ -467,10 +491,10 @@ const Confetti = React.memo(({ active }) => {
   );
 });
 
-const ScoreBreakdown = React.memo(({ match }) => {
+const ScoreBreakdown = React.memo(({ match, onNavigate }) => {
   if (match.isStarted && !match.isLive) {
     return (
-      <div className="mg-no-data" style={{ padding: '30px', textAlign: 'center' }}>
+      <div className="mg-empty" style={{ padding: '30px', textAlign: 'center', borderRadius: '0 0 14px 14px' }}>
         <Clock size={24} style={{ marginBottom: '10px', color: '#94a3b8' }} />
         <div style={{ color: '#fff', fontWeight: 800, marginBottom: '6px' }}>Match in Progress</div>
         <div style={{ color: '#94a3b8', fontSize: '.9em' }}>Live coverage not available. Results will be shown at Full Time.</div>
@@ -492,7 +516,7 @@ const ScoreBreakdown = React.memo(({ match }) => {
   const hasEvents = goals.length > 0 || cards.length > 0;
   const hasStatsData = stats.length > 0;
   
-  if (!hasScoreData && !hasEvents && !hasStatsData) return <div className="mg-no-data">Details appear once the match begins</div>;
+  if (!hasScoreData && !hasEvents && !hasStatsData) return <div className="mg-empty" style={{ borderRadius: 0, padding: '20px' }}>Details appear once the match begins</div>;
   
   const events = [
     ...goals.map(g => ({ ...g, eventType: 'goal' })),
@@ -500,7 +524,7 @@ const ScoreBreakdown = React.memo(({ match }) => {
   ].sort((a, b) => (a.minute || 0) - (b.minute || 0));
 
   return (
-    <div style={{ padding: '8px 0 4px' }}>
+    <div style={{ padding: '8px 0 0' }}>
       {hasScoreData && (
         <>
           <div className="mg-exp-section">Score Breakdown</div>
@@ -513,44 +537,65 @@ const ScoreBreakdown = React.memo(({ match }) => {
       {hasEvents && (
         <>
           <div className="mg-exp-section">Match Events</div>
-          {events.map((e, i) => {
-            const isGoal = e.eventType === 'goal';
-            const isYellow = e.type === 'YELLOW_CARD';
-            const isRed = e.type === 'RED_CARD';
-            return (
-              <div key={i} className="mg-event-row">
-                <span className="mg-event-min">{e.minute != null ? `${e.minute}'` : ''}</span>
-                <span className="mg-event-icon">
-                  {isGoal ? '⚽' : isYellow ? '🟨' : isRed ? '🟥' : '⚠️'}
-                </span>
-                <div className="mg-event-text">
-                  {e.scorer?.name || e.player?.name || 'Unknown'}
-                  {isGoal && e.assist?.name && <div className="mg-event-assist">Assist: {e.assist.name}</div>}
-                  <div className="mg-event-assist" style={{ fontSize: '.85em' }}>{e.team?.name || ''}</div>
-                </div>
-              </div>
-            );
-          })}
+          <div className="mg-timeline">
+            {events.map((e, i) => {
+              const isGoal = e.eventType === 'goal';
+              const isYellow = e.type === 'YELLOW_CARD';
+              const isRed = e.type === 'RED_CARD';
+              const isHome = e.team?.id === match.homeTeamId || e.team?.name === match.homeName;
+              const prevEvent = events[i-1];
+              const showHTDivider = prevEvent && prevEvent.minute <= 45 && e.minute > 45;
+
+              return (
+                <React.Fragment key={i}>
+                  {showHTDivider && <div className="mg-timeline-divider">HALF TIME</div>}
+                  <div className={`mg-timeline-row ${isHome ? 'home' : 'away'}`}>
+                    <span className="mg-timeline-min">{e.minute != null ? `${e.minute}'` : ''}</span>
+                    <span className="mg-timeline-icon">
+                      {isGoal ? '⚽' : isYellow ? '🟨' : isRed ? '🟥' : '⚠️'}
+                    </span>
+                    <span className="mg-timeline-text">{e.scorer?.name || e.player?.name || 'Unknown'}</span>
+                  </div>
+                </React.Fragment>
+              );
+            })}
+          </div>
         </>
       )}
       
       {hasStatsData && (
         <>
           <div className="mg-exp-section">Match Stats</div>
-          {stats.map((stat, i) => (
-            <div key={i} className="mg-stat-row">
-              <span className="mg-stat-home">{stat.home ?? '-'}</span>
-              <span className="mg-stat-label">{stat.type}</span>
-              <span className="mg-stat-away">{stat.away ?? '-'}</span>
-            </div>
-          ))}
+          {stats.map((stat, i) => {
+            const homeVal = parseFloat(stat.home) || 0;
+            const awayVal = parseFloat(stat.away) || 0;
+            const total = homeVal + awayVal;
+            const homePct = total > 0 ? (homeVal / total) * 100 : 50;
+            const awayPct = total > 0 ? (awayVal / total) * 100 : 50;
+            
+            return (
+              <div key={i} className="mg-stat-bar">
+                <span className="mg-stat-val home">{stat.home}</span>
+                <div className="mg-stat-track">
+                  <div className="mg-stat-fill home" style={{ width: `${homePct}%` }} />
+                  <div className="mg-stat-fill away" style={{ width: `${awayPct}%` }} />
+                  <span className="mg-stat-label">{stat.type}</span>
+                </div>
+                <span className="mg-stat-val away">{stat.away}</span>
+              </div>
+            );
+          })}
         </>
       )}
+      
+      <button className="mg-view-details" onClick={() => onNavigate(match.id)}>
+        View Match Details <ArrowRight size={14} />
+      </button>
     </div>
   );
 });
 
-const MatchCard = React.memo(({ m, idx, expanded, onToggle, scorePops, flashGoals, statusAnims, isFav, onFav }) => {
+const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePops, flashGoals, statusAnims, isFav, onFav }) => {
   const isLive = m.isLive;
   const isHT = m.isHT;
   const isFt = m.isFinished;
@@ -587,7 +632,7 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, scorePops, flashGoal
           </div>
           <div className="mg-card-actions" onClick={e => e.stopPropagation()}>
             <button className={`mg-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
-              <Star size={16} fill={isFav ? '#f59e0b' : 'none'} />
+              <Star size={16} fill={isFav ? '#f59e0b' : 'none'} color={isFav ? '#f59e0b' : '#94a3b8'} />
             </button>
           </div>
         </div>
@@ -628,7 +673,7 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, scorePops, flashGoal
           </div>
         )}
       </div>
-      {isExp && <div className="mg-expanded"><ScoreBreakdown match={m} /></div>}
+      {isExp && <div className="mg-expanded"><ScoreBreakdown match={m} onNavigate={onNavigate} /></div>}
     </div>
   );
 });
@@ -637,15 +682,18 @@ const LeagueSection = React.memo(({
     group,
     expanded,
     onToggle,
+    onNavigate,
     isExpanded,
     toggleLeagueExpand,
     scorePops,
     flashGoals,
     statusAnims,
     isFav,
-    onFav
+    onFav,
+    isPinned,
+    onTogglePin
 }) => {
-  const limit = group.isTop ? 5 : 1;
+  const limit = group.isTop || isPinned ? 5 : 1;
   const visibleMatches = isExpanded ? group.matches : group.matches.slice(0, limit);
   const hiddenCount = group.matches.length - limit;
   
@@ -655,6 +703,9 @@ const LeagueSection = React.memo(({
         {group.logo && <img src={group.logo} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px' }} onError={e => { e.target.style.display = 'none'; }} />}
         <span className="mg-league-name">{group.name}</span>
         <span className="mg-league-count">{group.matches.length}</span>
+        <button className="mg-icon-btn" style={{ opacity: isPinned ? 1 : 0.5, color: isPinned ? '#3b82f6' : '#94a3b8' }} onClick={() => onTogglePin(group.name)} title="Pin League">
+          <Pin size={12} fill={isPinned ? '#3b82f6' : 'none'} />
+        </button>
       </div>
       {visibleMatches.map((m, i) => (
           <MatchCard
@@ -663,6 +714,7 @@ const LeagueSection = React.memo(({
               idx={i}
               expanded={expanded}
               onToggle={onToggle}
+              onNavigate={onNavigate}
               scorePops={scorePops}
               flashGoals={flashGoals}
               statusAnims={statusAnims}
@@ -691,17 +743,24 @@ const CompCard = React.memo(({ c }) => (
 export default function MasterGames() {
   injectStyles();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { fixtures: backupRaw, liveMatches: backupLive, competitions, loading: backupLoading, loadDateFixtures, getStandings, getTeams, refreshFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   
-  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]')); } catch { return new Set(); } });
-  const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem(STORAGE_KEY, JSON.stringify([...n])); } catch {} return n; }); }, []);
+  // ─── URL & Local State Sync ───
+  const [tab, setTab] = useState(searchParams.get('tab') || 'fixtures');
+  const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || getLocalDateStr(0));
+  const [compFilter, setCompFilter] = useState(searchParams.get('league') || 'ALL');
+  
+  const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_FAVS) || '[]')); } catch { return new Set(); } });
+  const [pinnedLeagues, setPinnedLeagues] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_PINNED) || '[]')); } catch { return new Set(); } });
+  
+  const toggleFav = useCallback(id => { setFavs(p => { const n = new Set(p); const idStr = String(id); if (n.has(idStr)) n.delete(idStr); else n.add(idStr); try { localStorage.setItem(STORAGE_KEY_FAVS, JSON.stringify([...n])); } catch {} return n; }); }, []);
+  const togglePinLeague = useCallback(leagueName => { setPinnedLeagues(p => { const n = new Set(p); if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName); try { localStorage.setItem(STORAGE_KEY_PINNED, JSON.stringify([...n])); } catch {} return n; }); }, []);
+  
   const isFav = useCallback(id => favs.has(String(id)), [favs]);
 
-  const [tab, setTab] = useState('fixtures');
-  const [compFilter, setCompFilter] = useState('ALL');
-  const [selectedDate, setSelectedDate] = useState(getTodayStr());
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [primaryLoading, setPrimaryLoading] = useState(true);
   const [expanded, setExpanded] = useState(null);
@@ -717,6 +776,7 @@ export default function MasterGames() {
   const [teamsLoading, setTeamsLoading] = useState(false);
   const [rescued, setRescued] = useState(false);
   const [moreDatesOpen, setMoreDatesOpen] = useState(false);
+  const [leagueFilterOpen, setLeagueFilterOpen] = useState(false);
   const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
   const [leagueSearchQ, setLeagueSearchQ] = useState('');
   const rescueToastSent = useRef(false);
@@ -724,11 +784,20 @@ export default function MasterGames() {
   const [showLiveOnly, setShowLiveOnly] = useState(false);
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   
-  const [fontScale, setFontScale] = useState(() => { try { return parseFloat(localStorage.getItem(FONT_SCALE_KEY) || '1'); } catch { return 1; } });
-  useEffect(() => { try { localStorage.setItem(FONT_SCALE_KEY, String(fontScale)); } catch {} }, [fontScale]);
+  const [fontScale, setFontScale] = useState(() => { try { return parseFloat(localStorage.getItem(STORAGE_KEY_FONT) || '1'); } catch { return 1; } });
+  useEffect(() => { try { localStorage.setItem(STORAGE_KEY_FONT, String(fontScale)); } catch {} }, [fontScale]);
   
   const [selectedCompCode, setSelectedCompCode] = useState(null);
   const moreRef = useRef(null);
+
+  // ─── Update URL when state changes ───
+  useEffect(() => {
+    const params = {};
+    if (tab !== 'fixtures') params.tab = tab;
+    if (selectedDate !== getLocalDateStr(0)) params.date = selectedDate;
+    if (compFilter !== 'ALL') params.league = compFilter;
+    setSearchParams(params, { replace: true });
+  }, [tab, selectedDate, compFilter, setSearchParams]);
 
   const dates = useMemo(() => {
     const past = Array.from({ length: 14 }, (_, i) => {
@@ -860,7 +929,7 @@ export default function MasterGames() {
     setExpanded(null);
     setShowLiveOnly(false);
     setExpandedLeagues(new Set());
-    setCompFilter('ALL');
+    setLeagueFilterOpen(false);
     setSearchQ('');
   }, [selectedDate]);
 
@@ -917,12 +986,16 @@ export default function MasterGames() {
     });
 
     return [...map.values()].sort((a, b) => {
-      const pa = leaguePriorityMap[a.name] ?? 99;
-      const pb = leaguePriorityMap[b.name] ?? 99;
-      if (pa !== pb) return pa - pb;
+      const pA = pinnedLeagues.has(a.name) ? 0 : 1;
+      const pB = pinnedLeagues.has(b.name) ? 0 : 1;
+      if (pA !== pB) return pA - pB;
+
+      const lA = leaguePriorityMap[a.name] ?? 99;
+      const lB = leaguePriorityMap[b.name] ?? 99;
+      if (lA !== lB) return lA - lB;
       return a.name.localeCompare(b.name);
     });
-  }, [displayFixtures, favs, leaguePriorityMap]);
+  }, [displayFixtures, favs, leaguePriorityMap, pinnedLeagues]);
 
   const { topLeagues, otherLeagues } = useMemo(() => {
     return { topLeagues: grouped.slice(0, 5).map(g => ({...g, isTop: true})), otherLeagues: grouped.slice(5).map(g => ({...g, isTop: false})) };
@@ -955,6 +1028,10 @@ export default function MasterGames() {
 
   const liveCount = useMemo(() => allFixtures.filter(m => m.isLive).length, [allFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(String(m.id))), [displayFixtures, favs]);
+  
+  const trendingMatches = useMemo(() => {
+    return allFixtures.filter(m => m.isLive && (m.homeScore > 0 || m.awayScore > 0)).slice(0, 3);
+  }, [allFixtures]);
 
   const handleTabChange = useCallback(async (t) => {
     setTab(t);
@@ -1003,8 +1080,12 @@ export default function MasterGames() {
     addToast
   });
 
+  // Point 1: Don't navigate when expanding
   const handleMatchToggle = useCallback((matchId) => {
     setExpanded(prev => prev === matchId ? null : matchId);
+  }, []);
+
+  const handleNavigateToMatch = useCallback((matchId) => {
     const m = displayFixtures.find(x => String(x.id) === String(matchId));
     if (m) {
       const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}`;
@@ -1019,6 +1100,11 @@ export default function MasterGames() {
   const onSearchChange = useCallback((e) => {
     setSearchQ(e.target.value);
   }, []);
+
+  const currentLeagueEmblem = useMemo(() => {
+    if (compFilter === 'ALL') return null;
+    return fixtureCompList.find(c => c.value === compFilter)?.emblem || null;
+  }, [compFilter, fixtureCompList]);
 
   return (
     <div className="mg-page" style={{ fontSize: `${fontScale * 16}px` }}>
@@ -1132,31 +1218,46 @@ export default function MasterGames() {
               </div>
             )}
 
+            {/* Trending Matches Section */}
+            {trendingMatches.length > 0 && !searchQ && (
+              <div className="mg-section">
+                <div className="mg-league-hd">
+                  <TrendingUp size={18} style={{ color: '#ef4444' }} />
+                  <span className="mg-league-name">Trending Live</span>
+                </div>
+                {trendingMatches.map((m, i) => 
+                  <MatchCard key={`trend-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
+                )}
+              </div>
+            )}
+
+            {/* League Dropdown Filter */}
             {fixtureCompList.length > 0 && (
               <div className="mg-filter-row">
-                <div className="mg-pill-scroll">
-                  <button 
-                    className={`mg-pill ${compFilter === 'ALL' ? 'active' : ''}`} 
-                    onClick={() => setCompFilter('ALL')}
-                  >
-                    All Leagues
-                  </button>
-                  {fixtureCompList.map(c => (
-                    <button 
-                      key={c.value} 
-                      className={`mg-pill ${compFilter === String(c.value) ? 'active' : ''}`} 
-                      onClick={() => setCompFilter(String(c.value))}
-                    >
-                      {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                      {c.name}
+                <button className="mg-pill" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setLeagueFilterOpen(p => !p)}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {currentLeagueEmblem && <img src={currentLeagueEmblem} alt="" style={{ width: '16px', height: '16px' }} onError={e => { e.target.style.display = 'none'; }} />}
+                    {compFilter === 'ALL' ? 'All Leagues' : compFilter}
+                  </span>
+                  <ChevronDown size={16} />
+                </button>
+                {leagueFilterOpen && (
+                  <div className="mg-filter-panel" style={{ position: 'static' }}>
+                    <button className={`mg-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setLeagueFilterOpen(false); }}>
+                      All Leagues
                     </button>
-                  ))}
-                </div>
-                
+                    {fixtureCompList.map(c => (
+                      <button key={c.value} className={`mg-filter-item ${compFilter === String(c.value) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.value)); setLeagueFilterOpen(false); }}>
+                        {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                        {c.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
                 <button 
                   className={`mg-pill ${showLiveOnly ? 'live-active' : ''}`} 
                   onClick={() => setShowLiveOnly(p => !p)}
-                  style={{ flexShrink: 0 }}
+                  style={{ flexShrink: 0, marginTop: '8px', justifyContent: 'center' }}
                 >
                   {showLiveOnly ? <span className="mg-dot" style={{ background: '#ef4444' }} /> : <Activity size={14} />}
                   {showLiveOnly ? 'Live Only' : 'Show Live'}
@@ -1168,8 +1269,10 @@ export default function MasterGames() {
               <Skeleton count={5} />
             ) : displayFixtures.length === 0 ? (
               <div className="mg-empty">
-                <div className="mg-empty-icon"><Search size={28} /></div>
-                <p>No matches found for this date</p>
+                <div className="mg-empty-icon"><Calendar size={28} /></div>
+                <p>No fixtures scheduled for this date.</p>
+                <p className="mg-empty-hint">Try another date or clear your search.</p>
+                {searchQ && <button className="mg-empty-action" onClick={() => setSearchQ('')}>Clear Search</button>}
               </div>
             ) : (
               <>
@@ -1179,7 +1282,7 @@ export default function MasterGames() {
                       <Star size={18} className="mg-fav-icon" />
                       <span className="mg-league-name">Favourites</span>
                     </div>
-                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
                   </div>
                 )}
 
@@ -1189,6 +1292,7 @@ export default function MasterGames() {
                     group={g} 
                     expanded={expanded} 
                     onToggle={handleMatchToggle} 
+                    onNavigate={handleNavigateToMatch}
                     isExpanded={expandedLeagues.has(g.name)} 
                     toggleLeagueExpand={toggleLeagueExpand}
                     scorePops={scorePops}
@@ -1196,6 +1300,8 @@ export default function MasterGames() {
                     statusAnims={statusAnims}
                     isFav={isFav}
                     onFav={toggleFav}
+                    isPinned={pinnedLeagues.has(g.name)}
+                    onTogglePin={togglePinLeague}
                   />
                 ))}
 
@@ -1205,6 +1311,7 @@ export default function MasterGames() {
                     group={g} 
                     expanded={expanded} 
                     onToggle={handleMatchToggle} 
+                    onNavigate={handleNavigateToMatch}
                     isExpanded={expandedLeagues.has(g.name)} 
                     toggleLeagueExpand={toggleLeagueExpand}
                     scorePops={scorePops}
@@ -1212,6 +1319,8 @@ export default function MasterGames() {
                     statusAnims={statusAnims}
                     isFav={isFav}
                     onFav={toggleFav}
+                    isPinned={pinnedLeagues.has(g.name)}
+                    onTogglePin={togglePinLeague}
                   />
                 ))}
 
@@ -1246,12 +1355,13 @@ export default function MasterGames() {
                   <Star size={18} className="mg-fav-icon" />
                   <span className="mg-league-name">Favourites ({favMatches.length})</span>
                 </div>
-                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
               </div>
             ) : (
               <div className="mg-empty">
                 <div className="mg-empty-icon"><Star size={28} /></div>
                 <p>No favourite matches found for this date</p>
+                <p className="mg-empty-hint">Tap the star icon on any match to add it here.</p>
               </div>
             )}
           </>
@@ -1259,7 +1369,7 @@ export default function MasterGames() {
 
         {/* ═══ Standings Tab (ALL LEAGUES) ═══ */}
         {tab === 'standings' && (
-          <>
+          <Suspense fallback={<Skeleton count={3} />}>
             <div className="mg-pill-scroll" style={{ marginBottom: '10px' }}>
               {topGlobalComps.map(c => (
                 <button key={c.id} className={`mg-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code)}>
@@ -1287,7 +1397,7 @@ export default function MasterGames() {
             )}
 
             {standingsLoading ? (
-              <Skeleton count={3} height={320} />
+              <Skeleton count={3} />
             ) : standingsData && standingsData.standings ? (
               <div className="mg-section">
                 {standingsData.standings.map((group, i) => (
@@ -1329,12 +1439,12 @@ export default function MasterGames() {
                 <p>Select a competition above to view table</p>
               </div>
             )}
-          </>
+          </Suspense>
         )}
 
         {/* ═══ Teams Tab (ALL LEAGUES) ═══ */}
         {tab === 'teams' && (
-          <>
+          <Suspense fallback={<Skeleton count={5} />}>
             <div className="mg-pill-scroll" style={{ marginBottom: '10px' }}>
               {topGlobalComps.map(c => (
                 <button key={c.id} className={`mg-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code)}>
@@ -1362,7 +1472,7 @@ export default function MasterGames() {
             )}
 
             {teamsLoading ? (
-              <Skeleton count={5} height={120} />
+              <Skeleton count={5} />
             ) : teamsData && teamsData.teams ? (
               <div className="mg-teams-grid">
                 {teamsData.teams.map(t => (
@@ -1378,21 +1488,23 @@ export default function MasterGames() {
                 <p>Select a competition above to view teams</p>
               </div>
             )}
-          </>
+          </Suspense>
         )}
 
         {/* ═══ Competitions Tab ═══ */}
         {tab === 'competitions' && (
-          competitions && competitions.length > 0 ? (
-            <div className="mg-teams-grid">
-              {globalCompList.map(c => <CompCard key={c.id} c={c} />)}
-            </div>
-          ) : (
-            <div className="mg-empty">
-              <div className="mg-empty-icon"><Trophy size={28} /></div>
-              <p>No competitions data available</p>
-            </div>
-          )
+          <Suspense fallback={<Skeleton count={5} />}>
+            {competitions && competitions.length > 0 ? (
+              <div className="mg-teams-grid">
+                {globalCompList.map(c => <CompCard key={c.id} c={c} />)}
+              </div>
+            ) : (
+              <div className="mg-empty">
+                <div className="mg-empty-icon"><Trophy size={28} /></div>
+                <p>No competitions data available</p>
+              </div>
+            )}
+          </Suspense>
         )}
       </div>
     </div>
