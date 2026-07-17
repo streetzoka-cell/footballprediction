@@ -1,5 +1,5 @@
 // config/constants.js
-// Budget-optimized — smart midnight rollover, tomorrow-only daily fetch, live polling with daily caps.
+// Budget-optimized — smart midnight rollover, dynamic live polling, smart FT recovery.
 
 // ───────────────────────────────────────────────
 // DATES & SEASONS
@@ -197,26 +197,33 @@ const LIVE_POLLING = Object.freeze({
   FOOTBALL_DAILY_LIVE_CAP: 40,
   BASKETBALL_DAILY_LIVE_CAP: 15,
 
-  ACTIVE_INTERVAL_MS: 600000,         // 10 mins (Healthy budget & Live)
-  MEDIUM_INTERVAL_MS: 1200000,        // 20 mins (Medium budget & Live)
-  LOW_INTERVAL_MS: 3600000,           // 1 hour  (Low budget / Idle)
-  CRITICAL_INTERVAL_MS: 7200000,      // 2 hours (Critical budget)
-  CAP_REACHED_INTERVAL_MS: 21600000,  // 6 hours (Cap reached)
-  EXHAUSTED_INTERVAL_MS: 86400000,    // 24 hours (Budget exhausted)
+  NEAR_FINISH_INTERVAL_MS: 180000,     // 3 mins (Games approaching 85'+)
+  ACTIVE_INTERVAL_MS: 600000,          // 10 mins (Healthy budget & Live)
+  MEDIUM_INTERVAL_MS: 1200000,         // 20 mins (Medium budget & Live)
+  LOW_INTERVAL_MS: 3600000,            // 1 hour  (Low budget / Idle)
+  CRITICAL_INTERVAL_MS: 7200000,       // 2 hours (Critical budget)
+  CAP_REACHED_INTERVAL_MS: 21600000,   // 6 hours (Cap reached)
+  EXHAUSTED_INTERVAL_MS: 86400000,     // 24 hours (Budget exhausted)
 
-  MEDIUM_BUDGET_THRESHOLD: 70,        // <= 70 requests left
-  LOW_BUDGET_THRESHOLD: 40,           // <= 40 requests left
-  CRITICAL_BUDGET_THRESHOLD: 15,      // <= 15 requests left
-  MIN_BUDGET_TO_POLL: 3,              // Abort if less than 3 requests left
+  FT_CONFIRMATION_DELAY_MS: 60000,     // 1 min delay before checking if a game just finished
+
+  MEDIUM_BUDGET_THRESHOLD: 70,         // <= 70 requests left
+  LOW_BUDGET_THRESHOLD: 40,            // <= 40 requests left
+  CRITICAL_BUDGET_THRESHOLD: 15,       // <= 15 requests left
+  MIN_BUDGET_TO_POLL: 3,               // Abort if less than 3 requests left
 
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS: 60000,
 });
 
-const FT_FETCH = Object.freeze({
+// ───────────────────────────────────────────────
+// FT RECOVERY STRATEGY
+// ───────────────────────────────────────────────
+const FT_RECOVERY = Object.freeze({
   ENABLED: true,
-  MIN_BUDGET_TO_FETCH: 10,
-  DEDUP_KEY: "ftFetchedAt",
+  MIN_BUDGET_TO_FETCH: 5,
+  COOLDOWN_MS: 900000, // 15 mins between bulk FT recovery sweeps
+  DEDUP_KEY: "ftRecoveredAt",
 });
 
 const RETRY = Object.freeze({
@@ -242,8 +249,8 @@ module.exports = Object.freeze({
   LEAGUES, SEASON, STATUS, LIVE_STATUSES, FINISHED_STATUSES,
   BASKETBALL_LEAGUES, BASKETBALL_SEASON, BASKETBALL_STATUS,
   BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
-  COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING,
-  FT_FETCH, RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT,
+  COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY,
+  RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT,
   TRACK_ALL_LEAGUES,
   getCurrentSeason, getCurrentBasketballSeason,
 });

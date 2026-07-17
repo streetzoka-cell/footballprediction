@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v20.1 — Clean, Accurate, Reactive (Uses AppDataContext)
+// v20.2 — Smart Live Merging, Instant Results, Admin Auto-Resolver
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, Fragment, useTransition, useDeferredValue } from 'react';
@@ -19,7 +19,8 @@ import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { calcPoints, CACHE_KEY, SPORT, isLiveStatus, isFinishedStatus, isScheduledStatus } from '../utils/constants';
-import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote } from '../hooks/useMatchData';
+import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
+import { fetchFixtures } from '../utils/api';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════
@@ -443,11 +444,16 @@ function ScoreStepper({ value, onChange }) {
 /* ═══════════════════════════════════════════════════
    ZOKA PICK CARD
    ═══════════════════════════════════════════════════ */
-function ZokaPickCard({ pick, index, scoreMap, voteStats, userVote, onVote, votingId }) {
+function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId }) {
+  // ★ Smart check: Use pick.status and pick.homeScore directly (merged with live data)
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
-  const actual = scoreMap.get(String(pick.matchId));
-  const res = pick.adminPick && actual ? calcPoints(pick.adminPick.home, pick.adminPick.away, actual.h, actual.a) : null;
+  
+  // Calculate result locally based on merged score
+  const res = pick.adminPick && isFin && pick.homeScore != null 
+    ? calcPoints(pick.adminPick.home, pick.adminPick.away, pick.homeScore, pick.awayScore) 
+    : null;
+    
   const vs = voteStats[String(pick.matchId)] || { agree: 0, disagree: 0, total: 0 };
   const myV = userVote[String(pick.matchId)];
   const mid = String(pick.matchId);
@@ -483,11 +489,11 @@ function ZokaPickCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
           {homeLogo && <img src={homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{homeName}</span>
         </div>
-        {isFin && actual ? (
+        {isFin && pick.homeScore != null ? (
           <div className="v20-sb ft">
-            <span className="v20-sn" style={{ color: 'var(--accent)' }}>{actual.h}</span>
+            <span className="v20-sn" style={{ color: 'var(--accent)' }}>{pick.homeScore}</span>
             <span className="v20-sp">–</span>
-            <span className="v20-sn" style={{ color: 'var(--accent)' }}>{actual.a}</span>
+            <span className="v20-sn" style={{ color: 'var(--accent)' }}>{pick.awayScore}</span>
           </div>
         ) : isLive && pick.homeScore != null ? (
           <div className="v20-sb live">
@@ -508,9 +514,8 @@ function ZokaPickCard({ pick, index, scoreMap, voteStats, userVote, onVote, voti
         </div>
       </div>
       <div className="v20-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
-        {/* ★ FIX: Show result badge if finished and resolved */}
+        {/* ★ INSTANT RESULT BADGE */}
         {isFin && res && res.type !== 'pending' && <ResultBadge result={res} />}
-        {/* ★ FIX: Show calculating if finished but scores not processed yet */}
         {isFin && (!res || res.type === 'pending') && <span className="v20-bdg pn"><Clock size={8} /> Calculating...</span>}
         
         {!isFin && !isLive && vs.total > 0 && (
@@ -548,7 +553,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
   
-  // ★ FIX: If backend hasn't resolved yet, calculate locally for instant feedback
+  // ★ FIX: If backend hasn't resolved yet, calculate locally for instant feedback using MERGED data
   const localResult = (isFin && hasPred && pred.homeScore != null) 
     ? calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore) 
     : null;
@@ -568,9 +573,9 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
   const kickoff = parseKickoffTime(pred.kickoff || pred.date);
 
   let leftColor = 'var(--border)';
-  if (isResolved && result?.resultType === 'exact') leftColor = 'var(--accent)';
-  else if (isResolved && result?.resultType === 'result') leftColor = 'var(--gold)';
-  else if (isResolved && result?.resultType === 'miss') leftColor = '#ef4444';
+  if (isResolved && effectiveResult?.resultType === 'exact') leftColor = 'var(--accent)';
+  else if (isResolved && effectiveResult?.resultType === 'result') leftColor = 'var(--gold)';
+  else if (isResolved && effectiveResult?.resultType === 'miss') leftColor = '#ef4444';
   else if (isFin) leftColor = 'rgba(0,230,118,.2)';
   else if (isLive) leftColor = 'rgba(239,68,68,.3)';
   else if (hasPred) leftColor = '#60a5fa';
@@ -772,11 +777,12 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
    ═══════════════════════════════════════════════════ */
 export default function Predictions() {
   injectCSS();
-  const { currentUser } = useAuth();
+  const { currentUser, userProfile } = useAuth();
   const nav = useNavigate();
   const uid = currentUser?.uid;
   const loggedIn = !!uid;
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
+  const isAdmin = userProfile?.role === 'admin';
 
   // ★ Use AppDataContext for REACTIVE data (like navbar)
   const appData = useAppData();
@@ -810,6 +816,9 @@ export default function Predictions() {
   const [nonTodayLoading, setNonTodayLoading] = useState(false);
   const mountedRef = useRef(true);
 
+  // ★ LIVE FIXTURES FOR REAL-TIME MERGING
+  const [liveFixtures, setLiveFixtures] = useState([]);
+  
   const isToday = selDate === todayStr();
 
   // Update time every second for lock timers
@@ -817,6 +826,21 @@ export default function Predictions() {
     const id = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(id);
   }, []);
+
+  // ★ FETCH LIVE FIXTURES FOR TODAY (Every 15s)
+  useEffect(() => {
+    if (!isToday) return;
+    let cancelled = false;
+    const loadLive = async () => {
+      try {
+        const res = await fetchFixtures(todayStr());
+        if (!cancelled) setLiveFixtures(res?.matches || []);
+      } catch (e) {}
+    };
+    loadLive();
+    const interval = setInterval(loadLive, 15000); // 15s polling for real-time scores
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [isToday]);
 
   // Load data for non-today dates
   useEffect(() => {
@@ -868,16 +892,73 @@ export default function Predictions() {
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
+  // ★ MERGE LIVE FIXTURES INTO PREDICTIONS & ZOKA PICKS FOR INSTANT FT DETECTION
+  const mergedFeatured = useMemo(() => {
+    if (!isToday || !liveFixtures.length) return currentFeatured;
+    return currentFeatured.map(p => {
+      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      if (fx) {
+        return {
+          ...p,
+          status: fx.status || p.status,
+          homeScore: fx.homeScore ?? p.homeScore,
+          awayScore: fx.awayScore ?? p.awayScore,
+          minute: fx.minute ?? p.minute,
+          isLive: fx.isLive || p.isLive,
+          isFinished: fx.isFinished || p.isFinished,
+        };
+      }
+      return p;
+    });
+  }, [currentFeatured, liveFixtures, isToday]);
+
+  const mergedZoka = useMemo(() => {
+    if (!isToday || !liveFixtures.length) return currentZoka;
+    return currentZoka.map(p => {
+      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      if (fx) {
+        return {
+          ...p,
+          status: fx.status || p.status,
+          homeScore: fx.homeScore ?? p.homeScore,
+          awayScore: fx.awayScore ?? p.awayScore,
+          minute: fx.minute ?? p.minute,
+        };
+      }
+      return p;
+    });
+  }, [currentZoka, liveFixtures, isToday]);
+
+  // ★ ADMIN AUTO-RESOLVER: Automatically distribute points if a match just finished
+  useEffect(() => {
+    if (!isAdmin || !isToday || !liveFixtures.length) return;
+    
+    const toResolve = mergedFeatured.filter(p => {
+      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      return fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null;
+    });
+
+    toResolve.forEach(pred => {
+      const fx = liveFixtures.find(f => String(f.id) === String(pred.matchId));
+      // Check if DB hasn't already marked it as finished to avoid spamming the resolver
+      const dbPred = currentFeatured.find(p => String(p.matchId) === String(pred.matchId));
+      if (dbPred && dbPred.status !== 'finished') {
+         console.log(`[AutoResolve] Admin triggering resolution for ${pred.matchId}`);
+         resolveMatchForAllUsers(pred.matchId, fx.homeScore, fx.awayScore, pred.matchDate || todayStr());
+      }
+    });
+  }, [isAdmin, isToday, liveFixtures, mergedFeatured, currentFeatured]);
+
   // Build maps
   const scoreMap = useMemo(() => {
     const m = new Map();
-    currentFeatured.forEach(p => {
+    mergedFeatured.forEach(p => {
       if (isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
         m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore });
       }
     });
     return m;
-  }, [currentFeatured]);
+  }, [mergedFeatured]);
 
   const userPredMap = useMemo(() => {
     const m = new Map();
@@ -903,31 +984,31 @@ export default function Predictions() {
 
   // ★ Zoka picks: show top 5, then "Show More" button
   const visibleZoka = useMemo(() => {
-    if (currentZoka.length <= ZOKA_VISIBLE_COUNT) return currentZoka;
-    return zokaExpanded ? currentZoka : currentZoka.slice(0, ZOKA_VISIBLE_COUNT);
-  }, [currentZoka, zokaExpanded]);
-  const hiddenZokaCount = currentZoka.length - ZOKA_VISIBLE_COUNT;
+    if (mergedZoka.length <= ZOKA_VISIBLE_COUNT) return mergedZoka;
+    return zokaExpanded ? mergedZoka : mergedZoka.slice(0, ZOKA_VISIBLE_COUNT);
+  }, [mergedZoka, zokaExpanded]);
+  const hiddenZokaCount = mergedZoka.length - ZOKA_VISIBLE_COUNT;
 
   // Filter featured predictions
   const deferredFilter = useDeferredValue(filter);
   const filteredPreds = useMemo(() => {
-    if (deferredFilter === 'predicted') return currentFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId)));
-    if (deferredFilter === 'unpredicted') return currentFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
-    if (deferredFilter === 'finished') return currentFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL));
-    return currentFeatured;
-  }, [currentFeatured, userPredMap, deferredFilter]);
+    if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId)));
+    if (deferredFilter === 'unpredicted') return mergedFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
+    if (deferredFilter === 'finished') return mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL));
+    return mergedFeatured;
+  }, [mergedFeatured, userPredMap, deferredFilter]);
 
   const filterCounts = useMemo(() => ({
-    all: currentFeatured.length,
-    predicted: currentFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId))).length,
-    unpredicted: currentFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
-    finished: currentFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
-  }), [currentFeatured, userPredMap]);
+    all: mergedFeatured.length,
+    predicted: mergedFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId))).length,
+    unpredicted: mergedFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
+    finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
+  }), [mergedFeatured, userPredMap]);
 
   // Day stats (accurate, from context for today)
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
-    currentFeatured.forEach(p => {
+    mergedFeatured.forEach(p => {
       const up = userPredMap.get(p.id) || userPredMap.get(String(p.matchId));
       if (!up) return;
       pred++;
@@ -938,7 +1019,7 @@ export default function Predictions() {
       else mi++;
     });
     return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
-  }, [currentFeatured, userPredMap, resultMap]);
+  }, [mergedFeatured, userPredMap, resultMap]);
 
   const myRank = useMemo(() => {
     if (!uid || !dailyEntries) return null;
@@ -1041,7 +1122,7 @@ export default function Predictions() {
               <div className="v20-stat"><div className="n" style={{ color: 'var(--gold)' }}><AnimNum value={myDayStats.rs} /></div><div className="l">Result</div></div>
               <div className="v20-stat"><div className="n" style={{ color: '#ef4444' }}><AnimNum value={myDayStats.mi} /></div><div className="l">Miss</div></div>
               <div className="v20-stat"><div className="n">{myDayStats.accuracy}%</div><div className="l">Accuracy</div></div>
-              <div className="v20-stat"><div className="n">{myDayStats.pred}/{currentFeatured.length}</div><div className="l">Predicted</div></div>
+              <div className="v20-stat"><div className="n">{myDayStats.pred}/{mergedFeatured.length}</div><div className="l">Predicted</div></div>
             </div>
             {myDayStats.pred > 0 && (
               <div className="v20-progress">
@@ -1079,14 +1160,14 @@ export default function Predictions() {
         </div>
 
         {/* ★ Zoka Picks — Top 5 + Show More */}
-        {currentZoka.length > 0 && (
+        {mergedZoka.length > 0 && (
           <div className="v20-zoka">
             <div className="v20-zoka-hd">
               <div className="v20-zoka-icon"><Star size={14} style={{ color: 'var(--gold)' }} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '.85rem', fontWeight: 900, color: 'var(--text-primary)' }}>Zoka Picks</div>
                 <div style={{ fontSize: '.6rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: 1 }}>
-                  {currentZoka.length} picks · Not for competition
+                  {mergedZoka.length} picks · Not for competition
                 </div>
               </div>
             </div>
@@ -1095,7 +1176,6 @@ export default function Predictions() {
                 key={pick.matchId || i}
                 pick={pick}
                 index={i}
-                scoreMap={scoreMap}
                 voteStats={currentVoteStats}
                 userVote={currentVotes}
                 onVote={handleVote}
@@ -1175,7 +1255,7 @@ export default function Predictions() {
       {showResults && (
         <ResultsOverlay
           date={selDate}
-          preds={currentFeatured}
+          preds={mergedFeatured}
           userPredsObj={currentUserPreds}
           results={currentResults}
           onClose={() => setShowResults(false)}

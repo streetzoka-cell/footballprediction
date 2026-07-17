@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v20.1 — Fixed initialization order bug
+// v20.2 — Bulletproof historical fetching & reactive context
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition } from 'react';
@@ -174,7 +174,7 @@ const injectCSS = () => {
   document.head.appendChild(s);
 };
 
-/* ═════════════════════════════════════
+/* ═══════════════════════════════════════
    SMALL COMPONENTS
    ═══════════════════════════════════════ */
 function AccBar({ value, delay }) {
@@ -293,10 +293,9 @@ export default function Leaderboard() {
   const nav = useNavigate();
   const searchRef = useRef(null);
 
-  // ★ Get reactive data from context (NO initialization order issues)
+  // ★ Get reactive data from context
   const appData = useAppData();
   
-  // ★ Declare tab FIRST to avoid temporal dead zone
   const [tab, setTab] = useState(PERIOD.DAILY);
   const [search, setSearch] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -304,28 +303,32 @@ export default function Leaderboard() {
 
   const deferredSearch = useDeferredValue(search);
 
-  // ★ Now safely compute derived values AFTER all state is declared
   const isDaily = tab === PERIOD.DAILY;
-  const activeTab = isDaily ? null : tab;
 
-  // ★ Get historical data directly from context to avoid hook issues
-  const historicalData = isDaily ? null : (appData.historicalLeaderboards?.[tab] || null);
+  // ★ Trigger fetch for historical tabs if not already loaded
+  useEffect(() => {
+    if (!isDaily && !appData.historicalLeaderboards?.[tab] && appData.loadHistoricalLeaderboard) {
+      appData.loadHistoricalLeaderboard(tab);
+    }
+  }, [tab, isDaily, appData]);
+
+  // ★ Safe extraction of historical data
+  const historicalData = !isDaily ? (appData.historicalLeaderboards?.[tab] || null) : null;
+  const isLoadingHistorical = !isDaily && !historicalData;
 
   const entries = useMemo(() => {
     if (isDaily) return appData.dailyEntries || [];
     return historicalData?.entries || [];
   }, [isDaily, appData.dailyEntries, historicalData]);
 
-  const top3 = useMemo(() => entries.slice(0, 3), [entries]);
-
   const stats = useMemo(() => {
     if (isDaily) return appData.dailyStats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
     return historicalData?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   }, [isDaily, appData.dailyStats, historicalData]);
 
-  const loading = isDaily ? appData.loading : (historicalData ? false : true);
+  const loading = isDaily ? appData.loading : isLoadingHistorical;
   const error = isDaily ? null : (historicalData?.error || null);
-  const isStale = !isDaily ? (historicalData?.stale ?? true) : false;
+  const isStale = !isDaily && historicalData ? (historicalData.stale ?? true) : false;
 
   const myEntry = useMemo(() => {
     if (!uid) return null;
@@ -349,7 +352,6 @@ export default function Leaderboard() {
     startTransition(() => { setTab(t); setShowCount(15); setSearch(''); }); 
   }, []);
 
-  // ★ Safely compute tabDesc AFTER tab is declared
   const tabDesc = useMemo(() => {
     const descriptions = {
       daily: "Today's top predictors",
@@ -359,6 +361,14 @@ export default function Leaderboard() {
     };
     return descriptions[tab] || '';
   }, [tab]);
+
+  const handleRefresh = () => {
+    if (appData.refresh) {
+      appData.refresh({ invalidateCache: true, includeUserData: true });
+    } else {
+      window.location.reload();
+    }
+  };
 
   return (
     <div className="lb-page">
@@ -552,7 +562,7 @@ export default function Leaderboard() {
                 {/* Empty Refresh */}
                 {entries.length === 0 && !loading && !isStale && !error && (
                   <div style={{ textAlign: 'center', padding: '24px 0' }}>
-                    <button className="lb-refresh" onClick={() => appData.refresh({ invalidateCache: true, includeUserData: true })}><RotateCcw size={12} /> Refresh</button>
+                    <button className="lb-refresh" onClick={handleRefresh}><RotateCcw size={12} /> Refresh</button>
                   </div>
                 )}
 

@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v23.0 — Clean UI, Animated Title, Smart Data Fetch, SEO News
+// v23.1 — Reactive Architecture, Smart Live Merging, Clean UI
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -17,7 +17,7 @@ import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { useFootballData } from '../context/FootballDataContext';
 import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
-import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatTime } from '../utils/dates';
+import { todayStr as getTodayStr, getLocalDateFromUtc, formatTime } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
@@ -46,37 +46,30 @@ const slugify = (text) => {
   return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
-function normalizeMatch(raw, isPrimary = true) {
+// Simplified normalizeMatch because fetchFixtures already transforms the data
+function normalizeMatch(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   const status = raw.status || '';
   
-  const isLive = isPrimary ? raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
-  const isFinished = isPrimary ? raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
-
-  let kickoff = 'TBD';
-  const rawDate = raw.utcDate || raw.date;
-  if (rawDate) {
-    try { kickoff = formatTime(rawDate); } catch {}
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
-  }
-
   return {
-    id, status, isLive, isFinished,
+    id, 
+    status,
+    isLive: raw.isLive || isLiveStatus(status, SPORT.FOOTBALL),
+    isFinished: raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL),
     homeTeam: { 
-      name: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'), 
-      shortName: isPrimary ? (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD') 
+      name: raw.homeTeam?.name || 'TBD', 
+      shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD' 
     },
     awayTeam: { 
-      name: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'), 
-      shortName: isPrimary ? (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD') 
+      name: raw.awayTeam?.name || 'TBD', 
+      shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD' 
     },
-    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.homeScore ?? null),
-    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.awayScore ?? null),
+    homeScore: raw.homeScore ?? null,
+    awayScore: raw.awayScore ?? null,
     league: { name: raw.league?.name || raw.competition?.name || 'Other' },
     minute: raw.minute || raw.elapsed || null,
-    kickoff
+    kickoff: raw.kickoff || 'TBD'
   };
 }
 
@@ -116,25 +109,6 @@ function AccuracyRing({ value, size = 44, stroke = 4, color = 'var(--accent)' })
         strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
         strokeLinecap="round" style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)' }} />
     </svg>
-  );
-}
-
-/* ═══════════════════════════════════════
-   LIVE CLOCK
-   ═══════════════════════════════════════ */
-function LiveClock() {
-  const [time, setTime] = useState('');
-  useEffect(() => {
-    const tick = () => setTime(new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' }));
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, []);
-  if (!time) return null;
-  return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 8, background: 'rgba(255,255,255,.03)', border: '1px solid var(--border)', fontFamily: 'var(--font-display,monospace)', fontSize: '.82rem', fontWeight: 800, color: 'var(--text-muted)', fontVariantNumeric: 'tabular-nums', letterSpacing: '.02em', flexShrink: 0 }}>
-      <Timer size={12} style={{ opacity: .5 }} />{time}
-    </span>
   );
 }
 
@@ -209,27 +183,11 @@ const injectStyles = () => {
 @keyframes v23-strip{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 @keyframes v23-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
 @keyframes v23-title-line{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
-
-/* ★ NEWS MARQUEE ANIMATION */
-@keyframes v23-news-marquee {
-  0% { transform: translateX(0%); }
-  100% { transform: translateX(-50%); }
-}
-.v23-news-marquee {
-  display: flex;
-  gap: 14px;
-  animation: v23-news-marquee 40s linear infinite;
-  width: max-content;
-  padding: 4px 0;
-}
-.v23-news-marquee:hover {
-  animation-play-state: paused;
-}
+@keyframes v23-news-marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
 
 .v23{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
 .v23-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
 
-/* ANIMATED TITLE */
 .v23-hero{padding:32px 0 20px;position:relative;text-align:center}
 .v23-title{font-size:2.4rem;font-weight:900;letter-spacing:-.03em;margin:0;line-height:1;background:linear-gradient(135deg,var(--text-primary),var(--text-muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .v23-title span{color:var(--accent);-webkit-text-fill-color:var(--accent)}
@@ -323,75 +281,21 @@ const injectStyles = () => {
 
 .v23-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.76rem;font-weight:700;color:#ef4444}
 
-.v23-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v23-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none;color:#fff}
+.v23-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v23-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none}
 .v23-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
 .v23-cta:active{transform:scale(.98)}
 
 .v23-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
 
-/* ★ NEWS CARDS CSS */
-.v23-newsmini {
-  display: flex;
-  flex-direction: column;
-  min-width: 200px;
-  max-width: 220px;
-  height: 150px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  text-decoration: none;
-  color: inherit;
-  transition: transform .2s, border-color .2s;
-  position: relative;
-}
-.v23-newsmini:hover {
-  transform: translateY(-2px);
-  border-color: rgba(59,130,246,0.4);
-  box-shadow: 0 4px 20px rgba(0,0,0,0.2);
-}
-.v23-news-img {
-  width: 100%;
-  height: 80px;
-  object-fit: cover;
-  background: var(--bg-surface);
-}
-.v23-news-img-ph {
-  width: 100%;
-  height: 80px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02));
-  color: var(--accent);
-}
-.v23-news-body {
-  padding: 8px 10px;
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  overflow: hidden;
-}
-.v23-news-cat {
-  font-size: 0.55rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  color: var(--accent);
-  letter-spacing: 0.05em;
-}
-.v23-news-title {
-  margin: 0;
-  font-size: 0.68rem;
-  font-weight: 700;
-  color: var(--text-primary);
-  line-height: 1.3;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
+.v23-news-marquee { display: flex; gap: 14px; animation: v23-news-marquee 40s linear infinite; width: max-content; padding: 4px 0; }
+.v23-news-marquee:hover { animation-play-state: paused; }
+.v23-newsmini { display: flex; flex-direction: column; min-width: 200px; max-width: 220px; height: 150px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .2s, border-color .2s; position: relative; }
+.v23-newsmini:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+.v23-news-img { width: 100%; height: 80px; object-fit: cover; background: var(--bg-surface); }
+.v23-news-img-ph { width: 100%; height: 80px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02)); color: var(--accent); }
+.v23-news-body { padding: 8px 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+.v23-news-cat { font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; }
+.v23-news-title { margin: 0; font-size: 0.68rem; font-weight: 700; color: var(--text-primary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
 
 @media(max-width:640px){
   .v23-stats{grid-template-columns:repeat(2,1fr);gap:8px}
@@ -619,44 +523,49 @@ export default function Home() {
     getDocs(query(collection(db, 'users'), limit(1))).then(s => {
       if (!s.empty && mounted.current) setTotalUsers(s.docs[0].data().totalUsers || null);
     }).catch(() => {});
-  }, []);
+  }, [db]);
 
   useEffect(() => {
     if (!db) return;
     const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
     const unsub = onSnapshot(q, (snap) => {
       if (mounted.current) setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    });
+    }, (err) => console.error("News fetch error:", err));
     return () => unsub();
   }, [db]);
 
-  // ★ ROBUST FIXTURE FETCHING (Matches MasterGames.jsx exactly)
+  // ★ ROBUST FIXTURE FETCHING & LIVE MERGING
   useEffect(() => {
     let mnt = true;
     (async () => {
       try {
         const data = await fetchFixtures(getTodayStr());
         if (mnt && data) {
-          const l = Array.isArray(data) ? data : data?.matches || [];
-          setPrimaryFixtures(l.map(m => normalizeMatch(m, true)).filter(Boolean));
+          const l = data?.matches || [];
+          setPrimaryFixtures(l.map(m => normalizeMatch(m)).filter(Boolean));
         }
       } catch {} finally { if (mnt) setFxLoading(false); }
     })();
     
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
       if (!mnt || !lm) return;
-      setPrimaryFixtures(prev => prev.map(f => {
-        const freshMatch = lm.find(m => String(m.id) === String(f.id));
-        if (freshMatch) return { ...f, ...freshMatch };
-        return f;
-      }));
+      setPrimaryFixtures(prev => {
+        const liveMap = new Map(lm.map(m => [String(m.id), m]));
+        return prev.map(f => {
+          const liveMatch = liveMap.get(String(f.id));
+          if (liveMatch) {
+            return normalizeMatch({ ...f, ...liveMatch });
+          }
+          return f;
+        });
+      });
     });
     
     return () => { mnt = false; if (unsub) unsub(); };
   }, []);
 
   const allFixtures = useMemo(() => {
-    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m, false)).filter(Boolean);
+    let list = primaryFixtures.length > 0 ? primaryFixtures : (backupRaw || []).map(m => normalizeMatch(m)).filter(Boolean);
     const uniqueIds = new Set();
     return list.filter(m => { const idStr = String(m.id); if (uniqueIds.has(idStr)) return false; uniqueIds.add(idStr); return true; });
   }, [primaryFixtures, backupRaw]);

@@ -1,5 +1,5 @@
 // schedulers/scheduler.js
-const { SCHEDULER, LIVE_POLLING, API } = require("../config/constants");
+const { SCHEDULER, LIVE_POLLING, FT_RECOVERY, API } = require("../config/constants");
 const {
   getRemainingRequests,
   getLiveRequestsToday,
@@ -19,6 +19,7 @@ class Scheduler {
     this.cronTimers = [];
     this.syncStatus = {};
     this.activeSleepControllers = new Set();
+    this.lastFtRecovery = {}; // Tracks lastFtRecovery per sport
 
     for (const name of Object.keys(services)) {
       this.syncStatus[name] = this._createInitialStatus();
@@ -101,9 +102,9 @@ class Scheduler {
   }
 
   /**
-   * Smart State Machine: Determines interval based on Budget Tier and Live Status
+   * Smart State Machine: Determines interval based on Budget Tier, Live Status, and Near-Finish logic
    */
-  _determinePollingState(remaining, hasLive) {
+  _determinePollingState(remaining, hasLive, isNearFinish) {
     let mode = "HEALTHY";
     let interval = LIVE_POLLING.ACTIVE_INTERVAL_MS;
 
@@ -122,7 +123,12 @@ class Scheduler {
     } else {
       // Healthy Budget
       mode = "HEALTHY";
-      interval = hasLive ? LIVE_POLLING.ACTIVE_INTERVAL_MS : LIVE_POLLING.LOW_INTERVAL_MS;
+      if (hasLive) {
+        interval = isNearFinish ? LIVE_POLLING.NEAR_FINISH_INTERVAL_MS : LIVE_POLLING.ACTIVE_INTERVAL_MS;
+        if (isNearFinish) mode = "NEAR_FINISH";
+      } else {
+        interval = LIVE_POLLING.LOW_INTERVAL_MS; // Idle
+      }
     }
 
     return { mode, interval };
@@ -132,6 +138,7 @@ class Scheduler {
     const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
     let hasLive = false;
+    let isNearFinish = false;
 
     logger.info(`[Scheduler] ${sport.toUpperCase()} live polling started`);
 
@@ -139,7 +146,7 @@ class Scheduler {
       try {
         const remaining = getBudget();
         const liveUsed = getLiveCount();
-        const { mode, interval } = this._determinePollingState(remaining, hasLive);
+        const { mode, interval } = this._determinePollingState(remaining, hasLive, isNearFinish);
 
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} [${mode}] Next poll in ${Math.round(interval / 60000)}m ` +
@@ -162,16 +169,28 @@ class Scheduler {
           continue;
         }
 
+        const prevHasLive = hasLive;
         const result = await service.run();
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
         hasLive = result?.hasLive === true;
+        isNearFinish = result?.isNearFinish === true; // Service should return this boolean
+        const recoveredFT = result?.recoveredFT || 0;
 
         logger.info(
-          `[Scheduler] ${sport.toUpperCase()} sync done. Live matches: ${hasLive ? "Yes" : "No"}. ` +
-          `Next mode calculated based on budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
+          `[Scheduler] ${sport.toUpperCase()} sync done. Live: ${hasLive ? "Yes" : "No"}. Near FT: ${isNearFinish ? "Yes" : "No"}. ` +
+          `FT Recovered: ${recoveredFT}. Budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
         );
+
+        // SMART FT RECOVERY TRIGGER
+        // If we HAD live games, but now we DON'T, it means games just finished.
+        // We wait 60 seconds and poll again IMMEDIATELY to catch the final score 
+        // instead of waiting for the next 1-hour idle cycle.
+        if (prevHasLive && !hasLive && FT_RECOVERY.ENABLED && nowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH) {
+          logger.info(`[Scheduler] ${sport.toUpperCase()} live session ended. Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`);
+          await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
+        }
 
       } catch (err) {
         consecutiveErrors++;
@@ -281,6 +300,7 @@ class Scheduler {
         removed: result.removed ?? null,
         apiCalls: result.apiCalls ?? null,
         hasLive: result.hasLive ?? null,
+        isNearFinish: result.isNearFinish ?? null,
         capReached: result.capReached ?? null,
         deduped: result.deduped ?? null,
         rolloverYesterday: result.rolloverYesterday ?? null,
@@ -339,6 +359,7 @@ class Scheduler {
     logger.info("[Scheduler] ═══ Smart Schedule Configuration ═══");
     logger.info(`  Daily Rollover+Fetch: 03:00 AM UTC (1 API call/sport)`);
     logger.info(`  Live Polling (Active): ${LIVE_POLLING.ACTIVE_INTERVAL_MS / 60000}m`);
+    logger.info(`  Live Polling (Near FT): ${LIVE_POLLING.NEAR_FINISH_INTERVAL_MS / 60000}m`);
     logger.info(`  Live Polling (Idle):   ${LIVE_POLLING.LOW_INTERVAL_MS / 60000}m`);
     logger.info(`  Football Live Cap:     ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Basketball Live Cap:   ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);

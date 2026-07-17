@@ -349,16 +349,17 @@ class LiveFixturesService {
     };
   }
 
-  _emptyResult(extra) {
-    return {
-      total: 0,
-      writes: 0,
-      removed: 0,
-      hasLive: false,
-      duration: 0,
-      capReached: false,
-    };
-  }
+  _emptyResult(extra = {}) {
+  return {
+    total: 0,
+    writes: 0,
+    removed: 0,
+    hasLive: false,
+    duration: 0,
+    capReached: false,
+    ...extra,
+  };
+}
 }
 
 module.exports = LiveFixturesService;

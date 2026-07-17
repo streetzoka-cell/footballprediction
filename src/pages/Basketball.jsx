@@ -1,23 +1,24 @@
+// ═══════════════════════════════════════════════════════════════
+// FILE: src/pages/Basketball.jsx
+// v20.2 — Reactive Data Layer, Smart Live Merging, Clean Architecture
+// ═══════════════════════════════════════════════════════════════
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays, RefreshCw, WifiOff, Database,
-  Star,
-  ChevronDown, ChevronRight,
+  Star, ChevronDown, ChevronRight,
   Lock, LogIn, CheckCircle2, Sparkles, Flame,
 } from 'lucide-react';
-import { fetchBasketballFixtures, subscribeToBasketballLiveFixtures, getDateRange, getBasketballLeaguePriority } from "../utils/api";
-import { todayStr as getTodayStr, getLocalDateStr } from "../utils/dates";
-
-const getYesterdayStr = () => getLocalDateStr(-1);
-const getTomorrowStr = () => getLocalDateStr(1);
-
 
 import { useAuth } from '../context/AuthContext';
+import { dataLayer } from '../utils/dataLayer';
+import { subscribeToBasketballLiveFixtures, getDateRange, getBasketballLeaguePriority } from '../utils/api';
+import { todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
+
 import { db } from '../utils/firebase';
 import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import SEO from "../components/SEO";
-
+import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════════════════
    STYLE INJECTION
@@ -27,8 +28,7 @@ const injectStyles = () => {
   const s = document.createElement('style');
   s.id = 'bb-pro-v3';
   s.textContent = `
-    @keyframes bb_fadeInUp{from{opacity:0;transform:translateY(18px)}
-body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
+    @keyframes bb_fadeInUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
     @keyframes bb_slideDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:translateY(0)}}
     @keyframes bb_slideInLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
     @keyframes bb_scoreFlash{0%{transform:scale(1)}25%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(1);filter:brightness(1)}}
@@ -47,6 +47,7 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     @keyframes refreshSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
     @keyframes bballBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
     @keyframes sportGlow{0%,100%{box-shadow:0 0 8px rgba(249,115,22,.15)}50%{box-shadow:0 0 16px rgba(249,115,22,.3)}}
+    
     .bb-enter{animation:bb_fadeInUp .4s cubic-bezier(.22,1,.36,1) both}
     .bb-expand{animation:bb_slideDownReveal .3s cubic-bezier(.22,1,.36,1) both}
     .bb-predict-pop{animation:bb_predictPop .4s cubic-bezier(.22,1,.36,1) both}
@@ -60,7 +61,7 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
     .zoka-btn:active{transform:translateY(0) scale(.97)}
     .zoka-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
     .zoka-card:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.15)}
-    .zoka-glass{backdrop-filter:;-webkit-backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+    .zoka-glass{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
     .bball-icon{animation:bballBounce 1.5s ease-in-out infinite}
     .bball-glow{animation:sportGlow 2s ease-in-out infinite}
     .sport-switch{display:flex;gap:6px;padding:4px;border-radius:10px;background:var(--bg-card);border:1px solid var(--border)}
@@ -73,10 +74,8 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
   
     @media(prefers-reduced-motion:reduce){
       *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-      .toggle-hidden-items{transition:none!important}
     }
-`;
+  `;
   document.head.appendChild(s);
 };
 
@@ -84,7 +83,7 @@ body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:transla
    CONSTANTS & UTILITIES
    ═══════════════════════════════════════════════════════════════ */
 function gamePriorityScore(g) {
-  const base = getBasketballLeaguePriority(g.leagueKey);
+  const base = getBasketballLeaguePriority(g.leagueKey) || 0;
   const liveBoost = g.isLive ? 50 : 0;
   const scheduledBoost = g.isScheduled ? 10 : 0;
   return base + liveBoost + scheduledBoost;
@@ -382,8 +381,8 @@ export default function Basketball() {
 
   const dates = useMemo(() => getDateRange(9, -1), []);
   const todayStr = useMemo(() => getTodayStr(), []);
-  const yesterdayStr = useMemo(() => getYesterdayStr(), []);
-  const tomorrowStr = useMemo(() => getTomorrowStr(), []);
+  const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
+  const tomorrowStr = useMemo(() => getLocalDateStr(1), []);
 
   const windowDates = useMemo(() => [yesterdayStr, todayStr, tomorrowStr], [yesterdayStr, todayStr, tomorrowStr]);
 
@@ -401,7 +400,6 @@ export default function Basketball() {
   const loggedIn = !!currentUser;
   const [predictDay, setPredictDay] = useState('today');
   const [upcomingOpen, setUpcomingOpen] = useState(false);
-  const [predictData, setPredictData] = useState({});
 
   const loadedDatesRef = useRef(new Set());
   const dateScrollRef = useRef(null);
@@ -440,16 +438,16 @@ export default function Basketball() {
   };
 
   /* ═══════════════════════════════════════════════════════════
-     FETCH ONE DATE from Firestore
+     FETCH ONE DATE from DataLayer (24h Cache)
   ═══════════════════════════════════════════════════════════ */
   const fetchDate = useCallback(async (date) => {
     if (loadedDatesRef.current.has(date)) return;
     loadedDatesRef.current.add(date);
     try {
-      const res = await fetchBasketballFixtures(date);
+      // ★ Use dataLayer to hit the 24h memory cache
+      const res = await dataLayer.fetchBasketballFixtures(date);
       const matches = res?.matches || [];
       setGamesByDate(prev => ({ ...prev, [date]: matches }));
-      setPredictData(prev => ({ ...prev, [date]: matches }));
     } catch (err) {
       console.warn('[Basketball] Fetch error for', date, err.message);
     }
@@ -470,9 +468,9 @@ export default function Basketball() {
 
       try {
         const [yRes, tRes, tmRes] = await Promise.all([
-          fetchBasketballFixtures(yesterdayStr),
-          fetchBasketballFixtures(todayStr),
-          fetchBasketballFixtures(tomorrowStr),
+          dataLayer.fetchBasketballFixtures(yesterdayStr),
+          dataLayer.fetchBasketballFixtures(todayStr),
+          dataLayer.fetchBasketballFixtures(tomorrowStr),
         ]);
 
         if (cancelled) return;
@@ -490,12 +488,6 @@ export default function Basketball() {
           [todayStr]: tMatches,
           [tomorrowStr]: tmMatches,
         });
-        setPredictData(prev => ({
-          ...prev,
-          [yesterdayStr]: yMatches,
-          [todayStr]: tMatches,
-          [tomorrowStr]: tmMatches,
-        }));
 
         if (tRes?.error) setError(tRes.error);
       } catch (err) {
@@ -544,18 +536,13 @@ export default function Basketball() {
      PRE-FETCH extra future dates for predictions view
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
-    const futureDates = dates
-      .filter(d => d.date > tomorrowStr)
-      .slice(0, 7);
-
+    const futureDates = dates.filter(d => d.date > tomorrowStr).slice(0, 7);
     futureDates.forEach(async (d) => {
-      if (predictData[d.date]) return;
-      try {
-        const res = await fetchBasketballFixtures(d.date);
-        if (res?.matches) setPredictData(prev => ({ ...prev, [d.date]: res.matches }));
-      } catch {}
+      if (!loadedDatesRef.current.has(d.date)) {
+        fetchDate(d.date);
+      }
     });
-  }, [tomorrowStr]);
+  }, [tomorrowStr, dates, fetchDate]);
 
   /* ═══════════════════════════════════════════════════════════
      MANUAL REFRESH
@@ -566,15 +553,9 @@ export default function Basketball() {
     setError(null);
     loadedDatesRef.current.delete(selectedDate);
 
-    fetchBasketballFixtures(selectedDate)
-      .then(res => {
-        const matches = res?.matches || [];
-        setGamesByDate(prev => ({ ...prev, [selectedDate]: matches }));
-        setPredictData(prev => ({ ...prev, [selectedDate]: matches }));
-        if (res?.error) setError(res.error);
-      })
-      .catch(() => setError('NETWORK'))
-      .finally(() => setRefreshing(false));
+    // Force bypass cache on refresh
+    dataLayer.invalidate(`snap:bb:${selectedDate}`);
+    fetchDate(selectedDate).finally(() => setRefreshing(false));
   }, [selectedDate, refreshing, fetchDate]);
 
   /* ═══════════════════════════════════════════════════════════
@@ -582,8 +563,8 @@ export default function Basketball() {
   ═══════════════════════════════════════════════════════════ */
   const mergedGames = useMemo(() => {
     if (!liveGames.length) return currentGames;
-    const liveMap = new Map(liveGames.map(g => [g.id, g]));
-    return currentGames.map(g => liveMap.get(g.id) || g);
+    const liveMap = new Map(liveGames.map(g => [String(g.id), g]));
+    return currentGames.map(g => liveMap.get(String(g.id)) || g);
   }, [currentGames, liveGames]);
 
   /* ═══════════════════════════════════════════════════════════
@@ -630,24 +611,20 @@ export default function Basketball() {
      PREDICT GAMES
   ═══════════════════════════════════════════════════════════ */
   const todayPredictGames = useMemo(() => {
-    const todayData = predictData[todayStr] || currentGames;
-    return getTopPredictGames(todayData, 10);
-  }, [predictData, todayStr, currentGames]);
+    return getTopPredictGames(gamesByDate[todayStr] || [], 10);
+  }, [gamesByDate, todayStr]);
 
   const tomorrowPredictGames = useMemo(() => {
-    const tmData = predictData[tomorrowStr] || [];
-    return getTopPredictGames(tmData, 10);
-  }, [predictData, tomorrowStr]);
+    return getTopPredictGames(gamesByDate[tomorrowStr] || [], 10);
+  }, [gamesByDate, tomorrowStr]);
 
   const upcomingPredictGames = useMemo(() => {
     if (!upcomingOpen || !predictDay || predictDay === 'today' || predictDay === tomorrowStr) return [];
-    const data = predictData[predictDay] || [];
-    return getTopPredictGames(data, 10);
-  }, [predictData, predictDay, upcomingOpen, tomorrowStr]);
+    return getTopPredictGames(gamesByDate[predictDay] || [], 10);
+  }, [gamesByDate, predictDay, upcomingOpen, tomorrowStr]);
 
   const predictViewDates = useMemo(() => {
-    const furtherOut = dates.filter(d => d.date > tomorrowStr).slice(0, 7);
-    return furtherOut;
+    return dates.filter(d => d.date > tomorrowStr).slice(0, 7);
   }, [dates, tomorrowStr]);
 
   /* ═══════════════════════════════════════════════════════════
@@ -663,7 +640,7 @@ export default function Basketball() {
   let sectionIdx = 0;
 
   return (
-    <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)', animation: 'bb_fadeInUp .45s ease' }}>
+    <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)', animation: 'bb_fadeInUp .45s ease' }}>
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO
@@ -824,23 +801,7 @@ export default function Basketball() {
                 <div style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>Pick basketball game outcomes</div>
               </div>
               {!loggedIn && (
-                <button
-                  className="zoka-btn"
-                  onClick={() => setShowLoginModal(true)}
-                  style={{
-                    marginLeft: 'auto',
-                    padding: '7px 14px',
-                    borderRadius: 8,
-                    background: 'rgba(29,66,138,.12)',
-                    border: '1px solid rgba(29,66,138,.3)',
-                    color: '#60a5fa',
-                    fontWeight: 600,
-                    fontSize: '.78rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
+                <button className="zoka-btn" onClick={() => setShowLoginModal(true)} style={{ marginLeft: 'auto', padding: '7px 14px', borderRadius: 8, background: 'rgba(29,66,138,.12)', border: '1px solid rgba(29,66,138,.3)', color: '#60a5fa', fontWeight: 600, fontSize: '.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
                   <Lock size={12} /> Sign in
                 </button>
               )}
@@ -850,7 +811,93 @@ export default function Basketball() {
                 </div>
               )}
             </div>
-            {/* ... Your remaining Predict View UI continues here ... */}
+
+            {/* Today's Predictions */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <CalendarDays size={14} color="#60a5fa" />
+                <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Today's Games</span>
+              </div>
+              {todayPredictGames.length > 0 ? (
+                todayPredictGames.map((g, i) => (
+                  <PredictCard 
+                    key={g.id} 
+                    game={g} 
+                    index={i} 
+                    prediction={predictions[g.id]} 
+                    onPredict={handlePredict} 
+                    onRemove={handleRemovePredict} 
+                    loggedIn={loggedIn} 
+                  />
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>No predictions available for today.</div>
+              )}
+            </div>
+
+            {/* Tomorrow's Predictions */}
+            <div style={{ marginBottom: 24 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                <CalendarDays size={14} color="#f59e0b" />
+                <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Tomorrow's Games</span>
+              </div>
+              {tomorrowPredictGames.length > 0 ? (
+                tomorrowPredictGames.map((g, i) => (
+                  <PredictCard 
+                    key={g.id} 
+                    game={g} 
+                    index={i} 
+                    prediction={predictions[g.id]} 
+                    onPredict={handlePredict} 
+                    onRemove={handleRemovePredict} 
+                    loggedIn={loggedIn} 
+                  />
+                ))
+              ) : (
+                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>No predictions available for tomorrow.</div>
+              )}
+            </div>
+
+            {/* Upcoming Predictions */}
+            <div style={{ marginBottom: 24 }}>
+              <button className="zoka-btn" onClick={() => setUpcomingOpen(!upcomingOpen)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '.82rem' }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <ChevronDown size={14} color="var(--text-muted)" />
+                  Upcoming Games
+                </span>
+                <ChevronRight size={14} color="var(--text-muted)" style={{ transform: upcomingOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+              </button>
+              
+              {upcomingOpen && (
+                <div style={{ marginTop: 12 }}>
+                  <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }} className="date-scroll-hide">
+                    {predictViewDates.map(d => (
+                      <button key={d.date} onClick={() => setPredictDay(d.date)} className="zoka-btn" style={{ padding: '8px 14px', borderRadius: 8, background: predictDay === d.date ? '#1D428A' : 'var(--bg-card)', border: `1px solid ${predictDay === d.date ? '#1D428A' : 'var(--border)'}`, color: predictDay === d.date ? '#fff' : 'var(--text-muted)', fontWeight: 600, fontSize: '.72rem', flexShrink: 0 }}>
+                        {d.day} {d.num}
+                      </button>
+                    ))}
+                  </div>
+                  
+                  {upcomingPredictGames.length > 0 ? (
+                    upcomingPredictGames.map((g, i) => (
+                      <PredictCard 
+                        key={g.id} 
+                        game={g} 
+                        index={i} 
+                        prediction={predictions[g.id]} 
+                        onPredict={handlePredict} 
+                        onRemove={handleRemovePredict} 
+                        loggedIn={loggedIn} 
+                      />
+                    ))
+                  ) : (
+                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>
+                      {predictDay ? `No games scheduled for ${predictDay}.` : 'Select a date to view upcoming games.'}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
