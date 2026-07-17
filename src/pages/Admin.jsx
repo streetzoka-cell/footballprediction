@@ -1220,7 +1220,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                       {live && <span className="ld" />}
                       <span className="as" style={{ color: st.c, background: st.b }}>{st.l}</span>
                     </div>
-                      </div>
                   </div>
                   <div className="atm">
                     <div className="ate">
@@ -1293,6 +1292,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
     </div>
   );
 }
+
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    RESULTS TAB
