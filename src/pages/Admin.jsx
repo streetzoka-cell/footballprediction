@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// v15.4 Pro UI — Smart Grouped Matches, Auto-Failover, Bulletproof Loading
+// v15.3 Pro UI — Smart Match Locking, Auto-Failover, Bulletproof Loading
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -141,47 +141,6 @@ const hasMatchStarted = (m) => {
     }
   }
   return false;
-};
-
-// ★ LEAGUE PRIORITY & GROUPING (Matches MasterGames Layout)
-const LEAGUE_PRIORITY = {
-  'FIFA World Cup': 1, 'UEFA Champions League': 2, 'UEFA Europa League': 3,
-  'UEFA Conference League': 4, 'Premier League': 5, 'La Liga': 6, 'Serie A': 7,
-  'Bundesliga': 8, 'Ligue 1': 9, 'Primeira Liga': 10, 'Eredivisie': 11,
-  'Süper Lig': 12, 'Championship': 13,
-};
-const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
-
-const groupAndSortFixtures = (fixtures) => {
-  const map = new Map();
-  fixtures.forEach(m => {
-    const leagueName = m.league?.name || m.competition?.name || 'Other';
-    if (!map.has(leagueName)) {
-      map.set(leagueName, { name: leagueName, emblem: m.league?.emblem || m.competition?.emblem, matches: [] });
-    }
-    map.get(leagueName).matches.push(m);
-  });
-
-  map.forEach(g => {
-    g.matches.sort((a, b) => {
-      const aLive = isLive(a), bLive = isLive(b);
-      if (aLive && !bLive) return -1;
-      if (!aLive && bLive) return 1;
-      const aFin = isFin(a), bFin = isFin(b);
-      if (aFin && !bFin) return 1;
-      if (!aFin && bFin) return -1;
-      const aTime = a.utcDate ? new Date(a.utcDate).getTime() : 0;
-      const bTime = b.utcDate ? new Date(b.utcDate).getTime() : 0;
-      return aTime - bTime;
-    });
-  });
-
-  return [...map.values()].sort((a, b) => {
-    const pa = getLeaguePriority(a.name);
-    const pb = getLeaguePriority(b.name);
-    if (pa !== pb) return pa - pb;
-    return a.name.localeCompare(b.name);
-  });
 };
 
 const fmtTimeAgo = dt => {
@@ -393,10 +352,6 @@ const injectCSS = () => {
 .abatch-bar .ab{margin-left:auto}
 
 .aedit-hint{font-size:.65rem;color:var(--gold,#f5c542);font-weight:700;opacity:.7;margin-top:2px;display:flex;align-items:center;gap:3px}
-
-.league-group-header { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; padding: 0 4px; }
-.league-group-header img { width: 16px; height: 16px; border-radius: 3px; }
-.league-group-header span { font-size: .75rem; font-weight: 900; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.03em; }
 
 @media(max-width:640px){
   .atb{padding:10px 5px;font-size:.68rem;gap:4px}
@@ -677,7 +632,7 @@ export default function Admin() {
     // ★ SMART LOCK: Prevent adding if match has started
     if (hasMatchStarted(m)) { 
       showToast('Match has already started or finished!', 'er'); 
-      return; 
+       return; 
     }
     const matchDate = date;
     const predId = `feat_${date}_${m.id}`;
@@ -895,8 +850,12 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const mk = `zoka_${date}`;
 
   const setSel = (v) => { memUpdate(`${mk}_sel`, v); refresh(n => n + 1); };
+  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
+  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
 
   const sel = mem.get(`${mk}_sel`, {});
+  const lg = mem.get(`${mk}_lg`, 'ALL');
+  const showAll = mem.get(`${mk}_show`, false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -910,9 +869,25 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   // ★ SMART LOCK: Filter out matches that have started
   const selectableFx = useMemo(() => dayFx.filter(m => !hasMatchStarted(m)), [dayFx]);
 
-  // ★ GROUP & SORT: Group matches by League priority exactly like fixtures page
-  const groupedAvailable = useMemo(() => groupAndSortFixtures(selectableFx), [selectableFx]);
+  const leagues = useMemo(() => {
+    const map = new Map();
+    selectableFx.forEach(f => {
+      const c = f.competition || f.league; if (!c) return;
+      const id = String(c.id || c.code || 'x');
+      if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
+      map.get(id).n++;
+    });
+    return [...map.values()].sort((a, b) => b.n - a.n);
+  }, [selectableFx]);
 
+  const filtered = useMemo(() => {
+    let l = selectableFx;
+    if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
+    return l;
+  }, [selectableFx, lg]);
+
+  const vis = useMemo(() => showAll ? filtered : filtered.slice(0, SHOW_INIT), [filtered, showAll]);
+  const hidden = Math.max(0, filtered.length - SHOW_INIT);
   const ids = useMemo(() => new Set(Object.keys(sel)), [sel]);
   const cnt = ids.size;
   const full = cnt >= MAX_ZOKA;
@@ -923,6 +898,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
 
   const toggle = (m) => {
+    // ★ SMART LOCK: Prevent selecting if started
     if (hasMatchStarted(m)) { toast('Cannot select matches that have already started', 'in'); return; }
     const id = String(m.id);
     if (ids.has(id)) {
@@ -1081,33 +1057,38 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
         </div>
       )}
 
-      {fxLoading ? <Skel n={4} /> : groupedAvailable.length > 0 ? (
-        <div className={flash ? 'save-flash' : ''}>
-          {groupedAvailable.map((group, gi) => (
-            <div key={gi} style={{ marginBottom: '16px' }}>
-              <div className="league-group-header">
-                {group.emblem && <img src={group.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                <span>{group.name}</span>
-              </div>
-              {group.matches.map((m, i) => {
-                const mid = String(m.id);
-                const isPublished = pubMap.has(mid);
-                return (
-                  <div key={mid}>
-                    <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
-                      scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null}
-                      extraBadge={isPublished && !sel[mid] ? (<span className="abdg gd"><Star size={9} /> Published</span>) : null}
-                    />
-                    {isPublished && !sel[mid] && (
-                      <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
-                        <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
+      {leagues.length > 1 && (
+        <div className="alb" style={{ marginTop: 10 }}>
+          <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All ({selectableFx.length})</button>
+          {leagues.map(l => (
+            <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
+              {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+              {l.name} ({l.n})
+            </button>
           ))}
+        </div>
+      )}
+
+      {fxLoading ? <Skel n={4} /> : vis.length > 0 ? (
+        <div className={flash ? 'save-flash' : ''}>
+          {vis.map((m, i) => {
+            const mid = String(m.id);
+            const isPublished = pubMap.has(mid);
+            return (
+              <div key={mid}>
+                <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle}
+                  scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null}
+                  extraBadge={isPublished && !sel[mid] ? (<span className="abdg gd"><Star size={9} /> Published</span>) : null}
+                />
+                {isPublished && !sel[mid] && (
+                  <div className="aedit-hint" style={{ margin: '-4px 16px 8px', cursor: 'pointer' }} onClick={() => toggle(m)}>
+                    <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+          <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
         <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'} hint={dayFx.length === 0 ? 'Try a different day' : 'Matches that have started cannot be selected'} />
@@ -1166,19 +1147,40 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
    FEATURED TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
 function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
+  const [, refresh] = useState(0);
+  const mk = `feat_${date}`;
+  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
+  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
+  const lg = mem.get(`${mk}_lg`, 'ALL');
+  const showAll = mem.get(`${mk}_show`, false);
   const [addingId, setAddingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const isFull = preds.length >= MAX_FEATURED;
 
   const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
 
-  const availableMatches = useMemo(() => {
+  const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    return fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m));
+    // ★ SMART LOCK: Filter out matches that have started
+    let l = fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m)); 
+    if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
+    return l;
+  }, [fixtures, date, lg]);
+
+  const leagues = useMemo(() => {
+    const map = new Map();
+    // ★ SMART LOCK applied here too
+    (fixtures?.filter(m => extractDate(m) === date && !hasMatchStarted(m)) || []).forEach(f => {
+      const c = f.competition || f.league; if (!c) return;
+      const id = String(c.id || c.code || 'x');
+      if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
+      map.get(id).n++;
+    });
+    return [...map.values()].sort((a, b) => b.n - a.n);
   }, [fixtures, date]);
 
-  // ★ GROUP & SORT: Group matches by League priority exactly like fixtures page
-  const groupedAvailable = useMemo(() => groupAndSortFixtures(availableMatches), [availableMatches]);
+  const vis = useMemo(() => showAll ? avail : avail.slice(0, SHOW_INIT), [avail, showAll]);
+  const hidden = Math.max(0, avail.length - SHOW_INIT);
 
   const handleAddClick = async (m) => {
     if (isFull) return;
@@ -1203,11 +1205,12 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
             {preds.map((p, i) => {
               const mid = String(p.matchId);
               const isRemoving = removingId === mid;
+              const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
               const live = isLive(p);
               const finished = isFin(p);
-              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff ? formatTime(p.kickoff) : 'VS' };
+              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
               return (
-                <div key={mid} className="am card-in ok" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
+                <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
                   <div className="amh">
                     <div className="aml">
                       {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1217,19 +1220,18 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
                       {live && <span className="ld" />}
                       <span className="as" style={{ color: st.c, background: st.b }}>{st.l}</span>
                     </div>
+                      </div>
                   </div>
                   <div className="atm">
                     <div className="ate">
-                      {(p.homeLogo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                       <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                     </div>
                     <div className={`asb${live ? ' lv' : ''}${finished ? ' ft' : ''}`}>
-                      {p.homeScore != null ? (
-                        <><span className={`asn${live ? ' r' : ' g'}`}>{p.homeScore}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{p.awayScore}</span></>
-                      ) : <span className="avs">VS</span>}
+                      {sc ? (<><span className={`asn${live ? ' r' : ' g'}`}>{sc.h}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a}</span></>) : <span className="avs">VS</span>}
                     </div>
                     <div className="ate aw">
-                      {(p.awayLogo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                      {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                       <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
                     </div>
                   </div>
@@ -1250,39 +1252,39 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
       <div className="asec">
         <h3 className="ast"><Plus size={15} /> Available Matches {isFull && <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '.75rem' }}>(FULL)</span>}</h3>
-        {fxLoading ? <Skel n={4} /> : groupedAvailable.length > 0 ? (
-          <div>
-            {groupedAvailable.map((group, gi) => (
-              <div key={gi} style={{ marginBottom: '16px' }}>
-                <div className="league-group-header">
-                  {group.emblem && <img src={group.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  <span>{group.name}</span>
-                </div>
-                {group.matches.map((m, i) => {
-                  const mid = String(m.id);
-                  const isAdding = addingId === mid;
-                  const isFeatured = pids.has(mid);
-                  return (
-                    <MatchRow 
-                      key={mid} 
-                      m={m} 
-                      idx={i} 
-                      mode="featured"
-                      onAction={() => (
-                        isFeatured ? (
-                          <span className="abdg gn"><CheckCircle2 size={9} /> Featured</span>
-                        ) : (
-                          <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(m)} disabled={isAdding || isFull}>
-                            {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
-                            {isFull ? 'Full' : 'Add'}
-                          </button>
-                        )
-                      )}
-                    />
-                  );
-                })}
-              </div>
+        {leagues.length > 1 && (
+          <div className="alb" style={{ marginBottom: 10 }}>
+            <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All</button>
+            {leagues.map(l => (
+              <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
+                {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                {l.name} ({l.n})
+              </button>
             ))}
+          </div>
+        )}
+        {fxLoading ? <Skel n={3} /> : vis.length > 0 ? (
+          <div>
+            {vis.map((m, i) => {
+              const mid = String(m.id);
+              const isAdding = addingId === mid;
+              const isFeatured = pids.has(mid);
+              return (
+                <MatchRow key={mid} m={m} idx={i} mode="featured"
+                  onAction={(match) => (
+                    isFeatured ? (
+                      <span className="abdg gn"><CheckCircle2 size={9} /> Featured</span>
+                    ) : (
+                      <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(match)} disabled={isAdding || isFull}>
+                        {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
+                        {isFull ? 'Full' : 'Add'}
+                      </button>
+                    )
+                  )}
+                />
+              );
+            })}
+            <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
           </div>
         ) : (
           <Empty icon={CalendarDays} title="No available matches" hint="Live and finished matches cannot be featured" />
@@ -1401,7 +1403,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                 </div>
                 <div className="atm">
                   <div className="ate">
-                    {(p.homeLogo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
                   <div className="asb" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
@@ -1410,7 +1412,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
                   </div>
                   <div className="ate aw">
-                    {(p.awayLogo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
                   </div>
                 </div>
@@ -1450,7 +1452,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                 </div>
                 <div className="atm">
                   <div className="ate">
-                    {(p.homeLogo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
                   <div className="asb ft" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
@@ -1459,7 +1461,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
                   </div>
                   <div className="ate aw">
-                    {(p.awayLogo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
                   </div>
                 </div>
