@@ -6,6 +6,10 @@
  * fields required by the frontend. This reduces the document size by 
  * ~90%, allowing 1000+ matches to easily fit inside Firestore's 1MB 
  * document limit without needing complex chunking.
+ *
+ * ★ MERGE FIX: Only includes arrays that are explicitly passed in the 
+ * data payload to prevent accidentally overwriting existing arrays 
+ * with empty values.
  */
 
 const { getDb } = require("../config/firebase");
@@ -36,21 +40,25 @@ function stripMatch(m) {
 
 class SnapshotWriter {
   async writeFootballSnapshot(dateStr, data) {
-    return this._write("fixture_snapshots", dateStr, {
-      matches: (data.matches || []).map(stripMatch),
-      live: (data.live || []).map(stripMatch),
-      finished: (data.finished || []).map(stripMatch),
-      sport: "football",
-    });
+    const payload = { sport: "football" };
+    
+    // ★ FIX: Only add the array if it exists in the payload
+    // This prevents overwriting the 'matches' array with [] when liveFixtures runs
+    if (data.matches) payload.matches = data.matches.map(stripMatch);
+    if (data.live) payload.live = data.live.map(stripMatch);
+    if (data.finished) payload.finished = data.finished.map(stripMatch);
+    
+    return this._write("fixture_snapshots", dateStr, payload);
   }
 
   async writeBasketballSnapshot(dateStr, data) {
-    return this._write("fixture_snapshots", `basketball_${dateStr}`, {
-      matches: (data.matches || []).map(stripMatch),
-      live: (data.live || []).map(stripMatch),
-      finished: (data.finished || []).map(stripMatch),
-      sport: "basketball",
-    });
+    const payload = { sport: "basketball" };
+    
+    if (data.matches) payload.matches = data.matches.map(stripMatch);
+    if (data.live) payload.live = data.live.map(stripMatch);
+    if (data.finished) payload.finished = data.finished.map(stripMatch);
+    
+    return this._write("fixture_snapshots", `basketball_${dateStr}`, payload);
   }
 
   writeReference(type, sport, data) {
