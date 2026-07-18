@@ -48,7 +48,8 @@ const TOMORROW = getDateOffset(1);
 // ───────────────────────────────────────────────
 // LEAGUE CONFIGURATION
 // ───────────────────────────────────────────────
-const TRACK_ALL_LEAGUES = true;
+// ★ FIX: Set to false to ONLY track the major leagues listed in the array below
+const TRACK_ALL_LEAGUES = false;
 
 const LEAGUES = Object.freeze([
   { id: 39,  name: "Premier League",         country: "England",    flag: "🏴",  season: SEASON, priority: 1,  tier: 1, active: true },
@@ -166,11 +167,11 @@ const LIVE_POLLING = Object.freeze({
 
   // ── LIVE-COUNT-BASED INTERVALS (desired) ──
   IDLE_INTERVAL_MS:        3600000,  // 60 min  — 0 live matches
-  LOW_LIVE_INTERVAL_MS:    1800000,  // 30 min  — 1–10 live
-  MEDIUM_LIVE_INTERVAL_MS: 900000,   // 15 min  — 11–30 live
-  HIGH_LIVE_INTERVAL_MS:   420000,   //  7 min  — 31–60 live
-  MASSIVE_LIVE_INTERVAL_MS:240000,   //  4 min  — 61+ live
-  NEAR_FINISH_INTERVAL_MS: 150000,   // 2.5 min — any match at 80'+ or ET/BT/P
+  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live  (Was 30m)
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live (Was 15m)
+  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live (Was 7m)
+  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live   (Was 4m)
+  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+ or ET/BT/P (Was 2.5m)
 
   // ── BUDGET-TIER FLOORS ──
   BUDGET_HEALTHY_THRESHOLD:  30,
@@ -195,6 +196,7 @@ const LIVE_POLLING = Object.freeze({
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,
 });
+
 
 const FT_RECOVERY = Object.freeze({ ENABLED: true, MIN_BUDGET_TO_FETCH: 5, COOLDOWN_MS: 900000, DEDUP_KEY: "ftRecoveredAt" });
 const RETRY = Object.freeze({ MAX_ATTEMPTS: 3, BASE_DELAY_MS: 2000, MAX_DELAY_MS: 30000, JITTER: true });
