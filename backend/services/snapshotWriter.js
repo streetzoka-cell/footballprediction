@@ -42,7 +42,7 @@ class SnapshotWriter {
   async writeFootballSnapshot(dateStr, data) {
     const payload = { sport: "football" };
     
-    // ★ FIX: Only add the array if it exists in the payload
+    // Only add the array if it exists in the payload
     // This prevents overwriting the 'matches' array with [] when liveFixtures runs
     if (data.matches) payload.matches = data.matches.map(stripMatch);
     if (data.live) payload.live = data.live.map(stripMatch);

@@ -1,6 +1,7 @@
 ﻿/*
  * liveFixtures.js
  * ★ TIMEZONE FIX: Groups live matches by local date (EAT) to write to correct snapshot docs.
+ * ★ SIZE FIX: Caps lastFinishedSnapshot to 50 to prevent 1MB Firestore limit errors.
  */
 
 const {
@@ -84,7 +85,7 @@ class LiveFixturesService {
       if (transitioned > 0) cache.invalidate("ft:finished");
 
       try {
-        // ★ FIX: Group by Local Date (EAT) to write to separate documents
+        // Group by Local Date (EAT) to write to separate documents
         const liveByDate = {};
         newDocs.forEach(doc => {
           const localDate = getLocalDateFromUtc(doc.date) || TODAY;
@@ -142,7 +143,16 @@ class LiveFixturesService {
     if (toFinish.length === 0) return 0;
     await this.repo.batchUpsertFinished(toFinish);
     cache.invalidate("ft:finished");
+    
     toFinish.forEach((doc) => this.lastFinishedSnapshot.set(String(doc.id), doc));
+
+    // ★ FIX: Prevent lastFinishedSnapshot from growing infinitely and causing 1MB errors
+    if (this.lastFinishedSnapshot.size > 50) {
+      const keys = Array.from(this.lastFinishedSnapshot.keys());
+      const keysToDelete = keys.slice(0, this.lastFinishedSnapshot.size - 50);
+      keysToDelete.forEach(k => this.lastFinishedSnapshot.delete(k));
+    }
+
     return toFinish.length;
   }
 
