@@ -122,29 +122,28 @@ class Scheduler {
 
     if (isNearFinish && liveCount > 0) {
       liveTier = "NEAR_FT";
-      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2.5 min
+      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2 min
     } else if (liveCount === 0) {
       liveTier = "IDLE";
       desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 60 min
     } else if (liveCount <= 10) {
       liveTier = "LIVE_LOW";
-      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 30 min
+      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
     } else if (liveCount <= 30) {
       liveTier = "LIVE_MED";
-      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 15 min
+      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
     } else if (liveCount <= 60) {
       liveTier = "LIVE_HIGH";
-      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 7 min
+      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
     } else {
       liveTier = "LIVE_MASS";
-      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 4 min
+      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 3 min
     }
 
     // ── 2. Hard limit floors (Budget & Cap) ──
     let budgetTier = "HEALTHY";
     let budgetFloor = 0;
 
-    // ★ FIX: Fallback to DAILY_BUDGET if remaining is null (right after reset)
     const effRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
 
     if (effRemaining <= 0) {
@@ -254,8 +253,6 @@ class Scheduler {
         );
 
         const intervalMin = (state.interval / 60000).toFixed(1);
-        
-        // ★ FIX: Fallback to API.DAILY_BUDGET for logging if remaining is null
         const logRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
         
         logger.info(
@@ -299,7 +296,6 @@ class Scheduler {
         const recoveredFT = result?.recoveredFT || 0;
         const capReached = result?.capReached === true;
 
-        // ★ FIX: Fallback for logging after poll
         const logNowRemaining = nowRemaining !== null ? nowRemaining : API.DAILY_BUDGET;
 
         logger.info(
@@ -486,6 +482,7 @@ class Scheduler {
       });
     });
   }
+
   _logSchedule() {
     logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
@@ -512,6 +509,6 @@ class Scheduler {
     logger.info(`  FT Reserve:          ${LIVE_POLLING.CAP_FT_RESERVE} calls held for FT recovery`);
     logger.info("[Scheduler] ═════════════════════════════════════");
   }
-
 }
+
 module.exports = Scheduler;
