@@ -27,7 +27,6 @@ function getDateOffset(days) {
   return formatDate(d);
 }
 
-// ★ NEW: Convert UTC timestamp to local EAT date string
 function getLocalDateFromUtc(utcDateStr) {
   if (!utcDateStr) return null;
   try {
@@ -48,7 +47,6 @@ const TOMORROW = getDateOffset(1);
 // ───────────────────────────────────────────────
 // LEAGUE CONFIGURATION
 // ───────────────────────────────────────────────
-// ★ FIX: Set to false to ONLY track the major leagues listed in the array below
 const TRACK_ALL_LEAGUES = false;
 
 const LEAGUES = Object.freeze([
@@ -83,6 +81,21 @@ const LEAGUES = Object.freeze([
   { id: 203, name: "Süper Lig",              country: "Turkey",     flag: "🇹🇷", season: SEASON, priority: 29, tier: 2, active: true },
   { id: 131, name: "Primera B Metropolitana",country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 30, tier: 3, active: true },
 ]);
+
+// ★ NEW: Top Teams Dictionary (Lowercase for smart matching)
+const TOP_TEAMS_LIST = [
+  'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
+  'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
+  'bayern munich', 'borussia dortmund', 'rb leipzig', 'bayer leverkusen',
+  'paris saint germain', 'psg', 'marseille', 'lyon',
+  'juventus', 'inter', 'ac milan', 'napoli', 'roma', 'lazio', 'atalanta',
+  'benfica', 'porto', 'sporting cp',
+  'ajax', 'psv eindhoven', 'feyenoord',
+  'celtic', 'rangers',
+  'flamengo', 'palmeiras', 'corinthians', 'sao paulo',
+  'boca juniors', 'river plate'
+];
+const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
 
 const BASKETBALL_LEAGUES = Object.freeze([
   { id: 12, name: "NBA",        country: "USA",      flag: "🇺🇸", season: BASKETBALL_SEASON, priority: 1, tier: 1, active: true },
@@ -162,16 +175,17 @@ const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTUR
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
   // ── DAILY CAPS ──
-  FOOTBALL_DAILY_LIVE_CAP: 60,
+  // ★ FIX: Increased to 80 for faster polling, leaving 12 strictly for Top Match Details
+  FOOTBALL_DAILY_LIVE_CAP: 80,
   BASKETBALL_DAILY_LIVE_CAP: 15,
 
   // ── LIVE-COUNT-BASED INTERVALS (desired) ──
   IDLE_INTERVAL_MS:        3600000,  // 60 min  — 0 live matches
-  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live  (Was 30m)
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live (Was 15m)
-  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live (Was 7m)
-  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live   (Was 4m)
-  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+ or ET/BT/P (Was 2.5m)
+  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live
+  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live
+  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live
+  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+ or ET/BT/P
 
   // ── BUDGET-TIER FLOORS ──
   BUDGET_HEALTHY_THRESHOLD:  30,
@@ -197,7 +211,6 @@ const LIVE_POLLING = Object.freeze({
   ERROR_BACKOFF_MS:       60000,
 });
 
-
 const FT_RECOVERY = Object.freeze({ ENABLED: true, MIN_BUDGET_TO_FETCH: 5, COOLDOWN_MS: 900000, DEDUP_KEY: "ftRecoveredAt" });
 const RETRY = Object.freeze({ MAX_ATTEMPTS: 3, BASE_DELAY_MS: 2000, MAX_DELAY_MS: 30000, JITTER: true });
 const BATCH_MAX_OPS = 450;
@@ -211,5 +224,6 @@ module.exports = Object.freeze({
   BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
   COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY,
   RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT, TRACK_ALL_LEAGUES,
+  TOP_TEAMS_LIST, TOP_TEAMS_SET, // ★ Export Top Teams
   getCurrentSeason, getCurrentBasketballSeason,
 });

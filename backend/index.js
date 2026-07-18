@@ -31,6 +31,9 @@ const LeaguesService = require("./services/leagues");
 const BasketballDailyFixturesService = require("./services/basketballDailyFixtures");
 const BasketballLiveFixturesService = require("./services/basketballLiveFixtures");
 
+// ★ NEW: Import TopMatchesDetailsService
+const TopMatchesDetailsService = require("./services/topMatchesDetails");
+
 // Scheduler
 const Scheduler = require("./schedulers/scheduler");
 
@@ -181,6 +184,24 @@ function startServer() {
   app.get("/api/basketball/teams", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_TEAMS));
   app.get("/api/basketball/standings", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_STANDINGS));
 
+  // ★ NEW: Match Details Endpoint (0 API Calls - Reads strictly from Cache)
+  app.get("/api/match/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const db = getDb();
+      const docRef = db.collection("match_details").doc(id);
+      const docSnap = await docRef.get();
+      
+      if (docSnap.exists) {
+        return res.json(docSnap.data());
+      }
+      return res.status(404).json({ error: "Details not available for this match." });
+    } catch (err) {
+      logger.error(`[API] Match details read error: ${err.message}`);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
   // Manual Recovery
   app.get("/api/recover", async (req, res) => {
     const sport = req.query.sport || "all";
@@ -257,7 +278,6 @@ function setupShutdownHandlers() {
     logger.info(`[Shutdown] Initiated by ${source}`);
     if (scheduler) scheduler.stop();
 
-    // Give ongoing processes a moment to finish
     await new Promise((resolve) => setTimeout(resolve, 2000));
 
     if (server) {
@@ -335,6 +355,12 @@ async function main() {
   scheduler.start();
   startServer();
   setupShutdownHandlers();
+
+  // ★ NEW: Start Top Matches Background Poller (Runs every 5 minutes)
+  const topMatchesService = new TopMatchesDetailsService();
+  setInterval(() => {
+    topMatchesService.run().catch(err => logger.error(`[TopMatches] Error: ${err.message}`));
+  }, 300000); // 5 minutes
 
   const duration = Date.now() - startTime;
   const bball = isBasketballConfigured ? "✅ ON" : "⬜ OFF";
