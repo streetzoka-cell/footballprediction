@@ -126,35 +126,39 @@ class Scheduler {
     } else if (liveCount === 0) {
       liveTier = "IDLE";
       desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 60 min
-    } else if (liveCount <= 5) {
+    } else if (liveCount <= 10) {
       liveTier = "LIVE_LOW";
-      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
-    } else if (liveCount <= 15) {
+      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 30 min
+    } else if (liveCount <= 30) {
       liveTier = "LIVE_MED";
-      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
-    } else {
+      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 15 min
+    } else if (liveCount <= 60) {
       liveTier = "LIVE_HIGH";
-      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
+      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 7 min
+    } else {
+      liveTier = "LIVE_MASS";
+      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 4 min
     }
 
     // ── 2. Hard limit floors (Budget & Cap) ──
     let budgetTier = "HEALTHY";
     let budgetFloor = 0;
 
-    if (remaining !== null) {
-      if (remaining <= 0) {
-        budgetTier = "EXHAUSTED";
-        budgetFloor = Infinity; 
-      } else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) {
-        budgetTier = "RESERVE";       
-        budgetFloor = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS;
-      } else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) {
-        budgetTier = "CRITICAL";      
-        budgetFloor = LIVE_POLLING.BUDGET_CRITICAL_FLOOR_MS;
-      } else if (remaining <= LIVE_POLLING.BUDGET_HEALTHY_THRESHOLD) {
-        budgetTier = "NORMAL";        
-        budgetFloor = LIVE_POLLING.BUDGET_NORMAL_FLOOR_MS;
-      }
+    // ★ FIX: Fallback to DAILY_BUDGET if remaining is null (right after reset)
+    const effRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
+
+    if (effRemaining <= 0) {
+      budgetTier = "EXHAUSTED";
+      budgetFloor = Infinity; 
+    } else if (effRemaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) {
+      budgetTier = "RESERVE";       
+      budgetFloor = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS;
+    } else if (effRemaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) {
+      budgetTier = "CRITICAL";      
+      budgetFloor = LIVE_POLLING.BUDGET_CRITICAL_FLOOR_MS;
+    } else if (effRemaining <= LIVE_POLLING.BUDGET_HEALTHY_THRESHOLD) {
+      budgetTier = "NORMAL";        
+      budgetFloor = LIVE_POLLING.BUDGET_NORMAL_FLOOR_MS;
     }
 
     const capRemaining = liveCap - liveUsed;
@@ -173,9 +177,6 @@ class Scheduler {
     }
 
     // ── 3. Pacing floor ──
-    // Spread remaining cap calls across a rolling 3-hour active window.
-    // Matches rarely last longer than 2-3 hours, so we don't need to save 
-    // calls for 12 hours from now—only for the current live block.
     let pacingFloor = 0;
     let isPacing = false;
 
@@ -183,7 +184,6 @@ class Scheduler {
       const activeWindowHours = 3; 
       const effectiveCap = capRemaining - LIVE_POLLING.CAP_FT_RESERVE;
 
-      // Calculate the minimum interval required to avoid depletion during the 3h window
       pacingFloor = (activeWindowHours * 3600000) / effectiveCap;
 
       if (pacingFloor > desired) {
@@ -229,7 +229,6 @@ class Scheduler {
     let liveCount = 0;
     let isNearFinish = false;
 
-    // ★ SEED FROM INITIAL SYNC
     const initialResult = this.syncStatus[serviceName]?.lastResult;
     if (initialResult && initialResult.polled !== false) {
       liveCount = initialResult.liveCount ?? initialResult.total ?? 0;
@@ -255,16 +254,19 @@ class Scheduler {
         );
 
         const intervalMin = (state.interval / 60000).toFixed(1);
+        
+        // ★ FIX: Fallback to API.DAILY_BUDGET for logging if remaining is null
+        const logRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
+        
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} [${state.mode}] Next poll in ${intervalMin}m ` +
-            `[Live: ${liveUsed}/${liveCap} cap, API: ${remaining ?? "???"}/${API.DAILY_BUDGET}, ` +
+            `[Live: ${liveUsed}/${liveCap} cap, API: ${logRemaining}/${API.DAILY_BUDGET}, ` +
             `LiveMatches: ${liveCount}, NearFT: ${isNearFinish ? "Y" : "N"}]`
         );
 
         await this._sleep(state.interval);
         if (controller.stop) break;
 
-        // ── Re-check guards after sleeping ──
         const nowRemaining = getBudget();
         const nowLiveUsed = getLiveCount();
 
@@ -282,7 +284,6 @@ class Scheduler {
           continue;
         }
 
-        // ── Execute poll ──
         const prevHadLive = liveCount > 0;
         const result = await service.run();
         consecutiveErrors = 0;
@@ -298,20 +299,22 @@ class Scheduler {
         const recoveredFT = result?.recoveredFT || 0;
         const capReached = result?.capReached === true;
 
+        // ★ FIX: Fallback for logging after poll
+        const logNowRemaining = nowRemaining !== null ? nowRemaining : API.DAILY_BUDGET;
+
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} sync done. ` +
             `Live: ${liveCount} match(es). NearFT: ${isNearFinish ? "Yes" : "No"}. ` +
             `FT→: ${recoveredFT}. Cap: ${nowLiveUsed}/${liveCap}${capReached ? " (REACHED)" : ""}. ` +
-            `Budget: ${nowRemaining ?? "???"}/${API.DAILY_BUDGET}`
+            `Budget: ${logNowRemaining}/${API.DAILY_BUDGET}`
         );
 
-        // ── SMART FT RECOVERY TRIGGER ──
         if (
           prevHadLive &&
           liveCount === 0 &&
           actuallyPolled &&
           FT_RECOVERY.ENABLED &&
-          nowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH
+          logNowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH
         ) {
           logger.info(
             `[Scheduler] ${sport.toUpperCase()} live session ended. ` +
@@ -488,9 +491,10 @@ class Scheduler {
     logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
     logger.info(`    0 live      → 60 min   (IDLE)`);
-    logger.info(`    1–5 live    → 15 min   (LIVE_LOW)`);
-    logger.info(`    6–15 live   → 10 min   (LIVE_MED)`);
-    logger.info(`    16+ live    →  5 min   (LIVE_HIGH)`);
+    logger.info(`    1–10 live   → 30 min   (LIVE_LOW)`);
+    logger.info(`    11–30 live  → 15 min   (LIVE_MED)`);
+    logger.info(`    31–60 live  →  7 min   (LIVE_HIGH)`);
+    logger.info(`    61+ live    →  4 min   (LIVE_MASS)`);
     logger.info(`    80'+ / ET   → 2.5 min  (NEAR_FT)`);
     logger.info("  Budget Tiers (slowdown floors):");
     logger.info(`    > 30 left   → HEALTHY  (no floor)`);
