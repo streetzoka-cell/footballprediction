@@ -54,3 +54,13 @@ export const HelpCenter = lazy(() => import("../pages/HelpCenter"));
 =============================== */
 
 export const NotFound = lazy(() => import("../pages/NotFound"));
+
+/* ===============================
+   ZOKASCORE STUDIO 🆕
+=============================== */
+export const ReactorStudio = lazy(() => import("../studio/pages/ReactorStudio"));
+export const StudioHome = lazy(() => import("../studio/pages/StudioHome"));
+export const StudioEditor = lazy(() => import("../studio/pages/StudioEditor"));
+export const StudioTemplates = lazy(() => import("../studio/pages/Templates"));
+export const MediaStudio = lazy(() => import("../studio/pages/MediaStudio"));
+export const FaceARStudio = lazy(() => import("../studio/pages/FaceARStudio"));

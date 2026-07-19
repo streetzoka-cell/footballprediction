@@ -6,6 +6,8 @@ import {
   AdminRoute,
 } from "./guards";
 
+
+import { ReactorStudio } from "./routes";
 import {
   Home,
   Predictions,
@@ -15,7 +17,7 @@ import {
   Highlights,
   LiveStream,
   Leaderboard,
-  MatchDetails, // ★ Ensure this is here
+  MatchDetails,
 
   Login,
   Profile,
@@ -35,6 +37,13 @@ import {
   HelpCenter,
 
   NotFound,
+  
+  // 🆕 Studio Imports
+  StudioHome,
+  StudioEditor,
+  StudioTemplates,
+  MediaStudio,
+  FaceARStudio,
 } from "./routes";
 
 function Animated({ children }) {
@@ -53,6 +62,13 @@ export default function AppRoutes() {
       <Route path="/mastergames" element={<Animated><MasterGames /></Animated>} />
       <Route path="/basketball" element={<Animated><Basketball /></Animated>} />
       
+      {/* ================= ZOKASCORE STUDIO 🆕 ================= */}
+      <Route path="/studio" element={<Animated><StudioHome /></Animated>} />
+      <Route path="/studio/templates" element={<Animated><StudioTemplates /></Animated>} />
+      <Route path="/studio/editor" element={<Animated><StudioEditor /></Animated>} />
+      <Route path="/studio/media" element={<Animated><MediaStudio /></Animated>} />
+      <Route path="/studio/face-ar" element={<Animated><FaceARStudio /></Animated>} />
+
       {/* ★ NEWS HUB ROUTES (Order matters: Author before SlugId) ★ */}
       <Route path="/highlights" element={<Animated><Highlights /></Animated>} />
       <Route path="/highlights/author/:author" element={<Animated><Highlights /></Animated>} />
@@ -71,7 +87,7 @@ export default function AppRoutes() {
       <Route path="/contact" element={<Animated><Contact /></Animated>} />
       <Route path="/partners" element={<Animated><Partners /></Animated>} />
       <Route path="/advertise" element={<Animated><Advertise /></Animated>} />
-
+<Route path="/studio/reactor" element={<Animated><ReactorStudio /></Animated>} />
       {/* ================= SUPPORT ================= */}
       <Route path="/faq" element={<Animated><FAQ /></Animated>} />
       <Route path="/help" element={<Animated><HelpCenter /></Animated>} />
