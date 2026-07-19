@@ -2,8 +2,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Circle, Square, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield
+  ArrowLeft, Circle, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2
 } from 'lucide-react';
 
 // --- 1. MASSIVE TEMPLATE ENGINE (40+ Templates) ---
@@ -88,7 +88,8 @@ export default function ReactorStudio() {
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [brollLoaded, setBrollLoaded] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false); // Preview Play/Pause
+  const [isExporting, setIsExporting] = useState(false); // Export Loading State
   const [recordedUrl, setRecordedUrl] = useState(null);
   
   const [templateId, setTemplateId] = useState('social_pro');
@@ -145,6 +146,7 @@ export default function ReactorStudio() {
             setDuration(sourceVideoRef.current.duration);
             setTrimEnd(sourceVideoRef.current.duration);
             sourceVideoRef.current.play();
+            setIsPlaying(true);
             setSourceLoaded(true);
           };
         }
@@ -172,6 +174,20 @@ export default function ReactorStudio() {
       setBrollLoaded(false); 
       if (brollVideoRef.current) brollVideoRef.current.removeAttribute('src');
     } catch (err) { alert("Camera access denied."); }
+  };
+
+  // Preview Play/Pause Logic
+  const togglePreview = () => {
+    const vid = sourceVideoRef.current;
+    if (!vid) return;
+    if (isPlaying) {
+      vid.pause();
+      setIsPlaying(false);
+    } else {
+      if (vid.currentTime < trimStart || vid.currentTime >= trimEnd) vid.currentTime = trimStart;
+      vid.play();
+      setIsPlaying(true);
+    }
   };
 
   const drawCover = (ctx, video, x, y, w, h) => {
@@ -226,7 +242,11 @@ export default function ReactorStudio() {
     const brollVid = brollVideoRef.current;
 
     if (!sourceLoaded || !sourceVid) return;
-    if (sourceVid.duration && sourceVid.currentTime >= trimEnd) sourceVid.currentTime = trimStart;
+    
+    // Loop video during preview if it reaches trimEnd
+    if (isPlaying && sourceVid.currentTime >= trimEnd) {
+      sourceVid.currentTime = trimStart;
+    }
 
     const font = FONT_PACKS[fontPack];
 
@@ -429,37 +449,68 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => { dragRef.current.target = null; };
 
-  const startRecording = () => {
-    if (!canvasRef.current) return;
+  // --- Smart Trim Export Logic ---
+  const handleExportVideo = async () => {
+    const vid = sourceVideoRef.current;
+    if (!canvasRef.current || isExporting || !vid) return;
+
+    setIsExporting(true);
+    setIsPlaying(false); // Pause normal preview
+    vid.pause();
+    vid.currentTime = trimStart; // Seek to start
+
+    // Wait a tick for seek to complete
+    await new Promise(r => setTimeout(r, 100));
+
     const canvasStream = canvasRef.current.captureStream(30);
     if (streamRef.current) streamRef.current.getAudioTracks().forEach(track => canvasStream.addTrack(track));
-    if (!isMuted && sourceVideoRef.current.captureStream) {
-      try { sourceVideoRef.current.captureStream().getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
+    if (!isMuted && vid.captureStream) {
+      try { vid.captureStream().getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
     }
     if (audioRef.current.src) {
       try { const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); aStream.getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
     }
+
     chunksRef.current = [];
     const recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = () => setRecordedUrl(URL.createObjectURL(new Blob(chunksRef.current, { type: 'video/webm' })));
-    recorder.start();
-    mediaRecorderRef.current = recorder;
-    setIsRecording(true);
-    if (audioRef.current.src) audioRef.current.play();
-  };
-
-  const stopRecording = () => {
-    if (mediaRecorderRef.current && isRecording) {
-      mediaRecorderRef.current.stop(); setIsRecording(false);
+    recorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+      const url = URL.createObjectURL(blob);
+      setRecordedUrl(url);
+      setIsExporting(false);
+      vid.pause();
       if (audioRef.current) audioRef.current.pause();
-    }
+    };
+
+    // Monitor time to stop at trimEnd
+    const checkTime = () => {
+      if (vid.currentTime >= trimEnd) {
+        if (recorder.state !== 'inactive') recorder.stop();
+      } else {
+        requestAnimationFrame(checkTime);
+      }
+    };
+
+    recorder.start();
+    vid.play();
+    if (audioRef.current.src) audioRef.current.play();
+    requestAnimationFrame(checkTime);
   };
 
-  const handleDownload = () => {
-    if (!recordedUrl) return;
-    const a = document.createElement('a'); a.href = recordedUrl; a.download = 'zokascore_reactor.webm';
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  // --- Discard Recording Logic ---
+  const handleDiscardRecording = () => {
+    if (recordedUrl) {
+      URL.revokeObjectURL(recordedUrl); // Free up memory
+      setRecordedUrl(null);
+    }
+    // Reset preview state so they can edit and try again
+    const vid = sourceVideoRef.current;
+    if (vid) {
+      vid.currentTime = trimStart;
+      vid.pause();
+    }
+    setIsPlaying(false);
   };
 
   useEffect(() => { return () => { if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); }; }, []);
@@ -509,19 +560,34 @@ export default function ReactorStudio() {
           <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Reactor Studio</h1>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button onClick={() => setShowGallery(true)} style={topBtnStyle}><LayoutGrid size={16} /> Templates</button>
-          <button onClick={handleDownload} disabled={!recordedUrl} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !recordedUrl ? 0.5 : 1 }}><Download size={16} /> Export</button>
+          <button onClick={() => setShowGallery(true)} style={topBtnStyle} disabled={isExporting || recordedUrl}><LayoutGrid size={16} /> Templates</button>
+          
+          {/* Conditional Top Right Buttons */}
+          {recordedUrl ? (
+            <>
+              <button onClick={handleDiscardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
+                <Trash2 size={16} /> Discard
+              </button>
+              <a href={recordedUrl} download="zokascore_reactor.webm" style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}>
+                <Download size={16} /> Download
+              </a>
+            </>
+          ) : (
+            <button onClick={handleExportVideo} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
+              {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Video
+            </button>
+          )}
         </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         
         <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Video"><Upload size={20} /></button>
-          <button onClick={() => fileInputRefs.current.broll?.click()} style={sideBtnStyle} title="Add B-Roll (2nd Video)"><Film size={20} /></button>
-          <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar"><User size={20} /></button>
-          <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio"><Music size={20} /></button>
-          <button onClick={startCamera} style={sideBtnStyle} title="Camera"><Camera size={20} /></button>
+          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Video" disabled={isExporting || recordedUrl}><Upload size={20} /></button>
+          <button onClick={() => fileInputRefs.current.broll?.click()} style={sideBtnStyle} title="Add B-Roll (2nd Video)" disabled={isExporting || recordedUrl}><Film size={20} /></button>
+          <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar" disabled={isExporting || recordedUrl}><User size={20} /></button>
+          <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={isExporting || recordedUrl}><Music size={20} /></button>
+          <button onClick={startCamera} style={sideBtnStyle} title="Camera" disabled={isExporting || recordedUrl}><Camera size={20} /></button>
           <button onClick={() => setShowGuides(!showGuides)} style={{...sideBtnStyle, color: showGuides ? '#10b981' : '#64748b'}} title="Guides"><Grid3x3 size={20} /></button>
         </div>
 
@@ -532,16 +598,16 @@ export default function ReactorStudio() {
             onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}
           >
             <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            {!sourceLoaded && (
+            {!sourceLoaded && !recordedUrl && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer' }} onClick={() => fileInputRefs.current.video?.click()}>
                 <Upload size={40} style={{ marginBottom: '12px' }} />
                 <p style={{ fontWeight: 700 }}>Import Video</p>
               </div>
             )}
             {recordedUrl && <video src={recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
-            {isRecording && (
+            {isExporting && (
               <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, pointerEvents: 'none' }}>
-                <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} /> REC
+                <Loader size={12} className="animate-spin" /> EXPORTING
               </div>
             )}
           </div>
@@ -572,27 +638,27 @@ export default function ReactorStudio() {
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Shield size={14} /> Football Assets</div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={homeLogoUrl} onChange={(e) => setHomeLogoUrl(e.target.value)} placeholder="Home Logo URL" style={inputStyle} />
-              <input type="number" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} />
+              <input type="text" value={homeLogoUrl} onChange={(e) => setHomeLogoUrl(e.target.value)} placeholder="Home Logo URL" style={inputStyle} disabled={isExporting || recordedUrl} />
+              <input type="number" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={isExporting || recordedUrl} />
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={awayLogoUrl} onChange={(e) => setAwayLogoUrl(e.target.value)} placeholder="Away Logo URL" style={inputStyle} />
-              <input type="number" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} />
+              <input type="text" value={awayLogoUrl} onChange={(e) => setAwayLogoUrl(e.target.value)} placeholder="Away Logo URL" style={inputStyle} disabled={isExporting || recordedUrl} />
+              <input type="number" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={isExporting || recordedUrl} />
             </div>
           </div>
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><User size={14} /> Social Details</div>
-            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" style={inputStyle} />
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" style={inputStyle} />
-            <input type="text" value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={inputStyle} />
+            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" style={inputStyle} disabled={isExporting || recordedUrl} />
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" style={inputStyle} disabled={isExporting || recordedUrl} />
+            <input type="text" value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={inputStyle} disabled={isExporting || recordedUrl} />
           </div>
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Layers size={14} /> Layers</div>
             {Object.keys(layers).map(key => (
               <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#cbd5e1', textTransform: 'capitalize', cursor: 'pointer', marginBottom: '6px' }}>
-                <input type="checkbox" checked={layers[key]} onChange={() => setLayers(l => ({...l, [key]: !l[key]}))} style={{ accentColor: '#10b981' }} /> {key}
+                <input type="checkbox" checked={layers[key]} onChange={() => setLayers(l => ({...l, [key]: !l[key]}))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} /> {key}
               </label>
             ))}
           </div>
@@ -603,23 +669,23 @@ export default function ReactorStudio() {
               <div style={{ display: 'flex', gap: '8px' }}>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={labelStyle}>Start: {trimStart.toFixed(1)}s</span>
-                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimStart} onChange={(e) => setTrimStart(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} />
+                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimStart} onChange={(e) => setTrimStart(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} />
                 </div>
                 <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                   <span style={labelStyle}>End: {trimEnd.toFixed(1)}s</span>
-                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimEnd} onChange={(e) => setTrimEnd(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} />
+                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimEnd} onChange={(e) => setTrimEnd(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} />
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '8px' }}>
                 {filters.map(f => (
-                  <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{f.name}</button>
+                  <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={isExporting || recordedUrl}>{f.name}</button>
                 ))}
               </div>
               <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button onClick={() => setIsMuted(!isMuted)} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }}>
+                <button onClick={() => setIsMuted(!isMuted)} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
                   {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {isMuted ? 'Muted' : 'Audio On'}
                 </button>
-                <button onClick={() => setFadeIn(!fadeIn)} style={{ flex: 1, background: fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }}>
+                <button onClick={() => setFadeIn(!fadeIn)} style={{ flex: 1, background: fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
                   Fade In: {fadeIn ? 'On' : 'Off'}
                 </button>
               </div>
@@ -628,14 +694,16 @@ export default function ReactorStudio() {
         </div>
       </div>
 
+      {/* Bottom Bar - Preview Controls (Disabled if recordedUrl exists) */}
       <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px' }}>
-        <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute"><Volume2 size={20} /></button>
-        {!isRecording ? (
-          <button onClick={startRecording} style={{ ...bottomBtnStyle, background: '#ef4444', color: '#fff', width: '64px', height: '64px' }} title="Record"><Circle size={28} fill="#fff" /></button>
-        ) : (
-          <button onClick={stopRecording} style={{ ...bottomBtnStyle, background: '#334155', color: '#fff', width: '64px', height: '64px' }} title="Stop"><Square size={24} fill="#fff" /></button>
-        )}
-        <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound"><Music size={20} /></button>
+        <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute" disabled={isExporting || recordedUrl}><Volume2 size={20} /></button>
+        
+        {/* Preview Play/Pause Button */}
+        <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview">
+          {isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
+        </button>
+
+        <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={isExporting || recordedUrl}><Music size={20} /></button>
       </div>
 
       {showGallery && (
