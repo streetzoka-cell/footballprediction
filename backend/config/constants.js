@@ -44,6 +44,13 @@ const TODAY = formatDate(new Date());
 const YESTERDAY = getDateOffset(-1);
 const TOMORROW = getDateOffset(1);
 
+
+// ───────────────────────────────────────────────
+// LEAGUE CONFIGURATION
+// ───────────────────────────────────────────────
+// Only fetch matches for the major leagues listed below
+const TRACK_ALL_LEAGUES = false;
+
 const LEAGUES = Object.freeze([
   // ─── FRIENDLIES & INTERNATIONAL (Active in Summer) ───
   { id: 1,   name: "World Cup",              country: "World",      flag: "🌍", season: SEASON, priority: 1,  tier: 1, active: true },
