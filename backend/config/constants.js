@@ -47,68 +47,91 @@ const TOMORROW = getDateOffset(1);
 // ───────────────────────────────────────────────
 // LEAGUE CONFIGURATION
 // ───────────────────────────────────────────────
-// Only fetch matches for the leagues listed below (Top 37 Leagues)
+// Only fetch matches for the major leagues listed below
 const TRACK_ALL_LEAGUES = false;
 
 const LEAGUES = Object.freeze([
-  // ─── ENGLAND (4) ───
+  // ─── ENGLAND ───
   { id: 39,  name: "Premier League",         country: "England",    flag: "🏴",  season: SEASON, priority: 1,  tier: 1, active: true },
   { id: 40,  name: "Championship",           country: "England",    flag: "🏴",  season: SEASON, priority: 2,  tier: 2, active: true },
-  { id: 45,  name: "FA Cup",                 country: "England",    flag: "🏴",  season: SEASON, priority: 3,  tier: 2, active: true },
-  { id: 48,  name: "EFL Cup",                country: "England",    flag: "🏴",  season: SEASON, priority: 4,  tier: 2, active: true },
+  { id: 41,  name: "League One",             country: "England",    flag: "🏴",  season: SEASON, priority: 3,  tier: 3, active: true },
+  { id: 42,  name: "League Two",             country: "England",    flag: "🏴",  season: SEASON, priority: 4,  tier: 3, active: true },
+  { id: 45,  name: "FA Cup",                 country: "England",    flag: "🏴",  season: SEASON, priority: 5,  tier: 2, active: true },
+  { id: 48,  name: "EFL Cup",                country: "England",    flag: "🏴",  season: SEASON, priority: 6,  tier: 2, active: true },
 
-  // ─── SPAIN (3) ───
-  { id: 140, name: "La Liga",                country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 5,  tier: 1, active: true },
-  { id: 141, name: "Segunda División",       country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 6,  tier: 2, active: true },
-  { id: 143, name: "Copa del Rey",           country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 7,  tier: 2, active: true },
+  // ─── SPAIN ───
+  { id: 140, name: "La Liga",                country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 7,  tier: 1, active: true },
+  { id: 141, name: "Segunda División",       country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 8,  tier: 2, active: true },
+  { id: 143, name: "Copa del Rey",           country: "Spain",      flag: "🇪🇸", season: SEASON, priority: 9,  tier: 2, active: true },
 
-  // ─── ITALY (3) ───
-  { id: 135, name: "Serie A",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 8,  tier: 1, active: true },
-  { id: 136, name: "Serie B",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 9,  tier: 2, active: true },
-  { id: 137, name: "Coppa Italia",           country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 10, tier: 2, active: true },
+  // ─── ITALY ───
+  { id: 135, name: "Serie A",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 10, tier: 1, active: true },
+  { id: 136, name: "Serie B",                country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 11, tier: 2, active: true },
+  { id: 137, name: "Coppa Italia",           country: "Italy",      flag: "🇮🇹", season: SEASON, priority: 12, tier: 2, active: true },
 
-  // ─── GERMANY (3) ───
-  { id: 78,  name: "Bundesliga",             country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 11, tier: 1, active: true },
-  { id: 79,  name: "2. Bundesliga",          country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 12, tier: 2, active: true },
-  { id: 81,  name: "DFB Pokal",              country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 13, tier: 2, active: true },
+  // ─── GERMANY ───
+  { id: 78,  name: "Bundesliga",             country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 13, tier: 1, active: true },
+  { id: 79,  name: "2. Bundesliga",          country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 14, tier: 2, active: true },
+  { id: 80,  name: "3. Liga",                country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 15, tier: 3, active: true },
+  { id: 81,  name: "DFB Pokal",              country: "Germany",    flag: "🇩🇪", season: SEASON, priority: 16, tier: 2, active: true },
 
-  // ─── FRANCE (3) ───
-  { id: 61,  name: "Ligue 1",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 14, tier: 1, active: true },
-  { id: 62,  name: "Ligue 2",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 15, tier: 2, active: true },
-  { id: 66,  name: "Coupe de France",        country: "France",     flag: "🇫🇷", season: SEASON, priority: 16, tier: 2, active: true },
+  // ─── FRANCE ───
+  { id: 61,  name: "Ligue 1",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 17, tier: 1, active: true },
+  { id: 62,  name: "Ligue 2",                country: "France",     flag: "🇫🇷", season: SEASON, priority: 18, tier: 2, active: true },
+  { id: 66,  name: "Coupe de France",        country: "France",     flag: "🇫🇷", season: SEASON, priority: 19, tier: 2, active: true },
 
-  // ─── OTHER EUROPEAN MAJORS (6) ───
-  { id: 94,  name: "Primeira Liga",          country: "Portugal",   flag: "🇵🇹", season: SEASON, priority: 17, tier: 1, active: true },
-  { id: 88,  name: "Eredivisie",             country: "Netherlands",flag: "🇳🇱", season: SEASON, priority: 18, tier: 1, active: true },
-  { id: 144, name: "First Division A",       country: "Belgium",    flag: "🇧🇪", season: SEASON, priority: 19, tier: 1, active: true },
-  { id: 203, name: "Süper Lig",              country: "Turkey",     flag: "🇹🇷", season: SEASON, priority: 20, tier: 1, active: true },
-  { id: 105, name: "Super League",           country: "Greece",     flag: "🇬🇷", season: SEASON, priority: 21, tier: 1, active: true },
-  { id: 235, name: "Premiership",            country: "Scotland",   flag: "🏴",  season: SEASON, priority: 22, tier: 2, active: true },
+  // ─── OTHER EUROPEAN MAJORS ───
+  { id: 94,  name: "Primeira Liga",          country: "Portugal",   flag: "🇵🇹", season: SEASON, priority: 20, tier: 1, active: true },
+  { id: 88,  name: "Eredivisie",             country: "Netherlands",flag: "🇳🇱", season: SEASON, priority: 21, tier: 1, active: true },
+  { id: 144, name: "First Division A",       country: "Belgium",    flag: "🇧🇪", season: SEASON, priority: 22, tier: 1, active: true },
+  { id: 203, name: "Süper Lig",              country: "Turkey",     flag: "🇹🇷", season: SEASON, priority: 23, tier: 1, active: true },
+  { id: 105, name: "Super League",           country: "Greece",     flag: "🇬🇷", season: SEASON, priority: 24, tier: 1, active: true },
+  { id: 235, name: "Premiership",            country: "Scotland",   flag: "🏴",  season: SEASON, priority: 25, tier: 2, active: true },
 
-  // ─── INTERNATIONAL & CONTINENTAL CUPS (5) ───
-  { id: 1,   name: "World Cup",              country: "World",      flag: "🌍", season: SEASON, priority: 23, tier: 1, active: true },
-  { id: 2,   name: "UEFA Champions League",  country: "World",      flag: "🇪🇺", season: SEASON, priority: 24, tier: 1, active: true },
-  { id: 3,   name: "UEFA Europa League",     country: "World",      flag: "🇪🇺", season: SEASON, priority: 25, tier: 1, active: true },
-  { id: 848, name: "UEFA Conference League", country: "World",      flag: "🇪🇺", season: SEASON, priority: 26, tier: 1, active: true },
-  { id: 13,  name: "Copa Libertadores",      country: "World",      flag: "🌍", season: SEASON, priority: 27, tier: 2, active: true },
+  // ─── SUMMER LEAGUES (Americas) ───
+  { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 26, tier: 2, active: true },
+  { id: 72,  name: "Serie B",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 27, tier: 2, active: true },
+  { id: 84,  name: "Copa do Brasil",         country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 28, tier: 2, active: true },
+  { id: 128, name: "Primera División",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 29, tier: 2, active: true },
+  { id: 129, name: "Primera Nacional",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 30, tier: 3, active: true },
+  { id: 234, name: "Copa Argentina",         country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 31, tier: 3, active: true },
+  { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 32, tier: 2, active: true },
+  { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 33, tier: 2, active: true },
+  { id: 242, name: "Ecuador Serie A",        country: "Ecuador",    flag: "🇪🇨", season: SEASON, priority: 34, tier: 3, active: true },
+  { id: 250, name: "Primera División",       country: "Paraguay",   flag: "🇵🇾", season: SEASON, priority: 35, tier: 3, active: true },
+  { id: 263, name: "Primera División",       country: "Chile",      flag: "🇨🇱", season: SEASON, priority: 36, tier: 3, active: true },
+  { id: 271, name: "Primera División",       country: "Peru",       flag: "🇵🇪", season: SEASON, priority: 37, tier: 3, active: true },
 
-  // ─── AMERICAS (SUMMER LEAGUES) (5) ───
-  { id: 71,  name: "Serie A",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 28, tier: 2, active: true },
-  { id: 72,  name: "Serie B",                country: "Brazil",     flag: "🇧🇷", season: SEASON, priority: 29, tier: 2, active: true },
-  { id: 128, name: "Primera División",       country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 30, tier: 2, active: true },
-  { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 31, tier: 2, active: true },
-  { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 32, tier: 2, active: true },
+  // ─── ASIA & MIDDLE EAST ───
+  { id: 98,  name: "J1 League",              country: "Japan",      flag: "🇯🇵", season: SEASON, priority: 38, tier: 2, active: true },
+  { id: 99,  name: "J2 League",              country: "Japan",      flag: "🇯🇵", season: SEASON, priority: 39, tier: 3, active: true },
+  { id: 292, name: "K League 1",             country: "South Korea",flag: "🇰🇷", season: SEASON, priority: 40, tier: 2, active: true },
+  { id: 293, name: "K League 2",             country: "South Korea",flag: "🇰🇷", season: SEASON, priority: 41, tier: 3, active: true },
+  { id: 307, name: "Saudi Pro League",       country: "Saudi Arabia",flag: "🇸🇦", season: SEASON, priority: 42, tier: 2, active: true },
+  { id: 169, name: "Chinese Super League",   country: "China",      flag: "🇨🇳", season: SEASON, priority: 43, tier: 2, active: true },
 
-  // ─── ASIA & MIDDLE EAST (2) ───
-  { id: 307, name: "Saudi Pro League",       country: "Saudi Arabia",flag: "🇸🇦", season: SEASON, priority: 33, tier: 2, active: true },
-  { id: 98,  name: "J1 League",              country: "Japan",      flag: "🇯🇵", season: SEASON, priority: 34, tier: 2, active: true },
+  // ─── NORDIC (Summer) ───
+  { id: 103, name: "Eliteserien",            country: "Norway",     flag: "🇳🇴", season: SEASON, priority: 44, tier: 2, active: true },
+  { id: 113, name: "Allsvenskan",            country: "Sweden",     flag: "🇸🇪", season: SEASON, priority: 45, tier: 2, active: true },
+  { id: 114, name: "Superettan",             country: "Sweden",     flag: "🇸🇪", season: SEASON, priority: 46, tier: 3, active: true },
+  { id: 244, name: "Veikkausliiga",          country: "Finland",    flag: "🇫🇮", season: SEASON, priority: 47, tier: 3, active: true },
+  { id: 119, name: "Superliga",              country: "Denmark",    flag: "🇩🇰", season: SEASON, priority: 48, tier: 2, active: true },
+  { id: 188, name: "Premier Division",       country: "Ireland",    flag: "🇮🇪", season: SEASON, priority: 49, tier: 3, active: true },
+  { id: 164, name: "Urvalsdeild",            country: "Iceland",    flag: "🇮🇸", season: SEASON, priority: 50, tier: 3, active: true },
 
-  // ─── NORDIC (SUMMER LEAGUES) (4) ───
-  { id: 113, name: "Allsvenskan",            country: "Sweden",     flag: "🇸🇪", season: SEASON, priority: 35, tier: 2, active: true },
-  { id: 103, name: "Eliteserien",            country: "Norway",     flag: "🇳🇴", season: SEASON, priority: 36, tier: 2, active: true },
-  { id: 119, name: "Superliga",              country: "Denmark",    flag: "🇩🇰", season: SEASON, priority: 37, tier: 2, active: true },
+  // ─── INTERNATIONAL & CONTINENTAL CUPS ───
+  { id: 1,   name: "World Cup",              country: "World",      flag: "🌍", season: SEASON, priority: 51, tier: 1, active: true },
+  { id: 4,   name: "Euro Championship",      country: "World",      flag: "🇪🇺", season: SEASON, priority: 52, tier: 1, active: true },
+  { id: 5,   name: "UEFA Nations League",    country: "World",      flag: "🇪🇺", season: SEASON, priority: 53, tier: 1, active: true },
+  { id: 679, name: "U20 World Cup",          country: "World",      flag: "🌍", season: SEASON, priority: 54, tier: 1, active: true },
+  
+  { id: 2,   name: "UEFA Champions League",  country: "World",      flag: "🇪🇺", season: SEASON, priority: 55, tier: 1, active: true },
+  { id: 3,   name: "UEFA Europa League",     country: "World",      flag: "🇪🇺", season: SEASON, priority: 56, tier: 1, active: true },
+  { id: 848, name: "UEFA Conference League", country: "World",      flag: "🇪🇺", season: SEASON, priority: 57, tier: 1, active: true },
+  { id: 13,  name: "Copa Libertadores",      country: "World",      flag: "🌍", season: SEASON, priority: 58, tier: 2, active: true },
+  { id: 11,  name: "Copa Sudamericana",      country: "World",      flag: "🌍", season: SEASON, priority: 59, tier: 2, active: true },
+  { id: 17,  name: "AFC Champions League",   country: "World",      flag: "🌍", season: SEASON, priority: 60, tier: 2, active: true },
 ]);
-
 
 // ★ NEW: Top Teams Dictionary (Lowercase for smart matching)
 const TOP_TEAMS_LIST = [
