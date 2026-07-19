@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v20.4 — Instant Local Rank Calculation, 1-Player Podium, Live Merge
+// v20.5 — Instant Local Rank Calculation, 1-Player Podium, Live Merge
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition } from 'react';
@@ -300,18 +300,33 @@ export default function Leaderboard() {
     return () => unsub();
   }, []);
 
-  // 2. Fetch LIVE FIXTURES FOR TODAY (Every 15s)
+  // 2. Fetch LIVE FIXTURES FOR TODAY (Every 15s) - Visibility Aware
   useEffect(() => {
     let cancelled = false;
     const loadLive = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await fetchFixtures(todayStr());
         if (!cancelled) setLiveFixtures(res?.matches || []);
       } catch (e) {}
     };
+    
     loadLive();
-    const interval = setInterval(loadLive, 15000); 
-    return () => { cancelled = true; clearInterval(interval); };
+    
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadLive();
+    }, 15000);
+    
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadLive();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, []);
 
   // ★ Trigger fetch for historical tabs if not already loaded

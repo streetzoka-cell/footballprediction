@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v14.0 Ultimate — Smart Top Matches Detection
+// v15.0 Ultimate — Refactored Architecture, Grouped State, Reusable Components
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, lazy, Suspense } from 'react';
@@ -16,34 +16,54 @@ import { useFootballData } from '../context/FootballDataContext';
 import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime } from '../utils/dates';
 import SEO from '../components/SEO';
 
-// ─── Constants ───
+// ─── Constants & Config ───
 const STORAGE_KEY_FAVS = "mg11_favs";
 const STORAGE_KEY_PINNED = "mg11_pinned_leagues";
 const STORAGE_KEY_FONT = "mg11_fontscale";
 const LIVE_REFRESH = 45000;
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
 
-// ★ NEW: Top Teams Dictionary (Lowercase for smart matching)
+// ★ FIX 5: Centralized Magic Strings
+const MatchStatus = Object.freeze({
+  LIVE: 'LIVE', FT: 'FT', HT: 'HT', STARTED: 'STARTED',
+  IN_PLAY: 'IN_PLAY', PAUSED: 'PAUSED', AET: 'AET', PEN: 'PEN',
+  HALF_TIME: 'HALF_TIME', FINISHED: 'FINISHED'
+});
+
+const LIVE_STATUSES_SET = new Set([
+  MatchStatus.IN_PLAY, MatchStatus.PAUSED, MatchStatus.LIVE, 
+  '1H', '2H', 'ET', 'BT' // Keeping API specific ones mapped for safety
+]);
+
 const TOP_TEAMS_LIST = [
   'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
   'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
   'bayern munich', 'borussia dortmund', 'rb leipzig', 'bayer leverkusen',
   'paris saint germain', 'psg', 'marseille', 'lyon',
   'juventus', 'inter', 'ac milan', 'napoli', 'roma', 'lazio', 'atalanta',
-  'benfica', 'porto', 'sporting cp',
-  'ajax', 'psv eindhoven', 'feyenoord',
-  'celtic', 'rangers',
-  'flamengo', 'palmeiras', 'corinthians', 'sao paulo',
+  'benfica', 'porto', 'sporting cp', 'ajax', 'psv eindhoven', 'feyenoord',
+  'celtic', 'rangers', 'flamengo', 'palmeiras', 'corinthians', 'sao paulo',
   'boca juniors', 'river plate'
 ];
 const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 
+// ★ FIX 6: Extracted Sorting Logic
+const sortMatches = (a, b) => {
+  if (a.isLive && !b.isLive) return -1;
+  if (!a.isLive && b.isLive) return 1;
+  if (a.isHT && !b.isHT) return -1;
+  if (!a.isHT && b.isHT) return 1;
+  if (a.isFinished && !b.isFinished) return 1;
+  if (!a.isFinished && b.isFinished) return -1;
+  return (a.timestamp || 0) - (b.timestamp || 0);
+};
+
 const injectStyles = () => {
-  if (document.getElementById('mg14-css')) return;
+  if (document.getElementById('mg15-css')) return;
   const s = document.createElement('style');
-  s.id = 'mg14-css';
+  s.id = 'mg15-css';
   s.textContent = `
     @keyframes mgFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
     @keyframes mgSlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
@@ -319,7 +339,7 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
   const clearTO = useCallback((k) => { if (timeouts.current.has(k)) { clearTimeout(timeouts.current.get(k)); timeouts.current.delete(k); } }, []);
   const setTO = useCallback((k, fn, ms) => { clearTO(k); timeouts.current.set(k, setTimeout(() => { fn(); timeouts.current.delete(k); }, ms)); }, [clearTO]);
 
-  const isLiveStatus = useCallback((s) => s === 'IN_PLAY' || s === 'PAUSED' || s === '1H' || s === '2H' || s === 'ET' || s === 'BT' || s === 'LIVE', []);
+  const isLiveStatus = useCallback((s) => LIVE_STATUSES_SET.has(s), []);
 
   useEffect(() => {
     liveMatches.forEach(m => {
@@ -357,14 +377,14 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
           setStatusAnims(p => new Map([...p, [id, { type: 'live', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
         }
-        if (isLiveStatus(prev) && (curr === 'FINISHED' || curr === 'FT')) {
+        if (isLiveStatus(prev) && (curr === MatchStatus.FINISHED || curr === MatchStatus.FT)) {
           const score = `${m.homeScore ?? 0}–${m.awayScore ?? 0}`;
           if (shouldNotify) addToast({ type: 'status', st: 'ft', msg: pick(CMT.ft), detail: `${m.homeName} vs ${m.awayName}`, score, dur: 4000 });
           if (Sound.on) Sound.whistle('ft');
           setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
         }
-        if ((curr === 'HALF_TIME' || curr === 'HT') && prev !== 'HALF_TIME' && prev !== 'HT') {
+        if ((curr === MatchStatus.HALF_TIME || curr === MatchStatus.HT) && prev !== MatchStatus.HALF_TIME && prev !== MatchStatus.HT) {
           if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
           if (Sound.on) Sound.whistle('ht');
           setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
@@ -375,7 +395,9 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
     });
   }, [liveMatches, addToast, isFav, tab, isLiveStatus, setTO]);
 
-  return { scorePops, flashGoals, statusAnims, confettiKey };
+  // ★ FIX 3: Group notification state into a single object to reduce prop drilling
+  const matchState = useMemo(() => ({ scorePops, flashGoals, statusAnims }), [scorePops, flashGoals, statusAnims]);
+  return { matchState, confettiKey };
 }
 
 // ─── Helper Functions ───
@@ -410,9 +432,9 @@ function normalizeMatch(raw, isPrimary) {
     kickoff = raw.kickoff;
   }
 
-  const isLive = isPrimary ? !!raw.isLive : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || status === 'ET' || status === 'BT' || status === 'LIVE');
-  const isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  const isFinished = isPrimary ? !!raw.isFinished : (status === 'FINISHED' || status === 'FT' || status === 'AET' || status === 'PEN');
+  const isLive = isPrimary ? !!raw.isLive : LIVE_STATUSES_SET.has(status);
+  const isHT = status === MatchStatus.HT || status === 'BT' || status === MatchStatus.HALF_TIME;
+  const isFinished = isPrimary ? !!raw.isFinished : (status === MatchStatus.FINISHED || status === MatchStatus.FT || status === MatchStatus.AET || status === MatchStatus.PEN);
   
   let isStarted = false;
   if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
@@ -610,7 +632,8 @@ const ScoreBreakdown = React.memo(({ match, onNavigate }) => {
   );
 });
 
-const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePops, flashGoals, statusAnims, isFav, onFav }) => {
+// ★ FIX 3: MatchCard now accepts `matchState` instead of individual props
+const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchState, isFav, onFav }) => {
   const isLive = m.isLive;
   const isHT = m.isHT;
   const isFt = m.isFinished;
@@ -618,9 +641,9 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePop
   const isSched = !isLive && !isHT && !isFt && !isStarted;
   const isExp = expanded === m.id;
   const id = String(m.id);
-  const isFlash = flashGoals.has(id);
-  const sa = statusAnims.get(id);
-  const popSide = scorePops.get(id);
+  const isFlash = matchState.flashGoals.has(id);
+  const sa = matchState.statusAnims.get(id);
+  const popSide = matchState.scorePops.get(id);
 
   let cls = 'mg-card';
   if (isLive) cls += ' live';
@@ -639,10 +662,10 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, scorePop
         {(isLive || isStarted || isFt) && <div className="mg-left-bar" style={{ background: barColor }} />}
         <div className="mg-card-top">
           <div>
-            {isLive && <span className="mg-status live-s"><span className="mg-dot" /> {m.minute != null ? `${m.minute}'` : 'LIVE'}</span>}
-            {isStarted && <span className="mg-status started-s"><Clock size={10} /> STARTED</span>}
-            {isHT && <span className="mg-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>}
-            {isFt && <span className="mg-status ft-s">FT</span>}
+            {isLive && <span className="mg-status live-s"><span className="mg-dot" /> {m.minute != null ? `${m.minute}'` : MatchStatus.LIVE}</span>}
+            {isStarted && <span className="mg-status started-s"><Clock size={10} /> {MatchStatus.STARTED}</span>}
+            {isHT && <span className="mg-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>{MatchStatus.HT}</span>}
+            {isFt && <span className="mg-status ft-s">{MatchStatus.FT}</span>}
             {isSched && <span className="mg-status time-s">{m.kickoff}</span>}
           </div>
           <div className="mg-card-actions" onClick={e => e.stopPropagation()}>
@@ -700,9 +723,7 @@ const LeagueSection = React.memo(({
     onNavigate,
     isExpanded,
     toggleLeagueExpand,
-    scorePops,
-    flashGoals,
-    statusAnims,
+    matchState,
     isFav,
     onFav,
     isPinned,
@@ -730,9 +751,7 @@ const LeagueSection = React.memo(({
               expanded={expanded}
               onToggle={onToggle}
               onNavigate={onNavigate}
-              scorePops={scorePops}
-              flashGoals={flashGoals}
-              statusAnims={statusAnims}
+              matchState={matchState}
               isFav={isFav(m.id)}
               onFav={onFav}
           />
@@ -753,6 +772,47 @@ const CompCard = React.memo(({ c }) => (
     <div className="name">{c.name}</div>
   </div>
 ));
+
+// ★ FIX 4: Extracted Reusable CompetitionSelector Component
+function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, otherGlobalComps }) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQ, setSearchQ] = useState('');
+  
+  const filteredComps = useMemo(() => {
+    if (!searchQ.trim()) return otherGlobalComps;
+    return otherGlobalComps.filter(c => (c.name || '').toLowerCase().includes(searchQ.toLowerCase()));
+  }, [otherGlobalComps, searchQ]);
+
+  return (
+    <>
+      <div className="mg-pill-scroll" style={{ marginBottom: '10px' }}>
+        {topGlobalComps.map(c => (
+          <button key={c.id} className={`mg-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => onSelect(c.code)}>
+            {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+            {c.code || c.name}
+          </button>
+        ))}
+      </div>
+      <button className="mg-pill" style={{ width: '100%', marginBottom: '10px', borderRadius: '12px', padding: '12px 16px' }} onClick={() => setSearchOpen(p => !p)}>
+        <Search size={16} />
+        {searchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
+        <ChevronDown size={16} style={{ marginLeft: 'auto', opacity: 0.6 }} />
+      </button>
+      {searchOpen && (
+        <div className="mg-filter-panel" style={{ position: 'static', maxHeight: '300px' }}>
+          <input className="mg-search-static" style={{ width: '100%', marginBottom: '10px' }} placeholder="Type league name..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
+          {filteredComps.length === 0 && <div className="mg-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
+          {filteredComps.map(c => (
+            <button key={c.id} className={`mg-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { onSelect(c.code); setSearchOpen(false); setSearchQ(''); }}>
+              {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+              {c.name}
+            </button>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 // ─── Main Component ───
 export default function MasterGames() {
@@ -784,19 +844,23 @@ export default function MasterGames() {
   const deferredSearch = useDeferredValue(searchQ);
   const normalizedSearch = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
 
-  const [soundOn, setSoundOn] = useState(true);
+  // ★ FIX 2: Grouped UI State Variables
+  const [ui, setUI] = useState({
+    soundOn: true,
+    rescued: false,
+    moreDatesOpen: false,
+    leagueFilterOpen: false,
+    showLiveOnly: false,
+  });
+  const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
+  
   const [standingsData, setStandingsData] = useState(null);
   const [teamsData, setTeamsData] = useState(null);
   const [standingsLoading, setStandingsLoading] = useState(false);
   const [teamsLoading, setTeamsLoading] = useState(false);
-  const [rescued, setRescued] = useState(false);
-  const [moreDatesOpen, setMoreDatesOpen] = useState(false);
-  const [leagueFilterOpen, setLeagueFilterOpen] = useState(false);
-  const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
-  const [leagueSearchQ, setLeagueSearchQ] = useState('');
+  
   const rescueToastSent = useRef(false);
   const welcomeToastShown = useRef(false);
-  const [showLiveOnly, setShowLiveOnly] = useState(false);
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   
   const [fontScale, setFontScale] = useState(() => { try { return parseFloat(localStorage.getItem(STORAGE_KEY_FONT) || '1'); } catch { return 1; } });
@@ -833,11 +897,11 @@ export default function MasterGames() {
     'Süper Lig': 12, 'Championship': 13
   }), []);
 
-  useEffect(() => { Sound.on = soundOn; }, [soundOn]);
+  useEffect(() => { Sound.on = ui.soundOn; }, [ui.soundOn]);
 
   useEffect(() => {
     const handler = (e) => {
-      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreDatesOpen(false);
+      if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false }));
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
@@ -892,12 +956,12 @@ export default function MasterGames() {
         if (f.isLive) {
           const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
           if (ko > 0 && Date.now() > ko + (2 * 60 * 60 * 1000)) {
-            return { ...f, isLive: false, isFinished: true, status: 'FT' };
+            return { ...f, isLive: false, isFinished: true, status: MatchStatus.FT };
           }
         }
         const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
         if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
-          return { ...f, isStarted: true, status: 'STARTED' };
+          return { ...f, isStarted: true, status: MatchStatus.STARTED };
         }
         return f;
       }));
@@ -912,18 +976,18 @@ export default function MasterGames() {
 
   useEffect(() => {
     const needsRescue = primaryFixtures.length === 0 && backupFixtures.length > 0 && !primaryLoading;
-    if (needsRescue && !rescued) {
-      setRescued(true);
+    if (needsRescue && !ui.rescued) {
+      setUI(prev => ({ ...prev, rescued: true }));
       if (!rescueToastSent.current) {
         rescueToastSent.current = true;
         addToast({ type: 'rescue', msg: pick(CMT.rescue), detail: `Showing ${backupFixtures.length} games from backup`, dur: 4000 });
       }
     }
-    if (!needsRescue) {
-      setRescued(false);
+    if (!needsRescue && ui.rescued) {
+      setUI(prev => ({ ...prev, rescued: false }));
       rescueToastSent.current = false;
     }
-  }, [primaryFixtures.length, backupFixtures.length, primaryLoading, rescued, addToast]);
+  }, [primaryFixtures.length, backupFixtures.length, primaryLoading, ui.rescued, addToast]);
 
   useEffect(() => {
     if (!welcomeToastShown.current && !primaryLoading && primaryFixtures.length > 0) {
@@ -937,15 +1001,14 @@ export default function MasterGames() {
     }
   }, [primaryFixtures, primaryLoading, addToast]);
 
+  // ★ FIX: Date Picker Override Fix - Reset ALL UI elements on date change
   useEffect(() => {
-    setRescued(false);
     rescueToastSent.current = false;
     welcomeToastShown.current = false;
     setExpanded(null);
-    setShowLiveOnly(false);
     setExpandedLeagues(new Set());
-    setLeagueFilterOpen(false);
     setSearchQ('');
+    setUI(prev => ({ ...prev, rescued: false, leagueFilterOpen: false, moreDatesOpen: false, showLiveOnly: false }));
   }, [selectedDate]);
 
   const allFixtures = useMemo(() => {
@@ -970,15 +1033,14 @@ export default function MasterGames() {
   const displayFixtures = useMemo(() => {
     let list = allFixtures;
     if (compFilter !== 'ALL') list = list.filter(m => String(m.leagueName) === compFilter);
-    if (showLiveOnly) list = list.filter(m => m.isLive);
+    if (ui.showLiveOnly) list = list.filter(m => m.isLive);
     if (normalizedSearch) {
       const terms = normalizedSearch.split(/\s+/).filter(Boolean);
       if (terms.length) list = list.filter(m => matchQ(m, terms));
     }
     return list;
-  }, [allFixtures, compFilter, showLiveOnly, normalizedSearch]);
+  }, [allFixtures, compFilter, ui.showLiveOnly, normalizedSearch]);
 
-  // ★ NEW: Top Matches Detection Logic
   const topMatches = useMemo(() => {
     return allFixtures.filter(m => {
       const home = norm(m.homeName);
@@ -986,12 +1048,7 @@ export default function MasterGames() {
       const isTopHome = [...TOP_TEAMS_SET].some(t => home.includes(t));
       const isTopAway = [...TOP_TEAMS_SET].some(t => away.includes(t));
       return isTopHome || isTopAway;
-    }).sort((a, b) => {
-      // Sort live first, then by time
-      if (a.isLive && !b.isLive) return -1;
-      if (!a.isLive && b.isLive) return 1;
-      return (a.timestamp || 0) - (b.timestamp || 0);
-    });
+    }).sort(sortMatches); // ★ FIX 6: Use extracted sortMatches
   }, [allFixtures]);
 
   const topMatchIds = useMemo(() => new Set(topMatches.map(m => String(m.id))), [topMatches]);
@@ -1000,24 +1057,14 @@ export default function MasterGames() {
     const map = new Map();
     displayFixtures.forEach(m => {
       if (favs.has(String(m.id))) return; 
-      if (topMatchIds.has(String(m.id))) return; // ★ Skip top matches so they don't duplicate
+      if (topMatchIds.has(String(m.id))) return; 
       
       const key = m.leagueName || 'Other';
       if (!map.has(key)) map.set(key, { name: key, logo: m.leagueLogo, matches: [] });
       map.get(key).matches.push(m);
     });
 
-    map.forEach(g => {
-      g.matches.sort((a, b) => {
-        if (a.isLive && !b.isLive) return -1;
-        if (!a.isLive && b.isLive) return 1;
-        if (a.isHT && !b.isHT) return -1;
-        if (!a.isHT && b.isHT) return 1;
-        if (a.isFinished && !b.isFinished) return 1;
-        if (!a.isFinished && b.isFinished) return -1;
-        return (a.timestamp || 0) - (b.timestamp || 0);
-      });
-    });
+    map.forEach(g => g.matches.sort(sortMatches)); // ★ FIX 6: Use extracted sortMatches
 
     return [...map.values()].sort((a, b) => {
       const pA = pinnedLeagues.has(a.name) ? 0 : 1;
@@ -1055,10 +1102,6 @@ export default function MasterGames() {
 
   const topGlobalComps = useMemo(() => globalCompList.filter(c => TOP_5_CODES.includes(c.code)), [globalCompList]);
   const otherGlobalComps = useMemo(() => globalCompList.filter(c => !TOP_5_CODES.includes(c.code)), [globalCompList]);
-  const filteredOtherComps = useMemo(() => {
-    if (!leagueSearchQ.trim()) return otherGlobalComps;
-    return otherGlobalComps.filter(c => (c.name || '').toLowerCase().includes(leagueSearchQ.toLowerCase()));
-  }, [otherGlobalComps, leagueSearchQ]);
 
   const liveCount = useMemo(() => allFixtures.filter(m => m.isLive).length, [allFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favs.has(String(m.id))), [displayFixtures, favs]);
@@ -1107,7 +1150,7 @@ export default function MasterGames() {
     return (backupLive || []).map(m => normalizeMatch(m, false)).filter(m => m.isLive);
   }, [primaryFixtures, backupLive]);
 
-  const { scorePops, flashGoals, statusAnims, confettiKey } = useNotifications({
+  const { matchState, confettiKey } = useNotifications({
     liveMatches,
     isFav,
     tab,
@@ -1161,8 +1204,8 @@ export default function MasterGames() {
           <div className="mg-hdr-actions">
             <button className="mg-hdr-btn" onClick={() => setFontScale(p => Math.max(0.8, p - 0.1))} title="Decrease Font Size"><Minus size={16} /></button>
             <button className="mg-hdr-btn" onClick={() => setFontScale(p => Math.min(1.4, p + 0.1))} title="Increase Font Size"><Plus size={16} /></button>
-            <button className={`mg-hdr-btn ${soundOn ? 'active' : ''}`} onClick={() => setSoundOn(p => !p)} title="Sound">
-              {soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
+            <button className={`mg-hdr-btn ${ui.soundOn ? 'active' : ''}`} onClick={() => toggleUI('soundOn')} title="Sound">
+              {ui.soundOn ? <Volume2 size={18} /> : <VolumeX size={18} />}
             </button>
             <button className="mg-hdr-btn" onClick={handleRefresh} title="Refresh">
               <RefreshCw size={18} className={primaryLoading || backupLoading ? 'mg-spin' : ''} />
@@ -1198,20 +1241,20 @@ export default function MasterGames() {
             Tomorrow
           </button>
           <div className="mg-more-wrap" ref={moreRef}>
-            <button className={`mg-more-btn ${moreDatesOpen ? 'open' : ''}`} onClick={() => setMoreDatesOpen(p => !p)}>
+            <button className={`mg-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}>
               <Calendar size={16} /> More <ChevronDown size={16} />
             </button>
-            {moreDatesOpen && (
+            {ui.moreDatesOpen && (
               <div className="mg-more-dropdown">
                 <div className="mg-more-label">Past Dates</div>
                 {dates.past.map(d => (
-                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
                     {d.label}
                   </button>
                 ))}
                 <div className="mg-more-label" style={{ marginTop: '8px' }}>Future Dates</div>
                 {dates.future.map(d => (
-                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setMoreDatesOpen(false); }}>
+                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
                     {d.label}
                   </button>
                 ))}
@@ -1239,7 +1282,7 @@ export default function MasterGames() {
         {/* ═══ Fixtures Tab ═══ */}
         {tab === 'fixtures' && (
           <>
-            {rescued && (
+            {ui.rescued && (
               <div className="mg-rescue">
                 <div className="mg-rescue-icon">
                   <AlertTriangle size={18} />
@@ -1251,7 +1294,7 @@ export default function MasterGames() {
               </div>
             )}
 
-            {/* ★ NEW: Top Matches Section (Smart Detection) */}
+            {/* Top Matches Section */}
             {topMatches.length > 0 && !searchQ && (
               <div className="mg-section">
                 <div className="mg-league-hd">
@@ -1259,7 +1302,7 @@ export default function MasterGames() {
                   <span className="mg-league-name">Top Matches</span>
                 </div>
                 {topMatches.map((m, i) => 
-                  <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
+                  <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />
                 )}
               </div>
             )}
@@ -1272,7 +1315,7 @@ export default function MasterGames() {
                   <span className="mg-league-name">Trending Live</span>
                 </div>
                 {trendingMatches.map((m, i) => 
-                  <MatchCard key={`trend-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />
+                  <MatchCard key={`trend-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />
                 )}
               </div>
             )}
@@ -1280,20 +1323,20 @@ export default function MasterGames() {
             {/* League Dropdown Filter */}
             {fixtureCompList.length > 0 && (
               <div className="mg-filter-row">
-                <button className="mg-pill" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => setLeagueFilterOpen(p => !p)}>
+                <button className="mg-pill" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => toggleUI('leagueFilterOpen')}>
                   <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {currentLeagueEmblem && <img src={currentLeagueEmblem} alt="" style={{ width: '16px', height: '16px' }} onError={e => { e.target.style.display = 'none'; }} />}
                     {compFilter === 'ALL' ? 'All Leagues' : compFilter}
                   </span>
                   <ChevronDown size={16} />
                 </button>
-                {leagueFilterOpen && (
+                {ui.leagueFilterOpen && (
                   <div className="mg-filter-panel" style={{ position: 'static' }}>
-                    <button className={`mg-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setLeagueFilterOpen(false); }}>
+                    <button className={`mg-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setUI(prev => ({ ...prev, leagueFilterOpen: false })); }}>
                       All Leagues
                     </button>
                     {fixtureCompList.map(c => (
-                      <button key={c.value} className={`mg-filter-item ${compFilter === String(c.value) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.value)); setLeagueFilterOpen(false); }}>
+                      <button key={c.value} className={`mg-filter-item ${compFilter === String(c.value) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.value)); setUI(prev => ({ ...prev, leagueFilterOpen: false })); }}>
                         {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                         {c.name}
                       </button>
@@ -1301,12 +1344,12 @@ export default function MasterGames() {
                   </div>
                 )}
                 <button 
-                  className={`mg-pill ${showLiveOnly ? 'live-active' : ''}`} 
-                  onClick={() => setShowLiveOnly(p => !p)}
+                  className={`mg-pill ${ui.showLiveOnly ? 'live-active' : ''}`} 
+                  onClick={() => toggleUI('showLiveOnly')}
                   style={{ flexShrink: 0, marginTop: '8px', justifyContent: 'center' }}
                 >
-                  {showLiveOnly ? <span className="mg-dot" style={{ background: '#ef4444' }} /> : <Activity size={14} />}
-                  {showLiveOnly ? 'Live Only' : 'Show Live'}
+                  {ui.showLiveOnly ? <span className="mg-dot" style={{ background: '#ef4444' }} /> : <Activity size={14} />}
+                  {ui.showLiveOnly ? 'Live Only' : 'Show Live'}
                 </button>
               </div>
             )}
@@ -1328,7 +1371,7 @@ export default function MasterGames() {
                       <Star size={18} className="mg-fav-icon" />
                       <span className="mg-league-name">Favourites</span>
                     </div>
-                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />)}
                   </div>
                 )}
 
@@ -1341,9 +1384,7 @@ export default function MasterGames() {
                     onNavigate={handleNavigateToMatch}
                     isExpanded={expandedLeagues.has(g.name)} 
                     toggleLeagueExpand={toggleLeagueExpand}
-                    scorePops={scorePops}
-                    flashGoals={flashGoals}
-                    statusAnims={statusAnims}
+                    matchState={matchState}
                     isFav={isFav}
                     onFav={toggleFav}
                     isPinned={pinnedLeagues.has(g.name)}
@@ -1360,9 +1401,7 @@ export default function MasterGames() {
                     onNavigate={handleNavigateToMatch}
                     isExpanded={expandedLeagues.has(g.name)} 
                     toggleLeagueExpand={toggleLeagueExpand}
-                    scorePops={scorePops}
-                    flashGoals={flashGoals}
-                    statusAnims={statusAnims}
+                    matchState={matchState}
                     isFav={isFav}
                     onFav={toggleFav}
                     isPinned={pinnedLeagues.has(g.name)}
@@ -1401,7 +1440,7 @@ export default function MasterGames() {
                   <Star size={18} className="mg-fav-icon" />
                   <span className="mg-league-name">Favourites ({favMatches.length})</span>
                 </div>
-                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} scorePops={scorePops} flashGoals={flashGoals} statusAnims={statusAnims} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />)}
               </div>
             ) : (
               <div className="mg-empty">
@@ -1416,31 +1455,7 @@ export default function MasterGames() {
         {/* ═══ Standings Tab (ALL LEAGUES) ═══ */}
         {tab === 'standings' && (
           <Suspense fallback={<Skeleton count={3} />}>
-            <div className="mg-pill-scroll" style={{ marginBottom: '10px' }}>
-              {topGlobalComps.map(c => (
-                <button key={c.id} className={`mg-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code)}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  {c.code || c.name}
-                </button>
-              ))}
-            </div>
-            <button className="mg-pill" style={{ width: '100%', marginBottom: '10px', borderRadius: '12px', padding: '12px 16px' }} onClick={() => setLeagueSearchOpen(p => !p)}>
-              <Search size={16} />
-              {leagueSearchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
-              <ChevronDown size={16} style={{ marginLeft: 'auto', opacity: 0.6 }} />
-            </button>
-            {leagueSearchOpen && (
-              <div className="mg-filter-panel" style={{ position: 'static', maxHeight: '300px' }}>
-                <input className="mg-search-static" style={{ width: '100%', marginBottom: '10px' }} placeholder="Type league name..." value={leagueSearchQ} onChange={e => setLeagueSearchQ(e.target.value)} />
-                {filteredOtherComps.length === 0 && <div className="mg-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
-                {filteredOtherComps.map(c => (
-                  <button key={c.id} className={`mg-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
-                    {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
 
             {standingsLoading ? (
               <Skeleton count={3} />
@@ -1491,31 +1506,7 @@ export default function MasterGames() {
         {/* ═══ Teams Tab (ALL LEAGUES) ═══ */}
         {tab === 'teams' && (
           <Suspense fallback={<Skeleton count={5} />}>
-            <div className="mg-pill-scroll" style={{ marginBottom: '10px' }}>
-              {topGlobalComps.map(c => (
-                <button key={c.id} className={`mg-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code)}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                  {c.code || c.name}
-                </button>
-              ))}
-            </div>
-            <button className="mg-pill" style={{ width: '100%', marginBottom: '10px', borderRadius: '12px', padding: '12px 16px' }} onClick={() => setLeagueSearchOpen(p => !p)}>
-              <Search size={16} />
-              {leagueSearchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}
-              <ChevronDown size={16} style={{ marginLeft: 'auto', opacity: 0.6 }} />
-            </button>
-            {leagueSearchOpen && (
-              <div className="mg-filter-panel" style={{ position: 'static', maxHeight: '300px' }}>
-                <input className="mg-search-static" style={{ width: '100%', marginBottom: '10px' }} placeholder="Type league name..." value={leagueSearchQ} onChange={e => setLeagueSearchQ(e.target.value)} />
-                {filteredOtherComps.length === 0 && <div className="mg-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
-                {filteredOtherComps.map(c => (
-                  <button key={c.id} className={`mg-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
-                    {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    {c.name}
-                  </button>
-                ))}
-              </div>
-            )}
+            <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
 
             {teamsLoading ? (
               <Skeleton count={5} />

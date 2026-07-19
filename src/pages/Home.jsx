@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// v23.2 — Reactive Architecture, Smart Live Merging, SEO Internal Links
+// v24.0 — Reactive Architecture, Custom Hooks, CSS Refactor
 // ═══════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -24,6 +24,33 @@ import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════
+   CUSTOM HOOKS (Point 5: Extract Firebase logic)
+   ═══════════════════════════════════════ */
+function useNews() {
+  const [posts, setPosts] = useState([]);
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+    const unsub = onSnapshot(q, (snap) => {
+      setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }, (err) => console.error("News fetch error:", err));
+    return () => unsub();
+  }, [db]);
+  return posts;
+}
+
+function useTotalUsers() {
+  const [count, setCount] = useState(null);
+  useEffect(() => {
+    if (!db) return;
+    getDocs(query(collection(db, 'users'), limit(1)))
+      .then(s => { if (!s.empty) setCount(s.docs[0].data().totalUsers || null); })
+      .catch(() => {});
+  }, [db]);
+  return count;
+}
+
+/* ═══════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════ */
 const Sunset = (props) => (
@@ -42,29 +69,18 @@ const getGreeting = () => {
   return { text: 'Good night', icon: <Moon size={16} />, emoji: '🦉' };
 };
 
-const slugify = (text) => {
-  return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-};
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
-// Simplified normalizeMatch because fetchFixtures already transforms the data
 function normalizeMatch(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   const status = raw.status || '';
-  
   return {
-    id, 
-    status,
+    id, status,
     isLive: raw.isLive || isLiveStatus(status, SPORT.FOOTBALL),
     isFinished: raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL),
-    homeTeam: { 
-      name: raw.homeTeam?.name || 'TBD', 
-      shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD' 
-    },
-    awayTeam: { 
-      name: raw.awayTeam?.name || 'TBD', 
-      shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD' 
-    },
+    homeTeam: { name: raw.homeTeam?.name || 'TBD', shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD' },
+    awayTeam: { name: raw.awayTeam?.name || 'TBD', shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD' },
     homeScore: raw.homeScore ?? null,
     awayScore: raw.awayScore ?? null,
     league: { name: raw.league?.name || raw.competition?.name || 'Other' },
@@ -72,6 +88,174 @@ function normalizeMatch(raw) {
     kickoff: raw.kickoff || 'TBD'
   };
 }
+
+/* ═══════════════════════════════════════
+   STYLES (Point 3: Move inline to CSS, Point 7: Reduce Animations)
+   ═══════════════════════════════════════ */
+const injectStyles = () => {
+  if (document.getElementById('home-v24-css')) return;
+  const s = document.createElement('style');
+  s.id = 'home-v24-css';
+  s.textContent = `
+    @keyframes v24-fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+    @keyframes v24-pulse{0%,100%{opacity:1}50%{opacity:.4}}
+    @keyframes v24-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+    @keyframes v24-cta{0%,100%{box-shadow:0 4px 20px rgba(0,230,118,.15)}50%{box-shadow:0 4px 32px rgba(0,230,118,.3)}}
+    @keyframes v24-news-marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
+
+    .v24{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
+    .v24-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
+
+    .v24-hero{padding:32px 0 20px;position:relative;text-align:center;animation:v24-fade-up .4s cubic-bezier(.22,1,.36,1) both}
+    .v24-title{font-size:2.4rem;font-weight:900;letter-spacing:-.03em;margin:0;line-height:1;background:linear-gradient(135deg,var(--text-primary),var(--text-muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
+    .v24-title span{color:var(--accent);-webkit-text-fill-color:var(--accent)}
+    .v24-sub{font-size:.8rem;font-weight:600;color:var(--text-muted);margin:6px 0 0;display:flex;align-items:center;justify-content:center;gap:6px}
+    .v24-title-line{height:3px;width:80px;margin:14px auto 0;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:2px;transform-origin:center;animation:v24-fade-up .8s cubic-bezier(.22,1,.36,1) both}
+
+    .v24-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0 22px}
+    .v24-chip{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
+    .v24-chip:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px)}
+    .v24-chip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display);color:var(--text-primary);line-height:1}
+    .v24-chip .lbl{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
+    .v24-chip .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);margin-top:5px;overflow:hidden}
+    .v24-chip .bar-fill{height:100%;border-radius:2px}
+
+    .v24-sec{margin-bottom:26px}
+    .v24-sech{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+    .v24-sech h2{margin:0;font-size:.92rem;font-weight:900;color:var(--text-primary);white-space:nowrap}
+    .v24-sech-line{flex:1;height:1px;background:var(--border);border-radius:1px}
+    .v24-sech-badge{font-size:.58rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0}
+
+    .v24-strip-header{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+    .v24-strip-title{font-size:.74rem;font-weight:900;display:flex;align-items:center;gap:5px}
+    .v24-strip-link{font-size:.64rem;font-weight:700;color:var(--text-muted);text-decoration:none;display:flex;align-items:center;gap:3px}
+    
+    .v24-livestrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 6px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+    .v24-livestrip::-webkit-scrollbar{display:none}
+    .v24-livemini{min-width:175px;max-width:210px;flex-shrink:0;padding:10px 12px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:12px;scroll-snap-align:start;transition:transform .15s}
+    .v24-livemini:hover{transform:translateY(-1px)}
+    .v24-ldot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:v24-pulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
+    .v24-lm-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}
+    .v24-lm-league{font-size:.6rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+    .v24-lm-status{display:flex;align-items:center;gap:3px;background:rgba(239,68,68,.1);padding:2px 6px;border-radius:4px}
+    .v24-lm-row{display:flex;align-items:center;gap:4px}
+    .v24-lm-name{flex:1;font-size:.7rem;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .v24-lm-score{font-size:.82rem;font-weight:900;font-family:var(--font-display);font-variant-numeric:tabular-nums}
+
+    .v24-mc{display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:6px;transition:all .15s}
+    .v24-mc:hover{background:rgba(255,255,255,.012)}
+    .v24-mc.live{border-color:rgba(239,68,68,.25)}
+    .v24-mc.ft{border-color:rgba(0,230,118,.15)}
+    .v24-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border-color:rgba(245,197,66,.15)}
+    .v24-mc.dim{opacity:.45}
+
+    .v24-mh{display:flex;align-items:center;justify-content:space-between;gap:6px}
+    .v24-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
+    .v24-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
+    .v24-ml span{font-size:.64rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .v24-st{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:.56rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
+
+    .v24-tm{display:flex;align-items:center;gap:6px}
+    .v24-te{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
+    .v24-te.aw{flex-direction:row-reverse;text-align:right}
+    .v24-te img{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0}
+    .v24-te span{font-size:.78rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    .v24-sb{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;min-width:68px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid var(--border)}
+    .v24-sb.lv{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
+    .v24-sb.ft{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
+    .v24-sb.zk{background:rgba(245,197,66,.06);border-color:rgba(245,197,66,.2)}
+    .v24-sn{font-size:.92rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
+    .v24-sn.r{color:#ef4444}.v24-sn.g{color:var(--accent)}.v24-sn.gd{color:var(--gold,#f5c542)}
+    .v24-sep{color:var(--text-muted);font-size:.7rem;font-weight:700;opacity:.25}
+    .v24-vs{font-size:.58rem;font-weight:800;color:var(--text-muted);opacity:.15;letter-spacing:.08em}
+
+    .v24-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
+    .v24-btn{padding:6px 11px;border-radius:8px;font-size:.7rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:32px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none;color:inherit}
+    .v24-btn:active{transform:scale(.97)}
+    .v24-btn-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.15)}
+    .v24-btn-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
+    .v24-btn-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-muted)}
+    .v24-btn-gh:hover{border-color:var(--border-hover);color:var(--text-primary)}
+    .v24-btn-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
+    .v24-btn-ol:hover{border-color:var(--gold);color:var(--gold)}
+    .v24-btn-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.05)}
+
+    .bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.6rem;font-weight:800;white-space:nowrap}
+    .bdg.ex{background:rgba(0,230,118,.08);color:var(--accent);border:1px solid rgba(0,230,118,.18)}
+    .bdg.rs{background:rgba(245,197,66,.06);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.15)}
+    .bdg.ms{background:rgba(239,68,68,.06);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
+    .bdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
+    .bdg.gd{background:rgba(245,197,66,.06);color:var(--gold);border:1px solid rgba(245,197,66,.15)}
+
+    .v24-explore{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+    .v24-ecard{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:all .2s;-webkit-tap-highlight-color:transparent;outline:none}
+    .v24-ecard:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
+    .v24-ecard:active{transform:scale(.98)}
+    .v24-ecard-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
+    .v24-ecard-title{font-size:.8rem;font-weight:800;color:var(--text-primary)}
+    .v24-ecard-sub{font-size:.6rem;color:var(--text-muted)}
+
+    .v24-lbrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px;transition:background .15s}
+    .v24-lbrow:hover{background:rgba(255,255,255,.015)}
+    .v24-lbrow.me{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.15)}
+    .v24-lb-rank{width:28px;text-align:center;font-weight:900;font-family:var(--font-display)}
+    .v24-lb-avatar{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:.64rem;font-weight:800;color:#fff;flex-shrink:0}
+    .v24-lb-info{flex:1;min-width:0}
+    .v24-lb-name{font-size:.76rem;font-weight:700;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .v24-lb-sub{font-size:.6rem;color:var(--text-muted);font-weight:600}
+    .v24-lb-pts{font-size:.8rem;font-weight:900;color:var(--gold);font-family:var(--font-display)}
+
+    .v24-toggle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;margin-top:8px;border-radius:10px;font-size:.78rem;font-weight:700;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
+    .v24-toggle:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:var(--text-primary)}
+    .v24-toggle:active{transform:scale(.98)}
+    .v24-toggle svg{transition:transform .25s}
+    .v24-toggle.open svg{transform:rotate(180deg)}
+
+    .v24-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:v24-shimmer 1.2s ease-in-out infinite;border-radius:10px}
+    .v24-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.76rem;font-weight:700;color:#ef4444}
+
+    .v24-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v24-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none}
+    .v24-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
+    .v24-cta:active{transform:scale(.98)}
+
+    .v24-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
+
+    .v24-news-marquee-wrap { margin: 18px 0 22px; overflow: hidden; position: relative; mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent); -webkit-mask-image: linear-gradient(90deg, transparent, black 5%, black 95%, transparent); }
+    .v24-news-marquee { display: flex; gap: 14px; animation: v24-news-marquee 40s linear infinite; width: max-content; padding: 4px 0; }
+    .v24-news-marquee:hover { animation-play-state: paused; }
+    .v24-newsmini { display: flex; flex-direction: column; min-width: 200px; max-width: 220px; height: 150px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .2s, border-color .2s; position: relative; }
+    .v24-newsmini:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+    .v24-news-img { width: 100%; height: 80px; object-fit: cover; background: var(--bg-surface); }
+    .v24-news-img-ph { width: 100%; height: 80px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02)); color: var(--accent); }
+    .v24-news-body { padding: 8px 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
+    .v24-news-cat { font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; }
+    .v24-news-title { margin: 0; font-size: 0.68rem; font-weight: 700; color: var(--text-primary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
+
+    .v24-podium { display: flex; align-items: flex-end; justify-content: center; gap: 8px; padding: 8px 0 0; }
+    .v24-pod-u { flex: 1; max-width: 120px; display: flex; flex-direction: column; align-items: center; }
+    .v24-pod-info { display: flex; flex-direction: column; align-items: center; margin-bottom: 6px; }
+    .v24-pod-avatar { border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 900; font-family: var(--font-display); }
+    .v24-pod-name { font-size: .7rem; font-weight: 700; color: var(--text-primary); margin-top: 4px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+    .v24-pod-pts { font-size: .62rem; font-weight: 800; font-family: var(--font-display); }
+    .v24-pod-bar { width: 100%; border-radius: 10px 10px 0 0; border-bottom: none; display: flex; align-items: center; justify-content: center; }
+    .v24-pod-num { font-size: 1.1rem; font-weight: 900; font-family: var(--font-display); }
+
+    @media(max-width:640px){
+      .v24-stats{grid-template-columns:repeat(2,1fr);gap:8px}
+      .v24-chip .val{font-size:.95rem}
+      .v24-te span{font-size:.72rem}.v24-sn{font-size:.82rem}
+      .v24-sb{min-width:60px;padding:4px 8px}
+      .v24-title{font-size:2rem}
+    }
+    @media(max-width:380px){
+      .v24-stats{gap:6px}.v24-chip{padding:10px 6px}.v24-chip .val{font-size:.85rem}
+      .v24-ecard{padding:12px}
+    }
+    @media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+  `;
+  document.head.appendChild(s);
+};
 
 /* ═══════════════════════════════════════
    ANIMATED NUMBER
@@ -138,23 +322,23 @@ function MiniPodium({ entries }) {
     { h: 44, border: '#b45309', bg: 'rgba(180,83,9,.04)', color: '#d97706', sz: 32, fs: '.65rem' },
   ];
   return (
-    <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'center', gap: 8, padding: '8px 0 0' }}>
+    <div className="v24-podium">
       {order.map(pos => {
         const u = top3[pos];
         if (!u) return <div key={pos} style={{ flex: 1, maxWidth: 120 }} />;
         const c = cfg[pos];
         return (
-          <div key={u.uid} style={{ flex: 1, maxWidth: 120, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6 }}>
-              {pos === 0 && <Crown size={14} style={{ color: 'var(--gold)', marginBottom: -2, animation: 'v23-crown 3s ease-in-out infinite' }} />}
-              <div style={{ width: c.sz, height: c.sz, borderRadius: '50%', background: `${c.border}15`, border: `2px solid ${c.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: c.fs, fontWeight: 900, color: c.color, fontFamily: 'var(--font-display)' }}>
+          <div key={u.uid} className="v24-pod-u">
+            <div className="v24-pod-info">
+              {pos === 0 && <Crown size={14} style={{ color: 'var(--gold)', marginBottom: -2 }} />}
+              <div className="v24-pod-avatar" style={{ width: c.sz, height: c.sz, background: `${c.border}15`, border: `2px solid ${c.border}`, fontSize: c.fs, color: c.color }}>
                 {(u.displayName || '??').slice(0, 2).toUpperCase()}
               </div>
-              <div style={{ fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', marginTop: 4, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 110 }}>{u.displayName}</div>
-              <div style={{ fontSize: '.62rem', fontWeight: 800, color: c.color, fontFamily: 'var(--font-display)' }}>{u.points} pts</div>
+              <div className="v24-pod-name">{u.displayName}</div>
+              <div className="v24-pod-pts" style={{ color: c.color }}>{u.points} pts</div>
             </div>
-            <div style={{ width: '100%', height: c.h, borderRadius: '10px 10px 0 0', background: c.bg, border: `1px solid ${c.border}22`, borderBottom: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <span style={{ fontSize: '1.1rem', fontWeight: 900, color: c.color, fontFamily: 'var(--font-display)' }}>#{pos + 1}</span>
+            <div className="v24-pod-bar" style={{ height: c.h, background: c.bg, border: `1px solid ${c.border}22` }}>
+              <span className="v24-pod-num" style={{ color: c.color }}>#{pos + 1}</span>
             </div>
           </div>
         );
@@ -162,156 +346,6 @@ function MiniPodium({ entries }) {
     </div>
   );
 }
-
-/* ═══════════════════════════════════════
-   STYLES
-   ═══════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('home-v23-css')) return;
-  const s = document.createElement('style');
-  s.id = 'home-v23-css';
-  s.textContent = `
-@keyframes v23-fade-up{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v23-slide{from{opacity:0;transform:translateX(-10px)}to{opacity:1;transform:translateX(0)}}
-@keyframes v23-pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.5)}}
-@keyframes v23-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes v23-cta{0%,100%{box-shadow:0 4px 20px rgba(0,230,118,.15)}50%{box-shadow:0 4px 32px rgba(0,230,118,.3)}}
-@keyframes v23-crown{0%,100%{transform:translateY(0) rotate(-3deg)}50%{transform:translateY(-3px) rotate(3deg)}}
-@keyframes v23-live-glow{0%,100%{border-color:rgba(239,68,68,.12)}50%{border-color:rgba(239,68,68,.3)}}
-@keyframes v23-zoka-glow{0%,100%{border-color:rgba(245,197,66,.15)}50%{border-color:rgba(245,197,66,.3)}}
-@keyframes v23-bar{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes v23-strip{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v23-card{from{opacity:0;transform:translateY(6px) scale(.99)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes v23-title-line{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
-@keyframes v23-news-marquee { 0% { transform: translateX(0%); } 100% { transform: translateX(-50%); } }
-
-.v23{min-height:100vh;background:var(--bg-primary,#0a0a0b);overflow-x:hidden}
-.v23-wrap{max-width:660px;margin:0 auto;padding:0 16px;position:relative}
-
-.v23-hero{padding:32px 0 20px;position:relative;text-align:center}
-.v23-title{font-size:2.4rem;font-weight:900;letter-spacing:-.03em;margin:0;line-height:1;background:linear-gradient(135deg,var(--text-primary),var(--text-muted));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
-.v23-title span{color:var(--accent);-webkit-text-fill-color:var(--accent)}
-.v23-sub{font-size:.8rem;font-weight:600;color:var(--text-muted);margin:6px 0 0;display:flex;align-items:center;justify-content:center;gap:6px}
-.v23-title-line{height:3px;width:80px;margin:14px auto 0;background:linear-gradient(90deg,var(--accent),var(--gold));border-radius:2px;transform-origin:center;animation:v23-title-line .8s cubic-bezier(.22,1,.36,1) both}
-
-.v23-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:18px 0 22px}
-.v23-chip{background:var(--bg-card);border:1px solid var(--border);border-radius:12px;padding:12px 8px;text-align:center;transition:all .2s;position:relative;overflow:hidden}
-.v23-chip:hover{border-color:rgba(255,255,255,.1);transform:translateY(-1px)}
-.v23-chip .val{font-size:1.1rem;font-weight:900;font-family:var(--font-display);color:var(--text-primary);line-height:1}
-.v23-chip .lbl{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:3px}
-.v23-chip .bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);margin-top:5px;overflow:hidden}
-.v23-chip .bar-fill{height:100%;border-radius:2px;transform-origin:left;animation:v23-bar .6s cubic-bezier(.22,1,.36,1) both}
-
-.v23-sec{margin-bottom:26px}
-.v23-sech{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.v23-sech h2{margin:0;font-size:.92rem;font-weight:900;color:var(--text-primary);white-space:nowrap}
-.v23-sech-line{flex:1;height:1px;background:var(--border);border-radius:1px}
-.v23-sech-badge{font-size:.58rem;font-weight:800;padding:3px 8px;border-radius:6px;text-transform:uppercase;letter-spacing:.03em;flex-shrink:0}
-
-.v23-livestrip{display:flex;gap:10px;overflow-x:auto;padding:0 0 6px;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.v23-livestrip::-webkit-scrollbar{display:none}
-.v23-livemini{min-width:175px;max-width:210px;flex-shrink:0;padding:10px 12px;background:var(--bg-card);border:1.5px solid rgba(239,68,68,.15);border-radius:12px;scroll-snap-align:start;animation:v23-live-glow 2s ease-in-out infinite,v23-strip .35s cubic-bezier(.22,1,.36,1) both;transition:transform .15s}
-.v23-livemini:hover{transform:translateY(-1px)}
-.v23-ldot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:v23-pulse 1.2s infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
-
-.v23-mc{display:flex;flex-direction:column;gap:7px;padding:12px 14px;border-radius:12px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:6px;transition:all .15s;animation:v23-card .3s cubic-bezier(.22,1,.36,1) both}
-.v23-mc:hover{background:rgba(255,255,255,.012)}
-.v23-mc.live{animation:v23-live-glow 2s ease-in-out infinite,v23-card .3s cubic-bezier(.22,1,.36,1) both}
-.v23-mc.ft{border-color:rgba(0,230,118,.15)}
-.v23-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border-color:rgba(245,197,66,.15);animation:v23-zoka-glow 2.5s ease-in-out infinite,v23-card .3s cubic-bezier(.22,1,.36,1) both}
-.v23-mc.dim{opacity:.45}
-
-.v23-mh{display:flex;align-items:center;justify-content:space-between;gap:6px}
-.v23-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
-.v23-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
-.v23-ml span{font-size:.64rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.v23-st{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:5px;font-size:.56rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
-
-.v23-tm{display:flex;align-items:center;gap:6px}
-.v23-te{flex:1;display:flex;align-items:center;gap:6px;min-width:0}
-.v23-te.aw{flex-direction:row-reverse;text-align:right}
-.v23-te img{width:22px;height:22px;border-radius:5px;object-fit:contain;flex-shrink:0}
-.v23-te span{font-size:.78rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.v23-sb{display:flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;min-width:68px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid var(--border)}
-.v23-sb.lv{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
-.v23-sb.ft{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.1)}
-.v23-sb.zk{background:rgba(245,197,66,.06);border-color:rgba(245,197,66,.2)}
-.v23-sn{font-size:.92rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
-.v23-sn.r{color:#ef4444}.v23-sn.g{color:var(--accent)}.v23-sn.gd{color:var(--gold,#f5c542)}
-.v23-sep{color:var(--text-muted);font-size:.7rem;font-weight:700;opacity:.25}
-.v23-vs{font-size:.58rem;font-weight:800;color:var(--text-muted);opacity:.15;letter-spacing:.08em}
-
-.v23-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
-
-.v23-btn{padding:6px 11px;border-radius:8px;font-size:.7rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:32px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none;color:inherit}
-.v23-btn:active{transform:scale(.97)}
-.v23-btn-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 8px rgba(16,185,129,.15)}
-.v23-btn-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
-.v23-btn-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-muted)}
-.v23-btn-gh:hover{border-color:var(--border-hover);color:var(--text-primary)}
-.v23-btn-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
-.v23-btn-ol:hover{border-color:var(--gold);color:var(--gold)}
-.v23-btn-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.05)}
-
-.bdg{display:inline-flex;align-items:center;gap:3px;padding:2px 7px;border-radius:5px;font-size:.6rem;font-weight:800;white-space:nowrap}
-.bdg.ex{background:rgba(0,230,118,.08);color:var(--accent);border:1px solid rgba(0,230,118,.18)}
-.bdg.rs{background:rgba(245,197,66,.06);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.15)}
-.bdg.ms{background:rgba(239,68,68,.06);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
-.bdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
-.bdg.gd{background:rgba(245,197,66,.06);color:var(--gold);border:1px solid rgba(245,197,66,.15)}
-
-.v23-explore{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-.v23-ecard{display:flex;flex-direction:column;gap:10px;padding:14px;background:var(--bg-card);border:1.5px solid var(--border);border-radius:14px;text-decoration:none;color:inherit;position:relative;overflow:hidden;transition:all .2s;-webkit-tap-highlight-color:transparent;outline:none}
-.v23-ecard:hover{border-color:rgba(255,255,255,.12);transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.1)}
-.v23-ecard:active{transform:scale(.98)}
-.v23-ecard-accent{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
-
-.v23-lbrow{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:5px;animation:v23-slide .3s cubic-bezier(.22,1,.36,1) both;transition:background .15s}
-.v23-lbrow:hover{background:rgba(255,255,255,.015)}
-.v23-lbrow.me{background:rgba(0,230,118,.04);border-color:rgba(0,230,118,.15)}
-
-.v23-toggle{display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:10px;margin-top:8px;border-radius:10px;font-size:.78rem;font-weight:700;background:rgba(255,255,255,.02);border:1.5px dashed var(--border);color:var(--text-muted);cursor:pointer;transition:all .2s;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.v23-toggle:hover{background:rgba(255,255,255,.04);border-color:rgba(255,255,255,.1);color:var(--text-primary)}
-.v23-toggle:active{transform:scale(.98)}
-.v23-toggle svg{transition:transform .25s}
-.v23-toggle.open svg{transform:rotate(180deg)}
-
-.v23-skel{background:linear-gradient(90deg,var(--bg-surface) 25%,rgba(255,255,255,.03) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:v23-shimmer 1.2s ease-in-out infinite;border-radius:10px}
-
-.v23-offline{display:flex;align-items:center;justify-content:center;gap:8px;padding:8px 16px;background:rgba(239,68,68,.06);border-bottom:1px solid rgba(239,68,68,.15);font-size:.76rem;font-weight:700;color:#ef4444}
-
-.v23-cta{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 24px;border-radius:14px;background:var(--accent,#10b981);color:#fff;font-weight:900;font-size:.88rem;border:none;box-shadow:0 4px 20px rgba(0,230,118,.18);cursor:pointer;transition:all .2s;font-family:inherit;animation:v23-cta 3s ease-in-out infinite;-webkit-tap-highlight-color:transparent;text-decoration:none}
-.v23-cta:hover{transform:translateY(-2px);box-shadow:0 6px 24px rgba(0,230,118,.25)}
-.v23-cta:active{transform:scale(.98)}
-
-.v23-zoka-wrap{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 50%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:6px}
-
-.v23-news-marquee { display: flex; gap: 14px; animation: v23-news-marquee 40s linear infinite; width: max-content; padding: 4px 0; }
-.v23-news-marquee:hover { animation-play-state: paused; }
-.v23-newsmini { display: flex; flex-direction: column; min-width: 200px; max-width: 220px; height: 150px; background: var(--bg-card); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; text-decoration: none; color: inherit; transition: transform .2s, border-color .2s; position: relative; }
-.v23-newsmini:hover { transform: translateY(-2px); border-color: rgba(59,130,246,0.4); box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
-.v23-news-img { width: 100%; height: 80px; object-fit: cover; background: var(--bg-surface); }
-.v23-news-img-ph { width: 100%; height: 80px; display: flex; align-items: center; justify-content: center; background: linear-gradient(135deg, rgba(59,130,246,0.1), rgba(59,130,246,0.02)); color: var(--accent); }
-.v23-news-body { padding: 8px 10px; flex: 1; display: flex; flex-direction: column; gap: 4px; overflow: hidden; }
-.v23-news-cat { font-size: 0.55rem; font-weight: 800; text-transform: uppercase; color: var(--accent); letter-spacing: 0.05em; }
-.v23-news-title { margin: 0; font-size: 0.68rem; font-weight: 700; color: var(--text-primary); line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-overflow: ellipsis; }
-
-@media(max-width:640px){
-  .v23-stats{grid-template-columns:repeat(2,1fr);gap:8px}
-  .v23-chip .val{font-size:.95rem}
-  .v23-te span{font-size:.72rem}.v23-sn{font-size:.82rem}
-  .v23-sb{min-width:60px;padding:4px 8px}
-  .v23-title{font-size:2rem}
-}
-@media(max-width:380px){
-  .v23-stats{gap:6px}.v23-chip{padding:10px 6px}.v23-chip .val{font-size:.85rem}
-  .v23-ecard{padding:12px}
-}
-@media(prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-  `;
-  document.head.appendChild(s);
-};
 
 /* ═══════════════════════════════════════
    LIVE MINI CARD
@@ -322,25 +356,25 @@ const LiveMini = ({ match, index }) => {
   const hasScore = match.homeScore != null && match.awayScore != null;
   
   return (
-    <div className="v23-livemini" style={{ animationDelay: `${index * 60}ms`, borderColor: isLive ? 'rgba(239,68,68,.15)' : 'var(--border)' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{match.league?.name}</span>
+    <div className="v24-livemini" style={{ borderColor: isLive ? 'rgba(239,68,68,.15)' : 'var(--border)' }}>
+      <div className="v24-lm-top">
+        <span className="v24-lm-league">{match.league?.name}</span>
         {isLive && min ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 3, background: 'rgba(239,68,68,.1)', padding: '2px 6px', borderRadius: 4 }}>
-            <span className="v23-ldot" style={{ width: 4, height: 4 }} />
+          <div className="v24-lm-status">
+            <span className="v24-ldot" style={{ width: 4, height: 4 }} />
             <span style={{ fontSize: '.6rem', fontWeight: 900, color: '#ef4444', fontFamily: 'var(--font-display)' }}>{min}'</span>
           </div>
         ) : (
           <div style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{match.kickoff || 'VS'}</div>
         )}
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.homeTeam?.shortName || match.homeTeam?.name}</span>
-        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{hasScore ? match.homeScore : '-'}</span>
+      <div className="v24-lm-row">
+        <span className="v24-lm-name">{match.homeTeam?.shortName || match.homeTeam?.name}</span>
+        <span className="v24-lm-score" style={{ color: isLive ? '#ef4444' : 'var(--text-primary)' }}>{hasScore ? match.homeScore : '-'}</span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
-        <span style={{ flex: 1, fontSize: '.7rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{match.awayTeam?.shortName || match.awayTeam?.name}</span>
-        <span style={{ fontSize: '.82rem', fontWeight: 900, fontFamily: 'var(--font-display)', color: isLive ? '#ef4444' : 'var(--text-primary)', fontVariantNumeric: 'tabular-nums' }}>{hasScore ? match.awayScore : '-'}</span>
+      <div className="v24-lm-row" style={{ marginTop: 1 }}>
+        <span className="v24-lm-name">{match.awayTeam?.shortName || match.awayTeam?.name}</span>
+        <span className="v24-lm-score" style={{ color: isLive ? '#ef4444' : 'var(--text-primary)' }}>{hasScore ? match.awayScore : '-'}</span>
       </div>
     </div>
   );
@@ -372,43 +406,43 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
   else if (isHT) { sLabel = 'HT'; sColor = '#f97316'; sBg = 'rgba(249,115,22,.1)'; }
   else if (isFin) { sLabel = 'FT'; sColor = 'var(--accent)'; sBg = 'rgba(0,230,118,.08)'; }
 
-  const cls = `v23-mc${isLive ? ' live' : ''}${isFin ? ' ft' : ''}${isFin && !isResolved && !isPredicted ? ' dim' : ''}`;
+  const cls = `v24-mc${isLive ? ' live' : ''}${isFin ? ' ft' : ''}${isFin && !isResolved && !isPredicted ? ' dim' : ''}`;
   const mid = pred.id || pred.matchId;
 
   return (
-    <div className={cls} style={{ borderLeft: `3px solid ${border}`, animationDelay: `${index * 18}ms` }}>
-      <div className="v23-mh">
-        <div className="v23-ml">
+    <div className={cls} style={{ borderLeft: `3px solid ${border}` }}>
+      <div className="v24-mh">
+        <div className="v24-ml">
           {pred.league?.emblem && <img src={pred.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.league?.name || 'Featured'}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          {isLive && <span className="v23-ldot" />}
-          <span className="v23-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
+          {isLive && <span className="v24-ldot" />}
+          <span className="v24-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
         </div>
       </div>
-      <div className="v23-tm">
-        <div className="v23-te">
+      <div className="v24-tm">
+        <div className="v24-te">
           {pred.homeLogo && <img src={pred.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home'}</span>
         </div>
-        <div className={`v23-sb${isLive ? ' lv' : ''}${isFin ? ' ft' : ''}`}>
+        <div className={`v24-sb${isLive ? ' lv' : ''}${isFin ? ' ft' : ''}`}>
           {hasScore ? (
             <>
-              <span className={`v23-sn${isLive ? ' r' : ' g'}`}>{pred.homeScore}</span>
-              <span className="v23-sep">–</span>
-              <span className={`v23-sn${isLive ? ' r' : ' g'}`}>{pred.awayScore}</span>
+              <span className={`v24-sn${isLive ? ' r' : ' g'}`}>{pred.homeScore}</span>
+              <span className="v24-sep">–</span>
+              <span className={`v24-sn${isLive ? ' r' : ' g'}`}>{pred.awayScore}</span>
             </>
           ) : (
-            <span className="v23-vs">VS</span>
+            <span className="v24-vs">VS</span>
           )}
         </div>
-        <div className="v23-te aw">
+        <div className="v24-te aw">
           {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'}</span>
         </div>
       </div>
-      <div className="v23-ma">
+      <div className="v24-ma">
         {isResolved ? (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
             <span className={`bdg ${isExact ? 'ex' : isHit ? 'rs' : 'ms'}`}>
@@ -417,11 +451,11 @@ const FeaturedRow = ({ pred, userPred, userResult, index, isLoggedIn }) => {
             {isPredicted && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>You: {userPred.homeScore}–{userPred.awayScore}</span>}
           </div>
         ) : isPredicted ? (
-          <Link to="/predictions" className="v23-btn v23-btn-ol on" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><CheckCircle size={9} /> Locked</Link>
+          <Link to="/predictions" className="v24-btn v24-btn-ol on" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><CheckCircle size={9} /> Locked</Link>
         ) : isLoggedIn ? (
-          <Link to={`/predictions?match=${mid}`} className="v23-btn v23-btn-p" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Target size={9} /> Predict</Link>
+          <Link to={`/predictions?match=${mid}`} className="v24-btn v24-btn-p" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Target size={9} /> Predict</Link>
         ) : (
-          <Link to="/login" className="v23-btn v23-btn-gh" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Lock size={9} /> Login</Link>
+          <Link to="/login" className="v24-btn v24-btn-gh" style={{ minHeight: 30, fontSize: '.64rem', padding: '4px 9px' }}><Lock size={9} /> Login</Link>
         )}
       </div>
     </div>
@@ -440,30 +474,30 @@ const ZokaRow = ({ pick, index }) => {
   const predH = pick.adminPick?.home, predA = pick.adminPick?.away;
 
   return (
-    <div className="v23-mc zoka" style={{ animationDelay: `${index * 25}ms` }}>
-      <div className="v23-mh">
-        <div className="v23-ml">
+    <div className="v24-mc zoka">
+      <div className="v24-mh">
+        <div className="v24-ml">
           {pick.league?.emblem && <img src={pick.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.league?.name || 'Zoka'}</span>
         </div>
-        <span className="v23-st" style={{ color: isFin ? 'var(--accent)' : 'var(--text-muted)', background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)' }}>{isFin ? 'FT' : ko || 'TBD'}</span>
+        <span className="v24-st" style={{ color: isFin ? 'var(--accent)' : 'var(--text-muted)', background: isFin ? 'rgba(0,230,118,.08)' : 'rgba(255,255,255,.04)' }}>{isFin ? 'FT' : ko || 'TBD'}</span>
       </div>
-      <div className="v23-tm">
-        <div className="v23-te">
+      <div className="v24-tm">
+        <div className="v24-te">
           {pick.homeLogo && <img src={pick.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.homeTeam?.shortName || pick.homeTeam?.name || '?'}</span>
         </div>
-        <div className={`v23-sb${isFin ? ' ft' : ' zk'}`}>
+        <div className={`v24-sb${isFin ? ' ft' : ' zk'}`}>
           {isFin && pick.homeScore != null
-            ? <><span className="v23-sn g">{pick.homeScore}</span><span className="v23-sep">–</span><span className="v23-sn g">{pick.awayScore}</span></>
-            : <span className="v23-sn gd">{predH ?? '?'}–{predA ?? '?'}</span>}
+            ? <><span className="v24-sn g">{pick.homeScore}</span><span className="v24-sep">–</span><span className="v24-sn g">{pick.awayScore}</span></>
+            : <span className="v24-sn gd">{predH ?? '?'}–{predA ?? '?'}</span>}
         </div>
-        <div className="v23-te aw">
+        <div className="v24-te aw">
           {pick.awayLogo && <img src={pick.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
           <span>{pick.awayTeam?.shortName || pick.awayTeam?.name || '?'}</span>
         </div>
       </div>
-      <div className="v23-ma">
+      <div className="v24-ma">
         {isFin ? <ZokaBadge pick={pick} /> : <span className="bdg gd"><Star size={8} fill="currentColor" /> Prediction</span>}
       </div>
     </div>
@@ -474,7 +508,9 @@ const ZokaRow = ({ pick, index }) => {
    MAIN COMPONENT
    ═══════════════════════════════════════ */
 export default function Home() {
-  injectStyles();
+  // Point 6: Move injectStyles to useEffect
+  useEffect(() => { injectStyles(); }, []);
+
   const { currentUser, userProfile } = useAuth();
   const isLoggedIn = !!currentUser;
   const uid = currentUser?.uid;
@@ -497,12 +533,14 @@ export default function Home() {
   const [primaryFixtures, setPrimaryFixtures] = useState([]);
   const [fxLoading, setFxLoading] = useState(true);
   const [offline, setOffline] = useState(!navigator.onLine);
-  const [showMoreFeat, setShowMoreFeat] = useState(false);
-  const [showMoreZoka, setShowMoreZoka] = useState(false);
-  const [showMoreLB, setShowMoreLB] = useState(false);
-  const [totalUsers, setTotalUsers] = useState(null);
   
-  const [newsPosts, setNewsPosts] = useState([]);
+  // Point 4: Grouped UI State
+  const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
+  const toggleUI = (key) => setUI(prev => ({ ...prev, [key]: !prev[key] }));
+  
+  // Point 5: Use custom hooks instead of useState + useEffect for Firebase
+  const totalUsers = useTotalUsers();
+  const newsPosts = useNews();
 
   const { fixtures: backupRaw } = useFootballData();
 
@@ -518,23 +556,6 @@ export default function Home() {
     return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
   }, []);
 
-  useEffect(() => {
-    if (!db) return;
-    getDocs(query(collection(db, 'users'), limit(1))).then(s => {
-      if (!s.empty && mounted.current) setTotalUsers(s.docs[0].data().totalUsers || null);
-    }).catch(() => {});
-  }, [db]);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
-    const unsub = onSnapshot(q, (snap) => {
-      if (mounted.current) setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }, (err) => console.error("News fetch error:", err));
-    return () => unsub();
-  }, [db]);
-
-  // ★ ROBUST FIXTURE FETCHING & LIVE MERGING
   useEffect(() => {
     let mnt = true;
     (async () => {
@@ -571,22 +592,17 @@ export default function Home() {
   }, [primaryFixtures, backupRaw]);
 
   const liveMatches = useMemo(() => allFixtures.filter(f => f.isLive || isLiveStatus(f.status, SPORT.FOOTBALL)), [allFixtures]);
-  
-  // Fallback to all fixtures if no live matches
   const stripMatches = liveMatches.length > 0 ? liveMatches : allFixtures.slice(0, 10);
 
-  const zokaFlat = useMemo(() => {
-    const matches = zokaPicks?.matches || [];
-    return matches.map(m => ({ ...m, _d: getTodayStr() }));
-  }, [zokaPicks]);
-  const zokaVis = showMoreZoka ? zokaFlat : zokaFlat.slice(0, 4);
+  const zokaFlat = useMemo(() => (zokaPicks?.matches || []).map(m => ({ ...m, _d: getTodayStr() })), [zokaPicks]);
+  const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
   const featFlat = useMemo(() => (activePredictions || []).map(m => ({ ...m, _d: getTodayStr() })), [activePredictions]);
-  const featVis = showMoreFeat ? featFlat : featFlat.slice(0, 5);
+  const featVis = ui.showFeat ? featFlat : featFlat.slice(0, 5);
   const featHidden = Math.max(0, featFlat.length - 5);
 
-  const lbVis = showMoreLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
+  const lbVis = ui.showLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
   const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
 
   const userPredMap = useMemo(() => {
@@ -601,73 +617,69 @@ export default function Home() {
     return m;
   }, [predictionResults]);
 
-  const myPredicted = useMemo(() => {
-    return (activePredictions || []).filter(p => userPredMap[p.id || p.matchId]).length;
-  }, [activePredictions, userPredMap]);
+  const myPredicted = useMemo(() => (activePredictions || []).filter(p => userPredMap[p.id || p.matchId]).length, [activePredictions, userPredMap]);
 
   useEffect(() => { return () => { mounted.current = false; }; }, []);
 
   return (
-    <div className="v23">
+    <div className="v24">
       <SEO title="Football Predictions, Fixtures & Live Scores — ZOKASCORE" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKASCORE" path="/" />
 
-      {offline && <div className="v23-offline"><WifiOff size={14} /> You're offline — showing cached data</div>}
+      {offline && <div className="v24-offline"><WifiOff size={14} /> You're offline — showing cached data</div>}
 
-      <div className="v23-wrap">
+      <div className="v24-wrap">
         {/* ANIMATED TITLE */}
-        <section className="v23-hero">
-          <div style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) both' }}>
-            <h1 className="v23-title">ZOKA<span>SCORE</span></h1>
-            <p className="v23-sub">
-              {greeting.emoji} {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName.split(' ')[0]}` : ''}! {greeting.icon}
-            </p>
-          </div>
-          <div className="v23-title-line" />
+        <section className="v24-hero">
+          <h1 className="v24-title">ZOKA<span>SCORE</span></h1>
+          <p className="v24-sub">
+            {greeting.emoji} {greeting.text}{userProfile?.displayName ? `, ${userProfile.displayName.split(' ')[0]}` : ''}! {greeting.icon}
+          </p>
+          <div className="v24-title-line" />
         </section>
 
         {/* MATCH STRIP (Live or Upcoming) */}
         {fxLoading ? (
-          <div className="v23-livestrip">
-            {[1, 2, 3, 4].map(i => <div key={i} className="v23-skel" style={{ minWidth: 175, height: 80, borderRadius: 12, marginRight: 10 }} />)}
+          <div className="v24-livestrip">
+            {[1, 2, 3, 4].map(i => <div key={i} className="v24-skel" style={{ minWidth: 175, height: 80, borderRadius: 12, marginRight: 10 }} />)}
           </div>
         ) : stripMatches.length > 0 && (
-          <div style={{ margin: '16px 0 0', animation: 'v23-fade-up .4s cubic-bezier(.22,1,.36,1) both' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <div style={{ margin: '16px 0 0' }}>
+            <div className="v24-strip-header">
               {liveMatches.length > 0 ? (
                 <>
-                  <span className="v23-ldot" />
-                  <span style={{ fontSize: '.74rem', fontWeight: 900, color: '#ef4444' }}>{liveMatches.length} LIVE</span>
+                  <span className="v24-ldot" />
+                  <span className="v24-strip-title" style={{ color: '#ef4444' }}>{liveMatches.length} LIVE</span>
                 </>
               ) : (
-                <span style={{ fontSize: '.74rem', fontWeight: 900, color: 'var(--text-muted)' }}>TODAY'S MATCHES</span>
+                <span className="v24-strip-title" style={{ color: 'var(--text-muted)' }}>TODAY'S MATCHES</span>
               )}
-              <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
-              <Link to="/fixtures" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>View all <ChevronRight size={11} /></Link>
+              <div className="v24-sech-line" />
+              <Link to="/fixtures" className="v24-strip-link">View all <ChevronRight size={11} /></Link>
             </div>
-            <div className="v23-livestrip">{stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
+            <div className="v24-livestrip">{stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)}</div>
           </div>
         )}
 
         {/* LATEST NEWS MARQUEE */}
         {newsPosts.length > 0 && (
-          <div style={{ margin: '18px 0 22px', animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 120ms both', overflow: 'hidden', position: 'relative', maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div className="v24-news-marquee-wrap">
+            <div className="v24-strip-header">
               <Newspaper size={14} style={{ color: 'var(--accent)' }} />
-              <span style={{ fontSize: '.74rem', fontWeight: 900, color: 'var(--text-primary)' }}>LATEST NEWS</span>
-              <div style={{ flex: 1, height: 1, background: 'var(--border)', borderRadius: 1 }} />
-              <Link to="/highlights" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3 }}>Hub <ChevronRight size={11} /></Link>
+              <span className="v24-strip-title">LATEST NEWS</span>
+              <div className="v24-sech-line" />
+              <Link to="/highlights" className="v24-strip-link">Hub <ChevronRight size={11} /></Link>
             </div>
-            <div className="v23-news-marquee">
+            <div className="v24-news-marquee">
               {[...newsPosts, ...newsPosts].map((post, i) => (
-                <Link to={`/highlights/${slugify(post.title)}-${post.id}`} key={`${post.id}-${i}`} className="v23-newsmini">
+                <Link to={`/highlights/${slugify(post.title)}-${post.id}`} key={`${post.id}-${i}`} className="v24-newsmini">
                   {post.imageUrl ? (
-                    <img src={post.imageUrl} alt={post.title} className="v23-news-img" />
+                    <img src={post.imageUrl} alt={post.title} className="v24-news-img" />
                   ) : (
-                    <div className="v23-news-img-ph"><Newspaper size={18} /></div>
+                    <div className="v24-news-img-ph"><Newspaper size={18} /></div>
                   )}
-                  <div className="v23-news-body">
-                    <span className="v23-news-cat">{post.category}</span>
-                    <h4 className="v23-news-title">{post.title}</h4>
+                  <div className="v24-news-body">
+                    <span className="v24-news-cat">{post.category}</span>
+                    <h4 className="v24-news-title">{post.title}</h4>
                   </div>
                 </Link>
               ))}
@@ -676,62 +688,62 @@ export default function Home() {
         )}
 
         {/* STATS STRIP */}
-        <div className="v23-stats" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 150ms both' }}>
-          <div className="v23-chip">
+        <div className="v24-stats">
+          <div className="v24-chip">
             <div className="val"><AnimNum value={totalUsers || dailyStats?.players || 0} delay={200} /></div>
             <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, ((dailyStats?.players || 0) || (totalUsers || 0)) / 5)}%`, background: '#60a5fa', animationDelay: '400ms' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, ((dailyStats?.players || 0) || (totalUsers || 0)) / 5)}%`, background: '#60a5fa' }} /></div>
           </div>
-          <div className="v23-chip">
+          <div className="v24-chip">
             <div className="val"><AnimNum value={dailyStats?.preds || 0} delay={280} /></div>
             <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (dailyStats?.preds || 0) / 10)}%`, background: 'var(--gold)', animationDelay: '500ms' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (dailyStats?.preds || 0) / 10)}%`, background: 'var(--gold)' }} /></div>
           </div>
-          <div className="v23-chip" style={{ position: 'relative' }}>
+          <div className="v24-chip" style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', right: 8, top: 8 }}><AccuracyRing value={dailyStats?.avg ? parseFloat(dailyStats.avg) : 0} size={36} stroke={3} color={(dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 50 ? 'var(--accent)' : (dailyStats?.avg ? parseFloat(dailyStats.avg) : 0) >= 25 ? 'var(--gold)' : '#ef4444'} /></div>
             <div className="val" style={{ fontSize: '.92rem' }}><AnimNum value={dailyStats?.avg ? Math.round(parseFloat(dailyStats.avg)) : 0} delay={360} suffix="%" /></div>
             <div className="lbl">Accuracy</div>
           </div>
-          <div className="v23-chip">
+          <div className="v24-chip">
             <div className="val" style={{ color: isLoggedIn ? 'var(--accent)' : 'var(--text-muted)' }}>
               {isLoggedIn ? <AnimNum value={userStats?.todayPoints || 0} delay={440} /> : '—'}
             </div>
             <div className="lbl">My Points</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (userStats?.todayPoints || 0) / 5)}%`, background: 'var(--accent)', animationDelay: '600ms' }} /></div>}
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: `${Math.min(100, (userStats?.todayPoints || 0) / 5)}%`, background: 'var(--accent)' }} /></div>}
           </div>
         </div>
 
         {/* ZOKA PICKS */}
         {!ctxLoading && zokaFlat.length > 0 && (
-          <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 200ms both' }}>
-            <div className="v23-sech">
+          <div className="v24-sec">
+            <div className="v24-sech">
               <Star size={14} style={{ color: 'var(--gold)' }} />
               <h2>Zoka Picks</h2>
-              <span className="v23-sech-badge" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.15)' }}>{zokaFlat.length}</span>
-              <div className="v23-sech-line" />
+              <span className="v24-sech-badge" style={{ background: 'rgba(245,197,66,.08)', color: 'var(--gold)', border: '1px solid rgba(245,197,66,.15)' }}>{zokaFlat.length}</span>
+              <div className="v24-sech-line" />
             </div>
-            <div className="v23-zoka-wrap">
+            <div className="v24-zoka-wrap">
               {zokaVis.map((p, i) => <ZokaRow key={p.matchId || i} pick={p} index={i} />)}
             </div>
             {zokaHidden > 0 && (
-              <button className={`v23-toggle${showMoreZoka ? ' open' : ''}`} onClick={() => setShowMoreZoka(p => !p)}>
-                {showMoreZoka ? 'Show less' : `Show ${zokaHidden} more`} <ChevronDown size={13} />
+              <button className={`v24-toggle${ui.showZoka ? ' open' : ''}`} onClick={() => toggleUI('showZoka')}>
+                {ui.showZoka ? 'Show less' : `Show ${zokaHidden} more`} <ChevronDown size={13} />
               </button>
             )}
           </div>
         )}
 
         {/* FEATURED MATCHES */}
-        <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 250ms both' }}>
-          <div className="v23-sech">
+        <div className="v24-sec">
+          <div className="v24-sech">
             <Target size={14} style={{ color: 'var(--accent)' }} />
             <h2>Featured — Compete</h2>
-            <span className="v23-sech-badge" style={{ background: 'rgba(0,230,118,.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.15)' }}>{featFlat.length}</span>
+            <span className="v24-sech-badge" style={{ background: 'rgba(0,230,118,.08)', color: 'var(--accent)', border: '1px solid rgba(0,230,118,.15)' }}>{featFlat.length}</span>
             {isLoggedIn && <span style={{ fontSize: '.6rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{featFlat.length} predicted</span>}
-            <div className="v23-sech-line" />
+            <div className="v24-sech-line" />
           </div>
           {ctxLoading ? (
-            <div>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="v23-skel" style={{ height: 90, marginBottom: 6, animationDelay: `${i * 60}ms` }} />)}</div>
+            <div>{Array.from({ length: 4 }).map((_, i) => <div key={i} className="v24-skel" style={{ height: 90, marginBottom: 6 }} />)}</div>
           ) : featVis.length > 0 ? (
             featVis.map((p, i) => <FeaturedRow key={p.id || String(p.matchId) || i} pred={p} userPred={userPredMap[p.id || p.matchId]} userResult={resultMap[String(p.matchId || p.id)]} index={i} isLoggedIn={isLoggedIn} />)
           ) : (
@@ -741,22 +753,22 @@ export default function Home() {
             </div>
           )}
           {featHidden > 0 && (
-            <button className={`v23-toggle${showMoreFeat ? ' open' : ''}`} onClick={() => setShowMoreFeat(p => !p)}>
-              {showMoreFeat ? 'Show less' : `Show ${featHidden} more`} <ChevronDown size={13} />
+            <button className={`v24-toggle${ui.showFeat ? ' open' : ''}`} onClick={() => toggleUI('showFeat')}>
+              {ui.showFeat ? 'Show less' : `Show ${featHidden} more`} <ChevronDown size={13} />
             </button>
           )}
         </div>
 
         {/* LEADERBOARD */}
-        <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 300ms both' }}>
-          <div className="v23-sech">
+        <div className="v24-sec">
+          <div className="v24-sech">
             <Trophy size={14} style={{ color: 'var(--gold)' }} />
             <h2>Daily Leaderboard</h2>
-            <div className="v23-sech-line" />
-            <Link to="/leaderboard" style={{ fontSize: '.64rem', fontWeight: 700, color: 'var(--text-muted)', textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 3, flexShrink: 0 }}>Full <ArrowUpRight size={11} /></Link>
+            <div className="v24-sech-line" />
+            <Link to="/leaderboard" className="v24-strip-link">Full <ArrowUpRight size={11} /></Link>
           </div>
           {ctxLoading ? (
-            <div>{Array.from({ length: 5 }).map((_, i) => <div key={i} className="v23-skel" style={{ height: 48, marginBottom: 5, animationDelay: `${i * 50}ms` }} />)}</div>
+            <div>{Array.from({ length: 5 }).map((_, i) => <div key={i} className="v24-skel" style={{ height: 48, marginBottom: 5 }} />)}</div>
           ) : (dailyEntries || []).length > 0 ? (
             <>
               <MiniPodium entries={dailyEntries || []} />
@@ -766,118 +778,118 @@ export default function Home() {
                   const rank = u.rank || (i + 4);
                   const color = ['#ef4444','#f97316','#eab308','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#ec4899'][(rank - 1) % 8];
                   return (
-                    <div key={u.uid} className={`v23-lbrow${isMe ? ' me' : ''}`} style={{ animationDelay: `${(i + 3) * 25}ms` }}>
-                      <span style={{ width: 28, textAlign: 'center', fontWeight: 900, color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', fontFamily: 'var(--font-display)' }}>#{rank}</span>
-                      <div style={{ width: 30, height: 30, borderRadius: 8, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.64rem', fontWeight: 800, color: '#fff' }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{u.displayName}</div>
-                        <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.exact || 0} exact · {u.result || 0} results</div>
+                    <div key={u.uid} className={`v24-lbrow${isMe ? ' me' : ''}`}>
+                      <span className="v24-lb-rank" style={{ color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>#{rank}</span>
+                      <div className="v24-lb-avatar" style={{ background: color }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
+                      <div className="v24-lb-info">
+                        <div className="v24-lb-name">{u.displayName}</div>
+                        <div className="v24-lb-sub">{u.exact || 0} exact · {u.result || 0} results</div>
                       </div>
-                      <span style={{ fontSize: '.8rem', fontWeight: 900, color: 'var(--gold)', fontFamily: 'var(--font-display)' }}>{u.points || 0}</span>
+                      <span className="v24-lb-pts">{u.points || 0}</span>
                     </div>
                   );
                 })}
               </div>
               {lbHidden > 0 && (
-                <button className={`v23-toggle${showMoreLB ? ' open' : ''}`} onClick={() => setShowMoreLB(p => !p)}>
-                  {showMoreLB ? 'Show less' : `Show ${lbHidden} more`} <ChevronDown size={13} />
+                <button className={`v24-toggle${ui.showLB ? ' open' : ''}`} onClick={() => toggleUI('showLB')}>
+                  {ui.showLB ? 'Show less' : `Show ${lbHidden} more`} <ChevronDown size={13} />
                 </button>
               )}
             </>
           ) : (
-            <div className="v23-skel" style={{ height: 150, borderRadius: 12 }} />
+            <div className="v24-skel" style={{ height: 150, borderRadius: 12 }} />
           )}
         </div>
 
         {/* EXPLORE GRID & LEAGUE TABLES (SEO LINKS) */}
-        <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 350ms both' }}>
-          <div className="v23-sech">
+        <div className="v24-sec">
+          <div className="v24-sech">
             <Trophy size={14} style={{ color: 'var(--gold)' }} />
             <h2>League Tables</h2>
-            <div className="v23-sech-line" />
+            <div className="v24-sech-line" />
           </div>
-          <div className="v23-explore">
-            <Link to="/mastergames?tab=standings&comp=PL" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#3b82f6' }} />
+          <div className="v24-explore">
+            <Link to="/mastergames?tab=standings&comp=PL" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#3b82f6' }} />
               <Trophy size={20} style={{ color: '#3b82f6' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Premier League</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+                <div className="v24-ecard-title">Premier League</div>
+                <div className="v24-ecard-sub">Table & Standings</div>
               </div>
             </Link>
-            <Link to="/mastergames?tab=standings&comp=PD" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#f97316' }} />
+            <Link to="/mastergames?tab=standings&comp=PD" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#f97316' }} />
               <Trophy size={20} style={{ color: '#f97316' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>La Liga</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+                <div className="v24-ecard-title">La Liga</div>
+                <div className="v24-ecard-sub">Table & Standings</div>
               </div>
             </Link>
-            <Link to="/mastergames?tab=standings&comp=SA" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#22c55e' }} />
+            <Link to="/mastergames?tab=standings&comp=SA" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#22c55e' }} />
               <Trophy size={20} style={{ color: '#22c55e' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Serie A</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+                <div className="v24-ecard-title">Serie A</div>
+                <div className="v24-ecard-sub">Table & Standings</div>
               </div>
             </Link>
-            <Link to="/mastergames?tab=standings&comp=BL1" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#ef4444' }} />
+            <Link to="/mastergames?tab=standings&comp=BL1" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#ef4444' }} />
               <Trophy size={20} style={{ color: '#ef4444' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Bundesliga</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+                <div className="v24-ecard-title">Bundesliga</div>
+                <div className="v24-ecard-sub">Table & Standings</div>
               </div>
             </Link>
-            <Link to="/mastergames?tab=standings&comp=FL1" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#8b5cf6' }} />
+            <Link to="/mastergames?tab=standings&comp=FL1" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#8b5cf6' }} />
               <Trophy size={20} style={{ color: '#8b5cf6' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Ligue 1</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Table & Standings</div>
+                <div className="v24-ecard-title">Ligue 1</div>
+                <div className="v24-ecard-sub">Table & Standings</div>
               </div>
             </Link>
-            <Link to="/mastergames" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: 'var(--accent)' }} />
+            <Link to="/mastergames" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: 'var(--accent)' }} />
               <Activity size={20} style={{ color: 'var(--accent)' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>All Leagues</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Fixtures & Live Scores</div>
+                <div className="v24-ecard-title">All Leagues</div>
+                <div className="v24-ecard-sub">Fixtures & Live Scores</div>
               </div>
             </Link>
           </div>
         </div>
 
         {/* EXPLORE GRID */}
-        <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 400ms both' }}>
-          <div className="v23-sech">
+        <div className="v24-sec">
+          <div className="v24-sech">
             <Gamepad2 size={14} style={{ color: 'var(--accent)' }} />
             <h2>Explore</h2>
-            <div className="v23-sech-line" />
+            <div className="v24-sech-line" />
           </div>
-          <div className="v23-explore">
-            <Link to="/highlights" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#f59e0b' }} />
+          <div className="v24-explore">
+            <Link to="/highlights" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#f59e0b' }} />
               <Newspaper size={20} style={{ color: '#f59e0b' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>News Hub</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Official updates & articles</div>
+                <div className="v24-ecard-title">News Hub</div>
+                <div className="v24-ecard-sub">Official updates & articles</div>
               </div>
             </Link>
-            <Link to="/livestream" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#06b6d4' }} />
+            <Link to="/livestream" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#06b6d4' }} />
               <Zap size={20} style={{ color: '#06b6d4' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Live Stream</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Watch matches live</div>
+                <div className="v24-ecard-title">Live Stream</div>
+                <div className="v24-ecard-sub">Watch matches live</div>
               </div>
             </Link>
-            <Link to="/basketball" className="v23-ecard">
-              <div className="v23-ecard-accent" style={{ background: '#3b82f6' }} />
+            <Link to="/basketball" className="v24-ecard">
+              <div className="v24-ecard-accent" style={{ background: '#3b82f6' }} />
               <BarChart3 size={20} style={{ color: '#3b82f6' }} />
               <div>
-                <div style={{ fontSize: '.8rem', fontWeight: 800, color: 'var(--text-primary)' }}>Basketball</div>
-                <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>Hoops action & scores</div>
+                <div className="v24-ecard-title">Basketball</div>
+                <div className="v24-ecard-sub">Hoops action & scores</div>
               </div>
             </Link>
           </div>
@@ -885,8 +897,8 @@ export default function Home() {
 
         {/* CTA */}
         {!isLoggedIn && (
-          <div className="v23-sec" style={{ animation: 'v23-fade-up .5s cubic-bezier(.22,1,.36,1) 450ms both' }}>
-            <Link to="/login" className="v23-cta"><LogIn size={16} /> Sign In to Predict & Win</Link>
+          <div className="v24-sec">
+            <Link to="/login" className="v24-cta"><LogIn size={16} /> Sign In to Predict & Win</Link>
           </div>
         )}
       </div>

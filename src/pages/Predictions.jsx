@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v21.2 — Glass UI + Viral Share & Earn (Unique Links + Embedded Message)
+// v21.3 — Glass UI + Viral Share & Earn (Optimized)
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue } from 'react';
@@ -411,6 +411,7 @@ function ScoreStepper({ value, onChange }) {
 function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onShare }) {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
+  const mid = String(pick.matchId); // Cached ID
 
   const res = useMemo(() => {
     if (pick.adminPick && isFin && pick.homeScore != null) {
@@ -420,9 +421,8 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onSh
     return null;
   }, [pick.adminPick, isFin, pick.homeScore, pick.awayScore]);
 
-  const vs = voteStats[String(pick.matchId)] || { agree: 0, disagree: 0, total: 0 };
-  const myV = userVote[String(pick.matchId)];
-  const mid = String(pick.matchId);
+  const vs = voteStats[mid] || { agree: 0, disagree: 0, total: 0 };
+  const myV = userVote[mid];
   const isVoting = votingId === mid;
 
   const homeLogo = pick.homeLogo || pick.homeTeam?.logo || pick.homeTeam?.crest;
@@ -509,7 +509,7 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onSh
    PREDICTION CARD
    ═══════════════════════════════════════════════════ */
 function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
-  const mid = pred.id || String(pred.matchId);
+  const mid = pred.id || String(pred.matchId); // Cached ID
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
@@ -790,6 +790,9 @@ export default function Predictions() {
   const mountedRef = useRef(true);
   const [liveFixtures, setLiveFixtures] = useState([]);
 
+  // ★ FIX 3: Guard for Admin Auto-Resolver to prevent duplicate calls
+  const resolving = useRef(new Set());
+
   const isToday = selDate === todayStr();
 
   /* ═══ DERIVED DATA (Moved up to fix initialization order) ═══ */
@@ -801,10 +804,16 @@ export default function Predictions() {
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
+  // ★ FIX 4: O(1) Live fixture lookup map
+  const fixtureMap = useMemo(() => {
+    return new Map(liveFixtures.map(f => [String(f.id), f]));
+  }, [liveFixtures]);
+
   const mergedFeatured = useMemo(() => {
-    if (!isToday || !liveFixtures.length) return currentFeatured;
+    if (!isToday || !fixtureMap.size) return currentFeatured;
     return currentFeatured.map(p => {
-      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      const mid = String(p.matchId); // Cached ID
+      const fx = fixtureMap.get(mid);
       if (fx) {
         return {
           ...p,
@@ -818,12 +827,13 @@ export default function Predictions() {
       }
       return p;
     });
-  }, [currentFeatured, liveFixtures, isToday]);
+  }, [currentFeatured, fixtureMap, isToday]);
 
   const mergedZoka = useMemo(() => {
-    if (!isToday || !liveFixtures.length) return currentZoka;
+    if (!isToday || !fixtureMap.size) return currentZoka;
     return currentZoka.map(p => {
-      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      const mid = String(p.matchId); // Cached ID
+      const fx = fixtureMap.get(mid);
       if (fx) {
         return {
           ...p,
@@ -835,7 +845,7 @@ export default function Predictions() {
       }
       return p;
     });
-  }, [currentZoka, liveFixtures, isToday]);
+  }, [currentZoka, fixtureMap, isToday]);
 
   // Maps need to be initialized BEFORE handleShare
   const userPredMap = useMemo(() => {
@@ -879,8 +889,8 @@ export default function Predictions() {
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
     
-    // 1. Generate unique link with matchId and user's referral ID
-    const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${uid}`;
+    // ★ FIX 5: Encode the UID in the share URL
+    const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${encodeURIComponent(uid)}`;
 
     let homeName = 'Home', awayName = 'Away', scoreText = '';
     if (typeof pred.homeTeam === 'object') {
@@ -897,8 +907,8 @@ export default function Predictions() {
       if (up) scoreText = `${up.homeScore}-${up.awayScore}`;
     }
 
-    // 2. Combine the message AND the unique link into one string
-    const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore: ${shareUrl}`;
+    // ★ FIX 9: Keep text and URL separate for navigator.share
+    const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore.`;
 
     if (navigator.share) {
       try {
@@ -906,11 +916,15 @@ export default function Predictions() {
         setToast('Shared! Earn points when friends visit.');
       } catch (err) { if (err.name !== 'AbortError') console.error('Share failed', err); }
     } else {
+      // ★ FIX 6: Fallback with combined text and better error handling
+      const fullText = `${shareText}\n\n${shareUrl}`;
       try {
-        await navigator.clipboard.writeText(shareText);
+        await navigator.clipboard.writeText(fullText);
         setCopyToast(true);
         setTimeout(() => setCopyToast(false), 3000);
-      } catch (e) { setToast('Copy failed. Please copy manually.'); }
+      } catch (e) {
+        setToast(`Copy failed. Please copy manually: ${fullText}`);
+      }
     }
   }, [uid, setShowLogin, userPredMap]);
 
@@ -925,10 +939,9 @@ export default function Predictions() {
     const correct = (userStats?.exact || myDayStats.ex || 0) + (userStats?.result || myDayStats.rs || 0);
     const points = userStats?.points || myDayStats.pts || 0;
 
-    // 1. Generate unique link with user's referral ID
-    const shareUrl = `${window.location.origin}/predictions?ref=${uid}`;
+    // ★ FIX 5: Encode the UID in the share URL
+    const shareUrl = `${window.location.origin}/predictions?ref=${encodeURIComponent(uid)}`;
 
-    // 2. Combine the message AND the unique link into one string
     let shareText;
     if (total > 0) {
       shareText = `🔥 I predicted ${correct}/${total} matches and scored ${points} points! Think you can beat me?\n\nJoin me on ZOKASCORE: ${shareUrl}`;
@@ -944,11 +957,14 @@ export default function Predictions() {
         await navigator.clipboard.writeText(shareText);
         setCopyToast(true);
         setTimeout(() => setCopyToast(false), 3000);
-      } catch (e) {}
+      } catch (e) {
+        setToast(`Copy failed. Please copy manually: ${shareText}`);
+      }
     }
   }, [uid, userStats, myDayStats, setShowLogin]);
 
   // ★ REFERRAL VISIT TRACKING (Records the visit in Firestore)
+  // FIX 1 & 2: Backend Cloud Functions should verify and process the 'pending' status safely.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const referrer = params.get('ref');
@@ -967,7 +983,7 @@ export default function Predictions() {
             visitorDeviceId: deviceId,
             visitorUid: uid || null,
             visitedAt: serverTimestamp(),
-            status: 'pending'
+            status: 'pending' // Will be verified by backend
           }).catch(e => console.error("Referral track err:", e));
         }
       }
@@ -980,18 +996,34 @@ export default function Predictions() {
     return () => clearInterval(id);
   }, []);
 
+  // ★ FIX 7: Visibility-aware live polling
   useEffect(() => {
     if (!isToday) return;
     let cancelled = false;
     const loadLive = async () => {
+      if (document.visibilityState === 'hidden') return;
       try {
         const res = await fetchFixtures(todayStr());
         if (!cancelled) setLiveFixtures(res?.matches || []);
       } catch (e) {}
     };
+    
     loadLive();
-    const interval = setInterval(loadLive, 15000);
-    return () => { cancelled = true; clearInterval(interval); };
+    
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible') loadLive();
+    }, 15000);
+    
+    const onVisibilityChange = () => {
+      if (document.visibilityState === 'visible') loadLive();
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [isToday]);
 
   useEffect(() => {
@@ -1026,22 +1058,29 @@ export default function Predictions() {
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
-  // ★ ADMIN AUTO-RESOLVER
+  // ★ FIX 3: ADMIN AUTO-RESOLVER WITH GUARD
   useEffect(() => {
-    if (!isAdmin || !isToday || !liveFixtures.length) return;
+    if (!isAdmin || !isToday || !fixtureMap.size) return;
     const toResolve = mergedFeatured.filter(p => {
-      const fx = liveFixtures.find(f => String(f.id) === String(p.matchId));
+      const mid = String(p.matchId);
+      const fx = fixtureMap.get(mid);
       return fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null;
     });
+
     toResolve.forEach(pred => {
-      const fx = liveFixtures.find(f => String(f.id) === String(pred.matchId));
-      const dbPred = currentFeatured.find(p => String(p.matchId) === String(pred.matchId));
-      if (dbPred && dbPred.status !== 'finished') {
-        console.log(`[AutoResolve] Admin triggering resolution for ${pred.matchId}`);
-        resolveMatchForAllUsers(pred.matchId, fx.homeScore, fx.awayScore, pred.matchDate || todayStr());
+      const mid = String(pred.matchId);
+      if (!resolving.current.has(mid)) {
+        const fx = fixtureMap.get(mid);
+        const dbPred = currentFeatured.find(p => String(p.matchId) === mid);
+        if (dbPred && dbPred.status !== 'finished') {
+          resolving.current.add(mid);
+          console.log(`[AutoResolve] Admin triggering resolution for ${mid}`);
+          resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
+            .finally(() => resolving.current.delete(mid));
+        }
       }
     });
-  }, [isAdmin, isToday, liveFixtures, mergedFeatured, currentFeatured]);
+  }, [isAdmin, isToday, fixtureMap, mergedFeatured, currentFeatured]);
 
   /* ═══ OTHER MEMOS ═══ */
   const dateList = useMemo(() => {
