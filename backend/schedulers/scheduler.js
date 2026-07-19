@@ -483,15 +483,15 @@ class Scheduler {
     });
   }
 
-  _logSchedule() {
+    _logSchedule() {
     logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
     logger.info(`    0 live      → 60 min   (IDLE)`);
     logger.info(`    1–10 live   → 15 min   (LIVE_LOW)`);
     logger.info(`    11–30 live  → 10 min   (LIVE_MED)`);
     logger.info(`    31–60 live  →  5 min   (LIVE_HIGH)`);
-    logger.info(`    61+ live    →  3 min   (LIVE_MASS)`);
-    logger.info(`    80'+ / ET   →  2 min   (NEAR_FT)`);
+    logger.info(`    61+ live    →  5 min   (LIVE_MASS)`);
+    logger.info(`    80'+ / ET   →  5 min   (NEAR_FT)`);
     logger.info("  Budget Tiers (slowdown floors):");
     logger.info(`    > 30 left   → HEALTHY  (no floor)`);
     logger.info(`    15–30 left  → NORMAL   (≥ 15 min floor)`);
