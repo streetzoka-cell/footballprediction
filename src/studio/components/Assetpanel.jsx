@@ -58,7 +58,7 @@ export default function AssetPanel({ onClose }) {
         ))}
       </div>
 
-      <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Sound Effects (SFX)</div>
+      <div style={{ fontSize: '12.01px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Sound Effects (SFX)</div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
         {SFX.map((sfx, i) => (
           <button key={i} onClick={() => addSFX(sfx)} style={{ background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '12px', cursor: 'pointer', color: '#fff', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
