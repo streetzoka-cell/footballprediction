@@ -44,12 +44,18 @@ const TODAY = formatDate(new Date());
 const YESTERDAY = getDateOffset(-1);
 const TOMORROW = getDateOffset(1);
 
-
 // ───────────────────────────────────────────────
 // LEAGUE CONFIGURATION
 // ───────────────────────────────────────────────
-// Only fetch matches for the major leagues listed below
-const TRACK_ALL_LEAGUES = false;
+const TRACK_ALL_LEAGUES = true;
+
+// ★ NEW: Blacklist specific leagues (e.g., Youth, Women, or obscure leagues)
+// Add the API-Football league IDs here to block them from showing up.
+const BLOCKED_LEAGUE_IDS = new Set([
+  // Example: 
+  // 123, // Some Youth League
+  // 456, // Some Women's League
+]);
 
 const LEAGUES = Object.freeze([
   // ─── FRIENDLIES & INTERNATIONAL (Active in Summer) ───
@@ -98,7 +104,6 @@ const LEAGUES = Object.freeze([
   // ─── SUMMER EUROPEAN LEAGUES (Active July/August) ───
   { id: 106, name: "Ekstraklasa",            country: "Poland",     flag: "🇵🇱", season: SEASON, priority: 30, tier: 2, active: true },
   { id: 333, name: "Premier League",         country: "Ukraine",    flag: "🇺🇦", season: SEASON, priority: 31, tier: 2, active: true },
-  { id: 235, name: "Premier League",         country: "Russia",     flag: "🇷🇺", season: SEASON, priority: 32, tier: 2, active: true }, // Note: ID might differ, usually 235 is Scotland, but let's include it
   { id: 345, name: "First League",           country: "Czechia",    flag: "🇨🇿", season: SEASON, priority: 33, tier: 2, active: true },
   { id: 207, name: "Super League",           country: "Switzerland",flag: "🇨🇭", season: SEASON, priority: 34, tier: 2, active: true },
   { id: 218, name: "Bundesliga",             country: "Austria",    flag: "🇦🇹", season: SEASON, priority: 35, tier: 2, active: true },
@@ -145,8 +150,6 @@ const LEAGUES = Object.freeze([
   { id: 17,  name: "AFC Champions League",   country: "World",      flag: "🌍", season: SEASON, priority: 68, tier: 2, active: true },
 ]);
 
-
-// ★ NEW: Top Teams Dictionary (Lowercase for smart matching)
 const TOP_TEAMS_LIST = [
   'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
   'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
@@ -234,42 +237,28 @@ const META_DOCS = Object.freeze({
 const API = Object.freeze({ PAGE_SIZE: 100, DAILY_BUDGET: 100 });
 const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTURES_DAILY: "0 3 * * *" });
 
-// ───────────────────────────────────────────────
-// SMART POLLING & BUDGET STRATEGY
-// ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
-  // ── DAILY CAPS ──
-  // ★ FIX: Increased to 80 for faster polling, leaving 12 strictly for Top Match Details
   FOOTBALL_DAILY_LIVE_CAP: 80,
   BASKETBALL_DAILY_LIVE_CAP: 15,
-
-  // ── LIVE-COUNT-BASED INTERVALS (desired) ──
-  IDLE_INTERVAL_MS:        3600000,  // 60 min  — 0 live matches
-  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live
-  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live
-  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live
-  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+ or ET/BT/P
-
-  // ── BUDGET-TIER FLOORS ──
+  IDLE_INTERVAL_MS:        3600000,
+  LOW_LIVE_INTERVAL_MS:    900000,
+  MEDIUM_LIVE_INTERVAL_MS: 600000,
+  HIGH_LIVE_INTERVAL_MS:   300000,
+  MASSIVE_LIVE_INTERVAL_MS:180000,
+  NEAR_FINISH_INTERVAL_MS: 120000,
   BUDGET_HEALTHY_THRESHOLD:  30,
   BUDGET_NORMAL_THRESHOLD:   15,
   BUDGET_CRITICAL_THRESHOLD: 8,
   MIN_BUDGET_TO_POLL:        3,
-
-  BUDGET_NORMAL_FLOOR_MS:    900000,   // 15 min
-  BUDGET_CRITICAL_FLOOR_MS:  1800000,  // 30 min
-  BUDGET_RESERVE_FLOOR_MS:   3600000,  // 1 hour
-
-  // ── CAP-TIER FLOORS ──
+  BUDGET_NORMAL_FLOOR_MS:    900000,
+  BUDGET_CRITICAL_FLOOR_MS:  1800000,
+  BUDGET_RESERVE_FLOOR_MS:   3600000,
   CAP_NORMAL_REMAINING:    15,
   CAP_CRITICAL_REMAINING:  5,
   CAP_FT_RESERVE:          4,
-
-  CAP_LOW_FLOOR_MS:          900000,   // 15 min
-  CAP_CRITICAL_FLOOR_MS:     1800000,  // 30 min
-  CAP_EXHAUSTED_INTERVAL_MS: 3600000,  // 1 hour
-
+  CAP_LOW_FLOOR_MS:          900000,
+  CAP_CRITICAL_FLOOR_MS:     1800000,
+  CAP_EXHAUSTED_INTERVAL_MS: 3600000,
   FT_CONFIRMATION_DELAY_MS: 60000,
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,
@@ -288,6 +277,7 @@ module.exports = Object.freeze({
   BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
   COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY,
   RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT, TRACK_ALL_LEAGUES,
-  TOP_TEAMS_LIST, TOP_TEAMS_SET, // ★ Export Top Teams
+  BLOCKED_LEAGUE_IDS, 
+  TOP_TEAMS_LIST, TOP_TEAMS_SET, 
   getCurrentSeason, getCurrentBasketballSeason,
 });

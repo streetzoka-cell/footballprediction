@@ -11,6 +11,7 @@ const {
   getDateOffset,
   META_DOCS,
   TRACK_ALL_LEAGUES,
+  BLOCKED_LEAGUE_IDS,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
 const { withRetry } = require("../utils/retry");
@@ -169,7 +170,6 @@ class DailyFixturesService {
     };
   }
 
-  // ★ FIX: Write 3 separate documents to avoid 1MB Firestore limit
   async _writeSnapshot() {
     try {
       const todayStr = getDateOffset(0);
@@ -217,7 +217,11 @@ class DailyFixturesService {
       if (Object.keys(errors).length > 0) return { fetches: 1, writes: 0 };
 
       const allFixtures = raw?.response || [];
-      const filtered = TRACK_ALL_LEAGUES ? allFixtures : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+      // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
+      const filtered = TRACK_ALL_LEAGUES 
+        ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
+        : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+        
       const docs = filtered.map((f) => this.normalize(f));
 
       let written = 0, newIds = new Set();
@@ -255,7 +259,11 @@ class DailyFixturesService {
     if (Object.keys(raw?.errors || {}).length > 0) return { total: 0, writes: 0, raw: [], newIds: new Set() };
 
     const allFixtures = raw?.response || [];
-    const filtered = TRACK_ALL_LEAGUES ? allFixtures : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+    // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
+    const filtered = TRACK_ALL_LEAGUES 
+      ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
+      : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+      
     const docs = filtered.map((f) => this.normalize(f));
 
     let written = 0, newIds = new Set();

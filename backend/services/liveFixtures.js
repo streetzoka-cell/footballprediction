@@ -2,13 +2,14 @@
  * liveFixtures.js
  * ★ TIMEZONE FIX: Groups live matches by local date (EAT) to write to correct snapshot docs.
  * ★ SIZE FIX: Caps lastFinishedSnapshot to 50 to prevent 1MB Firestore limit errors.
+ * ★ BLACKLIST: Filters out blocked leagues if TRACK_ALL_LEAGUES is true.
  */
 
 const {
   api, isBudgetAvailable, isLiveCapAvailable, incrementLiveCounter,
 } = require("../config/api");
 const {
-  LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS, TODAY, getLocalDateFromUtc,
+  LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS, TODAY, getLocalDateFromUtc, BLOCKED_LEAGUE_IDS,
 } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const { batchWrite, deleteByIds } = require("../config/firebase");
@@ -41,7 +42,11 @@ class LiveFixturesService {
     if (Object.keys(response?.errors || {}).length > 0) return this._emptyResult({ capReached: true });
 
     var rawFixtures = response?.response || [];
-    var filtered = TRACK_ALL_LEAGUES ? rawFixtures : rawFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+    
+    // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
+    var filtered = TRACK_ALL_LEAGUES 
+      ? (BLOCKED_LEAGUE_IDS.size > 0 ? rawFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : rawFixtures)
+      : rawFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
 
     var newDocs = filtered.map((f) => this.normalize(f));
     var newIds = new Set(newDocs.map((d) => d.id));
@@ -85,7 +90,6 @@ class LiveFixturesService {
       if (transitioned > 0) cache.invalidate("ft:finished");
 
       try {
-        // Group by Local Date (EAT) to write to separate documents
         const liveByDate = {};
         newDocs.forEach(doc => {
           const localDate = getLocalDateFromUtc(doc.date) || TODAY;
@@ -146,7 +150,6 @@ class LiveFixturesService {
     
     toFinish.forEach((doc) => this.lastFinishedSnapshot.set(String(doc.id), doc));
 
-    // ★ FIX: Prevent lastFinishedSnapshot from growing infinitely and causing 1MB errors
     if (this.lastFinishedSnapshot.size > 50) {
       const keys = Array.from(this.lastFinishedSnapshot.keys());
       const keysToDelete = keys.slice(0, this.lastFinishedSnapshot.size - 50);
