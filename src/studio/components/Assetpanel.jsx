@@ -1,5 +1,5 @@
 import React from 'react';
-import { useEditorStore } from '../store/proEditorStore';
+import { useEditorStore } from '../store/editorStore';
 import { X } from 'lucide-react';
 
 const STICKERS = ['⚽', '🔥', '🏆', '🟨', '🟥', '👟', '🥅', '💯', '🤯', '👏', '👑', '🚀', '📈', '⚡', '🛡️', '🎯'];

@@ -3,7 +3,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Stage, Layer, Rect, Text, Circle, Image as KonvaImage, Transformer } from 'react-konva';
 import useImage from 'use-image';
-import { useEditorStore } from '../store/proEditorStore';
+import { useEditorStore } from '../store/editorStore';
 import FootballDataPanel from '../components/FootballDataPanel';
 import AssetPanel from '../components/AssetPanel';
 import { saveProject } from '../services/studioService';

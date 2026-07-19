@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchFixtures } from '../../utils/api';
 import { getLocalDateStr } from '../../utils/dates';
-import { useEditorStore } from '../store/proEditorStore';
+import { useEditorStore } from '../store/editorStore';
 import { fetchUserProjects, deleteProject } from '../services/studioService';
 import { LayoutGrid, Clock, Trash2, Video, Film, Image, Plus, Folder, Camera, Sparkles } from 'lucide-react';
 

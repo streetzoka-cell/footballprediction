@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useEditorStore } from '../store/proEditorStore';
+import { useEditorStore } from '../store/editorStore';
 import { Newspaper, Trophy, Zap } from 'lucide-react';
 
 const TEMPLATES = [
