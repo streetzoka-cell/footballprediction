@@ -176,6 +176,9 @@ class DailyFixturesService {
       const tomorrowStr = getDateOffset(1);
       const yesterdayStr = getDateOffset(-1);
       
+      // ★ NEW LOG: Show exactly how many matches are in the cache before writing
+      logger.info(`[DailyFixtures] Writing snapshots: Yest(${this._docCache.yesterday.length}), Today(${this._docCache.today.length}), Tom(${this._docCache.tomorrow.length})`);
+      
       await Promise.all([
         snapshotWriter.writeFootballSnapshot(yesterdayStr, { matches: this._docCache.yesterday }),
         snapshotWriter.writeFootballSnapshot(todayStr, { matches: this._docCache.today }),
@@ -217,7 +220,6 @@ class DailyFixturesService {
       if (Object.keys(errors).length > 0) return { fetches: 1, writes: 0 };
 
       const allFixtures = raw?.response || [];
-      // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
       const filtered = TRACK_ALL_LEAGUES 
         ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
         : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
@@ -259,11 +261,13 @@ class DailyFixturesService {
     if (Object.keys(raw?.errors || {}).length > 0) return { total: 0, writes: 0, raw: [], newIds: new Set() };
 
     const allFixtures = raw?.response || [];
-    // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
     const filtered = TRACK_ALL_LEAGUES 
       ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
       : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
       
+    // ★ NEW LOG: Show exactly what the API returned for tomorrow
+    logger.info(`[DailyFixtures] Tomorrow API returned ${allFixtures.length} matches. Filtered to ${filtered.length}.`);
+
     const docs = filtered.map((f) => this.normalize(f));
 
     let written = 0, newIds = new Set();

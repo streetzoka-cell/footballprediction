@@ -185,11 +185,19 @@ function _emptyResult(error = null) {
   return { matches: [], error, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished: false, isRolloverWindow: isInRolloverWindow() };
 }
 
+// ★ FIX: Read directly from Firestore to bypass any broken dataLayer caching
 export const fetchFixtures = async (date, forceRefresh = false) => {
   if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(date);
-    if (!snapshot) return _emptyResult(null);
+    if (!db) return _emptyResult(null);
+    
+    // Direct Firestore read
+    const docRef = doc(db, 'fixture_snapshots', date);
+    const docSnap = await getDoc(docRef);
+    
+    if (!docSnap.exists()) return _emptyResult(null);
+    
+    const snapshot = docSnap.data();
     const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
@@ -203,16 +211,22 @@ export const fetchTomorrowFixtures = () => fetchFixtures(tomorrowStr());
 
 export const fetchFinishedFixtures = async () => {
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snapshot) return [];
+    if (!db) return [];
+    const docRef = doc(db, 'fixture_snapshots', todayStr());
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return [];
+    const snapshot = docSnap.data();
     return (snapshot.finished || []).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   } catch { return []; }
 };
 
 export const fetchLiveScores = async () => {
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snapshot) return { matches: [], error: null };
+    if (!db) return { matches: [], error: null };
+    const docRef = doc(db, 'fixture_snapshots', todayStr());
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return { matches: [], error: null };
+    const snapshot = docSnap.data();
     return { matches: (snapshot.live || []).map((d) => transformMatch(d)), error: null };
   } catch (err) { return { matches: [], error: err.message }; }
 };
@@ -285,8 +299,11 @@ function _createPollingSubscription(sport, callback, options = {}) {
 
 export const fetchBasketballFixtures = async (date) => {
   try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(date);
-    if (!snapshot) return _emptyResult(null);
+    if (!db) return _emptyResult(null);
+    const docRef = doc(db, 'fixture_snapshots', `basketball_${date}`);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return _emptyResult(null);
+    const snapshot = docSnap.data();
     const matches = _extractMatchesForDate(snapshot);
     const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
     return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
@@ -300,16 +317,22 @@ export const fetchBasketballTomorrowFixtures = () => fetchBasketballFixtures(tom
 
 export const fetchBasketballFinishedFixtures = async () => {
   try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
-    if (!snapshot) return [];
+    if (!db) return [];
+    const docRef = doc(db, 'fixture_snapshots', `basketball_${todayStr()}`);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return [];
+    const snapshot = docSnap.data();
     return (snapshot.finished || []).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
   } catch { return []; }
 };
 
 export const fetchBasketballLiveScores = async () => {
   try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
-    if (!snapshot) return { matches: [], error: null };
+    if (!db) return { matches: [], error: null };
+    const docRef = doc(db, 'fixture_snapshots', `basketball_${todayStr()}`);
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return { matches: [], error: null };
+    const snapshot = docSnap.data();
     return { matches: (snapshot.live || []).map((d) => transformMatch(d)), error: null };
   } catch (err) { return { matches: [], error: err.message }; }
 };
@@ -364,8 +387,11 @@ export async function fetchBasketballTeamFixtures(teamId) {
 
 export const fetchBackendStatus = async () => {
   try {
-    const snap = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snap) return null;
+    if (!db) return null;
+    const docRef = doc(db, 'fixture_snapshots', todayStr());
+    const docSnap = await getDoc(docRef);
+    if (!docSnap.exists()) return null;
+    const snap = docSnap.data();
     const updatedAt = snap.updatedAt;
     const fetchDone = updatedAt?.startsWith(todayStr()) ?? false;
     return {
