@@ -49,34 +49,8 @@ const TOMORROW = getDateOffset(1);
 // ───────────────────────────────────────────────
 const TRACK_ALL_LEAGUES = true;
 
-// ★ NEW: Blacklist specific obscure leagues to keep the app clean during summer
 const BLOCKED_LEAGUE_IDS = new Set([
-  76,   // Brazil Serie D
-  75,   // Brazil Serie C
-  189,  // Australia NPL Queensland
-  190,  // Australia NPL South Australia
-  191,  // Australia NPL Tasmania
-  192,  // Australia NPL Victoria
-  193,  // Australia NPL Western Australia
-  194,  // Australia NSW League One
-  195,  // Australia Northern NSW
-  197,  // Australia Queensland Premier League
-  198,  // Australia South Australia State League 1
-  199,  // Australia Victoria Premier League One
-  232,  // USA USL League Two
-  233,  // USA USL W League
-  165,  // Iceland 1. Deild
-  166,  // Iceland 2. Deild
-  167,  // Iceland 3. Deild
-  246,  // Finland Kakkonen
-  247,  // Finland Kolmonen
-  248,  // Finland Naisten Liiga (Women)
-  102,  // Norway Division 2
-  104,  // Norway Division 3
-  115,  // Sweden Division 1
-  116,  // Sweden Division 2
-  319,  // Youth Leagues (Generic)
-  320,  // Youth Leagues (Generic)
+  // Add any obscure league IDs here to block them
 ]);
 
 const LEAGUES = Object.freeze([
