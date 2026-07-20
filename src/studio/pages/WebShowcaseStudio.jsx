@@ -75,7 +75,7 @@ export default function WebShowcaseStudio() {
   const mixedStreamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
-  const dragRef = useRef({ active: false, offsetX: 0, offsetY: 0 });
+  const dragRef = useRef({ active: false, mode: null, offsetX: 0, offsetY: 0 });
   const recordStartRef = useRef(0);
 
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
@@ -255,6 +255,15 @@ export default function WebShowcaseStudio() {
       }
       
       ctx.restore();
+
+      // Draw Resize Handle (Bottom Right Corner)
+      ctx.beginPath();
+      ctx.arc(x + size, y + size, 16, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+      ctx.fill();
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
   };
 
@@ -281,8 +290,19 @@ export default function WebShowcaseStudio() {
   const handlePointerDown = (e) => {
     if (!webcamOn) return;
     const { x, y } = getCanvasCoords(e);
+    
+    const handleX = webcamPos.x + webcamSize;
+    const handleY = webcamPos.y + webcamSize;
+
+    // 1. Check if user clicked the resize handle
+    if (Math.hypot(x - handleX, y - handleY) < 30) {
+      dragRef.current = { active: true, mode: 'resize' };
+      return;
+    }
+
+    // 2. Check if user clicked inside webcam to move it
     if (x >= webcamPos.x && x <= webcamPos.x + webcamSize && y >= webcamPos.y && y <= webcamPos.y + webcamSize) {
-      dragRef.current = { active: true, offsetX: x - webcamPos.x, offsetY: y - webcamPos.y };
+      dragRef.current = { active: true, mode: 'move', offsetX: x - webcamPos.x, offsetY: y - webcamPos.y };
     }
   };
 
@@ -290,9 +310,17 @@ export default function WebShowcaseStudio() {
     if (!dragRef.current.active) return;
     e.preventDefault();
     const { x, y } = getCanvasCoords(e);
-    let newX = Math.max(0, Math.min(x - dragRef.current.offsetX, activeRatio.w - webcamSize));
-    let newY = Math.max(0, Math.min(y - dragRef.current.offsetY, activeRatio.h - webcamSize));
-    setWebcamPos({ x: newX, y: newY });
+    
+    if (dragRef.current.mode === 'resize') {
+      // Resize from bottom right corner
+      let newSize = Math.max(x - webcamPos.x, y - webcamPos.y);
+      newSize = Math.max(80, Math.min(newSize, 600)); // Clamp size between 80px and 600px
+      setWebcamSize(newSize);
+    } else if (dragRef.current.mode === 'move') {
+      let newX = Math.max(0, Math.min(x - dragRef.current.offsetX, activeRatio.w - webcamSize));
+      let newY = Math.max(0, Math.min(y - dragRef.current.offsetY, activeRatio.h - webcamSize));
+      setWebcamPos({ x: newX, y: newY });
+    }
   };
 
   const handlePointerUp = () => { dragRef.current.active = false; };
@@ -325,27 +353,23 @@ export default function WebShowcaseStudio() {
       const audioDest = audioCtx.createMediaStreamDestination();
       let hasAudio = false;
 
-      // 1. Capture Screen/Tab Audio
       if (screenStreamRef.current && screenStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(screenStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
         hasAudio = true;
       }
-      
-      // 2. Capture Microphone Audio
       if (micStreamRef.current && micStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(micStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
         hasAudio = true;
       }
 
-      // 3. Silent fallback track (prevents 30m duration bug if no audio is selected)
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
       gain.gain.value = 0.0;
       osc.connect(gain);
       gain.connect(audioDest);
-      gain.connect(audioCtx.destination); // Prevent background tab throttling
+      gain.connect(audioCtx.destination); 
       osc.start();
 
       audioDest.stream.getAudioTracks().forEach(t => mixedStreamRef.current.addTrack(t));
@@ -353,7 +377,6 @@ export default function WebShowcaseStudio() {
 
     chunksRef.current = [];
     
-    // Prefer MP4 if supported (for native iOS/Android gallery playback), fallback to WebM
     let mimeType = 'video/webm';
     let ext = 'webm';
     if (MediaRecorder.isTypeSupported('video/mp4')) {
@@ -408,7 +431,6 @@ export default function WebShowcaseStudio() {
   const sideBtnStyle = { width: '40px', height: '40px', borderRadius: '8px', background: '#1f2937', border: '1px solid #334155', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };
   const mobileBtnStyle = { width: '44px', height: '44px', borderRadius: '50%', background: '#1f2937', border: '1px solid #334155', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };
 
-  // Settings Panel Content (Shared between Desktop & Mobile)
   const renderSettings = () => (
     <>
       <div style={panelStyle}>
@@ -424,9 +446,7 @@ export default function WebShowcaseStudio() {
 
       {webcamOn && (
         <div style={panelStyle}>
-          <div style={panelTitleStyle}><Camera size={14} /> Webcam Settings</div>
-          
-          <label style={{ fontSize: '11px', color: '#94a3b8' }}>Frame Style</label>
+          <div style={panelTitleStyle}><Camera size={14} /> Webcam Shape</div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {CAMERA_FRAMES.map(f => (
               <button key={f.id} onClick={() => setCameraFrame(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: cameraFrame === f.id ? '#10b981' : '#1f2937', color: cameraFrame === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>
@@ -434,12 +454,8 @@ export default function WebShowcaseStudio() {
               </button>
             ))}
           </div>
-
-          <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Size: {webcamSize}px</label>
-          <input type="range" min="100" max="500" value={webcamSize} onChange={(e) => setWebcamSize(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#10b981' }} disabled={isRecording} />
-          
-          <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '4px' }}>
-            <Move size={12} /> Drag the webcam on the preview to position it.
+          <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
+            <Move size={12} /> Drag the webcam to move. Drag the white circle at the bottom-right to resize.
           </span>
         </div>
       )}
@@ -481,11 +497,11 @@ export default function WebShowcaseStudio() {
             </>
           ) : isRecording ? (
             <button onClick={stopRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444', padding: isMobile ? '6px 10px' : '8px 12px' }}>
-              <Square size={16} fill="#fff" /> {!isMobile ? 'Stop' : 'Stop'}
+              <Square size={16} fill="#fff" /> Stop
             </button>
           ) : (
             <button onClick={startRecording} disabled={!screenReady} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !screenReady ? 0.5 : 1, padding: isMobile ? '6px 10px' : '8px 12px' }}>
-              <Circle size={16} fill="#fff" /> {!isMobile ? 'Start' : 'Rec'}
+              <Circle size={16} fill="#fff" /> Rec
             </button>
           )}
         </div>
