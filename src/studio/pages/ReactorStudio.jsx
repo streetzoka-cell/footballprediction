@@ -3,8 +3,114 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser
 } from 'lucide-react';
+
+// --- HELPER: WebM Duration Metadata Fixer ---
+const fixWebmDuration = async (blob, durationMs) => {
+  if (blob.type !== 'video/webm') return blob;
+  const arrayBuffer = await blob.arrayBuffer();
+  const uint8 = new Uint8Array(arrayBuffer);
+  const view = new DataView(arrayBuffer);
+  
+  let segInfoOffset = -1;
+  for (let i = 0; i < uint8.length - 4; i++) {
+    if (view.getUint32(i) === 0x1549A966) { segInfoOffset = i; break; }
+  }
+  if (segInfoOffset === -1) return blob;
+  
+  let timecodeOffset = -1;
+  for (let i = segInfoOffset; i < uint8.length - 3; i++) {
+    if (view.getUint8(i) === 0x2A && view.getUint8(i+1) === 0xD7 && view.getUint8(i+2) === 0xB1) { timecodeOffset = i; break; }
+  }
+  if (timecodeOffset === -1) return blob;
+  
+  let timecodeScale = 1000000;
+  const tsSize = view.getUint8(timecodeOffset + 3);
+  if (tsSize === 3) {
+    timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | view.getUint8(timecodeOffset + 6);
+  }
+  const durationInMkvUnits = durationMs * (timecodeScale / 1000000);
+  
+  const insertAt = timecodeOffset + 7;
+  const durationElement = new Uint8Array(2 + 1 + 8);
+  const durView = new DataView(durationElement.buffer);
+  durView.setUint16(0, 0x4489);
+  durView.setUint8(2, 0x88);
+  durView.setFloat64(3, durationInMkvUnits);
+  
+  const segInfoSizeOffset = segInfoOffset + 4;
+  const firstByte = view.getUint8(segInfoSizeOffset);
+  let sizeBytes = 1;
+  let mask = 0x80;
+  while (sizeBytes <= 8 && (firstByte & mask) === 0) { mask >>= 1; sizeBytes++; }
+  
+  let segInfoSize = (firstByte & (mask - 1));
+  for (let i = 1; i < sizeBytes; i++) {
+    segInfoSize = (segInfoSize << 8) + view.getUint8(segInfoSizeOffset + i);
+  }
+  
+  const newSize = segInfoSize + durationElement.length;
+  const maxValForWidth = (1 << (7 * sizeBytes - 1)) - 1;
+  if (newSize > maxValForWidth) return blob;
+  
+  const newUint8 = new Uint8Array(uint8.length + durationElement.length);
+  newUint8.set(uint8.subarray(0, insertAt), 0);
+  newUint8.set(durationElement, insertAt);
+  newUint8.set(uint8.subarray(insertAt), insertAt + durationElement.length);
+  
+  const newView = new DataView(newUint8.buffer);
+  let patchVal = newSize;
+  for (let i = sizeBytes - 1; i >= 1; i--) {
+    newView.setUint8(segInfoSizeOffset + i, patchVal & 0xFF);
+    patchVal >>= 8;
+  }
+  newView.setUint8(segInfoSizeOffset, (firstByte & (mask - 1)) | (patchVal & (mask - 1)));
+  
+  return new Blob([newUint8], { type: 'video/webm' });
+};
+
+// --- HELPER: IndexedDB for saving videos locally across reloads ---
+const DB_NAME = 'ReactorStudioDB';
+const STORE_NAME = 'Assets';
+const openDB = () => {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, 1);
+    request.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
+    };
+    request.onsuccess = (e) => resolve(e.target.result);
+    request.onerror = (e) => reject(e.target.error);
+  });
+};
+const idbSet = async (key, blob) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).put(blob, key);
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+};
+const idbGet = async (key) => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const req = tx.objectStore(STORE_NAME).get(key);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+};
+const idbClear = async () => {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = () => reject(tx.error);
+  });
+};
 
 // --- 1. MASSIVE TEMPLATE ENGINE ---
 const TEMPLATES = [
@@ -94,6 +200,7 @@ export default function ReactorStudio() {
   const [isPlaying, setIsPlaying] = useState(false); 
   const [isExporting, setIsExporting] = useState(false); 
   const [recordedUrl, setRecordedUrl] = useState(null);
+  const [isLoadingProject, setIsLoadingProject] = useState(true);
   
   const [templateId, setTemplateId] = useState('social_pro');
   const [displayName, setDisplayName] = useState('Manu');
@@ -104,21 +211,17 @@ export default function ReactorStudio() {
   const [accentColor, setAccentColor] = useState('#f97316');
   const [fontPack, setFontPack] = useState('TikTok');
   
-  // Universal Font Customization & Verified Badge State
   const [nameColor, setNameColor] = useState('#ffffff');
   const [nameSize, setNameSize] = useState(null); 
   const [captionColor, setCaptionColor] = useState('#ffffff');
   const [captionSize, setCaptionSize] = useState(null); 
   const [showVerified, setShowVerified] = useState(true);
 
-  // Edit Mode State
   const [editMode, setEditMode] = useState(false);
 
-  // Effects State
   const [videoEffect, setVideoEffect] = useState('none');
   const [textAnimation, setTextAnimation] = useState('none');
 
-  // Football Assets State
   const [homeLogoUrl, setHomeLogoUrl] = useState('');
   const [awayLogoUrl, setAwayLogoUrl] = useState('');
   const [homeScore, setHomeScore] = useState(0);
@@ -134,7 +237,6 @@ export default function ReactorStudio() {
   const [trimEnd, setTrimEnd] = useState(0);
   const [fadeIn, setFadeIn] = useState(false);
 
-  // UI State
   const [showGallery, setShowGallery] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
   const [layers, setLayers] = useState({ video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true });
@@ -146,15 +248,95 @@ export default function ReactorStudio() {
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
   const activeTemplate = templateMap[templateId];
 
+  // --- LocalStorage & IndexedDB Restoration ---
+  useEffect(() => {
+    const loadProject = async () => {
+      // 1. Load Text States
+      const savedState = JSON.parse(localStorage.getItem('reactor-project-state') || '{}');
+      if (savedState.templateId) setTemplateId(savedState.templateId);
+      if (savedState.displayName) setDisplayName(savedState.displayName);
+      if (savedState.username) setUsername(savedState.username);
+      if (savedState.povCaption) setPovCaption(savedState.povCaption);
+      if (savedState.accentColor) setAccentColor(savedState.accentColor);
+      if (savedState.fontPack) setFontPack(savedState.fontPack);
+      if (savedState.nameColor) setNameColor(savedState.nameColor);
+      if (savedState.nameSize) setNameSize(savedState.nameSize);
+      if (savedState.captionColor) setCaptionColor(savedState.captionColor);
+      if (savedState.captionSize) setCaptionSize(savedState.captionSize);
+      if (savedState.showVerified !== undefined) setShowVerified(savedState.showVerified);
+      if (savedState.videoEffect) setVideoEffect(savedState.videoEffect);
+      if (savedState.textAnimation) setTextAnimation(savedState.textAnimation);
+      if (savedState.homeLogoUrl) setHomeLogoUrl(savedState.homeLogoUrl);
+      if (savedState.awayLogoUrl) setAwayLogoUrl(savedState.awayLogoUrl);
+      if (savedState.homeScore) setHomeScore(savedState.homeScore);
+      if (savedState.awayScore) setAwayScore(savedState.awayScore);
+      if (savedState.filter) setFilter(savedState.filter);
+      if (savedState.fadeIn) setFadeIn(savedState.fadeIn);
+
+      // 2. Load Media from IndexedDB
+      try {
+        const videoBlob = await idbGet('main_video');
+        if (videoBlob && sourceVideoRef.current) {
+          const url = URL.createObjectURL(videoBlob);
+          sourceVideoRef.current.src = url;
+          sourceVideoRef.current.loop = true;
+          sourceVideoRef.current.muted = true;
+          sourceVideoRef.current.onloadedmetadata = () => {
+            setDuration(sourceVideoRef.current.duration);
+            setTrimStart(savedState.trimStart || 0);
+            setTrimEnd(savedState.trimEnd || sourceVideoRef.current.duration);
+            sourceVideoRef.current.play();
+            setIsPlaying(true);
+            setSourceLoaded(true);
+          };
+        }
+
+        const brollBlob = await idbGet('broll_video');
+        if (brollBlob && brollVideoRef.current) {
+          const url = URL.createObjectURL(brollBlob);
+          brollVideoRef.current.src = url;
+          brollVideoRef.current.loop = true;
+          brollVideoRef.current.muted = true;
+          brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); setBrollLoaded(true); };
+        }
+
+        const imageBlob = await idbGet('profile_image');
+        if (imageBlob) setProfileSrc(URL.createObjectURL(imageBlob));
+
+        const audioBlob = await idbGet('audio_track');
+        if (audioBlob && audioRef.current) {
+          audioRef.current.src = URL.createObjectURL(audioBlob);
+          audioRef.current.loop = true;
+          setAudioName('Restored Audio');
+        }
+      } catch (e) { console.error("Failed to load media", e); }
+      
+      setIsLoadingProject(false);
+    };
+    loadProject();
+  }, []);
+
+  // Save Text States to LocalStorage on change
+  useEffect(() => {
+    if (isLoadingProject) return;
+    const saveState = {
+      templateId, displayName, username, povCaption, accentColor, fontPack,
+      nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation,
+      homeLogoUrl, awayLogoUrl, homeScore, awayScore, trimStart, trimEnd, filter, fadeIn
+    };
+    localStorage.setItem('reactor-project-state', JSON.stringify(saveState));
+  }, [templateId, displayName, username, povCaption, accentColor, fontPack, nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation, homeLogoUrl, awayLogoUrl, homeScore, awayScore, trimStart, trimEnd, filter, fadeIn, isLoadingProject]);
+
   useEffect(() => { if (profileSrc) profileImgRef.current.src = profileSrc; else profileImgRef.current = new Image(); }, [profileSrc]);
   useEffect(() => { if (homeLogoUrl) homeLogoRef.current.src = homeLogoUrl; else homeLogoRef.current = new Image(); }, [homeLogoUrl]);
   useEffect(() => { if (awayLogoUrl) awayLogoRef.current.src = awayLogoUrl; else awayLogoRef.current = new Image(); }, [awayLogoUrl]);
 
-  const handleImport = (e, type) => {
+  const handleImport = async (e, type) => {
     const file = e.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
       if (type === 'video') {
+        await idbSet('main_video', file); // Save to IDB
         if (sourceVideoRef.current) {
           sourceVideoRef.current.src = url;
           sourceVideoRef.current.loop = true;
@@ -168,16 +350,30 @@ export default function ReactorStudio() {
           };
         }
       } else if (type === 'broll') {
+        await idbSet('broll_video', file); // Save to IDB
         if (brollVideoRef.current) {
           brollVideoRef.current.src = url;
           brollVideoRef.current.loop = true;
           brollVideoRef.current.muted = true;
           brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); setBrollLoaded(true); };
         }
-      } else if (type === 'image') setProfileSrc(url);
-      else if (type === 'audio') { if (audioRef.current) { audioRef.current.src = url; audioRef.current.loop = true; setAudioName(file.name); } }
+      } else if (type === 'image') {
+        await idbSet('profile_image', file); // Save to IDB
+        setProfileSrc(url);
+      } else if (type === 'audio') {
+        await idbSet('audio_track', file); // Save to IDB
+        if (audioRef.current) { audioRef.current.src = url; audioRef.current.loop = true; setAudioName(file.name); }
+      }
     }
     e.target.value = null; 
+  };
+
+  // Clear project
+  const handleClearProject = async () => {
+    if (!window.confirm("Clear all project data? This will remove the current video and settings.")) return;
+    localStorage.removeItem('reactor-project-state');
+    await idbClear();
+    window.location.reload();
   };
 
   useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = isMuted; }, [isMuted]);
@@ -281,14 +477,12 @@ export default function ReactorStudio() {
 
     const font = FONT_PACKS[fontPack];
     const currentTime = sourceVid.currentTime;
-    const animProgress = Math.min((currentTime - trimStart) / 2, 1); // Animations last 2 seconds
+    const animProgress = Math.min((currentTime - trimStart) / 2, 1);
 
-    // 1. Draw Source Video
     if (layers.video) {
       ctx.save();
       const v = activeTemplate.video;
       
-      // Apply Video Effects
       if (videoEffect === 'zoom_in') {
         const scale = 1 + Math.min((currentTime - trimStart) / (trimEnd - trimStart), 1) * 0.3;
         ctx.translate(v.x + v.w/2, v.y + v.h/2);
@@ -325,7 +519,6 @@ export default function ReactorStudio() {
       }
     }
 
-    // 2. Draw PiP (Webcam OR B-Roll)
     const showPiP = (cameraOn || brollLoaded) && layers.pip;
     const activePiPVid = brollLoaded ? brollVid : webcamVid;
     if (activePiPVid && showPiP) {
@@ -343,7 +536,6 @@ export default function ReactorStudio() {
       ctx.restore();
     }
 
-    // 3. Draw Gradients
     if (layers.gradients) {
       if (activeTemplate.topGradient) {
         const grd = ctx.createLinearGradient(0, 0, 0, activeTemplate.topGradient);
@@ -357,7 +549,6 @@ export default function ReactorStudio() {
       }
     }
 
-    // 4. Draw Header/Ticker
     if (activeTemplate.header) {
       const h = activeTemplate.header;
       ctx.fillStyle = h.bg; ctx.fillRect(0, 0, W, h.h);
@@ -373,7 +564,6 @@ export default function ReactorStudio() {
       lines.forEach(line => { ctx.fillText(line, 20, yPos); yPos += 36; });
     }
 
-    // 5. Draw Caption (With Text Animations)
     if (layers.caption && activeTemplate.caption && !activeTemplate.ticker) {
       const c = activeTemplate.caption;
       ctx.fillStyle = captionColor || c.color || '#fff';
@@ -396,10 +586,9 @@ export default function ReactorStudio() {
       const lines = wrapText(ctx, displayCaption, c.maxW, 3);
       let yPos = c.y + yOffset;
       lines.forEach(line => { ctx.fillText(line, c.x, yPos); yPos += cSize + 8; });
-      ctx.globalAlpha = 1; // Reset
+      ctx.globalAlpha = 1;
     }
 
-    // 6. Draw Profile, Name & Handle
     const p = (activeTemplate.isCustom || editMode) ? profilePos : activeTemplate.profile;
     if (profileImgRef.current.src && p && layers.profile) {
       ctx.save();
@@ -455,7 +644,6 @@ export default function ReactorStudio() {
       }
     }
 
-    // 7. Draw Football Scorebug
     if (layers.scorebug && (homeLogoRef.current.src || awayLogoRef.current.src)) {
       const bugY = H - 150; const bugH = 80; const bugW = 400; const bugX = (W - bugW) / 2;
       ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
@@ -528,7 +716,6 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => { dragRef.current.target = null; };
 
-  // --- Bulletproof Fast Export Logic ---
   const handleExportVideo = async (withAudio = true) => {
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || isExporting || !vid) return;
@@ -541,21 +728,18 @@ export default function ReactorStudio() {
     await new Promise(r => setTimeout(r, 200));
 
     const wasMuted = vid.muted;
-    vid.muted = true; // Prevent browser stalling due to audio autoplay policies
+    vid.muted = true;
 
     const fps = 30;
     const canvasStream = canvasRef.current.captureStream(fps);
     
-    // SILENT AUDIO TRACK FIX: Generates a silent audio oscillator internally.
-    // This forces the browser to write correct timestamps for every single frame, 
-    // fixing the bug where 5s videos export as 30m.
     let audioCtx;
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioDest = audioCtx.createMediaStreamDestination();
       const osc = audioCtx.createOscillator();
       const gain = audioCtx.createGain();
-      gain.gain.value = 0.0; // Completely silent
+      gain.gain.value = 0.0;
       osc.connect(gain);
       gain.connect(audioDest);
       osc.start();
@@ -589,9 +773,12 @@ export default function ReactorStudio() {
     });
     
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const url = URL.createObjectURL(blob);
+    recorder.onstop = async () => {
+      let rawBlob = new Blob(chunksRef.current, { type: 'video/webm' });
+      const exportDurationMs = (trimEnd - trimStart) * 1000;
+      const fixedBlob = await fixWebmDuration(rawBlob, exportDurationMs);
+      
+      const url = URL.createObjectURL(fixedBlob);
       setRecordedUrl(url);
       setIsExporting(false);
       vid.pause();
@@ -603,7 +790,6 @@ export default function ReactorStudio() {
 
     const end = isFinite(trimEnd) ? trimEnd : (vid.duration || 0);
     
-    // Use setInterval instead of requestAnimationFrame to ensure it runs even if tab is hidden
     const checkInterval = setInterval(() => {
       if (vid.currentTime >= end - 0.05 || vid.ended) {
         clearInterval(checkInterval);
@@ -673,6 +859,7 @@ export default function ReactorStudio() {
           <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Reactor Studio</h1>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+          <button onClick={handleClearProject} style={topBtnStyle} title="Clear Project & Start Over"><Eraser size={16} /> Clear</button>
           <button onClick={() => setShowGallery(true)} style={topBtnStyle} disabled={isExporting || recordedUrl}><LayoutGrid size={16} /> Templates</button>
           
           {recordedUrl ? (
@@ -730,7 +917,6 @@ export default function ReactorStudio() {
           </div>
         </div>
 
-        {/* Right Sidebar (Properties) */}
         <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
           
           <div style={panelStyle}>
@@ -741,7 +927,6 @@ export default function ReactorStudio() {
             <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
           </div>
 
-          {/* NEW EFFECTS PANEL */}
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
             <label style={{ fontSize: '11px', color: '#94a3b8' }}>Video Effect</label>
@@ -854,7 +1039,6 @@ export default function ReactorStudio() {
         </div>
       </div>
 
-      {/* Bottom Bar - Preview Controls */}
       <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px' }}>
         <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute" disabled={isExporting || recordedUrl}><Volume2 size={20} /></button>
         <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview">
