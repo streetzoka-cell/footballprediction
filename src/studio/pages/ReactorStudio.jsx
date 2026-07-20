@@ -76,7 +76,7 @@ const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.restore();
 };
 
-// --- 1. MASSIVE TEMPLATE ENGINE ---
+// --- 1. MASSIVE TEMPLATE ENGINE (Merged Old + New Pro) ---
 const TEMPLATES = [
   // === PRO CINEMATIC PRESETS ===
   { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro'} },
@@ -93,10 +93,29 @@ const TEMPLATES = [
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
   { id: 'tiktok_tl', title: 'TikTok Top Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
+  { id: 'tiktok_tr', title: 'TikTok Top Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tr'} },
+  { id: 'tiktok_bl', title: 'TikTok Bottom Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#111', layout: 'bl'} },
+  { id: 'tiktok_br', title: 'TikTok Bottom Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:1180,r:35,ring:'accent'}, username: {x:620,y:1175,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:1080,size:24,maxW:680,align:'right'}, bottomGradient:400, preview: {bg: '#111', layout: 'br'} },
+  { id: 'tiktok_face', title: 'TikTok Facecam', category: 'TikTok', tags: ['facecam', 'gaming'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
+  { id: 'insta_tl', title: 'Insta Story Top Left', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tl'} },
+  { id: 'insta_tr', title: 'Insta Story Top Right', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tr'} },
+  { id: 'insta_bl', title: 'Insta Story Bottom', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#1a1a1a', layout: 'bl'} },
+  { id: 'insta_lux', title: 'Insta Luxury Gold', category: 'Instagram', tags: ['luxury', 'gold'], pip: false, video: {x:40,y:80,w:640,h:900,border:'#f59e0b'}, profile: {x:360,y:1100,r:40,ring:'#f59e0b'}, username: {x:360,y:1200,size:36,color:'#fff',center:true,badge:true,badgeColor:'#f59e0b'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
   { id: 'yt_shorts', title: 'YT Shorts Standard', category: 'YouTube', tags: ['shorts', 'viral'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#0f0f0f', layout: 'tl'} },
   { id: 'yt_mrbeast', title: 'YT MrBeast Style', category: 'YouTube', tags: ['mrbeast', 'viral'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1100,size:60,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#0f0f0f', layout: 'center'} },
+  { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#1a1a1a', layout: 'tl'} },
   { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#ec4899'}, profile: {x:360,y:1150,r:35,ring:'#ec4899'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#ec4899'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#10b981'}, profile: {x:360,y:1150,r:35,ring:'#10b981'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#10b981'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'#9146ff'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'#9146ff'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#0e0e10', preview: {bg: '#0e0e10', layout: 'tl'} },
+  { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: {x:0,y:0,w:360,h:1280}, profile: {x:180,y:640,r:50,ring:'accent'}, username: {x:180,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:540,y:640,size:28,maxW:300,center:true}, bg:'#000', preview: {bg: '#111', layout: 'split'} },
+  { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#dc2626',text:'BREAKING NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#dc2626', layout: 'news'} },
+  { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#1d9bf0',text:'MATCH UPDATE',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#1d9bf0', layout: 'news'} },
+  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#10b981',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#10b981', layout: 'news'} },
+  { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#000', preview: {bg: '#000', layout: 'tl'} },
+  { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:80,w:640,h:900,border:'accent'}, profile: {x:360,y:1100,r:40,ring:'#f1f1f1'}, username: {x:360,y:1200,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
+  { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:40,w:640,h:800,border:'accent'}, profile: {x:360,y:1000,r:40,ring:'#f1f1f1'}, username: {x:360,y:1100,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:900,size:28,color:'#000',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
   { id: 'min_dark', title: 'Minimal Dark', category: 'Minimal', tags: ['dark', 'clean'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1200,size:32,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
 ];
 
@@ -116,6 +135,8 @@ const BRAND_PRESETS = [
 const FILTERS = [
   { id: 'none', name: 'Normal' }, { id: 'saturate(2) contrast(1.3)', name: 'Vivid' },
   { id: 'grayscale(1) contrast(1.2)', name: 'B&W' }, { id: 'sepia(0.8) contrast(1.1) brightness(0.9)', name: 'Retro' },
+  { id: 'invert(1)', name: 'Invert' }, { id: 'blur(2px)', name: 'Blur' },
+  { id: 'brightness(1.4) saturate(0.8)', name: 'Warm' }, { id: 'brightness(0.8) saturate(1.5) hue-rotate(200deg)', name: 'Cool' },
   { id: 'contrast(1.5) brightness(1.1) sepia(0.3)', name: 'Vintage' }
 ];
 
@@ -143,10 +164,11 @@ const initialState = {
   editor: {
     templateId: 'pro_aura', displayName: 'Manu', username: 'manuel_palmer', povCaption: 'POV: You just witnessed greatness 🔥',
     accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
-    showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
+    showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', 
+    homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
     isMuted: false, filter: 'none', fadeIn: false, pipPos: { x: 450, y: 800, w: 280, h: 380 }, profilePos: { x: 50, y: 70, r: 35 },
     introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true,
-    videoZoom: 1, videoPanX: 0, videoPanY: 0 // NEW: Crop & Zoom State
+    videoZoom: 1, videoPanX: 0, videoPanY: 0
   },
   timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
   ui: { showGallery: false, showGuides: false, isExporting: false, recordedUrl: null, isLoadingProject: true,
@@ -243,7 +265,6 @@ export default function ReactorStudio() {
         sourceVideoRef.current.onloadedmetadata = () => {
           const dur = sourceVideoRef.current.duration;
           const newClips = [{ id: `clip_${Date.now()}`, start: 0, end: dur }];
-          // Reset Crop on new video
           dispatch({ type: 'SET_EDITOR', payload: { videoZoom: 1, videoPanX: 0, videoPanY: 0 } });
           dispatch({ type: 'SET_TIMELINE', payload: { duration: dur, clips: newClips, activeClipId: newClips[0].id, isPlaying: true, currentTime: 0 } });
           dispatch({ type: 'SET_MEDIA', payload: { sourceLoaded: true } });
@@ -514,7 +535,6 @@ export default function ReactorStudio() {
 
         ctx.filter = editor.filter;
         
-        // Calculate Crop
         const zoom = editor.videoZoom || 1;
         const panX = editor.videoPanX || 0;
         const panY = editor.videoPanY || 0;
@@ -715,6 +735,7 @@ export default function ReactorStudio() {
           <button onClick={() => fileInputRefs.current.logo?.click()} style={{...sideBtnStyle, color: media.logoSrc ? '#10b981' : '#64748b'}} title="Upload Brand Logo" disabled={ui.isExporting || ui.recordedUrl}><ImageIcon size={20} /></button>
           <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
           <button onClick={startCamera} style={{...sideBtnStyle, color: media.cameraOn ? '#10b981' : '#64748b'}} title="Camera" disabled={ui.isExporting || ui.recordedUrl}><Camera size={20} /></button>
+          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGuides: !ui.showGuides } })} style={{...sideBtnStyle, color: ui.showGuides ? '#10b981' : '#64748b'}} title="Guides"><Grid3x3 size={20} /></button>
         </div>
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000', minHeight: 0 }}>
@@ -771,7 +792,7 @@ export default function ReactorStudio() {
 
         <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
           
-          {/* NEW: CROP & ZOOM PANEL */}
+          {/* CROP & ZOOM PANEL */}
           {media.sourceLoaded && (
             <div style={panelStyle}>
               <div style={panelTitleStyle}><Crop size={14} /> Crop & Zoom</div>
@@ -838,6 +859,18 @@ export default function ReactorStudio() {
           </div>
 
           <div style={panelStyle}>
+            <div style={panelTitleStyle}><Shield size={14} /> Football Assets</div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="text" value={editor.homeLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeLogoUrl: e.target.value } })} placeholder="Home Logo URL" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="number" value={editor.homeScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeScore: e.target.value } })} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
+            </div>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="text" value={editor.awayLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayLogoUrl: e.target.value } })} placeholder="Away Logo URL" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="number" value={editor.awayScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayScore: e.target.value } })} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
+            </div>
+          </div>
+
+          <div style={panelStyle}>
             <div style={panelTitleStyle}><User size={14} /> Social Details & Fonts</div>
             <input type="text" value={editor.displayName} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { displayName: e.target.value } })} placeholder="Display Name" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -851,6 +884,15 @@ export default function ReactorStudio() {
               <input type="color" value={editor.captionColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionColor: e.target.value } })} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
               <input type="number" value={editor.captionSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Caption Size (px)" style={{...inputStyle, width: '100px'}} title="Caption Size" />
             </div>
+          </div>
+
+          <div style={panelStyle}>
+            <div style={panelTitleStyle}><Layers size={14} /> Layers</div>
+            {Object.keys(ui.layers).map(key => (
+              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#cbd5e1', textTransform: 'capitalize', cursor: 'pointer', marginBottom: '6px' }}>
+                <input type="checkbox" checked={ui.layers[key]} onChange={() => dispatch({ type: 'SET_UI', payload: { layers: { ...ui.layers, [key]: !ui.layers[key] } } })} style={{ accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} /> {key}
+              </label>
+            ))}
           </div>
 
           <div style={panelStyle}>
@@ -885,7 +927,7 @@ export default function ReactorStudio() {
               <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })} style={topBtnStyle}><X size={18} /></button>
             </div>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937', display: 'flex', gap: '8px', overflowX: 'auto' }}>
-              {["All", "Favorites", "Pro", "TikTok", "YouTube", "Gaming", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} style={{ padding: '6px 16px', borderRadius: '20px', border: '1px solid #334155', background: ui.activeCategory === cat ? '#10b981' : '#1f2937', color: ui.activeCategory === cat ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat}</button>)}
+              {["All", "Favorites", "Pro", "TikTok", "Instagram", "YouTube", "Gaming", "Podcast", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} style={{ padding: '6px 16px', borderRadius: '20px', border: '1px solid #334155', background: ui.activeCategory === cat ? '#10b981' : '#1f2937', color: ui.activeCategory === cat ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat}</button>)}
             </div>
             <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
               {filteredTemplates.map(t => (
