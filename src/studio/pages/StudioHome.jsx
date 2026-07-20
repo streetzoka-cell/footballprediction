@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchFixtures } from '../../utils/api';
 import { getLocalDateStr } from '../../utils/dates';
 import { useEditorStore } from '../store/editorStore';
-import { fetchUserProjects, deleteProject } from '../../services/studioService';
+import { fetchUserProjects, deleteProject } from '../services/studioService';
 import { LayoutGrid, Clock, Trash2, Video, Image, Plus, Folder, Camera, Sparkles, Monitor, Film, Zap } from 'lucide-react';
 
 export default function StudioHome() {
