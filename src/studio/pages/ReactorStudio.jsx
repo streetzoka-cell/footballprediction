@@ -88,8 +88,8 @@ export default function ReactorStudio() {
   const [sourceLoaded, setSourceLoaded] = useState(false);
   const [brollLoaded, setBrollLoaded] = useState(false);
   const [cameraOn, setCameraOn] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false); // Preview Play/Pause
-  const [isExporting, setIsExporting] = useState(false); // Export Loading State
+  const [isPlaying, setIsPlaying] = useState(false); 
+  const [isExporting, setIsExporting] = useState(false); 
   const [recordedUrl, setRecordedUrl] = useState(null);
   
   const [templateId, setTemplateId] = useState('social_pro');
@@ -98,9 +98,18 @@ export default function ReactorStudio() {
   const [povCaption, setPovCaption] = useState('POV: You just witnessed greatness 🔥');
   const [profileSrc, setProfileSrc] = useState(null);
   const [audioName, setAudioName] = useState('');
-  const [accentColor, setAccentColor] = useState('#f97316'); // Default to Orange to match pic
+  const [accentColor, setAccentColor] = useState('#f97316');
   const [fontPack, setFontPack] = useState('TikTok');
   
+  // Font Customization State
+  const [nameColor, setNameColor] = useState('#ffffff');
+  const [nameSize, setNameSize] = useState(null); // Null falls back to template
+  const [captionColor, setCaptionColor] = useState('#ffffff');
+  const [captionSize, setCaptionSize] = useState(null); 
+
+  // Edit Mode State
+  const [editMode, setEditMode] = useState(false);
+
   // Football Assets State
   const [homeLogoUrl, setHomeLogoUrl] = useState('');
   const [awayLogoUrl, setAwayLogoUrl] = useState('');
@@ -108,7 +117,7 @@ export default function ReactorStudio() {
   const [awayScore, setAwayScore] = useState(0);
 
   const [pipPos, setPipPos] = useState({ x: 450, y: 800, w: 280, h: 380 });
-  const [profilePos, setProfilePos] = useState({ x: 360, y: 640, r: 50 });
+  const [profilePos, setProfilePos] = useState({ x: 50, y: 70, r: 35 });
 
   const [isMuted, setIsMuted] = useState(false);
   const [filter, setFilter] = useState('none');
@@ -176,7 +185,6 @@ export default function ReactorStudio() {
     } catch (err) { alert("Camera access denied."); }
   };
 
-  // Preview Play/Pause Logic
   const togglePreview = () => {
     const vid = sourceVideoRef.current;
     if (!vid) return;
@@ -243,7 +251,6 @@ export default function ReactorStudio() {
 
     if (!sourceLoaded || !sourceVid) return;
     
-    // Loop video during preview if it reaches trimEnd
     if (isPlaying && sourceVid.currentTime >= trimEnd) {
       sourceVid.currentTime = trimStart;
     }
@@ -274,10 +281,11 @@ export default function ReactorStudio() {
       }
     }
 
-    // 2. Draw PiP (Webcam OR B-Roll)
-    const pip = activeTemplate.isCustom ? pipPos : { x: 450, y: 850, w: 280, h: 380 };
+    // 2. Draw PiP (Webcam OR B-Roll) - Universal across all templates
+    const showPiP = (cameraOn || brollLoaded) && layers.pip;
     const activePiPVid = brollLoaded ? brollVid : webcamVid;
-    if (activePiPVid && activeTemplate.pip && layers.pip && (cameraOn || brollLoaded)) {
+    if (activePiPVid && showPiP) {
+      const pip = pipPos; // Use global pipPos
       ctx.fillStyle = '#fff';
       ctx.fillRect(pip.x - 4, pip.y - 4, pip.w + 8, pip.h + 8);
       ctx.save();
@@ -324,16 +332,17 @@ export default function ReactorStudio() {
     // 5. Draw Caption
     if (layers.caption && activeTemplate.caption && !activeTemplate.ticker) {
       const c = activeTemplate.caption;
-      ctx.fillStyle = c.color || '#fff';
-      ctx.font = `${font.weight} ${c.size}px ${font.name}`;
+      ctx.fillStyle = captionColor || c.color || '#fff';
+      const cSize = captionSize || c.size;
+      ctx.font = `${font.weight} ${cSize}px ${font.name}`;
       ctx.textAlign = c.center ? 'center' : (c.align || 'left');
       const lines = wrapText(ctx, povCaption, c.maxW, 3);
       let yPos = c.y;
-      lines.forEach(line => { ctx.fillText(line, c.x, yPos); yPos += c.size + 8; });
+      lines.forEach(line => { ctx.fillText(line, c.x, yPos); yPos += cSize + 8; });
     }
 
-    // 6. Draw Profile, Name & Handle
-    const p = activeTemplate.isCustom ? profilePos : activeTemplate.profile;
+    // 6. Draw Profile, Name & Handle (Universal Profile Pos on Edit Mode)
+    const p = (activeTemplate.isCustom || editMode) ? profilePos : activeTemplate.profile;
     if (profileImgRef.current.src && p && layers.profile) {
       ctx.save();
       ctx.beginPath();
@@ -351,26 +360,31 @@ export default function ReactorStudio() {
     if (activeTemplate.nameEl && activeTemplate.handleEl) {
       const n = activeTemplate.nameEl, hd = activeTemplate.handleEl;
       ctx.textAlign = n.align || 'left';
-      ctx.fillStyle = n.color || '#fff';
-      ctx.font = `${font.weight} ${n.size}px ${font.name}`;
-      ctx.fillText(displayName, n.x, n.y);
+      ctx.fillStyle = nameColor || n.color || '#fff';
+      const nSize = nameSize || n.size;
+      ctx.font = `${font.weight} ${nSize}px ${font.name}`;
+      
+      const nx = (activeTemplate.isCustom || editMode) ? p.x + p.r + 12 : n.x;
+      const ny = (activeTemplate.isCustom || editMode) ? p.y + 10 : n.y;
+      ctx.fillText(displayName, nx, ny);
+      
       const nameWidth = ctx.measureText(displayName).width;
-      const hdX = n.align === 'center' ? n.x + nameWidth/2 + 12 : n.x + nameWidth + 12;
+      const hdX = n.align === 'center' ? nx + nameWidth/2 + 12 : nx + nameWidth + 12;
       ctx.fillStyle = hd.color || '#aaa';
       ctx.font = `${hd.size}px ${font.name}`;
-      ctx.fillText(`@${username}`, hdX, n.y);
-    } else if (activeTemplate.username && layers.username) {
-      const u = activeTemplate.username;
-      const ux = activeTemplate.isCustom ? profilePos.x : u.x;
-      const uy = activeTemplate.isCustom ? profilePos.y + profilePos.r + 30 : u.y;
-      ctx.textAlign = u.center ? 'center' : (u.align || 'left');
-      ctx.fillStyle = u.color || '#fff';
-      ctx.font = `${font.weight} ${u.size}px ${font.name}`;
+      ctx.fillText(`@${username}`, hdX, ny);
+    } else if (activeTemplate.username || editMode) {
+      const u = activeTemplate.username || { size: 28, center: true, badge: false };
+      const ux = (activeTemplate.isCustom || editMode) ? p.x : u.x;
+      const uy = (activeTemplate.isCustom || editMode) ? p.y + p.r + 30 : u.y;
+      ctx.textAlign = (activeTemplate.isCustom || editMode) ? 'center' : (u.center ? 'center' : (u.align || 'left'));
+      ctx.fillStyle = nameColor || u.color || '#fff';
+      ctx.font = `${font.weight} ${nameSize || u.size}px ${font.name}`;
       ctx.fillText(`@${username}`, ux, uy);
       if (u.badge && layers.badge) {
         const nameWidth = ctx.measureText(username).width;
-        const badgeX = u.center ? ux + nameWidth/2 + 14 : ux + nameWidth + 14;
-        const badgeY = uy - u.size + 6;
+        const badgeX = (activeTemplate.isCustom || editMode) ? ux + nameWidth/2 + 14 : ux + nameWidth + 14;
+        const badgeY = uy - (nameSize || u.size) + 6;
         ctx.fillStyle = u.badgeColor === 'accent' ? accentColor : (u.badgeColor || '#1d9bf0');
         ctx.beginPath(); ctx.arc(badgeX, badgeY, 12, 0, Math.PI * 2); ctx.fill();
         ctx.fillStyle = '#fff'; ctx.font = `bold 16px Arial`; 
@@ -412,18 +426,21 @@ export default function ReactorStudio() {
   };
 
   const handlePointerDown = (e) => {
-    if (!activeTemplate.isCustom && !activeTemplate.pip) return;
+    // Enable drag if Edit Mode, Custom Template, or universal PiP elements
+    if (!editMode && !activeTemplate.isCustom && !brollLoaded && !cameraOn) return;
     const { x, y } = getCanvasCoords(e);
-    if (activeTemplate.isCustom && profileSrc) {
+    
+    if ((activeTemplate.isCustom || editMode) && profileSrc) {
       const distToProfile = Math.hypot(x - profilePos.x, y - profilePos.y);
       if (distToProfile <= profilePos.r) {
         dragRef.current = { target: 'profile', offsetX: x - profilePos.x, offsetY: y - profilePos.y };
         return;
       }
     }
-    const pip = activeTemplate.isCustom ? pipPos : { x: 450, y: 850, w: 280, h: 380 };
-    if (activeTemplate.pip && x >= pip.x && x <= pip.x + pip.w && y >= pip.y && y <= pip.y + pip.h) {
-      dragRef.current = { target: 'pip', offsetX: x - pip.x, offsetY: y - pip.y };
+    if (brollLoaded || cameraOn) {
+      if (x >= pipPos.x && x <= pipPos.x + pipPos.w && y >= pipPos.y && y <= pipPos.y + pipPos.h) {
+        dragRef.current = { target: 'pip', offsetX: x - pipPos.x, offsetY: y - pipPos.y };
+      }
     }
   };
 
@@ -434,8 +451,8 @@ export default function ReactorStudio() {
     const snapPointsX = [0, 360, 720];
     
     if (dragRef.current.target === 'pip') {
-      const pipW = activeTemplate.isCustom ? pipPos.w : 280;
-      const pipH = activeTemplate.isCustom ? pipPos.h : 380;
+      const pipW = pipPos.w;
+      const pipH = pipPos.h;
       let newX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - pipW));
       let newY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - pipH));
       snapPointsX.forEach(pt => { if (Math.abs(newX - pt) < 20) newX = pt; });
@@ -449,17 +466,16 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => { dragRef.current.target = null; };
 
-  // --- Smart Trim Export Logic ---
+  // --- Smart Trim Export Logic (Optimized) ---
   const handleExportVideo = async () => {
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || isExporting || !vid) return;
 
     setIsExporting(true);
-    setIsPlaying(false); // Pause normal preview
+    setIsPlaying(false);
     vid.pause();
-    vid.currentTime = trimStart; // Seek to start
+    vid.currentTime = trimStart; 
 
-    // Wait a tick for seek to complete
     await new Promise(r => setTimeout(r, 100));
 
     const canvasStream = canvasRef.current.captureStream(30);
@@ -472,7 +488,19 @@ export default function ReactorStudio() {
     }
 
     chunksRef.current = [];
-    const recorder = new MediaRecorder(canvasStream, { mimeType: 'video/webm' });
+    
+    // Pick the best available codec for performance and quality
+    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
+      ? 'video/webm;codecs=vp9' 
+      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
+      ? 'video/webm;codecs=vp8'
+      : 'video/webm';
+
+    const recorder = new MediaRecorder(canvasStream, { 
+      mimeType,
+      videoBitsPerSecond: 10000000 // 10 Mbps for high quality output
+    });
+    
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: 'video/webm' });
@@ -483,28 +511,26 @@ export default function ReactorStudio() {
       if (audioRef.current) audioRef.current.pause();
     };
 
-    // Monitor time to stop at trimEnd
+    // Use setTimeout loop instead of requestAnimationFrame for more reliable timing export
     const checkTime = () => {
       if (vid.currentTime >= trimEnd) {
         if (recorder.state !== 'inactive') recorder.stop();
       } else {
-        requestAnimationFrame(checkTime);
+        setTimeout(checkTime, 100); // Check every 100ms to save CPU
       }
     };
 
-    recorder.start();
+    recorder.start(100); // Gather chunks in 100ms intervals
     vid.play();
     if (audioRef.current.src) audioRef.current.play();
-    requestAnimationFrame(checkTime);
+    setTimeout(checkTime, 100);
   };
 
-  // --- Discard Recording Logic ---
   const handleDiscardRecording = () => {
     if (recordedUrl) {
-      URL.revokeObjectURL(recordedUrl); // Free up memory
+      URL.revokeObjectURL(recordedUrl); 
       setRecordedUrl(null);
     }
-    // Reset preview state so they can edit and try again
     const vid = sourceVideoRef.current;
     if (vid) {
       vid.currentTime = trimStart;
@@ -516,7 +542,14 @@ export default function ReactorStudio() {
   useEffect(() => { return () => { if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); }; }, []);
 
   const applyTemplate = (id) => {
-    setTemplateId(id); setShowGallery(false);
+    setTemplateId(id); 
+    setShowGallery(false);
+    
+    // Sync universal positions to the newly selected template defaults
+    const t = templateMap[id];
+    if (t.profile) setProfilePos({ x: t.profile.x, y: t.profile.y, r: t.profile.r });
+    setPipPos({ x: 450, y: 800, w: 280, h: 380 });
+    
     let newRecents = [id, ...recents.filter(r => r !== id)].slice(0, 5);
     setRecents(newRecents);
     localStorage.setItem("reactor-recents", JSON.stringify(newRecents));
@@ -530,11 +563,8 @@ export default function ReactorStudio() {
 
   const filteredTemplates = useMemo(() => {
     let list = TEMPLATES;
-    if (activeCategory === "Favorites") {
-      list = list.filter(t => favorites.includes(t.id));
-    } else if (activeCategory !== "All") {
-      list = list.filter(t => t.category === activeCategory);
-    }
+    if (activeCategory === "Favorites") list = list.filter(t => favorites.includes(t.id));
+    else if (activeCategory !== "All") list = list.filter(t => t.category === activeCategory);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       list = list.filter(t => t.title.toLowerCase().includes(q) || t.tags.some(tag => tag.includes(q)) || t.category.toLowerCase().includes(q));
@@ -562,7 +592,6 @@ export default function ReactorStudio() {
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
           <button onClick={() => setShowGallery(true)} style={topBtnStyle} disabled={isExporting || recordedUrl}><LayoutGrid size={16} /> Templates</button>
           
-          {/* Conditional Top Right Buttons */}
           {recordedUrl ? (
             <>
               <button onClick={handleDiscardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
@@ -583,11 +612,11 @@ export default function ReactorStudio() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         
         <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Video" disabled={isExporting || recordedUrl}><Upload size={20} /></button>
-          <button onClick={() => fileInputRefs.current.broll?.click()} style={sideBtnStyle} title="Add B-Roll (2nd Video)" disabled={isExporting || recordedUrl}><Film size={20} /></button>
+          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Main Video" disabled={isExporting || recordedUrl}><Upload size={20} /></button>
+          <button onClick={() => fileInputRefs.current.broll?.click()} style={{...sideBtnStyle, color: brollLoaded ? '#10b981' : '#64748b'}} title="Add 2nd Video (B-Roll)" disabled={isExporting || recordedUrl}><Film size={20} /></button>
           <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar" disabled={isExporting || recordedUrl}><User size={20} /></button>
           <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={isExporting || recordedUrl}><Music size={20} /></button>
-          <button onClick={startCamera} style={sideBtnStyle} title="Camera" disabled={isExporting || recordedUrl}><Camera size={20} /></button>
+          <button onClick={startCamera} style={{...sideBtnStyle, color: cameraOn ? '#10b981' : '#64748b'}} title="Camera" disabled={isExporting || recordedUrl}><Camera size={20} /></button>
           <button onClick={() => setShowGuides(!showGuides)} style={{...sideBtnStyle, color: showGuides ? '#10b981' : '#64748b'}} title="Guides"><Grid3x3 size={20} /></button>
         </div>
 
@@ -601,7 +630,7 @@ export default function ReactorStudio() {
             {!sourceLoaded && !recordedUrl && (
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer' }} onClick={() => fileInputRefs.current.video?.click()}>
                 <Upload size={40} style={{ marginBottom: '12px' }} />
-                <p style={{ fontWeight: 700 }}>Import Video</p>
+                <p style={{ fontWeight: 700 }}>Import Main Video</p>
               </div>
             )}
             {recordedUrl && <video src={recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
@@ -615,6 +644,15 @@ export default function ReactorStudio() {
 
         {/* Right Sidebar (Properties) */}
         <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          
+          <div style={panelStyle}>
+            <div style={panelTitleStyle}><Move size={14} /> Grid Edit Mode</div>
+            <button onClick={() => setEditMode(!editMode)} style={{ ...inputStyle, background: editMode ? '#10b981' : '#1f2937', color: editMode ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
+              {editMode ? 'DRAGGING ENABLED' : 'ENABLE FREE DRAG'}
+            </button>
+            <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
+          </div>
+
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Palette size={14} /> Brand Kit</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -634,7 +672,6 @@ export default function ReactorStudio() {
             </div>
           </div>
 
-          {/* Football Assets */}
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Shield size={14} /> Football Assets</div>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -648,10 +685,18 @@ export default function ReactorStudio() {
           </div>
 
           <div style={panelStyle}>
-            <div style={panelTitleStyle}><User size={14} /> Social Details</div>
+            <div style={panelTitleStyle}><User size={14} /> Social Details & Fonts</div>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" style={inputStyle} disabled={isExporting || recordedUrl} />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="color" value={nameColor} onChange={(e) => setNameColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Name Color" />
+              <input type="number" value={nameSize || ''} onChange={(e) => setNameSize(e.target.value ? parseInt(e.target.value) : null)} placeholder="Name Size (px)" style={{...inputStyle, width: '100px'}} title="Name Size" />
+            </div>
             <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" style={inputStyle} disabled={isExporting || recordedUrl} />
-            <input type="text" value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={inputStyle} disabled={isExporting || recordedUrl} />
+            <textarea value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={{...inputStyle, height: '60px', resize: 'none'}} disabled={isExporting || recordedUrl} />
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input type="color" value={captionColor} onChange={(e) => setCaptionColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
+              <input type="number" value={captionSize || ''} onChange={(e) => setCaptionSize(e.target.value ? parseInt(e.target.value) : null)} placeholder="Caption Size (px)" style={{...inputStyle, width: '100px'}} title="Caption Size" />
+            </div>
           </div>
 
           <div style={panelStyle}>
@@ -694,15 +739,12 @@ export default function ReactorStudio() {
         </div>
       </div>
 
-      {/* Bottom Bar - Preview Controls (Disabled if recordedUrl exists) */}
+      {/* Bottom Bar - Preview Controls */}
       <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px' }}>
         <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute" disabled={isExporting || recordedUrl}><Volume2 size={20} /></button>
-        
-        {/* Preview Play/Pause Button */}
         <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview">
           {isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
         </button>
-
         <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={isExporting || recordedUrl}><Music size={20} /></button>
       </div>
 
@@ -723,29 +765,23 @@ export default function ReactorStudio() {
               {filteredTemplates.map(t => (
                 <div key={t.id} style={{ background: '#1f2937', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', border: templateId === t.id ? '2px solid #10b981' : '2px solid #334155', position: 'relative' }} onClick={() => applyTemplate(t.id)}>
                   <div style={{ height: '200px', background: t.preview.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', position: 'relative' }}>
-                    
                     {t.preview.layout === 'pov' && (
                       <>
-                        {/* Profile Pic */}
                         <div style={{ position: 'absolute', top: '15px', left: '15px', width: '24px', height: '24px', background: '#fff', borderRadius: '50%', border: '2px solid #1d9bf0' }}></div>
-                        {/* Name & Handle */}
                         <div style={{ position: 'absolute', top: '14px', left: '48px', display: 'flex', gap: '6px', alignItems: 'center' }}>
                           <div style={{ width: '40px', height: '8px', background: '#fff', borderRadius: '4px' }}></div>
                           <div style={{ width: '60px', height: '6px', background: '#aaa', borderRadius: '4px' }}></div>
                         </div>
-                        {/* POV Caption */}
                         <div style={{ position: 'absolute', top: '50px', left: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
                           <div style={{ width: '120px', height: '6px', background: '#fff', borderRadius: '4px' }}></div>
                           <div style={{ width: '100px', height: '6px', background: '#fff', borderRadius: '4px' }}></div>
                         </div>
                       </>
                     )}
-
                     {t.preview.layout === 'tl' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-start', marginLeft: '10px', marginTop: '10px' }}></div>}
                     {t.preview.layout === 'tr' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-end', marginRight: '10px', marginTop: '10px' }}></div>}
                     {t.preview.layout === 'bl' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-start', marginLeft: '10px', marginBottom: '10px' }}></div>}
                     {t.preview.layout === 'br' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-end', marginRight: '10px', marginBottom: '10px' }}></div>}
-                    
                     {(t.preview.layout === 'center' || t.preview.layout === 'split' || t.preview.layout === 'news' || t.preview.layout === 'custom') && (
                       <div style={{ width: '60%', height: '10px', background: '#fff', borderRadius: '4px' }}></div>
                     )}
