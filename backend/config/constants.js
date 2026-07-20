@@ -184,6 +184,12 @@ const FINISHED_STATUSES = Object.freeze([
   STATUS.ABANDONED, STATUS.AWARDED, STATUS.WALKOVER,
 ]);
 
+// ★ NEW: Any status that means the match is no longer active
+const RESOLVED_STATUSES = Object.freeze([
+  ...FINISHED_STATUSES,
+  STATUS.POSTPONED, STATUS.CANCELLED, STATUS.SUSPENDED, STATUS.INTERRUPTED
+]);
+
 const BASKETBALL_STATUS = Object.freeze({
   NOT_STARTED: "NS", FIRST_QUARTER: "1Q", BETWEEN_Q1_Q2: "Q1",
   SECOND_QUARTER: "2Q", BETWEEN_Q2_Q3: "Q2", THIRD_QUARTER: "3Q",
@@ -238,21 +244,20 @@ const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTUR
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
   // ── DAILY CAPS ──
-  // Strict limit on live polls per day to protect overall API budget
   FOOTBALL_DAILY_LIVE_CAP: 60,
   BASKETBALL_DAILY_LIVE_CAP: 20,
 
   // ── LIVE-COUNT-BASED INTERVALS (desired) ──
-  IDLE_INTERVAL_MS:        3600000,  // 60 min  — 0 live matches
-  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live
-  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live
-  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live
-  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+
+  IDLE_INTERVAL_MS:        3600000,  // 60 min
+  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min
+  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min
+  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min
+  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min
 
   // ── BUDGET PROTECTION ──
-  RESERVE_FOR_DAILY_CRON:  15,       // Always save 15 calls for tomorrow's initial cron sync
-  MIN_BUDGET_TO_POLL:      3,        // Do not poll if budget drops below this
+  RESERVE_FOR_DAILY_CRON:  15,
+  MIN_BUDGET_TO_POLL:      3,
   BUDGET_NORMAL_THRESHOLD: 30,
   BUDGET_CRITICAL_THRESHOLD: 15,
 
@@ -270,7 +275,7 @@ const SPORT = Object.freeze({ FOOTBALL: "football", BASKETBALL: "basketball" });
 
 module.exports = Object.freeze({
   TODAY, YESTERDAY, TOMORROW, formatDate, getDateOffset, getLocalDateFromUtc,
-  LEAGUES, SEASON, STATUS, LIVE_STATUSES, FINISHED_STATUSES,
+  LEAGUES, SEASON, STATUS, LIVE_STATUSES, FINISHED_STATUSES, RESOLVED_STATUSES,
   BASKETBALL_LEAGUES, BASKETBALL_SEASON, BASKETBALL_STATUS,
   BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
   COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY,

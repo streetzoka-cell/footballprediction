@@ -7,6 +7,7 @@ const { api, isBudgetAvailable } = require("../config/api");
 const {
   LEAGUES,
   FINISHED_STATUSES,
+  RESOLVED_STATUSES, // ★ NEW
   COLLECTIONS,
   getDateOffset,
   META_DOCS,
@@ -186,9 +187,11 @@ class DailyFixturesService {
       ]);
 
       const isStale = (d) => {
-        if (FINISHED_STATUSES.includes(d.status)) return false;
+        // If it's already resolved (FT, PST, CANC, etc.), it's not stale
+        if (RESOLVED_STATUSES.includes(d.status)) return false;
         const matchDateStr = d.date ? new Date(d.date).toISOString().split("T")[0] : null;
-        return matchDateStr !== todayStr;
+        // If the match date is before today, and it's not resolved, it's stale
+        return matchDateStr && matchDateStr < todayStr;
       };
 
       const staleYesterday = yesterdayDocs.filter(isStale);
@@ -196,7 +199,7 @@ class DailyFixturesService {
       const totalStale = staleYesterday.length + staleToday.length;
 
       if (totalStale === 0) {
-        logger.info(`[DailyFixtures] No stale matches found. All previous games are FT.`);
+        logger.info(`[DailyFixtures] No stale matches found. All previous games are resolved.`);
         return 0;
       }
 
@@ -227,49 +230,43 @@ class DailyFixturesService {
         const updatedDocs = filtered.map((f) => this.normalize(f));
         const updatedMap = new Map(updatedDocs.map(d => [String(d.id), d]));
 
-        const toUpsertYesterday = [];
-        const toUpsertToday = [];
+        const yestDocsToWrite = [];
+        const todDocsToWrite = [];
 
         for (const s of staleYesterday) {
-          const matchDateStr = s.date ? new Date(s.date).toISOString().split("T")[0] : null;
-          if (matchDateStr === dateStr) {
-            const updated = updatedMap.get(String(s.id));
-            if (updated && FINISHED_STATUSES.includes(updated.status)) {
-              toUpsertYesterday.push(updated);
-              recovered++;
-            }
+          const updated = updatedMap.get(String(s.id));
+          if (updated) {
+            yestDocsToWrite.push(updated);
+            if (FINISHED_STATUSES.includes(updated.status)) recovered++;
           }
         }
 
         for (const s of staleToday) {
-          const matchDateStr = s.date ? new Date(s.date).toISOString().split("T")[0] : null;
-          if (matchDateStr === dateStr) {
-            const updated = updatedMap.get(String(s.id));
-            if (updated && FINISHED_STATUSES.includes(updated.status)) {
-              toUpsertToday.push(updated);
-              recovered++;
-            }
+          const updated = updatedMap.get(String(s.id));
+          if (updated) {
+            todDocsToWrite.push(updated);
+            if (FINISHED_STATUSES.includes(updated.status)) recovered++;
           }
         }
 
-        if (toUpsertYesterday.length > 0) {
-          await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, toUpsertYesterday, new Set(toUpsertYesterday.map(s => String(s.id))));
-          await this.repo.batchUpsertFinished(toUpsertYesterday);
+        // ★ SAFE WRITE: Pass empty set for prevIds so diffWrite deletes nothing else
+        if (yestDocsToWrite.length > 0) {
+          await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, yestDocsToWrite, new Set());
+          const ftGames = yestDocsToWrite.filter(d => FINISHED_STATUSES.includes(d.status));
+          if (ftGames.length > 0) await this.repo.batchUpsertFinished(ftGames);
         }
-        if (toUpsertToday.length > 0) {
-          await this.repo.diffWrite(COLLECTIONS.TODAY_FIXTURES, toUpsertToday, new Set(toUpsertToday.map(s => String(s.id))));
-          await this.repo.batchUpsertFinished(toUpsertToday);
+        if (todDocsToWrite.length > 0) {
+          await this.repo.diffWrite(COLLECTIONS.TODAY_FIXTURES, todDocsToWrite, new Set());
+          const ftGames = todDocsToWrite.filter(d => FINISHED_STATUSES.includes(d.status));
+          if (ftGames.length > 0) await this.repo.batchUpsertFinished(ftGames);
         }
       }
 
-      if (recovered > 0) {
-        logger.info(`[DailyFixtures] Recovered ${recovered} stale matches to FT`);
+      if (totalStale > 0) {
+        logger.info(`[DailyFixtures] Recovered ${recovered} stale matches to FT. Updating cache & snapshots...`);
         cache.invalidatePrefix("ft:");
-        // Refresh local cache and write snapshot to reflect changes immediately
         await this._warmupCache();
         await this._writeSnapshot();
-      } else {
-        logger.info(`[DailyFixtures] Stale matches still not FT on API (maybe postponed/abandoned). Will retry next run.`);
       }
       return recovered;
     } catch (err) {
