@@ -238,36 +238,25 @@ const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTUR
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
   // ── DAILY CAPS ──
-  FOOTBALL_DAILY_LIVE_CAP: 50,
-  BASKETBALL_DAILY_LIVE_CAP: 15,
+  // Strict limit on live polls per day to protect overall API budget
+  FOOTBALL_DAILY_LIVE_CAP: 60,
+  BASKETBALL_DAILY_LIVE_CAP: 20,
 
   // ── LIVE-COUNT-BASED INTERVALS (desired) ──
   IDLE_INTERVAL_MS:        3600000,  // 60 min  — 0 live matches
   LOW_LIVE_INTERVAL_MS:    900000,   // 15 min  — 1–10 live
   MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min  — 11–30 live
   HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min  — 31–60 live
-  MASSIVE_LIVE_INTERVAL_MS:300000,   //  5 min  — 61+ live (Was 3m, now 5m to save budget)
-  NEAR_FINISH_INTERVAL_MS: 300000,   //  5 min  — any match at 80'+ (Was 2m, now 5m)
+  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min  — 61+ live
+  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min  — any match at 80'+
 
-  // ── BUDGET-TIER FLOORS ──
-  BUDGET_HEALTHY_THRESHOLD:  30,
-  BUDGET_NORMAL_THRESHOLD:   15,
-  BUDGET_CRITICAL_THRESHOLD: 8,
-  MIN_BUDGET_TO_POLL:        3,
+  // ── BUDGET PROTECTION ──
+  RESERVE_FOR_DAILY_CRON:  15,       // Always save 15 calls for tomorrow's initial cron sync
+  MIN_BUDGET_TO_POLL:      3,        // Do not poll if budget drops below this
+  BUDGET_NORMAL_THRESHOLD: 30,
+  BUDGET_CRITICAL_THRESHOLD: 15,
 
-  BUDGET_NORMAL_FLOOR_MS:    900000,   // 15 min
-  BUDGET_CRITICAL_FLOOR_MS:  1800000,  // 30 min
-  BUDGET_RESERVE_FLOOR_MS:   3600000,  // 1 hour
-
-  // ── CAP-TIER FLOORS ──
-  CAP_NORMAL_REMAINING:    15,
-  CAP_CRITICAL_REMAINING:  5,
-  CAP_FT_RESERVE:          4,
-
-  CAP_LOW_FLOOR_MS:          900000,   // 15 min
-  CAP_CRITICAL_FLOOR_MS:     1800000,  // 30 min
-  CAP_EXHAUSTED_INTERVAL_MS: 3600000,  // 1 hour
-
+  // ── FT RECOVERY ──
   FT_CONFIRMATION_DELAY_MS: 60000,
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,
