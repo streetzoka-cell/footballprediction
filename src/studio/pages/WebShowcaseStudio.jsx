@@ -110,7 +110,8 @@ export default function WebShowcaseStudio() {
       screenStreamRef.current = stream;
       if (screenVideoRef.current) {
         screenVideoRef.current.srcObject = stream;
-        screenVideoRef.current.play();
+        screenVideoRef.current.muted = true; // Mute local playback to prevent echo
+        screenVideoRef.current.play().catch(e => console.error("Play error:", e));
       }
       setScreenReady(true);
 
@@ -161,98 +162,102 @@ export default function WebShowcaseStudio() {
     }
   };
 
-  // Canvas Drawing Loop
+  // Uninterrupted Canvas Drawing Loop using Refs
+  const drawFrameRef = useRef(() => {});
+  
+  drawFrameRef.current = () => {
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!ctx) return;
+    
+    canvas.width = activeRatio.w;
+    canvas.height = activeRatio.h;
+
+    ctx.fillStyle = bgColor;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    const screenVid = screenVideoRef.current;
+    if (screenReady && screenVid && screenVid.videoWidth > 0) {
+      const vidW = screenVid.videoWidth;
+      const vidH = screenVid.videoHeight;
+      const canvasRatio = canvas.width / canvas.height;
+      const vidRatio = vidW / vidH;
+      
+      let sx, sy, sw, sh;
+      if (vidRatio > canvasRatio) {
+        sw = vidW; sh = vidW / canvasRatio; sx = 0; sy = (vidH - sh) / 2;
+      } else {
+        sh = vidH; sw = vidH * canvasRatio; sx = (vidW - sw) / 2; sy = 0;
+      }
+      ctx.drawImage(screenVid, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+    }
+
+    const webcamVid = webcamVideoRef.current;
+    if (webcamOn && webcamVid && webcamVid.videoWidth > 0) {
+      const size = webcamSize;
+      const x = webcamPos.x;
+      const y = webcamPos.y;
+      
+      ctx.save();
+      
+      if (cameraFrame === 'circle') {
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.scale(-1, 1);
+        ctx.translate(-(x + size), 0);
+        ctx.drawImage(webcamVid, x, y, size, size);
+      } else if (cameraFrame === 'rounded') {
+        const r = 24;
+        ctx.beginPath();
+        ctx.moveTo(x + r, y);
+        ctx.arcTo(x + size, y, x + size, y + size, r);
+        ctx.arcTo(x + size, y + size, x, y + size, r);
+        ctx.arcTo(x, y + size, x, y, r);
+        ctx.arcTo(x, y, x + size, y, r);
+        ctx.closePath();
+        ctx.clip();
+        ctx.scale(-1, 1);
+        ctx.translate(-(x + size), 0);
+        ctx.drawImage(webcamVid, x, y, size, size);
+      } else if (cameraFrame === 'neon') {
+        ctx.shadowColor = '#3b82f6';
+        ctx.shadowBlur = 20;
+        ctx.strokeStyle = '#3b82f6';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+        
+        ctx.beginPath();
+        ctx.arc(x + size/2, y + size/2, size/2 - 4, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        ctx.scale(-1, 1);
+        ctx.translate(-(x + size), 0);
+        ctx.drawImage(webcamVid, x, y, size, size);
+      } else {
+        ctx.scale(-1, 1);
+        ctx.translate(-(x + size), 0);
+        ctx.drawImage(webcamVid, x, y, size, size);
+      }
+      
+      ctx.restore();
+    }
+  };
+
   useEffect(() => {
     let animFrame;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    const draw = () => {
-      canvas.width = activeRatio.w;
-      canvas.height = activeRatio.h;
-
-      ctx.fillStyle = bgColor;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      const screenVid = screenVideoRef.current;
-      if (screenReady && screenVid && screenVid.videoWidth > 0) {
-        const vidW = screenVid.videoWidth;
-        const vidH = screenVid.videoHeight;
-        const canvasRatio = canvas.width / canvas.height;
-        const vidRatio = vidW / vidH;
-        
-        let sx, sy, sw, sh;
-        if (vidRatio > canvasRatio) {
-          sw = vidW; sh = vidW / canvasRatio; sx = 0; sy = (vidH - sh) / 2;
-        } else {
-          sh = vidH; sw = vidH * canvasRatio; sx = (vidW - sw) / 2; sy = 0;
-        }
-        ctx.drawImage(screenVid, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
-      }
-
-      const webcamVid = webcamVideoRef.current;
-      if (webcamOn && webcamVid && webcamVid.videoWidth > 0) {
-        const size = webcamSize;
-        const x = webcamPos.x;
-        const y = webcamPos.y;
-        
-        ctx.save();
-        
-        if (cameraFrame === 'circle') {
-          ctx.beginPath();
-          ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.clip();
-          ctx.scale(-1, 1);
-          ctx.translate(-(x + size), 0);
-          ctx.drawImage(webcamVid, x, y, size, size);
-        } else if (cameraFrame === 'rounded') {
-          const r = 24;
-          ctx.beginPath();
-          ctx.moveTo(x + r, y);
-          ctx.arcTo(x + size, y, x + size, y + size, r);
-          ctx.arcTo(x + size, y + size, x, y + size, r);
-          ctx.arcTo(x, y + size, x, y, r);
-          ctx.arcTo(x, y, x + size, y, r);
-          ctx.closePath();
-          ctx.clip();
-          ctx.scale(-1, 1);
-          ctx.translate(-(x + size), 0);
-          ctx.drawImage(webcamVid, x, y, size, size);
-        } else if (cameraFrame === 'neon') {
-          ctx.shadowColor = '#3b82f6';
-          ctx.shadowBlur = 20;
-          ctx.strokeStyle = '#3b82f6';
-          ctx.lineWidth = 4;
-          ctx.beginPath();
-          ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.stroke();
-          ctx.shadowBlur = 0;
-          
-          ctx.beginPath();
-          ctx.arc(x + size/2, y + size/2, size/2 - 4, 0, Math.PI * 2);
-          ctx.closePath();
-          ctx.clip();
-          ctx.scale(-1, 1);
-          ctx.translate(-(x + size), 0);
-          ctx.drawImage(webcamVid, x, y, size, size);
-        } else {
-          ctx.scale(-1, 1);
-          ctx.translate(-(x + size), 0);
-          ctx.drawImage(webcamVid, x, y, size, size);
-        }
-        
-        ctx.restore();
-      }
-
-      animFrame = requestAnimationFrame(draw);
+    const loop = () => { 
+      drawFrameRef.current(); 
+      animFrame = requestAnimationFrame(loop); 
     };
-
-    draw();
+    animFrame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrame);
-  }, [screenReady, webcamOn, webcamPos, webcamSize, cameraFrame, bgColor, activeRatio]);
+  }, []);
 
   const getCanvasCoords = (e) => {
     const canvas = canvasRef.current;
@@ -510,9 +515,13 @@ export default function WebShowcaseStudio() {
         </div>
       </div>
 
-      {/* Off-screen video elements to force browser decoding without throttling */}
-      <video ref={screenVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '1280px', height: '720px', opacity: 0 }} autoPlay playsInline />
-      <video ref={webcamVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '640px', height: '480px', opacity: 0 }} autoPlay playsInline />
+      {/* 
+        Hidden video elements. 
+        Positioned fixed with 2px size in the viewport so the browser's IntersectionObserver 
+        doesn't throttle them. This forces Chrome to decode every single frame perfectly.
+      */}
+      <video ref={screenVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} autoPlay playsInline muted />
+      <video ref={webcamVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} autoPlay playsInline muted />
     </div>
   );
 }
