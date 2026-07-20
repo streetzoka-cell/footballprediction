@@ -18,7 +18,7 @@ const CAMERA_FRAMES = [
   { id: 'neon', name: 'Neon Glow' }
 ];
 
-// WebM Duration Fixer (Prevents 30m TikTok bug)
+// WebM Duration Fixer (Prevents 30m TikTok bug & corruption)
 const fixWebmDuration = async (blob, durationMs) => {
   if (blob.type !== 'video/webm') return blob;
   const arrayBuffer = await blob.arrayBuffer();
@@ -71,7 +71,7 @@ export default function WebShowcaseStudio() {
   
   const screenStreamRef = useRef(null);
   const webcamStreamRef = useRef(null);
-  const micStreamRef = useRef(null); // Separate mic stream
+  const micStreamRef = useRef(null); 
   const mixedStreamRef = useRef(null);
   const recorderRef = useRef(null);
   const chunksRef = useRef([]);
@@ -85,7 +85,7 @@ export default function WebShowcaseStudio() {
 
   const [screenReady, setScreenReady] = useState(false);
   const [webcamOn, setWebcamOn] = useState(false);
-  const [micOn, setMicOn] = useState(false); // Separate Mic State
+  const [micOn, setMicOn] = useState(false); 
   const [isRecording, setIsRecording] = useState(false);
   const [recordedUrl, setRecordedUrl] = useState(null);
   const [elapsedTime, setElapsedTime] = useState(0);
@@ -132,7 +132,6 @@ export default function WebShowcaseStudio() {
       setWebcamOn(false);
     } else {
       try {
-        // Video only for webcam stream to keep it separate from mic
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 } });
         webcamStreamRef.current = stream;
         if (webcamVideoRef.current) {
@@ -297,7 +296,6 @@ export default function WebShowcaseStudio() {
     return () => clearInterval(interval);
   }, [isRecording]);
 
-  // Recording Logic (Mixes Screen, Mic, and Tab Audio)
   const startRecording = async () => {
     if (!screenReady || !canvasRef.current) return;
 
@@ -308,32 +306,29 @@ export default function WebShowcaseStudio() {
 
     try {
       const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      
       const audioDest = audioCtx.createMediaStreamDestination();
       let hasAudio = false;
 
-      // 1. Add Screen/Tab Audio
       if (screenStreamRef.current && screenStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(screenStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
         hasAudio = true;
       }
-      
-      // 2. Add Microphone Audio
       if (micStreamRef.current && micStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(micStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
         hasAudio = true;
       }
 
-      // 3. Silent fallback track (prevents 30m duration bug if no audio is selected)
-      if (!hasAudio) {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        gain.gain.value = 0.0;
-        osc.connect(gain);
-        gain.connect(audioDest);
-        osc.start();
-      }
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.0;
+      osc.connect(gain);
+      gain.connect(audioDest);
+      gain.connect(audioCtx.destination); // Prevent background tab throttling
+      osc.start();
 
       audioDest.stream.getAudioTracks().forEach(t => mixedStreamRef.current.addTrack(t));
     } catch(e) { console.warn("Audio mix failed", e); }
@@ -515,8 +510,9 @@ export default function WebShowcaseStudio() {
         </div>
       </div>
 
-      <video ref={screenVideoRef} style={{ display: 'none' }} autoPlay playsInline />
-      <video ref={webcamVideoRef} style={{ display: 'none' }} autoPlay playsInline />
+      {/* Off-screen video elements to force browser decoding without throttling */}
+      <video ref={screenVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '1280px', height: '720px', opacity: 0 }} autoPlay playsInline />
+      <video ref={webcamVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '640px', height: '480px', opacity: 0 }} autoPlay playsInline />
     </div>
   );
 }
