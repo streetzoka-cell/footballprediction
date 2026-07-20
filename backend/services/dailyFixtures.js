@@ -49,6 +49,9 @@ class DailyFixturesService {
     logger.info(`[DailyFixtures] Run for ${tomorrowStr} (today: ${todayStr})`);
     const startTime = Date.now();
 
+    // ★ NEW: Check and recover stale matches (e.g. yesterday's games still marked as 1H)
+    await this._recoverStaleFixtures(todayStr);
+
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
@@ -170,13 +173,117 @@ class DailyFixturesService {
     };
   }
 
+  // ═══════════════════════════════════════════════════════════════
+  // ★ NEW: STALE FT RECOVERY
+  // Finds matches from previous days that were never updated to FT
+  // and smoothly updates them by fetching exact dates from the API.
+  // ═══════════════════════════════════════════════════════════════
+  async _recoverStaleFixtures(todayStr) {
+    try {
+      const [yesterdayDocs, todayDocs] = await Promise.all([
+        this.repo.getAllYesterday(),
+        this.repo.getAllToday()
+      ]);
+
+      const isStale = (d) => {
+        if (FINISHED_STATUSES.includes(d.status)) return false;
+        const matchDateStr = d.date ? new Date(d.date).toISOString().split("T")[0] : null;
+        return matchDateStr !== todayStr;
+      };
+
+      const staleYesterday = yesterdayDocs.filter(isStale);
+      const staleToday = todayDocs.filter(isStale);
+      const totalStale = staleYesterday.length + staleToday.length;
+
+      if (totalStale === 0) {
+        logger.info(`[DailyFixtures] No stale matches found. All previous games are FT.`);
+        return 0;
+      }
+
+      logger.info(`[DailyFixtures] Found ${totalStale} stale matches (Yesterday: ${staleYesterday.length}, Today: ${staleToday.length}). Recovering...`);
+      
+      if (!isBudgetAvailable(1)) {
+        logger.warn(`[DailyFixtures] Budget too low — skipping stale recovery`);
+        return 0;
+      }
+
+      const datesToFetch = new Set();
+      [...staleYesterday, ...staleToday].forEach(d => {
+        const matchDateStr = d.date ? new Date(d.date).toISOString().split("T")[0] : null;
+        if (matchDateStr) datesToFetch.add(matchDateStr);
+      });
+
+      let recovered = 0;
+
+      for (const dateStr of datesToFetch) {
+        const raw = await withRetry(() => api.get("/fixtures", { params: { date: dateStr } }), `DailyFixtures:recoverStale:${dateStr}`);
+        if (Object.keys(raw?.errors || {}).length > 0) continue;
+
+        const allFixtures = raw?.response || [];
+        const filtered = TRACK_ALL_LEAGUES 
+          ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
+          : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+          
+        const updatedDocs = filtered.map((f) => this.normalize(f));
+        const updatedMap = new Map(updatedDocs.map(d => [String(d.id), d]));
+
+        const toUpsertYesterday = [];
+        const toUpsertToday = [];
+
+        for (const s of staleYesterday) {
+          const matchDateStr = s.date ? new Date(s.date).toISOString().split("T")[0] : null;
+          if (matchDateStr === dateStr) {
+            const updated = updatedMap.get(String(s.id));
+            if (updated && FINISHED_STATUSES.includes(updated.status)) {
+              toUpsertYesterday.push(updated);
+              recovered++;
+            }
+          }
+        }
+
+        for (const s of staleToday) {
+          const matchDateStr = s.date ? new Date(s.date).toISOString().split("T")[0] : null;
+          if (matchDateStr === dateStr) {
+            const updated = updatedMap.get(String(s.id));
+            if (updated && FINISHED_STATUSES.includes(updated.status)) {
+              toUpsertToday.push(updated);
+              recovered++;
+            }
+          }
+        }
+
+        if (toUpsertYesterday.length > 0) {
+          await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, toUpsertYesterday, new Set(toUpsertYesterday.map(s => String(s.id))));
+          await this.repo.batchUpsertFinished(toUpsertYesterday);
+        }
+        if (toUpsertToday.length > 0) {
+          await this.repo.diffWrite(COLLECTIONS.TODAY_FIXTURES, toUpsertToday, new Set(toUpsertToday.map(s => String(s.id))));
+          await this.repo.batchUpsertFinished(toUpsertToday);
+        }
+      }
+
+      if (recovered > 0) {
+        logger.info(`[DailyFixtures] Recovered ${recovered} stale matches to FT`);
+        cache.invalidatePrefix("ft:");
+        // Refresh local cache and write snapshot to reflect changes immediately
+        await this._warmupCache();
+        await this._writeSnapshot();
+      } else {
+        logger.info(`[DailyFixtures] Stale matches still not FT on API (maybe postponed/abandoned). Will retry next run.`);
+      }
+      return recovered;
+    } catch (err) {
+      logger.error(`[DailyFixtures] Stale recovery failed: ${err.message}`);
+      return 0;
+    }
+  }
+
   async _writeSnapshot() {
     try {
       const todayStr = getDateOffset(0);
       const tomorrowStr = getDateOffset(1);
       const yesterdayStr = getDateOffset(-1);
       
-      // ★ NEW LOG: Show exactly how many matches are in the cache before writing
       logger.info(`[DailyFixtures] Writing snapshots: Yest(${this._docCache.yesterday.length}), Today(${this._docCache.today.length}), Tom(${this._docCache.tomorrow.length})`);
       
       await Promise.all([
@@ -265,7 +372,6 @@ class DailyFixturesService {
       ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
       : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
       
-    // ★ NEW LOG: Show exactly what the API returned for tomorrow
     logger.info(`[DailyFixtures] Tomorrow API returned ${allFixtures.length} matches. Filtered to ${filtered.length}.`);
 
     const docs = filtered.map((f) => this.normalize(f));
