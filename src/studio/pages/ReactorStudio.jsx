@@ -746,6 +746,7 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => { dragRef.current.target = null; };
 
+  // --- Bulletproof Audio export using Web Audio API ---
   const handleExportVideo = async (withAudio = true) => {
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || isExporting || !vid || !activeClip) return;
@@ -759,6 +760,7 @@ export default function ReactorStudio() {
 
     const wasMuted = vid.muted;
     const wasVolume = vid.volume;
+    
     // MUST be false to capture original audio track correctly
     vid.muted = false; 
     // MUST be 0 to prevent echo/double audio playing out loud during export
@@ -771,28 +773,55 @@ export default function ReactorStudio() {
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
       const audioDest = audioCtx.createMediaStreamDestination();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      gain.gain.value = 0.0;
-      osc.connect(gain);
-      gain.connect(audioDest);
-      osc.start();
-      canvasStream.addTrack(audioDest.stream.getAudioTracks()[0]);
-    } catch(e) { console.warn("Audio context failed", e); }
+      let hasAudio = false;
 
-    if (withAudio) {
-      if (streamRef.current) streamRef.current.getAudioTracks().forEach(track => canvasStream.addTrack(track));
-      if (!isMuted && vid.captureStream) {
-        try { vid.captureStream().getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
+      if (withAudio) {
+        // 1. Capture Webcam/Mic Audio
+        if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
+          const src = audioCtx.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks()));
+          src.connect(audioDest);
+          hasAudio = true;
+        }
+
+        // 2. Capture Original Video Audio (Always includes video sound unless "Export Muted" is clicked)
+        if (vid.captureStream) {
+          try { 
+            const vStream = vid.captureStream();
+            if (vStream.getAudioTracks().length > 0) {
+              const src = audioCtx.createMediaStreamSource(vStream);
+              src.connect(audioDest);
+              hasAudio = true;
+            }
+          } catch(e) {}
+        }
+
+        // 3. Capture Added Audio Track
+        if (audioRef.current.src) {
+          try { 
+            audioRef.current.play();
+            const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
+            if (aStream.getAudioTracks().length > 0) {
+              const src = audioCtx.createMediaStreamSource(aStream);
+              src.connect(audioDest);
+              hasAudio = true;
+            }
+          } catch(e) {}
+        }
       }
-      if (audioRef.current.src) {
-        try { 
-          audioRef.current.play();
-          const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
-          aStream.getAudioTracks().forEach(track => canvasStream.addTrack(track)); 
-        } catch(e) {}
+
+      // 4. Silent fallback track (prevents 30m duration bug if no audio is selected)
+      if (!hasAudio) {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        gain.gain.value = 0.0;
+        osc.connect(gain);
+        gain.connect(audioDest);
+        osc.start();
       }
-    }
+
+      // Add the mixed audio track to the canvas stream
+      audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
+    } catch(e) { console.warn("Audio mix failed", e); }
 
     chunksRef.current = [];
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
