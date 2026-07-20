@@ -747,7 +747,7 @@ export default function ReactorStudio() {
   const handlePointerUp = () => { dragRef.current.target = null; };
 
   // --- Bulletproof Audio export using Web Audio API ---
-  const handleExportVideo = async (withAudio = true) => {
+  const handleExportVideo = async () => {
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || isExporting || !vid || !activeClip) return;
 
@@ -775,38 +775,36 @@ export default function ReactorStudio() {
       const audioDest = audioCtx.createMediaStreamDestination();
       let hasAudio = false;
 
-      if (withAudio) {
-        // 1. Capture Webcam/Mic Audio
-        if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
-          const src = audioCtx.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks()));
-          src.connect(audioDest);
-          hasAudio = true;
-        }
+      // 1. Capture Webcam/Mic Audio
+      if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
+        const src = audioCtx.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks()));
+        src.connect(audioDest);
+        hasAudio = true;
+      }
 
-        // 2. Capture Original Video Audio (Always includes video sound unless "Export Muted" is clicked)
-        if (vid.captureStream) {
-          try { 
-            const vStream = vid.captureStream();
-            if (vStream.getAudioTracks().length > 0) {
-              const src = audioCtx.createMediaStreamSource(vStream);
-              src.connect(audioDest);
-              hasAudio = true;
-            }
-          } catch(e) {}
-        }
+      // 2. Capture Original Video Audio
+      if (vid.captureStream) {
+        try { 
+          const vStream = vid.captureStream();
+          if (vStream.getAudioTracks().length > 0) {
+            const src = audioCtx.createMediaStreamSource(vStream);
+            src.connect(audioDest);
+            hasAudio = true;
+          }
+        } catch(e) {}
+      }
 
-        // 3. Capture Added Audio Track
-        if (audioRef.current.src) {
-          try { 
-            audioRef.current.play();
-            const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
-            if (aStream.getAudioTracks().length > 0) {
-              const src = audioCtx.createMediaStreamSource(aStream);
-              src.connect(audioDest);
-              hasAudio = true;
-            }
-          } catch(e) {}
-        }
+      // 3. Capture Added Audio Track
+      if (audioRef.current.src) {
+        try { 
+          audioRef.current.play();
+          const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
+          if (aStream.getAudioTracks().length > 0) {
+            const src = audioCtx.createMediaStreamSource(aStream);
+            src.connect(audioDest);
+            hasAudio = true;
+          }
+        } catch(e) {}
       }
 
       // 4. Silent fallback track (prevents 30m duration bug if no audio is selected)
@@ -936,14 +934,9 @@ export default function ReactorStudio() {
               </a>
             </>
           ) : (
-            <>
-              <button onClick={() => handleExportVideo(false)} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
-                {isExporting ? <Loader size={16} className="animate-spin" /> : <VolumeX size={16} />} Export Muted
-              </button>
-              <button onClick={() => handleExportVideo(true)} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
-                {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
-              </button>
-            </>
+            <button onClick={handleExportVideo} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
+              {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
+            </button>
           )}
         </div>
       </div>
