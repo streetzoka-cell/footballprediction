@@ -260,7 +260,7 @@ export default function ReactorStudio() {
         if (videoBlob && sourceVideoRef.current) {
           const url = URL.createObjectURL(videoBlob);
           sourceVideoRef.current.src = url;
-          sourceVideoRef.current.loop = false; // Handled manually by activeClip
+          sourceVideoRef.current.loop = false; 
           sourceVideoRef.current.muted = true;
           sourceVideoRef.current.onloadedmetadata = () => {
             const dur = sourceVideoRef.current.duration;
@@ -488,12 +488,10 @@ export default function ReactorStudio() {
 
     if (!sourceLoaded || !sourceVid) return;
     
-    // Update React State for time if changed (throttled by checking difference)
     if (Math.abs(sourceVid.currentTime - currentTime) > 0.1) {
       setCurrentTime(sourceVid.currentTime);
     }
 
-    // Enforce Active Clip Boundaries (Play Trimmed Part Alone)
     if (activeClip) {
       if (sourceVid.currentTime < activeClip.start) {
         sourceVid.currentTime = activeClip.start;
@@ -756,14 +754,41 @@ export default function ReactorStudio() {
     
     vid.pause();
     vid.currentTime = activeClip.start;
-    await new Promise(r => setTimeout(r, 200));
+    
+    // Wait for video to be fully loaded and buffered
+    if (vid.readyState < 4) {
+      await new Promise(resolve => {
+        const check = setInterval(() => {
+          if (vid.readyState >= 4) { clearInterval(check); resolve(); }
+        }, 100);
+        setTimeout(() => { clearInterval(check); resolve(); }, 3000); // fallback
+      });
+    }
+    
+    // Fix Infinity duration if it happened
+    let trueDuration = vid.duration;
+    if (!isFinite(trueDuration)) {
+      vid.currentTime = 1e101;
+      await new Promise(r => setTimeout(r, 200));
+      trueDuration = vid.duration;
+      vid.currentTime = activeClip.start;
+      await new Promise(r => setTimeout(r, 200));
+    }
+
+    let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDuration;
+    if (end > trueDuration) end = trueDuration;
+    
+    if (activeClip.start >= end - 0.1) {
+      alert("Invalid clip duration.");
+      setIsExporting(false);
+      return;
+    }
+
+    await new Promise(r => setTimeout(r, 300)); // Extra buffer for seek to settle
 
     const wasMuted = vid.muted;
     const wasVolume = vid.volume;
-    
-    // MUST be false to capture original audio track correctly
     vid.muted = false; 
-    // MUST be 0 to prevent echo/double audio playing out loud during export
     vid.volume = 0; 
 
     const fps = 30;
@@ -772,17 +797,17 @@ export default function ReactorStudio() {
     let audioCtx;
     try {
       audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      if (audioCtx.state === 'suspended') await audioCtx.resume();
+      
       const audioDest = audioCtx.createMediaStreamDestination();
       let hasAudio = false;
 
-      // 1. Capture Webcam/Mic Audio
       if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks()));
         src.connect(audioDest);
         hasAudio = true;
       }
 
-      // 2. Capture Original Video Audio
       if (vid.captureStream) {
         try { 
           const vStream = vid.captureStream();
@@ -794,7 +819,6 @@ export default function ReactorStudio() {
         } catch(e) {}
       }
 
-      // 3. Capture Added Audio Track
       if (audioRef.current.src) {
         try { 
           audioRef.current.play();
@@ -807,17 +831,16 @@ export default function ReactorStudio() {
         } catch(e) {}
       }
 
-      // 4. Silent fallback track (prevents 30m duration bug if no audio is selected)
-      if (!hasAudio) {
-        const osc = audioCtx.createOscillator();
-        const gain = audioCtx.createGain();
-        gain.gain.value = 0.0;
-        osc.connect(gain);
-        gain.connect(audioDest);
-        osc.start();
-      }
-
-      // Add the mixed audio track to the canvas stream
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.0;
+      osc.connect(gain);
+      gain.connect(audioDest); // For recording
+      
+      // Connect to destination as well to prevent background tab throttling!
+      gain.connect(audioCtx.destination); 
+      
+      osc.start();
       audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
     } catch(e) { console.warn("Audio mix failed", e); }
 
@@ -836,7 +859,7 @@ export default function ReactorStudio() {
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       let rawBlob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const exportDurationMs = (activeClip.end - activeClip.start) * 1000;
+      const exportDurationMs = (end - activeClip.start) * 1000;
       const fixedBlob = await fixWebmDuration(rawBlob, exportDurationMs);
       
       const url = URL.createObjectURL(fixedBlob);
@@ -850,8 +873,6 @@ export default function ReactorStudio() {
       if (audioCtx) audioCtx.close();
     };
 
-    const end = isFinite(activeClip.end) ? activeClip.end : (vid.duration || 0);
-    
     const checkInterval = setInterval(() => {
       if (vid.currentTime >= end - 0.05 || vid.ended) {
         clearInterval(checkInterval);
@@ -860,7 +881,14 @@ export default function ReactorStudio() {
     }, 50);
 
     recorder.start(100); 
-    await vid.play();
+    
+    try {
+      await vid.play();
+    } catch(e) {
+      console.error("Play failed during export", e);
+      clearInterval(checkInterval);
+      if (recorder.state !== 'inactive') recorder.stop();
+    }
   };
 
   const handleDiscardRecording = () => {
@@ -984,7 +1012,6 @@ export default function ReactorStudio() {
             <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
           </div>
 
-          {/* CLIP SPLITTER PANEL (CapCut Style) */}
           {sourceLoaded && (
             <div style={panelStyle}>
               <div style={panelTitleStyle}><Scissors size={14} /> Trim & Clips</div>
@@ -1169,9 +1196,9 @@ export default function ReactorStudio() {
         </div>
       )}
 
-      <video ref={sourceVideoRef} style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} playsInline preload="auto" />
-      <video ref={brollVideoRef} style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
-      <video ref={webcamVideoRef} style={{ position: 'absolute', width: '1px', height: '1px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
+      <video ref={sourceVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '720px', height: '1280px', opacity: 0, pointerEvents: 'none' }} playsInline preload="auto" />
+      <video ref={brollVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '320px', height: '434px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
+      <video ref={webcamVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '320px', height: '434px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
       <audio ref={audioRef} style={{ display: 'none' }} />
 
       <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }`}</style>
