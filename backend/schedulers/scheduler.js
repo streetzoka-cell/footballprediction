@@ -106,41 +106,30 @@ class Scheduler {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // SMART STATE MACHINE (Priority-Based)
-  // 
-  // 1. Live Tier (Desired Interval based on match state)
-  // 2. Hard Limits (Budget & Cap Floors)
-  // 3. Day-Pacing (Spread calls across a 3-hour active window)
-  //
-  // Final interval = shortest interval that doesn't violate a hard limit
-  // ═══════════════════════════════════════════════════════════════
   _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap) {
-    // ── 1. Desired interval from live match count ──
     let liveTier;
     let desired;
 
     if (isNearFinish && liveCount > 0) {
       liveTier = "NEAR_FT";
-      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2 min
+      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;
     } else if (liveCount === 0) {
       liveTier = "IDLE";
-      desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 60 min
+      desired = LIVE_POLLING.IDLE_INTERVAL_MS;
     } else if (liveCount <= 10) {
       liveTier = "LIVE_LOW";
-      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
+      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;
     } else if (liveCount <= 30) {
       liveTier = "LIVE_MED";
-      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
+      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;
     } else if (liveCount <= 60) {
       liveTier = "LIVE_HIGH";
-      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
+      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;
     } else {
       liveTier = "LIVE_MASS";
-      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 3 min
+      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;
     }
 
-    // ── 2. Hard limit floors (Budget & Cap) ──
     let budgetTier = "HEALTHY";
     let budgetFloor = 0;
 
@@ -166,7 +155,7 @@ class Scheduler {
 
     if (capRemaining <= 0) {
       capTier = "EXHAUSTED";
-      capFloor = LIVE_POLLING.CAP_EXHAUSTED_INTERVAL_MS;  // 1 hour
+      capFloor = LIVE_POLLING.CAP_EXHAUSTED_INTERVAL_MS;
     } else if (capRemaining <= LIVE_POLLING.CAP_CRITICAL_REMAINING) {
       capTier = "CRITICAL";   
       capFloor = LIVE_POLLING.CAP_CRITICAL_FLOOR_MS;
@@ -175,7 +164,6 @@ class Scheduler {
       capFloor = LIVE_POLLING.CAP_LOW_FLOOR_MS;
     }
 
-    // ── 3. Pacing floor ──
     let pacingFloor = 0;
     let isPacing = false;
 
@@ -190,7 +178,6 @@ class Scheduler {
       }
     }
 
-    // ── 4. Final interval = Math.max(desired, hardLimits) ──
     let interval;
     if (budgetTier === "EXHAUSTED") {
       interval = LIVE_POLLING.BUDGET_RESERVE_FLOOR_MS; 
@@ -198,7 +185,6 @@ class Scheduler {
       interval = Math.max(desired, budgetFloor, capFloor, pacingFloor);
     }
 
-    // ── 5. Human-readable mode label ──
     let mode = liveTier;
 
     if (budgetTier === "EXHAUSTED") {
@@ -317,6 +303,24 @@ class Scheduler {
               `Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`
           );
           await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
+          if (controller.stop) break;
+
+          // ★ NEW: Trigger Daily Fixtures immediately to check & update all matches (even yesterday's) to FT
+          const dailyServiceName = sport === "football" ? "footballDailyFixtures" : "basketballDailyFixtures";
+          const dailyService = this.services[dailyServiceName];
+          
+          if (dailyService) {
+            logger.info(
+              `[Scheduler] ${sport.toUpperCase()} executing immediate ${dailyServiceName} ` +
+              `to ensure all finished matches (including yesterday) are updated to FT...`
+            );
+            await this._executeJob(dailyServiceName, dailyService);
+            logger.info(`[Scheduler] ${sport.toUpperCase()} immediate FT confirmation via ${dailyServiceName} completed.`);
+          } else {
+            // Fallback to live service if daily service is somehow missing
+            logger.info(`[Scheduler] ${sport.toUpperCase()} executing immediate FT confirmation poll...`);
+            await this._executeJob(serviceName, service);
+          }
         }
       } catch (err) {
         consecutiveErrors++;
@@ -483,7 +487,7 @@ class Scheduler {
     });
   }
 
-    _logSchedule() {
+  _logSchedule() {
     logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
     logger.info(`    0 live      → 60 min   (IDLE)`);

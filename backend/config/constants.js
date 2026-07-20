@@ -238,7 +238,6 @@ const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTUR
 // ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
   // ── DAILY CAPS ──
-  // ★ FIX: Reduced to 50 to force pacing to slow down and protect the 100 daily limit
   FOOTBALL_DAILY_LIVE_CAP: 50,
   BASKETBALL_DAILY_LIVE_CAP: 15,
 
