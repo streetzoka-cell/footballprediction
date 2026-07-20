@@ -32,8 +32,25 @@ class Scheduler {
     await this._tryRun("footballLiveFixtures");
     if (isBasketballConfigured) await this._tryRun("basketballLiveFixtures");
 
-    await this._tryRun("footballDailyFixtures");
-    if (isBasketballConfigured) await this._tryRun("basketballDailyFixtures");
+    // ★ NEW: Check for stale live matches and trigger immediate FT recovery on startup
+    // This ensures that if the server was offline overnight, yesterday's finished games are updated instantly.
+    const ftLiveResult = this.syncStatus["footballLiveFixtures"]?.lastResult;
+    if (ftLiveResult && (ftLiveResult.liveCount ?? ftLiveResult.total ?? 0) === 0) {
+      logger.info("[Scheduler] FOOTBALL no live matches on startup. Triggering immediate FT recovery to update yesterday's games...");
+      await this._executeJob("footballDailyFixtures", this.services["footballDailyFixtures"]);
+    } else {
+      await this._tryRun("footballDailyFixtures");
+    }
+
+    if (isBasketballConfigured) {
+      const bbLiveResult = this.syncStatus["basketballLiveFixtures"]?.lastResult;
+      if (bbLiveResult && (bbLiveResult.liveCount ?? bbLiveResult.total ?? 0) === 0) {
+        logger.info("[Scheduler] BASKETBALL no live matches on startup. Triggering immediate FT recovery...");
+        await this._executeJob("basketballDailyFixtures", this.services["basketballDailyFixtures"]);
+      } else {
+        await this._tryRun("basketballDailyFixtures");
+      }
+    }
 
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
     logger.info(" Initial Sync Complete");
