@@ -3,7 +3,7 @@ import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors
 } from 'lucide-react';
 
 // --- HELPER: WebM Duration Metadata Fixer ---
@@ -12,65 +12,45 @@ const fixWebmDuration = async (blob, durationMs) => {
   const arrayBuffer = await blob.arrayBuffer();
   const uint8 = new Uint8Array(arrayBuffer);
   const view = new DataView(arrayBuffer);
-  
   let segInfoOffset = -1;
   for (let i = 0; i < uint8.length - 4; i++) {
     if (view.getUint32(i) === 0x1549A966) { segInfoOffset = i; break; }
   }
   if (segInfoOffset === -1) return blob;
-  
   let timecodeOffset = -1;
   for (let i = segInfoOffset; i < uint8.length - 3; i++) {
     if (view.getUint8(i) === 0x2A && view.getUint8(i+1) === 0xD7 && view.getUint8(i+2) === 0xB1) { timecodeOffset = i; break; }
   }
   if (timecodeOffset === -1) return blob;
-  
   let timecodeScale = 1000000;
   const tsSize = view.getUint8(timecodeOffset + 3);
-  if (tsSize === 3) {
-    timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | view.getUint8(timecodeOffset + 6);
-  }
+  if (tsSize === 3) timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | view.getUint8(timecodeOffset + 6);
   const durationInMkvUnits = durationMs * (timecodeScale / 1000000);
-  
   const insertAt = timecodeOffset + 7;
   const durationElement = new Uint8Array(2 + 1 + 8);
   const durView = new DataView(durationElement.buffer);
-  durView.setUint16(0, 0x4489);
-  durView.setUint8(2, 0x88);
-  durView.setFloat64(3, durationInMkvUnits);
-  
+  durView.setUint16(0, 0x4489); durView.setUint8(2, 0x88); durView.setFloat64(3, durationInMkvUnits);
   const segInfoSizeOffset = segInfoOffset + 4;
   const firstByte = view.getUint8(segInfoSizeOffset);
-  let sizeBytes = 1;
-  let mask = 0x80;
+  let sizeBytes = 1, mask = 0x80;
   while (sizeBytes <= 8 && (firstByte & mask) === 0) { mask >>= 1; sizeBytes++; }
-  
   let segInfoSize = (firstByte & (mask - 1));
-  for (let i = 1; i < sizeBytes; i++) {
-    segInfoSize = (segInfoSize << 8) + view.getUint8(segInfoSizeOffset + i);
-  }
-  
+  for (let i = 1; i < sizeBytes; i++) segInfoSize = (segInfoSize << 8) + view.getUint8(segInfoSizeOffset + i);
   const newSize = segInfoSize + durationElement.length;
   const maxValForWidth = (1 << (7 * sizeBytes - 1)) - 1;
   if (newSize > maxValForWidth) return blob;
-  
   const newUint8 = new Uint8Array(uint8.length + durationElement.length);
   newUint8.set(uint8.subarray(0, insertAt), 0);
   newUint8.set(durationElement, insertAt);
   newUint8.set(uint8.subarray(insertAt), insertAt + durationElement.length);
-  
   const newView = new DataView(newUint8.buffer);
   let patchVal = newSize;
-  for (let i = sizeBytes - 1; i >= 1; i--) {
-    newView.setUint8(segInfoSizeOffset + i, patchVal & 0xFF);
-    patchVal >>= 8;
-  }
+  for (let i = sizeBytes - 1; i >= 1; i--) { newView.setUint8(segInfoSizeOffset + i, patchVal & 0xFF); patchVal >>= 8; }
   newView.setUint8(segInfoSizeOffset, (firstByte & (mask - 1)) | (patchVal & (mask - 1)));
-  
   return new Blob([newUint8], { type: 'video/webm' });
 };
 
-// --- HELPER: IndexedDB for saving videos locally across reloads ---
+// --- HELPER: IndexedDB ---
 const DB_NAME = 'ReactorStudioDB';
 const STORE_NAME = 'Assets';
 const openDB = () => {
@@ -178,7 +158,6 @@ const TEXT_ANIMATIONS = [
 export default function ReactorStudio() {
   const navigate = useNavigate();
   
-  // Refs
   const sourceVideoRef = useRef(null);
   const brollVideoRef = useRef(null);
   const webcamVideoRef = useRef(null);
@@ -201,6 +180,7 @@ export default function ReactorStudio() {
   const [isExporting, setIsExporting] = useState(false); 
   const [recordedUrl, setRecordedUrl] = useState(null);
   const [isLoadingProject, setIsLoadingProject] = useState(true);
+  const [currentTime, setCurrentTime] = useState(0);
   
   const [templateId, setTemplateId] = useState('social_pro');
   const [displayName, setDisplayName] = useState('Manu');
@@ -233,9 +213,13 @@ export default function ReactorStudio() {
   const [isMuted, setIsMuted] = useState(false);
   const [filter, setFilter] = useState('none');
   const [duration, setDuration] = useState(0);
-  const [trimStart, setTrimStart] = useState(0);
-  const [trimEnd, setTrimEnd] = useState(0);
   const [fadeIn, setFadeIn] = useState(false);
+
+  // Multi-Clip CapCut Style State
+  const [clips, setClips] = useState([{ id: 'clip1', start: 0, end: 0 }]);
+  const [activeClipId, setActiveClipId] = useState('clip1');
+
+  const activeClip = useMemo(() => clips.find(c => c.id === activeClipId) || clips[0], [clips, activeClipId]);
 
   const [showGallery, setShowGallery] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
@@ -248,10 +232,8 @@ export default function ReactorStudio() {
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
   const activeTemplate = templateMap[templateId];
 
-  // --- LocalStorage & IndexedDB Restoration ---
   useEffect(() => {
     const loadProject = async () => {
-      // 1. Load Text States
       const savedState = JSON.parse(localStorage.getItem('reactor-project-state') || '{}');
       if (savedState.templateId) setTemplateId(savedState.templateId);
       if (savedState.displayName) setDisplayName(savedState.displayName);
@@ -273,20 +255,22 @@ export default function ReactorStudio() {
       if (savedState.filter) setFilter(savedState.filter);
       if (savedState.fadeIn) setFadeIn(savedState.fadeIn);
 
-      // 2. Load Media from IndexedDB
       try {
         const videoBlob = await idbGet('main_video');
         if (videoBlob && sourceVideoRef.current) {
           const url = URL.createObjectURL(videoBlob);
           sourceVideoRef.current.src = url;
-          sourceVideoRef.current.loop = true;
+          sourceVideoRef.current.loop = false; // Handled manually by activeClip
           sourceVideoRef.current.muted = true;
           sourceVideoRef.current.onloadedmetadata = () => {
-            setDuration(sourceVideoRef.current.duration);
-            setTrimStart(savedState.trimStart || 0);
-            setTrimEnd(savedState.trimEnd || sourceVideoRef.current.duration);
-            sourceVideoRef.current.play();
-            setIsPlaying(true);
+            const dur = sourceVideoRef.current.duration;
+            setDuration(dur);
+            const restoredClips = savedState.clips && savedState.clips.length > 0 
+              ? savedState.clips 
+              : [{ id: 'clip1', start: 0, end: dur }];
+            setClips(restoredClips);
+            setActiveClipId(savedState.activeClipId || restoredClips[0].id);
+            sourceVideoRef.current.currentTime = restoredClips[0].start;
             setSourceLoaded(true);
           };
         }
@@ -316,16 +300,15 @@ export default function ReactorStudio() {
     loadProject();
   }, []);
 
-  // Save Text States to LocalStorage on change
   useEffect(() => {
     if (isLoadingProject) return;
     const saveState = {
       templateId, displayName, username, povCaption, accentColor, fontPack,
       nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation,
-      homeLogoUrl, awayLogoUrl, homeScore, awayScore, trimStart, trimEnd, filter, fadeIn
+      homeLogoUrl, awayLogoUrl, homeScore, awayScore, clips, activeClipId, filter, fadeIn
     };
     localStorage.setItem('reactor-project-state', JSON.stringify(saveState));
-  }, [templateId, displayName, username, povCaption, accentColor, fontPack, nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation, homeLogoUrl, awayLogoUrl, homeScore, awayScore, trimStart, trimEnd, filter, fadeIn, isLoadingProject]);
+  }, [templateId, displayName, username, povCaption, accentColor, fontPack, nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation, homeLogoUrl, awayLogoUrl, homeScore, awayScore, clips, activeClipId, filter, fadeIn, isLoadingProject]);
 
   useEffect(() => { if (profileSrc) profileImgRef.current.src = profileSrc; else profileImgRef.current = new Image(); }, [profileSrc]);
   useEffect(() => { if (homeLogoUrl) homeLogoRef.current.src = homeLogoUrl; else homeLogoRef.current = new Image(); }, [homeLogoUrl]);
@@ -336,21 +319,23 @@ export default function ReactorStudio() {
     if (file) {
       const url = URL.createObjectURL(file);
       if (type === 'video') {
-        await idbSet('main_video', file); // Save to IDB
+        await idbSet('main_video', file); 
         if (sourceVideoRef.current) {
           sourceVideoRef.current.src = url;
-          sourceVideoRef.current.loop = true;
           sourceVideoRef.current.muted = isMuted;
           sourceVideoRef.current.onloadedmetadata = () => {
-            setDuration(sourceVideoRef.current.duration);
-            setTrimEnd(sourceVideoRef.current.duration);
+            const dur = sourceVideoRef.current.duration;
+            setDuration(dur);
+            const newClips = [{ id: `clip_${Date.now()}`, start: 0, end: dur }];
+            setClips(newClips);
+            setActiveClipId(newClips[0].id);
             sourceVideoRef.current.play();
             setIsPlaying(true);
             setSourceLoaded(true);
           };
         }
       } else if (type === 'broll') {
-        await idbSet('broll_video', file); // Save to IDB
+        await idbSet('broll_video', file); 
         if (brollVideoRef.current) {
           brollVideoRef.current.src = url;
           brollVideoRef.current.loop = true;
@@ -358,17 +343,16 @@ export default function ReactorStudio() {
           brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); setBrollLoaded(true); };
         }
       } else if (type === 'image') {
-        await idbSet('profile_image', file); // Save to IDB
+        await idbSet('profile_image', file); 
         setProfileSrc(url);
       } else if (type === 'audio') {
-        await idbSet('audio_track', file); // Save to IDB
+        await idbSet('audio_track', file); 
         if (audioRef.current) { audioRef.current.src = url; audioRef.current.loop = true; setAudioName(file.name); }
       }
     }
     e.target.value = null; 
   };
 
-  // Clear project
   const handleClearProject = async () => {
     if (!window.confirm("Clear all project data? This will remove the current video and settings.")) return;
     localStorage.removeItem('reactor-project-state');
@@ -391,14 +375,47 @@ export default function ReactorStudio() {
 
   const togglePreview = () => {
     const vid = sourceVideoRef.current;
-    if (!vid) return;
+    if (!vid || !activeClip) return;
     if (isPlaying) {
       vid.pause();
       setIsPlaying(false);
     } else {
-      if (vid.currentTime < trimStart || vid.currentTime >= trimEnd) vid.currentTime = trimStart;
+      if (vid.currentTime < activeClip.start || vid.currentTime >= activeClip.end - 0.1) {
+        vid.currentTime = activeClip.start;
+      }
       vid.play();
       setIsPlaying(true);
+    }
+  };
+
+  const handleSplit = () => {
+    const vid = sourceVideoRef.current;
+    if (!vid || !activeClip) return;
+    const splitTime = vid.currentTime;
+    
+    const currentClipIndex = clips.findIndex(c => c.id === activeClipId);
+    const currentClip = clips[currentClipIndex];
+    
+    if (splitTime > currentClip.start + 0.5 && splitTime < currentClip.end - 0.5) {
+      const newClip1 = { ...currentClip, end: splitTime };
+      const newClip2 = { id: `clip_${Date.now()}`, start: splitTime, end: currentClip.end };
+      
+      const newClips = [...clips];
+      newClips.splice(currentClipIndex, 1, newClip1, newClip2);
+      setClips(newClips);
+      setActiveClipId(newClip2.id);
+    } else {
+      alert("Move playhead to middle of clip to split.");
+    }
+  };
+
+  const handleDeleteClip = (clipId) => {
+    if (clips.length <= 1) return;
+    const newClips = clips.filter(c => c.id !== clipId);
+    setClips(newClips);
+    if (activeClipId === clipId) {
+      setActiveClipId(newClips[0].id);
+      if (sourceVideoRef.current) sourceVideoRef.current.currentTime = newClips[0].start;
     }
   };
 
@@ -471,27 +488,40 @@ export default function ReactorStudio() {
 
     if (!sourceLoaded || !sourceVid) return;
     
-    if (isPlaying && sourceVid.currentTime >= trimEnd) {
-      sourceVid.currentTime = trimStart;
+    // Update React State for time if changed (throttled by checking difference)
+    if (Math.abs(sourceVid.currentTime - currentTime) > 0.1) {
+      setCurrentTime(sourceVid.currentTime);
+    }
+
+    // Enforce Active Clip Boundaries (Play Trimmed Part Alone)
+    if (activeClip) {
+      if (sourceVid.currentTime < activeClip.start) {
+        sourceVid.currentTime = activeClip.start;
+      }
+      if (isPlaying && sourceVid.currentTime >= activeClip.end - 0.05) {
+        sourceVid.pause();
+        sourceVid.currentTime = activeClip.start;
+        sourceVid.play();
+      }
     }
 
     const font = FONT_PACKS[fontPack];
-    const currentTime = sourceVid.currentTime;
-    const animProgress = Math.min((currentTime - trimStart) / 2, 1);
+    const cTime = sourceVid.currentTime;
+    const animProgress = activeClip ? Math.min((cTime - activeClip.start) / 2, 1) : 0;
 
     if (layers.video) {
       ctx.save();
       const v = activeTemplate.video;
       
       if (videoEffect === 'zoom_in') {
-        const scale = 1 + Math.min((currentTime - trimStart) / (trimEnd - trimStart), 1) * 0.3;
+        const scale = 1 + Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) * 0.3;
         ctx.translate(v.x + v.w/2, v.y + v.h/2);
         ctx.scale(scale, scale);
         ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
       } else if (videoEffect === 'shake') {
         ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
       } else if (videoEffect === 'pulse') {
-        const scale = 1 + Math.sin(currentTime * 8) * 0.04;
+        const scale = 1 + Math.sin(cTime * 8) * 0.04;
         ctx.translate(v.x + v.w/2, v.y + v.h/2);
         ctx.scale(scale, scale);
         ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
@@ -513,8 +543,8 @@ export default function ReactorStudio() {
       ctx.filter = 'none';
       ctx.restore();
 
-      if (fadeIn && currentTime < 1) {
-        ctx.fillStyle = `rgba(0,0,0,${1 - currentTime})`;
+      if (fadeIn && cTime < activeClip.start + 1) {
+        ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - activeClip.start)})`;
         ctx.fillRect(0, 0, W, H);
       }
     }
@@ -718,17 +748,21 @@ export default function ReactorStudio() {
 
   const handleExportVideo = async (withAudio = true) => {
     const vid = sourceVideoRef.current;
-    if (!canvasRef.current || isExporting || !vid) return;
+    if (!canvasRef.current || isExporting || !vid || !activeClip) return;
 
     setIsExporting(true);
     setIsPlaying(false);
     
     vid.pause();
-    vid.currentTime = trimStart;
+    vid.currentTime = activeClip.start;
     await new Promise(r => setTimeout(r, 200));
 
     const wasMuted = vid.muted;
-    vid.muted = true;
+    const wasVolume = vid.volume;
+    // MUST be false to capture original audio track correctly
+    vid.muted = false; 
+    // MUST be 0 to prevent echo/double audio playing out loud during export
+    vid.volume = 0; 
 
     const fps = 30;
     const canvasStream = canvasRef.current.captureStream(fps);
@@ -775,7 +809,7 @@ export default function ReactorStudio() {
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     recorder.onstop = async () => {
       let rawBlob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const exportDurationMs = (trimEnd - trimStart) * 1000;
+      const exportDurationMs = (activeClip.end - activeClip.start) * 1000;
       const fixedBlob = await fixWebmDuration(rawBlob, exportDurationMs);
       
       const url = URL.createObjectURL(fixedBlob);
@@ -784,11 +818,12 @@ export default function ReactorStudio() {
       vid.pause();
       if (audioRef.current) audioRef.current.pause();
       vid.muted = wasMuted; 
+      vid.volume = wasVolume;
       canvasStream.getTracks().forEach(track => track.stop());
       if (audioCtx) audioCtx.close();
     };
 
-    const end = isFinite(trimEnd) ? trimEnd : (vid.duration || 0);
+    const end = isFinite(activeClip.end) ? activeClip.end : (vid.duration || 0);
     
     const checkInterval = setInterval(() => {
       if (vid.currentTime >= end - 0.05 || vid.ended) {
@@ -807,8 +842,8 @@ export default function ReactorStudio() {
       setRecordedUrl(null);
     }
     const vid = sourceVideoRef.current;
-    if (vid) {
-      vid.currentTime = trimStart;
+    if (vid && activeClip) {
+      vid.currentTime = activeClip.start;
       vid.pause();
     }
     setIsPlaying(false);
@@ -867,8 +902,8 @@ export default function ReactorStudio() {
               <button onClick={handleDiscardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
                 <Trash2 size={16} /> Discard
               </button>
-              <a href={recordedUrl} download="zokascore_reactor.webm" style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}>
-                <Download size={16} /> Download
+              <a href={recordedUrl} download={`zokascore_clip_${activeClipId}.webm`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}>
+                <Download size={16} /> Download Clip
               </a>
             </>
           ) : (
@@ -877,7 +912,7 @@ export default function ReactorStudio() {
                 {isExporting ? <Loader size={16} className="animate-spin" /> : <VolumeX size={16} />} Export Muted
               </button>
               <button onClick={() => handleExportVideo(true)} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
-                {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Video
+                {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
               </button>
             </>
           )}
@@ -926,6 +961,32 @@ export default function ReactorStudio() {
             </button>
             <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
           </div>
+
+          {/* CLIP SPLITTER PANEL (CapCut Style) */}
+          {sourceLoaded && (
+            <div style={panelStyle}>
+              <div style={panelTitleStyle}><Scissors size={14} /> Trim & Clips</div>
+              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8', flex: 1 }}>Playhead: {currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
+                <button onClick={handleSplit} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={isExporting || recordedUrl}>
+                  <Scissors size={12} /> Split
+                </button>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', overflowY: 'auto' }}>
+                {clips.map((c, i) => (
+                  <div key={c.id} onClick={() => { setActiveClipId(c.id); if (sourceVideoRef.current) sourceVideoRef.current.currentTime = c.start; }} 
+                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: activeClipId === c.id ? '#10b981' : '#1f2937', color: activeClipId === c.id ? '#fff' : '#94a3b8', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}>
+                    <span>Clip {i + 1}</span>
+                    <span style={{ fontSize: '10px', opacity: 0.9 }}>{c.start.toFixed(1)}s - {c.end.toFixed(1)}s</span>
+                    {clips.length > 1 && (
+                      <button onClick={(e) => { e.stopPropagation(); handleDeleteClip(c.id); }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex' }}><Trash2 size={12} /></button>
+                    )}
+                  </div>
+                ))}
+              </div>
+              <span style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Select a clip to preview & export it individually.</span>
+            </div>
+          )}
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
@@ -1008,40 +1069,28 @@ export default function ReactorStudio() {
             ))}
           </div>
 
-          {sourceLoaded && (
-            <div style={panelStyle}>
-              <div style={panelTitleStyle}><Sliders size={14} /> Trim & Edit</div>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={labelStyle}>Start: {trimStart.toFixed(1)}s</span>
-                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimStart} onChange={(e) => setTrimStart(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} />
-                </div>
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                  <span style={labelStyle}>End: {trimEnd.toFixed(1)}s</span>
-                  <input type="range" min="0" max={duration || 0} step="0.1" value={trimEnd} onChange={(e) => setTrimEnd(parseFloat(e.target.value))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} />
-                </div>
-              </div>
-              <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '8px' }}>
-                {FILTERS.map(f => (
-                  <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={isExporting || recordedUrl}>{f.name}</button>
-                ))}
-              </div>
-              <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-                <button onClick={() => setIsMuted(!isMuted)} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
-                  {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {isMuted ? 'Muted' : 'Audio On'}
-                </button>
-                <button onClick={() => setFadeIn(!fadeIn)} style={{ flex: 1, background: fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
-                  Fade In: {fadeIn ? 'On' : 'Off'}
-                </button>
-              </div>
+          <div style={panelStyle}>
+            <div style={panelTitleStyle}><Sliders size={14} /> Filters</div>
+            <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
+              {FILTERS.map(f => (
+                <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={isExporting || recordedUrl}>{f.name}</button>
+              ))}
             </div>
-          )}
+            <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
+              <button onClick={() => setIsMuted(!isMuted)} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
+                {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {isMuted ? 'Muted' : 'Audio On'}
+              </button>
+              <button onClick={() => setFadeIn(!fadeIn)} style={{ flex: 1, background: fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
+                Fade In: {fadeIn ? 'On' : 'Off'}
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px' }}>
         <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute" disabled={isExporting || recordedUrl}><Volume2 size={20} /></button>
-        <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview">
+        <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview Active Clip">
           {isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
         </button>
         <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={isExporting || recordedUrl}><Music size={20} /></button>
@@ -1114,4 +1163,3 @@ const bottomBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', bac
 const panelStyle = { background: '#0f172a', border: '1px solid #1f2937', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' };
 const panelTitleStyle = { display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' };
 const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', width: '100%', fontSize: '13px' };
-const labelStyle = { fontSize: '10px', color: '#64748b', fontWeight: '700' };
