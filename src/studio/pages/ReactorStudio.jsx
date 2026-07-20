@@ -1,9 +1,9 @@
 // src/studio/pages/ReactorStudio.jsx
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useReducer, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu
 } from 'lucide-react';
 
 // --- HELPER: WebM Duration Metadata Fixer ---
@@ -53,47 +53,53 @@ const fixWebmDuration = async (blob, durationMs) => {
 // --- HELPER: IndexedDB ---
 const DB_NAME = 'ReactorStudioDB';
 const STORE_NAME = 'Assets';
-const openDB = () => {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, 1);
-    request.onupgradeneeded = (e) => {
-      const db = e.target.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) db.createObjectStore(STORE_NAME);
-    };
-    request.onsuccess = (e) => resolve(e.target.result);
-    request.onerror = (e) => reject(e.target.error);
-  });
-};
-const idbSet = async (key, blob) => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).put(blob, key);
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
-  });
-};
-const idbGet = async (key) => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readonly');
-    const req = tx.objectStore(STORE_NAME).get(key);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
-  });
-};
-const idbClear = async () => {
-  const db = await openDB();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, 'readwrite');
-    tx.objectStore(STORE_NAME).clear();
-    tx.oncomplete = () => resolve(true);
-    tx.onerror = () => reject(tx.error);
-  });
+const openDB = () => new Promise((res, rej) => {
+  const req = indexedDB.open(DB_NAME, 1);
+  req.onupgradeneeded = e => !e.target.result.objectStoreNames.contains(STORE_NAME) && e.target.result.createObjectStore(STORE_NAME);
+  req.onsuccess = e => res(e.target.result);
+  req.onerror = e => rej(e.target.error);
+});
+const idbSet = async (k, v) => (await openDB()).transaction(STORE_NAME, 'readwrite').objectStore(STORE_NAME).put(v, k);
+const idbGet = async (k) => new Promise(async (res, rej) => { const tx = (await openDB()).transaction(STORE_NAME, 'readonly'); const r = tx.objectStore(STORE_NAME).get(k); r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+const idbClear = async () => new Promise(async (res, rej) => { const tx = (await openDB()).transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
+
+// --- HELPER: Draw ZOKA Logo Vector ---
+const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = color;
+  // Abstract 'Z' shape for Zoka
+  ctx.beginPath();
+  ctx.moveTo(-size/2, -size/2);
+  ctx.lineTo(size/2, -size/2);
+  ctx.lineTo(size/2, -size/4);
+  ctx.lineTo(-size/4, size/4);
+  ctx.lineTo(size/2, size/4);
+  ctx.lineTo(size/2, size/2);
+  ctx.lineTo(-size/2, size/2);
+  ctx.lineTo(-size/2, size/4);
+  ctx.lineTo(size/4, -size/4);
+  ctx.lineTo(-size/2, -size/4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
 };
 
 // --- 1. MASSIVE TEMPLATE ENGINE ---
 const TEMPLATES = [
+  // === PRO CINEMATIC TEMPLATES ===
+  { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#000', introText: 'AURA MAXIMUS', bugLogo: true, bugPos: 'tr', bg:'#000', preview: {bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro'} },
+  { id: 'pro_goal', title: 'Pro: Goal Machine', category: 'Pro', tags: ['viral', 'goal', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#dc2626', introText: 'GOAL MACHINE', bugLogo: true, bugPos: 'tl', bg:'#000', preview: {bg: 'linear-gradient(135deg, #dc2626, #000)', layout: 'pro'} },
+  { id: 'pro_chills', title: 'Pro: Chill Vibes', category: 'Pro', tags: ['viral', 'chill', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#6366f1', introText: 'CHILL VIBES', bugLogo: true, bugPos: 'br', bg:'#000', preview: {bg: 'linear-gradient(135deg, #4338ca, #312e81)', layout: 'pro'} },
+  { id: 'pro_skill', title: 'Pro: Skill Show', category: 'Pro', tags: ['viral', 'skill', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#10b981', introText: 'SKILL SHOW', bugLogo: true, bugPos: 'bl', bg:'#000', preview: {bg: 'linear-gradient(135deg, #065f46, #000)', layout: 'pro'} },
+  { id: 'pro_news', title: 'Pro: Breaking News', category: 'Pro', tags: ['viral', 'news', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#1d9bf0', introText: 'BREAKING NEWS', bugLogo: true, bugPos: 'tr', bg:'#000', preview: {bg: 'linear-gradient(135deg, #0c4a6e, #000)', layout: 'pro'} },
+  { id: 'pro_transfer', title: 'Pro: Transfer Guru', category: 'Pro', tags: ['viral', 'transfer', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#f59e0b', introText: 'TRANSFER GURU', bugLogo: true, bugPos: 'tl', bg:'#000', preview: {bg: 'linear-gradient(135deg, #b45309, #000)', layout: 'pro'} },
+  { id: 'pro_hype', title: 'Pro: Hype Beast', category: 'Pro', tags: ['viral', 'hype', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#ec4899', introText: 'HYPE BEAST', bugLogo: true, bugPos: 'br', bg:'#000', preview: {bg: 'linear-gradient(135deg, #be185d, #000)', layout: 'pro'} },
+  { id: 'pro_cinematic', title: 'Pro: Cinematic Wide', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:140,w:720,h:1000}, introDuration: 3, introColor: '#000', introText: 'CINEMATIC', bugLogo: true, bugPos: 'tr', bg:'#000', preview: {bg: 'linear-gradient(135deg, #111, #000)', layout: 'pro'} },
+  { id: 'pro_hero', title: 'Pro: Hometown Hero', category: 'Pro', tags: ['viral', 'hero', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#3b82f6', introText: 'HOMETOWN HERO', bugLogo: true, bugPos: 'bl', bg:'#000', preview: {bg: 'linear-gradient(135deg, #1e40af, #000)', layout: 'pro'} },
+  { id: 'pro_signature', title: 'Pro: ZOKA Signature', category: 'Pro', tags: ['viral', 'zoka', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, introDuration: 3, introColor: '#10b981', introText: 'ZOKA SCORE', bugLogo: true, bugPos: 'tr', bg:'#000', preview: {bg: 'linear-gradient(135deg, #047857, #000)', layout: 'pro'} },
+
+  // === STANDARD TEMPLATES ===
   { id: 'social_pro', title: 'TikTok POV (Exact Match)', category: 'TikTok', tags: ['viral', 'pov', 'exact'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:70,r:35,ring:'accent'}, nameEl: {x:100,y:60,size:30,color:'#fff'}, handleEl: {x:100,y:92,size:24,color:'#aaa'}, caption: {x:50,y:150,size:26,maxW:620,align:'left',color:'#fff'}, topGradient:350, bottomGradient:200, preview: {bg: 'linear-gradient(to bottom, #1e293b, #0f172a)', layout: 'pov'} },
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
@@ -101,26 +107,11 @@ const TEMPLATES = [
   { id: 'tiktok_tr', title: 'TikTok Top Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tr'} },
   { id: 'tiktok_bl', title: 'TikTok Bottom Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#111', layout: 'bl'} },
   { id: 'tiktok_br', title: 'TikTok Bottom Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:1180,r:35,ring:'accent'}, username: {x:620,y:1175,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:1080,size:24,maxW:680,align:'right'}, bottomGradient:400, preview: {bg: '#111', layout: 'br'} },
-  { id: 'tiktok_face', title: 'TikTok Facecam', category: 'TikTok', tags: ['facecam', 'gaming'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
-  { id: 'insta_tl', title: 'Insta Story Top Left', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tl'} },
-  { id: 'insta_tr', title: 'Insta Story Top Right', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tr'} },
-  { id: 'insta_bl', title: 'Insta Story Bottom', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#1a1a1a', layout: 'bl'} },
-  { id: 'insta_lux', title: 'Insta Luxury Gold', category: 'Instagram', tags: ['luxury', 'gold'], pip: false, video: {x:40,y:80,w:640,h:900,border:'#f59e0b'}, profile: {x:360,y:1100,r:40,ring:'#f59e0b'}, username: {x:360,y:1200,size:36,color:'#fff',center:true,badge:true,badgeColor:'#f59e0b'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
   { id: 'yt_shorts', title: 'YT Shorts Standard', category: 'YouTube', tags: ['shorts', 'viral'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#0f0f0f', layout: 'tl'} },
   { id: 'yt_mrbeast', title: 'YT MrBeast Style', category: 'YouTube', tags: ['mrbeast', 'viral'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1100,size:60,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#0f0f0f', layout: 'center'} },
-  { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#1a1a1a', layout: 'tl'} },
   { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#ec4899'}, profile: {x:360,y:1150,r:35,ring:'#ec4899'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#ec4899'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
-  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#10b981'}, profile: {x:360,y:1150,r:35,ring:'#10b981'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#10b981'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
-  { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'#9146ff'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'#9146ff'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#0e0e10', preview: {bg: '#0e0e10', layout: 'tl'} },
-  { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: {x:0,y:0,w:360,h:1280}, profile: {x:180,y:640,r:50,ring:'accent'}, username: {x:180,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:540,y:640,size:28,maxW:300,center:true}, bg:'#000', preview: {bg: '#111', layout: 'split'} },
-  { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#dc2626',text:'BREAKING NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#dc2626', layout: 'news'} },
-  { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#1d9bf0',text:'MATCH UPDATE',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#1d9bf0', layout: 'news'} },
-  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#10b981',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#10b981', layout: 'news'} },
-  { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#000', preview: {bg: '#000', layout: 'tl'} },
-  { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:80,w:640,h:900,border:'accent'}, profile: {x:360,y:1100,r:40,ring:'#f1f1f1'}, username: {x:360,y:1200,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
-  { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:40,w:640,h:800,border:'accent'}, profile: {x:360,y:1000,r:40,ring:'#f1f1f1'}, username: {x:360,y:1100,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:900,size:28,color:'#000',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
   { id: 'min_dark', title: 'Minimal Dark', category: 'Minimal', tags: ['dark', 'clean'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1200,size:32,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
 ];
 
@@ -140,14 +131,14 @@ const BRAND_PRESETS = [
 const FILTERS = [
   { id: 'none', name: 'Normal' }, { id: 'saturate(2) contrast(1.3)', name: 'Vivid' },
   { id: 'grayscale(1) contrast(1.2)', name: 'B&W' }, { id: 'sepia(0.8) contrast(1.1) brightness(0.9)', name: 'Retro' },
-  { id: 'invert(1)', name: 'Invert' }, { id: 'blur(2px)', name: 'Blur' },
-  { id: 'brightness(1.4) saturate(0.8)', name: 'Warm' }, { id: 'brightness(0.8) saturate(1.5) hue-rotate(200deg)', name: 'Cool' },
   { id: 'contrast(1.5) brightness(1.1) sepia(0.3)', name: 'Vintage' }
 ];
 
 const VIDEO_EFFECTS = [
   { id: 'none', name: 'None' }, { id: 'zoom_in', name: 'Zoom In' },
-  { id: 'shake', name: 'Shake' }, { id: 'pulse', name: 'Pulse' }
+  { id: 'shake', name: 'Shake' }, { id: 'pulse', name: 'Pulse' },
+  { id: 'ken_burns', name: 'Ken Burns' }, { id: 'glitch', name: 'Glitch' },
+  { id: 'rgb_split', name: 'RGB Split' }, { id: 'flash', name: 'Flash' }
 ];
 
 const TEXT_ANIMATIONS = [
@@ -155,786 +146,478 @@ const TEXT_ANIMATIONS = [
   { id: 'slide_up', name: 'Slide Up' }, { id: 'type_writer', name: 'Typewriter' }
 ];
 
+// --- 2. REDUCER STATE MANAGEMENT ---
+const initialState = {
+  media: { sourceLoaded: false, brollLoaded: false, cameraOn: false, profileSrc: null, audioName: '' },
+  editor: {
+    templateId: 'pro_aura', displayName: 'Manu', username: 'manuel_palmer', povCaption: 'POV: You just witnessed greatness 🔥',
+    accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
+    showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
+    isMuted: false, filter: 'none', fadeIn: false, pipPos: { x: 450, y: 800, w: 280, h: 380 }, profilePos: { x: 50, y: 70, r: 35 }
+  },
+  timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
+  ui: { showGallery: false, showGuides: false, isExporting: false, recordedUrl: null, isLoadingProject: true,
+        favorites: JSON.parse(localStorage.getItem("reactor-favorites")) || [], recents: JSON.parse(localStorage.getItem("reactor-recents")) || [],
+        searchQuery: "", activeCategory: "All", layers: { video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true } }
+};
+
+function studioReducer(state, action) {
+  switch (action.type) {
+    case 'SET_STATE': return { ...state, ...action.payload };
+    case 'SET_MEDIA': return { ...state, media: { ...state.media, ...action.payload } };
+    case 'SET_EDITOR': return { ...state, editor: { ...state.editor, ...action.payload } };
+    case 'SET_TIMELINE': return { ...state, timeline: { ...state.timeline, ...action.payload } };
+    case 'SET_UI': return { ...state, ui: { ...state.ui, ...action.payload } };
+    case 'RESET': return { ...initialState, ui: { ...initialState.ui, isLoadingProject: false } };
+    default: return state;
+  }
+}
+
 export default function ReactorStudio() {
   const navigate = useNavigate();
+  const [state, dispatch] = useReducer(studioReducer, initialState);
   
   const sourceVideoRef = useRef(null);
   const brollVideoRef = useRef(null);
   const webcamVideoRef = useRef(null);
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
+  const overlayCanvasRef = useRef(document.createElement('canvas')); // Off-screen cache
   const fileInputRefs = useRef({ video: null, broll: null, image: null, audio: null });
-  const mediaRecorderRef = useRef(null);
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const dragRef = useRef({ target: null, offsetX: 0, offsetY: 0 });
+  const timelineDragRef = useRef(null);
   const profileImgRef = useRef(new Image());
   const homeLogoRef = useRef(new Image());
   const awayLogoRef = useRef(new Image());
 
-  // State
-  const [sourceLoaded, setSourceLoaded] = useState(false);
-  const [brollLoaded, setBrollLoaded] = useState(false);
-  const [cameraOn, setCameraOn] = useState(false);
-  const [isPlaying, setIsPlaying] = useState(false); 
-  const [isExporting, setIsExporting] = useState(false); 
-  const [recordedUrl, setRecordedUrl] = useState(null);
-  const [isLoadingProject, setIsLoadingProject] = useState(true);
-  const [currentTime, setCurrentTime] = useState(0);
-  
-  const [templateId, setTemplateId] = useState('social_pro');
-  const [displayName, setDisplayName] = useState('Manu');
-  const [username, setUsername] = useState('manuel_palmer');
-  const [povCaption, setPovCaption] = useState('POV: You just witnessed greatness 🔥');
-  const [profileSrc, setProfileSrc] = useState(null);
-  const [audioName, setAudioName] = useState('');
-  const [accentColor, setAccentColor] = useState('#f97316');
-  const [fontPack, setFontPack] = useState('TikTok');
-  
-  const [nameColor, setNameColor] = useState('#ffffff');
-  const [nameSize, setNameSize] = useState(null); 
-  const [captionColor, setCaptionColor] = useState('#ffffff');
-  const [captionSize, setCaptionSize] = useState(null); 
-  const [showVerified, setShowVerified] = useState(true);
-
-  const [editMode, setEditMode] = useState(false);
-
-  const [videoEffect, setVideoEffect] = useState('none');
-  const [textAnimation, setTextAnimation] = useState('none');
-
-  const [homeLogoUrl, setHomeLogoUrl] = useState('');
-  const [awayLogoUrl, setAwayLogoUrl] = useState('');
-  const [homeScore, setHomeScore] = useState(0);
-  const [awayScore, setAwayScore] = useState(0);
-
-  const [pipPos, setPipPos] = useState({ x: 450, y: 800, w: 280, h: 380 });
-  const [profilePos, setProfilePos] = useState({ x: 50, y: 70, r: 35 });
-
-  const [isMuted, setIsMuted] = useState(false);
-  const [filter, setFilter] = useState('none');
-  const [duration, setDuration] = useState(0);
-  const [fadeIn, setFadeIn] = useState(false);
-
-  // Multi-Clip CapCut Style State
-  const [clips, setClips] = useState([{ id: 'clip1', start: 0, end: 0 }]);
-  const [activeClipId, setActiveClipId] = useState('clip1');
-
-  const activeClip = useMemo(() => clips.find(c => c.id === activeClipId) || clips[0], [clips, activeClipId]);
-
-  const [showGallery, setShowGallery] = useState(false);
-  const [showGuides, setShowGuides] = useState(false);
-  const [layers, setLayers] = useState({ video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true });
-  const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem("reactor-favorites")) || []);
-  const [recents, setRecents] = useState(() => JSON.parse(localStorage.getItem("reactor-recents")) || []);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeCategory, setActiveCategory] = useState("All");
-
+  const { media, editor, timeline, ui } = state;
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
-  const activeTemplate = templateMap[templateId];
+  const activeTemplate = templateMap[editor.templateId];
+  const activeClip = useMemo(() => timeline.clips.find(c => c.id === timeline.activeClipId) || timeline.clips[0], [timeline.clips, timeline.activeClipId]);
 
   useEffect(() => {
-    const loadProject = async () => {
-      const savedState = JSON.parse(localStorage.getItem('reactor-project-state') || '{}');
-      if (savedState.templateId) setTemplateId(savedState.templateId);
-      if (savedState.displayName) setDisplayName(savedState.displayName);
-      if (savedState.username) setUsername(savedState.username);
-      if (savedState.povCaption) setPovCaption(savedState.povCaption);
-      if (savedState.accentColor) setAccentColor(savedState.accentColor);
-      if (savedState.fontPack) setFontPack(savedState.fontPack);
-      if (savedState.nameColor) setNameColor(savedState.nameColor);
-      if (savedState.nameSize) setNameSize(savedState.nameSize);
-      if (savedState.captionColor) setCaptionColor(savedState.captionColor);
-      if (savedState.captionSize) setCaptionSize(savedState.captionSize);
-      if (savedState.showVerified !== undefined) setShowVerified(savedState.showVerified);
-      if (savedState.videoEffect) setVideoEffect(savedState.videoEffect);
-      if (savedState.textAnimation) setTextAnimation(savedState.textAnimation);
-      if (savedState.homeLogoUrl) setHomeLogoUrl(savedState.homeLogoUrl);
-      if (savedState.awayLogoUrl) setAwayLogoUrl(savedState.awayLogoUrl);
-      if (savedState.homeScore) setHomeScore(savedState.homeScore);
-      if (savedState.awayScore) setAwayScore(savedState.awayScore);
-      if (savedState.filter) setFilter(savedState.filter);
-      if (savedState.fadeIn) setFadeIn(savedState.fadeIn);
-
+    const load = async () => {
+      const saved = JSON.parse(localStorage.getItem('reactor-project-state') || '{}');
+      if (saved.editor) dispatch({ type: 'SET_EDITOR', payload: saved.editor });
+      if (saved.timeline) dispatch({ type: 'SET_TIMELINE', payload: saved.timeline });
+      
       try {
-        const videoBlob = await idbGet('main_video');
-        if (videoBlob && sourceVideoRef.current) {
-          const url = URL.createObjectURL(videoBlob);
-          sourceVideoRef.current.src = url;
-          sourceVideoRef.current.loop = false; 
+        const vBlob = await idbGet('main_video');
+        if (vBlob && sourceVideoRef.current) {
+          sourceVideoRef.current.src = URL.createObjectURL(vBlob);
           sourceVideoRef.current.muted = true;
           sourceVideoRef.current.onloadedmetadata = () => {
             const dur = sourceVideoRef.current.duration;
-            setDuration(dur);
-            const restoredClips = savedState.clips && savedState.clips.length > 0 
-              ? savedState.clips 
-              : [{ id: 'clip1', start: 0, end: dur }];
-            setClips(restoredClips);
-            setActiveClipId(savedState.activeClipId || restoredClips[0].id);
-            sourceVideoRef.current.currentTime = restoredClips[0].start;
-            setSourceLoaded(true);
+            dispatch({ type: 'SET_MEDIA', payload: { sourceLoaded: true } });
+            dispatch({ type: 'SET_TIMELINE', payload: { duration: dur, clips: saved.timeline?.clips?.length ? saved.timeline.clips : [{ id: 'clip1', start: 0, end: dur }] } });
           };
         }
-
-        const brollBlob = await idbGet('broll_video');
-        if (brollBlob && brollVideoRef.current) {
-          const url = URL.createObjectURL(brollBlob);
-          brollVideoRef.current.src = url;
-          brollVideoRef.current.loop = true;
-          brollVideoRef.current.muted = true;
-          brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); setBrollLoaded(true); };
-        }
-
-        const imageBlob = await idbGet('profile_image');
-        if (imageBlob) setProfileSrc(URL.createObjectURL(imageBlob));
-
-        const audioBlob = await idbGet('audio_track');
-        if (audioBlob && audioRef.current) {
-          audioRef.current.src = URL.createObjectURL(audioBlob);
-          audioRef.current.loop = true;
-          setAudioName('Restored Audio');
-        }
-      } catch (e) { console.error("Failed to load media", e); }
-      
-      setIsLoadingProject(false);
+        const bBlob = await idbGet('broll_video');
+        if (bBlob) { brollVideoRef.current.src = URL.createObjectURL(bBlob); brollVideoRef.current.loop = true; brollVideoRef.current.muted = true; brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); dispatch({ type: 'SET_MEDIA', payload: { brollLoaded: true } }); }; }
+        const pBlob = await idbGet('profile_image');
+        if (pBlob) { const src = URL.createObjectURL(pBlob); profileImgRef.current.src = src; dispatch({ type: 'SET_MEDIA', payload: { profileSrc: src } }); }
+        const aBlob = await idbGet('audio_track');
+        if (aBlob) { audioRef.current.src = URL.createObjectURL(aBlob); audioRef.current.loop = true; dispatch({ type: 'SET_MEDIA', payload: { audioName: 'Restored Audio' } }); }
+      } catch (e) { console.error(e); }
+      dispatch({ type: 'SET_UI', payload: { isLoadingProject: false } });
     };
-    loadProject();
+    load();
   }, []);
 
   useEffect(() => {
-    if (isLoadingProject) return;
-    const saveState = {
-      templateId, displayName, username, povCaption, accentColor, fontPack,
-      nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation,
-      homeLogoUrl, awayLogoUrl, homeScore, awayScore, clips, activeClipId, filter, fadeIn
-    };
-    localStorage.setItem('reactor-project-state', JSON.stringify(saveState));
-  }, [templateId, displayName, username, povCaption, accentColor, fontPack, nameColor, nameSize, captionColor, captionSize, showVerified, videoEffect, textAnimation, homeLogoUrl, awayLogoUrl, homeScore, awayScore, clips, activeClipId, filter, fadeIn, isLoadingProject]);
+    if (ui.isLoadingProject) return;
+    localStorage.setItem('reactor-project-state', JSON.stringify({ editor, timeline }));
+  }, [editor, timeline, ui.isLoadingProject]);
 
-  useEffect(() => { if (profileSrc) profileImgRef.current.src = profileSrc; else profileImgRef.current = new Image(); }, [profileSrc]);
-  useEffect(() => { if (homeLogoUrl) homeLogoRef.current.src = homeLogoUrl; else homeLogoRef.current = new Image(); }, [homeLogoUrl]);
-  useEffect(() => { if (awayLogoUrl) awayLogoRef.current.src = awayLogoUrl; else awayLogoRef.current = new Image(); }, [awayLogoUrl]);
+  useEffect(() => { if (media.profileSrc) profileImgRef.current.src = media.profileSrc; }, [media.profileSrc]);
+  useEffect(() => { if (editor.homeLogoUrl) homeLogoRef.current.src = editor.homeLogoUrl; }, [editor.homeLogoUrl]);
+  useEffect(() => { if (editor.awayLogoUrl) awayLogoRef.current.src = editor.awayLogoUrl; }, [editor.awayLogoUrl]);
 
   const handleImport = async (e, type) => {
     const file = e.target.files[0];
     if (file) {
       const url = URL.createObjectURL(file);
       if (type === 'video') {
-        await idbSet('main_video', file); 
-        if (sourceVideoRef.current) {
-          sourceVideoRef.current.src = url;
-          sourceVideoRef.current.muted = isMuted;
-          sourceVideoRef.current.onloadedmetadata = () => {
-            const dur = sourceVideoRef.current.duration;
-            setDuration(dur);
-            const newClips = [{ id: `clip_${Date.now()}`, start: 0, end: dur }];
-            setClips(newClips);
-            setActiveClipId(newClips[0].id);
-            sourceVideoRef.current.play();
-            setIsPlaying(true);
-            setSourceLoaded(true);
-          };
-        }
+        await idbSet('main_video', file);
+        sourceVideoRef.current.src = url;
+        sourceVideoRef.current.muted = editor.isMuted;
+        sourceVideoRef.current.onloadedmetadata = () => {
+          const dur = sourceVideoRef.current.duration;
+          const newClips = [{ id: `clip_${Date.now()}`, start: 0, end: dur }];
+          dispatch({ type: 'SET_TIMELINE', payload: { duration: dur, clips: newClips, activeClipId: newClips[0].id, isPlaying: true, currentTime: 0 } });
+          dispatch({ type: 'SET_MEDIA', payload: { sourceLoaded: true } });
+          sourceVideoRef.current.play();
+        };
       } else if (type === 'broll') {
-        await idbSet('broll_video', file); 
-        if (brollVideoRef.current) {
-          brollVideoRef.current.src = url;
-          brollVideoRef.current.loop = true;
-          brollVideoRef.current.muted = true;
-          brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); setBrollLoaded(true); };
-        }
+        await idbSet('broll_video', file);
+        brollVideoRef.current.src = url; brollVideoRef.current.loop = true; brollVideoRef.current.muted = true;
+        brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); dispatch({ type: 'SET_MEDIA', payload: { brollLoaded: true } }); };
       } else if (type === 'image') {
-        await idbSet('profile_image', file); 
-        setProfileSrc(url);
+        await idbSet('profile_image', file);
+        const src = URL.createObjectURL(file); profileImgRef.current.src = src;
+        dispatch({ type: 'SET_MEDIA', payload: { profileSrc: src } });
       } else if (type === 'audio') {
-        await idbSet('audio_track', file); 
-        if (audioRef.current) { audioRef.current.src = url; audioRef.current.loop = true; setAudioName(file.name); }
+        await idbSet('audio_track', file);
+        audioRef.current.src = url; audioRef.current.loop = true;
+        dispatch({ type: 'SET_MEDIA', payload: { audioName: file.name } });
       }
     }
-    e.target.value = null; 
+    e.target.value = null;
   };
 
   const handleClearProject = async () => {
-    if (!window.confirm("Clear all project data? This will remove the current video and settings.")) return;
+    if (!window.confirm("Clear all project data?")) return;
     localStorage.removeItem('reactor-project-state');
     await idbClear();
     window.location.reload();
   };
 
-  useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = isMuted; }, [isMuted]);
+  useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = editor.isMuted; }, [editor.isMuted]);
 
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 1280, facingMode: 'user' }, audio: true });
       streamRef.current = stream;
-      if (webcamVideoRef.current) { webcamVideoRef.current.srcObject = stream; webcamVideoRef.current.play(); }
-      setCameraOn(true);
-      setBrollLoaded(false); 
-      if (brollVideoRef.current) brollVideoRef.current.removeAttribute('src');
-    } catch (err) { alert("Camera access denied."); }
+      webcamVideoRef.current.srcObject = stream; webcamVideoRef.current.play();
+      dispatch({ type: 'SET_MEDIA', payload: { cameraOn: true, brollLoaded: false } });
+      brollVideoRef.current.removeAttribute('src');
+    } catch { alert("Camera access denied."); }
   };
 
   const togglePreview = () => {
     const vid = sourceVideoRef.current;
     if (!vid || !activeClip) return;
-    if (isPlaying) {
-      vid.pause();
-      setIsPlaying(false);
-    } else {
-      if (vid.currentTime < activeClip.start || vid.currentTime >= activeClip.end - 0.1) {
-        vid.currentTime = activeClip.start;
-      }
-      vid.play();
-      setIsPlaying(true);
+    if (timeline.isPlaying) { vid.pause(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } }); }
+    else {
+      if (vid.currentTime < activeClip.start || vid.currentTime >= activeClip.end - 0.1) vid.currentTime = activeClip.start;
+      vid.play(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: true } });
     }
   };
 
   const handleSplit = () => {
-    const vid = sourceVideoRef.current;
-    if (!vid || !activeClip) return;
-    const splitTime = vid.currentTime;
-    
-    const currentClipIndex = clips.findIndex(c => c.id === activeClipId);
-    const currentClip = clips[currentClipIndex];
-    
-    if (splitTime > currentClip.start + 0.5 && splitTime < currentClip.end - 0.5) {
-      const newClip1 = { ...currentClip, end: splitTime };
-      const newClip2 = { id: `clip_${Date.now()}`, start: splitTime, end: currentClip.end };
-      
-      const newClips = [...clips];
-      newClips.splice(currentClipIndex, 1, newClip1, newClip2);
-      setClips(newClips);
-      setActiveClipId(newClip2.id);
-    } else {
-      alert("Move playhead to middle of clip to split.");
+    const vid = sourceVideoRef.current; if (!vid || !activeClip) return;
+    const t = vid.currentTime;
+    const idx = timeline.clips.findIndex(c => c.id === timeline.activeClipId);
+    const c = timeline.clips[idx];
+    if (t > c.start + 0.5 && t < c.end - 0.5) {
+      const c1 = { ...c, end: t }; const c2 = { id: `clip_${Date.now()}`, start: t, end: c.end };
+      const nClips = [...timeline.clips]; nClips.splice(idx, 1, c1, c2);
+      dispatch({ type: 'SET_TIMELINE', payload: { clips: nClips, activeClipId: c2.id } });
     }
   };
 
-  const handleDeleteClip = (clipId) => {
-    if (clips.length <= 1) return;
-    const newClips = clips.filter(c => c.id !== clipId);
-    setClips(newClips);
-    if (activeClipId === clipId) {
-      setActiveClipId(newClips[0].id);
-      if (sourceVideoRef.current) sourceVideoRef.current.currentTime = newClips[0].start;
-    }
+  const handleDeleteClip = (id) => {
+    if (timeline.clips.length <= 1) return;
+    const nClips = timeline.clips.filter(c => c.id !== id);
+    dispatch({ type: 'SET_TIMELINE', payload: { clips: nClips, activeClipId: nClips[0].id } });
+    if (sourceVideoRef.current) sourceVideoRef.current.currentTime = nClips[0].start;
+  };
+
+  const handleTimelineDrag = (e, clipId, mode) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const trackEl = e.currentTarget.parentElement;
+    const rect = trackEl.getBoundingClientRect();
+    const startX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clip = timeline.clips.find(c => c.id === clipId);
+    const pxToSec = timeline.duration / rect.width;
+    
+    timelineDragRef.current = { clipId, mode, startX, origStart: clip.start, origEnd: clip.end, pxToSec };
+
+    const onMove = (ev) => {
+      if (!timelineDragRef.current) return;
+      const x = ev.touches ? ev.touches[0].clientX : ev.clientX;
+      const deltaSec = (x - timelineDragRef.current.startX) * timelineDragRef.current.pxToSec;
+      
+      let { clipId, mode, origStart, origEnd } = timelineDragRef.current;
+      let newStart = origStart, newEnd = origEnd;
+      
+      if (mode === 'move') { 
+        newStart = Math.max(0, Math.min(origStart + deltaSec, timeline.duration - (origEnd - origStart))); 
+        newEnd = newStart + (origEnd - origStart); 
+      } else if (mode === 'resize-l') { 
+        newStart = Math.max(0, Math.min(origStart + deltaSec, origEnd - 0.5)); 
+      } else if (mode === 'resize-r') { 
+        newEnd = Math.max(origStart + 0.5, Math.min(origEnd + deltaSec, timeline.duration)); 
+      }
+      
+      dispatch({ type: 'SET_TIMELINE', payload: { clips: timeline.clips.map(c => c.id === clipId ? { ...c, start: newStart, end: newEnd } : c) } });
+    };
+
+    const onUp = () => {
+      timelineDragRef.current = null;
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onUp);
+    };
+
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    window.addEventListener('touchmove', onMove);
+    window.addEventListener('touchend', onUp);
   };
 
   const drawCover = (ctx, video, x, y, w, h) => {
-    const vidW = video.videoWidth, vidH = video.videoHeight;
-    if (!vidW || !vidH) return;
-    const vidRatio = vidW / vidH, boxRatio = w / h;
-    let sx, sy, sw, sh;
-    if (vidRatio > boxRatio) { sh = vidH; sw = vidH * boxRatio; sx = (vidW - sw) / 2; sy = 0; } 
-    else { sw = vidW; sh = vidW / boxRatio; sx = 0; sy = (vidH - sh) / 2; }
+    const vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return;
+    const vr = vw / vh, br = w / h; let sx, sy, sw, sh;
+    if (vr > br) { sh = vh; sw = vh * br; sx = (vw - sw) / 2; sy = 0; } else { sw = vw; sh = vw / br; sx = 0; sy = (vh - sh) / 2; }
     ctx.drawImage(video, sx, sy, sw, sh, x, y, w, h);
   };
 
   const drawRounded = (ctx, video, x, y, w, h, r) => {
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
-    ctx.clip();
-    drawCover(ctx, video, x, y, w, h);
-    ctx.restore();
+    ctx.save(); ctx.beginPath();
+    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.clip();
+    drawCover(ctx, video, x, y, w, h); ctx.restore();
   };
 
-  const wrapText = (ctx, text, maxWidth, maxLines) => {
-    const words = text.split(' ');
-    let lines = [], currentLine = words[0] || '';
-    for (let i = 1; i < words.length; i++) {
-      const testLine = currentLine + ' ' + words[i];
-      if (ctx.measureText(testLine).width < maxWidth) currentLine = testLine;
-      else { lines.push(currentLine); currentLine = words[i]; }
-    }
-    lines.push(currentLine);
-    return lines.slice(0, maxLines);
+  const wrapText = (ctx, text, mw, ml) => {
+    const w = text.split(' '); let l = [], c = w[0] || '';
+    for (let i = 1; i < w.length; i++) { if (ctx.measureText(c + ' ' + w[i]).width < mw) c += ' ' + w[i]; else { l.push(c); c = w[i]; } }
+    l.push(c); return l.slice(0, ml);
   };
 
-  const drawVerifiedBadge = (ctx, x, y, size) => {
-    ctx.save();
-    ctx.fillStyle = '#1d9bf0';
-    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
-    ctx.strokeStyle = '#fff'; 
-    ctx.lineWidth = size * 0.35;
-    ctx.lineCap = 'round'; 
-    ctx.lineJoin = 'round';
-    ctx.beginPath(); 
-    ctx.moveTo(x - size * 0.4, y); 
-    ctx.lineTo(x - size * 0.1, y + size * 0.35); 
-    ctx.lineTo(x + size * 0.45, y - size * 0.35); 
-    ctx.stroke();
-    ctx.restore();
+  const drawVerifiedBadge = (ctx, x, y, s) => {
+    ctx.save(); ctx.fillStyle = '#1d9bf0'; ctx.beginPath(); ctx.arc(x, y, s, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; ctx.lineWidth = s * 0.35; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+    ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.35); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore();
   };
 
-  const drawFrameRef = useRef(() => {});
-  
-  drawFrameRef.current = () => {
-    const canvas = canvasRef.current;
-    const ctx = canvas?.getContext('2d');
-    if (!ctx) return;
-    
-    const W = canvas.width, H = canvas.height;
-    ctx.fillStyle = activeTemplate.bg === 'accent' ? accentColor : (activeTemplate.bg || '#000');
-    ctx.fillRect(0, 0, W, H);
+  // --- 3. OVERLAY CACHING ---
+  const renderOverlay = useCallback(() => {
+    const oc = overlayCanvasRef.current;
+    const ctx = oc.getContext('2d');
+    const W = 720, H = 1280;
+    oc.width = W; oc.height = H;
+    ctx.clearRect(0, 0, W, H);
+    const font = FONT_PACKS[editor.fontPack];
+    const cTime = timeline.currentTime;
+    const aProg = activeClip ? Math.min((cTime - activeClip.start) / 2, 1) : 0;
 
-    const sourceVid = sourceVideoRef.current;
-    const webcamVid = webcamVideoRef.current;
-    const brollVid = brollVideoRef.current;
-
-    if (!sourceLoaded || !sourceVid) return;
-    
-    if (Math.abs(sourceVid.currentTime - currentTime) > 0.1) {
-      setCurrentTime(sourceVid.currentTime);
+    if (ui.layers.gradients) {
+      if (activeTemplate.topGradient) { const g = ctx.createLinearGradient(0, 0, 0, activeTemplate.topGradient); g.addColorStop(0, 'rgba(0,0,0,0.8)'); g.addColorStop(1, 'rgba(0,0,0,0)'); ctx.fillStyle = g; ctx.fillRect(0, 0, W, activeTemplate.topGradient); }
+      if (activeTemplate.bottomGradient) { const g = ctx.createLinearGradient(0, H - activeTemplate.bottomGradient, 0, H); g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,0.9)'); ctx.fillStyle = g; ctx.fillRect(0, H - activeTemplate.bottomGradient, W, activeTemplate.bottomGradient); }
     }
 
-    if (activeClip) {
-      if (sourceVid.currentTime < activeClip.start) {
-        sourceVid.currentTime = activeClip.start;
-      }
-      if (isPlaying && sourceVid.currentTime >= activeClip.end - 0.05) {
-        sourceVid.pause();
-        sourceVid.currentTime = activeClip.start;
-        sourceVid.play();
-      }
-    }
+    if (activeTemplate.header) { const h = activeTemplate.header; ctx.fillStyle = h.bg; ctx.fillRect(0, 0, W, h.h); ctx.fillStyle = '#fff'; ctx.font = `bold ${h.size}px ${font.name}`; ctx.textAlign = 'center'; ctx.fillText(h.text, W / 2, h.y); }
+    if (activeTemplate.ticker) { const t = activeTemplate.ticker; ctx.fillStyle = t.bg; ctx.fillRect(0, t.y, W, t.h); ctx.fillStyle = '#fff'; ctx.font = `bold ${t.size}px ${font.name}`; ctx.textAlign = 'left'; wrapText(ctx, editor.povCaption, W - 40, 2).forEach((l, i) => ctx.fillText(l, 20, t.y + 40 + (i * 36))); }
 
-    const font = FONT_PACKS[fontPack];
-    const cTime = sourceVid.currentTime;
-    const animProgress = activeClip ? Math.min((cTime - activeClip.start) / 2, 1) : 0;
-
-    if (layers.video) {
-      ctx.save();
-      const v = activeTemplate.video;
-      
-      if (videoEffect === 'zoom_in') {
-        const scale = 1 + Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) * 0.3;
-        ctx.translate(v.x + v.w/2, v.y + v.h/2);
-        ctx.scale(scale, scale);
-        ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
-      } else if (videoEffect === 'shake') {
-        ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
-      } else if (videoEffect === 'pulse') {
-        const scale = 1 + Math.sin(cTime * 8) * 0.04;
-        ctx.translate(v.x + v.w/2, v.y + v.h/2);
-        ctx.scale(scale, scale);
-        ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
-      }
-
-      ctx.filter = filter;
-      if (v.glow) {
-        ctx.shadowColor = v.glow; ctx.shadowBlur = 30; ctx.strokeStyle = v.glow; ctx.lineWidth = 8;
-        drawRounded(ctx, sourceVid, v.x, v.y, v.w, v.h, 20);
-        ctx.strokeRect(v.x, v.y, v.w, v.h);
-        ctx.shadowBlur = 0;
-      } else if (v.border) {
-        drawCover(ctx, sourceVid, v.x, v.y, v.w, v.h);
-        ctx.strokeStyle = v.border === 'accent' ? accentColor : v.border; ctx.lineWidth = 4;
-        ctx.strokeRect(v.x, v.y, v.w, v.h);
-      } else {
-        drawCover(ctx, sourceVid, v.x, v.y, v.w, v.h);
-      }
-      ctx.filter = 'none';
-      ctx.restore();
-
-      if (fadeIn && cTime < activeClip.start + 1) {
-        ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - activeClip.start)})`;
-        ctx.fillRect(0, 0, W, H);
-      }
-    }
-
-    const showPiP = (cameraOn || brollLoaded) && layers.pip;
-    const activePiPVid = brollLoaded ? brollVid : webcamVid;
-    if (activePiPVid && showPiP) {
-      const pip = pipPos; 
-      ctx.fillStyle = '#fff';
-      ctx.fillRect(pip.x - 4, pip.y - 4, pip.w + 8, pip.h + 8);
-      ctx.save();
-      if (!brollLoaded) { 
-        ctx.scale(-1, 1);
-        ctx.translate(-W, 0);
-        drawRounded(ctx, activePiPVid, W - pip.x - pip.w, pip.y, pip.w, pip.h, 12);
-      } else {
-        drawRounded(ctx, activePiPVid, pip.x, pip.y, pip.w, pip.h, 12);
-      }
-      ctx.restore();
-    }
-
-    if (layers.gradients) {
-      if (activeTemplate.topGradient) {
-        const grd = ctx.createLinearGradient(0, 0, 0, activeTemplate.topGradient);
-        grd.addColorStop(0, 'rgba(0,0,0,0.8)'); grd.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle = grd; ctx.fillRect(0, 0, W, activeTemplate.topGradient);
-      }
-      if (activeTemplate.bottomGradient) {
-        const grd = ctx.createLinearGradient(0, H - activeTemplate.bottomGradient, 0, H);
-        grd.addColorStop(0, 'rgba(0,0,0,0)'); grd.addColorStop(1, 'rgba(0,0,0,0.9)');
-        ctx.fillStyle = grd; ctx.fillRect(0, H - activeTemplate.bottomGradient, W, activeTemplate.bottomGradient);
-      }
-    }
-
-    if (activeTemplate.header) {
-      const h = activeTemplate.header;
-      ctx.fillStyle = h.bg; ctx.fillRect(0, 0, W, h.h);
-      ctx.fillStyle = '#fff'; ctx.font = `bold ${h.size}px ${font.name}`; ctx.textAlign = 'center';
-      ctx.fillText(h.text, W / 2, h.y);
-    }
-    if (activeTemplate.ticker) {
-      const t = activeTemplate.ticker;
-      ctx.fillStyle = t.bg; ctx.fillRect(0, t.y, W, t.h);
-      ctx.fillStyle = '#fff'; ctx.font = `bold ${t.size}px ${font.name}`; ctx.textAlign = 'left';
-      const lines = wrapText(ctx, povCaption, W - 40, 2);
-      let yPos = t.y + 40;
-      lines.forEach(line => { ctx.fillText(line, 20, yPos); yPos += 36; });
-    }
-
-    if (layers.caption && activeTemplate.caption && !activeTemplate.ticker) {
-      const c = activeTemplate.caption;
-      ctx.fillStyle = captionColor || c.color || '#fff';
-      const cSize = captionSize ? parseInt(captionSize) : c.size;
-      ctx.font = `${font.weight} ${cSize}px ${font.name}`;
-      ctx.textAlign = c.center ? 'center' : (c.align || 'left');
-      
-      let displayCaption = povCaption;
-      let yOffset = 0;
-      
-      if (textAnimation === 'type_writer') {
-        const len = Math.floor((povCaption.length) * animProgress);
-        displayCaption = povCaption.substring(0, len);
-      } else if (textAnimation === 'fade_in') {
-        ctx.globalAlpha = animProgress;
-      } else if (textAnimation === 'slide_up') {
-        yOffset = (1 - animProgress) * 50;
-      }
-
-      const lines = wrapText(ctx, displayCaption, c.maxW, 3);
-      let yPos = c.y + yOffset;
-      lines.forEach(line => { ctx.fillText(line, c.x, yPos); yPos += cSize + 8; });
+    if (ui.layers.caption && activeTemplate.caption && !activeTemplate.ticker) {
+      const c = activeTemplate.caption; ctx.fillStyle = editor.captionColor || c.color || '#fff';
+      const cS = editor.captionSize ? parseInt(editor.captionSize) : c.size;
+      ctx.font = `${font.weight} ${cS}px ${font.name}`; ctx.textAlign = c.center ? 'center' : (c.align || 'left');
+      let dC = editor.povCaption, yO = 0;
+      if (editor.textAnimation === 'type_writer') dC = editor.povCaption.substring(0, Math.floor(editor.povCaption.length * aProg));
+      else if (editor.textAnimation === 'fade_in') ctx.globalAlpha = aProg;
+      else if (editor.textAnimation === 'slide_up') yO = (1 - aProg) * 50;
+      let yP = c.y + yO; wrapText(ctx, dC, c.maxW, 3).forEach(l => { ctx.fillText(l, c.x, yP); yP += cS + 8; });
       ctx.globalAlpha = 1;
     }
 
-    const p = (activeTemplate.isCustom || editMode) ? profilePos : activeTemplate.profile;
-    if (profileImgRef.current.src && p && layers.profile) {
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
-      ctx.closePath();
-      ctx.clip();
-      ctx.drawImage(profileImgRef.current, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2);
-      ctx.restore();
-      if (p.ring) {
-        ctx.strokeStyle = p.ring === 'accent' ? accentColor : p.ring; ctx.lineWidth = 4; 
-        ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 1, 0, Math.PI * 2); ctx.stroke();
-      }
+    const p = (activeTemplate.isCustom || editor.editMode) ? editor.profilePos : activeTemplate.profile;
+    if (profileImgRef.current.src && p && ui.layers.profile) {
+      ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+      ctx.drawImage(profileImgRef.current, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2); ctx.restore();
+      if (p.ring) { ctx.strokeStyle = p.ring === 'accent' ? editor.accentColor : p.ring; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 1, 0, Math.PI * 2); ctx.stroke(); }
     }
 
     if (activeTemplate.nameEl && activeTemplate.handleEl) {
       const n = activeTemplate.nameEl, hd = activeTemplate.handleEl;
-      ctx.textAlign = n.align || 'left';
-      ctx.fillStyle = nameColor || n.color || '#fff';
-      const nSize = nameSize ? parseInt(nameSize) : n.size;
-      ctx.font = `${font.weight} ${nSize}px ${font.name}`;
-      
-      const nx = (activeTemplate.isCustom || editMode) ? p.x + p.r + 12 : n.x;
-      const ny = (activeTemplate.isCustom || editMode) ? p.y + 10 : n.y;
-      ctx.fillText(displayName, nx, ny);
-      
-      let nameWidth = ctx.measureText(displayName).width;
-      let currentX = nx + nameWidth + 12;
-
-      if (showVerified) {
-        drawVerifiedBadge(ctx, currentX, ny - nSize / 2 + 2, nSize / 2.5);
-        currentX += (nSize / 2.5) * 2 + 12;
-      }
-
-      ctx.fillStyle = hd.color || '#aaa';
-      ctx.font = `${hd.size}px ${font.name}`;
-      ctx.fillText(`@${username}`, currentX, ny);
-    } else if (activeTemplate.username || editMode) {
+      ctx.textAlign = n.align || 'left'; ctx.fillStyle = editor.nameColor || n.color || '#fff';
+      const nS = editor.nameSize ? parseInt(editor.nameSize) : n.size; ctx.font = `${font.weight} ${nS}px ${font.name}`;
+      const nx = (activeTemplate.isCustom || editor.editMode) ? p.x + p.r + 12 : n.x;
+      const ny = (activeTemplate.isCustom || editor.editMode) ? p.y + 10 : n.y;
+      ctx.fillText(editor.displayName, nx, ny);
+      let nW = ctx.measureText(editor.displayName).width; let cX = nx + nW + 12;
+      if (editor.showVerified) { drawVerifiedBadge(ctx, cX, ny - nS / 2 + 2, nS / 2.5); cX += (nS / 2.5) * 2 + 12; }
+      ctx.fillStyle = hd.color || '#aaa'; ctx.font = `${hd.size}px ${font.name}`; ctx.fillText(`@${editor.username}`, cX, ny);
+    } else if (activeTemplate.username || editor.editMode) {
       const u = activeTemplate.username || { size: 28, center: true };
-      const ux = (activeTemplate.isCustom || editMode) ? p.x : u.x;
-      const uy = (activeTemplate.isCustom || editMode) ? p.y + p.r + 30 : u.y;
-      ctx.textAlign = (activeTemplate.isCustom || editMode) ? 'center' : (u.center ? 'center' : (u.align || 'left'));
-      ctx.fillStyle = nameColor || u.color || '#fff';
-      const uSize = nameSize ? parseInt(nameSize) : u.size;
-      ctx.font = `${font.weight} ${uSize}px ${font.name}`;
-      ctx.fillText(`@${username}`, ux, uy);
+      const ux = (activeTemplate.isCustom || editor.editMode) ? p.x : u.x;
+      const uy = (activeTemplate.isCustom || editor.editMode) ? p.y + p.r + 30 : u.y;
+      ctx.textAlign = (activeTemplate.isCustom || editor.editMode) ? 'center' : (u.center ? 'center' : (u.align || 'left'));
+      ctx.fillStyle = editor.nameColor || u.color || '#fff';
+      const uS = editor.nameSize ? parseInt(editor.nameSize) : u.size; ctx.font = `${font.weight} ${uS}px ${font.name}`;
+      ctx.fillText(`@${editor.username}`, ux, uy);
+      if (editor.showVerified) { let nW = ctx.measureText(editor.username).width; let bX = (activeTemplate.isCustom || editor.editMode || u.center) ? ux + nW/2 + 16 : ux + nW + 16; drawVerifiedBadge(ctx, bX, uy - uS / 2 + 2, uS / 2.5); }
+    }
 
-      if (showVerified) {
-        let nameWidth = ctx.measureText(username).width;
-        let badgeX = (activeTemplate.isCustom || editMode || u.center) ? ux + nameWidth/2 + 16 : ux + nameWidth + 16;
-        let badgeY = uy - uSize / 2 + 2;
-        drawVerifiedBadge(ctx, badgeX, badgeY, uSize / 2.5);
+    if (ui.layers.scorebug && (homeLogoRef.current.src || awayLogoRef.current.src)) {
+      const bY = H - 150, bH = 80, bW = 400, bX = (W - bW) / 2;
+      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)'; ctx.fillRect(bX, bY, bW, bH);
+      if (homeLogoRef.current.complete) ctx.drawImage(homeLogoRef.current, bX + 15, bY + 15, 50, 50);
+      if (awayLogoRef.current.complete) ctx.drawImage(awayLogoRef.current, bX + bW - 65, bY + 15, 50, 50);
+      ctx.fillStyle = '#fff'; ctx.font = `bold 36px ${font.name}`; ctx.textAlign = 'center'; ctx.fillText(`${editor.homeScore} - ${editor.awayScore}`, W / 2, bY + 50);
+    }
+
+    // Pro Template Intro & Bug Logic
+    if (activeTemplate.introDuration && activeTemplate.bugLogo) {
+      const introEnd = activeClip ? activeClip.start + activeTemplate.introDuration : 0;
+      const isInIntro = cTime < introEnd;
+      
+      if (isInIntro) {
+        const prog = (cTime - (activeClip?.start || 0)) / activeTemplate.introDuration;
+        ctx.fillStyle = activeTemplate.introColor;
+        ctx.globalAlpha = 1 - Math.pow(prog, 3); 
+        ctx.fillRect(0, 0, W, H);
+        
+        const logoScale = 1 + (1 - Math.min(prog * 2, 1)) * 0.5;
+        ctx.globalAlpha = Math.min(prog * 2, 1);
+        drawZokaLogo(ctx, W/2, H/2 - 60, 100 * logoScale, '#fff');
+        
+        const text = activeTemplate.introText || "ZOKA SCORE";
+        const len = Math.floor(text.length * Math.min(prog * 1.5, 1));
+        ctx.fillStyle = '#fff'; ctx.font = `bold 48px ${font.name}`; ctx.textAlign = 'center';
+        ctx.fillText(text.substring(0, len), W/2, H/2 + 40);
+        ctx.globalAlpha = 1;
+      } else {
+        const bPos = activeTemplate.bugPos;
+        const bSize = 40, pad = 20;
+        const bX = bPos.includes('l') ? pad : W - pad - bSize;
+        const bY = bPos.includes('t') ? pad : H - pad - bSize;
+        ctx.globalAlpha = 0.8;
+        drawZokaLogo(ctx, bX + bSize/2, bY + bSize/2, bSize/2, '#fff');
+        ctx.globalAlpha = 1;
       }
     }
+  }, [activeTemplate, editor, ui.layers, timeline.currentTime, activeClip]);
 
-    if (layers.scorebug && (homeLogoRef.current.src || awayLogoRef.current.src)) {
-      const bugY = H - 150; const bugH = 80; const bugW = 400; const bugX = (W - bugW) / 2;
-      ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
-      ctx.fillRect(bugX, bugY, bugW, bugH);
+  useEffect(() => { renderOverlay(); }, [renderOverlay]);
+
+  // --- 4. MAIN RENDER LOOP ---
+  const drawFrameRef = useRef(() => {});
+  drawFrameRef.current = () => {
+    const canvas = canvasRef.current; if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const W = 720, H = 1280;
+    ctx.fillStyle = activeTemplate.bg === 'accent' ? editor.accentColor : (activeTemplate.bg || '#000');
+    ctx.fillRect(0, 0, W, H);
+
+    const sVid = sourceVideoRef.current;
+    if (media.sourceLoaded && sVid) {
+      if (Math.abs(sVid.currentTime - timeline.currentTime) > 0.1) dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sVid.currentTime } });
+      if (activeClip) {
+        if (sVid.currentTime < activeClip.start) sVid.currentTime = activeClip.start;
+        if (timeline.isPlaying && sVid.currentTime >= activeClip.end - 0.05) { sVid.pause(); sVid.currentTime = activeClip.start; sVid.play(); }
+      }
       
-      if (homeLogoRef.current.complete) ctx.drawImage(homeLogoRef.current, bugX + 15, bugY + 15, 50, 50);
-      if (awayLogoRef.current.complete) ctx.drawImage(awayLogoRef.current, bugX + bugW - 65, bugY + 15, 50, 50);
+      if (ui.layers.video) {
+        ctx.save(); const v = activeTemplate.video;
+        const cTime = sVid.currentTime;
+        const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
+
+        if (editor.videoEffect === 'zoom_in') { const s = 1 + aProg * 0.3; ctx.translate(v.x + v.w/2, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
+        else if (editor.videoEffect === 'shake') ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
+        else if (editor.videoEffect === 'pulse') { const s = 1 + Math.sin(cTime * 8) * 0.04; ctx.translate(v.x + v.w/2, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
+        else if (editor.videoEffect === 'ken_burns') { const s = 1 + aProg * 0.15; const tx = aProg * 30; ctx.translate(v.x + v.w/2 - tx, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
+
+        ctx.filter = editor.filter;
+        if (editor.videoEffect === 'glitch' || editor.videoEffect === 'rgb_split') {
+          ctx.globalCompositeOperation = 'screen';
+          ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x + (Math.random()*10), v.y, v.w, v.h);
+          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x - (Math.random()*10), v.y, v.w, v.h);
+          ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        } else {
+          drawCover(ctx, sVid, v.x, v.y, v.w, v.h);
+        }
+        ctx.filter = 'none'; ctx.restore();
+
+        if (editor.videoEffect === 'flash' && cTime < (activeClip?.start || 0) + 0.5) { ctx.fillStyle = `rgba(255,255,255,${1 - (cTime - (activeClip?.start || 0)) * 2})`; ctx.fillRect(0, 0, W, H); }
+        if (editor.fadeIn && cTime < (activeClip?.start || 0) + 1) { ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - (activeClip?.start || 0))})`; ctx.fillRect(0, 0, W, H); }
+      }
       
-      ctx.fillStyle = '#fff'; ctx.font = `bold 36px ${font.name}`; ctx.textAlign = 'center';
-      ctx.fillText(`${homeScore} - ${awayScore}`, W / 2, bugY + 50);
+      const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip;
+      const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
+      if (aPiPVid && showPiP) {
+        const p = editor.pipPos; ctx.fillStyle = '#fff'; ctx.fillRect(p.x - 4, p.y - 4, p.w + 8, p.h + 8);
+        ctx.save(); if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); drawRounded(ctx, aPiPVid, W - p.x - p.w, p.y, p.w, p.h, 12); } else { drawRounded(ctx, aPiPVid, p.x, p.y, p.w, p.h, 12); } ctx.restore();
+      }
     }
-
-    ctx.textAlign = 'left';
+    
+    if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
   };
 
   useEffect(() => {
-    let animFrame;
-    const loop = () => { drawFrameRef.current(); animFrame = requestAnimationFrame(loop); };
-    animFrame = requestAnimationFrame(loop);
-    return () => cancelAnimationFrame(animFrame);
+    let aF; const l = () => { drawFrameRef.current(); aF = requestAnimationFrame(l); };
+    aF = requestAnimationFrame(l); return () => cancelAnimationFrame(aF);
   }, []);
 
   const getCanvasCoords = (e) => {
-    const canvas = canvasRef.current;
-    const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width;
-    const scaleY = canvas.height / rect.height;
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
+    const r = canvasRef.current.getBoundingClientRect(); const sx = 720 / r.width, sy = 1280 / r.height;
+    const cx = e.touches ? e.touches[0].clientX : e.clientX, cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
   };
 
   const handlePointerDown = (e) => {
-    if (!editMode && !activeTemplate.isCustom && !brollLoaded && !cameraOn) return;
+    if (!editor.editMode && !activeTemplate.isCustom && !media.brollLoaded && !media.cameraOn) return;
     const { x, y } = getCanvasCoords(e);
-    
-    if ((activeTemplate.isCustom || editMode) && profileSrc) {
-      const distToProfile = Math.hypot(x - profilePos.x, y - profilePos.y);
-      if (distToProfile <= profilePos.r) {
-        dragRef.current = { target: 'profile', offsetX: x - profilePos.x, offsetY: y - profilePos.y };
-        return;
-      }
-    }
-    if (brollLoaded || cameraOn) {
-      if (x >= pipPos.x && x <= pipPos.x + pipPos.w && y >= pipPos.y && y <= pipPos.y + pipPos.h) {
-        dragRef.current = { target: 'pip', offsetX: x - pipPos.x, offsetY: y - pipPos.y };
-      }
-    }
+    if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { dragRef.current = { target: 'profile', offsetX: x - editor.profilePos.x, offsetY: y - editor.profilePos.y }; return; } }
+    if (media.brollLoaded || media.cameraOn) { const p = editor.pipPos; if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) dragRef.current = { target: 'pip', offsetX: x - p.x, offsetY: y - p.y }; }
   };
 
   const handlePointerMove = (e) => {
-    if (!dragRef.current.target) return;
-    e.preventDefault(); 
-    const { x, y } = getCanvasCoords(e);
-    const snapPointsX = [0, 360, 720];
-    
-    if (dragRef.current.target === 'pip') {
-      const pipW = pipPos.w;
-      const pipH = pipPos.h;
-      let newX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - pipW));
-      let newY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - pipH));
-      snapPointsX.forEach(pt => { if (Math.abs(newX - pt) < 20) newX = pt; });
-      setPipPos(prev => ({ ...prev, x: newX, y: newY }));
-    } else if (dragRef.current.target === 'profile') {
-      let newX = Math.max(profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - profilePos.r));
-      let newY = Math.max(profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - profilePos.r));
-      setProfilePos(prev => ({ ...prev, x: newX, y: newY }));
-    }
+    if (!dragRef.current.target) return; e.preventDefault(); const { x, y } = getCanvasCoords(e); const sx = [0, 360, 720];
+    if (dragRef.current.target === 'pip') { let nX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - editor.pipPos.w)); let nY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - editor.pipPos.h)); sx.forEach(pt => { if (Math.abs(nX - pt) < 20) nX = pt; }); dispatch({ type: 'SET_EDITOR', payload: { pipPos: { ...editor.pipPos, x: nX, y: nY } } }); }
+    else if (dragRef.current.target === 'profile') { let nX = Math.max(editor.profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - editor.profilePos.r)); let nY = Math.max(editor.profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - editor.profilePos.r)); dispatch({ type: 'SET_EDITOR', payload: { profilePos: { ...editor.profilePos, x: nX, y: nY } } }); }
   };
 
-  const handlePointerUp = () => { dragRef.current.target = null; };
+  const handlePointerUp = () => dragRef.current.target = null;
 
-  // --- Bulletproof Audio export using Web Audio API ---
   const handleExportVideo = async () => {
-    const vid = sourceVideoRef.current;
-    if (!canvasRef.current || isExporting || !vid || !activeClip) return;
-
-    setIsExporting(true);
-    setIsPlaying(false);
-    
-    vid.pause();
-    vid.currentTime = activeClip.start;
-    
-    // Wait for video to be fully loaded and buffered
-    if (vid.readyState < 4) {
-      await new Promise(resolve => {
-        const check = setInterval(() => {
-          if (vid.readyState >= 4) { clearInterval(check); resolve(); }
-        }, 100);
-        setTimeout(() => { clearInterval(check); resolve(); }, 3000); // fallback
-      });
-    }
-    
-    // Fix Infinity duration if it happened
-    let trueDuration = vid.duration;
-    if (!isFinite(trueDuration)) {
-      vid.currentTime = 1e101;
-      await new Promise(r => setTimeout(r, 200));
-      trueDuration = vid.duration;
-      vid.currentTime = activeClip.start;
-      await new Promise(r => setTimeout(r, 200));
-    }
-
-    let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDuration;
-    if (end > trueDuration) end = trueDuration;
-    
-    if (activeClip.start >= end - 0.1) {
-      alert("Invalid clip duration.");
-      setIsExporting(false);
-      return;
-    }
-
-    await new Promise(r => setTimeout(r, 300)); // Extra buffer for seek to settle
-
-    const wasMuted = vid.muted;
-    const wasVolume = vid.volume;
-    vid.muted = false; 
-    vid.volume = 0; 
-
-    const fps = 30;
-    const canvasStream = canvasRef.current.captureStream(fps);
-    
-    let audioCtx;
+    const vid = sourceVideoRef.current; if (!canvasRef.current || ui.isExporting || !vid || !activeClip) return;
+    dispatch({ type: 'SET_UI', payload: { isExporting: true } });
+    dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
+    vid.pause(); vid.currentTime = activeClip.start;
+    await new Promise(r => setTimeout(r, 200));
+    let trueDur = vid.duration; if (!isFinite(trueDur)) { vid.currentTime = 1e101; await new Promise(r => setTimeout(r, 200)); trueDur = vid.duration; vid.currentTime = activeClip.start; await new Promise(r => setTimeout(r, 200)); }
+    let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDur; if (end > trueDur) end = trueDur;
+    if (activeClip.start >= end - 0.1) { alert("Invalid clip duration."); dispatch({ type: 'SET_UI', payload: { isExporting: false } }); return; }
+    await new Promise(r => setTimeout(r, 300));
+    const wM = vid.muted, wV = vid.volume; vid.muted = false; vid.volume = 0;
+    const fps = 30; const cS = canvasRef.current.captureStream(fps); let aC;
     try {
-      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      if (audioCtx.state === 'suspended') await audioCtx.resume();
-      
-      const audioDest = audioCtx.createMediaStreamDestination();
-      let hasAudio = false;
-
-      if (streamRef.current && streamRef.current.getAudioTracks().length > 0) {
-        const src = audioCtx.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks()));
-        src.connect(audioDest);
-        hasAudio = true;
-      }
-
-      if (vid.captureStream) {
-        try { 
-          const vStream = vid.captureStream();
-          if (vStream.getAudioTracks().length > 0) {
-            const src = audioCtx.createMediaStreamSource(vStream);
-            src.connect(audioDest);
-            hasAudio = true;
-          }
-        } catch(e) {}
-      }
-
-      if (audioRef.current.src) {
-        try { 
-          audioRef.current.play();
-          const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
-          if (aStream.getAudioTracks().length > 0) {
-            const src = audioCtx.createMediaStreamSource(aStream);
-            src.connect(audioDest);
-            hasAudio = true;
-          }
-        } catch(e) {}
-      }
-
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      gain.gain.value = 0.0;
-      osc.connect(gain);
-      gain.connect(audioDest); // For recording
-      
-      // Connect to destination as well to prevent background tab throttling!
-      gain.connect(audioCtx.destination); 
-      
-      osc.start();
-      audioDest.stream.getAudioTracks().forEach(t => canvasStream.addTrack(t));
-    } catch(e) { console.warn("Audio mix failed", e); }
-
+      aC = new (window.AudioContext || window.webkitAudioContext)(); if (aC.state === 'suspended') await aC.resume();
+      const aD = aC.createMediaStreamDestination(); let hA = false;
+      if (streamRef.current && streamRef.current.getAudioTracks().length > 0) { aC.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks())).connect(aD); hA = true; }
+      if (vid.captureStream) { try { const vS = vid.captureStream(); if (vS.getAudioTracks().length > 0) { aC.createMediaStreamSource(vS).connect(aD); hA = true; } } catch {} }
+      if (audioRef.current.src) { try { audioRef.current.play(); const aS = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); if (aS.getAudioTracks().length > 0) { aC.createMediaStreamSource(aS).connect(aD); hA = true; } } catch {} }
+      const o = aC.createOscillator(); const g = aC.createGain(); g.gain.value = 0.0; o.connect(g); g.connect(aD); g.connect(aC.destination); o.start();
+      aD.stream.getAudioTracks().forEach(t => cS.addTrack(t));
+    } catch(e) {}
     chunksRef.current = [];
-    const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
-      ? 'video/webm;codecs=vp9' 
-      : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
-      ? 'video/webm;codecs=vp8'
-      : 'video/webm';
-
-    const recorder = new MediaRecorder(canvasStream, { 
-      mimeType,
-      videoBitsPerSecond: 8000000 
-    });
-    
-    recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    recorder.onstop = async () => {
-      let rawBlob = new Blob(chunksRef.current, { type: 'video/webm' });
-      const exportDurationMs = (end - activeClip.start) * 1000;
-      const fixedBlob = await fixWebmDuration(rawBlob, exportDurationMs);
-      
-      const url = URL.createObjectURL(fixedBlob);
-      setRecordedUrl(url);
-      setIsExporting(false);
-      vid.pause();
-      if (audioRef.current) audioRef.current.pause();
-      vid.muted = wasMuted; 
-      vid.volume = wasVolume;
-      canvasStream.getTracks().forEach(track => track.stop());
-      if (audioCtx) audioCtx.close();
-    };
-
-    const checkInterval = setInterval(() => {
-      if (vid.currentTime >= end - 0.05 || vid.ended) {
-        clearInterval(checkInterval);
-        if (recorder.state !== 'inactive') recorder.stop();
-      }
-    }, 50);
-
-    recorder.start(100); 
-    
-    try {
-      await vid.play();
-    } catch(e) {
-      console.error("Play failed during export", e);
-      clearInterval(checkInterval);
-      if (recorder.state !== 'inactive') recorder.stop();
-    }
+    const mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+    const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: 8000000 });
+    r.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+    r.onstop = async () => { let b = new Blob(chunksRef.current, { type: 'video/webm' }); const f = await fixWebmDuration(b, (end - activeClip.start) * 1000); dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(f), isExporting: false } }); vid.pause(); if (audioRef.current) audioRef.current.pause(); vid.muted = wM; vid.volume = wV; cS.getTracks().forEach(t => t.stop()); if (aC) aC.close(); };
+    const cI = setInterval(() => { if (vid.currentTime >= end - 0.05 || vid.ended) { clearInterval(cI); if (r.state !== 'inactive') r.stop(); } }, 50);
+    r.start(100); try { await vid.play(); } catch {}
   };
-
-  const handleDiscardRecording = () => {
-    if (recordedUrl) {
-      URL.revokeObjectURL(recordedUrl); 
-      setRecordedUrl(null);
-    }
-    const vid = sourceVideoRef.current;
-    if (vid && activeClip) {
-      vid.currentTime = activeClip.start;
-      vid.pause();
-    }
-    setIsPlaying(false);
-  };
-
-  useEffect(() => { return () => { if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); }; }, []);
 
   const applyTemplate = (id) => {
-    setTemplateId(id); 
-    setShowGallery(false);
-    
     const t = templateMap[id];
-    if (t.profile) setProfilePos({ x: t.profile.x, y: t.profile.y, r: t.profile.r });
-    setPipPos({ x: 450, y: 800, w: 280, h: 380 });
-    
-    let newRecents = [id, ...recents.filter(r => r !== id)].slice(0, 5);
-    setRecents(newRecents);
-    localStorage.setItem("reactor-recents", JSON.stringify(newRecents));
+    dispatch({ type: 'SET_EDITOR', payload: { templateId: id, profilePos: t.profile ? { x: t.profile.x, y: t.profile.y, r: t.profile.r } : editor.profilePos, pipPos: { x: 450, y: 800, w: 280, h: 380 } } });
+    dispatch({ type: 'SET_UI', payload: { showGallery: false } });
+    const nR = [id, ...ui.recents.filter(r => r !== id)].slice(0, 5);
+    localStorage.setItem("reactor-recents", JSON.stringify(nR));
+    dispatch({ type: 'SET_UI', payload: { recents: nR } });
   };
 
   const toggleFavorite = (id) => {
-    const next = favorites.includes(id) ? favorites.filter(x => x !== id) : [...favorites, id];
-    setFavorites(next);
-    localStorage.setItem("reactor-favorites", JSON.stringify(next));
+    const n = ui.favorites.includes(id) ? ui.favorites.filter(x => x !== id) : [...ui.favorites, id];
+    localStorage.setItem("reactor-favorites", JSON.stringify(n));
+    dispatch({ type: 'SET_UI', payload: { favorites: n } });
   };
 
   const filteredTemplates = useMemo(() => {
-    let list = TEMPLATES;
-    if (activeCategory === "Favorites") list = list.filter(t => favorites.includes(t.id));
-    else if (activeCategory !== "All") list = list.filter(t => t.category === activeCategory);
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      list = list.filter(t => t.title.toLowerCase().includes(q) || t.tags.some(tag => tag.includes(q)) || t.category.toLowerCase().includes(q));
-    }
-    return list;
-  }, [activeCategory, searchQuery, favorites]);
+    let l = TEMPLATES;
+    if (ui.activeCategory === "Favorites") l = l.filter(t => ui.favorites.includes(t.id));
+    else if (ui.activeCategory !== "All") l = l.filter(t => t.category === ui.activeCategory);
+    if (ui.searchQuery) { const q = ui.searchQuery.toLowerCase(); l = l.filter(t => t.title.toLowerCase().includes(q) || t.tags.some(tg => tg.includes(q))); }
+    return l;
+  }, [ui.activeCategory, ui.searchQuery, ui.favorites]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
@@ -946,248 +629,187 @@ export default function ReactorStudio() {
       <div style={{ padding: '12px 16px', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', zIndex: 10, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
           <button onClick={() => navigate('/studio')} style={topBtnStyle}><ArrowLeft size={18} /></button>
-          <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Reactor Studio</h1>
+          <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><Cpu size={18} color="#10b981" /> Reactor Studio Pro</h1>
         </div>
         <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button onClick={handleClearProject} style={topBtnStyle} title="Clear Project & Start Over"><Eraser size={16} /> Clear</button>
-          <button onClick={() => setShowGallery(true)} style={topBtnStyle} disabled={isExporting || recordedUrl}><LayoutGrid size={16} /> Templates</button>
-          
-          {recordedUrl ? (
+          <button onClick={handleClearProject} style={topBtnStyle} title="Clear Project"><Eraser size={16} /> Clear</button>
+          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: true } })} style={topBtnStyle} disabled={ui.isExporting || ui.recordedUrl}><LayoutGrid size={16} /> Templates</button>
+          {ui.recordedUrl ? (
             <>
-              <button onClick={handleDiscardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}>
-                <Trash2 size={16} /> Discard
-              </button>
-              <a href={recordedUrl} download={`zokascore_clip_${activeClipId}.webm`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}>
-                <Download size={16} /> Download Clip
-              </a>
+              <button onClick={() => dispatch({ type: 'SET_UI', payload: { recordedUrl: null } })} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}><Trash2 size={16} /> Discard</button>
+              <a href={ui.recordedUrl} download={`zokascore_clip.webm`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}><Download size={16} /> Download</a>
             </>
           ) : (
-            <button onClick={handleExportVideo} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
-              {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
+            <button onClick={handleExportVideo} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }}>
+              {ui.isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
             </button>
           )}
         </div>
       </div>
 
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        
         <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Main Video" disabled={isExporting || recordedUrl}><Upload size={20} /></button>
-          <button onClick={() => fileInputRefs.current.broll?.click()} style={{...sideBtnStyle, color: brollLoaded ? '#10b981' : '#64748b'}} title="Add 2nd Video (B-Roll)" disabled={isExporting || recordedUrl}><Film size={20} /></button>
-          <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar" disabled={isExporting || recordedUrl}><User size={20} /></button>
-          <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={isExporting || recordedUrl}><Music size={20} /></button>
-          <button onClick={startCamera} style={{...sideBtnStyle, color: cameraOn ? '#10b981' : '#64748b'}} title="Camera" disabled={isExporting || recordedUrl}><Camera size={20} /></button>
-          <button onClick={() => setShowGuides(!showGuides)} style={{...sideBtnStyle, color: showGuides ? '#10b981' : '#64748b'}} title="Guides"><Grid3x3 size={20} /></button>
+          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Main Video" disabled={ui.isExporting || ui.recordedUrl}><Upload size={20} /></button>
+          <button onClick={() => fileInputRefs.current.broll?.click()} style={{...sideBtnStyle, color: media.brollLoaded ? '#10b981' : '#64748b'}} title="Add 2nd Video (B-Roll)" disabled={ui.isExporting || ui.recordedUrl}><Film size={20} /></button>
+          <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar" disabled={ui.isExporting || ui.recordedUrl}><User size={20} /></button>
+          <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
+          <button onClick={startCamera} style={{...sideBtnStyle, color: media.cameraOn ? '#10b981' : '#64748b'}} title="Camera" disabled={ui.isExporting || ui.recordedUrl}><Camera size={20} /></button>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', background: '#000', minHeight: 0 }}>
-          <div 
-            style={{ position: 'relative', height: '100%', aspectRatio: '9/16', borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }}
-            onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
-            onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}
-          >
-            <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-            {!sourceLoaded && !recordedUrl && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer' }} onClick={() => fileInputRefs.current.video?.click()}>
-                <Upload size={40} style={{ marginBottom: '12px' }} />
-                <p style={{ fontWeight: 700 }}>Import Main Video</p>
-              </div>
-            )}
-            {recordedUrl && <video src={recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
-            {isExporting && (
-              <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800, pointerEvents: 'none' }}>
-                <Loader size={12} className="animate-spin" /> EXPORTING
-              </div>
-            )}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000', minHeight: 0 }}>
+          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', minHeight: 0 }}>
+            <div style={{ position: 'relative', height: '100%', aspectRatio: '9/16', borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }}
+              onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
+              onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}>
+              <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              {!media.sourceLoaded && !ui.recordedUrl && (
+                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer' }} onClick={() => fileInputRefs.current.video?.click()}>
+                  <Upload size={40} style={{ marginBottom: '12px' }} /><p style={{ fontWeight: 700 }}>Import Main Video</p>
+                </div>
+              )}
+              {ui.recordedUrl && <video src={ui.recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
+              {ui.isExporting && <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800 }}><Loader size={12} className="animate-spin" /> EXPORTING</div>}
+            </div>
           </div>
+
+          {media.sourceLoaded && (
+            <div style={{ height: '120px', background: '#111827', borderTop: '1px solid #1f2937', padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>Playhead: {timeline.currentTime.toFixed(1)}s / {timeline.duration.toFixed(1)}s</span>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button onClick={handleSplit} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={ui.isExporting || ui.recordedUrl}><Scissors size={12} /> Split</button>
+                </div>
+              </div>
+              <div style={{ position: 'relative', height: '60px', background: '#0f172a', borderRadius: '8px', overflow: 'hidden', display: 'flex' }}>
+                {timeline.clips.map((c) => {
+                  const dur = timeline.duration || 1;
+                  const wPct = ((c.end - c.start) / dur) * 100;
+                  const lPct = (c.start / dur) * 100;
+                  const isAct = c.id === timeline.activeClipId;
+                  return (
+                    <div key={c.id} onClick={() => { dispatch({ type: 'SET_TIMELINE', payload: { activeClipId: c.id } }); sourceVideoRef.current.currentTime = c.start; }}
+                      style={{ position: 'absolute', left: `${lPct}%`, width: `${wPct}%`, height: '100%', background: isAct ? '#10b981' : '#334155', border: '1px solid #1f2937', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', cursor: 'grab', boxSizing: 'border-box' }}>
+                      
+                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-l')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-l')} style={{ width: '8px', height: '100%', background: '#1f2937', cursor: 'ew-resize', flexShrink: 0 }}></div>
+                      
+                      <span style={{ fontSize: '10px', fontWeight: 700, color: '#fff', flex: 1, textAlign: 'center', pointerEvents: 'none' }}>Clip {timeline.clips.indexOf(c) + 1}</span>
+                      
+                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-r')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-r')} style={{ width: '8px', height: '100%', background: '#1f2937', cursor: 'ew-resize', flexShrink: 0 }}></div>
+                      
+                      {timeline.clips.length > 1 && (
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteClip(c.id); }} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px', borderRadius: '2px' }}><X size={10} /></button>
+                      )}
+                    </div>
+                  );
+                })}
+                <div style={{ position: 'absolute', left: `${(timeline.currentTime / (timeline.duration || 1)) * 100}%`, top: 0, bottom: 0, width: '2px', background: '#ef4444', pointerEvents: 'none' }}></div>
+              </div>
+            </div>
+          )}
         </div>
 
-        <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+        <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
           
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Move size={14} /> Grid Edit Mode</div>
-            <button onClick={() => setEditMode(!editMode)} style={{ ...inputStyle, background: editMode ? '#10b981' : '#1f2937', color: editMode ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
-              {editMode ? 'DRAGGING ENABLED' : 'ENABLE FREE DRAG'}
+            <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } })} style={{ ...inputStyle, background: editor.editMode ? '#10b981' : '#1f2937', color: editor.editMode ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
+              {editor.editMode ? 'DRAGGING ENABLED' : 'ENABLE FREE DRAG'}
             </button>
-            <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
           </div>
-
-          {sourceLoaded && (
-            <div style={panelStyle}>
-              <div style={panelTitleStyle}><Scissors size={14} /> Trim & Clips</div>
-              <div style={{ display: 'flex', gap: '8px', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontSize: '11px', color: '#94a3b8', flex: 1 }}>Playhead: {currentTime.toFixed(1)}s / {duration.toFixed(1)}s</span>
-                <button onClick={handleSplit} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={isExporting || recordedUrl}>
-                  <Scissors size={12} /> Split
-                </button>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', maxHeight: '150px', overflowY: 'auto' }}>
-                {clips.map((c, i) => (
-                  <div key={c.id} onClick={() => { setActiveClipId(c.id); if (sourceVideoRef.current) sourceVideoRef.current.currentTime = c.start; }} 
-                       style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: activeClipId === c.id ? '#10b981' : '#1f2937', color: activeClipId === c.id ? '#fff' : '#94a3b8', padding: '8px 10px', borderRadius: '6px', cursor: 'pointer', fontSize: '11px', fontWeight: 700 }}>
-                    <span>Clip {i + 1}</span>
-                    <span style={{ fontSize: '10px', opacity: 0.9 }}>{c.start.toFixed(1)}s - {c.end.toFixed(1)}s</span>
-                    {clips.length > 1 && (
-                      <button onClick={(e) => { e.stopPropagation(); handleDeleteClip(c.id); }} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: 0, display: 'flex' }}><Trash2 size={12} /></button>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <span style={{ fontSize: '10px', color: '#64748b', marginTop: '4px' }}>Select a clip to preview & export it individually.</span>
-            </div>
-          )}
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
-            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Video Effect</label>
+            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Video Effect (Ken Burns, Glitch...)</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {VIDEO_EFFECTS.map(f => (
-                <button key={f.id} onClick={() => setVideoEffect(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: videoEffect === f.id ? '#10b981' : '#1f2937', color: videoEffect === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>
-              ))}
+              {VIDEO_EFFECTS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoEffect: f.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: editor.videoEffect === f.id ? '#10b981' : '#1f2937', color: editor.videoEffect === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>)}
             </div>
             <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Caption Animation</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {TEXT_ANIMATIONS.map(f => (
-                <button key={f.id} onClick={() => setTextAnimation(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: textAnimation === f.id ? '#10b981' : '#1f2937', color: textAnimation === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>
-              ))}
+              {TEXT_ANIMATIONS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { textAnimation: f.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: editor.textAnimation === f.id ? '#10b981' : '#1f2937', color: editor.textAnimation === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>)}
             </div>
           </div>
 
           <div style={panelStyle}>
-            <div style={panelTitleStyle}><Palette size={14} /> Brand Kit</div>
+            <div style={panelTitleStyle}><Palette size={14} /> Brand Kit & Fonts</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {BRAND_PRESETS.map(p => (
-                <button key={p.name} onClick={() => setAccentColor(p.color)} style={{ width: '30px', height: '30px', borderRadius: '50%', background: p.color, border: accentColor === p.color ? '2px solid #fff' : '2px solid #334155', cursor: 'pointer' }} title={p.name}></button>
-              ))}
-              <input type="color" value={accentColor} onChange={(e) => setAccentColor(e.target.value)} style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'none', border: '2px solid #334155', cursor: 'pointer', padding: 0 }} />
+              {BRAND_PRESETS.map(p => <button key={p.name} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { accentColor: p.color } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: p.color, border: editor.accentColor === p.color ? '2px solid #fff' : '2px solid #334155', cursor: 'pointer' }} title={p.name}></button>)}
+              <input type="color" value={editor.accentColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { accentColor: e.target.value } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'none', border: '2px solid #334155', cursor: 'pointer', padding: 0 }} />
             </div>
-          </div>
-
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Type size={14} /> Font Pack</div>
-            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {Object.keys(FONT_PACKS).map(f => (
-                <button key={f} onClick={() => setFontPack(f)} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155', background: fontPack === f ? '#10b981' : '#1f2937', color: fontPack === f ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer' }}>{f}</button>
-              ))}
-            </div>
-          </div>
-
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Shield size={14} /> Football Assets</div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={homeLogoUrl} onChange={(e) => setHomeLogoUrl(e.target.value)} placeholder="Home Logo URL" style={inputStyle} disabled={isExporting || recordedUrl} />
-              <input type="number" value={homeScore} onChange={(e) => setHomeScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={isExporting || recordedUrl} />
-            </div>
-            <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={awayLogoUrl} onChange={(e) => setAwayLogoUrl(e.target.value)} placeholder="Away Logo URL" style={inputStyle} disabled={isExporting || recordedUrl} />
-              <input type="number" value={awayScore} onChange={(e) => setAwayScore(e.target.value)} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={isExporting || recordedUrl} />
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
+              {Object.keys(FONT_PACKS).map(f => <button key={f} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fontPack: f } })} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155', background: editor.fontPack === f ? '#10b981' : '#1f2937', color: editor.fontPack === f ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer' }}>{f}</button>)}
             </div>
           </div>
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><User size={14} /> Social Details & Fonts</div>
-            
-            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Display Name</label>
-            <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" style={inputStyle} disabled={isExporting || recordedUrl} />
-            
+            <input type="text" value={editor.displayName} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { displayName: e.target.value } })} placeholder="Display Name" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input type="color" value={nameColor} onChange={(e) => setNameColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Name Color" />
-              <input type="number" value={nameSize || ''} onChange={(e) => setNameSize(e.target.value ? parseInt(e.target.value) : null)} placeholder="Name Size (px)" style={{...inputStyle, width: '100px'}} title="Name Size" />
-              <button onClick={() => setShowVerified(!showVerified)} style={{ ...inputStyle, background: showVerified ? '#1d9bf0' : '#1f2937', color: showVerified ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
-                <BadgeCheck size={16} /> Tick
-              </button>
+              <input type="color" value={editor.nameColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameColor: e.target.value } })} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Name Color" />
+              <input type="number" value={editor.nameSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Name Size (px)" style={{...inputStyle, width: '100px'}} title="Name Size" />
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { showVerified: !editor.showVerified } })} style={{ ...inputStyle, background: editor.showVerified ? '#1d9bf0' : '#1f2937', color: editor.showVerified ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><BadgeCheck size={16} /> Tick</button>
             </div>
-
-            <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Username / Handle</label>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@username" style={inputStyle} disabled={isExporting || recordedUrl} />
-            
-            <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Caption</label>
-            <textarea value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={{...inputStyle, height: '60px', resize: 'none'}} disabled={isExporting || recordedUrl} />
+            <input type="text" value={editor.username} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { username: e.target.value } })} placeholder="@username" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
+            <textarea value={editor.povCaption} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { povCaption: e.target.value } })} placeholder="Caption" style={{...inputStyle, height: '60px', resize: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="color" value={captionColor} onChange={(e) => setCaptionColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
-              <input type="number" value={captionSize || ''} onChange={(e) => setCaptionSize(e.target.value ? parseInt(e.target.value) : null)} placeholder="Caption Size (px)" style={{...inputStyle, width: '100px'}} title="Caption Size" />
+              <input type="color" value={editor.captionColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionColor: e.target.value } })} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
+              <input type="number" value={editor.captionSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Caption Size (px)" style={{...inputStyle, width: '100px'}} title="Caption Size" />
             </div>
           </div>
 
           <div style={panelStyle}>
-            <div style={panelTitleStyle}><Layers size={14} /> Layers</div>
-            {Object.keys(layers).map(key => (
-              <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#cbd5e1', textTransform: 'capitalize', cursor: 'pointer', marginBottom: '6px' }}>
-                <input type="checkbox" checked={layers[key]} onChange={() => setLayers(l => ({...l, [key]: !l[key]}))} style={{ accentColor: '#10b981' }} disabled={isExporting || recordedUrl} /> {key}
-              </label>
-            ))}
-          </div>
-
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Sliders size={14} /> Filters</div>
+            <div style={panelTitleStyle}><Sliders size={14} /> Filters & Audio</div>
             <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-              {FILTERS.map(f => (
-                <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={isExporting || recordedUrl}>{f.name}</button>
-              ))}
+              {FILTERS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { filter: f.id } })} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: editor.filter === f.id ? '#10b981' : '#1f2937', color: editor.filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={ui.isExporting || ui.recordedUrl}>{f.name}</button>)}
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <button onClick={() => setIsMuted(!isMuted)} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
-                {isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {isMuted ? 'Muted' : 'Audio On'}
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }} disabled={ui.isExporting || ui.recordedUrl}>
+                {editor.isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {editor.isMuted ? 'Muted' : 'Audio On'}
               </button>
-              <button onClick={() => setFadeIn(!fadeIn)} style={{ flex: 1, background: fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={isExporting || recordedUrl}>
-                Fade In: {fadeIn ? 'On' : 'Off'}
-              </button>
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fadeIn: !editor.fadeIn } })} style={{ flex: 1, background: editor.fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={ui.isExporting || ui.recordedUrl}>Fade In: {editor.fadeIn ? 'On' : 'Off'}</button>
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px' }}>
-        <button onClick={() => setIsMuted(!isMuted)} style={bottomBtnStyle} title="Mute" disabled={isExporting || recordedUrl}><Volume2 size={20} /></button>
-        <button onClick={togglePreview} disabled={!sourceLoaded || isExporting || recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !sourceLoaded || isExporting || recordedUrl ? 0.5 : 1 }} title="Preview Active Clip">
-          {isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
+      <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px', flexShrink: 0 }}>
+        <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} style={bottomBtnStyle} title="Mute" disabled={ui.isExporting || ui.recordedUrl}><Volume2 size={20} /></button>
+        <button onClick={togglePreview} disabled={!media.sourceLoaded || ui.isExporting || ui.recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !media.sourceLoaded || ui.isExporting || ui.recordedUrl ? 0.5 : 1 }} title="Preview Active Clip">
+          {timeline.isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
         </button>
-        <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={isExporting || recordedUrl}><Music size={20} /></button>
+        <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
       </div>
 
-      {showGallery && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => setShowGallery(false)}>
-          <div style={{ width: '90%', maxWidth: '800px', height: '80vh', background: '#111827', borderRadius: '16px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
+      {ui.showGallery && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })}>
+          <div style={{ width: '90%', maxWidth: '900px', height: '85vh', background: '#111827', borderRadius: '16px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
             <div style={{ padding: '16px', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center', gap: '12px' }}>
               <Search size={20} color="#64748b" />
-              <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search templates..." style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }} />
-              <button onClick={() => setShowGallery(false)} style={topBtnStyle}><X size={18} /></button>
+              <input type="text" value={ui.searchQuery} onChange={(e) => dispatch({ type: 'SET_UI', payload: { searchQuery: e.target.value } })} placeholder="Search templates..." style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }} />
+              <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })} style={topBtnStyle}><X size={18} /></button>
             </div>
             <div style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937', display: 'flex', gap: '8px', overflowX: 'auto' }}>
-              {["All", "Favorites", "Pro", "TikTok", "Instagram", "YouTube", "Gaming", "Podcast", "Football", "Minimal"].map(cat => (
-                <button key={cat} onClick={() => setActiveCategory(cat)} style={{ padding: '6px 16px', borderRadius: '20px', border: '1px solid #334155', background: activeCategory === cat ? '#10b981' : '#1f2937', color: activeCategory === cat ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat}</button>
-              ))}
+              {["All", "Favorites", "Pro", "TikTok", "YouTube", "Gaming", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} style={{ padding: '6px 16px', borderRadius: '20px', border: '1px solid #334155', background: ui.activeCategory === cat ? '#10b981' : '#1f2937', color: ui.activeCategory === cat ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat}</button>)}
             </div>
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '16px' }}>
+            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
               {filteredTemplates.map(t => (
-                <div key={t.id} style={{ background: '#1f2937', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', border: templateId === t.id ? '2px solid #10b981' : '2px solid #334155', position: 'relative' }} onClick={() => applyTemplate(t.id)}>
-                  <div style={{ height: '200px', background: t.preview.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', position: 'relative' }}>
-                    {t.preview.layout === 'pov' && (
-                      <>
-                        <div style={{ position: 'absolute', top: '15px', left: '15px', width: '24px', height: '24px', background: '#fff', borderRadius: '50%', border: '2px solid #1d9bf0' }}></div>
-                        <div style={{ position: 'absolute', top: '14px', left: '48px', display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <div style={{ width: '40px', height: '8px', background: '#fff', borderRadius: '4px' }}></div>
-                          <div style={{ width: '60px', height: '6px', background: '#aaa', borderRadius: '4px' }}></div>
-                        </div>
-                        <div style={{ position: 'absolute', top: '50px', left: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                          <div style={{ width: '120px', height: '6px', background: '#fff', borderRadius: '4px' }}></div>
-                          <div style={{ width: '100px', height: '6px', background: '#fff', borderRadius: '4px' }}></div>
-                        </div>
-                      </>
+                <div key={t.id} style={{ background: '#1f2937', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', border: editor.templateId === t.id ? '2px solid #10b981' : '2px solid #334155', position: 'relative' }} onClick={() => applyTemplate(t.id)}>
+                  <div style={{ height: '250px', background: t.preview.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+                    {t.category === 'Pro' && (
+                      <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}>
+                        <div style={{ width: '40px', height: '40px', background: '#fff', marginBottom: '8px', borderRadius: '4px' }}></div>
+                        <div style={{ width: '80px', height: '8px', background: '#fff', borderRadius: '4px' }}></div>
+                      </div>
                     )}
+                    {t.preview.layout === 'pov' && (<><div style={{ position: 'absolute', top: '15px', left: '15px', width: '24px', height: '24px', background: '#fff', borderRadius: '50%', border: '2px solid #1d9bf0' }}></div><div style={{ position: 'absolute', top: '14px', left: '48px', display: 'flex', gap: '6px', alignItems: 'center' }}><div style={{ width: '40px', height: '8px', background: '#fff', borderRadius: '4px' }}></div><div style={{ width: '60px', height: '6px', background: '#aaa', borderRadius: '4px' }}></div></div><div style={{ position: 'absolute', top: '50px', left: '15px', display: 'flex', flexDirection: 'column', gap: '4px' }}><div style={{ width: '120px', height: '6px', background: '#fff', borderRadius: '4px' }}></div><div style={{ width: '100px', height: '6px', background: '#fff', borderRadius: '4px' }}></div></div></>)}
                     {t.preview.layout === 'tl' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-start', marginLeft: '10px', marginTop: '10px' }}></div>}
                     {t.preview.layout === 'tr' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-end', marginRight: '10px', marginTop: '10px' }}></div>}
                     {t.preview.layout === 'bl' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-start', marginLeft: '10px', marginBottom: '10px' }}></div>}
                     {t.preview.layout === 'br' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-end', marginRight: '10px', marginBottom: '10px' }}></div>}
-                    {(t.preview.layout === 'center' || t.preview.layout === 'split' || t.preview.layout === 'news' || t.preview.layout === 'custom') && (
-                      <div style={{ width: '60%', height: '10px', background: '#fff', borderRadius: '4px' }}></div>
-                    )}
+                    {(t.preview.layout === 'center' || t.preview.layout === 'news' || t.preview.layout === 'custom') && <div style={{ width: '60%', height: '10px', background: '#fff', borderRadius: '4px' }}></div>}
                   </div>
                   <div style={{ padding: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{t.title}</span>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: favorites.includes(t.id) ? '#f59e0b' : '#64748b' }}>
-                      <Star size={14} fill={favorites.includes(t.id) ? '#f59e0b' : 'none'} />
-                    </button>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: ui.favorites.includes(t.id) ? '#f59e0b' : '#64748b' }}><Star size={14} fill={ui.favorites.includes(t.id) ? '#f59e0b' : 'none'} /></button>
                   </div>
                 </div>
               ))}
@@ -1196,12 +818,10 @@ export default function ReactorStudio() {
         </div>
       )}
 
-      <video ref={sourceVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '720px', height: '1280px', opacity: 0, pointerEvents: 'none' }} playsInline preload="auto" />
-      <video ref={brollVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '320px', height: '434px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
-      <video ref={webcamVideoRef} style={{ position: 'absolute', top: '-9999px', left: '-9999px', width: '320px', height: '434px', opacity: 0, pointerEvents: 'none' }} playsInline muted preload="auto" />
+      <video ref={sourceVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} playsInline preload="auto" />
+      <video ref={brollVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} playsInline muted preload="auto" />
+      <video ref={webcamVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} playsInline muted preload="auto" />
       <audio ref={audioRef} style={{ display: 'none' }} />
-
-      <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }`}</style>
     </div>
   );
 }
