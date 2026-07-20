@@ -4,7 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { fetchFixtures } from '../../utils/api';
 import { getLocalDateStr } from '../../utils/dates';
 import { useEditorStore } from '../store/editorStore';
-import { fetchUserProjects, deleteProject } from '../services/studioService';
+import { fetchUserProjects, deleteProject } from '../../services/studioService';
 import { LayoutGrid, Clock, Trash2, Video, Image, Plus, Folder, Camera, Sparkles, Monitor, Film, Zap } from 'lucide-react';
 
 export default function StudioHome() {
@@ -133,7 +133,7 @@ export default function StudioHome() {
           
           {savedProjects.length === 0 ? (
             <div style={{ background: '#111827', padding: '40px', borderRadius: '16px', textAlign: 'center', color: '#64748b', border: '1px dashed #334155' }}>
-              <Plus size={32} style={{ marginBottom: '12px', opacity: 0.5' }} />
+              <Plus size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
               <p style={{ fontWeight: 600, color: '#94a3b8' }}>No saved projects yet</p>
               <p style={{ fontSize: '13px' }}>Pick a tool above to start creating!</p>
             </div>
