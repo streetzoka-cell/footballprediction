@@ -2,52 +2,37 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Circle, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2
+  ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles
 } from 'lucide-react';
 
-// --- 1. MASSIVE TEMPLATE ENGINE (40+ Templates) ---
+// --- 1. MASSIVE TEMPLATE ENGINE ---
 const TEMPLATES = [
-  // PRO & CUSTOM
   { id: 'social_pro', title: 'TikTok POV (Exact Match)', category: 'TikTok', tags: ['viral', 'pov', 'exact'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:70,r:35,ring:'accent'}, nameEl: {x:100,y:60,size:30,color:'#fff'}, handleEl: {x:100,y:92,size:24,color:'#aaa'}, caption: {x:50,y:150,size:26,maxW:620,align:'left',color:'#fff'}, topGradient:350, bottomGradient:200, preview: {bg: 'linear-gradient(to bottom, #1e293b, #0f172a)', layout: 'pov'} },
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
-
-  // TIKTOK
   { id: 'tiktok_tl', title: 'TikTok Top Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
   { id: 'tiktok_tr', title: 'TikTok Top Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tr'} },
   { id: 'tiktok_bl', title: 'TikTok Bottom Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#111', layout: 'bl'} },
   { id: 'tiktok_br', title: 'TikTok Bottom Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:1180,r:35,ring:'accent'}, username: {x:620,y:1175,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:1080,size:24,maxW:680,align:'right'}, bottomGradient:400, preview: {bg: '#111', layout: 'br'} },
   { id: 'tiktok_face', title: 'TikTok Facecam', category: 'TikTok', tags: ['facecam', 'gaming'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
-
-  // INSTAGRAM
   { id: 'insta_tl', title: 'Insta Story Top Left', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tl'} },
   { id: 'insta_tr', title: 'Insta Story Top Right', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tr'} },
   { id: 'insta_bl', title: 'Insta Story Bottom', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#1a1a1a', layout: 'bl'} },
   { id: 'insta_lux', title: 'Insta Luxury Gold', category: 'Instagram', tags: ['luxury', 'gold'], pip: false, video: {x:40,y:80,w:640,h:900,border:'#f59e0b'}, profile: {x:360,y:1100,r:40,ring:'#f59e0b'}, username: {x:360,y:1200,size:36,color:'#fff',center:true,badge:true,badgeColor:'#f59e0b'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
-
-  // YOUTUBE
   { id: 'yt_shorts', title: 'YT Shorts Standard', category: 'YouTube', tags: ['shorts', 'viral'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#0f0f0f', layout: 'tl'} },
   { id: 'yt_mrbeast', title: 'YT MrBeast Style', category: 'YouTube', tags: ['mrbeast', 'viral'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1100,size:60,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#0f0f0f', layout: 'center'} },
   { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#1a1a1a', layout: 'tl'} },
-
-  // GAMING
   { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#ec4899'}, profile: {x:360,y:1150,r:35,ring:'#ec4899'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#ec4899'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#10b981'}, profile: {x:360,y:1150,r:35,ring:'#10b981'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#10b981'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'#9146ff'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'#9146ff'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#0e0e10', preview: {bg: '#0e0e10', layout: 'tl'} },
-
-  // PODCAST
   { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: {x:0,y:0,w:360,h:1280}, profile: {x:180,y:640,r:50,ring:'accent'}, username: {x:180,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:540,y:640,size:28,maxW:300,center:true}, bg:'#000', preview: {bg: '#111', layout: 'split'} },
   { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
-
-  // FOOTBALL & NEWS
   { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#dc2626',text:'BREAKING NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#dc2626', layout: 'news'} },
   { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#1d9bf0',text:'MATCH UPDATE',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#1d9bf0', layout: 'news'} },
   { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#10b981',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#10b981', layout: 'news'} },
   { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#000', preview: {bg: '#000', layout: 'tl'} },
-
-  // MINIMAL & POLAROID
   { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:80,w:640,h:900,border:'accent'}, profile: {x:360,y:1100,r:40,ring:'#f1f1f1'}, username: {x:360,y:1200,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
   { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:40,w:640,h:800,border:'accent'}, profile: {x:360,y:1000,r:40,ring:'#f1f1f1'}, username: {x:360,y:1100,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:900,size:28,color:'#000',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
   { id: 'min_dark', title: 'Minimal Dark', category: 'Minimal', tags: ['dark', 'clean'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1200,size:32,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
@@ -64,6 +49,24 @@ const BRAND_PRESETS = [
   { name: 'ZOKA', color: '#10b981' }, { name: 'Twitter', color: '#1d9bf0' }, 
   { name: 'TikTok', color: '#ec4899' }, { name: 'Twitch', color: '#9146ff' }, 
   { name: 'Gold', color: '#f59e0b' }, { name: 'Orange', color: '#f97316' }
+];
+
+const FILTERS = [
+  { id: 'none', name: 'Normal' }, { id: 'saturate(2) contrast(1.3)', name: 'Vivid' },
+  { id: 'grayscale(1) contrast(1.2)', name: 'B&W' }, { id: 'sepia(0.8) contrast(1.1) brightness(0.9)', name: 'Retro' },
+  { id: 'invert(1)', name: 'Invert' }, { id: 'blur(2px)', name: 'Blur' },
+  { id: 'brightness(1.4) saturate(0.8)', name: 'Warm' }, { id: 'brightness(0.8) saturate(1.5) hue-rotate(200deg)', name: 'Cool' },
+  { id: 'contrast(1.5) brightness(1.1) sepia(0.3)', name: 'Vintage' }
+];
+
+const VIDEO_EFFECTS = [
+  { id: 'none', name: 'None' }, { id: 'zoom_in', name: 'Zoom In' },
+  { id: 'shake', name: 'Shake' }, { id: 'pulse', name: 'Pulse' }
+];
+
+const TEXT_ANIMATIONS = [
+  { id: 'none', name: 'None' }, { id: 'fade_in', name: 'Fade In' },
+  { id: 'slide_up', name: 'Slide Up' }, { id: 'type_writer', name: 'Typewriter' }
 ];
 
 export default function ReactorStudio() {
@@ -101,14 +104,19 @@ export default function ReactorStudio() {
   const [accentColor, setAccentColor] = useState('#f97316');
   const [fontPack, setFontPack] = useState('TikTok');
   
-  // Font Customization State
+  // Universal Font Customization & Verified Badge State
   const [nameColor, setNameColor] = useState('#ffffff');
-  const [nameSize, setNameSize] = useState(null); // Null falls back to template
+  const [nameSize, setNameSize] = useState(null); 
   const [captionColor, setCaptionColor] = useState('#ffffff');
   const [captionSize, setCaptionSize] = useState(null); 
+  const [showVerified, setShowVerified] = useState(true);
 
   // Edit Mode State
   const [editMode, setEditMode] = useState(false);
+
+  // Effects State
+  const [videoEffect, setVideoEffect] = useState('none');
+  const [textAnimation, setTextAnimation] = useState('none');
 
   // Football Assets State
   const [homeLogoUrl, setHomeLogoUrl] = useState('');
@@ -129,7 +137,7 @@ export default function ReactorStudio() {
   // UI State
   const [showGallery, setShowGallery] = useState(false);
   const [showGuides, setShowGuides] = useState(false);
-  const [layers, setLayers] = useState({ video: true, pip: true, profile: true, caption: true, badge: true, gradients: true, scorebug: true });
+  const [layers, setLayers] = useState({ video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true });
   const [favorites, setFavorites] = useState(() => JSON.parse(localStorage.getItem("reactor-favorites")) || []);
   const [recents, setRecents] = useState(() => JSON.parse(localStorage.getItem("reactor-recents")) || []);
   const [searchQuery, setSearchQuery] = useState("");
@@ -234,6 +242,22 @@ export default function ReactorStudio() {
     return lines.slice(0, maxLines);
   };
 
+  const drawVerifiedBadge = (ctx, x, y, size) => {
+    ctx.save();
+    ctx.fillStyle = '#1d9bf0';
+    ctx.beginPath(); ctx.arc(x, y, size, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#fff'; 
+    ctx.lineWidth = size * 0.35;
+    ctx.lineCap = 'round'; 
+    ctx.lineJoin = 'round';
+    ctx.beginPath(); 
+    ctx.moveTo(x - size * 0.4, y); 
+    ctx.lineTo(x - size * 0.1, y + size * 0.35); 
+    ctx.lineTo(x + size * 0.45, y - size * 0.35); 
+    ctx.stroke();
+    ctx.restore();
+  };
+
   const drawFrameRef = useRef(() => {});
   
   drawFrameRef.current = () => {
@@ -256,11 +280,30 @@ export default function ReactorStudio() {
     }
 
     const font = FONT_PACKS[fontPack];
+    const currentTime = sourceVid.currentTime;
+    const animProgress = Math.min((currentTime - trimStart) / 2, 1); // Animations last 2 seconds
 
     // 1. Draw Source Video
     if (layers.video) {
-      ctx.filter = filter;
+      ctx.save();
       const v = activeTemplate.video;
+      
+      // Apply Video Effects
+      if (videoEffect === 'zoom_in') {
+        const scale = 1 + Math.min((currentTime - trimStart) / (trimEnd - trimStart), 1) * 0.3;
+        ctx.translate(v.x + v.w/2, v.y + v.h/2);
+        ctx.scale(scale, scale);
+        ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
+      } else if (videoEffect === 'shake') {
+        ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
+      } else if (videoEffect === 'pulse') {
+        const scale = 1 + Math.sin(currentTime * 8) * 0.04;
+        ctx.translate(v.x + v.w/2, v.y + v.h/2);
+        ctx.scale(scale, scale);
+        ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2));
+      }
+
+      ctx.filter = filter;
       if (v.glow) {
         ctx.shadowColor = v.glow; ctx.shadowBlur = 30; ctx.strokeStyle = v.glow; ctx.lineWidth = 8;
         drawRounded(ctx, sourceVid, v.x, v.y, v.w, v.h, 20);
@@ -274,18 +317,19 @@ export default function ReactorStudio() {
         drawCover(ctx, sourceVid, v.x, v.y, v.w, v.h);
       }
       ctx.filter = 'none';
+      ctx.restore();
 
-      if (fadeIn && sourceVid.currentTime < 1) {
-        ctx.fillStyle = `rgba(0,0,0,${1 - sourceVid.currentTime})`;
+      if (fadeIn && currentTime < 1) {
+        ctx.fillStyle = `rgba(0,0,0,${1 - currentTime})`;
         ctx.fillRect(0, 0, W, H);
       }
     }
 
-    // 2. Draw PiP (Webcam OR B-Roll) - Universal across all templates
+    // 2. Draw PiP (Webcam OR B-Roll)
     const showPiP = (cameraOn || brollLoaded) && layers.pip;
     const activePiPVid = brollLoaded ? brollVid : webcamVid;
     if (activePiPVid && showPiP) {
-      const pip = pipPos; // Use global pipPos
+      const pip = pipPos; 
       ctx.fillStyle = '#fff';
       ctx.fillRect(pip.x - 4, pip.y - 4, pip.w + 8, pip.h + 8);
       ctx.save();
@@ -329,19 +373,33 @@ export default function ReactorStudio() {
       lines.forEach(line => { ctx.fillText(line, 20, yPos); yPos += 36; });
     }
 
-    // 5. Draw Caption
+    // 5. Draw Caption (With Text Animations)
     if (layers.caption && activeTemplate.caption && !activeTemplate.ticker) {
       const c = activeTemplate.caption;
       ctx.fillStyle = captionColor || c.color || '#fff';
-      const cSize = captionSize || c.size;
+      const cSize = captionSize ? parseInt(captionSize) : c.size;
       ctx.font = `${font.weight} ${cSize}px ${font.name}`;
       ctx.textAlign = c.center ? 'center' : (c.align || 'left');
-      const lines = wrapText(ctx, povCaption, c.maxW, 3);
-      let yPos = c.y;
+      
+      let displayCaption = povCaption;
+      let yOffset = 0;
+      
+      if (textAnimation === 'type_writer') {
+        const len = Math.floor((povCaption.length) * animProgress);
+        displayCaption = povCaption.substring(0, len);
+      } else if (textAnimation === 'fade_in') {
+        ctx.globalAlpha = animProgress;
+      } else if (textAnimation === 'slide_up') {
+        yOffset = (1 - animProgress) * 50;
+      }
+
+      const lines = wrapText(ctx, displayCaption, c.maxW, 3);
+      let yPos = c.y + yOffset;
       lines.forEach(line => { ctx.fillText(line, c.x, yPos); yPos += cSize + 8; });
+      ctx.globalAlpha = 1; // Reset
     }
 
-    // 6. Draw Profile, Name & Handle (Universal Profile Pos on Edit Mode)
+    // 6. Draw Profile, Name & Handle
     const p = (activeTemplate.isCustom || editMode) ? profilePos : activeTemplate.profile;
     if (profileImgRef.current.src && p && layers.profile) {
       ctx.save();
@@ -361,34 +419,39 @@ export default function ReactorStudio() {
       const n = activeTemplate.nameEl, hd = activeTemplate.handleEl;
       ctx.textAlign = n.align || 'left';
       ctx.fillStyle = nameColor || n.color || '#fff';
-      const nSize = nameSize || n.size;
+      const nSize = nameSize ? parseInt(nameSize) : n.size;
       ctx.font = `${font.weight} ${nSize}px ${font.name}`;
       
       const nx = (activeTemplate.isCustom || editMode) ? p.x + p.r + 12 : n.x;
       const ny = (activeTemplate.isCustom || editMode) ? p.y + 10 : n.y;
       ctx.fillText(displayName, nx, ny);
       
-      const nameWidth = ctx.measureText(displayName).width;
-      const hdX = n.align === 'center' ? nx + nameWidth/2 + 12 : nx + nameWidth + 12;
+      let nameWidth = ctx.measureText(displayName).width;
+      let currentX = nx + nameWidth + 12;
+
+      if (showVerified) {
+        drawVerifiedBadge(ctx, currentX, ny - nSize / 2 + 2, nSize / 2.5);
+        currentX += (nSize / 2.5) * 2 + 12;
+      }
+
       ctx.fillStyle = hd.color || '#aaa';
       ctx.font = `${hd.size}px ${font.name}`;
-      ctx.fillText(`@${username}`, hdX, ny);
+      ctx.fillText(`@${username}`, currentX, ny);
     } else if (activeTemplate.username || editMode) {
-      const u = activeTemplate.username || { size: 28, center: true, badge: false };
+      const u = activeTemplate.username || { size: 28, center: true };
       const ux = (activeTemplate.isCustom || editMode) ? p.x : u.x;
       const uy = (activeTemplate.isCustom || editMode) ? p.y + p.r + 30 : u.y;
       ctx.textAlign = (activeTemplate.isCustom || editMode) ? 'center' : (u.center ? 'center' : (u.align || 'left'));
       ctx.fillStyle = nameColor || u.color || '#fff';
-      ctx.font = `${font.weight} ${nameSize || u.size}px ${font.name}`;
+      const uSize = nameSize ? parseInt(nameSize) : u.size;
+      ctx.font = `${font.weight} ${uSize}px ${font.name}`;
       ctx.fillText(`@${username}`, ux, uy);
-      if (u.badge && layers.badge) {
-        const nameWidth = ctx.measureText(username).width;
-        const badgeX = (activeTemplate.isCustom || editMode) ? ux + nameWidth/2 + 14 : ux + nameWidth + 14;
-        const badgeY = uy - (nameSize || u.size) + 6;
-        ctx.fillStyle = u.badgeColor === 'accent' ? accentColor : (u.badgeColor || '#1d9bf0');
-        ctx.beginPath(); ctx.arc(badgeX, badgeY, 12, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.font = `bold 16px Arial`; 
-        ctx.fillText('✓', badgeX - 5, badgeY + 5);
+
+      if (showVerified) {
+        let nameWidth = ctx.measureText(username).width;
+        let badgeX = (activeTemplate.isCustom || editMode || u.center) ? ux + nameWidth/2 + 16 : ux + nameWidth + 16;
+        let badgeY = uy - uSize / 2 + 2;
+        drawVerifiedBadge(ctx, badgeX, badgeY, uSize / 2.5);
       }
     }
 
@@ -426,7 +489,6 @@ export default function ReactorStudio() {
   };
 
   const handlePointerDown = (e) => {
-    // Enable drag if Edit Mode, Custom Template, or universal PiP elements
     if (!editMode && !activeTemplate.isCustom && !brollLoaded && !cameraOn) return;
     const { x, y } = getCanvasCoords(e);
     
@@ -466,30 +528,55 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => { dragRef.current.target = null; };
 
-  // --- Smart Trim Export Logic (Optimized) ---
-  const handleExportVideo = async () => {
+  // --- Bulletproof Fast Export Logic ---
+  const handleExportVideo = async (withAudio = true) => {
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || isExporting || !vid) return;
 
     setIsExporting(true);
     setIsPlaying(false);
+    
     vid.pause();
-    vid.currentTime = trimStart; 
+    vid.currentTime = trimStart;
+    await new Promise(r => setTimeout(r, 200));
 
-    await new Promise(r => setTimeout(r, 100));
+    const wasMuted = vid.muted;
+    vid.muted = true; // Prevent browser stalling due to audio autoplay policies
 
-    const canvasStream = canvasRef.current.captureStream(30);
-    if (streamRef.current) streamRef.current.getAudioTracks().forEach(track => canvasStream.addTrack(track));
-    if (!isMuted && vid.captureStream) {
-      try { vid.captureStream().getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
-    }
-    if (audioRef.current.src) {
-      try { const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); aStream.getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
+    const fps = 30;
+    const canvasStream = canvasRef.current.captureStream(fps);
+    
+    // SILENT AUDIO TRACK FIX: Generates a silent audio oscillator internally.
+    // This forces the browser to write correct timestamps for every single frame, 
+    // fixing the bug where 5s videos export as 30m.
+    let audioCtx;
+    try {
+      audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioDest = audioCtx.createMediaStreamDestination();
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      gain.gain.value = 0.0; // Completely silent
+      osc.connect(gain);
+      gain.connect(audioDest);
+      osc.start();
+      canvasStream.addTrack(audioDest.stream.getAudioTracks()[0]);
+    } catch(e) { console.warn("Audio context failed", e); }
+
+    if (withAudio) {
+      if (streamRef.current) streamRef.current.getAudioTracks().forEach(track => canvasStream.addTrack(track));
+      if (!isMuted && vid.captureStream) {
+        try { vid.captureStream().getAudioTracks().forEach(track => canvasStream.addTrack(track)); } catch(e) {}
+      }
+      if (audioRef.current.src) {
+        try { 
+          audioRef.current.play();
+          const aStream = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
+          aStream.getAudioTracks().forEach(track => canvasStream.addTrack(track)); 
+        } catch(e) {}
+      }
     }
 
     chunksRef.current = [];
-    
-    // Pick the best available codec for performance and quality
     const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') 
       ? 'video/webm;codecs=vp9' 
       : MediaRecorder.isTypeSupported('video/webm;codecs=vp8')
@@ -498,7 +585,7 @@ export default function ReactorStudio() {
 
     const recorder = new MediaRecorder(canvasStream, { 
       mimeType,
-      videoBitsPerSecond: 10000000 // 10 Mbps for high quality output
+      videoBitsPerSecond: 8000000 
     });
     
     recorder.ondataavailable = (e) => { if (e.data.size > 0) chunksRef.current.push(e.data); };
@@ -509,21 +596,23 @@ export default function ReactorStudio() {
       setIsExporting(false);
       vid.pause();
       if (audioRef.current) audioRef.current.pause();
+      vid.muted = wasMuted; 
+      canvasStream.getTracks().forEach(track => track.stop());
+      if (audioCtx) audioCtx.close();
     };
 
-    // Use setTimeout loop instead of requestAnimationFrame for more reliable timing export
-    const checkTime = () => {
-      if (vid.currentTime >= trimEnd) {
+    const end = isFinite(trimEnd) ? trimEnd : (vid.duration || 0);
+    
+    // Use setInterval instead of requestAnimationFrame to ensure it runs even if tab is hidden
+    const checkInterval = setInterval(() => {
+      if (vid.currentTime >= end - 0.05 || vid.ended) {
+        clearInterval(checkInterval);
         if (recorder.state !== 'inactive') recorder.stop();
-      } else {
-        setTimeout(checkTime, 100); // Check every 100ms to save CPU
       }
-    };
+    }, 50);
 
-    recorder.start(100); // Gather chunks in 100ms intervals
-    vid.play();
-    if (audioRef.current.src) audioRef.current.play();
-    setTimeout(checkTime, 100);
+    recorder.start(100); 
+    await vid.play();
   };
 
   const handleDiscardRecording = () => {
@@ -545,7 +634,6 @@ export default function ReactorStudio() {
     setTemplateId(id); 
     setShowGallery(false);
     
-    // Sync universal positions to the newly selected template defaults
     const t = templateMap[id];
     if (t.profile) setProfilePos({ x: t.profile.x, y: t.profile.y, r: t.profile.r });
     setPipPos({ x: 450, y: 800, w: 280, h: 380 });
@@ -572,11 +660,6 @@ export default function ReactorStudio() {
     return list;
   }, [activeCategory, searchQuery, favorites]);
 
-  const filters = [
-    { id: 'none', name: 'Normal' }, { id: 'saturate(1.5) contrast(1.2)', name: 'Vivid' },
-    { id: 'grayscale(1)', name: 'B&W' }, { id: 'sepia(0.7) contrast(1.1)', name: 'Retro' },
-  ];
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
       <input type="file" ref={el => fileInputRefs.current.video = el} onChange={(e) => handleImport(e, 'video')} accept="video/*" style={{ display: 'none' }} />
@@ -602,9 +685,14 @@ export default function ReactorStudio() {
               </a>
             </>
           ) : (
-            <button onClick={handleExportVideo} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
-              {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Video
-            </button>
+            <>
+              <button onClick={() => handleExportVideo(false)} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
+                {isExporting ? <Loader size={16} className="animate-spin" /> : <VolumeX size={16} />} Export Muted
+              </button>
+              <button onClick={() => handleExportVideo(true)} disabled={!sourceLoaded || isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !sourceLoaded || isExporting ? 0.5 : 1 }}>
+                {isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Video
+              </button>
+            </>
           )}
         </div>
       </div>
@@ -653,6 +741,23 @@ export default function ReactorStudio() {
             <span style={{ fontSize: '10px', color: '#64748b' }}>Move Profile & Second Video anywhere on any template.</span>
           </div>
 
+          {/* NEW EFFECTS PANEL */}
+          <div style={panelStyle}>
+            <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
+            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Video Effect</label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {VIDEO_EFFECTS.map(f => (
+                <button key={f.id} onClick={() => setVideoEffect(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: videoEffect === f.id ? '#10b981' : '#1f2937', color: videoEffect === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>
+              ))}
+            </div>
+            <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Caption Animation</label>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+              {TEXT_ANIMATIONS.map(f => (
+                <button key={f.id} onClick={() => setTextAnimation(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: textAnimation === f.id ? '#10b981' : '#1f2937', color: textAnimation === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>
+              ))}
+            </div>
+          </div>
+
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Palette size={14} /> Brand Kit</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -686,12 +791,22 @@ export default function ReactorStudio() {
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><User size={14} /> Social Details & Fonts</div>
+            
+            <label style={{ fontSize: '11px', color: '#94a3b8' }}>Display Name</label>
             <input type="text" value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Display Name" style={inputStyle} disabled={isExporting || recordedUrl} />
-            <div style={{ display: 'flex', gap: '8px' }}>
+            
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
               <input type="color" value={nameColor} onChange={(e) => setNameColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Name Color" />
               <input type="number" value={nameSize || ''} onChange={(e) => setNameSize(e.target.value ? parseInt(e.target.value) : null)} placeholder="Name Size (px)" style={{...inputStyle, width: '100px'}} title="Name Size" />
+              <button onClick={() => setShowVerified(!showVerified)} style={{ ...inputStyle, background: showVerified ? '#1d9bf0' : '#1f2937', color: showVerified ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <BadgeCheck size={16} /> Tick
+              </button>
             </div>
-            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Username" style={inputStyle} disabled={isExporting || recordedUrl} />
+
+            <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Username / Handle</label>
+            <input type="text" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="@username" style={inputStyle} disabled={isExporting || recordedUrl} />
+            
+            <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Caption</label>
             <textarea value={povCaption} onChange={(e) => setPovCaption(e.target.value)} placeholder="Caption" style={{...inputStyle, height: '60px', resize: 'none'}} disabled={isExporting || recordedUrl} />
             <div style={{ display: 'flex', gap: '8px' }}>
               <input type="color" value={captionColor} onChange={(e) => setCaptionColor(e.target.value)} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
@@ -722,7 +837,7 @@ export default function ReactorStudio() {
                 </div>
               </div>
               <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', marginTop: '8px' }}>
-                {filters.map(f => (
+                {FILTERS.map(f => (
                   <button key={f.id} onClick={() => setFilter(f.id)} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.id ? '#10b981' : '#1f2937', color: filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={isExporting || recordedUrl}>{f.name}</button>
                 ))}
               </div>
