@@ -3,7 +3,7 @@ import React, { useReducer, useRef, useEffect, useMemo, useCallback } from 'reac
 import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop
 } from 'lucide-react';
 
 // --- HELPER: WebM Duration Metadata Fixer ---
@@ -145,7 +145,8 @@ const initialState = {
     accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
     showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
     isMuted: false, filter: 'none', fadeIn: false, pipPos: { x: 450, y: 800, w: 280, h: 380 }, profilePos: { x: 50, y: 70, r: 35 },
-    introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true
+    introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true,
+    videoZoom: 1, videoPanX: 0, videoPanY: 0 // NEW: Crop & Zoom State
   },
   timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
   ui: { showGallery: false, showGuides: false, isExporting: false, recordedUrl: null, isLoadingProject: true,
@@ -242,6 +243,8 @@ export default function ReactorStudio() {
         sourceVideoRef.current.onloadedmetadata = () => {
           const dur = sourceVideoRef.current.duration;
           const newClips = [{ id: `clip_${Date.now()}`, start: 0, end: dur }];
+          // Reset Crop on new video
+          dispatch({ type: 'SET_EDITOR', payload: { videoZoom: 1, videoPanX: 0, videoPanY: 0 } });
           dispatch({ type: 'SET_TIMELINE', payload: { duration: dur, clips: newClips, activeClipId: newClips[0].id, isPlaying: true, currentTime: 0 } });
           dispatch({ type: 'SET_MEDIA', payload: { sourceLoaded: true } });
           sourceVideoRef.current.play();
@@ -360,11 +363,21 @@ export default function ReactorStudio() {
     window.addEventListener('touchend', onUp);
   };
 
-  const drawCover = (ctx, video, x, y, w, h) => {
-    const vw = video.videoWidth, vh = video.videoHeight; if (!vw || !vh) return;
-    const vr = vw / vh, br = w / h; let sx, sy, sw, sh;
-    if (vr > br) { sh = vh; sw = vh * br; sx = (vw - sw) / 2; sy = 0; } else { sw = vw; sh = vw / br; sx = 0; sy = (vh - sh) / 2; }
-    ctx.drawImage(video, sx, sy, sw, sh, x, y, w, h);
+  // --- UPDATED DRAW COVER WITH CROP SUPPORT ---
+  const drawCover = (ctx, video, dx, dy, dw, dh, crop = { x: 0, y: 0, w: 1, h: 1 }) => {
+    const vw = video.videoWidth, vh = video.videoHeight; 
+    if (!vw || !vh) return;
+    
+    const srcW = vw * crop.w;
+    const srcH = vh * crop.h;
+    const srcX = vw * crop.x;
+    const srcY = vh * crop.y;
+    
+    const vr = srcW / srcH, br = dw / dh; 
+    let sx, sy, sw, sh;
+    if (vr > br) { sh = srcH; sw = srcH * br; sx = srcX + (srcW - sw) / 2; sy = srcY; } 
+    else { sw = srcW; sh = srcW / br; sx = srcX; sy = srcY + (srcH - sh) / 2; }
+    ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 
   const drawRounded = (ctx, video, x, y, w, h, r) => {
@@ -386,7 +399,7 @@ export default function ReactorStudio() {
     ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.35); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore();
   };
 
-  // --- 3. OVERLAY CACHING (Static Elements + Watermark) ---
+  // --- 3. OVERLAY CACHING ---
   const renderOverlay = useCallback(() => {
     const oc = overlayCanvasRef.current;
     const ctx = oc.getContext('2d');
@@ -453,7 +466,6 @@ export default function ReactorStudio() {
       ctx.fillStyle = '#fff'; ctx.font = `bold 36px ${font.name}`; ctx.textAlign = 'center'; ctx.fillText(`${editor.homeScore} - ${editor.awayScore}`, W / 2, bY + 50);
     }
 
-    // Draw Watermark if Intro is over and watermark is enabled
     if (editor.introEnabled && editor.introWatermark && activeClip) {
       const introEnd = activeClip.start + 3.0;
       if (cTime >= introEnd) {
@@ -473,7 +485,7 @@ export default function ReactorStudio() {
 
   useEffect(() => { renderOverlay(); }, [renderOverlay]);
 
-  // --- 4. MAIN RENDER LOOP (Video + Dynamic Intro Animation) ---
+  // --- 4. MAIN RENDER LOOP ---
   const drawFrameRef = useRef(() => {});
   drawFrameRef.current = () => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -501,13 +513,24 @@ export default function ReactorStudio() {
         else if (editor.videoEffect === 'ken_burns') { const s = 1 + aProg * 0.15; const tx = aProg * 30; ctx.translate(v.x + v.w/2 - tx, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
 
         ctx.filter = editor.filter;
+        
+        // Calculate Crop
+        const zoom = editor.videoZoom || 1;
+        const panX = editor.videoPanX || 0;
+        const panY = editor.videoPanY || 0;
+        const cropW = 1 / zoom;
+        const cropH = 1 / zoom;
+        const cropX = (1 - cropW) / 2 + (panX * (1 - cropW) / 2);
+        const cropY = (1 - cropH) / 2 + (panY * (1 - cropH) / 2);
+        const mainCrop = { x: cropX, y: cropY, w: cropW, h: cropH };
+
         if (editor.videoEffect === 'glitch' || editor.videoEffect === 'rgb_split') {
           ctx.globalCompositeOperation = 'screen';
-          ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x + (Math.random()*10), v.y, v.w, v.h);
-          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x - (Math.random()*10), v.y, v.w, v.h);
+          ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x + (Math.random()*10), v.y, v.w, v.h, mainCrop);
+          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sVid, v.x - (Math.random()*10), v.y, v.w, v.h, mainCrop);
           ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
         } else {
-          drawCover(ctx, sVid, v.x, v.y, v.w, v.h);
+          drawCover(ctx, sVid, v.x, v.y, v.w, v.h, mainCrop);
         }
         ctx.filter = 'none'; ctx.restore();
 
@@ -523,16 +546,13 @@ export default function ReactorStudio() {
       }
     }
     
-    // Draw Cached Overlay (Text/Profile)
     if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
 
-    // --- DYNAMIC CINEMATIC INTRO LOGIC ---
     if (editor.introEnabled && activeClip) {
-      const introDur = 3.0; // 3 seconds
+      const introDur = 3.0;
       const introP = Math.min((timeline.currentTime - activeClip.start) / introDur, 1.0);
       
       if (introP < 1.0) {
-        // Fade out intro overlay
         ctx.fillStyle = `rgba(0,0,0,${1 - Math.pow(introP, 3)})`;
         ctx.fillRect(0, 0, W, H);
         
@@ -548,7 +568,6 @@ export default function ReactorStudio() {
           let jitter = (1 - introP) * 40;
           ctx.globalAlpha = Math.min(introP * 3, 1);
           if (hasLogo) {
-            // RGB Split Approximation
             ctx.globalCompositeOperation = 'screen';
             ctx.fillStyle = 'red'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 + jitter, cy - lSize/2, lSize, lSize);
             ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 - jitter, cy - lSize/2, lSize, lSize);
@@ -752,6 +771,23 @@ export default function ReactorStudio() {
 
         <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
           
+          {/* NEW: CROP & ZOOM PANEL */}
+          {media.sourceLoaded && (
+            <div style={panelStyle}>
+              <div style={panelTitleStyle}><Crop size={14} /> Crop & Zoom</div>
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>Zoom: {editor.videoZoom.toFixed(1)}x</label>
+              <input type="range" min="1" max="4" step="0.1" value={editor.videoZoom} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { videoZoom: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
+              
+              <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Pan X: {editor.videoPanX.toFixed(1)}</label>
+              <input type="range" min="-1" max="1" step="0.1" value={editor.videoPanX} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { videoPanX: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
+              
+              <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Pan Y: {editor.videoPanY.toFixed(1)}</label>
+              <input type="range" min="-1" max="1" step="0.1" value={editor.videoPanY} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { videoPanY: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
+              
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoZoom: 1, videoPanX: 0, videoPanY: 0 } })} style={{ marginTop: '8px', background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '11px' }}>Reset Crop</button>
+            </div>
+          )}
+
           {/* CINEMATIC INTRO PANEL */}
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Sparkles size={14} /> Cinematic Intro</div>
