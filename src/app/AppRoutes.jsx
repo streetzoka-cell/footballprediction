@@ -44,6 +44,7 @@ import {
   StudioTemplates,
   MediaStudio,
   FaceARStudio,
+  WebShowcaseStudio,
 } from "./routes";
 
 function Animated({ children }) {
@@ -66,6 +67,8 @@ export default function AppRoutes() {
       <Route path="/studio" element={<Animated><StudioHome /></Animated>} />
       <Route path="/studio/templates" element={<Animated><StudioTemplates /></Animated>} />
       <Route path="/studio/editor" element={<Animated><StudioEditor /></Animated>} />
+      <Route path="/studio/reactor" element={<Animated><ReactorStudio /></Animated>} />
+      <Route path="/studio/web-showcase" element={<Animated><WebShowcaseStudio /></Animated>} />
       <Route path="/studio/media" element={<Animated><MediaStudio /></Animated>} />
       <Route path="/studio/face-ar" element={<Animated><FaceARStudio /></Animated>} />
 
@@ -87,7 +90,7 @@ export default function AppRoutes() {
       <Route path="/contact" element={<Animated><Contact /></Animated>} />
       <Route path="/partners" element={<Animated><Partners /></Animated>} />
       <Route path="/advertise" element={<Animated><Advertise /></Animated>} />
-<Route path="/studio/reactor" element={<Animated><ReactorStudio /></Animated>} />
+
       {/* ================= SUPPORT ================= */}
       <Route path="/faq" element={<Animated><FAQ /></Animated>} />
       <Route path="/help" element={<Animated><HelpCenter /></Animated>} />

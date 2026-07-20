@@ -64,3 +64,4 @@ export const StudioEditor = lazy(() => import("../studio/pages/StudioEditor"));
 export const StudioTemplates = lazy(() => import("../studio/pages/Templates"));
 export const MediaStudio = lazy(() => import("../studio/pages/MediaStudio"));
 export const FaceARStudio = lazy(() => import("../studio/pages/FaceARStudio"));
+export const WebShowcaseStudio = lazy(() => import("../studio/pages/WebShowcaseStudio"));
