@@ -1,6 +1,5 @@
-// src/studio/pages/ReactorStudio.jsx
 import React, { useReducer, useRef, useEffect, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
   Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop
@@ -76,9 +75,8 @@ const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.restore();
 };
 
-// --- 1. MASSIVE TEMPLATE ENGINE (Merged Old + New Pro) ---
+// --- 1. MASSIVE TEMPLATE ENGINE ---
 const TEMPLATES = [
-  // === PRO CINEMATIC PRESETS ===
   { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro'} },
   { id: 'pro_goal', title: 'Pro: Goal Machine', category: 'Pro', tags: ['viral', 'goal', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #dc2626, #000)', layout: 'pro'} },
   { id: 'pro_chills', title: 'Pro: Chill Vibes', category: 'Pro', tags: ['viral', 'chill', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #4338ca, #312e81)', layout: 'pro'} },
@@ -88,7 +86,6 @@ const TEMPLATES = [
   { id: 'pro_cinematic', title: 'Pro: Cinematic Wide', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:140,w:720,h:1000}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #111, #000)', layout: 'pro'} },
   { id: 'pro_signature', title: 'Pro: ZOKA Signature', category: 'Pro', tags: ['viral', 'zoka', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #047857, #000)', layout: 'pro'} },
 
-  // === STANDARD TEMPLATES ===
   { id: 'social_pro', title: 'TikTok POV (Exact Match)', category: 'TikTok', tags: ['viral', 'pov', 'exact'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:70,r:35,ring:'accent'}, nameEl: {x:100,y:60,size:30,color:'#fff'}, handleEl: {x:100,y:92,size:24,color:'#aaa'}, caption: {x:50,y:150,size:26,maxW:620,align:'left',color:'#fff'}, topGradient:350, bottomGradient:200, preview: {bg: 'linear-gradient(to bottom, #1e293b, #0f172a)', layout: 'pov'} },
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
@@ -158,6 +155,51 @@ const INTRO_STYLES = [
   { id: 'slide_zoom', name: 'Slide Zoom' }
 ];
 
+// --- HELPER: Smart PIP Position Calculator ---
+const getPipPosForTemplate = (template) => {
+  if (template.pipPos) return template.pipPos;
+  const w = 280, h = 380;
+  const p = template.profile;
+  const cap = template.caption;
+  const hasHeader = !!template.header;
+  const hasTicker = !!template.ticker;
+  const hasSplit = template.video && template.video.w < 500; 
+
+  if (hasSplit) return { x: 380, y: 100, w: 320, h: 450 };
+
+  if (p) {
+    if (p.y < 200 && p.x < 360) return { x: 410, y: 830, w, h };        
+    if (p.y < 200 && p.x > 360) return { x: 30, y: 830, w, h };         
+    if (p.y > 1000 && p.x < 360) return { x: 410, y: 50, w, h };        
+    if (p.y > 1000 && p.x > 360) return { x: 30, y: 50, w, h };         
+  }
+
+  if (cap && cap.y > 900 && cap.center) return { x: 410, y: 50, w, h };  
+  if (cap && cap.y < 200) return { x: 410, y: 830, w, h };               
+
+  if (hasHeader && hasTicker) return { x: 420, y: 730, w: 270, h: 350 };
+
+  if (template.video && (template.video.x > 0 || template.video.y > 0)) {
+    const v = template.video;
+    if (v.y > 100) return { x: 430, y: 20, w: 260, h: 80 };             
+    return { x: 430, y: v.y + v.h + 20, w: 260, h: 200 };               
+  }
+
+  return { x: 410, y: 830, w, h };
+};
+
+// --- HELPER: Rounded Rectangle Path ---
+const roundRectPath = (ctx, x, y, w, h, r) => {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+};
+
 // --- 2. REDUCER STATE MANAGEMENT ---
 const initialState = {
   media: { sourceLoaded: false, brollLoaded: false, cameraOn: false, profileSrc: null, logoSrc: null, audioName: '' },
@@ -166,7 +208,8 @@ const initialState = {
     accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
     showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', 
     homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
-    isMuted: false, filter: 'none', fadeIn: false, pipPos: { x: 450, y: 800, w: 280, h: 380 }, profilePos: { x: 50, y: 70, r: 35 },
+    isMuted: false, filter: 'none', fadeIn: false, 
+    pipPos: { x: 410, y: 830, w: 280, h: 380 }, pipScale: 1.0, pipFrameStyle: 'accent', profilePos: { x: 50, y: 70, r: 35 },
     introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true,
     videoZoom: 1, videoPanX: 0, videoPanY: 0
   },
@@ -190,6 +233,9 @@ function studioReducer(state, action) {
 
 export default function ReactorStudio() {
   const navigate = useNavigate();
+  const location = useLocation(); 
+  const fixtureData = location.state; 
+  
   const [state, dispatch] = useReducer(studioReducer, initialState);
   
   const sourceVideoRef = useRef(null);
@@ -197,7 +243,7 @@ export default function ReactorStudio() {
   const webcamVideoRef = useRef(null);
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
-  const overlayCanvasRef = useRef(document.createElement('canvas')); // Off-screen cache
+  const overlayCanvasRef = useRef(document.createElement('canvas')); 
   const fileInputRefs = useRef({ video: null, broll: null, image: null, audio: null, logo: null });
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -208,10 +254,32 @@ export default function ReactorStudio() {
   const homeLogoRef = useRef(new Image());
   const awayLogoRef = useRef(new Image());
 
+  const currentTimeRef = useRef(0);
+  const renderOverlayRef = useRef(() => {});
+
   const { media, editor, timeline, ui } = state;
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
-  const activeTemplate = templateMap[editor.templateId];
+  
+  const activeTemplate = templateMap[editor.templateId] || TEMPLATES[0];
+  
   const activeClip = useMemo(() => timeline.clips.find(c => c.id === timeline.activeClipId) || timeline.clips[0], [timeline.clips, timeline.activeClipId]);
+
+  useEffect(() => {
+    if (fixtureData) {
+      dispatch({
+        type: 'SET_EDITOR', 
+        payload: {
+          homeLogoUrl: fixtureData.homeLogo || '',
+          awayLogoUrl: fixtureData.awayLogo || '',
+          homeScore: fixtureData.score?.home ?? 0,
+          awayScore: fixtureData.score?.away ?? 0,
+          povCaption: `${fixtureData.minute || ''} GOAL! ${fixtureData.scorer || ''} scores! 🔥`,
+          templateId: 'news_blue' 
+        }
+      });
+      dispatch({ type: 'SET_UI', payload: { activeCategory: "Football", showGallery: true } });
+    }
+  }, [fixtureData]);
 
   useEffect(() => {
     const load = async () => {
@@ -384,7 +452,7 @@ export default function ReactorStudio() {
     window.addEventListener('touchend', onUp);
   };
 
-  // --- UPDATED DRAW COVER WITH CROP SUPPORT ---
+  // --- DRAWING HELPERS ---
   const drawCover = (ctx, video, dx, dy, dw, dh, crop = { x: 0, y: 0, w: 1, h: 1 }) => {
     const vw = video.videoWidth, vh = video.videoHeight; 
     if (!vw || !vh) return;
@@ -401,13 +469,6 @@ export default function ReactorStudio() {
     ctx.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
   };
 
-  const drawRounded = (ctx, video, x, y, w, h, r) => {
-    ctx.save(); ctx.beginPath();
-    ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath(); ctx.clip();
-    drawCover(ctx, video, x, y, w, h); ctx.restore();
-  };
-
   const wrapText = (ctx, text, mw, ml) => {
     const w = text.split(' '); let l = [], c = w[0] || '';
     for (let i = 1; i < w.length; i++) { if (ctx.measureText(c + ' ' + w[i]).width < mw) c += ' ' + w[i]; else { l.push(c); c = w[i]; } }
@@ -420,15 +481,15 @@ export default function ReactorStudio() {
     ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.35); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore();
   };
 
-  // --- 3. OVERLAY CACHING ---
-  const renderOverlay = useCallback(() => {
+  // --- 3. OVERLAY CACHING (REF-BASED FOR SMOOTHNESS) ---
+  renderOverlayRef.current = () => {
     const oc = overlayCanvasRef.current;
     const ctx = oc.getContext('2d');
     const W = 720, H = 1280;
     oc.width = W; oc.height = H;
     ctx.clearRect(0, 0, W, H);
     const font = FONT_PACKS[editor.fontPack];
-    const cTime = timeline.currentTime;
+    const cTime = currentTimeRef.current; 
     const aProg = activeClip ? Math.min((cTime - activeClip.start) / 2, 1) : 0;
 
     if (ui.layers.gradients) {
@@ -502,9 +563,7 @@ export default function ReactorStudio() {
         ctx.globalAlpha = 1;
       }
     }
-  }, [activeTemplate, editor, ui.layers, timeline.currentTime, activeClip]);
-
-  useEffect(() => { renderOverlay(); }, [renderOverlay]);
+  };
 
   // --- 4. MAIN RENDER LOOP ---
   const drawFrameRef = useRef(() => {});
@@ -517,7 +576,10 @@ export default function ReactorStudio() {
 
     const sVid = sourceVideoRef.current;
     if (media.sourceLoaded && sVid) {
-      if (Math.abs(sVid.currentTime - timeline.currentTime) > 0.1) dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sVid.currentTime } });
+      currentTimeRef.current = sVid.currentTime;
+      if (Math.abs(sVid.currentTime - timeline.currentTime) > 0.3) {
+        dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sVid.currentTime } });
+      }
       if (activeClip) {
         if (sVid.currentTime < activeClip.start) sVid.currentTime = activeClip.start;
         if (timeline.isPlaying && sVid.currentTime >= activeClip.end - 0.05) { sVid.pause(); sVid.currentTime = activeClip.start; sVid.play(); }
@@ -525,7 +587,7 @@ export default function ReactorStudio() {
       
       if (ui.layers.video) {
         ctx.save(); const v = activeTemplate.video;
-        const cTime = sVid.currentTime;
+        const cTime = currentTimeRef.current;
         const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
 
         if (editor.videoEffect === 'zoom_in') { const s = 1 + aProg * 0.3; ctx.translate(v.x + v.w/2, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
@@ -558,19 +620,78 @@ export default function ReactorStudio() {
         if (editor.fadeIn && cTime < (activeClip?.start || 0) + 1) { ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - (activeClip?.start || 0))})`; ctx.fillRect(0, 0, W, H); }
       }
       
+      // --- FRAMED & SCALED PIP RENDERING ---
       const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip;
       const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
       if (aPiPVid && showPiP) {
-        const p = editor.pipPos; ctx.fillStyle = '#fff'; ctx.fillRect(p.x - 4, p.y - 4, p.w + 8, p.h + 8);
-        ctx.save(); if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); drawRounded(ctx, aPiPVid, W - p.x - p.w, p.y, p.w, p.h, 12); } else { drawRounded(ctx, aPiPVid, p.x, p.y, p.w, p.h, 12); } ctx.restore();
+        const baseP = editor.pipPos;
+        const scale = editor.pipScale || 1.0;
+        const pW = Math.round(baseP.w * scale);
+        const pH = Math.round(baseP.h * scale);
+        const pX = Math.round(baseP.x + (baseP.w - pW) / 2);
+        const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
+        const frameStyle = editor.pipFrameStyle || 'accent';
+        const radius = 16;
+        const vw = aPiPVid.videoWidth, vh = aPiPVid.videoHeight;
+
+        // Outer frame border
+        ctx.save();
+        if (frameStyle === 'accent') {
+          ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4;
+          ctx.fillStyle = editor.accentColor;
+          roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4);
+          ctx.fill();
+        } else if (frameStyle === 'white') {
+          ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4;
+          ctx.fillStyle = '#fff';
+          roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4);
+          ctx.fill();
+        } else if (frameStyle === 'glow') {
+          ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 30;
+          ctx.strokeStyle = editor.accentColor; ctx.lineWidth = 3;
+          roundRectPath(ctx, pX, pY, pW, pH, radius);
+          ctx.stroke();
+        } else if (frameStyle === 'minimal') {
+          ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
+          ctx.fillStyle = 'rgba(0,0,0,0.3)';
+          roundRectPath(ctx, pX, pY, pW, pH, radius);
+          ctx.fill();
+        }
+        ctx.restore();
+
+        // Draw video clipped to rounded rect
+        ctx.save();
+        roundRectPath(ctx, pX, pY, pW, pH, radius);
+        ctx.clip();
+        if (vw && vh) {
+          if (!media.brollLoaded) {
+            ctx.scale(-1, 1); ctx.translate(-W, 0);
+            drawCover(ctx, aPiPVid, W - pX - pW, pY, pW, pH);
+          } else {
+            drawCover(ctx, aPiPVid, pX, pY, pW, pH);
+          }
+        }
+        ctx.restore();
+
+        // Inner highlight border
+        if (frameStyle !== 'minimal' && frameStyle !== 'glow') {
+          ctx.save();
+          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
+          ctx.lineWidth = 1;
+          roundRectPath(ctx, pX, pY, pW, pH, radius);
+          ctx.stroke();
+          ctx.restore();
+        }
       }
     }
     
+    // Render overlay every frame 
+    renderOverlayRef.current();
     if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
 
     if (editor.introEnabled && activeClip) {
       const introDur = 3.0;
-      const introP = Math.min((timeline.currentTime - activeClip.start) / introDur, 1.0);
+      const introP = Math.min((currentTimeRef.current - activeClip.start) / introDur, 1.0);
       
       if (introP < 1.0) {
         ctx.fillStyle = `rgba(0,0,0,${1 - Math.pow(introP, 3)})`;
@@ -630,17 +751,58 @@ export default function ReactorStudio() {
     return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
   };
 
+  // --- DRAG HANDLERS (FIXED FOR SCALED PIP) ---
   const handlePointerDown = (e) => {
     if (!editor.editMode && !activeTemplate.isCustom && !media.brollLoaded && !media.cameraOn) return;
     const { x, y } = getCanvasCoords(e);
-    if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { dragRef.current = { target: 'profile', offsetX: x - editor.profilePos.x, offsetY: y - editor.profilePos.y }; return; } }
-    if (media.brollLoaded || media.cameraOn) { const p = editor.pipPos; if (x >= p.x && x <= p.x + p.w && y >= p.y && y <= p.y + p.h) dragRef.current = { target: 'pip', offsetX: x - p.x, offsetY: y - p.y }; }
+    
+    if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { 
+      if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { 
+        dragRef.current = { target: 'profile', offsetX: x - editor.profilePos.x, offsetY: y - editor.profilePos.y }; return; 
+      } 
+    }
+    
+    if (media.brollLoaded || media.cameraOn) { 
+      const baseP = editor.pipPos;
+      const scale = editor.pipScale || 1.0;
+      const pW = Math.round(baseP.w * scale);
+      const pH = Math.round(baseP.h * scale);
+      const pX = Math.round(baseP.x + (baseP.w - pW) / 2);
+      const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
+      
+      if (x >= pX && x <= pX + pW && y >= pY && y <= pY + pH) {
+        dragRef.current = { target: 'pip', offsetX: x - pX, offsetY: y - pY };
+      }
+    }
   };
 
   const handlePointerMove = (e) => {
-    if (!dragRef.current.target) return; e.preventDefault(); const { x, y } = getCanvasCoords(e); const sx = [0, 360, 720];
-    if (dragRef.current.target === 'pip') { let nX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - editor.pipPos.w)); let nY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - editor.pipPos.h)); sx.forEach(pt => { if (Math.abs(nX - pt) < 20) nX = pt; }); dispatch({ type: 'SET_EDITOR', payload: { pipPos: { ...editor.pipPos, x: nX, y: nY } } }); }
-    else if (dragRef.current.target === 'profile') { let nX = Math.max(editor.profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - editor.profilePos.r)); let nY = Math.max(editor.profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - editor.profilePos.r)); dispatch({ type: 'SET_EDITOR', payload: { profilePos: { ...editor.profilePos, x: nX, y: nY } } }); }
+    if (!dragRef.current.target) return; 
+    e.preventDefault(); 
+    const { x, y } = getCanvasCoords(e); 
+    
+    if (dragRef.current.target === 'pip') { 
+      const baseP = editor.pipPos;
+      const scale = editor.pipScale || 1.0;
+      const pW = Math.round(baseP.w * scale);
+      const pH = Math.round(baseP.h * scale);
+      
+      let nX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - pW));
+      let nY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - pH));
+      
+      const sx = [0, 360 - pW/2, 720 - pW];
+      sx.forEach(pt => { if (Math.abs(nX - pt) < 20) nX = pt; });
+      
+      const newBaseX = nX - (baseP.w - pW) / 2;
+      const newBaseY = nY - (baseP.h - pH) / 2;
+      
+      dispatch({ type: 'SET_EDITOR', payload: { pipPos: { ...baseP, x: newBaseX, y: newBaseY } } }); 
+    } 
+    else if (dragRef.current.target === 'profile') { 
+      let nX = Math.max(editor.profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - editor.profilePos.r)); 
+      let nY = Math.max(editor.profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - editor.profilePos.r)); 
+      dispatch({ type: 'SET_EDITOR', payload: { profilePos: { ...editor.profilePos, x: nX, y: nY } } }); 
+    }
   };
 
   const handlePointerUp = () => dragRef.current.target = null;
@@ -677,7 +839,16 @@ export default function ReactorStudio() {
 
   const applyTemplate = (id) => {
     const t = templateMap[id];
-    dispatch({ type: 'SET_EDITOR', payload: { templateId: id, profilePos: t.profile ? { x: t.profile.x, y: t.profile.y, r: t.profile.r } : editor.profilePos, pipPos: { x: 450, y: 800, w: 280, h: 380 } } });
+    if (!t) return; 
+    dispatch({ 
+      type: 'SET_EDITOR', 
+      payload: { 
+        templateId: id, 
+        profilePos: t.profile ? { x: t.profile.x, y: t.profile.y, r: t.profile.r } : editor.profilePos, 
+        pipPos: getPipPosForTemplate(t),
+        pipScale: 1.0 
+      } 
+    });
     dispatch({ type: 'SET_UI', payload: { showGallery: false } });
     const nR = [id, ...ui.recents.filter(r => r !== id)].slice(0, 5);
     localStorage.setItem("reactor-recents", JSON.stringify(nR));
@@ -740,7 +911,7 @@ export default function ReactorStudio() {
 
         <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000', minHeight: 0 }}>
           <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', minHeight: 0 }}>
-            <div style={{ position: 'relative', height: '100%', aspectRatio: '9/16', borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)' }}
+            <div style={{ position: 'relative', height: '100%', aspectRatio: '9/16', borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)', cursor: (editor.editMode || media.brollLoaded || media.cameraOn) ? 'grab' : 'default' }}
               onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
               onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}>
               <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -833,7 +1004,44 @@ export default function ReactorStudio() {
             <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } })} style={{ ...inputStyle, background: editor.editMode ? '#10b981' : '#1f2937', color: editor.editMode ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
               {editor.editMode ? 'DRAGGING ENABLED' : 'ENABLE FREE DRAG'}
             </button>
+            <div style={{ fontSize: '10px', color: '#475569', marginTop: '4px' }}>💡 Tip: PIP can always be dragged if added.</div>
           </div>
+
+          {/* PIP / REACTION CONTROLS */}
+          {(media.brollLoaded || media.cameraOn) && (
+            <div style={panelStyle}>
+              <div style={panelTitleStyle}><Film size={14} /> PIP / Reaction Controls</div>
+              
+              <label style={{ fontSize: '11px', color: '#94a3b8' }}>PIP Size: {Math.round((editor.pipScale || 1) * 100)}%</label>
+              <input type="range" min="0.5" max="2" step="0.05" value={editor.pipScale || 1} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { pipScale: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
+              <div style={{ display: 'flex', gap: '6px' }}>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 0.75 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>S</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.0 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>M</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.5 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>L</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 2.0 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>XL</button>
+              </div>
+
+              <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Quick Position</label>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 50, w: 280, h: 380 } } })} style={pipBtnStyle}>↖ Top Left</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 50, w: 280, h: 380 } } })} style={pipBtnStyle}>↗ Top Right</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 830, w: 280, h: 380 } } })} style={pipBtnStyle}>↙ Bot Left</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 830, w: 280, h: 380 } } })} style={pipBtnStyle}>↘ Bot Right</button>
+              </div>
+
+              <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Frame Style</label>
+              <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+                {[
+                  { id: 'accent', name: 'Accent' },
+                  { id: 'white', name: 'White' },
+                  { id: 'glow', name: 'Glow' },
+                  { id: 'minimal', name: 'Minimal' }
+                ].map(s => (
+                  <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipFrameStyle: s.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: (editor.pipFrameStyle || 'accent') === s.id ? '#10b981' : '#1f2937', color: (editor.pipFrameStyle || 'accent') === s.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{s.name}</button>
+                ))}
+              </div>
+            </div>
+          )}
 
           <div style={panelStyle}>
             <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
@@ -971,3 +1179,4 @@ const bottomBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', bac
 const panelStyle = { background: '#0f172a', border: '1px solid #1f2937', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' };
 const panelTitleStyle = { display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' };
 const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', width: '100%', fontSize: '13px' };
+const pipBtnStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '8px 6px', color: '#94a3b8', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' };

@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/MasterGames.jsx
-// v15.0 Ultimate — Refactored Architecture, Grouped State, Reusable Components
+// v15.1 Ultimate — Added "React Now" Creator Pipeline
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, lazy, Suspense } from 'react';
@@ -8,7 +8,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
-  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight, Flame
+  RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight, Flame, Camera
 } from 'lucide-react';
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
@@ -23,7 +23,6 @@ const STORAGE_KEY_FONT = "mg11_fontscale";
 const LIVE_REFRESH = 45000;
 const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1']; 
 
-// ★ FIX 5: Centralized Magic Strings
 const MatchStatus = Object.freeze({
   LIVE: 'LIVE', FT: 'FT', HT: 'HT', STARTED: 'STARTED',
   IN_PLAY: 'IN_PLAY', PAUSED: 'PAUSED', AET: 'AET', PEN: 'PEN',
@@ -32,7 +31,7 @@ const MatchStatus = Object.freeze({
 
 const LIVE_STATUSES_SET = new Set([
   MatchStatus.IN_PLAY, MatchStatus.PAUSED, MatchStatus.LIVE, 
-  '1H', '2H', 'ET', 'BT' // Keeping API specific ones mapped for safety
+  '1H', '2H', 'ET', 'BT'
 ]);
 
 const TOP_TEAMS_LIST = [
@@ -49,7 +48,6 @@ const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-');
 
-// ★ FIX 6: Extracted Sorting Logic
 const sortMatches = (a, b) => {
   if (a.isLive && !b.isLive) return -1;
   if (!a.isLive && b.isLive) return 1;
@@ -195,6 +193,9 @@ const injectStyles = () => {
     .mg-timeline-text{flex:1;color:#fff;font-weight:700}
     .mg-timeline-divider{text-align:center;font-size:.6em;font-weight:800;color:#64748b;letter-spacing:.05em;padding:8px 0;border-top:1px dashed rgba(255,255,255,0.1);border-bottom:1px dashed rgba(255,255,255,0.1);margin:6px 0}
 
+    .mg-react-banner{display:flex;align-items:center;justify-content:center;gap:8px;padding:14px;background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(59,130,246,.1));border-bottom:1px solid rgba(255,255,255,0.08);color:#10b981;font-size:.8em;font-weight:900;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;transition:all .2s}
+    .mg-react-banner:hover{background:linear-gradient(135deg,rgba(16,185,129,.3),rgba(59,130,246,.2));color:#fff}
+
     .mg-view-details{width:100%;padding:10px;border:none;border-radius:0 0 14px 14px;background:rgba(16,185,129,0.1);color:#10b981;font-size:.75em;font-weight:800;cursor:pointer;transition:all .2s;margin-top:12px;display:flex;align-items:center;justify-content:center;gap:6px}
     .mg-view-details:hover{background:rgba(16,185,129,0.2)}
 
@@ -267,7 +268,6 @@ const injectStyles = () => {
   document.head.appendChild(s);
 };
 
-// ─── Sound Engine ───
 const Sound = {
   ctx: null, on: true, _lg: 0, _lw: 0,
   _init() { if (!this.ctx) { try { this.ctx = new (window.AudioContext || window.webkitAudioContext)(); } catch { return false; } } if (this.ctx.state === 'suspended') this.ctx.resume(); return !!this.ctx; },
@@ -307,7 +307,6 @@ const CMT = {
 };
 const pick = (a) => a[Math.floor(Math.random()*a.length)];
 
-// ─── Custom Hooks ───
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const idRef = useRef(0);
@@ -395,12 +394,10 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
     });
   }, [liveMatches, addToast, isFav, tab, isLiveStatus, setTO]);
 
-  // ★ FIX 3: Group notification state into a single object to reduce prop drilling
   const matchState = useMemo(() => ({ scorePops, flashGoals, statusAnims }), [scorePops, flashGoals, statusAnims]);
   return { matchState, confettiKey };
 }
 
-// ─── Helper Functions ───
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
 
@@ -463,7 +460,6 @@ function normalizeMatch(raw, isPrimary) {
   };
 }
 
-// ─── Memoized UI Components ───
 const MatchCardSkeleton = React.memo(() => (
   <div className="mg-sk-card">
     <div className="mg-sk-row" style={{ justifyContent: 'space-between', marginBottom: '12px' }}>
@@ -632,8 +628,7 @@ const ScoreBreakdown = React.memo(({ match, onNavigate }) => {
   );
 });
 
-// ★ FIX 3: MatchCard now accepts `matchState` instead of individual props
-const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchState, isFav, onFav }) => {
+const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchState, isFav, onFav, onReactNow }) => {
   const isLive = m.isLive;
   const isHT = m.isHT;
   const isFt = m.isFinished;
@@ -711,23 +706,21 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchSta
           </div>
         )}
       </div>
-      {isExp && <div className="mg-expanded"><ScoreBreakdown match={m} onNavigate={onNavigate} /></div>}
+      {isExp && (
+        <div className="mg-expanded">
+          <div className="mg-react-banner" onClick={(e) => { e.stopPropagation(); onReactNow(m); }}>
+            <Camera size={16} /> React Now
+          </div>
+          <ScoreBreakdown match={m} onNavigate={onNavigate} />
+        </div>
+      )}
     </div>
   );
 });
 
 const LeagueSection = React.memo(({
-    group,
-    expanded,
-    onToggle,
-    onNavigate,
-    isExpanded,
-    toggleLeagueExpand,
-    matchState,
-    isFav,
-    onFav,
-    isPinned,
-    onTogglePin
+    group, expanded, onToggle, onNavigate, isExpanded, toggleLeagueExpand,
+    matchState, isFav, onFav, isPinned, onTogglePin, onReactNow
 }) => {
   const limit = group.isTop || isPinned ? 5 : 1;
   const visibleMatches = isExpanded ? group.matches : group.matches.slice(0, limit);
@@ -754,6 +747,7 @@ const LeagueSection = React.memo(({
               matchState={matchState}
               isFav={isFav(m.id)}
               onFav={onFav}
+              onReactNow={onReactNow}
           />
       ))}
       {hiddenCount > 0 && (
@@ -773,7 +767,6 @@ const CompCard = React.memo(({ c }) => (
   </div>
 ));
 
-// ★ FIX 4: Extracted Reusable CompetitionSelector Component
 function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, otherGlobalComps }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
@@ -814,7 +807,6 @@ function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, other
   );
 }
 
-// ─── Main Component ───
 export default function MasterGames() {
   injectStyles();
   const navigate = useNavigate();
@@ -823,7 +815,6 @@ export default function MasterGames() {
   const { fixtures: backupRaw, liveMatches: backupLive, competitions, loading: backupLoading, loadDateFixtures, getStandings, getTeams, refreshFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   
-  // ─── URL & Local State Sync ───
   const [tab, setTab] = useState(searchParams.get('tab') || 'fixtures');
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || getLocalDateStr(0));
   const [compFilter, setCompFilter] = useState(searchParams.get('league') || 'ALL');
@@ -844,14 +835,7 @@ export default function MasterGames() {
   const deferredSearch = useDeferredValue(searchQ);
   const normalizedSearch = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
 
-  // ★ FIX 2: Grouped UI State Variables
-  const [ui, setUI] = useState({
-    soundOn: true,
-    rescued: false,
-    moreDatesOpen: false,
-    leagueFilterOpen: false,
-    showLiveOnly: false,
-  });
+  const [ui, setUI] = useState({ soundOn: true, rescued: false, moreDatesOpen: false, leagueFilterOpen: false, showLiveOnly: false });
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
   
   const [standingsData, setStandingsData] = useState(null);
@@ -869,7 +853,6 @@ export default function MasterGames() {
   const [selectedCompCode, setSelectedCompCode] = useState(null);
   const moreRef = useRef(null);
 
-  // ─── Update URL when state changes ───
   useEffect(() => {
     const params = {};
     if (tab !== 'fixtures') params.tab = tab;
@@ -879,14 +862,8 @@ export default function MasterGames() {
   }, [tab, selectedDate, compFilter, setSearchParams]);
 
   const dates = useMemo(() => {
-    const past = Array.from({ length: 14 }, (_, i) => {
-      const d = getLocalDateStr(-(i + 2)); 
-      return { str: d, label: formatDateShort(d) };
-    }).reverse();
-    const future = Array.from({ length: 14 }, (_, i) => {
-      const d = getLocalDateStr(i + 2); 
-      return { str: d, label: formatDateShort(d) };
-    });
+    const past = Array.from({ length: 14 }, (_, i) => { const d = getLocalDateStr(-(i + 2)); return { str: d, label: formatDateShort(d) }; }).reverse();
+    const future = Array.from({ length: 14 }, (_, i) => { const d = getLocalDateStr(i + 2); return { str: d, label: formatDateShort(d) }; });
     return { past, future };
   }, []);
 
@@ -900,9 +877,7 @@ export default function MasterGames() {
   useEffect(() => { Sound.on = ui.soundOn; }, [ui.soundOn]);
 
   useEffect(() => {
-    const handler = (e) => {
-      if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false }));
-    };
+    const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false })); };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -923,50 +898,35 @@ export default function MasterGames() {
   }, []);
 
   useEffect(() => {
-    if (!isPrimaryDate) {
-      setPrimaryFixtures([]);
-      setPrimaryLoading(false);
-      return;
-    }
+    if (!isPrimaryDate) { setPrimaryFixtures([]); setPrimaryLoading(false); return; }
     fetchPrimary(selectedDate);
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
-  useEffect(() => {
-    if (selectedDate) loadDateFixtures(selectedDate);
-  }, [selectedDate, loadDateFixtures]);
+  useEffect(() => { if (selectedDate) loadDateFixtures(selectedDate); }, [selectedDate, loadDateFixtures]);
 
   useEffect(() => {
     if (!isPrimaryDate) return;
-    const interval = setInterval(() => {
-      fetchPrimary(selectedDate, true);
-    }, LIVE_REFRESH);
+    const interval = setInterval(() => { fetchPrimary(selectedDate, true); }, LIVE_REFRESH);
     return () => clearInterval(interval);
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
   useEffect(() => {
     if (selectedDate !== getLocalDateStr(0)) return;
-
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
       if (!lm || lm.length === 0) return;
       const liveMap = new Map(lm.map(m => [String(m.id), m]));
-      
       setPrimaryFixtures(prev => prev.map(f => {
         const freshMatch = liveMap.get(String(f.id));
         if (freshMatch) return { ...f, ...freshMatch };
         if (f.isLive) {
           const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-          if (ko > 0 && Date.now() > ko + (2 * 60 * 60 * 1000)) {
-            return { ...f, isLive: false, isFinished: true, status: MatchStatus.FT };
-          }
+          if (ko > 0 && Date.now() > ko + (2 * 60 * 60 * 1000)) return { ...f, isLive: false, isFinished: true, status: MatchStatus.FT };
         }
         const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-        if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
-          return { ...f, isStarted: true, status: MatchStatus.STARTED };
-        }
+        if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) return { ...f, isStarted: true, status: MatchStatus.STARTED };
         return f;
       }));
     });
-
     return () => unsub();
   }, [selectedDate]);
 
@@ -978,15 +938,9 @@ export default function MasterGames() {
     const needsRescue = primaryFixtures.length === 0 && backupFixtures.length > 0 && !primaryLoading;
     if (needsRescue && !ui.rescued) {
       setUI(prev => ({ ...prev, rescued: true }));
-      if (!rescueToastSent.current) {
-        rescueToastSent.current = true;
-        addToast({ type: 'rescue', msg: pick(CMT.rescue), detail: `Showing ${backupFixtures.length} games from backup`, dur: 4000 });
-      }
+      if (!rescueToastSent.current) { rescueToastSent.current = true; addToast({ type: 'rescue', msg: pick(CMT.rescue), detail: `Showing ${backupFixtures.length} games from backup`, dur: 4000 }); }
     }
-    if (!needsRescue && ui.rescued) {
-      setUI(prev => ({ ...prev, rescued: false }));
-      rescueToastSent.current = false;
-    }
+    if (!needsRescue && ui.rescued) { setUI(prev => ({ ...prev, rescued: false })); rescueToastSent.current = false; }
   }, [primaryFixtures.length, backupFixtures.length, primaryLoading, ui.rescued, addToast]);
 
   useEffect(() => {
@@ -994,39 +948,26 @@ export default function MasterGames() {
       const live = primaryFixtures.filter(m => m.isLive && (m.homeScore > 0 || m.awayScore > 0));
       if (live.length > 0) {
         welcomeToastShown.current = true;
-        setTimeout(() => {
-          addToast({ type: 'status', st: 'live', msg: `${live.length} live match${live.length > 1 ? 'es' : ''} with goals!`, detail: 'Scores updating in real-time', dur: 3500 });
-        }, 800);
+        setTimeout(() => { addToast({ type: 'status', st: 'live', msg: `${live.length} live match${live.length > 1 ? 'es' : ''} with goals!`, detail: 'Scores updating in real-time', dur: 3500 }); }, 800);
       }
     }
   }, [primaryFixtures, primaryLoading, addToast]);
 
-  // ★ FIX: Date Picker Override Fix - Reset ALL UI elements on date change
   useEffect(() => {
-    rescueToastSent.current = false;
-    welcomeToastShown.current = false;
-    setExpanded(null);
-    setExpandedLeagues(new Set());
-    setSearchQ('');
+    rescueToastSent.current = false; welcomeToastShown.current = false;
+    setExpanded(null); setExpandedLeagues(new Set()); setSearchQ('');
     setUI(prev => ({ ...prev, rescued: false, leagueFilterOpen: false, moreDatesOpen: false, showLiveOnly: false }));
   }, [selectedDate]);
 
   const allFixtures = useMemo(() => {
     let list = primaryFixtures.length > 0 ? primaryFixtures : backupFixtures;
     const uniqueIds = new Set();
-    return list.filter(m => {
-      const idStr = String(m.id);
-      if (uniqueIds.has(idStr)) return false;
-      uniqueIds.add(idStr);
-      return true;
-    });
+    return list.filter(m => { const idStr = String(m.id); if (uniqueIds.has(idStr)) return false; uniqueIds.add(idStr); return true; });
   }, [primaryFixtures, backupFixtures]);
 
   const fixtureCompList = useMemo(() => {
     const map = new Map();
-    allFixtures.forEach(m => {
-      if (!map.has(m.leagueName)) map.set(m.leagueName, { value: m.leagueName, name: m.leagueName, emblem: m.leagueLogo });
-    });
+    allFixtures.forEach(m => { if (!map.has(m.leagueName)) map.set(m.leagueName, { value: m.leagueName, name: m.leagueName, emblem: m.leagueLogo }); });
     return [...map.values()].sort((a, b) => (leaguePriorityMap[a.name] ?? 99) - (leaguePriorityMap[b.name] ?? 99));
   }, [allFixtures, leaguePriorityMap]);
 
@@ -1034,21 +975,17 @@ export default function MasterGames() {
     let list = allFixtures;
     if (compFilter !== 'ALL') list = list.filter(m => String(m.leagueName) === compFilter);
     if (ui.showLiveOnly) list = list.filter(m => m.isLive);
-    if (normalizedSearch) {
-      const terms = normalizedSearch.split(/\s+/).filter(Boolean);
-      if (terms.length) list = list.filter(m => matchQ(m, terms));
-    }
+    if (normalizedSearch) { const terms = normalizedSearch.split(/\s+/).filter(Boolean); if (terms.length) list = list.filter(m => matchQ(m, terms)); }
     return list;
   }, [allFixtures, compFilter, ui.showLiveOnly, normalizedSearch]);
 
   const topMatches = useMemo(() => {
     return allFixtures.filter(m => {
-      const home = norm(m.homeName);
-      const away = norm(m.awayName);
+      const home = norm(m.homeName); const away = norm(m.awayName);
       const isTopHome = [...TOP_TEAMS_SET].some(t => home.includes(t));
       const isTopAway = [...TOP_TEAMS_SET].some(t => away.includes(t));
       return isTopHome || isTopAway;
-    }).sort(sortMatches); // ★ FIX 6: Use extracted sortMatches
+    }).sort(sortMatches);
   }, [allFixtures]);
 
   const topMatchIds = useMemo(() => new Set(topMatches.map(m => String(m.id))), [topMatches]);
@@ -1058,19 +995,15 @@ export default function MasterGames() {
     displayFixtures.forEach(m => {
       if (favs.has(String(m.id))) return; 
       if (topMatchIds.has(String(m.id))) return; 
-      
       const key = m.leagueName || 'Other';
       if (!map.has(key)) map.set(key, { name: key, logo: m.leagueLogo, matches: [] });
       map.get(key).matches.push(m);
     });
-
-    map.forEach(g => g.matches.sort(sortMatches)); // ★ FIX 6: Use extracted sortMatches
-
+    map.forEach(g => g.matches.sort(sortMatches));
     return [...map.values()].sort((a, b) => {
       const pA = pinnedLeagues.has(a.name) ? 0 : 1;
       const pB = pinnedLeagues.has(b.name) ? 0 : 1;
       if (pA !== pB) return pA - pB;
-
       const lA = leaguePriorityMap[a.name] ?? 99;
       const lB = leaguePriorityMap[b.name] ?? 99;
       if (lA !== lB) return lA - lB;
@@ -1083,21 +1016,11 @@ export default function MasterGames() {
   }, [grouped]);
 
   const toggleLeagueExpand = useCallback((leagueName) => {
-    setExpandedLeagues(prev => {
-      const n = new Set(prev);
-      if (n.has(leagueName)) n.delete(leagueName);
-      else n.add(leagueName);
-      return n;
-    });
+    setExpandedLeagues(prev => { const n = new Set(prev); if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName); return n; });
   }, []);
 
   const globalCompList = useMemo(() => {
-    return (competitions || []).map(c => ({
-      id: String(c.id),
-      code: c.code,
-      name: c.name,
-      emblem: c.emblem
-    })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    return (competitions || []).map(c => ({ id: String(c.id), code: c.code, name: c.name, emblem: c.emblem })).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }, [competitions]);
 
   const topGlobalComps = useMemo(() => globalCompList.filter(c => TOP_5_CODES.includes(c.code)), [globalCompList]);
@@ -1112,11 +1035,7 @@ export default function MasterGames() {
 
   const handleTabChange = useCallback(async (t) => {
     setTab(t);
-    if (t === 'standings' || t === 'teams') {
-      if (!selectedCompCode && globalCompList.length > 0) {
-        setSelectedCompCode(globalCompList[0].code || globalCompList[0].id);
-      }
-    }
+    if (t === 'standings' || t === 'teams') { if (!selectedCompCode && globalCompList.length > 0) setSelectedCompCode(globalCompList[0].code || globalCompList[0].id); }
   }, [selectedCompCode, globalCompList]);
 
   const loadStandings = useCallback(async (code, force = false) => {
@@ -1150,12 +1069,7 @@ export default function MasterGames() {
     return (backupLive || []).map(m => normalizeMatch(m, false)).filter(m => m.isLive);
   }, [primaryFixtures, backupLive]);
 
-  const { matchState, confettiKey } = useNotifications({
-    liveMatches,
-    isFav,
-    tab,
-    addToast
-  });
+  const { matchState, confettiKey } = useNotifications({ liveMatches, isFav, tab, addToast });
 
   const handleMatchToggle = useCallback((matchId) => {
     setExpanded(prev => prev === matchId ? null : matchId);
@@ -1169,13 +1083,28 @@ export default function MasterGames() {
     }
   }, [displayFixtures, navigate]);
 
+  // ★ KILLER FEATURE: React Now Handler
+  const handleReactNow = useCallback((match) => {
+    navigate('/studio/reactor', {
+      state: {
+        fixtureId: match.id,
+        homeTeam: match.homeName,
+        awayTeam: match.awayName,
+        homeLogo: match.homeLogo,
+        awayLogo: match.awayLogo,
+        score: { home: match.homeScore, away: match.awayScore },
+        minute: match.minute,
+        scorer: match.homeScore > match.awayScore ? match.homeName : match.awayName, 
+        competition: match.leagueName
+      }
+    });
+  }, [navigate]);
+
   const handleRefresh = useCallback(async () => {
     await Promise.all([refreshFixtures(), fetchPrimary(selectedDate)]);
   }, [refreshFixtures, fetchPrimary, selectedDate]);
 
-  const onSearchChange = useCallback((e) => {
-    setSearchQ(e.target.value);
-  }, []);
+  const onSearchChange = useCallback((e) => { setSearchQ(e.target.value); }, []);
 
   const currentLeagueEmblem = useMemo(() => {
     if (compFilter === 'ALL') return null;
@@ -1195,7 +1124,6 @@ export default function MasterGames() {
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
       <div className="mg-wrap">
-        {/* Clean Header */}
         <div className="mg-hdr">
           <div className="mg-hdr-title">
             <h1><Activity size={18} style={{ color: '#10b981' }} /> Master Games</h1>
@@ -1213,33 +1141,16 @@ export default function MasterGames() {
           </div>
         </div>
 
-        {/* Stats */}
         <div className="mg-stats">
-          <div className="mg-schip">
-            <div className="val live-c">{liveCount}</div>
-            <div className="lbl">Live</div>
-          </div>
-          <div className="mg-schip">
-            <div className="val total-c">{displayFixtures.length}</div>
-            <div className="lbl">Matches</div>
-          </div>
-          <div className="mg-schip">
-            <div className="val fav-c">{favs.size}</div>
-            <div className="lbl">Favourites</div>
-          </div>
+          <div className="mg-schip"><div className="val live-c">{liveCount}</div><div className="lbl">Live</div></div>
+          <div className="mg-schip"><div className="val total-c">{displayFixtures.length}</div><div className="lbl">Matches</div></div>
+          <div className="mg-schip"><div className="val fav-c">{favs.size}</div><div className="lbl">Favourites</div></div>
         </div>
 
-        {/* Date Navigation */}
         <div className="mg-datenav">
-          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>
-            Yesterday
-          </button>
-          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(0))}>
-            Today
-          </button>
-          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(1))}>
-            Tomorrow
-          </button>
+          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(-1))}>Yesterday</button>
+          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(0))}>Today</button>
+          <button className={`mg-nav-btn ${selectedDate === getLocalDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getLocalDateStr(1))}>Tomorrow</button>
           <div className="mg-more-wrap" ref={moreRef}>
             <button className={`mg-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}>
               <Calendar size={16} /> More <ChevronDown size={16} />
@@ -1247,23 +1158,14 @@ export default function MasterGames() {
             {ui.moreDatesOpen && (
               <div className="mg-more-dropdown">
                 <div className="mg-more-label">Past Dates</div>
-                {dates.past.map(d => (
-                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
-                    {d.label}
-                  </button>
-                ))}
+                {dates.past.map(d => (<button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>))}
                 <div className="mg-more-label" style={{ marginTop: '8px' }}>Future Dates</div>
-                {dates.future.map(d => (
-                  <button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
-                    {d.label}
-                  </button>
-                ))}
+                {dates.future.map(d => (<button key={d.str} className={`mg-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>))}
               </div>
             )}
           </div>
         </div>
 
-        {/* Tabs */}
         <div className="mg-tabs">
           {['fixtures', 'favourites', 'standings', 'teams', 'competitions'].map(t => (
             <button key={t} className={`mg-tab ${tab === t ? 'active' : ''}`} onClick={() => handleTabChange(t)}>
@@ -1272,21 +1174,17 @@ export default function MasterGames() {
           ))}
         </div>
 
-        {/* Always Visible Search */}
         <div className="mg-search-static">
           <Search size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
           <input type="text" placeholder="Search teams, leagues, or matches..." value={searchQ} onChange={onSearchChange} />
           {searchQ && <button className="mg-search-clear" onClick={() => setSearchQ('')}><X size={18} /></button>}
         </div>
 
-        {/* ═══ Fixtures Tab ═══ */}
         {tab === 'fixtures' && (
           <>
             {ui.rescued && (
               <div className="mg-rescue">
-                <div className="mg-rescue-icon">
-                  <AlertTriangle size={18} />
-                </div>
+                <div className="mg-rescue-icon"><AlertTriangle size={18} /></div>
                 <div>
                   <div className="mg-rescue-title">Backup Source Active</div>
                   <div className="mg-rescue-sub">Showing {backupFixtures.length} games from global feed</div>
@@ -1294,7 +1192,6 @@ export default function MasterGames() {
               </div>
             )}
 
-            {/* Top Matches Section */}
             {topMatches.length > 0 && !searchQ && (
               <div className="mg-section">
                 <div className="mg-league-hd">
@@ -1302,12 +1199,11 @@ export default function MasterGames() {
                   <span className="mg-league-name">Top Matches</span>
                 </div>
                 {topMatches.map((m, i) => 
-                  <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />
+                  <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} onReactNow={handleReactNow} />
                 )}
               </div>
             )}
 
-            {/* Trending Matches Section */}
             {trendingMatches.length > 0 && !searchQ && (
               <div className="mg-section">
                 <div className="mg-league-hd">
@@ -1315,12 +1211,11 @@ export default function MasterGames() {
                   <span className="mg-league-name">Trending Live</span>
                 </div>
                 {trendingMatches.map((m, i) => 
-                  <MatchCard key={`trend-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />
+                  <MatchCard key={`trend-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} onReactNow={handleReactNow} />
                 )}
               </div>
             )}
 
-            {/* League Dropdown Filter */}
             {fixtureCompList.length > 0 && (
               <div className="mg-filter-row">
                 <button className="mg-pill" style={{ width: '100%', justifyContent: 'space-between' }} onClick={() => toggleUI('leagueFilterOpen')}>
@@ -1332,9 +1227,7 @@ export default function MasterGames() {
                 </button>
                 {ui.leagueFilterOpen && (
                   <div className="mg-filter-panel" style={{ position: 'static' }}>
-                    <button className={`mg-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setUI(prev => ({ ...prev, leagueFilterOpen: false })); }}>
-                      All Leagues
-                    </button>
+                    <button className={`mg-filter-item ${compFilter === 'ALL' ? 'active' : ''}`} onClick={() => { setCompFilter('ALL'); setUI(prev => ({ ...prev, leagueFilterOpen: false })); }}>All Leagues</button>
                     {fixtureCompList.map(c => (
                       <button key={c.value} className={`mg-filter-item ${compFilter === String(c.value) ? 'active' : ''}`} onClick={() => { setCompFilter(String(c.value)); setUI(prev => ({ ...prev, leagueFilterOpen: false })); }}>
                         {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
@@ -1371,7 +1264,7 @@ export default function MasterGames() {
                       <Star size={18} className="mg-fav-icon" />
                       <span className="mg-league-name">Favourites</span>
                     </div>
-                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} onReactNow={handleReactNow} />)}
                   </div>
                 )}
 
@@ -1389,6 +1282,7 @@ export default function MasterGames() {
                     onFav={toggleFav}
                     isPinned={pinnedLeagues.has(g.name)}
                     onTogglePin={togglePinLeague}
+                    onReactNow={handleReactNow}
                   />
                 ))}
 
@@ -1406,10 +1300,10 @@ export default function MasterGames() {
                     onFav={toggleFav}
                     isPinned={pinnedLeagues.has(g.name)}
                     onTogglePin={togglePinLeague}
+                    onReactNow={handleReactNow}
                   />
                 ))}
 
-                {/* SEO Crawlable Links Footer */}
                 <div className="mg-seo-links">
                   <h3>Today's Match Links</h3>
                   {displayFixtures.slice(0, 50).map(m => {
@@ -1431,7 +1325,6 @@ export default function MasterGames() {
           </>
         )}
 
-        {/* ═══ Favourites Tab ═══ */}
         {tab === 'favourites' && (
           <>
             {favMatches.length > 0 ? (
@@ -1440,7 +1333,7 @@ export default function MasterGames() {
                   <Star size={18} className="mg-fav-icon" />
                   <span className="mg-league-name">Favourites ({favMatches.length})</span>
                 </div>
-                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} />)}
+                {favMatches.map((m, i) => <MatchCard key={`fav-tab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFav} onReactNow={handleReactNow} />)}
               </div>
             ) : (
               <div className="mg-empty">
@@ -1452,11 +1345,9 @@ export default function MasterGames() {
           </>
         )}
 
-        {/* ═══ Standings Tab (ALL LEAGUES) ═══ */}
         {tab === 'standings' && (
           <Suspense fallback={<Skeleton count={3} />}>
             <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
-
             {standingsLoading ? (
               <Skeleton count={3} />
             ) : standingsData && standingsData.standings ? (
@@ -1503,11 +1394,9 @@ export default function MasterGames() {
           </Suspense>
         )}
 
-        {/* ═══ Teams Tab (ALL LEAGUES) ═══ */}
         {tab === 'teams' && (
           <Suspense fallback={<Skeleton count={5} />}>
             <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
-
             {teamsLoading ? (
               <Skeleton count={5} />
             ) : teamsData && teamsData.teams ? (
@@ -1528,7 +1417,6 @@ export default function MasterGames() {
           </Suspense>
         )}
 
-        {/* ═══ Competitions Tab ═══ */}
         {tab === 'competitions' && (
           <Suspense fallback={<Skeleton count={5} />}>
             {competitions && competitions.length > 0 ? (
