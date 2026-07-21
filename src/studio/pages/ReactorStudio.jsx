@@ -214,7 +214,7 @@ const initialState = {
     videoZoom: 1, videoPanX: 0, videoPanY: 0
   },
   timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
-  ui: { showGallery: false, showGuides: false, isExporting: false, exportFormat: null, recordedUrl: null, recordedExt: 'webm', isLoadingProject: true,
+  ui: { showGallery: false, showGuides: false, isExporting: false, exportFormat: null, exportFps: null, recordedUrl: null, recordedExt: 'webm', isLoadingProject: true,
         favorites: JSON.parse(localStorage.getItem("reactor-favorites")) || [], recents: JSON.parse(localStorage.getItem("reactor-recents")) || [],
         searchQuery: "", activeCategory: "All", layers: { video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true } }
 };
@@ -244,6 +244,7 @@ export default function ReactorStudio() {
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
   const overlayCanvasRef = useRef(document.createElement('canvas')); 
+  const exportCanvasRef = useRef(null); // 1080x1920 export canvas
   const fileInputRefs = useRef({ video: null, broll: null, image: null, audio: null, logo: null });
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -738,6 +739,14 @@ export default function ReactorStudio() {
         ctx.restore();
       }
     }
+
+    // --- EXPORT UPSCALER: Draw 720x1280 canvas onto 1080x1920 export canvas ---
+    if (ui.isExporting && exportCanvasRef.current) {
+      const eCtx = exportCanvasRef.current.getContext('2d');
+      eCtx.imageSmoothingEnabled = true;
+      eCtx.imageSmoothingQuality = 'high';
+      eCtx.drawImage(canvas, 0, 0, 1080, 1920);
+    }
   };
 
   useEffect(() => {
@@ -807,24 +816,54 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => dragRef.current.target = null;
 
-  const handleExportVideo = async (format = 'webm') => {
+  const handleExportVideo = async (format = 'mp4', fps = 30) => {
     const vid = sourceVideoRef.current; if (!canvasRef.current || ui.isExporting || !vid || !activeClip) return;
-    dispatch({ type: 'SET_UI', payload: { isExporting: true, exportFormat: format } });
+    
+    // Create 1080x1920 invisible canvas for true HD export
+    const exportC = document.createElement('canvas');
+    exportC.width = 1080;
+    exportC.height = 1920;
+    exportCanvasRef.current = exportC;
+    
+    dispatch({ type: 'SET_UI', payload: { isExporting: true, exportFormat: format, exportFps: fps } });
     dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
     vid.pause(); vid.currentTime = activeClip.start;
     await new Promise(r => setTimeout(r, 200));
-    let trueDur = vid.duration; if (!isFinite(trueDur)) { vid.currentTime = 1e101; await new Promise(r => setTimeout(r, 200)); trueDur = vid.duration; vid.currentTime = activeClip.start; await new Promise(r => setTimeout(r, 200)); }
-    let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDur; if (end > trueDur) end = trueDur;
-    if (activeClip.start >= end - 0.1) { alert("Invalid clip duration."); dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null } }); return; }
+    
+    let trueDur = vid.duration; 
+    if (!isFinite(trueDur)) { vid.currentTime = 1e101; await new Promise(r => setTimeout(r, 200)); trueDur = vid.duration; vid.currentTime = activeClip.start; await new Promise(r => setTimeout(r, 200)); }
+    let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDur; 
+    if (end > trueDur) end = trueDur;
+    if (activeClip.start >= end - 0.1) { 
+      alert("Invalid clip duration."); 
+      dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null, exportFps: null } }); 
+      exportCanvasRef.current = null;
+      return; 
+    }
+    
     await new Promise(r => setTimeout(r, 300));
     const wM = vid.muted, wV = vid.volume; vid.muted = false; vid.volume = 0;
-    const fps = 30; const cS = canvasRef.current.captureStream(fps); let aC;
+    
+    const cS = exportC.captureStream(fps); 
+    let aC;
     try {
-      aC = new (window.AudioContext || window.webkitAudioContext)(); if (aC.state === 'suspended') await aC.resume();
-      const aD = aC.createMediaStreamDestination(); let hA = false;
-      if (streamRef.current && streamRef.current.getAudioTracks().length > 0) { aC.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks())).connect(aD); hA = true; }
-      if (vid.captureStream) { try { const vS = vid.captureStream(); if (vS.getAudioTracks().length > 0) { aC.createMediaStreamSource(vS).connect(aD); hA = true; } } catch {} }
-      if (audioRef.current.src) { try { audioRef.current.play(); const aS = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); if (aS.getAudioTracks().length > 0) { aC.createMediaStreamSource(aS).connect(aD); hA = true; } } catch {} }
+      aC = new (window.AudioContext || window.webkitAudioContext)(); 
+      if (aC.state === 'suspended') await aC.resume();
+      const aD = aC.createMediaStreamDestination(); 
+      let hA = false;
+      if (streamRef.current && streamRef.current.getAudioTracks().length > 0) { 
+        aC.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks())).connect(aD); hA = true; 
+      }
+      if (vid.captureStream) { 
+        try { const vS = vid.captureStream(); if (vS.getAudioTracks().length > 0) { aC.createMediaStreamSource(vS).connect(aD); hA = true; } } catch {} 
+      }
+      if (audioRef.current.src) { 
+        try { 
+          audioRef.current.play(); 
+          const aS = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); 
+          if (aS.getAudioTracks().length > 0) { aC.createMediaStreamSource(aS).connect(aD); hA = true; } 
+        } catch {} 
+      }
       const o = aC.createOscillator(); const g = aC.createGain(); g.gain.value = 0.0; o.connect(g); g.connect(aD); g.connect(aC.destination); o.start();
       aD.stream.getAudioTracks().forEach(t => cS.addTrack(t));
     } catch(e) {}
@@ -834,34 +873,63 @@ export default function ReactorStudio() {
     let fileExt = 'webm';
 
     if (format === 'mp4') {
-      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
-        mT = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'; fileExt = 'mp4';
-      } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
-        mT = 'video/mp4;codecs=h264'; fileExt = 'mp4';
-      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-        mT = 'video/mp4'; fileExt = 'mp4';
+      // Strictly try to enforce MP4 / H.264 codecs
+      const mp4Codecs = [
+        'video/mp4;codecs=avc1.640029,mp4a.40.2', // High 5.0 (best for 1080p 60fps)
+        'video/mp4;codecs=avc1.640028,mp4a.40.2', // High 4.0 (best for 1080p 30fps)
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // Baseline 3.0
+        'video/mp4;codecs=h264',
+        'video/mp4'
+      ];
+      mT = mp4Codecs.find(c => MediaRecorder.isTypeSupported(c));
+      
+      if (mT) {
+        fileExt = 'mp4';
       } else {
-        alert("⚠️ MP4 is not directly supported by Chrome/Firefox. Falling back to WebM. For true MP4, use Safari browser.");
-        mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
-        fileExt = 'webm';
+        // Graceful fallback to H.264 WebM if browser blocks MP4 (common in Chrome)
+        if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+          mT = 'video/webm;codecs=h264';
+          fileExt = 'webm';
+          alert("⚠️ Your browser restricts direct .mp4 recording. Exporting as H.264 .webm instead (still 1080p 60fps/30fps). For native .mp4, use Safari.");
+        } else {
+          mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm;codecs=vp8';
+          fileExt = 'webm';
+          alert("⚠️ Your browser restricts direct .mp4 recording. Exporting as standard .webm. For native .mp4, use Safari.");
+        }
       }
     } else {
       mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
       fileExt = 'webm';
     }
 
-    const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: 8000000 });
+    // Enforce 8-15 Mbps bitrate depending on frame rate
+    const bitrate = fps === 60 ? 15000000 : 10000000;
+    const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: bitrate });
+    
     r.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
     r.onstop = async () => { 
       let b = new Blob(chunksRef.current, { type: mT }); 
       if (fileExt === 'webm') {
         b = await fixWebmDuration(b, (end - activeClip.start) * 1000);
       }
-      dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(b), recordedExt: fileExt, isExporting: false, exportFormat: null } }); 
-      vid.pause(); if (audioRef.current) audioRef.current.pause(); vid.muted = wM; vid.volume = wV; cS.getTracks().forEach(t => t.stop()); if (aC) aC.close(); 
+      dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(b), recordedExt: fileExt, isExporting: false, exportFormat: null, exportFps: null } }); 
+      vid.pause(); 
+      if (audioRef.current) audioRef.current.pause(); 
+      vid.muted = wM; vid.volume = wV; 
+      cS.getTracks().forEach(t => t.stop()); 
+      if (aC) aC.close(); 
+      exportCanvasRef.current = null; // cleanup
     };
-    const cI = setInterval(() => { if (vid.currentTime >= end - 0.05 || vid.ended) { clearInterval(cI); if (r.state !== 'inactive') r.stop(); } }, 50);
-    r.start(100); try { await vid.play(); } catch {}
+    
+    const cI = setInterval(() => { 
+      if (vid.currentTime >= end - 0.05 || vid.ended) { 
+        clearInterval(cI); 
+        if (r.state !== 'inactive') r.stop(); 
+      } 
+    }, 50);
+    
+    r.start(100); 
+    try { await vid.play(); } catch {}
   };
 
   const applyTemplate = (id) => {
@@ -919,11 +987,14 @@ export default function ReactorStudio() {
             </>
           ) : (
             <>
-              <button onClick={() => handleExportVideo('mp4')} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export as MP4 (Best for all platforms. Requires Safari browser)">
-                {ui.isExporting && ui.exportFormat === 'mp4' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export MP4
+              <button onClick={() => handleExportVideo('mp4', 30)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p MP4 at 30 FPS (~10 Mbps)">
+                {ui.isExporting && ui.exportFormat === 'mp4' && ui.exportFps === 30 ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} MP4 30fps
               </button>
-              <button onClick={() => handleExportVideo('webm')} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#3b82f6', borderColor: '#3b82f6', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export as WebM (Fast, works in Chrome/Firefox)">
-                {ui.isExporting && ui.exportFormat === 'webm' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export WebM
+              <button onClick={() => handleExportVideo('mp4', 60)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p MP4 at 60 FPS (~15 Mbps)">
+                {ui.isExporting && ui.exportFormat === 'mp4' && ui.exportFps === 60 ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} MP4 60fps
+              </button>
+              <button onClick={() => handleExportVideo('webm', 30)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#3b82f6', borderColor: '#3b82f6', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p WebM (Fast)">
+                {ui.isExporting && ui.exportFormat === 'webm' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} WebM
               </button>
             </>
           )}
