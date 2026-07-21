@@ -1,9 +1,9 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// v21.3 — Glass UI + Viral Share & Earn (Optimized)
+// ZOKA PRO — Lightning Fast, Memoized, No Double Fetching
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue } from 'react';
+import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import {
   Clock, CheckCircle2, TrendingUp, Target, BarChart3,
@@ -19,7 +19,7 @@ import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
 import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
-import { fetchFixtures } from '../utils/api';
+import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api'; // ★ FIX: Import global subscription
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import SEO from '../components/SEO';
@@ -406,12 +406,12 @@ function ScoreStepper({ value, onChange }) {
 }
 
 /* ═══════════════════════════════════════════════════
-   ZOKA PICK CARD
+   ZOKA PICK CARD (Memoized for performance)
    ═══════════════════════════════════════════════════ */
-function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onShare }) {
+const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onShare }) {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
-  const mid = String(pick.matchId); // Cached ID
+  const mid = String(pick.matchId);
 
   const res = useMemo(() => {
     if (pick.adminPick && isFin && pick.homeScore != null) {
@@ -503,13 +503,13 @@ function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onSh
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
-   PREDICTION CARD
+   PREDICTION CARD (Memoized for performance)
    ═══════════════════════════════════════════════════ */
-function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
-  const mid = pred.id || String(pred.matchId); // Cached ID
+const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
+  const mid = pred.id || String(pred.matchId);
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
@@ -638,7 +638,7 @@ function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEd
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
    RESULTS OVERLAY (Centered Modal)
@@ -790,12 +790,11 @@ export default function Predictions() {
   const mountedRef = useRef(true);
   const [liveFixtures, setLiveFixtures] = useState([]);
 
-  // ★ FIX 3: Guard for Admin Auto-Resolver to prevent duplicate calls
   const resolving = useRef(new Set());
 
   const isToday = selDate === todayStr();
 
-  /* ═══ DERIVED DATA (Moved up to fix initialization order) ═══ */
+  /* ═══ DERIVED DATA ═══ */
   const currentFeatured = isToday ? (featuredPreds || []) : (nonTodayData.featured || []);
   const currentZoka = isToday ? (zokaPicks?.matches || []) : (nonTodayData.zoka || []);
   const currentUserPreds = isToday ? (ctxUserPreds || {}) : (nonTodayData.userPreds || {});
@@ -804,7 +803,6 @@ export default function Predictions() {
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
-  // ★ FIX 4: O(1) Live fixture lookup map
   const fixtureMap = useMemo(() => {
     return new Map(liveFixtures.map(f => [String(f.id), f]));
   }, [liveFixtures]);
@@ -812,7 +810,7 @@ export default function Predictions() {
   const mergedFeatured = useMemo(() => {
     if (!isToday || !fixtureMap.size) return currentFeatured;
     return currentFeatured.map(p => {
-      const mid = String(p.matchId); // Cached ID
+      const mid = String(p.matchId);
       const fx = fixtureMap.get(mid);
       if (fx) {
         return {
@@ -832,7 +830,7 @@ export default function Predictions() {
   const mergedZoka = useMemo(() => {
     if (!isToday || !fixtureMap.size) return currentZoka;
     return currentZoka.map(p => {
-      const mid = String(p.matchId); // Cached ID
+      const mid = String(p.matchId);
       const fx = fixtureMap.get(mid);
       if (fx) {
         return {
@@ -847,7 +845,6 @@ export default function Predictions() {
     });
   }, [currentZoka, fixtureMap, isToday]);
 
-  // Maps need to be initialized BEFORE handleShare
   const userPredMap = useMemo(() => {
     const m = new Map();
     Object.values(currentUserPreds).forEach(p => {
@@ -863,7 +860,6 @@ export default function Predictions() {
     return m;
   }, [currentResults]);
 
-  // Stats need to be initialized BEFORE handleBannerShare
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
     mergedFeatured.forEach(p => {
@@ -883,13 +879,11 @@ export default function Predictions() {
     return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
   }, [mergedFeatured, userPredMap, resultMap]);
 
-  /* ═══ SHARE & EARN LOGIC (UNIQUE LINK + EMBEDDED MESSAGE) ═══ */
+  /* ═══ SHARE & EARN LOGIC ═══ */
   const handleShare = useCallback(async (pred, isZoka = false) => {
     if (!uid) { setShowLogin(true); return; }
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
-    
-    // ★ FIX 5: Encode the UID in the share URL
     const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${encodeURIComponent(uid)}`;
 
     let homeName = 'Home', awayName = 'Away', scoreText = '';
@@ -907,7 +901,6 @@ export default function Predictions() {
       if (up) scoreText = `${up.homeScore}-${up.awayScore}`;
     }
 
-    // ★ FIX 9: Keep text and URL separate for navigator.share
     const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore.`;
 
     if (navigator.share) {
@@ -916,7 +909,6 @@ export default function Predictions() {
         setToast('Shared! Earn points when friends visit.');
       } catch (err) { if (err.name !== 'AbortError') console.error('Share failed', err); }
     } else {
-      // ★ FIX 6: Fallback with combined text and better error handling
       const fullText = `${shareText}\n\n${shareUrl}`;
       try {
         await navigator.clipboard.writeText(fullText);
@@ -928,18 +920,13 @@ export default function Predictions() {
     }
   }, [uid, setShowLogin, userPredMap]);
 
-  // ★ VIRAL BANNER SHARE (Unique Link + Embedded Message)
   const handleBannerShare = useCallback(async () => {
-    if (!uid) {
-      setShowLogin(true);
-      return;
-    }
+    if (!uid) { setShowLogin(true); return; }
 
     const total = userStats?.predicted || myDayStats.pred || 0;
     const correct = (userStats?.exact || myDayStats.ex || 0) + (userStats?.result || myDayStats.rs || 0);
     const points = userStats?.points || myDayStats.pts || 0;
 
-    // ★ FIX 5: Encode the UID in the share URL
     const shareUrl = `${window.location.origin}/predictions?ref=${encodeURIComponent(uid)}`;
 
     let shareText;
@@ -963,8 +950,7 @@ export default function Predictions() {
     }
   }, [uid, userStats, myDayStats, setShowLogin]);
 
-  // ★ REFERRAL VISIT TRACKING (Records the visit in Firestore)
-  // FIX 1 & 2: Backend Cloud Functions should verify and process the 'pending' status safely.
+  // ★ REFERRAL VISIT TRACKING
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const referrer = params.get('ref');
@@ -983,7 +969,7 @@ export default function Predictions() {
             visitorDeviceId: deviceId,
             visitorUid: uid || null,
             visitedAt: serverTimestamp(),
-            status: 'pending' // Will be verified by backend
+            status: 'pending'
           }).catch(e => console.error("Referral track err:", e));
         }
       }
@@ -991,39 +977,22 @@ export default function Predictions() {
   }, [location.search, uid]);
 
   /* ═══ EFFECTS ═══ */
+  
+  // ★ FIX: 30-second interval for lock timers instead of 1s to save CPU/Battery
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // ★ FIX 7: Visibility-aware live polling
+  // ★ FIX: Use global live subscription to prevent duplicate API calls
   useEffect(() => {
     if (!isToday) return;
-    let cancelled = false;
-    const loadLive = async () => {
-      if (document.visibilityState === 'hidden') return;
-      try {
-        const res = await fetchFixtures(todayStr());
-        if (!cancelled) setLiveFixtures(res?.matches || []);
-      } catch (e) {}
-    };
-    
-    loadLive();
-    
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible') loadLive();
-    }, 15000);
-    
-    const onVisibilityChange = () => {
-      if (document.visibilityState === 'visible') loadLive();
-    };
-    document.addEventListener('visibilitychange', onVisibilityChange);
-
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-    };
+    setLiveFixtures([]); // Clear when date changes
+    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+      setLiveFixtures(lm || []);
+      setNow(Date.now()); // Refresh lock timers when live data arrives
+    });
+    return () => unsub();
   }, [isToday]);
 
   useEffect(() => {
@@ -1192,12 +1161,10 @@ export default function Predictions() {
         robots="index,follow"
       />
 
-      {/* Copy Toast */}
       {copyToast && (
         <div className="v21-toast-copy">Copied to clipboard!</div>
       )}
 
-      {/* Header */}
       <div className="v21-hdr">
         <button className="v21-hdr-btn" onClick={() => nav('/')}><ArrowLeft size={12} /> Home</button>
         <div className="v21-hdr-title">
@@ -1210,7 +1177,6 @@ export default function Predictions() {
         <button className="v21-hdr-btn" onClick={() => setShowResults(true)}><BarChart3 size={12} /> Results</button>
       </div>
 
-      {/* Date Strip */}
       <div className="v21-dsk">
         <div className="v21-wrap" style={{ padding: 0 }}>
           <DateStrip date={selDate} onChange={handleDateChange} dates={dateList} hasDataMap={hasDataMap} />
@@ -1218,7 +1184,6 @@ export default function Predictions() {
       </div>
 
       <div className="v21-wrap">
-        {/* Glass Stats Banner — Logged in users */}
         {loggedIn && (
           <div style={{ marginBottom: 16, animation: 'v21-fade-up .4s ' + SMOOTH + ' both' }}>
             <div className="v21-stats">
@@ -1248,7 +1213,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Viral Share Banner — for logged in users with predictions */}
         {loggedIn && myDayStats.pred > 0 && (
           <div className="v21-banner">
             <div className="v21-banner-text">
@@ -1261,7 +1225,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Login Banner for guests */}
         {!loggedIn && (
           <div className="v21-banner login-banner">
             <div className="v21-banner-text">
@@ -1274,7 +1237,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Filters */}
         <div className="v21-filter">
           {[
             { key: 'all', label: 'All', count: filterCounts.all },
@@ -1288,7 +1250,6 @@ export default function Predictions() {
           ))}
         </div>
 
-        {/* Zoka Picks Section */}
         {mergedZoka.length > 0 && (
           <div className="v21-zoka">
             <div className="v21-zoka-hd">
@@ -1316,7 +1277,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Featured Matches */}
         <div style={{ animation: 'v21-fade-up .3s ' + SMOOTH + ' both' }}>
           <div className="v21-sec">
             <div className="v21-sec-icon"><Target size={13} /></div>
@@ -1359,7 +1319,6 @@ export default function Predictions() {
           )}
         </div>
 
-        {/* All results complete celebration */}
         {myDayStats.allResolved && myDayStats.pred > 0 && (
           <div className="v21-rank" style={{ marginTop: 16, textAlign: 'center' }}>
             <Trophy size={24} style={{ color: '#10b981', marginBottom: 8 }} />
@@ -1371,7 +1330,6 @@ export default function Predictions() {
           </div>
         )}
 
-        {/* Secondary Share Button at bottom */}
         {loggedIn && myDayStats.pred > 0 && (
           <button className="v21-banner-btn secondary" style={{ marginTop: '20px' }} onClick={handleBannerShare}>
             <Share2 size={18} /> Share My Score Again

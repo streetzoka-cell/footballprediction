@@ -1,6 +1,6 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
-// v14.4 — App Logo Integration, Mobile Notif Dropdown, ProHeader Fix
+// ZOKA PRO — Smart Context Sync, Direct Fast Fetch, No Stale Data
 // ═══════════════════════════════════════════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -10,18 +10,20 @@ import {
   Clock, Target, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
+import { useAppData } from '../context/AppDataContext';
+import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api'; // ★ FIX: Direct fast fetch
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants'; // ★ FIX: Status helpers
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
-/* ═══════════════════════════════════════════════════
-   CONSTANTS
-   ═══════════════════════════════════════════════════ */
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const ADMIN_REMEMBER_KEY = 'nv-admin-remembered';
 const APP_LOGO = '/icons/icon-192.png';
 
+/* ═══════════════════════════════════════════════════
+   STYLES (Module Level)
+   ═══════════════════════════════════════════════════ */
 let stylesInjected = false;
 const injectBase = () => {
   if (stylesInjected || document.getElementById('nv-base-v15')) return;
@@ -49,10 +51,8 @@ const injectBase = () => {
     @keyframes nvInfoExpand{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
     @keyframes nvBtnShine{0%{transform:translateX(-100%) rotate(10deg)}100%{transform:translateX(200%) rotate(10deg)}}
 
-    /* Typography & Base Fixes */
     body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
     
-    /* Pro Header (Featured Match) */
     .nv-pro-wrap { padding: 14px 16px 0; max-width: 1140px; margin: 0 auto; box-sizing: border-box; }
     .nv-pro-inner { 
       background: linear-gradient(145deg, rgba(20,25,40,0.8), rgba(10,12,20,0.9)); 
@@ -125,7 +125,6 @@ const injectBase = () => {
       .nv-pro-teams { gap: 6px; }
     }
 
-    /* Desktop Nav Links */
     .nv-nav-link {
       position: relative; display: flex; align-items: center; height: 100%; padding: 8px 12px;
       font-size: 0.72rem; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.04em;
@@ -145,16 +144,14 @@ const injectBase = () => {
     .nv-dk-links-container { display: flex; align-items: center; height: 100%; margin-left: 10px; overflow-x: auto; scrollbar-width: none; }
     .nv-dk-links-container::-webkit-scrollbar { display: none; }
 
-    /* Action Buttons (Icons) */
     .nv-action-btn {
       width: 40px; height: 40px; border-radius: 10px; display: flex; align-items: center; justify-content: center;
       background: transparent; color: #64748b; border: 1px solid transparent; cursor: pointer; transition: all 0.3s ease;
-      position: relative;
+      position: relative; flex-shrink: 0;
     }
     .nv-action-btn:hover { background: rgba(255,255,255,0.05); color: #fff; border-color: rgba(255,255,255,0.1); }
     .nv-action-btn.active { background: rgba(0,230,118,0.1); color: #00e676; border-color: rgba(0,230,118,0.2); box-shadow: 0 0 12px rgba(0,230,118,0.1); }
 
-    /* Auth / Sign In Button */
     .nv-auth-btn {
       display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 24px; border-radius: 10px;
       background: linear-gradient(135deg, #00e676 0%, #00c853 100%); color: #001b07;
@@ -166,7 +163,6 @@ const injectBase = () => {
     .nv-auth-btn::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); transform: translateX(-100%) rotate(10deg); }
     .nv-auth-btn:hover::before { animation: nvBtnShine 1s ease forwards; }
 
-    /* Points Badge */
     .nv-points-badge {
       display: flex; align-items: center; gap: 8px; padding: 8px 16px; border-radius: 12px;
       background: linear-gradient(135deg, rgba(251,191,36,0.1), rgba(251,191,36,0.02));
@@ -174,7 +170,6 @@ const injectBase = () => {
     }
     .nv-points-badge:hover { transform: scale(1.05); border-color: rgba(251,191,36,0.4); box-shadow: 0 0 15px rgba(251,191,36,0.2); }
 
-    /* Mobile Optimizations */
     @media (max-width: 900px) {
       .nv-dk { display: none !important; }
       .nv-tg { display: flex !important; }
@@ -183,7 +178,6 @@ const injectBase = () => {
     }
     @media (min-width: 901px) { .nv-tg { display: none !important; } }
 
-    /* Mobile Drawer */
     .nv-mob-overlay { position: fixed; inset: 0; z-index: 2000; background: rgba(0,0,0,0.75); backdrop-filter: blur(8px); opacity: 0; pointer-events: none; transition: opacity 0.3s ease; }
     .nv-mob-overlay.open { opacity: 1; pointer-events: auto; }
     .nv-mob-drawer {
@@ -197,7 +191,6 @@ const injectBase = () => {
     .nv-mob-scroll::-webkit-scrollbar { width: 4px; }
     .nv-mob-scroll::-webkit-scrollbar-thumb { background: rgba(0,230,118,0.2); border-radius: 10px; }
     
-    /* Mobile Links */
     .nv-mob-link { 
       width: 100%; display: flex; align-items: center; gap: 14px; padding: 16px 18px; border-radius: 12px; 
       border: none; cursor: pointer; text-align: left; background: transparent; color: #94a3af; 
@@ -209,19 +202,29 @@ const injectBase = () => {
   document.head.appendChild(s);
   stylesInjected = true;
 };
+injectBase(); // Execute at module level
 
 /* ═══════════════════════════════════════════════════
    HELPERS & SVG
    ═══════════════════════════════════════════════════ */
 const todayStr = () => new Date().toISOString().split('T')[0];
 
-function calcPoints(predH, predA, actualH, actualA) {
-  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
-  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
-  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
-  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
-  if (pR === aR) return { points: 3, type: 'result' };
-  return { points: 0, type: 'miss' };
+function normalizeMatch(raw) {
+  if (!raw) return null;
+  const id = String(raw.id || raw.matchId);
+  const status = raw.status || '';
+  return {
+    id, status,
+    isLive: raw.isLive || isLiveStatus(status, SPORT.FOOTBALL),
+    isFinished: raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL),
+    homeTeam: { name: raw.homeTeam?.name || 'TBD', shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD', logo: raw.homeTeam?.logo || raw.homeTeam?.crest },
+    awayTeam: { name: raw.awayTeam?.name || 'TBD', shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD', logo: raw.awayTeam?.logo || raw.awayTeam?.crest },
+    homeScore: raw.homeScore ?? null,
+    awayScore: raw.awayScore ?? null,
+    league: { name: raw.league?.name || raw.competition?.name || 'Other' },
+    minute: raw.minute || raw.elapsed || null,
+    kickoff: raw.kickoff || (raw.date ? new Date(raw.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'TBD')
+  };
 }
 
 function timeAgo(ts) {
@@ -231,6 +234,15 @@ function timeAgo(ts) {
   if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
   if (diff < 86400000) return `${Math.floor(diff / 3600000)}h ago`;
   return `${Math.floor(diff / 86400000)}d ago`;
+}
+
+function calcPoints(predH, predA, actualH, actualA) {
+  if (actualH == null || actualA == null) return { points: 0, type: 'pending' };
+  if (predH === actualH && predA === actualA) return { points: 10, type: 'exact' };
+  const pR = predH > predA ? 'H' : predH < predA ? 'A' : 'D';
+  const aR = actualH > actualA ? 'H' : actualH < actualA ? 'A' : 'D';
+  if (pR === aR) return { points: 3, type: 'result' };
+  return { points: 0, type: 'miss' };
 }
 
 const StatusDot = ({ status, size = 6 }) => {
@@ -247,6 +259,7 @@ const LINKS = [
   { to: '/basketball', label: 'Hoops', emoji: '🏀' },
   { to: '/leaderboard', label: 'Ranks', emoji: '🏆' },
   { to: '/mastergames', label: 'other Games', emoji: '🎮' },
+  { to: '/studio', label: 'Studio', emoji: '🎨', badge: 'NEW' },
   { to: '/livestream', label: 'Stream', emoji: '📡', isLive: true },
 ];
 
@@ -273,11 +286,11 @@ function ProHeader({ matches, liveMatches, nav }) {
   if (!featured) return null;
 
   const m = featured.match;
-  const homeLogo = m.homeTeam?.logo || m.homeTeam?.crest;
-  const awayLogo = m.awayTeam?.logo || m.awayTeam?.crest;
+  const homeLogo = m.homeTeam?.logo;
+  const awayLogo = m.awayTeam?.logo;
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
-  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : '';
+  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
 
   return (
     <div className="nv-pro-wrap" onClick={() => nav(m.matchId ? `/predictions?match=${m.matchId}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
@@ -324,13 +337,13 @@ function ProHeader({ matches, liveMatches, nav }) {
    MAIN COMPONENT
    ═══════════════════════════════════════════════════ */
 export default function Navbar() {
-  injectBase();
-
   const { currentUser, userProfile, signOut } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const uid = currentUser?.uid;
   const isLoggedIn = !!uid;
+
+  const appData = useAppData();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -345,6 +358,10 @@ export default function Navbar() {
     try { return localStorage.getItem(ADMIN_REMEMBER_KEY) === 'true'; } catch { return false; }
   });
   const [adminNotifs, setAdminNotifs] = useState([]);
+
+  // ★ FIX: Direct fast state for matches to bypass FootballDataContext stale cache
+  const [bannerMatches, setBannerMatches] = useState([]);
+  const [liveMatches, setLiveMatches] = useState([]);
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -365,10 +382,6 @@ export default function Navbar() {
 
   const isAdmin = userProfile ? userProfile.role === 'admin' : rememberedAdmin;
 
-  const [bannerMatches, setBannerMatches] = useState([]);
-  const [activePreds, setActivePreds] = useState([]);
-  const [allPreds, setAllPreds] = useState([]);
-
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const mobNotifRef = useRef(null);
@@ -377,7 +390,9 @@ export default function Navbar() {
   const isHome = location.pathname === '/';
   const isActive = useCallback((p) => location.pathname === p, [location.pathname]);
 
-  const liveMatches = useMemo(() => bannerMatches.filter(m => m.isLive), [bannerMatches]);
+  const activePreds = appData.activePredictions || [];
+  const allPreds = useMemo(() => Object.values(appData.userPredictions || {}), [appData.userPredictions]);
+  const dailyEntries = appData.dailyLeaderboard?.entries || [];
 
   const scoreMap = useMemo(() => {
     const m = new Map();
@@ -424,19 +439,8 @@ export default function Navbar() {
 
   const userRank = useMemo(() => {
     if (!uid) return null;
-    const um = {};
-    allPreds.forEach(p => {
-      if (!um[p.userId]) um[p.userId] = { uid: p.userId, points: 0, resolved: 0 };
-      const u = um[p.userId];
-      const a = scoreMap.get(String(p.matchId));
-      if (!a) return;
-      u.resolved++;
-      u.points += calcPoints(p.homeScore, p.awayScore, a.h, a.a).points;
-    });
-    const sorted = Object.values(um).filter(u => u.resolved > 0).sort((a, b) => b.points - a.points);
-    const idx = sorted.findIndex(u => u.uid === uid);
-    return idx >= 0 ? idx + 1 : null;
-  }, [allPreds, scoreMap, uid]);
+    return dailyEntries.find(u => u.uid === uid)?.rank || null;
+  }, [dailyEntries, uid]);
 
   const predNotifs = useMemo(() => {
     const combined = [];
@@ -471,44 +475,33 @@ export default function Navbar() {
   }, [bannerMatches]);
 
   /* ═══ EFFECTS ═══ */
+  // ★ FIX: Direct fetch and subscribe to live fixtures (bypasses stale context)
   useEffect(() => {
-    let cancelled = false;
+    let mnt = true;
     (async () => {
       try {
         const res = await fetchFixtures(todayStr());
-        if (!cancelled && res?.matches?.length > 0) setBannerMatches(res.matches);
+        if (mnt && res) {
+          const l = Array.isArray(res) ? res : res?.matches || [];
+          setBannerMatches(l.map(m => normalizeMatch(m)).filter(Boolean));
+        }
       } catch { /* silent */ }
     })();
-    return () => { cancelled = true; };
-  }, []);
 
-  useEffect(() => {
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
-      if (lm.length === 0) return;
-      const liveMap = new Map(lm.map(m => [String(m.id), m]));
+      if (!mnt || !lm) return;
+      setLiveMatches(lm);
       setBannerMatches(prev => prev.map(f => {
-        const live = liveMap.get(String(f.id));
+        const live = lm.find(m => String(m.id) === String(f.id));
         if (!live) return f;
         return { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, status: live.status || f.status, minute: live.minute ?? f.minute };
       }));
     });
-    return () => unsub();
+
+    return () => { mnt = false; if (unsub) unsub(); };
   }, []);
 
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'active_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => setActivePreds(snap.docs.map(d => ({ id: d.id, ...d.data() }))), () => {});
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
-    const unsub = onSnapshot(q, snap => setAllPreds(snap.docs.map(d => d.data())), () => {});
-    return () => unsub();
-  }, []);
-
+  // Only fetch Admin Notifications directly (everything else is from Context)
   useEffect(() => {
     if (!db) return setAdminNotifs([]);
     const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
@@ -572,17 +565,6 @@ export default function Navbar() {
   useEffect(() => {
     if (notifOpen && predNotifs.length > 0) setSeenNotifIds(new Set(predNotifs.map(n => n.id)));
   }, [notifOpen, predNotifs]);
-
-  useEffect(() => {
-    const handleRefocus = async () => {
-      try {
-        const res = await fetchFixtures(todayStr());
-        if (res?.matches?.length > 0) setBannerMatches(res.matches);
-      } catch { /* silent */ }
-    };
-    window.addEventListener('app:refocused', handleRefocus);
-    return () => window.removeEventListener('app:refocused', handleRefocus);
-  }, []);
 
   /* ═══ HANDLERS ═══ */
   const handleLogout = useCallback(async () => {
@@ -696,7 +678,6 @@ export default function Navbar() {
     );
   };
 
-  /* ═══ NOTIFICATION DROPDOWN COMPONENT ═══ */
   const renderNotifDropdown = () => (
     <div style={{
       position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)',
@@ -734,9 +715,6 @@ export default function Navbar() {
     </div>
   );
 
-  /* ═══════════════════════════════════════════════════════════════════════════════════════════════════════════
-     RENDER
-     ═══════════════════════════════════════════════════════════════════════════════════════════════════════════ */
   return (
     <>
       <SEO
@@ -748,7 +726,6 @@ export default function Navbar() {
 
       <ProHeader matches={bannerMatches} liveMatches={liveMatches} nav={navigate} />
 
-      {/* TICKER BAR */}
       <div style={{
         position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden',
         display: 'flex', alignItems: 'center',
@@ -797,7 +774,6 @@ export default function Navbar() {
         )}
       </div>
 
-      {/* NAV BAR */}
       <nav className="nv-main-nav" style={{
         position: 'sticky', top: 42, zIndex: 1000, height: 68,
         background: scrolled ? 'rgba(6,11,20,0.85)' : 'rgba(6,11,20,0)',
@@ -810,14 +786,12 @@ export default function Navbar() {
       }}>
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', alignItems: 'center', gap: 12 }}>
           
-          {/* LEFT: Desktop Home */}
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center' }}>
             <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home">
               <Home size={16} strokeWidth={2.5} /> Home
             </Link>
           </div>
 
-          {/* CENTER: Logo */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} className="nv-logo-link">
               <img src={APP_LOGO} alt="ZokaScore Logo" style={{ width: 42, height: 42, borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(0,230,118,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
@@ -830,10 +804,8 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* RIGHT: Desktop actions */}
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, justifyContent: 'flex-end' }}>
             
-            {/* Search */}
             <div ref={searchRef} style={{ position: 'relative' }}>
               <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search">
                 <Search size={18} strokeWidth={2.5} />
@@ -851,7 +823,7 @@ export default function Navbar() {
                   <Search size={16} style={{ color: '#00e676', flexShrink: 0 }} />
                   <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{
                     flex: 1, background: 'none', border: 'none', outline: 'none',
-                    color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit',
+                    color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0,
                   }} />
                   {searchQuery && (
                     <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
@@ -860,7 +832,6 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Notifications */}
             {isLoggedIn && (
               <div ref={notifRef} style={{ position: 'relative' }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
@@ -870,7 +841,7 @@ export default function Navbar() {
                       position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px',
                       background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white',
                       fontSize: '0.55rem', fontWeight: 900,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      display: 'flex', alignItems: 'center', justifyConteent: 'center',
                       border: '2px solid #060b14',
                       boxShadow: '0 0 12px rgba(239,68,68,0.6)',
                       animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
@@ -881,7 +852,6 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Points badge */}
             {isLoggedIn && userStats.resolved > 0 && (
               <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)}>
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
@@ -893,7 +863,6 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Desktop nav links */}
             <div className="nv-dk-links-container">
               {LINKS.map((link) => {
                 const active = isActive(link.to);
@@ -914,7 +883,6 @@ export default function Navbar() {
                 );
               })}
 
-              {/* Auth */}
               {isLoggedIn ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
                   {isAdmin && (
@@ -934,7 +902,6 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* MOBILE RIGHT */}
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home">
               <Home size={18} strokeWidth={2.5} />
@@ -968,11 +935,9 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* ═══ MOBILE MENU ═══ */}
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
       <div className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
         
-        {/* Sticky header */}
         <div className="nv-mob-header" style={{
           padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           borderBottom: '1px solid rgba(0,230,118,0.1)', position: 'sticky', top: 0, zIndex: 3,
@@ -988,7 +953,6 @@ export default function Navbar() {
         </div>
 
         <div className="nv-mob-scroll">
-          {/* User card */}
           {isLoggedIn && userProfile && (
             <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, rgba(0,230,118,0.05) 0%, transparent 100%)', animation: 'nvMobUserIn 0.45s ease 0.08s both' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
@@ -1030,7 +994,6 @@ export default function Navbar() {
             </div>
           )}
 
-          {/* Main nav links */}
           <div style={{ padding: '12px 16px' }}>
             {LINKS.map((link, i) => {
               const active = isActive(link.to);
@@ -1057,7 +1020,6 @@ export default function Navbar() {
               );
             })}
 
-            {/* Auth section */}
             {isLoggedIn ? (
               <>
                 <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', margin: '14px 0' }} />
@@ -1084,7 +1046,6 @@ export default function Navbar() {
 
             <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(0,230,118,0.1), transparent)', margin: '18px 0' }} />
 
-            {/* Info accordion */}
             <button
               onClick={() => setInfoOpen(p => !p)}
               className="nv-mob-link"
@@ -1129,7 +1090,6 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Footer */}
           <div style={{ padding: '28px 20px 40px', textAlign: 'center', borderTop: '1px solid rgba(255,255,255,0.05)', marginTop: '12px' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 8 }}>
               <img src={APP_LOGO} alt="ZokaScore Logo" style={{ width: 24, height: 24, borderRadius: 6, objectFit: 'cover' }} />
