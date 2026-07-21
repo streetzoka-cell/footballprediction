@@ -214,7 +214,7 @@ const initialState = {
     videoZoom: 1, videoPanX: 0, videoPanY: 0
   },
   timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
-  ui: { showGallery: false, showGuides: false, isExporting: false, recordedUrl: null, isLoadingProject: true,
+  ui: { showGallery: false, showGuides: false, isExporting: false, exportFormat: null, recordedUrl: null, recordedExt: 'webm', isLoadingProject: true,
         favorites: JSON.parse(localStorage.getItem("reactor-favorites")) || [], recents: JSON.parse(localStorage.getItem("reactor-recents")) || [],
         searchQuery: "", activeCategory: "All", layers: { video: true, pip: true, profile: true, caption: true, gradients: true, scorebug: true } }
 };
@@ -807,15 +807,15 @@ export default function ReactorStudio() {
 
   const handlePointerUp = () => dragRef.current.target = null;
 
-  const handleExportVideo = async () => {
+  const handleExportVideo = async (format = 'webm') => {
     const vid = sourceVideoRef.current; if (!canvasRef.current || ui.isExporting || !vid || !activeClip) return;
-    dispatch({ type: 'SET_UI', payload: { isExporting: true } });
+    dispatch({ type: 'SET_UI', payload: { isExporting: true, exportFormat: format } });
     dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
     vid.pause(); vid.currentTime = activeClip.start;
     await new Promise(r => setTimeout(r, 200));
     let trueDur = vid.duration; if (!isFinite(trueDur)) { vid.currentTime = 1e101; await new Promise(r => setTimeout(r, 200)); trueDur = vid.duration; vid.currentTime = activeClip.start; await new Promise(r => setTimeout(r, 200)); }
     let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDur; if (end > trueDur) end = trueDur;
-    if (activeClip.start >= end - 0.1) { alert("Invalid clip duration."); dispatch({ type: 'SET_UI', payload: { isExporting: false } }); return; }
+    if (activeClip.start >= end - 0.1) { alert("Invalid clip duration."); dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null } }); return; }
     await new Promise(r => setTimeout(r, 300));
     const wM = vid.muted, wV = vid.volume; vid.muted = false; vid.volume = 0;
     const fps = 30; const cS = canvasRef.current.captureStream(fps); let aC;
@@ -828,11 +828,38 @@ export default function ReactorStudio() {
       const o = aC.createOscillator(); const g = aC.createGain(); g.gain.value = 0.0; o.connect(g); g.connect(aD); g.connect(aC.destination); o.start();
       aD.stream.getAudioTracks().forEach(t => cS.addTrack(t));
     } catch(e) {}
+
     chunksRef.current = [];
-    const mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+    let mT = 'video/webm';
+    let fileExt = 'webm';
+
+    if (format === 'mp4') {
+      if (MediaRecorder.isTypeSupported('video/mp4;codecs=avc1.42E01E,mp4a.40.2')) {
+        mT = 'video/mp4;codecs=avc1.42E01E,mp4a.40.2'; fileExt = 'mp4';
+      } else if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264')) {
+        mT = 'video/mp4;codecs=h264'; fileExt = 'mp4';
+      } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+        mT = 'video/mp4'; fileExt = 'mp4';
+      } else {
+        alert("⚠️ MP4 is not directly supported by Chrome/Firefox. Falling back to WebM. For true MP4, use Safari browser.");
+        mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+        fileExt = 'webm';
+      }
+    } else {
+      mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
+      fileExt = 'webm';
+    }
+
     const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: 8000000 });
     r.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    r.onstop = async () => { let b = new Blob(chunksRef.current, { type: 'video/webm' }); const f = await fixWebmDuration(b, (end - activeClip.start) * 1000); dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(f), isExporting: false } }); vid.pause(); if (audioRef.current) audioRef.current.pause(); vid.muted = wM; vid.volume = wV; cS.getTracks().forEach(t => t.stop()); if (aC) aC.close(); };
+    r.onstop = async () => { 
+      let b = new Blob(chunksRef.current, { type: mT }); 
+      if (fileExt === 'webm') {
+        b = await fixWebmDuration(b, (end - activeClip.start) * 1000);
+      }
+      dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(b), recordedExt: fileExt, isExporting: false, exportFormat: null } }); 
+      vid.pause(); if (audioRef.current) audioRef.current.pause(); vid.muted = wM; vid.volume = wV; cS.getTracks().forEach(t => t.stop()); if (aC) aC.close(); 
+    };
     const cI = setInterval(() => { if (vid.currentTime >= end - 0.05 || vid.ended) { clearInterval(cI); if (r.state !== 'inactive') r.stop(); } }, 50);
     r.start(100); try { await vid.play(); } catch {}
   };
@@ -888,12 +915,17 @@ export default function ReactorStudio() {
           {ui.recordedUrl ? (
             <>
               <button onClick={() => dispatch({ type: 'SET_UI', payload: { recordedUrl: null } })} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}><Trash2 size={16} /> Discard</button>
-              <a href={ui.recordedUrl} download={`zokascore_clip.webm`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}><Download size={16} /> Download</a>
+              <a href={ui.recordedUrl} download={`zokascore_clip.${ui.recordedExt || 'webm'}`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}><Download size={16} /> Download .{ui.recordedExt || 'webm'}</a>
             </>
           ) : (
-            <button onClick={handleExportVideo} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }}>
-              {ui.isExporting ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export Clip
-            </button>
+            <>
+              <button onClick={() => handleExportVideo('mp4')} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export as MP4 (Best for all platforms. Requires Safari browser)">
+                {ui.isExporting && ui.exportFormat === 'mp4' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export MP4
+              </button>
+              <button onClick={() => handleExportVideo('webm')} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#3b82f6', borderColor: '#3b82f6', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export as WebM (Fast, works in Chrome/Firefox)">
+                {ui.isExporting && ui.exportFormat === 'webm' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} Export WebM
+              </button>
+            </>
           )}
         </div>
       </div>
