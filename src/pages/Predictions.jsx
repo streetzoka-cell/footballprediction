@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
-// ZOKA PRO — Lightning Fast, Memoized, No Double Fetching
+// ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -19,7 +19,7 @@ import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
 import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
-import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api'; // ★ FIX: Import global subscription
+import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import SEO from '../components/SEO';
@@ -85,10 +85,13 @@ function parseKickoffTime(kickoff) {
   catch { return '--:--'; }
 }
 
+const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
+const toastStyle = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' };
+
 /* ═══════════════════════════════════════════════════
    ANIMATED NUMBER
    ═══════════════════════════════════════════════════ */
-function AnimNum({ value, duration = 400, delay = 0 }) {
+const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   const [d, setD] = useState(0);
   const raf = useRef(null);
   useEffect(() => {
@@ -105,224 +108,37 @@ function AnimNum({ value, duration = 400, delay = 0 }) {
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
   }, [value, duration, delay]);
   return <>{d}</>;
-}
-
-/* ═══════════════════════════════════════════════════
-   STYLES
-   ═══════════════════════════════════════════════════ */
-const injectCSS = () => {
-  if (document.getElementById('pred-v21')) return;
-  const s = document.createElement('style');
-  s.id = 'pred-v21';
-  s.textContent = `
-@keyframes v21-fade-up{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v21-pop{0%{transform:scale(.92);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
-@keyframes v21-shimmer{0%{background-position:-300% 0}100%{background-position:300% 0}}
-@keyframes v21-toast{0%{opacity:0;transform:translateX(-50%) translateY(12px)}10%{opacity:1;transform:translateX(-50%) translateY(0)}85%{opacity:1}100%{opacity:0;transform:translateX(-50%) translateY(-6px)}}
-@keyframes v21-pulse-live{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.2;transform:scale(2)}}
-@keyframes v21-zoka-glow{0%,100%{border-color:rgba(245,197,66,.12)}50%{border-color:rgba(245,197,66,.28)}}
-@keyframes v21-edit-ring{0%,100%{border-color:rgba(0,230,118,.2)}50%{border-color:rgba(0,230,118,.4)}}
-@keyframes v21-date-glow{0%,100%{box-shadow:0 0 8px rgba(0,230,118,.12)}50%{box-shadow:0 0 16px rgba(0,230,118,.25)}}
-@keyframes v21-overlay{from{opacity:0}to{opacity:1}}
-@keyframes v21-box-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-@keyframes v21-shine{0%{left:-100%}100%{left:200%}}
-
-.v21-page{min-height:100vh;background:radial-gradient(circle at top right,#1e293b,#0a0f1a);padding-bottom:100px;color:#f8fafc;font-weight:600;overflow-x:hidden}
-.v21-wrap{max-width:640px;margin:0 auto;padding:0 16px;position:relative;z-index:1}
-
-.v21-hdr{position:sticky;top:0;z-index:100;padding:12px 0;backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);background:rgba(10,15,26,.78);border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;gap:8px}
-.v21-hdr-title{display:flex;flex-direction:column;gap:2px}
-.v21-hdr-title h1{margin:0;font-size:1.25em;font-weight:900;letter-spacing:-.02em;display:flex;align-items:baseline;gap:2px}
-.v21-hdr-title .sub{font-size:.7em;color:#cbd5e1;font-weight:700}
-.v21-hdr-btn{display:inline-flex;align-items:center;gap:5px;padding:7px 12px;border-radius:9px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);color:#cbd5e1;font-size:.74rem;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.v21-hdr-btn:hover{color:#fff;border-color:rgba(255,255,255,0.16)}
-
-.v21-dsk{position:sticky;top:60px;z-index:99;padding:10px 0 12px;backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);background:rgba(10,15,26,.78);border-bottom:1px solid rgba(255,255,255,0.06);margin:0 -16px;padding-left:16px;padding-right:16px}
-.v21-ds{display:flex;gap:4px;overflow-x:auto;scrollbar-width:none;scroll-snap-type:x proximity;-webkit-overflow-scrolling:touch;padding:2px 0}
-.v21-ds::-webkit-scrollbar{display:none}
-.v21-dc{flex-shrink:0;scroll-snap-align:center;position:relative;display:flex;flex-direction:column;align-items:center;gap:2px;padding:7px 11px;border-radius:10px;border:1px solid transparent;background:transparent;color:#94a3b8;cursor:pointer;transition:all .18s;font-family:inherit;min-width:46px;-webkit-tap-highlight-color:transparent}
-.v21-dc:hover{color:#fff;background:rgba(255,255,255,.03);border-color:rgba(255,255,255,0.08)}
-.v21-dc .dn{font-size:.56rem;font-weight:800;text-transform:uppercase;letter-spacing:.06em;opacity:.6}
-.v21-dc .dd{font-size:.92rem;font-weight:900;line-height:1}
-.v21-dc .dm{font-size:.48rem;font-weight:700;opacity:.4}
-.v21-dc.on{background:linear-gradient(135deg,rgba(16,185,129,.12),rgba(16,185,129,.04));color:#10b981;border-color:rgba(16,185,129,.25)}
-.v21-dc.on .dn{opacity:1;color:#10b981}
-.v21-dc.on .dd{transform:scale(1.1);transition:transform .18s ${SPRING}}
-.v21-dc.today:not(.on){border-color:rgba(245,197,66,.18);color:#f5c542}
-.v21-dc.today.on{animation:v21-date-glow 2.5s ease-in-out infinite}
-.v21-dc.past{opacity:.45}
-.v21-dmore{flex-shrink:0;display:flex;align-items:center;gap:4px;padding:7px 10px;border-radius:10px;border:1px dashed rgba(255,255,255,0.08);background:transparent;color:#94a3b8;font-size:.6rem;font-weight:700;cursor:pointer;transition:all .18s;font-family:inherit;white-space:nowrap;-webkit-tap-highlight-color:transparent}
-.v21-dmore:hover{border-color:#10b981;color:#10b981}
-
-.v21-banner{background:linear-gradient(135deg,rgba(16,185,129,0.1),rgba(59,130,246,0.05));border:1px solid rgba(16,185,129,0.2);border-radius:16px;padding:18px;margin:16px 0;display:flex;flex-direction:column;gap:14px;animation:v21-fade-up .4s ease both;backdrop-filter:blur(8px)}
-.v21-banner.login-banner{background:linear-gradient(135deg,rgba(59,130,246,0.06),rgba(168,85,247,0.04));border-color:rgba(59,130,246,0.18)}
-.v21-banner-text{font-size:.82em;font-weight:700;color:#fff;line-height:1.4;display:flex;align-items:center;gap:8px}
-.v21-banner-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-weight:900;font-size:.85em;border:none;cursor:pointer;transition:transform .2s;box-shadow:0 4px 16px rgba(16,185,129,0.3);text-decoration:none}
-.v21-banner-btn:hover{transform:translateY(-2px)}
-.v21-banner-btn.blue{background:linear-gradient(135deg,#3b82f6,#2563eb);box-shadow:0 4px 16px rgba(59,130,246,0.3)}
-.v21-banner-btn.secondary{background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);color:#fff;box-shadow:none;margin-top:16px}
-
-.v21-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px;animation:v21-fade-up .4s ${SMOOTH} both}
-.v21-stat{background:rgba(255,255,255,0.03);backdrop-filter:blur(8px);border:1px solid rgba(255,255,255,0.05);border-radius:12px;padding:10px 4px;text-align:center}
-.v21-stat .n{font-size:1.1em;font-weight:900;font-family:var(--font-display,system-ui);line-height:1}
-.v21-stat .l{font-size:.5em;font-weight:800;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-
-.v21-progress{margin-bottom:10px}
-.v21-progress-bar{height:4px;border-radius:2px;background:rgba(255,255,255,0.04);overflow:hidden}
-.v21-progress-fill{height:100%;border-radius:2px;transition:width .5s ${SMOOTH};background:linear-gradient(90deg,#10b981,#34d399)}
-.v21-progress-labels{display:flex;justify-content:space-between;font-size:.6rem;font-weight:700;color:#94a3b8;margin-top:3px}
-
-.v21-rank{background:linear-gradient(135deg,rgba(16,185,129,.04),rgba(16,185,129,.01));border:1.5px solid rgba(16,185,129,.15);border-radius:14px;padding:14px;position:relative;overflow:hidden;animation:v21-pop .4s ${SPRING} both}
-.v21-rank::before{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(16,185,129,.05),transparent);animation:v21-shine 4s ease-in-out infinite}
-.v21-rank-inner{position:relative;z-index:1;display:flex;align-items:center;gap:12px}
-.v21-rank-btn{margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;background:rgba(245,197,66,.06);border:1.5px solid rgba(245,197,66,.16);color:#f5c542;font-weight:800;font-size:.72rem;cursor:pointer;transition:all .15s;font-family:inherit;text-decoration:none}
-.v21-rank-btn:hover{background:rgba(245,197,66,.1);border-color:rgba(245,197,66,.28)}
-
-.v21-filter{display:flex;gap:4px;overflow-x:auto;padding:0 0 12px;scrollbar-width:none;margin-bottom:2px}
-.v21-filter::-webkit-scrollbar{display:none}
-.v21-fbtn{flex-shrink:0;padding:6px 12px;border-radius:8px;font-size:.7rem;font-weight:700;border:1px solid rgba(255,255,255,0.08);background:transparent;color:#94a3b8;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
-.v21-fbtn:hover{background:rgba(255,255,255,.03);color:#fff}
-.v21-fbtn.on{background:rgba(16,185,129,.07);border-color:rgba(16,185,129,.2);color:#10b981}
-
-.v21-zoka{background:linear-gradient(135deg,rgba(245,197,66,.03) 0%,transparent 60%);border:1.5px solid rgba(245,197,66,.1);border-radius:14px;padding:14px;margin-bottom:16px;overflow:hidden;animation:v21-fade-up .4s ${SMOOTH} both}
-.v21-zoka-hd{display:flex;align-items:center;gap:10px;margin-bottom:12px}
-.v21-zoka-icon{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,rgba(245,197,66,.12),rgba(245,197,66,.04));border:1.5px solid rgba(245,197,66,.22);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.v21-zoka-more{width:100%;padding:10px;border-radius:10px;border:1.5px dashed rgba(245,197,66,.2);background:transparent;color:#f5c542;font-weight:800;font-size:.76rem;cursor:pointer;transition:all .15s;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px;margin-top:8px}
-.v21-zoka-more:hover{background:rgba(245,197,66,.04);border-color:rgba(245,197,66,.35)}
-
-.v21-mc{display:flex;flex-direction:column;gap:8px;padding:12px 14px;border-radius:14px;background:rgba(30,41,59,0.4);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);margin-bottom:8px;transition:all .25s cubic-bezier(.22,1,.36,1);animation:v21-fade-up .3s ${SMOOTH} both;position:relative;overflow:hidden}
-.v21-mc:hover{background:rgba(30,41,59,0.5)}
-.v21-mc.zoka{background:linear-gradient(135deg,rgba(245,197,66,.03),rgba(245,197,66,.005));border-color:rgba(245,197,66,.12)}
-.v21-mc.zoka.pending{animation:v21-zoka-glow 2.5s ease-in-out infinite}
-.v21-mc.live{border-color:rgba(239,68,68,.3);animation:v21-pulse-live 2.5s ease-in-out infinite}
-.v21-mc.finished{opacity:.85}
-.v21-mc.editing{border-color:rgba(16,185,129,.3);animation:v21-edit-ring 2s ease-in-out infinite}
-.v21-mc.locked{border-color:rgba(96,165,250,.15)}
-.v21-mc.missed{opacity:.5}
-
-.v21-mh{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.v21-ml{display:flex;align-items:center;gap:5px;min-width:0;flex:1}
-.v21-ml img{width:14px;height:14px;border-radius:3px;object-fit:contain;flex-shrink:0}
-.v21-ml span{font-size:.62rem;font-weight:700;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.v21-st{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:.58rem;font-weight:800;letter-spacing:.04em;text-transform:uppercase;flex-shrink:0}
-
-.v21-tm{display:flex;align-items:center;gap:6px}
-.v21-te{flex:1;display:flex;align-items:center;gap:7px;min-width:0}
-.v21-te.aw{flex-direction:row-reverse;text-align:right}
-.v21-te img{width:22px;height:22px;border-radius:6px;object-fit:contain;flex-shrink:0;background:rgba(255,255,255,.03);padding:2px}
-.v21-te span{font-size:.8rem;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.v21-sb{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:8px;min-width:70px;justify-content:center;background:rgba(255,255,255,.02);border:1px solid rgba(255,255,255,0.06)}
-.v21-sb.live{background:rgba(239,68,68,.06);border-color:rgba(239,68,68,.15)}
-.v21-sb.ft{background:rgba(16,185,129,.04);border-color:rgba(16,185,129,.1)}
-.v21-sn{font-size:1rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:#fff}
-.v21-sp{color:#64748b;font-size:.7rem;font-weight:700;opacity:.25}
-.v21-vs{font-size:.62rem;font-weight:800;color:#64748b;opacity:.4;letter-spacing:.1em}
-
-.v21-ma{display:flex;align-items:center;gap:5px;justify-content:flex-end;flex-wrap:wrap}
-
-.v21-lock-timer{display:inline-flex;align-items:center;gap:4px;font-size:.6rem;font-weight:700;color:#60a5fa;padding:2px 7px;border-radius:5px;background:rgba(96,165,250,.08);border:1px solid rgba(96,165,250,.15)}
-
-.v21-b{padding:7px 12px;border-radius:8px;font-size:.72rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:5px;transition:all .15s;min-height:34px;font-family:inherit;-webkit-tap-highlight-color:transparent;text-decoration:none}
-.v21-b:active{transform:scale(.96)}.v21-b:disabled{opacity:.25;pointer-events:none}
-.v21-bp{background:linear-gradient(135deg,#10b981,#059669);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.2)}
-.v21-bp:hover{transform:translateY(-1px);box-shadow:0 4px 14px rgba(16,185,129,.25)}
-.v21-bgh{background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,0.1);color:#fff}
-.v21-bgh:hover{background:rgba(255,255,255,.06)}
-.v21-bsm{padding:5px 10px;font-size:.66rem;min-height:30px;border-radius:7px;gap:4px}
-.v21-bbl{background:transparent;border:1px solid rgba(96,165,250,.2);color:#60a5fa}
-.v21-bbl:hover{background:rgba(96,165,250,.06);border-color:rgba(96,165,250,.35)}
-.v21-bshare{background:rgba(168,85,247,.06);border:1px solid rgba(168,85,247,.2);color:#a855f7}
-.v21-bshare:hover{background:rgba(168,85,247,.12);border-color:rgba(168,85,247,.35)}
-
-.v21-bdg{display:inline-flex;align-items:center;gap:3px;padding:3px 8px;border-radius:6px;font-size:.6rem;font-weight:800;white-space:nowrap}
-.v21-bdg.ex{background:rgba(16,185,129,.15);color:#10b981;border:1px solid rgba(16,185,129,.3)}
-.v21-bdg.rs{background:rgba(245,197,66,.06);color:#f59e0b;border:1px solid rgba(245,197,66,.15)}
-.v21-bdg.ms{background:rgba(239,68,68,.06);color:#ef4444;border:1px solid rgba(239,68,68,.12)}
-.v21-bdg.pn{background:rgba(255,255,255,.02);color:#94a3b8;border:1px solid rgba(255,255,255,0.06)}
-.v21-bdg.bl{background:rgba(96,165,250,.06);color:#60a5fa;border:1px solid rgba(96,165,250,.18)}
-
-.v21-si-wrap{display:flex;align-items:center;gap:8px}
-.v21-step{width:32px;height:32px;border-radius:9px;border:1px solid rgba(255,255,255,0.1);background:rgba(255,255,255,0.05);color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .12s;padding:0}
-.v21-step:hover{border-color:rgba(16,185,129,0.3);background:rgba(16,185,129,0.1);color:#10b981}
-.v21-step:active{transform:scale(.9)}
-.v21-si{width:44px;height:36px;padding:0;border-radius:9px;background:rgba(15,23,42,0.6);border:1.5px solid rgba(16,185,129,.2);text-align:center;font-weight:900;font-size:1rem;outline:none;font-variant-numeric:tabular-nums;transition:all .15s;-webkit-appearance:none;font-family:var(--font-display,monospace);color:#fff}
-.v21-si:focus{box-shadow:0 0 0 2px rgba(16,185,129,.1);border-color:rgba(16,185,129,.4)}
-.v21-si::placeholder{color:#64748b;opacity:.4}
-
-.v21-qp{display:grid;grid-template-columns:repeat(4,1fr);gap:4px}
-.v21-qp-btn{padding:6px 3px;border-radius:7px;font-size:.72rem;font-weight:900;font-family:var(--font-display);font-variant-numeric:tabular-nums;border:1.5px solid rgba(255,255,255,0.06);background:rgba(255,255,255,.02);color:#94a3b8;cursor:pointer;transition:all .12s;min-height:30px;text-align:center}
-.v21-qp-btn:hover{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.06);color:#10b981}
-.v21-qp-btn:active{transform:scale(.93)}
-.v21-qp-btn.sel{border-color:#10b981;background:rgba(16,185,129,.1);color:#10b981}
-
-.v21-vote{display:inline-flex;align-items:center;gap:3px;padding:5px 10px;border-radius:7px;font-size:.68rem;font-weight:800;border:1.5px solid rgba(255,255,255,0.08);background:rgba(255,255,255,.02);color:#94a3b8;cursor:pointer;transition:all .15s;min-height:30px;flex:1;justify-content:center}
-.v21-vote:active{transform:scale(.95)}
-.v21-vote.agree-on{border-color:rgba(16,185,129,.25);background:rgba(16,185,129,.07);color:#10b981}
-.v21-vote.disagree-on{border-color:rgba(239,68,68,.2);background:rgba(239,68,68,.05);color:#ef4444}
-.v21-vote-bar{height:3px;border-radius:2px;background:rgba(255,255,255,.04);overflow:hidden;flex:1}
-.v21-vote-fill{height:100%;border-radius:2px;transition:width .4s ${SMOOTH};background:#10b981}
-
-.v21-skel{background:linear-gradient(90deg,rgba(30,41,59,0.2) 25%,rgba(255,255,255,0.05) 50%,rgba(30,41,59,0.2) 75%);background-size:200% 100%;animation:v21-shimmer 1.5s ease-in-out infinite;border-radius:14px;height:100px;margin-bottom:8px}
-
-.v21-empty{padding:32px 20px;text-align:center;border:2px dashed rgba(255,255,255,0.08);border-radius:14px;background:rgba(255,255,255,0.02)}
-.v21-empty p{color:#cbd5e1;font-size:.8rem;margin:0;font-weight:700}
-
-.v21-toast{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:9999;animation:v21-toast 2.5s ${SMOOTH} both;pointer-events:none}
-.v21-toast-copy{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#10b981;color:#fff;padding:12px 24px;border-radius:12px;font-weight:800;font-size:.8em;z-index:1000;box-shadow:0 10px 30px rgba(0,0,0,0.3)}
-
-.v21-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;animation:v21-overlay .2s ease;padding:16px}
-.v21-overlay-box{background:rgba(15,23,42,0.95);border:1px solid rgba(255,255,255,0.08);border-radius:16px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;animation:v21-box-up .3s ${SPRING} both;scrollbar-width:none}
-.v21-overlay-box::-webkit-scrollbar{display:none}
-.v21-overlay-handle{width:36px;height:4px;border-radius:2px;background:rgba(255,255,255,0.1);margin:10px auto 0}
-.v21-res-row{display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:10px;background:rgba(255,255,255,0.02);border:1px solid rgba(255,255,255,0.05);margin-bottom:5px}
-
-.v21-sec{display:flex;align-items:center;gap:8px;margin-bottom:12px}
-.v21-sec span{font-size:.85rem;font-weight:900;color:#fff}
-.v21-sec-icon{width:30px;height:30px;border-radius:8px;display:flex;align-items:center;justify-content:center;flex-shrink:0;background:rgba(16,185,129,.08);border:1.5px solid rgba(16,185,129,.18);color:#10b981}
-.v21-sec-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:5px;font-size:.62rem;font-weight:900;background:rgba(16,185,129,.08);color:#10b981;border:1px solid rgba(16,185,129,.18)}
-
-@media(max-width:640px){
-  .v21-stats{grid-template-columns:repeat(4,1fr)}.v21-stat .n{font-size:1rem}.v21-stat{padding:10px 4px}
-  .v21-qp{grid-template-columns:repeat(4,1fr)!important;gap:3px!important}.v21-qp-btn{padding:5px 2px;font-size:.68rem;min-height:28px}
-  .v21-sb{min-width:60px;padding:4px 8px}.v21-sn{font-size:.88rem}.v21-te span{font-size:.74rem}.v21-te img{width:20px;height:20px}
-  .v21-dc{padding:6px 9px;min-width:40px}.v21-dc .dd{font-size:.82rem}
-}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;transition-duration:.01ms!important}}
-  `;
-  document.head.appendChild(s);
-};
+});
 
 /* ═══════════════════════════════════════════════════
    SMALL COMPONENTS
    ═══════════════════════════════════════════════════ */
-function Skeleton() { return <div className="v21-skel" />; }
+const Skeleton = memo(function Skeleton() { return <div className="v21-skel" />; });
 
-function ResultBadge({ result, isCalculating }) {
+const ResultBadge = memo(function ResultBadge({ result, isCalculating }) {
   if (isCalculating) return <span className="v21-bdg pn"><Clock size={8} /> Calc...</span>;
   if (!result || result.resultType === 'pending') return <span className="v21-bdg pn"><Clock size={8} /> Pending</span>;
   if (result.resultType === 'exact') return <span className="v21-bdg ex"><CheckCircle2 size={8} /> Hit +{result.points || 10}</span>;
   if (result.resultType === 'result') return <span className="v21-bdg rs"><TrendingUp size={8} /> Won +{result.points || 3}</span>;
   return <span className="v21-bdg ms"><CircleX size={8} /> Missed</span>;
-}
+});
 
-function SaveToast({ show, score }) {
+const SaveToast = memo(function SaveToast({ show, score }) {
   if (!show) return null;
   return (
     <div className="v21-toast">
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' }}>
+      <div style={toastStyle}>
         <CircleCheck size={15} style={{ color: '#10b981' }} />
         <span style={{ fontSize: '.82rem', fontWeight: 800, color: '#10b981' }}>{score}</span>
       </div>
     </div>
   );
-}
+});
 
-function LoginModal({ onClose, nav }) {
+const LoginModal = memo(function LoginModal({ onClose, nav }) {
   return (
     <div onClick={onClose} className="v21-overlay" style={{ zIndex: 9999 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: 'v21-pop .3s ' + SPRING + ' both' }}>
+      <div onClick={e => e.stopPropagation()} style={modalStyle}>
         <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,.08)', border: '1.5px solid rgba(16,185,129,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: '#10b981' }}><LogIn size={22} /></div>
         <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', marginBottom: 6 }}>Login Required</div>
         <div style={{ fontSize: '.8rem', color: '#94a3b8', marginBottom: 18, lineHeight: 1.5 }}>Sign in to make predictions and compete on the leaderboard.</div>
@@ -333,12 +149,12 @@ function LoginModal({ onClose, nav }) {
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
    DATE STRIP
    ═══════════════════════════════════════════════════ */
-function DateStrip({ date, onChange, dates, hasDataMap }) {
+const DateStrip = memo(function DateStrip({ date, onChange, dates, hasDataMap }) {
   const stripRef = useRef(null);
   const today = todayStr();
   const [expanded, setExpanded] = useState(false);
@@ -388,12 +204,12 @@ function DateStrip({ date, onChange, dates, hasDataMap }) {
       )}
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
    SCORE STEPPER (Glass UI)
    ═══════════════════════════════════════════════════ */
-function ScoreStepper({ value, onChange }) {
+const ScoreStepper = memo(function ScoreStepper({ value, onChange }) {
   const num = value === '' || value == null ? null : parseInt(value, 10);
   const display = num != null && !isNaN(num) ? num : '';
   return (
@@ -403,7 +219,7 @@ function ScoreStepper({ value, onChange }) {
       <button className="v21-step" onClick={() => onChange(String(Math.min(99, (num || 0) + 1)))}><Plus size={12} /></button>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
    ZOKA PICK CARD (Memoized for performance)
@@ -643,7 +459,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
 /* ═══════════════════════════════════════════════════
    RESULTS OVERLAY (Centered Modal)
    ═══════════════════════════════════════════════════ */
-function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
+const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
   useEffect(() => { if (overlayBoxRef.current) overlayBoxRef.current.scrollTop = 0; }, []);
 
@@ -662,23 +478,24 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
     return m;
   }, [results]);
 
-  let totalPts = 0, exact = 0, result = 0, miss = 0, pending = 0, predicted = 0;
-  preds.forEach(p => {
-    const up = upMap.get(p.id) || upMap.get(String(p.matchId));
-    if (!up) return;
-    predicted++;
-    let res = resMap.get(String(p.matchId));
-    if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
-      const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
-      res = { ...r, resultType: r.type };
-    }
-    if (!res || res.resultType === 'pending') { pending++; return; }
-    if (res.resultType === 'exact') { exact++; totalPts += (res.points || 10); }
-    else if (res.resultType === 'result') { result++; totalPts += (res.points || 3); }
-    else miss++;
-  });
-  const allResolved = predicted > 0 && pending === 0;
-  const accuracy = predicted > 0 ? Math.round(((exact + result) / predicted) * 100) : 0;
+  const stats = useMemo(() => {
+    let totalPts = 0, exact = 0, result = 0, miss = 0, pending = 0, predicted = 0;
+    preds.forEach(p => {
+      const up = upMap.get(p.id) || upMap.get(String(p.matchId));
+      if (!up) return;
+      predicted++;
+      let res = resMap.get(String(p.matchId));
+      if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+        const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
+        res = { ...r, resultType: r.type };
+      }
+      if (!res || res.resultType === 'pending') { pending++; return; }
+      if (res.resultType === 'exact') { exact++; totalPts += (res.points || 10); }
+      else if (res.resultType === 'result') { result++; totalPts += (res.points || 3); }
+      else miss++;
+    });
+    return { totalPts, exact, result, miss, pending, predicted, allResolved: predicted > 0 && pending === 0, accuracy: predicted > 0 ? Math.round(((exact + result) / predicted) * 100) : 0 };
+  }, [preds, upMap, resMap]);
 
   return (
     <div className="v21-overlay" onClick={onClose}>
@@ -693,14 +510,14 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
             <button className="v21-b v21-bgh v21-bsm" onClick={onClose}><X size={14} /></button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 5, marginBottom: 12 }}>
-            <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}><AnimNum value={totalPts} /></div><div className="l">Points</div></div>
-            <div className="v21-stat"><div className="n" style={{ color: '#10b981' }}><AnimNum value={exact} /></div><div className="l">Exact</div></div>
-            <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={result} /></div><div className="l">Result</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}><AnimNum value={stats.totalPts} /></div><div className="l">Points</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: '#10b981' }}><AnimNum value={stats.exact} /></div><div className="l">Exact</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={stats.result} /></div><div className="l">Result</div></div>
           </div>
-          {predicted > 0 && (
+          {stats.predicted > 0 && (
             <div className="v21-progress" style={{ marginBottom: 12 }}>
-              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((predicted - pending) / predicted) * 100}%`, background: allResolved ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} /></div>
-              <div className="v21-progress-labels"><span>{predicted} predicted</span><span>{allResolved ? '✓ Complete' : `${pending} pending`}</span></div>
+              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((stats.predicted - stats.pending) / stats.predicted) * 100}%`, background: stats.allResolved ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} /></div>
+              <div className="v21-progress-labels"><span>{stats.predicted} predicted</span><span>{stats.allResolved ? '✓ Complete' : `${stats.pending} pending`}</span></div>
             </div>
           )}
           {preds.map((p, i) => {
@@ -726,17 +543,17 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
               </div>
             );
           })}
-          {predicted === 0 && (
+          {stats.predicted === 0 && (
             <div className="v21-empty" style={{ marginTop: 8 }}>
               <Target size={20} style={{ color: '#94a3b8', display: 'block', margin: '0 auto 6px' }} />
               <p>No predictions for this day</p>
             </div>
           )}
-          {allResolved && (
+          {stats.allResolved && (
             <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center' }}>
               <Trophy size={22} style={{ color: '#10b981', marginBottom: 6 }} />
               <div style={{ fontSize: '.88rem', fontWeight: 900, color: '#fff', marginBottom: 3 }}>All Results In!</div>
-              <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: '#a855f7' }}>{totalPts} pts</strong> · {accuracy}% accuracy</div>
+              <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: '#a855f7' }}>{stats.totalPts} pts</strong> · {stats.accuracy}% accuracy</div>
               <button className="v21-b v21-bp" onClick={() => { onClose(); nav('/leaderboard'); }}>View Leaderboard <ArrowRight size={13} /></button>
             </div>
           )}
@@ -744,13 +561,12 @@ function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════
    MAIN COMPONENT
    ═══════════════════════════════════════════════════ */
 export default function Predictions() {
-  injectCSS();
   const { currentUser, userProfile } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
@@ -791,7 +607,6 @@ export default function Predictions() {
   const [liveFixtures, setLiveFixtures] = useState([]);
 
   const resolving = useRef(new Set());
-
   const isToday = selDate === todayStr();
 
   /* ═══ DERIVED DATA ═══ */
@@ -803,46 +618,39 @@ export default function Predictions() {
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
-  const fixtureMap = useMemo(() => {
-    return new Map(liveFixtures.map(f => [String(f.id), f]));
-  }, [liveFixtures]);
+  const fixtureMap = useMemo(() => new Map(liveFixtures.map(f => [String(f.id), f])), [liveFixtures]);
 
+  // ★ STRICT EQUALITY MERGE: Prevents new object creation if nothing changed, saving React.memo re-renders!
   const mergedFeatured = useMemo(() => {
     if (!isToday || !fixtureMap.size) return currentFeatured;
-    return currentFeatured.map(p => {
-      const mid = String(p.matchId);
-      const fx = fixtureMap.get(mid);
+    let changed = false;
+    const next = currentFeatured.map(p => {
+      const fx = fixtureMap.get(String(p.matchId));
       if (fx) {
-        return {
-          ...p,
-          status: fx.status || p.status,
-          homeScore: fx.homeScore ?? p.homeScore,
-          awayScore: fx.awayScore ?? p.awayScore,
-          minute: fx.minute ?? p.minute,
-          isLive: fx.isLive || p.isLive,
-          isFinished: fx.isFinished || p.isFinished,
-        };
+        if (p.status !== fx.status || p.homeScore !== fx.homeScore || p.awayScore !== fx.awayScore || p.minute !== fx.minute || p.isLive !== fx.isLive || p.isFinished !== fx.isFinished) {
+          changed = true;
+          return { ...p, status: fx.status || p.status, homeScore: fx.homeScore ?? p.homeScore, awayScore: fx.awayScore ?? p.awayScore, minute: fx.minute ?? p.minute, isLive: fx.isLive || p.isLive, isFinished: fx.isFinished || p.isFinished };
+        }
       }
-      return p;
+      return p; // Return original reference
     });
+    return changed ? next : currentFeatured;
   }, [currentFeatured, fixtureMap, isToday]);
 
   const mergedZoka = useMemo(() => {
     if (!isToday || !fixtureMap.size) return currentZoka;
-    return currentZoka.map(p => {
-      const mid = String(p.matchId);
-      const fx = fixtureMap.get(mid);
+    let changed = false;
+    const next = currentZoka.map(p => {
+      const fx = fixtureMap.get(String(p.matchId));
       if (fx) {
-        return {
-          ...p,
-          status: fx.status || p.status,
-          homeScore: fx.homeScore ?? p.homeScore,
-          awayScore: fx.awayScore ?? p.awayScore,
-          minute: fx.minute ?? p.minute,
-        };
+        if (p.status !== fx.status || p.homeScore !== fx.homeScore || p.awayScore !== fx.awayScore || p.minute !== fx.minute) {
+          changed = true;
+          return { ...p, status: fx.status || p.status, homeScore: fx.homeScore ?? p.homeScore, awayScore: fx.awayScore ?? p.awayScore, minute: fx.minute ?? p.minute };
+        }
       }
       return p;
     });
+    return changed ? next : currentZoka;
   }, [currentZoka, fixtureMap, isToday]);
 
   const userPredMap = useMemo(() => {
@@ -879,9 +687,11 @@ export default function Predictions() {
     return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
   }, [mergedFeatured, userPredMap, resultMap]);
 
-  /* ═══ SHARE & EARN LOGIC ═══ */
+  /* ═══ HANDLERS (useCallback) ═══ */
+  const openLogin = useCallback(() => setShowLogin(true), []);
+  
   const handleShare = useCallback(async (pred, isZoka = false) => {
-    if (!uid) { setShowLogin(true); return; }
+    if (!uid) { openLogin(); return; }
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
     const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${encodeURIComponent(uid)}`;
@@ -918,10 +728,10 @@ export default function Predictions() {
         setToast(`Copy failed. Please copy manually: ${fullText}`);
       }
     }
-  }, [uid, setShowLogin, userPredMap]);
+  }, [uid, openLogin, userPredMap]);
 
   const handleBannerShare = useCallback(async () => {
-    if (!uid) { setShowLogin(true); return; }
+    if (!uid) { openLogin(); return; }
 
     const total = userStats?.predicted || myDayStats.pred || 0;
     const correct = (userStats?.exact || myDayStats.ex || 0) + (userStats?.result || myDayStats.rs || 0);
@@ -948,9 +758,70 @@ export default function Predictions() {
         setToast(`Copy failed. Please copy manually: ${shareText}`);
       }
     }
-  }, [uid, userStats, myDayStats, setShowLogin]);
+  }, [uid, userStats, myDayStats, openLogin]);
 
-  // ★ REFERRAL VISIT TRACKING
+  const startEdit = useCallback((pred) => {
+    const mid = pred.id || String(pred.matchId);
+    const existing = userPredMap.get(mid) || userPredMap.get(String(pred.matchId));
+    setEditingId(mid);
+    setEditH(existing ? String(existing.homeScore) : '');
+    setEditA(existing ? String(existing.awayScore) : '');
+  }, [userPredMap]);
+
+  const cancelEdit = useCallback(() => { setEditingId(null); setEditH(''); setEditA(''); }, []);
+  const quickPick = useCallback((h, a) => { setEditH(String(h)); setEditA(String(a)); }, []);
+
+  const savePrediction = useCallback(async (pred) => {
+    if (!uid || !editingId) return;
+    const h = parseInt(editH, 10);
+    const a = parseInt(editA, 10);
+    if (isNaN(h) || isNaN(a)) { setToast('Enter valid scores'); return; }
+    setSaving(true);
+    try {
+      const matchId = String(pred.matchId || editingId);
+      const matchDate = pred.matchDate || selDate;
+      await savePredictionAction(uid, displayName, { ...pred, id: editingId, matchId, matchDate }, h, a);
+      setEditingId(null);
+      setEditH('');
+      setEditA('');
+      setToast(`${h}-${a} saved`);
+    } catch (e) {
+      console.error('[Pred] Save err:', e);
+      setToast('Save failed');
+    }
+    setSaving(false);
+  }, [uid, editingId, editH, editA, selDate, displayName]);
+
+  const handleVote = useCallback(async (matchId, vote) => {
+    if (!uid) { openLogin(); return; }
+    setVotingId(matchId);
+    try {
+      const oldVote = currentVotes[matchId];
+      if (oldVote === vote) {
+        await removeZokaVote(uid, matchId, null);
+        if (isToday) {
+          const key = `zoka_votes_${selDate}`;
+          const existing = JSON.parse(localStorage.getItem(key) || '{}');
+          delete existing[matchId];
+          localStorage.setItem(key, JSON.stringify(existing));
+        }
+      } else {
+        await saveZokaVote(uid, matchId, vote);
+      }
+    } catch (e) { console.error('[Pred] Vote err:', e); }
+    setVotingId(null);
+  }, [uid, openLogin, currentVotes, isToday, selDate]);
+
+  const handleDateChange = useCallback((d) => {
+    setSelDate(d);
+    setFilter('all');
+    setZokaExpanded(false);
+    cancelEdit();
+  }, [cancelEdit]);
+
+  /* ═══ EFFECTS ═══ */
+  
+  // Referral Visit Tracking
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const referrer = params.get('ref');
@@ -976,25 +847,33 @@ export default function Predictions() {
     }
   }, [location.search, uid]);
 
-  /* ═══ EFFECTS ═══ */
-  
-  // ★ FIX: 30-second interval for lock timers instead of 1s to save CPU/Battery
+  // 30s interval for lock timers
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // ★ FIX: Use global live subscription to prevent duplicate API calls
+  // Global live subscription
   useEffect(() => {
     if (!isToday) return;
-    setLiveFixtures([]); // Clear when date changes
+    setLiveFixtures([]);
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
-      setLiveFixtures(lm || []);
-      setNow(Date.now()); // Refresh lock timers when live data arrives
+      setLiveFixtures(prev => {
+        if (prev.length !== lm.length) return lm || [];
+        let changed = false;
+        for (let i = 0; i < lm.length; i++) {
+          if (prev[i].homeScore !== lm[i].homeScore || prev[i].awayScore !== lm[i].awayScore || prev[i].status !== lm[i].status || prev[i].minute !== lm[i].minute) {
+            changed = true; break;
+          }
+        }
+        return changed ? lm : prev;
+      });
+      setNow(Date.now());
     });
     return () => unsub();
   }, [isToday]);
 
+  // Fetch non-today data
   useEffect(() => {
     if (isToday) return;
     let cancelled = false;
@@ -1027,7 +906,7 @@ export default function Predictions() {
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
-  // ★ FIX 3: ADMIN AUTO-RESOLVER WITH GUARD
+  // Admin auto-resolver
   useEffect(() => {
     if (!isAdmin || !isToday || !fixtureMap.size) return;
     const toResolve = mergedFeatured.filter(p => {
@@ -1043,7 +922,6 @@ export default function Predictions() {
         const dbPred = currentFeatured.find(p => String(p.matchId) === mid);
         if (dbPred && dbPred.status !== 'finished') {
           resolving.current.add(mid);
-          console.log(`[AutoResolve] Admin triggering resolution for ${mid}`);
           resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
             .finally(() => resolving.current.delete(mid));
         }
@@ -1069,6 +947,7 @@ export default function Predictions() {
     if (mergedZoka.length <= ZOKA_VISIBLE_COUNT) return mergedZoka;
     return zokaExpanded ? mergedZoka : mergedZoka.slice(0, ZOKA_VISIBLE_COUNT);
   }, [mergedZoka, zokaExpanded]);
+  
   const hiddenZokaCount = mergedZoka.length - ZOKA_VISIBLE_COUNT;
 
   const deferredFilter = useDeferredValue(filter);
@@ -1091,66 +970,7 @@ export default function Predictions() {
     return dailyEntries.find(u => u.uid === uid) || null;
   }, [dailyEntries, uid]);
 
-  /* ═══ HANDLERS ═══ */
-  const startEdit = (pred) => {
-    const mid = pred.id || String(pred.matchId);
-    const existing = userPredMap.get(mid) || userPredMap.get(String(pred.matchId));
-    setEditingId(mid);
-    setEditH(existing ? String(existing.homeScore) : '');
-    setEditA(existing ? String(existing.awayScore) : '');
-  };
-
-  const cancelEdit = () => { setEditingId(null); setEditH(''); setEditA(''); };
-  const quickPick = (h, a) => { setEditH(String(h)); setEditA(String(a)); };
-
-  const savePrediction = async (pred) => {
-    if (!uid || !editingId) return;
-    const h = parseInt(editH, 10);
-    const a = parseInt(editA, 10);
-    if (isNaN(h) || isNaN(a)) { setToast('Enter valid scores'); return; }
-    setSaving(true);
-    try {
-      const matchId = String(pred.matchId || editingId);
-      const matchDate = pred.matchDate || selDate;
-      await savePredictionAction(uid, displayName, { ...pred, id: editingId, matchId, matchDate }, h, a);
-      setEditingId(null);
-      setEditH('');
-      setEditA('');
-      setToast(`${h}-${a} saved`);
-    } catch (e) {
-      console.error('[Pred] Save err:', e);
-      setToast('Save failed');
-    }
-    setSaving(false);
-  };
-
-  const handleVote = async (matchId, vote) => {
-    if (!uid) { setShowLogin(true); return; }
-    setVotingId(matchId);
-    try {
-      const oldVote = currentVotes[matchId];
-      if (oldVote === vote) {
-        await removeZokaVote(uid, matchId, null);
-        if (isToday) {
-          const key = `zoka_votes_${selDate}`;
-          const existing = JSON.parse(localStorage.getItem(key) || '{}');
-          delete existing[matchId];
-          localStorage.setItem(key, JSON.stringify(existing));
-        }
-      } else {
-        await saveZokaVote(uid, matchId, vote);
-      }
-    } catch (e) { console.error('[Pred] Vote err:', e); }
-    setVotingId(null);
-  };
-
-  const handleDateChange = (d) => {
-    setSelDate(d);
-    setFilter('all');
-    setZokaExpanded(false);
-    cancelEdit();
-  };
-
+  /* ═══ RENDER ═══ */
   return (
     <div className="v21-page">
       <SEO
@@ -1161,9 +981,7 @@ export default function Predictions() {
         robots="index,follow"
       />
 
-      {copyToast && (
-        <div className="v21-toast-copy">Copied to clipboard!</div>
-      )}
+      {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
 
       <div className="v21-hdr">
         <button className="v21-hdr-btn" onClick={() => nav('/')}><ArrowLeft size={12} /> Home</button>
@@ -1185,7 +1003,7 @@ export default function Predictions() {
 
       <div className="v21-wrap">
         {loggedIn && (
-          <div style={{ marginBottom: 16, animation: 'v21-fade-up .4s ' + SMOOTH + ' both' }}>
+          <div style={{ marginBottom: 16, animation: `v21-fade-up .4s ${SMOOTH} both` }}>
             <div className="v21-stats">
               <div className="v21-stat"><div className="n" style={{ color: '#fbbf24' }}><AnimNum value={myDayStats.pts} /></div><div className="l">Points</div></div>
               <div className="v21-stat"><div className="n" style={{ color: '#10b981' }}><AnimNum value={myDayStats.ex} /></div><div className="l">Exact</div></div>
@@ -1277,7 +1095,7 @@ export default function Predictions() {
           </div>
         )}
 
-        <div style={{ animation: 'v21-fade-up .3s ' + SMOOTH + ' both' }}>
+        <div style={{ animation: `v21-fade-up .3s ${SMOOTH} both` }}>
           <div className="v21-sec">
             <div className="v21-sec-icon"><Target size={13} /></div>
             <span>Featured — Compete</span>
@@ -1287,29 +1105,32 @@ export default function Predictions() {
           {currentLoading ? (
             <div>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} />)}</div>
           ) : filteredPreds.length > 0 ? (
-            filteredPreds.map((pred, i) => (
-              <PredCard
-                key={pred.id || String(pred.matchId) || i}
-                pred={pred}
-                index={i}
-                userPred={userPredMap.get(pred.id) || userPredMap.get(String(pred.matchId))}
-                result={resultMap.get(String(pred.matchId))}
-                isEditing={editingId === (pred.id || String(pred.matchId))}
-                editH={editH}
-                editA={editA}
-                onEdit={startEdit}
-                onSave={savePrediction}
-                onCancel={cancelEdit}
-                onQuickPick={quickPick}
-                onEditH={setEditH}
-                onEditA={setEditA}
-                loggedIn={loggedIn}
-                onLogin={() => setShowLogin(true)}
-                saving={saving}
-                now={now}
-                onShare={handleShare}
-              />
-            ))
+            filteredPreds.map((pred, i) => {
+              const predId = pred.id || String(pred.matchId);
+              return (
+                <PredCard
+                  key={predId}
+                  pred={pred}
+                  index={i}
+                  userPred={userPredMap.get(predId)}
+                  result={resultMap.get(String(pred.matchId))}
+                  isEditing={editingId === predId}
+                  editH={editH}
+                  editA={editA}
+                  onEdit={startEdit}
+                  onSave={savePrediction}
+                  onCancel={cancelEdit}
+                  onQuickPick={quickPick}
+                  onEditH={setEditH}
+                  onEditA={setEditA}
+                  loggedIn={loggedIn}
+                  onLogin={openLogin}
+                  saving={saving}
+                  now={now}
+                  onShare={handleShare}
+                />
+              );
+            })
           ) : (
             <div className="v21-empty">
               <Target size={20} style={{ color: '#94a3b8', display: 'block', margin: '0 auto 6px' }} />

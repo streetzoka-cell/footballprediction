@@ -4,21 +4,15 @@
 
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
-
 import { dataLayer } from './dataLayer';
-import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow, getDateRange } from './dates';
-
+import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow } from './dates';
 import { eventBus, EVENT } from './eventBus';
-
 import {
-  SPORT, STATUS,
-  isLiveStatus, isFinishedStatus, isScheduledStatus,
-  getLeagueColor, getBasketballLeaguePriority,
-  TTL, TIMEOUT, POLL_INTERVAL, CACHE_KEY,
-  calcPoints, RESULT_TYPE, POINTS,
+  SPORT, isLiveStatus, isFinishedStatus, isScheduledStatus,
+  getLeagueColor, POLL_INTERVAL, CACHE_KEY, calcPoints, RESULT_TYPE, POINTS,
 } from './constants';
 
-export { todayStr, yesterdayStr, tomorrowStr, getDateRange };
+export { todayStr, yesterdayStr, tomorrowStr, eventBus, EVENT, SPORT, isLiveStatus, isFinishedStatus, isScheduledStatus, getLeagueColor, CACHE_KEY, calcPoints, RESULT_TYPE, POINTS, dataLayer };
 
 let isUserAuthenticated = false;
 let authReady = false;
@@ -34,23 +28,13 @@ if (auth) {
     if (user && !wasAuthenticated) eventBus.emit(EVENT.USER_SIGNIN, { uid: user.uid });
     else if (!user && wasAuthenticated) eventBus.emit(EVENT.USER_SIGNOUT, {});
   });
-} else {
-  authReady = true;
-}
+} else { authReady = true; }
 
 export const waitForAuth = () => authReady ? Promise.resolve() : new Promise((resolve) => authWaiters.push(resolve));
 export const isAuthenticated = () => isUserAuthenticated;
 
-const getDeviceId = () => {
-  let id = localStorage.getItem('fx_device_id');
-  if (!id) {
-    id = `dev_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 11)}`;
-    localStorage.setItem('fx_device_id', id);
-  }
-  return id;
-};
-
-const lsGet = (key, fallback) => { try { const item = localStorage.getItem(key); return item ? JSON.parse(item) : fallback; } catch { return fallback; } };
+const getDeviceId = () => { let id = localStorage.getItem('fx_device_id'); if (!id) { id = `dev_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 11)}`; localStorage.setItem('fx_device_id', id); } return id; };
+const lsGet = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key)) || fallback; } catch { return fallback; } };
 const lsSet = (key, value) => { try { localStorage.setItem(key, JSON.stringify(value)); } catch {} };
 
 export const getFavs = () => lsGet('fx_favs', []);
@@ -61,344 +45,128 @@ export const addFav = (team) => { const favs = getFavs(); if (!favs.find((t) => 
 export const removeFav = (id) => setFavs(getFavs().filter((t) => t.id !== id));
 export const isFav = (id) => getFavs().some((t) => t.id === id);
 
-const getUserId = () => { const user = auth?.currentUser; return user ? user.uid : getDeviceId(); };
-const pushToFb = async (key, value) => { if (!db) return; await waitForAuth(); try { await setDoc(doc(db, 'users', getUserId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true }); } catch (err) {} };
+const getUserId = () => auth?.currentUser ? auth.currentUser.uid : getDeviceId();
+const pushToFb = async (key, value) => { if (!db) return; await waitForAuth(); try { await setDoc(doc(db, 'users', getUserId()), { [key]: value, updatedAt: serverTimestamp() }, { merge: true }); } catch {} };
 
-export const initFirebaseSync = async () => {
-  if (!db) return;
-  await waitForAuth();
-  try {
-    const snap = await getDoc(doc(db, 'users', getUserId()));
-    if (!snap.exists()) return;
-    const data = snap.data();
-    if (data.favorites?.length > getFavs().length) lsSet('fx_favs', data.favorites);
-    if (data.prefs) lsSet('fx_prefs', data.prefs);
-  } catch (err) {}
-};
-
-export function formatDate(dateStr) { return new Date(dateStr).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }); }
+export const initFirebaseSync = async () => { if (!db) return; await waitForAuth(); try { const snap = await getDoc(doc(db, 'users', getUserId())); if (!snap.exists()) return; const data = snap.data(); if (data.favorites?.length > getFavs().length) lsSet('fx_favs', data.favorites); if (data.prefs) lsSet('fx_prefs', data.prefs); } catch {} };
 
 export function transformMatch(m) {
   if (!m) return null;
-  if (m.fixture) return _transformApiFormat(m);
-  if (m.sport === SPORT.BASKETBALL || m.pointsHome !== undefined || m.q1Home !== undefined) return _transformBasketballFormat(m);
-  return _transformFootballFormat(m);
+  if (m.sport === SPORT.BASKETBALL || m.pointsHome !== undefined || m.q1Home !== undefined) return transformBasketball(m);
+  return transformFootball(m);
 }
 
-function _transformFootballFormat(m) {
-  const id = String(m.id || '');
-  const s = m.status || '';
+function transformFootball(m) {
+  const id = String(m.id || ''), s = m.status || '';
   return {
     id, sport: SPORT.FOOTBALL, date: m.date || null, kickoff: formatTime(m.date), timestamp: m.timestamp || null,
-    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
-    awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
-    homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''),
-    homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
-    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: m.leagueFlag || null, type: 'League', season: m.season || null, round: m.round || null },
-    leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '',
-    status: s, rawStatus: s, statusLong: m.statusLong || '',
+    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD' }, awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD' },
+    homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''), homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
+    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: m.leagueFlag || null, season: m.season || null, round: m.round || null },
+    leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '', status: s, rawStatus: s, statusLong: m.statusLong || '',
     homeScore: m.goalsHome ?? null, awayScore: m.goalsAway ?? null,
-    score: {
-      home: m.goalsHome ?? null, away: m.goalsAway ?? null,
-      halfTime: { home: m.scoreHalftimeHome ?? null, away: m.scoreHalftimeAway ?? null },
-      fullTime: { home: m.scoreFulltimeHome ?? m.goalsHome ?? null, away: m.scoreFulltimeAway ?? m.goalsAway ?? null },
-      extraTime: { home: m.scoreExtratimeHome ?? null, away: m.scoreExtratimeAway ?? null },
-      penalties: { home: m.scorePenaltyHome ?? null, away: m.scorePenaltyAway ?? null },
-    },
+    score: { home: m.goalsHome ?? null, away: m.goalsAway ?? null, halfTime: { home: m.scoreHalftimeHome ?? null, away: m.scoreHalftimeAway ?? null }, fullTime: { home: m.scoreFulltimeHome ?? m.goalsHome ?? null, away: m.scoreFulltimeAway ?? m.goalsAway ?? null }, extraTime: { home: m.scoreExtratimeHome ?? null, away: m.scoreExtratimeAway ?? null }, penalties: { home: m.scorePenaltyHome ?? null, away: m.scorePenaltyAway ?? null } },
     isLive: isLiveStatus(s, SPORT.FOOTBALL), isFinished: isFinishedStatus(s, SPORT.FOOTBALL), isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
-    minute: m.elapsed ?? null, venue: null, referee: m.referee || null,
+    minute: m.elapsed ?? null, venue: null, referee: null,
   };
 }
 
-function _transformBasketballFormat(m) {
-  const id = String(m.id || '');
-  const s = m.status || '';
-  const periodMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4', 5: 'OT' };
-  const minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
+function transformBasketball(m) {
+  const id = String(m.id || ''), s = m.status || '', periodMap = { 1: 'Q1', 2: 'Q2', 3: 'Q3', 4: 'Q4', 5: 'OT' }, minute = m.currentPeriod ? (periodMap[m.currentPeriod] || s) : (s || null);
   return {
     id, sport: SPORT.BASKETBALL, date: m.date || null, kickoff: formatTime(m.date), timestamp: m.timestamp || null,
-    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD', abbr: '', color: '#333' },
-    awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD', abbr: '', color: '#333' },
-    homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''),
-    homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
-    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: null, type: 'League', season: m.season || null, round: null },
-    leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '',
-    status: s, rawStatus: s, statusLong: m.statusLong || '',
+    homeTeam: { id: String(m.homeTeamId || ''), name: m.homeTeamName || 'TBD' }, awayTeam: { id: String(m.awayTeamId || ''), name: m.awayTeamName || 'TBD' },
+    homeId: String(m.homeTeamId || ''), awayId: String(m.awayTeamId || ''), homeLogo: m.homeTeamLogo || null, awayLogo: m.awayTeamLogo || null,
+    league: { id: String(m.leagueId || ''), name: m.leagueName || 'Other', color: getLeagueColor(m.leagueId), emblem: m.leagueLogo || null, country: m.leagueCountry || '', flag: null, season: m.season || null, round: null },
+    leagueKey: String(m.leagueId || 'OTHER'), leagueCountry: m.leagueCountry || '', status: s, rawStatus: s, statusLong: m.statusLong || '',
     homeScore: m.pointsHome ?? null, awayScore: m.pointsAway ?? null,
-    score: {
-      home: m.pointsHome ?? null, away: m.pointsAway ?? null, halfTime: null, fullTime: { home: m.pointsHome ?? null, away: m.pointsAway ?? null }, extraTime: null, penalties: null,
-      q1: { home: m.q1Home ?? null, away: m.q1Away ?? null }, q2: { home: m.q2Home ?? null, away: m.q2Away ?? null },
-      q3: { home: m.q3Home ?? null, away: m.q3Away ?? null }, q4: { home: m.q4Home ?? null, away: m.q4Away ?? null }, ot: { home: m.otHome ?? null, away: m.otAway ?? null },
-    },
+    score: { home: m.pointsHome ?? null, away: m.pointsAway ?? null, halfTime: null, fullTime: { home: m.pointsHome ?? null, away: m.pointsAway ?? null }, extraTime: null, penalties: null, q1: { home: m.q1Home ?? null, away: m.q1Away ?? null }, q2: { home: m.q2Home ?? null, away: m.q2Away ?? null }, q3: { home: m.q3Home ?? null, away: m.q3Away ?? null }, q4: { home: m.q4Home ?? null, away: m.q4Away ?? null }, ot: { home: m.otHome ?? null, away: m.otAway ?? null } },
     isLive: isLiveStatus(s, SPORT.BASKETBALL), isFinished: isFinishedStatus(s, SPORT.BASKETBALL), isScheduled: isScheduledStatus(s, SPORT.BASKETBALL),
     minute, venue: null, referee: null,
   };
 }
 
-function _transformApiFormat(m) {
-  const { fixture = {}, teams = {}, goals = {}, score = {}, league = {} } = m;
-  const homeId = String(teams.home?.id || '');
-  const awayId = String(teams.away?.id || '');
-  const s = fixture.status?.short || '';
-  return {
-    id: String(fixture.id), date: fixture.date, kickoff: formatTime(fixture.date), timestamp: fixture.timestamp || null, sport: SPORT.FOOTBALL,
-    homeTeam: { id: homeId, name: teams.home?.name || 'TBD', abbr: teams.home?.code || '', color: '#333' },
-    awayTeam: { id: awayId, name: teams.away?.name || 'TBD', abbr: teams.away?.code || '', color: '#333' },
-    homeId, awayId, homeLogo: teams.home?.logo || null, awayLogo: teams.away?.logo || null,
-    league: { id: String(league.id || ''), name: league.name || 'Other', color: getLeagueColor(league.id), emblem: league.logo || null, country: league.country || '', flag: league.flag || null, type: league.type || 'League', season: league.season || null, round: league.round || null },
-    leagueKey: String(league.id || 'OTHER'), leagueCountry: league.country || '',
-    status: s, rawStatus: s, statusLong: fixture.status?.long || '',
-    homeScore: goals.home, awayScore: goals.away,
-    score: {
-      home: goals.home, away: goals.away,
-      halfTime: { home: score.halftime?.home ?? null, away: score.halftime?.away ?? null },
-      fullTime: { home: score.fulltime?.home ?? goals.home, away: score.fulltime?.away ?? goals.away },
-      extraTime: { home: score.extratime?.home ?? null, away: score.extratime?.away ?? null },
-      penalties: { home: score.penalty?.home ?? null, away: score.penalty?.away ?? null },
-    },
-    isLive: isLiveStatus(s, SPORT.FOOTBALL), isFinished: isFinishedStatus(s, SPORT.FOOTBALL), isScheduled: isScheduledStatus(s, SPORT.FOOTBALL),
-    minute: fixture.status?.elapsed || null, venue: fixture.venue?.name || null, referee: fixture.referee || null,
-  };
+function extractMatches(snapshot) {
+  if (!snapshot) return { matches: [], live: [], finished: [] };
+  const live = (snapshot.live || []).map(transformMatch);
+  const finished = (snapshot.finished || []).map(transformMatch);
+  const scheduled = (snapshot.matches || []).map(transformMatch);
+  const seenIds = new Set();
+  const matches = [...live, ...finished, ...scheduled].filter(m => { if (seenIds.has(m.id)) return false; seenIds.add(m.id); return true; });
+  return { matches, live, finished };
 }
 
-function _extractMatchesForDate(snapshot) {
-  if (!snapshot) return [];
+function emptyResult(error = null) { return { matches: [], live: [], finished: [], error, updatedAt: null, isRolloverWindow: isInRolloverWindow() }; }
 
-  const allRaw = [
-    ...(snapshot.live || []),
-    ...(snapshot.finished || []),
-    ...(snapshot.matches || [])
-  ];
-
-  const uniqueIds = new Set();
-  const deduped = allRaw.filter(m => {
-    const id = String(m.id || m.matchId);
-    if (uniqueIds.has(id)) return false;
-    uniqueIds.add(id);
-    return true;
-  });
-
-  return deduped.map((d) => transformMatch(d));
-}
-
-function _emptyResult(error = null) {
-  return { matches: [], error, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished: false, isRolloverWindow: isInRolloverWindow() };
-}
-
-export const fetchFixtures = async (date, forceRefresh = false) => {
-  if (forceRefresh) dataLayer.invalidatePrefix('snap:ft:');
+export async function fetchFixtures(dateStr, { forceRefresh = false } = {}) {
+  if (forceRefresh) dataLayer.invalidatePrefix(`snap:ft:${dateStr}`);
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(date);
-    if (!snapshot) return _emptyResult(null);
-    const matches = _extractMatchesForDate(snapshot);
-    const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
-    return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
-  } catch (err) {
-    return _emptyResult('FIRESTORE');
-  }
-};
+    const snapshot = await dataLayer.fetchFootballSnapshot(dateStr);
+    if (!snapshot) return emptyResult(null);
+    const result = extractMatches(snapshot);
+    return { ...result, updatedAt: snapshot.updatedAt, error: null, isRolloverWindow: isInRolloverWindow() };
+  } catch (err) { return emptyResult(err.message); }
+}
 
 export const fetchYesterdayFixtures = () => fetchFixtures(yesterdayStr());
 export const fetchTomorrowFixtures = () => fetchFixtures(tomorrowStr());
+export async function fetchFinishedFixtures() { try { const snapshot = await dataLayer.fetchFootballSnapshot(todayStr()); return snapshot ? (snapshot.finished || []).map(transformMatch).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : []; } catch { return []; } }
+export async function fetchLiveScores() { try { const snapshot = await dataLayer.fetchFootballSnapshot(todayStr()); return snapshot ? { matches: (snapshot.live || []).map(transformMatch), error: null } : { matches: [], error: null }; } catch (err) { return { matches: [], error: err.message }; } }
 
-export const fetchFinishedFixtures = async () => {
-  try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snapshot) return [];
-    return (snapshot.finished || []).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  } catch { return []; }
-};
-
-export const fetchLiveScores = async () => {
-  try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snapshot) return { matches: [], error: null };
-    return { matches: (snapshot.live || []).map((d) => transformMatch(d)), error: null };
-  } catch (err) { return { matches: [], error: err.message }; }
-};
-
-export const subscribeToLiveFixtures = (callback) =>
-  _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
-
-export const subscribeToTodayFixtures = (callback) =>
-  _createPollingSubscription(SPORT.FOOTBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
-
-function _createPollingSubscription(sport, callback, options = {}) {
-  const activeMs = 15000; 
-  const idleMs = 60000;
-  const includeToday = options.includeToday || false;
-  
-  let timer = null, active = false, currentMatches = [], errorCount = 0;
-
-  const onVisibilityChange = () => {
-    if (document.hidden && timer) { clearTimeout(timer); timer = null; }
-    else if (!document.hidden && active && !timer) { timer = setTimeout(poll, activeMs); }
-  };
-
-  const poll = async () => {
-    if (!active) return;
-    if (document.hidden) { timer = setTimeout(poll, idleMs); return; }
-
-    try {
-      const dateStr = todayStr();
-      const prefix = sport === SPORT.BASKETBALL ? 'snap:bb:' : 'snap:ft:';
-      dataLayer.invalidate(`${prefix}${dateStr}`);
-      const snapshot = await dataLayer.fetchSnapshot(sport, dateStr);
-      errorCount = 0;
-
-      const liveMatches = (snapshot?.live || []).map((d) => transformMatch(d));
-      const finishedMatches = (snapshot?.finished || []).map((d) => transformMatch(d));
-      const todayMatches = includeToday ? (snapshot?.matches || []).map((d) => transformMatch(d)) : [];
-
-      const allMatches = [...liveMatches, ...finishedMatches, ...todayMatches];
-
-      const uniqueIds = new Set();
-      const dedupedMatches = allMatches.filter(m => {
-        const id = String(m.id);
-        if (uniqueIds.has(id)) return false;
-        uniqueIds.add(id);
-        return true;
-      });
-
-      currentMatches = dedupedMatches;
-      const hasLive = liveMatches.length > 0;
-      callback({ matches: dedupedMatches, hasLive, liveCount: liveMatches.length, error: null });
-      
-      if (active) timer = setTimeout(poll, hasLive ? activeMs : idleMs);
-    } catch (err) {
-      errorCount++;
-      callback({ matches: currentMatches, hasLive: false, liveCount: 0, error: err.message });
-      if (active) timer = setTimeout(poll, Math.min(idleMs * errorCount, 300000));
-    }
-  };
-
-  active = true;
-  document.addEventListener('visibilitychange', onVisibilityChange);
-  poll();
-
-  return () => {
-    active = false;
-    if (timer) { clearTimeout(timer); timer = null; }
-    document.removeEventListener('visibilitychange', onVisibilityChange);
-  };
+// ★ FIX: Use real-time Firestore listeners instead of polling
+export function subscribeToLiveFixtures(callback) {
+  const dateStr = todayStr();
+  return dataLayer.subscribeFootballSnapshot(dateStr, (snapshot) => {
+    if (!snapshot) return callback({ matches: [], live: [], finished: [], hasLive: false, liveCount: 0, error: null });
+    const result = extractMatches(snapshot);
+    callback({ matches: result.live, live: result.live, finished: result.finished, hasLive: result.live.length > 0, liveCount: result.live.length, error: null });
+  });
 }
 
-export const fetchBasketballFixtures = async (date) => {
-  try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(date);
-    if (!snapshot) return _emptyResult(null);
-    const matches = _extractMatchesForDate(snapshot);
-    const allFinished = matches.length > 0 && matches.every((m) => m.isFinished);
-    return { matches, error: null, fromCache: true, isStale: false, forceFailed: false, cacheSource: 'firestore', allFinished, isRolloverWindow: isInRolloverWindow() };
-  } catch (err) {
-    return _emptyResult('FIRESTORE');
-  }
-};
+export function subscribeToTodayFixtures(callback) {
+  const dateStr = todayStr();
+  return dataLayer.subscribeFootballSnapshot(dateStr, (snapshot) => {
+    if (!snapshot) return callback({ matches: [], live: [], finished: [], hasLive: false, liveCount: 0, error: null });
+    const result = extractMatches(snapshot);
+    callback({ matches: result.matches, live: result.live, finished: result.finished, hasLive: result.live.length > 0, liveCount: result.live.length, error: null });
+  });
+}
 
+export async function fetchBasketballFixtures(dateStr, { forceRefresh = false } = {}) { if (forceRefresh) dataLayer.invalidatePrefix(`snap:bb:${dateStr}`); try { const snapshot = await dataLayer.fetchBasketballSnapshot(dateStr); if (!snapshot) return emptyResult(null); const result = extractMatches(snapshot); return { ...result, updatedAt: snapshot.updatedAt, error: null, isRolloverWindow: isInRolloverWindow() }; } catch (err) { return emptyResult(err.message); } }
 export const fetchBasketballYesterdayFixtures = () => fetchBasketballFixtures(yesterdayStr());
 export const fetchBasketballTomorrowFixtures = () => fetchBasketballFixtures(tomorrowStr());
+export async function fetchBasketballFinishedFixtures() { try { const s = await dataLayer.fetchBasketballSnapshot(todayStr()); return s ? (s.finished || []).map(transformMatch).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : []; } catch { return []; } }
+export async function fetchBasketballLiveScores() { try { const s = await dataLayer.fetchBasketballSnapshot(todayStr()); return s ? { matches: (s.live || []).map(transformMatch), error: null } : { matches: [], error: null }; } catch (err) { return { matches: [], error: err.message }; } }
 
-export const fetchBasketballFinishedFixtures = async () => {
-  try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
-    if (!snapshot) return [];
-    return (snapshot.finished || []).map((d) => transformMatch(d)).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-  } catch { return []; }
-};
+export function subscribeToBasketballLiveFixtures(cb) {
+  const dateStr = todayStr();
+  return dataLayer.subscribeBasketballSnapshot(dateStr, (snapshot) => {
+    if (!snapshot) return cb({ matches: [], live: [], finished: [], hasLive: false, liveCount: 0, error: null });
+    const result = extractMatches(snapshot);
+    cb({ matches: result.live, live: result.live, finished: result.finished, hasLive: result.live.length > 0, liveCount: result.live.length, error: null });
+  });
+}
 
-export const fetchBasketballLiveScores = async () => {
-  try {
-    const snapshot = await dataLayer.fetchBasketballSnapshot(todayStr());
-    if (!snapshot) return { matches: [], error: null };
-    return { matches: (snapshot.live || []).map((d) => transformMatch(d)), error: null };
-  } catch (err) { return { matches: [], error: err.message }; }
-};
-
-export const subscribeToBasketballLiveFixtures = (callback) =>
-  _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.LIVE_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
-
-export const subscribeToBasketballTodayFixtures = (callback) =>
-  _createPollingSubscription(SPORT.BASKETBALL, callback, { activeMs: POLL_INTERVAL.TODAY_ACTIVE, idleMs: POLL_INTERVAL.LIVE_IDLE, includeToday: true });
-
-export const fetchLeagueStandings = async (leagueId) => {
-  try {
-    const allData = await dataLayer.fetchStandings(SPORT.FOOTBALL);
-    return allData.find((doc) => String(doc.leagueId || doc.id) === String(leagueId))?.standings || [];
-  } catch { return []; }
-};
-
-export const fetchBasketballLeagueStandings = async (leagueId) => {
-  try {
-    const allData = await dataLayer.fetchStandings(SPORT.BASKETBALL);
-    return allData.find((doc) => String(doc.leagueId || doc.id) === String(leagueId))?.standings || [];
-  } catch { return []; }
-};
+export function subscribeToBasketballTodayFixtures(cb) {
+  const dateStr = todayStr();
+  return dataLayer.subscribeBasketballSnapshot(dateStr, (snapshot) => {
+    if (!snapshot) return cb({ matches: [], live: [], finished: [], hasLive: false, liveCount: 0, error: null });
+    const result = extractMatches(snapshot);
+    cb({ matches: result.matches, live: result.live, finished: result.finished, hasLive: result.live.length > 0, liveCount: result.live.length, error: null });
+  });
+}
 
 export const fetchLeagues = (sport = SPORT.FOOTBALL) => dataLayer.fetchLeagues(sport);
+export async function fetchLeagueStandings(leagueId) { try { const all = await dataLayer.fetchStandings(SPORT.FOOTBALL); return all.find(d => String(d.leagueId || d.id) === String(leagueId))?.standings || []; } catch { return []; } }
+export async function fetchBasketballLeagueStandings(leagueId) { try { const all = await dataLayer.fetchStandings(SPORT.BASKETBALL); return all.find(d => String(d.leagueId || d.id) === String(leagueId))?.standings || []; } catch { return []; } }
+export async function fetchTeamFixtures(teamId) { try { const [y, t, tm] = await Promise.all([fetchFixtures(yesterdayStr()), fetchFixtures(todayStr()), fetchFixtures(tomorrowStr())]); return [...(y.matches||[]), ...(t.matches||[]), ...(tm.matches||[])].filter(m => String(m.homeId) === String(teamId) || String(m.awayId) === String(teamId)).sort((a, b) => (b.timestamp||0) - (a.timestamp||0)).slice(0, 10); } catch { return []; } }
+export async function fetchBasketballTeamFixtures(teamId) { try { const [y, t, tm] = await Promise.all([fetchBasketballFixtures(yesterdayStr()), fetchBasketballFixtures(todayStr()), fetchBasketballFixtures(tomorrowStr())]); return [...(y.matches||[]), ...(t.matches||[]), ...(tm.matches||[])].filter(m => String(m.homeId) === String(teamId) || String(m.awayId) === String(teamId)).sort((a, b) => (b.timestamp||0) - (a.timestamp||0)).slice(0, 10); } catch { return []; } }
 
-export async function fetchTeamFixtures(teamId) {
-  try {
-    const [ySnap, tSnap, tmSnap] = await Promise.all([
-      fetchFixtures(yesterdayStr()),
-      fetchFixtures(todayStr()),
-      fetchFixtures(tomorrowStr()),
-    ]);
-    const tid = String(teamId);
-    const allRaw = [...(ySnap?.matches || []), ...(tSnap?.matches || []), ...(tmSnap?.matches || [])];
-    return allRaw.filter((m) => String(m.homeId) === tid || String(m.awayId) === tid).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10);
-  } catch { return []; }
-}
-
-export async function fetchBasketballTeamFixtures(teamId) {
-  try {
-    const [ySnap, tSnap, tmSnap] = await Promise.all([
-      fetchBasketballFixtures(yesterdayStr()),
-      fetchBasketballFixtures(todayStr()),
-      fetchBasketballFixtures(tomorrowStr()),
-    ]);
-    const tid = String(teamId);
-    const allRaw = [...(ySnap?.matches || []), ...(tSnap?.matches || []), ...(tmSnap?.matches || [])];
-    return allRaw.filter((m) => String(m.homeId) === tid || String(m.awayId) === tid).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).slice(0, 10);
-  } catch { return []; }
-}
-
-export const fetchBackendStatus = async () => {
-  try {
-    const snap = await dataLayer.fetchFootballSnapshot(todayStr());
-    if (!snap) return null;
-    const updatedAt = snap.updatedAt;
-    const fetchDone = updatedAt?.startsWith(todayStr()) ?? false;
-    return {
-      football: { status: fetchDone ? 'complete' : 'pending', fetchedAt: updatedAt || null, fetchDone, lastDailyFetchDate: updatedAt ? updatedAt.split('T')[0] : null },
-      basketball: null, _raw: snap, fetchedAt: new Date().toISOString(), isRolloverWindow: isInRolloverWindow(), budget: null,
-    };
-  } catch { return null; }
-};
-
-export const getSyncStatusMessage = (status) => {
-  if (!status) return 'Unknown';
-  if (status.status === 'pending') return isInRolloverWindow() ? 'Updating...' : 'Waiting for daily sync';
-  if (status.fetchedAt) {
-    try { return `Updated at ${new Date(status.fetchedAt).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`; }
-    catch { return 'Updated'; }
-  }
-  return 'Updated';
-};
-
-export const fetchMatchEvents = async () => ({ events: [], error: null, fromCache: 'firestore' });
-export const fetchMatchLineups = async () => ({ lineups: [], error: null, fromCache: 'firestore' });
-export const fetchMatchStatistics = async () => ({ statistics: [], error: null, fromCache: 'firestore' });
-
-export const loadFixturesFromAnyCache = async (date) => {
-  const res = await fetchFixtures(date);
-  return res.matches.length > 0 ? { matches: res.matches, source: 'firestore', stale: false, allFinished: res.allFinished } : null;
-};
-
-export const getCacheStats = () => ({ dates: 0, total: 0, finished: 0, cachedDates: [], ...dataLayer.getStats() });
+export const fetchMatchEvents = async () => ({ events: [], error: null });
+export const fetchMatchLineups = async () => ({ lineups: [], error: null });
+export const fetchMatchStatistics = async () => ({ statistics: [], error: null });
+export const getCacheStats = () => dataLayer.getStats();
 export const clearAllCache = () => dataLayer.clear();
-
 export const getLivePollInterval = () => POLL_INTERVAL.LIVE_ACTIVE;
 export const isBackendReachable = () => true;
 export const initApp = async () => { await waitForAuth(); initFirebaseSync(); };
-
-export { eventBus, EVENT, SPORT, STATUS, isLiveStatus, isFinishedStatus, isScheduledStatus, getLeagueColor, getBasketballLeaguePriority, CACHE_KEY, calcPoints, RESULT_TYPE, POINTS };

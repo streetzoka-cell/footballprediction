@@ -1,87 +1,33 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Basketball.jsx
-// v20.2 — Reactive Data Layer, Smart Live Merging, Clean Architecture
+// v20.3 — Reactive Data Layer, Smart Live Merging, Zero Render Jank
 // ═══════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays, RefreshCw, WifiOff, Database,
-  Star, ChevronDown, ChevronRight,
+  ChevronDown, ChevronRight,
   Lock, LogIn, CheckCircle2, Sparkles, Flame,
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { dataLayer } from '../utils/dataLayer';
-import { subscribeToBasketballLiveFixtures, getDateRange, getBasketballLeaguePriority } from '../utils/api';
-import { todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
+import { subscribeToBasketballLiveFixtures } from '../utils/api';
+import { getDateRange, todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
 
 import { db } from '../utils/firebase';
 import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('bb-pro-v3')) return;
-  const s = document.createElement('style');
-  s.id = 'bb-pro-v3';
-  s.textContent = `
-    @keyframes bb_fadeInUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes bb_slideDown{from{opacity:0;transform:translateY(-24px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes bb_slideInLeft{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes bb_scoreFlash{0%{transform:scale(1)}25%{transform:scale(1.35);filter:brightness(1.8)}100%{transform:scale(1);filter:brightness(1)}}
-    @keyframes bb_liveGlow{0%,100%{box-shadow:0 0 6px rgba(239,68,68,.3),0 0 12px rgba(239,68,68,.1)}50%{box-shadow:0 0 12px rgba(239,68,68,.6),0 0 28px rgba(239,68,68,.2)}}
-    @keyframes bb_pulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(.85)}}
-    @keyframes bb_float{0%,100%{transform:translateY(0) rotate(0)}33%{transform:translateY(-10px) rotate(2deg)}66%{transform:translateY(-4px) rotate(-1deg)}}
-    @keyframes bb_borderGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
-    @keyframes bb_shimmer{0%{background-position:-300% 0}100%{background-position:300% 0}}
-    @keyframes bb_cardLiveBorder{0%,100%{border-color:rgba(239,68,68,.12)}50%{border-color:rgba(239,68,68,.4)}}
-    @keyframes bb_badgePop{0%{transform:scale(0);opacity:0}60%{transform:scale(1.15)}100%{transform:scale(1);opacity:1}}
-    @keyframes bb_liveBarSweep{0%{transform:translateY(-100%)}100%{transform:translateY(600%)}}
-    @keyframes bb_predictPop{0%{transform:scale(.9);opacity:0;box-shadow:0 0 0 0 rgba(29,66,138,.4)}50%{transform:scale(1.03);box-shadow:0 0 20px rgba(29,66,138,.12)}100%{transform:scale(1);opacity:1;box-shadow:none}}
-    @keyframes bb_slideDownReveal{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes bb_glowRing{0%,100%{box-shadow:0 0 0 0 rgba(29,66,138,.3)}50%{box-shadow:0 0 0 6px rgba(29,66,138,0)}}
-    @keyframes bb_countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes refreshSpin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-    @keyframes bballBounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
-    @keyframes sportGlow{0%,100%{box-shadow:0 0 8px rgba(249,115,22,.15)}50%{box-shadow:0 0 16px rgba(249,115,22,.3)}}
-    
-    .bb-enter{animation:bb_fadeInUp .4s cubic-bezier(.22,1,.36,1) both}
-    .bb-expand{animation:bb_slideDownReveal .3s cubic-bezier(.22,1,.36,1) both}
-    .bb-predict-pop{animation:bb_predictPop .4s cubic-bezier(.22,1,.36,1) both}
-    .bb-glow-ring{animation:bb_glowRing 2s ease-in-out infinite}
-    .bb-count{animation:bb_countUp .35s cubic-bezier(.22,1,.36,1) both}
-    .bb-shimmer{background:linear-gradient(90deg,rgba(255,255,255,.02) 25%,rgba(255,255,255,.07) 50%,rgba(255,255,255,.02) 75%);background-size:300% 100%;animation:bb_shimmer 1.8s ease-in-out infinite;border-radius:4px}
-    .date-scroll-hide::-webkit-scrollbar{display:none}
-    .date-scroll-hide{scrollbar-width:none}
-    .zoka-btn{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none}
-    .zoka-btn:hover{transform:translateY(-1px)}
-    .zoka-btn:active{transform:translateY(0) scale(.97)}
-    .zoka-card{transition:all .22s cubic-bezier(.22,1,.36,1)}
-    .zoka-card:hover{transform:translateY(-1px);box-shadow:0 6px 24px rgba(0,0,0,.15)}
-    .zoka-glass{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-    .bball-icon{animation:bballBounce 1.5s ease-in-out infinite}
-    .bball-glow{animation:sportGlow 2s ease-in-out infinite}
-    .sport-switch{display:flex;gap:6px;padding:4px;border-radius:10px;background:var(--bg-card);border:1px solid var(--border)}
-    .sport-pill{display:flex;align-items:center;gap:6px;padding:8px 16px;border-radius:8px;font-size:.78rem;font-weight:700;border:none;cursor:pointer;transition:all .2s cubic-bezier(.22,1,.36,1)}
-    .sport-pill:hover{transform:translateY(-1px)}
-    .sport-pill:active{transform:scale(.97)}
-    .sport-pill.active{color:var(--bg-deep)}
-    .sport-pill.inactive{color:var(--text-muted);background:transparent}
-    .sport-pill.inactive:hover{color:var(--text-primary);background:rgba(255,255,255,.04)}
-  
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-    }
-  `;
-  document.head.appendChild(s);
-};
-
-/* ═══════════════════════════════════════════════════════════════
    CONSTANTS & UTILITIES
    ═══════════════════════════════════════════════════════════════ */
+function getBasketballLeaguePriority(key) {
+  const p = { 'NBA': 100, 'EUROLEAGUE': 90, 'EUROCUP': 80, 'NCAAB': 70, 'ACB': 60, 'BBL': 50, 'LNB': 50 };
+  return p[String(key)?.toUpperCase()] || 0;
+}
+
 function gamePriorityScore(g) {
   const base = getBasketballLeaguePriority(g.leagueKey) || 0;
   const liveBoost = g.isLive ? 50 : 0;
@@ -100,7 +46,7 @@ function getTopPredictGames(gamesList, count = 10) {
 /* ═══════════════════════════════════════════════════════════════
    SKELETON COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
-const SkeletonCard = ({ delay = 0 }) => (
+const SkeletonCard = memo(({ delay = 0 }) => (
   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', marginBottom: 8, animation: `bb_fadeInUp .35s ease ${delay}ms both` }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
       <div className="bb-shimmer" style={{ width: 30, height: 30, borderRadius: 8 }} />
@@ -113,9 +59,9 @@ const SkeletonCard = ({ delay = 0 }) => (
       <div className="bb-shimmer" style={{ width: 28, height: 20 }} />
     </div>
   </div>
-);
+));
 
-const SkeletonGroup = () => (
+const SkeletonGroup = memo(() => (
   <div>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px 8px' }}>
       <div className="bb-shimmer" style={{ width: 22, height: 22, borderRadius: 5 }} />
@@ -123,12 +69,12 @@ const SkeletonGroup = () => (
     </div>
     {[0, 1, 2].map(i => <SkeletonCard key={i} delay={i * 80} />)}
   </div>
-);
+));
 
 /* ═══════════════════════════════════════════════════════════════
    ERROR SCREEN
    ═══════════════════════════════════════════════════════════════ */
-function ErrorScreen({ error, onRetry }) {
+const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
   const cfg = {
     NETWORK: { icon: <WifiOff size={24} />, bg: 'rgba(239,68,68,.1)', color: '#ef4444', t: 'Connection error', d: 'Could not reach Firestore. Check your internet connection.' },
     NO_DB: { icon: <Database size={24} />, bg: 'rgba(245,197,66,.1)', color: 'var(--gold)', t: 'No database', d: 'Firebase is not configured.' },
@@ -144,21 +90,21 @@ function ErrorScreen({ error, onRetry }) {
       </button>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════════════════
    SUB-COMPONENTS
    ═══════════════════════════════════════════════════════════════ */
-const TeamLogo = ({ src, name }) => {
+const TeamLogo = memo(({ src, name }) => {
   if (!src) return (
     <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>
       {(name || '?')[0]}
     </div>
   );
   return <img src={src} alt={name} style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', flexShrink: 0, background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
-};
+});
 
-const StatusBadge = ({ game }) => {
+const StatusBadge = memo(({ game }) => {
   const s = game.status;
   let bg = 'rgba(255,255,255,.05)', color = 'var(--text-muted)', label = s;
 
@@ -169,9 +115,9 @@ const StatusBadge = ({ game }) => {
   else if (s === 'CANC') { bg = 'rgba(239,68,68,.1)'; color = '#ef4444'; label = 'CANC'; }
 
   return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 6, letterSpacing: .3, background: bg, color, animation: 'bb_badgePop .35s ease' }}>{label}</span>;
-};
+});
 
-const ScoreDisplay = ({ score, isLive }) => {
+const ScoreDisplay = memo(({ score, isLive }) => {
   const baseStyle = { fontSize: 18, fontWeight: 800, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums', transition: 'color .3s' };
   if (!isLive) return <span style={{ ...baseStyle, color: 'var(--text-primary)' }}>{score ?? '-'}</span>;
   return (
@@ -179,12 +125,12 @@ const ScoreDisplay = ({ score, isLive }) => {
       {score ?? '-'}
     </span>
   );
-};
+});
 
 /* ═══════════════════════════════════════════════════════════════
    GAME CARD
    ═══════════════════════════════════════════════════════════════ */
-const GameCard = ({ game, index = 0 }) => {
+const GameCard = memo(function GameCard({ game, index = 0 }) {
   const hasQuarters = game.score?.q1?.home !== null && game.score?.q1?.home !== undefined;
   const showQuarters = hasQuarters && (game.isLive || game.isFinished);
   const homeWin = game.isFinished && (game.homeScore ?? 0) > (game.awayScore ?? 0);
@@ -262,28 +208,30 @@ const GameCard = ({ game, index = 0 }) => {
       )}
     </div>
   );
-};
+});
 
 /* ═══════════════════════════════════════════════════════════════
    LEAGUE SECTION
    ═══════════════════════════════════════════════════════════════ */
-const LeagueSection = ({ league, games, sectionIndex = 0 }) => (
-  <div style={{ animation: `bb_slideInLeft .4s cubic-bezier(.4,0,.2,1) ${sectionIndex * 80}ms both` }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6, position: 'relative' }}>
-      <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0', transformOrigin: 'top', animation: 'bb_borderGrow .5s cubic-bezier(.4,0,.2,1)' }} />
-      {league.emblem && <img src={league.emblem} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} loading="lazy" />}
-      {!league.emblem && <div style={{ width: 22, height: 22, borderRadius: 5, background: league.color, flexShrink: 0 }} />}
-      <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', flex: 1 }}>{league.name}</span>
-      {league.country && <span style={{ fontSize: 11, color: '#334155' }}>{league.country}</span>}
+const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex = 0 }) {
+  return (
+    <div style={{ animation: `bb_slideInLeft .4s cubic-bezier(.4,0,.2,1) ${sectionIndex * 80}ms both` }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6, position: 'relative' }}>
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0', transformOrigin: 'top', animation: 'bb_borderGrow .5s cubic-bezier(.4,0,.2,1)' }} />
+        {league.emblem && <img src={league.emblem} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} loading="lazy" />}
+        {!league.emblem && <div style={{ width: 22, height: 22, borderRadius: 5, background: league.color, flexShrink: 0 }} />}
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', flex: 1 }}>{league.name}</span>
+        {league.country && <span style={{ fontSize: 11, color: '#334155' }}>{league.country}</span>}
+      </div>
+      {games.map((g, i) => <GameCard key={g.id} game={g} index={i} />)}
     </div>
-    {games.map((g, i) => <GameCard key={g.id} game={g} index={i} />)}
-  </div>
-);
+  );
+});
 
 /* ═══════════════════════════════════════════════════════════════
    PREDICTION CARD
    ═══════════════════════════════════════════════════════════════ */
-const PredictCard = ({ game, prediction, onPredict, onRemove, loggedIn, index }) => {
+const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onRemove, loggedIn, index }) {
   const isLive = game.isLive;
   const isFinished = game.isFinished;
   const currentPick = prediction?.pick || null;
@@ -295,10 +243,10 @@ const PredictCard = ({ game, prediction, onPredict, onRemove, loggedIn, index })
     away: { bg: currentPick === 'away' ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.04)', border: currentPick === 'away' ? '#ef4444' : 'var(--border)', color: currentPick === 'away' ? '#ef4444' : 'var(--text-secondary)' },
   };
 
-  function handlePick(pick) {
+  const handlePick = useCallback((pick) => {
     if (!loggedIn) { onPredict(null, true); return; }
     if (currentPick === pick) { onRemove(String(game.id)); } else { onPredict(String(game.id), false, pick); }
-  }
+  }, [loggedIn, onPredict, currentPick, onRemove, game.id]);
 
   return (
     <div className="zoka-card bb-predict-pop" style={{ padding: '14px 16px', background: 'var(--bg-card)', border: `1px solid ${isLive ? 'rgba(239,68,68,.25)' : 'var(--border)'}`, borderRadius: 12, marginBottom: 8, animationDelay: `${index * 60}ms`, position: 'relative', overflow: 'hidden' }}>
@@ -348,12 +296,12 @@ const PredictCard = ({ game, prediction, onPredict, onRemove, loggedIn, index })
       )}
     </div>
   );
-};
+});
 
 /* ═══════════════════════════════════════════════════════════════
    LOGIN PROMPT MODAL
    ═══════════════════════════════════════════════════════════════ */
-function LoginPromptModal({ onClose }) {
+const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20, backdropFilter: 'blur(4px)' }}>
       <div onClick={e => e.stopPropagation()} className="bb-expand" style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '32px 28px', maxWidth: 380, width: '100%', border: '1px solid var(--border)', textAlign: 'center' }}>
@@ -369,13 +317,12 @@ function LoginPromptModal({ onClose }) {
       </div>
     </div>
   );
-}
+});
 
 /* ═══════════════════════════════════════════════════════════════
    MAIN BASKETBALL COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Basketball() {
-  injectStyles();
   const { currentUser } = useAuth();
   const navigate = useNavigate();
 
@@ -419,23 +366,29 @@ export default function Basketball() {
         const data = d.data();
         userPreds[data.gameId] = { pick: data.pick, timestamp: data.timestamp };
       });
-      setPredictions(userPreds);
+      setPredictions(prev => {
+        if (Object.keys(prev).length !== Object.keys(userPreds).length) return userPreds;
+        for (const k in userPreds) {
+          if (prev[k]?.pick !== userPreds[k].pick) return userPreds;
+        }
+        return prev;
+      });
     }, (err) => console.error("Pred fetch error:", err));
     return () => unsub();
   }, [currentUser]);
 
-  const handlePredict = async (gameId, needsLogin, pick) => {
+  const handlePredict = useCallback(async (gameId, needsLogin, pick) => {
     if (needsLogin || !currentUser) { setShowLoginModal(true); return; }
     if (!gameId || !pick) return;
     const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
     await setDoc(predRef, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
-  };
+  }, [currentUser]);
 
-  const handleRemovePredict = async (gameId) => {
+  const handleRemovePredict = useCallback(async (gameId) => {
     if (!currentUser) return;
     const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
     await deleteDoc(predRef);
-  };
+  }, [currentUser]);
 
   /* ═══════════════════════════════════════════════════════════
      FETCH ONE DATE from DataLayer (24h Cache)
@@ -444,7 +397,6 @@ export default function Basketball() {
     if (loadedDatesRef.current.has(date)) return;
     loadedDatesRef.current.add(date);
     try {
-      // ★ Use dataLayer to hit the 24h memory cache
       const res = await dataLayer.fetchBasketballFixtures(date);
       const matches = res?.matches || [];
       setGamesByDate(prev => ({ ...prev, [date]: matches }));
@@ -511,22 +463,46 @@ export default function Basketball() {
       fetchDate(selectedDate);
     }
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [selectedDate]);
+  }, [selectedDate, windowDates, fetchDate]);
 
   /* ═══════════════════════════════════════════════════════════
      REAL-TIME LIVE — onSnapshot on basketballLiveFixtures
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     const unsub = subscribeToBasketballLiveFixtures(({ matches }) => {
-      setLiveGames(matches);
+      setLiveGames(prev => {
+        if (prev.length !== matches.length) return matches;
+        let changed = false;
+        for (let i = 0; i < matches.length; i++) {
+          if (prev[i].homeScore !== matches[i].homeScore || prev[i].awayScore !== matches[i].awayScore || prev[i].status !== matches[i].status || prev[i].minute !== matches[i].minute) {
+            changed = true; break;
+          }
+        }
+        return changed ? matches : prev; // BAIL OUT IF NOTHING CHANGED
+      });
+
       if (matches.length === 0) return;
+
       const liveMap = new Map(matches.map(m => [String(m.id), m]));
       setGamesByDate(prev => {
+        let changed = false;
         const next = { ...prev };
         Object.keys(next).forEach(dateKey => {
-          next[dateKey] = next[dateKey].map(g => liveMap.get(String(g.id)) || g);
+          let dateChanged = false;
+          const updatedGames = next[dateKey].map(g => {
+            const live = liveMap.get(String(g.id));
+            if (live && (g.homeScore !== live.homeScore || g.awayScore !== live.awayScore || g.status !== live.status || g.minute !== live.minute)) {
+              dateChanged = true;
+              return { ...g, ...live };
+            }
+            return g;
+          });
+          if (dateChanged) {
+            changed = true;
+            next[dateKey] = updatedGames;
+          }
         });
-        return next;
+        return changed ? next : prev; // BAIL OUT IF NOTHING CHANGED
       });
     });
     return () => unsub();
@@ -553,7 +529,6 @@ export default function Basketball() {
     setError(null);
     loadedDatesRef.current.delete(selectedDate);
 
-    // Force bypass cache on refresh
     dataLayer.invalidate(`snap:bb:${selectedDate}`);
     fetchDate(selectedDate).finally(() => setRefreshing(false));
   }, [selectedDate, refreshing, fetchDate]);
@@ -564,7 +539,16 @@ export default function Basketball() {
   const mergedGames = useMemo(() => {
     if (!liveGames.length) return currentGames;
     const liveMap = new Map(liveGames.map(g => [String(g.id), g]));
-    return currentGames.map(g => liveMap.get(String(g.id)) || g);
+    let changed = false;
+    const next = currentGames.map(g => {
+      const live = liveMap.get(String(g.id));
+      if (live && (g.homeScore !== live.homeScore || g.awayScore !== live.awayScore || g.status !== live.status || g.minute !== live.minute)) {
+        changed = true;
+        return { ...g, ...live };
+      }
+      return g;
+    });
+    return changed ? next : currentGames; // BAIL OUT IF NOTHING CHANGED
   }, [currentGames, liveGames]);
 
   /* ═══════════════════════════════════════════════════════════

@@ -1,38 +1,33 @@
-﻿const path = require('path');
-require('dotenv').config();
+﻿// backend/config/firebase.js
+const admin = require('firebase-admin');
+const env = require('./env');
+const logger = require('../utils/logger');
 
-const required = [
-  'FOOTBALL_DATA_API_KEY',
-  'FIREBASE_SERVICE_ACCOUNT_PATH',
-  'PORT',
-];
+let serviceAccount;
 
-const missing = required.filter(k => !process.env[k]);
-if (missing.length) {
-  console.error(`[ENV] Missing required variables: ${missing.join(', ')}`);
+try {
+  serviceAccount = require(env.firebase.serviceAccountPath);
+} catch (err) {
+  logger.error(`[FIREBASE] Cannot load service account from "${env.firebase.serviceAccountPath}"`);
+  logger.error('[FIREBASE] Ensure the JSON file exists and is valid.');
   process.exit(1);
 }
 
-module.exports = {
-  port: parseInt(process.env.PORT, 10),
-  nodeEnv: process.env.NODE_ENV || 'development',
-  isDev: (process.env.NODE_ENV || 'development') === 'development',
+try {
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
 
-  footballData: {
-    apiKey: process.env.FOOTBALL_DATA_API_KEY,
-    baseUrl: (process.env.FOOTBALL_DATA_BASE_URL || 'https://api.football-data.org/v4').replace(/\/+$/, ''),
-  },
+  const db = admin.firestore();
+  db.settings({ ignoreUndefinedProperties: true });
 
-  firebase: {
-    serviceAccountPath: path.resolve(process.env.FIREBASE_SERVICE_ACCOUNT_PATH),
-  },
+  const FieldValue = admin.firestore.FieldValue;
 
-  competitions: (process.env.SUPPORTED_COMPETITIONS || 'PL,BL1,SA,PD,FL1,CL,EL')
-    .split(',')
-    .map(c => c.trim())
-    .filter(Boolean),
+  logger.info(`[FIREBASE] Initialised - project: ${serviceAccount.project_id}`);
 
-  scheduler: {
-    enabled: process.env.SCHEDULER_ENABLED !== 'false',
-  },
-};
+  module.exports = { admin, db, FieldValue };
+
+} catch (err) {
+  logger.error('[FIREBASE] Initialization failed: ' + err.message);
+  process.exit(1);
+}

@@ -4,56 +4,6 @@ import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X, Zap } from 'lucide-react';
 import SEO from "../components/SEO";
 
-/* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION — MOBILE-FIRST, BOLD, FOOTBALL VIBE
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('auth-mob-v2')) return;
-  const s = document.createElement('style');
-  s.id = 'auth-mob-v2';
-  s.textContent = `
-    body{overflow-x:hidden;width:100%;max-width:100vw}
-    @keyframes auth_fadeUp{from{opacity:0;transform:translateY(28px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes auth_pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.015)}100%{transform:scale(1);opacity:1}}
-    @keyframes auth_spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-    @keyframes auth_glow{0%,100%{box-shadow:0 0 20px rgba(0,230,118,.12)}50%{box-shadow:0 0 44px rgba(0,230,118,.22)}}
-    @keyframes auth_pulse{0%,100%{opacity:.6}50%{opacity:1}}
-    @keyframes auth_slideErr{from{opacity:0;transform:translateY(-10px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes auth_shine{0%{left:-100%}100%{left:200%}}
-    @keyframes auth_float{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
-    @keyframes auth_borderGlow{0%,100%{border-color:rgba(0,230,118,.08)}50%{border-color:rgba(0,230,118,.18)}}
-
-    .auth-enter{animation:auth_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
-    .auth-pop{animation:auth_pop .45s cubic-bezier(.22,1,.36,1) both}
-    .auth-glow{animation:auth_glow 3s ease-in-out infinite}
-    .auth-float{animation:auth_float 4s ease-in-out infinite}
-
-    .zoka-btn{
-      transition:all .18s cubic-bezier(.22,1,.36,1);
-      cursor:pointer;outline:none;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.05)}
-    .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
-
-    /* Remove autofill styling interference */
-    input:-webkit-autofill,
-    input:-webkit-autofill:hover,
-    input:-webkit-autofill:focus{
-      -webkit-box-shadow:0 0 0 1000px var(--bg-surface) inset;
-      -webkit-text-fill-color:var(--text-primary);
-      transition:background-color 5000s ease-in-out 0s;
-    }
-  
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-      .toggle-hidden-items{transition:none!important}
-    }
-`;
-  document.head.appendChild(s);
-};
-
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -69,7 +19,7 @@ const PasswordStrength = ({ password }) => {
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
   const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#00e676'];
+  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981'];
   const activeColor = colors[Math.max(0, score - 1)];
 
   return (
@@ -109,7 +59,7 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
       {label && (
         <label style={{
           display: 'block', fontSize: '.85rem', fontWeight: 800,
-          color: focused ? 'var(--accent)' : 'var(--text-muted)',
+          color: focused ? '#10b981' : '#64748b',
           marginBottom: 8, textTransform: 'uppercase', letterSpacing: '.08em',
           transition: 'color .2s',
         }}>
@@ -119,7 +69,7 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
       <div style={{ position: 'relative' }}>
         <div style={{
           position: 'absolute', left: 16, top: '50%', transform: 'translateY(-50%)',
-          color: focused ? 'var(--accent)' : 'var(--text-muted)',
+          color: focused ? '#10b981' : '#64748b',
           transition: 'color .2s', display: 'flex', alignItems: 'center', pointerEvents: 'none',
         }}>
           {icon}
@@ -138,14 +88,14 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
             width: '100%',
             padding: '16px 50px 16px 50px',
             borderRadius: 14,
-            background: focused ? 'rgba(0,230,118,.03)' : 'var(--bg-surface)',
-            border: `2px solid ${focused ? 'var(--accent)' : 'var(--border)'}`,
-            color: 'var(--text-primary)',
+            background: focused ? 'rgba(16,185,129,.03)' : '#0d1118',
+            border: `2px solid ${focused ? '#10b981' : '#151b26'}`,
+            color: '#f8fafc',
             fontSize: '1rem',
             fontWeight: 600,
             outline: 'none',
             transition: 'border-color .2s, box-shadow .2s, background .2s',
-            boxShadow: focused ? '0 0 0 4px rgba(0,230,118,.1)' : 'none',
+            boxShadow: focused ? '0 0 0 4px rgba(16,185,129,.1)' : 'none',
             boxSizing: 'border-box',
             minHeight: 56,
             WebkitAppearance: 'none',
@@ -158,7 +108,7 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
             onClick={() => setShowPass(p => !p)}
             style={{
               position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)',
-              color: focused ? 'var(--accent)' : 'var(--text-muted)',
+              color: focused ? '#10b981' : '#64748b',
               padding: 6, background: 'none', border: 'none',
               cursor: 'pointer', transition: 'color .2s',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -204,8 +154,6 @@ const PitchDecoration = () => (
    MAIN LOGIN COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Login() {
-  injectStyles();
-
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -287,7 +235,7 @@ export default function Login() {
   return (
     <div style={{
       minHeight: '100vh',
-      background: 'var(--bg-deep)',
+      background: '#05070a',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
@@ -310,7 +258,7 @@ export default function Login() {
       <div style={{
         position: 'absolute', top: '-25%', left: '-10%',
         width: '70%', height: '65%',
-        background: 'radial-gradient(ellipse, rgba(0,230,118,.06) 0%, transparent 65%)',
+        background: 'radial-gradient(ellipse, rgba(16,185,129,.06) 0%, transparent 65%)',
         pointerEvents: 'none',
       }} />
       {/* Blue glow bottom-right */}
@@ -324,7 +272,7 @@ export default function Login() {
       <div style={{
         position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -55%)',
         width: '120%', height: '60%',
-        background: 'radial-gradient(ellipse, rgba(0,230,118,.035) 0%, transparent 55%)',
+        background: 'radial-gradient(ellipse, rgba(16,185,129,.035) 0%, transparent 55%)',
         pointerEvents: 'none',
       }} />
 
@@ -334,13 +282,13 @@ export default function Login() {
         style={{
           width: '100%',
           maxWidth: 440,
-          background: 'var(--bg-card)',
-          border: '1.5px solid rgba(0,230,118,.08)',
+          background: '#0a0d14',
+          border: '1.5px solid rgba(16,185,129,.08)',
           borderRadius: 24,
           padding: '40px 28px 32px',
           position: 'relative',
           zIndex: 1,
-          boxShadow: '0 24px 64px rgba(0,0,0,.35), 0 0 80px rgba(0,230,118,.03)',
+          boxShadow: '0 24px 64px rgba(0,0,0,.35), 0 0 80px rgba(16,185,129,.03)',
           backdropFilter: 'blur(16px)',
           animation: 'auth_borderGlow 4s ease-in-out infinite, auth_pop .45s cubic-bezier(.22,1,.36,1) both',
           overflow: 'hidden',
@@ -361,14 +309,14 @@ export default function Login() {
             className="auth-float"
             style={{
               width: 68, height: 68, borderRadius: 20,
-              background: 'linear-gradient(145deg, #00e676 0%, #00c853 40%, #059669 100%)',
+              background: 'linear-gradient(145deg, #10b981 0%, #059669 40%, #047857 100%)',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               marginBottom: 20,
-              boxShadow: '0 8px 28px rgba(0,230,118,.3), 0 2px 8px rgba(0,230,118,.2), inset 0 1px 0 rgba(255,255,255,.2)',
+              boxShadow: '0 8px 28px rgba(16,185,129,.3), 0 2px 8px rgba(16,185,129,.2), inset 0 1px 0 rgba(255,255,255,.2)',
               position: 'relative', overflow: 'hidden',
             }}
           >
-            <span style={{ color: 'var(--bg-deep)', fontWeight: 900, fontSize: '1.5rem', fontFamily: 'var(--font-display)', textShadow: '0 1px 0 rgba(255,255,255,.15)' }}>Z</span>
+            <span style={{ color: '#05070a', fontWeight: 900, fontSize: '1.5rem', fontFamily: 'var(--font-display)', textShadow: '0 1px 0 rgba(255,255,255,.15)' }}>Z</span>
             {/* Glossy top half */}
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(180deg, rgba(255,255,255,.22) 0%, transparent 100%)', borderRadius: '20px 20px 0 0', pointerEvents: 'none' }} />
           </div>
@@ -376,7 +324,7 @@ export default function Login() {
           {/* Title */}
           <h2 style={{
             margin: 0, fontSize: '1.7rem', fontWeight: 900,
-            color: 'var(--text-primary)', letterSpacing: '.01em',
+            color: '#f8fafc', letterSpacing: '.01em',
             opacity: modeTrans ? 0 : 1,
             transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)',
             transition: `opacity .2s, transform .2s`,
@@ -385,7 +333,7 @@ export default function Login() {
           </h2>
           <p style={{
             margin: '8px 0 0', fontSize: '.95rem', fontWeight: 600,
-            color: 'var(--text-muted)',
+            color: '#64748b',
             opacity: modeTrans ? 0 : 1,
             transform: modeTrans ? 'translateY(-8px)' : 'translateY(0)',
             transition: `opacity .2s .05s, transform .2s .05s`,
@@ -441,8 +389,8 @@ export default function Login() {
             padding: '16px',
             borderRadius: 14,
             background: 'rgba(255,255,255,.04)',
-            border: '1.5px solid var(--border)',
-            color: 'var(--text-primary)',
+            border: '1.5px solid #151b26',
+            color: '#f8fafc',
             fontWeight: 700,
             fontSize: '.95rem',
             display: 'flex',
@@ -466,15 +414,15 @@ export default function Login() {
 
         {/* ── Divider ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
-          <div style={{ flex: 1, height: 1.5, background: 'var(--border)', borderRadius: 1 }} />
+          <div style={{ flex: 1, height: 1.5, background: '#151b26', borderRadius: 1 }} />
           <span style={{
             fontSize: '.82rem', fontWeight: 800,
-            color: 'var(--text-muted)', textTransform: 'uppercase',
+            color: '#64748b', textTransform: 'uppercase',
             letterSpacing: '.1em',
           }}>
             or use email
           </span>
-          <div style={{ flex: 1, height: 1.5, background: 'var(--border)', borderRadius: 1 }} />
+          <div style={{ flex: 1, height: 1.5, background: '#151b26', borderRadius: 1 }} />
         </div>
 
         {/* ── Form ── */}
@@ -535,7 +483,7 @@ export default function Login() {
                 className="zoka-btn"
                 style={{
                   background: 'none', border: 'none', cursor: 'pointer',
-                  color: 'var(--accent)', fontSize: '.9rem',
+                  color: '#10b981', fontSize: '.9rem',
                   fontWeight: 700, padding: '4px 0',
                 }}
               >
@@ -556,11 +504,11 @@ export default function Login() {
               position: 'relative',
               overflow: 'hidden',
               borderRadius: 16,
-              background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
-              color: 'var(--bg-deep)',
+              background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
+              color: '#05070a',
               fontWeight: 900,
               border: 'none',
-              boxShadow: '0 6px 24px rgba(0,230,118,.3), 0 2px 8px rgba(0,230,118,.15), inset 0 1px 0 rgba(255,255,255,.2)',
+              boxShadow: '0 6px 24px rgba(16,185,129,.3), 0 2px 8px rgba(16,185,129,.15), inset 0 1px 0 rgba(255,255,255,.2)',
               letterSpacing: '.02em',
               marginTop: isLogin ? 0 : 8,
             }}
@@ -596,7 +544,7 @@ export default function Login() {
         {/* ── Toggle Mode ── */}
         <div style={{
           textAlign: 'center', marginTop: 28,
-          fontSize: '.95rem', fontWeight: 600, color: 'var(--text-muted)',
+          fontSize: '.95rem', fontWeight: 600, color: '#64748b',
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
         }}>
           {isLogin ? "Don't have an account? " : "Already have an account? "}
@@ -604,7 +552,7 @@ export default function Login() {
             onClick={toggleMode}
             className="zoka-btn"
             style={{
-              background: 'none', border: 'none', color: 'var(--accent)',
+              background: 'none', border: 'none', color: '#10b981',
               fontWeight: 900, cursor: 'pointer', fontSize: '.95rem',
               padding: '4px 0', position: 'relative',
             }}
@@ -617,24 +565,24 @@ export default function Login() {
         <div style={{
           marginTop: 28, padding: '16px 18px',
           background: 'rgba(255,255,255,.02)',
-          border: '1px solid var(--border)',
+          border: '1px solid #151b26',
           borderRadius: 14,
           display: 'flex', alignItems: 'flex-start', gap: 14,
         }}>
           <div style={{
             width: 36, height: 36, borderRadius: 10,
-            background: 'rgba(0,230,118,.06)',
-            border: '1px solid rgba(0,230,118,.1)',
+            background: 'rgba(16,185,129,.06)',
+            border: '1px solid rgba(16,185,129,.1)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             flexShrink: 0,
           }}>
-            <Shield size={18} style={{ color: 'var(--accent)' }} />
+            <Shield size={18} style={{ color: '#10b981' }} />
           </div>
           <div>
             <p style={{
               textAlign: 'left', margin: 0,
               fontSize: '.82rem', fontWeight: 700,
-              color: 'var(--text-muted)', lineHeight: 1.6,
+              color: '#64748b', lineHeight: 1.6,
               marginBottom: 4,
             }}>
               Secure authentication powered by Firebase
@@ -642,7 +590,7 @@ export default function Login() {
             <p style={{
               textAlign: 'left', margin: 0,
               fontSize: '.78rem', fontWeight: 600,
-              color: 'var(--text-muted)', lineHeight: 1.5, opacity: .7,
+              color: '#64748b', lineHeight: 1.5, opacity: .7,
             }}>
               Configure in <code style={{
                 background: 'rgba(255,255,255,.06)', padding: '2px 8px',
@@ -658,9 +606,9 @@ export default function Login() {
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
           opacity: .25,
         }}>
-          <div style={{ width: 40, height: 1, background: 'var(--border)' }} />
+          <div style={{ width: 40, height: 1, background: '#151b26' }} />
           <span style={{ fontSize: '.7rem' }}>⚽</span>
-          <div style={{ width: 40, height: 1, background: 'var(--border)' }} />
+          <div style={{ width: 40, height: 1, background: '#151b26' }} />
         </div>
       </div>
     </div>

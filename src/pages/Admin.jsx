@@ -1,9 +1,9 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
-// v15.3 Pro UI — Smart Match Locking, Auto-Failover, Bulletproof Loading
+// v15.4 Pro UI — Smart Match Locking, Memoized Tabs, Zero-Jank Admin Panel
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Trash2, CheckCircle2, XCircle, Zap, Trophy,
@@ -13,7 +13,7 @@ import {
   Save, Timer, Users, UserCog, Search,
   LayoutDashboard, Copy, History,
   ChevronUp, RotateCcw, Activity, Megaphone,
-  Eye, ChevronRight, Ban, ArrowLeft
+  Ban, ArrowLeft
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -35,18 +35,6 @@ import {
 } from 'firebase/firestore';
 
 import SEO from '../components/SEO';
-
-/* ═════════════════════════════════════════════════════════════════════════════════
-   MEMORY LAYER
-   ═════════════════════════════════════════════════════════════════════════════════ */
-const _mem = {};
-const mem = {
-  get(k, d) { return k in _mem ? _mem[k] : (typeof d === 'function' ? d() : d); },
-  set(k, v) { _mem[k] = v; },
-};
-const memUpdate = (key, v) => {
-  mem.set(key, typeof v === 'function' ? v(mem.get(key)) : v);
-};
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    CONSTANTS & HELPERS
@@ -117,10 +105,10 @@ const ST_MAP = {
   BT:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'BT'},
   ET:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'ET'},
   P:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Pens'},
-  FT:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
-  FINISHED:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
-  AET:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
-  PEN:{c:'var(--accent)',b:'rgba(0,230,118,.08)',l:'FT'},
+  FT:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
+  FINISHED:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
+  AET:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
+  PEN:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
   PST:{c:'#f59e0b',b:'rgba(245,158,11,.1)',l:'PST'},
 };
 const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
@@ -129,7 +117,7 @@ const isLive = m => isLiveStatus(m?.status, m?.sport || 'football') || m?.isLive
 const isFin = m => isFinishedStatus(m?.status, m?.sport || 'football') || m?.isFinished;
 const getScore = m => m?.score?.fullTime ? {h:m.score.fullTime.home,a:m.score.fullTime.away} : m?.homeScore!=null ? {h:m.homeScore,a:m.awayScore} : {h:null,a:null};
 
-// ★ SMART MATCH LOCKING: Checks status AND kickoff time to prevent adding started matches
+// ★ SMART MATCH LOCKING
 const hasMatchStarted = (m) => {
   if (!m) return false;
   if (isLive(m) || isFin(m)) return true;
@@ -137,7 +125,7 @@ const hasMatchStarted = (m) => {
   if (kickoffStr) {
     const kickoffTime = new Date(kickoffStr).getTime();
     if (!isNaN(kickoffTime) && kickoffTime <= Date.now()) {
-      return true; // Kickoff time has passed
+      return true; 
     }
   }
   return false;
@@ -169,224 +157,17 @@ const TABS = [
 ];
 
 /* ═════════════════════════════════════════════════════════════════════════════════
-   STYLE INJECTION
-   ═════════════════════════════════════════════════════════════════════════════════ */
-const injectCSS = () => {
-  if (document.getElementById('adm-v15-css')) return;
-  const s = document.createElement('style');
-  s.id = 'adm-v15-css';
-  s.textContent = `
-@keyframes afu{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-@keyframes asp{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-@keyframes afl{0%{background:rgba(0,230,118,.16)}100%{background:transparent}}
-@keyframes pulse-live{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.3;transform:scale(1.7)}}
-@keyframes slide-in{from{opacity:0;transform:translateX(14px)}to{opacity:1;transform:translateX(0)}}
-@keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-@keyframes live-glow{0%,100%{border-color:rgba(239,68,68,.12);box-shadow:0 0 3px rgba(239,68,68,.01)}50%{border-color:rgba(239,68,68,.35);box-shadow:0 0 14px rgba(239,68,68,.06)}}
-@keyframes save-flash{0%{background:linear-gradient(135deg,rgba(0,230,118,.18),rgba(0,230,118,.04))}100%{background:var(--bg-card)}}
-@keyframes tab-ind{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-@keyframes card-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
-@keyframes pop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
-@keyframes edit-pulse{0%,100%{border-color:rgba(0,230,118,.25)}50%{border-color:rgba(0,230,118,.5)}}
-
-.ae{animation:afu .4s cubic-bezier(.22,1,.36,1) both}
-.fl{animation:afl 2s ease-out}
-.card-in{animation:card-in .3s cubic-bezier(.22,1,.36,1) both}
-.save-flash{animation:save-flash 1.2s ease-out}
-.pop{animation:pop .25s cubic-bezier(.22,1,.36,1) both}
-
-.ap{min-height:100vh;background:var(--bg-deep,#0a0f1a);padding-bottom:80px}
-.aw{max-width:860px;margin:0 auto;padding:0 16px}
-.ah{text-align:center;padding:20px 0 0}
-.ah h1{margin:0 0 2px;font-size:1.15rem;font-weight:900;color:var(--text-primary);letter-spacing:-.01em}
-.ah .sub{font-size:.62rem;color:var(--text-muted);font-weight:600}
-
-.at{display:flex;gap:2px;background:var(--bg-card);border:1px solid var(--border);border-radius:14px;padding:3px;margin:14px 0;overflow-x:auto;scrollbar-width:none}
-.at::-webkit-scrollbar{display:none}
-.atb{flex:1;position:relative;display:flex;align-items:center;justify-content:center;gap:5px;padding:11px 6px;border:none;border-radius:11px;background:transparent;color:var(--text-muted);font-size:.72rem;font-weight:700;cursor:pointer;transition:all .2s;white-space:nowrap;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.atb:hover{color:var(--text-primary);background:rgba(255,255,255,.02)}
-.atb.on{color:var(--gold,#f5c542);background:rgba(245,197,66,.06)}
-.atb.on::after{content:'';position:absolute;bottom:1px;left:18%;right:18%;height:2.5px;background:var(--gold,#f5c542);border-radius:2px;animation:tab-ind .2s ease-out;box-shadow:0 0 8px rgba(245,197,66,.35)}
-
-.ask{position:sticky;top:0;z-index:50;background:var(--bg-deep);padding:12px 0 14px;border-bottom:1px solid var(--border);margin:0 -16px;padding-left:16px;padding-right:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
-
-.adb{display:flex;gap:4px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none;flex-wrap:wrap}
-.adb::-webkit-scrollbar{display:none}
-.adp{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:.7rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
-.adp:hover{color:var(--text-primary);border-color:var(--border-hover)}
-.adp.on{background:rgba(0,230,118,.07);color:var(--accent);border-color:rgba(0,230,118,.22)}
-.adp.past{opacity:.6}
-.more-dates-btn{flex-shrink:0;padding:7px 12px;border-radius:8px;border:1px dashed var(--border);background:transparent;color:var(--text-muted);font-size:.68rem;font-weight:700;cursor:pointer;transition:all .15s;font-family:inherit;white-space:nowrap}
-.more-dates-btn:hover{border-color:var(--accent);color:var(--accent)}
-
-.alb{display:flex;gap:4px;overflow-x:auto;padding:0 0 10px;scrollbar-width:none}
-.alb::-webkit-scrollbar{display:none}
-.alp{flex-shrink:0;display:flex;align-items:center;gap:5px;padding:6px 12px;border-radius:8px;border:1px solid var(--border);background:var(--bg-card);color:var(--text-muted);font-size:.68rem;font-weight:600;cursor:pointer;transition:all .15s;white-space:nowrap;font-family:inherit}
-.alp:hover{color:var(--text-primary);border-color:var(--border-hover)}
-.alp.on{background:rgba(16,185,129,.07);color:var(--accent);border-color:rgba(16,185,129,.22)}
-.alp img{width:13px;height:13px;object-fit:contain;border-radius:2px}
-
-.am{display:flex;flex-direction:column;gap:10px;padding:14px 16px;border-radius:14px;background:var(--bg-surface);border:1px solid var(--border);margin-bottom:8px;transition:all .15s}
-.am:hover{background:rgba(255,255,255,.015)}
-.am.zs{background:linear-gradient(135deg,rgba(245,197,66,.05),rgba(245,197,66,.015));border-color:rgba(245,197,66,.28)}
-.am.lg{animation:live-glow 2s ease-in-out infinite}
-.am.ok{border-color:rgba(0,230,118,.22)}
-.am.editing{border-color:rgba(0,230,118,.35);animation:edit-pulse 2s ease-in-out infinite}
-.am.resolved{opacity:.55}
-
-.amh{display:flex;align-items:center;justify-content:space-between;gap:8px}
-.aml{display:flex;align-items:center;gap:6px;min-width:0;flex:1}
-.aml img{width:18px;height:18px;border-radius:4px;object-fit:contain;flex-shrink:0}
-.aml span{font-size:.72rem;font-weight:700;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.as{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:.63rem;font-weight:800;letter-spacing:.03em;text-transform:uppercase;flex-shrink:0}
-.ld{width:7px;height:7px;border-radius:50%;background:#ef4444;animation:pulse-live 1.2s ease-in-out infinite;box-shadow:0 0 6px rgba(239,68,68,.5);flex-shrink:0}
-
-.atm{display:flex;align-items:center;gap:8px}
-.ate{flex:1;display:flex;align-items:center;gap:8px;min-width:0}
-.ate.aw{flex-direction:row-reverse;text-align:right}
-.ate img{width:26px;height:26px;border-radius:6px;object-fit:contain;flex-shrink:0}
-.ate span{font-size:.86rem;font-weight:800;color:var(--text-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-
-.asb{display:flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;min-width:80px;justify-content:center;background:rgba(255,255,255,.03);border:1px solid var(--border)}
-.asb.lv{background:rgba(239,68,68,.07);border-color:rgba(239,68,68,.18)}
-.asb.ft{background:rgba(0,230,118,.05);border-color:rgba(0,230,118,.12)}
-.asn{font-size:1.1rem;font-weight:900;font-family:var(--font-display,monospace);font-variant-numeric:tabular-nums;color:var(--text-primary)}
-.asn.r{color:#ef4444}.asn.g{color:var(--accent)}
-.asep{color:var(--text-muted);font-size:.8rem;font-weight:700;opacity:.3}
-.avs{font-size:.68rem;font-weight:800;color:var(--text-muted);opacity:.2;letter-spacing:.08em}
-
-.aa{display:flex;align-items:center;gap:6px;justify-content:flex-end;flex-wrap:wrap}
-
-.ab{padding:9px 14px;border-radius:9px;font-size:.78rem;font-weight:800;border:none;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;min-height:40px;font-family:inherit;-webkit-tap-highlight-color:transparent}
-.ab:active{transform:scale(.97)}.ab:disabled{opacity:.28;pointer-events:none;transform:none}
-.ab-p{background:var(--accent,#10b981);color:#fff;box-shadow:0 2px 10px rgba(16,185,129,.18)}
-.ab-p:hover{filter:brightness(1.08);transform:translateY(-1px)}
-.ab-gd{background:linear-gradient(135deg,rgba(245,197,66,.92),rgba(245,197,66,.78));color:#000;box-shadow:0 2px 12px rgba(245,197,66,.22)}
-.ab-gd:hover{filter:brightness(1.04);transform:translateY(-1px)}
-.ab-gh{background:rgba(255,255,255,.03);border:1px solid var(--border);color:var(--text-primary)}
-.ab-gh:hover{background:rgba(255,255,255,.05);border-color:var(--border-hover)}
-.ab-dg{background:rgba(239,68,68,.06);border:1px solid rgba(239,68,68,.16);color:#ef4444}
-.ab-dg:hover{background:rgba(239,68,68,.1)}
-.ab-sm{padding:7px 11px;font-size:.7rem;min-height:34px;border-radius:8px}
-.ab-ol{background:transparent;border:1px solid var(--border);color:var(--text-muted)}
-.ab-ol:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
-.ab-ol.on{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.06)}
-.ab-sc{background:rgba(0,230,118,.08);border:1px solid rgba(0,230,118,.2);color:var(--accent)}
-.ab-er{background:rgba(239,68,68,.08);border:1px solid rgba(239,68,68,.2);color:#ef4444}
-.ab-bl{background:rgba(96,165,250,.06);border:1px solid rgba(96,165,250,.2);color:#60a5fa}
-.ab-bl:hover{background:rgba(96,165,250,.1)}
-.ab-olive{background:rgba(245,158,11,.06);border:1px solid rgba(245,158,11,.2);color:#f59e0b}
-
-.api{width:48px;height:42px;padding:0;border-radius:8px;background:var(--bg-surface);border:2px solid rgba(245,197,66,.18);color:var(--gold,#f5c542);text-align:center;font-weight:900;font-size:1rem;outline:none;font-variant-numeric:tabular-nums;transition:all .2s;-webkit-appearance:none;appearance:none;font-family:var(--font-display,monospace)}
-.api:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.12)}
-.api::placeholder{color:var(--text-muted);opacity:.28;font-weight:700}
-.api.hv{border-color:var(--gold);background:rgba(245,197,66,.04)}
-
-.ari{width:42px;height:36px;padding:0;border-radius:7px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);text-align:center;font-weight:900;font-size:.95rem;outline:none;font-variant-numeric:tabular-nums;font-family:var(--font-display,monospace);-webkit-appearance:none;appearance:none;transition:border-color .2s}
-.ari:focus{border-color:var(--accent);box-shadow:0 0 0 2px rgba(16,185,129,.12)}
-.ari.hv{border-color:var(--accent);background:rgba(0,230,118,.04)}
-
-.asec{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:16px;margin-bottom:12px}
-.ast{font-size:.92rem;font-weight:900;color:var(--text-primary);margin:0 0 12px;display:flex;align-items:center;gap:8px}
-
-.asg{display:grid;grid-template-columns:repeat(auto-fit,minmax(95px,1fr));gap:8px;margin-bottom:12px}
-.astat{display:flex;flex-direction:column;align-items:center;padding:12px 6px;background:var(--bg-surface);border:1px solid var(--border);border-radius:11px}
-.astat .n{font-size:1.3rem;font-weight:900;font-family:var(--font-display);line-height:1}
-.astat .n.gd{color:var(--gold,#f5c542)}.astat .n.gn{color:var(--accent)}.astat .n.rd{color:#ef4444}.astat .n.bl{color:#3b82f6}
-.astat .l{font-size:.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-top:4px}
-
-.abdg{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:6px;font-size:.68rem;font-weight:800;white-space:nowrap}
-.abdg.ex{background:rgba(0,230,118,.1);color:var(--accent);border:1px solid rgba(0,230,118,.22)}
-.abdg.rs{background:rgba(245,197,66,.08);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.18)}
-.abdg.ms{background:rgba(239,68,68,.07);color:#ef4444;border:1px solid rgba(239,68,68,.15)}
-.abdg.pn{background:rgba(255,255,255,.03);color:var(--text-muted);border:1px solid var(--border)}
-.abdg.gd{background:rgba(245,197,66,.1);color:var(--gold,#f5c542);border:1px solid rgba(245,197,66,.22)}
-.abdg.gn{background:rgba(0,230,118,.1);color:var(--accent);border:1px solid rgba(0,230,118,.22)}
-
-.aem{padding:36px 20px;text-align:center;border:2px dashed var(--border);border-radius:14px;background:var(--bg-surface)}
-.aem p{color:var(--text-muted);font-size:.82rem;margin:0;font-weight:600}
-.aem .h{font-size:.7rem;color:var(--text-muted);opacity:.45;margin-top:3px}
-
-.askel{height:48px;border-radius:10px;background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:shimmer 1.5s ease-in-out infinite;margin-bottom:8px}
-
-.azs{display:flex;gap:5px;flex-wrap:wrap;padding:8px 12px;background:rgba(245,197,66,.03);border:1px solid rgba(245,197,66,.1);border-radius:9px;margin-bottom:10px}
-
-.arg{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.arb{padding:9px 12px;border-radius:9px;font-size:.75rem;font-weight:800;border:1px solid var(--border);background:var(--bg-surface);color:var(--text-primary);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;transition:all .15s;font-family:inherit;min-height:40px}
-.arb:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
-.arb:active{transform:scale(.97)}
-.arb:disabled{opacity:.28;pointer-events:none}
-
-.asm{width:100%;padding:11px;border-radius:11px;background:var(--bg-card);border:2px dashed var(--border);color:var(--text-muted);font-size:.8rem;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .15s;font-family:inherit}
-.asm:hover{border-color:var(--gold);color:var(--gold);background:rgba(245,197,66,.03)}
-.asm:active{transform:scale(.98)}
-
-.ahc{background:var(--bg-surface);border:1px solid var(--border);border-radius:11px;padding:13px;margin-bottom:7px;cursor:pointer;transition:all .15s}
-.ahc:hover{border-color:var(--border-hover);background:rgba(255,255,255,.015)}
-.ahc.op{border-color:rgba(245,197,66,.25);background:rgba(245,197,66,.02)}
-
-.aip{padding:9px 14px;border-radius:9px;background:var(--bg-surface);border:2px solid var(--border);color:var(--text-primary);font-size:.85rem;font-weight:600;outline:none;transition:border-color .2s;width:100%;font-family:inherit;-webkit-appearance:none;appearance:none;box-sizing:border-box}
-.aip:focus{border-color:var(--gold);box-shadow:0 0 0 3px rgba(245,197,66,.08)}
-.aip::placeholder{color:var(--text-muted);opacity:.35}
-
-.atst{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);padding:11px 20px;border-radius:13px;font-size:.82rem;font-weight:700;z-index:9999;animation:slide-in .3s ease-out;box-shadow:0 6px 22px rgba(0,0,0,.5);display:flex;align-items:center;gap:8px;max-width:90vw;white-space:nowrap}
-.atst.ok{background:rgba(0,230,118,.14);border:1px solid rgba(0,230,118,.28);color:var(--accent)}
-.atst.er{background:rgba(239,68,68,.14);border:1px solid rgba(239,68,68,.28);color:#ef4444}
-.atst.in{background:rgba(245,197,66,.14);border:1px solid rgba(245,197,66,.28);color:var(--gold,#f5c542)}
-
-.aov{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;padding:20px;animation:afu .2s ease}
-.abox{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:22px;max-width:380px;width:100%;text-align:center}
-.abox h3{font-size:.95rem;font-weight:900;color:var(--text-primary);margin:0 0 8px}
-.abox p{font-size:.82rem;color:var(--text-muted);margin:0 0 18px;font-weight:600;line-height:1.4}
-.abbtns{display:flex;gap:8px;justify-content:center}
-
-.aur{display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;border:1px solid var(--border);background:var(--bg-surface);margin-bottom:7px;transition:background .15s}
-.aur:hover{background:rgba(255,255,255,.015)}
-.aur.me{border-color:rgba(0,230,118,.2);background:rgba(0,230,118,.03)}
-
-.ausr-input{display:flex;gap:8px;margin-bottom:14px}
-.ausr-input .aip{flex:1}
-
-.abatch-bar{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg-surface);border:1px solid var(--border);border-radius:11px;margin-bottom:12px;font-size:.78rem;color:var(--text-muted);font-weight:700}
-.abatch-bar .ab{margin-left:auto}
-
-.aedit-hint{font-size:.65rem;color:var(--gold,#f5c542);font-weight:700;opacity:.7;margin-top:2px;display:flex;align-items:center;gap:3px}
-
-@media(max-width:640px){
-  .atb{padding:10px 5px;font-size:.68rem;gap:4px}
-  .atb span.lb{display:none}
-  .asg{grid-template-columns:repeat(3,1fr)}
-  .astat .n{font-size:1.15rem}.astat .l{font-size:.55rem}
-  .arg{grid-template-columns:1fr 1fr}
-  .ate span{font-size:.78rem}.asn{font-size:.95rem}
-  .asb{min-width:68px;padding:6px 10px}
-  .api{width:42px;height:38px;font-size:.9rem}
-  .alp{padding:5px 9px;font-size:.64rem}
-  .ausr-input{flex-direction:column}.ausr-input .ab{width:100%}
-}
-@media(max-width:380px){
-  .asg{grid-template-columns:repeat(2,1fr)}
-  .arg{grid-template-columns:1fr}
-  .am{padding:11px 12px}
-}
-@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
-  `;
-  document.head.appendChild(s);
-};
-
-/* ═════════════════════════════════════════════════════════════════════════════════
-   HOOKS & SMALL COMPONENTS
+   HOOKS & MEMOIZED SMALL COMPONENTS
    ═════════════════════════════════════════════════════════════════════════════════ */
 function useMounted() { const r = useRef(true); useEffect(() => () => { r.current = false; }, []); return r; }
 
-function Toast({ message, type, onDone }) {
+const Toast = memo(function Toast({ message, type, onDone }) {
   useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
   const Ic = type === 'ok' ? CheckCircle2 : type === 'er' ? XCircle : AlertTriangle;
   return <div className={`atst ${type}`}><Ic size={15} /> {message}</div>;
-}
+});
 
-function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false }) {
+const Confirm = memo(function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false }) {
   return (
     <div className="aov" onClick={onNo}>
       <div className="abox" onClick={e => e.stopPropagation()}>
@@ -398,22 +179,22 @@ function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false 
       </div>
     </div>
   );
-}
+});
 
-function Skel({ n = 3 }) {
+const Skel = memo(function Skel({ n = 3 }) {
   return <div>{Array.from({ length: n }).map((_, i) => <div key={i} className="askel" style={{ animationDelay: `${i * 80}ms` }} />)}</div>;
-}
+});
 
-function Empty({ icon: Ic, title, hint }) {
+const Empty = memo(function Empty({ icon: Ic, title, hint }) {
   return (
     <div className="aem">
       {Ic && <Ic size={26} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 6px' }} />}
       <p>{title}</p>{hint && <p className="h">{hint}</p>}
     </div>
   );
-}
+});
 
-function ShowMore({ count, show, onToggle }) {
+const ShowMore = memo(function ShowMore({ count, show, onToggle }) {
   if (count <= 0) return null;
   return (
     <button className="asm" onClick={onToggle} style={{ marginTop: 8 }}>
@@ -421,22 +202,23 @@ function ShowMore({ count, show, onToggle }) {
       {show ? 'Show less' : `Show ${count} more`}
     </button>
   );
-}
+});
 
-function RBadge({ pick }) {
+const RBadge = memo(function RBadge({ pick }) {
   if (!pick?.adminPick || pick.status !== 'finished') return null;
   const h = pick.adminPick.home, a = pick.adminPick.away, ph = pick.homeScore, pa = pick.awayScore;
   if (ph == null || pa == null) return <span className="abdg pn">PENDING</span>;
   if (h === ph && a === pa) return <span className="abdg ex"><CheckCircle2 size={9} /> EXACT +10</span>;
   if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="abdg rs"><TrendingUp size={9} /> RESULT +3</span>;
   return <span className="abdg ms"><XCircle size={9} /> MISS</span>;
-}
+});
 
-function MatchRow({ m, idx, mode, sel, onToggleSel, scoreInput, onScoreInput, onAction, pubPick, extraBadge }) {
+const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel, scoreInput, onScoreInput, pubPick, extraBadge, isFeatured, isAdding, isFull, onAddClick, onRemoveClick, isRemoving }) {
   const mid = String(m.id);
   const live = isLive(m), fin = isFin(m), sc = getScore(m), st = gst(m.status);
   const comp = m.competition || m.league;
   const cls = `am card-in${sel ? ' zs' : ''}${live ? ' lg' : ''}`;
+  
   return (
     <div className={cls} style={{ animationDelay: `${idx * 20}ms` }}>
       <div className="amh">
@@ -479,19 +261,31 @@ function MatchRow({ m, idx, mode, sel, onToggleSel, scoreInput, onScoreInput, on
             <input className={`api${scoreInput.a ? ' hv' : ''}`} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
           </div>
         )}
-        {mode === 'featured' && typeof onAction === 'function' && onAction(m, idx)}
+        
+        {mode === 'featured' && (
+          isFeatured ? (
+            <button className="ab ab-sm ab-dg" onClick={() => onRemoveClick(m)} disabled={isRemoving}>
+              {isRemoving ? <Loader2 size={11} className="asp" /> : <Trash2 size={11} />} Remove
+            </button>
+          ) : (
+            <button className="ab ab-sm ab-sc" onClick={() => onAddClick(m)} disabled={isAdding || isFull}>
+              {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
+              {isFull ? 'Full' : 'Add'}
+            </button>
+          )
+        )}
+        
         {pubPick && <RBadge pick={pubPick} />}
         {extraBadge}
       </div>
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    MAIN ADMIN COMPONENT
    ═════════════════════════════════════════════════════════════════════════════════ */
 export default function Admin() {
-  injectCSS();
   const nav = useNavigate();
   const { userProfile } = useAuth();
   const mounted = useMounted();
@@ -521,7 +315,7 @@ export default function Admin() {
       if (!defaultDates.includes(d)) dates.push(d);
     }
     return dates.sort();
-  }, []);
+  }, [defaultDates]);
 
   useEffect(() => {
     let mnt = true;
@@ -586,33 +380,22 @@ export default function Admin() {
     return unsub;
   }, [date, mounted]);
 
-  // ★ AUTO-RESOLVE LOGIC
-  useEffect(() => {
-    if (!preds.length || !dayFixtures.length) return;
-    preds.forEach(p => {
-      if (p.status === 'finished' || p.isFinished) return;
-      const fx = dayFixtures.find(f => String(f.id) === String(p.matchId));
-      if (fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null) {
-        handleResolve(p, fx.homeScore, fx.awayScore, true);
-      }
-    });
-  }, [dayFixtures, preds]);
-
-  const handleZokaSaveDraft = async (data) => {
+  // Handlers
+  const handleZokaSaveDraft = useCallback(async (data) => {
     if (!db) return;
     await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, updatedAt: serverTimestamp() }, { merge: true });
     dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  };
+  }, [date]);
 
-  const handleZokaPublish = async (data) => {
+  const handleZokaPublish = useCallback(async (data) => {
     if (!db) return;
     await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
     dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  };
+  }, [date]);
 
-  const handleZokaUnpublish = async () => {
+  const handleZokaUnpublish = useCallback(async () => {
     if (!db || !pubPicks) return;
     setConfirm({
       title: 'Unpublish All Zoka Picks?',
@@ -625,15 +408,12 @@ export default function Admin() {
         setConfirm(null);
       },
     });
-  };
+  }, [db, pubPicks, date]);
 
-  const handleFeaturedAdd = async (m) => {
+  const handleFeaturedAdd = useCallback(async (m) => {
     if (!db) return;
-    // ★ SMART LOCK: Prevent adding if match has started
-    if (hasMatchStarted(m)) { 
-      showToast('Match has already started or finished!', 'er'); 
-       return; 
-    }
+    if (hasMatchStarted(m)) { showToast('Match has already started or finished!', 'er'); return; }
+    
     const matchDate = date;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
@@ -652,9 +432,9 @@ export default function Admin() {
     
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  };
+  }, [db, date, preds, showToast]);
 
-  const handleFeaturedRemove = async (p) => {
+  const handleFeaturedRemove = useCallback(async (p) => {
     if (!db) return;
     const predId = p.id || `feat_${date}_${p.matchId}`;
     const updatedPreds = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
@@ -665,9 +445,9 @@ export default function Admin() {
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  };
+  }, [db, date, preds]);
 
-  const handleResolve = async (pred, h, a, isAuto = false) => {
+  const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
 
@@ -677,7 +457,6 @@ export default function Admin() {
     setPreds(updated);
 
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
-
     await resolveMatchForAllUsers(matchId, h, a, date);
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
@@ -685,9 +464,9 @@ export default function Admin() {
     eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
 
     if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
-  };
+  }, [preds, date, showToast]);
 
-  const handleOverride = async (pred, h, a) => {
+  const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
 
@@ -697,15 +476,14 @@ export default function Admin() {
     setPreds(updated);
 
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
-
     await resolveMatchForAllUsers(matchId, h, a, date);
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
     eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-  };
+  }, [preds, date]);
 
-  const handleRebuild = async (period) => {
+  const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
       if (period === 'daily') await rebuildDailySummary(date);
@@ -719,7 +497,19 @@ export default function Admin() {
       showToast('Rebuild failed', 'er');
     }
     setRebuilding(null);
-  };
+  }, [date, showToast]);
+
+  // ★ AUTO-RESOLVE LOGIC
+  useEffect(() => {
+    if (!preds.length || !dayFixtures.length) return;
+    preds.forEach(p => {
+      if (p.status === 'finished' || p.isFinished) return;
+      const fx = dayFixtures.find(f => String(f.id) === String(p.matchId));
+      if (fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null) {
+        handleResolve(p, fx.homeScore, fx.awayScore, true);
+      }
+    });
+  }, [dayFixtures, preds, handleResolve]);
 
   return (
     <div className="ap">
@@ -786,7 +576,7 @@ export default function Admin() {
 /* ═════════════════════════════════════════════════════════════════════════════════
    DASHBOARD TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function DashTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuild, rebuilding }) {
+const DashTab = memo(function DashTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuild, rebuilding }) {
   const pr = pubPicks?.matches || [];
   let zE = 0, zR = 0, zM = 0, zP = 0;
   pr.forEach(p => {
@@ -839,23 +629,17 @@ function DashTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuil
       </div>
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    ZOKA PICKS TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, onSaveDraft, toast }) {
+const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, onSaveDraft, toast }) {
   const mounted = useMounted();
-  const [, refresh] = useState(0);
-  const mk = `zoka_${date}`;
-
-  const setSel = (v) => { memUpdate(`${mk}_sel`, v); refresh(n => n + 1); };
-  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
-  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
-
-  const sel = mem.get(`${mk}_sel`, {});
-  const lg = mem.get(`${mk}_lg`, 'ALL');
-  const showAll = mem.get(`${mk}_show`, false);
+  
+  const [sel, setSel] = useState({});
+  const [lg, setLg] = useState('ALL');
+  const [showAll, setShowAll] = useState(false);
   const [saving, setSaving] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [flash, setFlash] = useState(false);
@@ -865,8 +649,6 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const [openDay, setOpenDay] = useState(null);
 
   const dayFx = useMemo(() => fixtures?.filter(m => extractDate(m) === date) || [], [fixtures, date]);
-  
-  // ★ SMART LOCK: Filter out matches that have started
   const selectableFx = useMemo(() => dayFx.filter(m => !hasMatchStarted(m)), [dayFx]);
 
   const leagues = useMemo(() => {
@@ -897,26 +679,28 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
   const pubMatches = useMemo(() => Array.isArray(pubPicks) ? pubPicks : (pubPicks?.matches || []), [pubPicks]);
   const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
 
-  const toggle = (m) => {
-    // ★ SMART LOCK: Prevent selecting if started
+  const toggle = useCallback((m) => {
     if (hasMatchStarted(m)) { toast('Cannot select matches that have already started', 'in'); return; }
     const id = String(m.id);
-    if (ids.has(id)) {
-      setSel(prev => { const n = { ...prev }; delete n[id]; return n; });
-    } else if (!full) {
-      const existing = pubMap.get(id);
-      setSel(prev => ({ ...prev, [id]: existing ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') } : { h: '', a: '' } }));
-    } else {
-      toast(`Max ${MAX_ZOKA} Zoka Picks`, 'in');
-    }
-  };
+    setSel(prev => {
+      if (prev[id]) {
+        const n = { ...prev }; delete n[id]; return n;
+      } else if (Object.keys(prev).length < MAX_ZOKA) {
+        const existing = pubMap.get(id);
+        return { ...prev, [id]: existing ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') } : { h: '', a: '' } };
+      } else {
+        toast(`Max ${MAX_ZOKA} Zoka Picks`, 'in');
+        return prev;
+      }
+    });
+  }, [pubMap, toast]);
 
-  const updScore = (mid, f, v) => {
+  const updScore = useCallback((mid, f, v) => {
     const c = v.replace(/[^0-9]/g, '').slice(0, 2);
     setSel(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
-  };
+  }, []);
 
-  const buildNewPicks = () => {
+  const buildNewPicks = useCallback(() => {
     const picks = [];
     for (const [mid, sc] of Object.entries(sel)) {
       const m = dayFx.find(x => String(x.id) === mid);
@@ -932,9 +716,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       });
     }
     return picks;
-  };
+  }, [sel, dayFx]);
 
-  const mergeWithExisting = (newPicks) => {
+  const mergeWithExisting = useCallback((newPicks) => {
     const existing = pubMatches;
     const merged = [...existing];
     for (const np of newPicks) {
@@ -943,9 +727,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       else merged.push(np);
     }
     return merged;
-  };
+  }, [pubMatches]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!db || cnt === 0) return;
     setSaving(true);
     try {
@@ -959,9 +743,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       toast(`Saved ${newPicks.length} pick${newPicks.length > 1 ? 's' : ''} (${merged.length} total)`, 'ok');
     } catch (e) { console.error('[Zoka] Save err:', e); toast('Save failed', 'er'); }
     setSaving(false);
-  };
+  }, [cnt, buildNewPicks, mergeWithExisting, onSaveDraft, date, ready, toast, mounted]);
 
-  const handlePublish = async () => {
+  const handlePublish = useCallback(async () => {
     if (!db || !ready) return;
     setPublishing(true);
     try {
@@ -973,9 +757,9 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       toast(`Published ${newPicks.length} pick${newPicks.length > 1 ? 's' : ''} (${merged.length} total)!`, 'ok');
     } catch (e) { console.error('[Zoka] Pub err:', e); toast('Publish failed', 'er'); }
     setPublishing(false);
-  };
+  }, [db, ready, buildNewPicks, mergeWithExisting, onPublish, date, toast]);
 
-  const loadHist = async () => {
+  const loadHist = useCallback(async () => {
     if (hist.length > 0 || histLoad) return;
     setHistLoad(true);
     try {
@@ -1001,7 +785,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       if (mounted.current) setHist(days);
     } catch (e) { console.error('[Zoka] Hist err:', e); }
     setHistLoad(false);
-  };
+  }, [hist, histLoad, mounted]);
 
   const pubRes = useMemo(() => {
     if (!pubMatches.length) return { e: 0, r: 0, mi: 0, p: 0 };
@@ -1127,7 +911,7 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
                         <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>{pk.awayTeam?.shortName || pk.awayTeam?.name || '?'}</span>
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--gold,#f5c542)', fontSize: '.82rem' }}>{pk.adminPick?.home}-{pk.adminPick?.away}</span>
+                        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--gold)', fontSize: '.82rem' }}>{pk.adminPick?.home}-{pk.adminPick?.away}</span>
                         {pk.status === 'finished' && pk.homeScore != null && <><span style={{ color: 'var(--text-muted)' }}>→</span><span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--text-primary)', fontSize: '.82rem' }}>{pk.homeScore}-{pk.awayScore}</span></>}
                         <RBadge pick={pk} />
                       </div>
@@ -1141,18 +925,14 @@ function ZokaTab({ date, fixtures, fxLoading, pubPicks, onPublish, onUnpublish, 
       </div>
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    FEATURED TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
-  const [, refresh] = useState(0);
-  const mk = `feat_${date}`;
-  const setLg = (v) => { memUpdate(`${mk}_lg`, v); refresh(n => n + 1); };
-  const setShowAll = (v) => { memUpdate(`${mk}_show`, v); refresh(n => n + 1); };
-  const lg = mem.get(`${mk}_lg`, 'ALL');
-  const showAll = mem.get(`${mk}_show`, false);
+const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
+  const [lg, setLg] = useState('ALL');
+  const [showAll, setShowAll] = useState(false);
   const [addingId, setAddingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
   const isFull = preds.length >= MAX_FEATURED;
@@ -1161,7 +941,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    // ★ SMART LOCK: Filter out matches that have started
     let l = fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m)); 
     if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
     return l;
@@ -1169,7 +948,6 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
 
   const leagues = useMemo(() => {
     const map = new Map();
-    // ★ SMART LOCK applied here too
     (fixtures?.filter(m => extractDate(m) === date && !hasMatchStarted(m)) || []).forEach(f => {
       const c = f.competition || f.league; if (!c) return;
       const id = String(c.id || c.code || 'x');
@@ -1182,19 +960,19 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
   const vis = useMemo(() => showAll ? avail : avail.slice(0, SHOW_INIT), [avail, showAll]);
   const hidden = Math.max(0, avail.length - SHOW_INIT);
 
-  const handleAddClick = async (m) => {
+  const handleAddClick = useCallback(async (m) => {
     if (isFull) return;
     const mid = String(m.id);
     setAddingId(mid);
     try { await onAdd(m); } catch (e) { toast('Add failed: ' + e.message, 'er'); }
     finally { setAddingId(null); }
-  };
+  }, [isFull, onAdd, toast]);
 
-  const handleRemoveClick = async (p) => {
+  const handleRemoveClick = useCallback(async (p) => {
     setRemovingId(String(p.matchId));
     try { await onRemove(p); } catch (e) { toast('Remove failed: ' + e.message, 'er'); }
     finally { setRemovingId(null); }
-  };
+  }, [onRemove, toast]);
 
   return (
     <div className="ae">
@@ -1208,7 +986,7 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
               const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
               const live = isLive(p);
               const finished = isFin(p);
-              const st = finished ? { c: 'var(--accent)', b: 'rgba(0,230,118,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
+              const st = finished ? { c: 'var(--accent)', b: 'rgba(16,185,129,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
               return (
                 <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
                   <div className="amh">
@@ -1269,17 +1047,17 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
               const isAdding = addingId === mid;
               const isFeatured = pids.has(mid);
               return (
-                <MatchRow key={mid} m={m} idx={i} mode="featured"
-                  onAction={(match) => (
-                    isFeatured ? (
-                      <span className="abdg gn"><CheckCircle2 size={9} /> Featured</span>
-                    ) : (
-                      <button className="ab ab-sm ab-sc" onClick={() => handleAddClick(match)} disabled={isAdding || isFull}>
-                        {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
-                        {isFull ? 'Full' : 'Add'}
-                      </button>
-                    )
-                  )}
+                <MatchRow 
+                  key={mid} 
+                  m={m} 
+                  idx={i} 
+                  mode="featured"
+                  isFeatured={isFeatured}
+                  isAdding={isAdding}
+                  isFull={isFull}
+                  onAddClick={handleAddClick}
+                  onRemoveClick={handleRemoveClick}
+                  isRemoving={removingId === mid}
                 />
               );
             })}
@@ -1291,14 +1069,12 @@ function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast 
       </div>
     </div>
   );
-}
-
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    RESULTS TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
-  const mounted = useMounted();
+const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
   const [scores, setScores] = useState({});
   const [resolving, setResolving] = useState({});
   const [overriding, setOverriding] = useState({});
@@ -1316,12 +1092,12 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
 
   const resolved = useMemo(() => preds.filter(p => p.isFinished || p.status === 'finished'), [preds]);
 
-  const updScore = (mid, f, v) => {
+  const updScore = useCallback((mid, f, v) => {
     const c = v.replace(/[^0-9]/g, '').slice(0, 2);
     setScores(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
-  };
+  }, []);
 
-  const handleResolve = async (pred) => {
+  const handleResolve = useCallback(async (pred) => {
     const mid = String(pred.matchId || pred.id);
     const s = scores[mid];
     const h = s?.h !== '' ? Number(s.h) : (pred.homeScore ?? null);
@@ -1336,9 +1112,9 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
       toast(`Resolved: ${pred.homeTeam?.shortName || pred.homeTeam?.name} ${h}-${a} ${pred.awayTeam?.shortName || pred.awayTeam?.name}`, 'ok');
     } catch (e) { toast('Resolve failed: ' + e.message, 'er'); }
     setResolving(prev => ({ ...prev, [mid]: false }));
-  };
+  }, [scores, onResolve, toast]);
 
-  const handleOverride = async (pred) => {
+  const handleOverride = useCallback(async (pred) => {
     const mid = String(pred.matchId || pred.id);
     const s = scores[mid];
     const h = s?.h !== '' ? Number(s.h) : null;
@@ -1353,9 +1129,9 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
       toast(`Override: ${pred.homeTeam?.shortName || pred.homeTeam?.name} → ${h}-${a}`, 'ok');
     } catch (e) { toast('Override failed: ' + e.message, 'er'); }
     setOverriding(prev => ({ ...prev, [mid]: false }));
-  };
+  }, [scores, onOverride, toast]);
 
-  const handleResolveAll = async () => {
+  const handleResolveAll = useCallback(async () => {
     const toResolve = unresolved.filter(p => {
       const mid = String(p.matchId || p.id);
       const s = scores[mid];
@@ -1375,7 +1151,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
     setScores({});
     setResolving({});
     toast(`Resolved ${ok} match${ok !== 1 ? 'es' : ''}${fail > 0 ? ', ' + fail + ' failed' : ''}`, fail > 0 ? 'er' : 'ok');
-  };
+  }, [unresolved, scores, onResolve, toast]);
 
   return (
     <div className="ae">
@@ -1406,7 +1182,7 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
-                  <div className="asb" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
+                  <div className="asb" style={{ borderColor: 'rgba(16,185,129,.25)', background: 'rgba(16,185,129,.04)' }}>
                     <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
                     <span className="asep">–</span>
                     <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
@@ -1448,14 +1224,14 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
                     {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.league?.name || 'Match'}</span>
                   </div>
-                  <span className="as" style={{ color: 'var(--accent)', background: 'rgba(0,230,118,.08)' }}>FT</span>
+                  <span className="as" style={{ color: 'var(--accent)', background: 'rgba(16,185,129,.08)' }}>FT</span>
                 </div>
                 <div className="atm">
                   <div className="ate">
                     {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
-                  <div className="asb ft" style={{ borderColor: 'rgba(0,230,118,.25)', background: 'rgba(0,230,118,.04)' }}>
+                  <div className="asb ft" style={{ borderColor: 'rgba(16,185,129,.25)', background: 'rgba(16,185,129,.04)' }}>
                     <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
                     <span className="asep">–</span>
                     <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
@@ -1482,12 +1258,12 @@ function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
       )}
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
-   BROADCAST TAB (UPGRADED)
+   BROADCAST TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function BroadcastTab({ toast }) {
+const BroadcastTab = memo(function BroadcastTab({ toast }) {
   const [type, setType] = useState('global');
   const [uid, setUid] = useState('');
   const [title, setTitle] = useState('');
@@ -1499,7 +1275,7 @@ function BroadcastTab({ toast }) {
   const [search, setSearch] = useState('');
   const [showUserList, setShowUserList] = useState(false);
 
-  const loadUsers = async () => {
+  const loadUsers = useCallback(async () => {
     if (!db) return;
     setLoadingUsers(true);
     try {
@@ -1510,15 +1286,15 @@ function BroadcastTab({ toast }) {
       toast('Load failed: ' + e.message, 'er');
     }
     setLoadingUsers(false);
-  };
+  }, [toast]);
 
-  const selectUser = (u) => {
+  const selectUser = useCallback((u) => {
     setType('personal');
     setUid(u.id);
     setSearch(`${u.displayName || u.email || u.id}`);
     setShowUserList(false);
     toast(`Selected ${u.displayName || u.email}`, 'ok');
-  };
+  }, [toast]);
 
   const filteredUsers = useMemo(() => {
     if (!search.trim()) return users;
@@ -1530,7 +1306,7 @@ function BroadcastTab({ toast }) {
     );
   }, [users, search]);
 
-  const handleSend = async () => {
+  const handleSend = useCallback(async () => {
     if (!db || !title.trim() || !message.trim()) return;
     if (type === 'personal' && !uid.trim()) { toast('Target UID required', 'in'); return; }
     
@@ -1548,7 +1324,7 @@ function BroadcastTab({ toast }) {
       setTitle(''); setMessage(''); setUid(''); setSearch('');
     } catch (e) { toast('Send failed: ' + e.message, 'er'); }
     setSending(false);
-  };
+  }, [db, title, message, type, uid, toast]);
 
   return (
     <div className="ae">
@@ -1605,19 +1381,19 @@ function BroadcastTab({ toast }) {
       </div>
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
    STAFF TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function StaffTab({ toast }) {
+const StaffTab = memo(function StaffTab({ toast }) {
   const mounted = useMounted();
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(false);
   const [email, setEmail] = useState('');
   const [adding, setAdding] = useState(false);
 
-  const loadStaff = async () => {
+  const loadStaff = useCallback(async () => {
     if (!db) return;
     setLoading(true);
     try {
@@ -1627,9 +1403,9 @@ function StaffTab({ toast }) {
       }
     } catch (e) { toast('Load failed: ' + e.message, 'er'); }
     setLoading(false);
-  };
+  }, [db, mounted, toast]);
 
-  const addStaff = async () => {
+  const addStaff = useCallback(async () => {
     if (!db || !email.trim()) return;
     setAdding(true);
     try {
@@ -1642,16 +1418,16 @@ function StaffTab({ toast }) {
       loadStaff();
     } catch (e) { toast('Add failed: ' + e.message, 'er'); }
     setAdding(false);
-  };
+  }, [db, email, toast, loadStaff]);
 
-  const removeRole = async (uid) => {
+  const removeRole = useCallback(async (uid) => {
     if (!db) return;
     try {
       await setDoc(doc(db, 'users', uid), { role: 'user', updatedAt: serverTimestamp() }, { merge: true });
       toast('Role removed', 'ok');
       setStaff(prev => prev.filter(s => s.id !== uid));
     } catch (e) { toast('Remove failed: ' + e.message, 'er'); }
-  };
+  }, [db, toast]);
 
   return (
     <div className="ae">
@@ -1682,12 +1458,12 @@ function StaffTab({ toast }) {
       </div>
     </div>
   );
-}
+});
 
 /* ═════════════════════════════════════════════════════════════════════════════════
-   USERS TAB (FIXED)
+   USERS TAB
    ═════════════════════════════════════════════════════════════════════════════════ */
-function UsersTab({ toast }) {
+const UsersTab = memo(function UsersTab({ toast }) {
   const mounted = useMounted();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -1695,7 +1471,7 @@ function UsersTab({ toast }) {
   const [lastKey, setLastKey] = useState(null);
   const [hasMore, setHasMore] = useState(false);
 
-  const loadUsers = async (more = false) => {
+  const loadUsers = useCallback(async (more = false) => {
     if (!db) return;
     setLoading(true);
     try {
@@ -1714,7 +1490,7 @@ function UsersTab({ toast }) {
       }
     } catch (e) { toast('Load failed: ' + e.message, 'er'); }
     setLoading(false);
-  };
+  }, [db, mounted, toast]);
 
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
@@ -1763,4 +1539,4 @@ function UsersTab({ toast }) {
       </div>
     </div>
   );
-}
+});

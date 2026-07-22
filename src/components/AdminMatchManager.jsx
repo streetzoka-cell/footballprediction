@@ -3,14 +3,13 @@
 // Exact Fixture UI format, integrated with Admin Controls (Zoka, Featured, Active)
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
-  Search, X, Clock, Trophy, Zap, ChevronRight, ChevronDown, 
-  RefreshCw, Calendar, AlertTriangle, Star, Target, CheckCircle, XCircle, Save
+  Search, X, Trophy, ChevronRight, ChevronDown, 
+  RefreshCw, Star, CheckCircle, Save
 } from 'lucide-react';
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
-import { useFootballData } from '../context/FootballDataContext';
 import { todayStr as getTodayStr, getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime } from '../utils/dates';
 
 const LEAGUE_PRIORITY = {
@@ -20,106 +19,6 @@ const LEAGUE_PRIORITY = {
   'Süper Lig': 12, 'Championship': 13,
 };
 const getLeaguePriority = (name) => LEAGUE_PRIORITY[name] || 99;
-
-const injectStyles = () => {
-  if (document.getElementById('adm-mg-css')) return;
-  const s = document.createElement('style');
-  s.id = 'adm-mg-css';
-  s.textContent = `
-    @keyframes admFadeIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes admSlideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes admPulse{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(1.4)}}
-    @keyframes admLiveGlow{0%,100%{box-shadow:0 0 0 1px rgba(239,68,68,.2), 0 4px 20px rgba(0,0,0,0.3)}50%{box-shadow:0 0 15px 1px rgba(239,68,68,.4), 0 4px 20px rgba(0,0,0,0.3)}}
-    @keyframes admExpand{from{opacity:0;max-height:0}to{opacity:1;max-height:1000px}}
-    @keyframes admShimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes admSpin{to{transform:rotate(360deg)}}
-
-    .adm-page{min-height:100vh;background:radial-gradient(circle at top right, #1e293b, #0a0f1a);padding:0 0 120px;position:relative;color:#f8fafc;font-weight:600;overflow-x:hidden}
-    .adm-wrap{max-width:560px;margin:0 auto;padding:0 12px;position:relative;z-index:1}
-
-    .adm-hdr{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.75);backdrop-filter:blur(20px) saturate(1.8);-webkit-backdrop-filter:blur(20px) saturate(1.8);padding:12px 0;border-bottom:1px solid rgba(255,255,255,0.08);display:flex;align-items:center;justify-content:space-between;gap:8px}
-    .adm-hdr-title h1{margin:0;font-size:1.2em;font-weight:900;letter-spacing:-.02em;display:flex;align-items:baseline;gap:2px}
-    .adm-hdr-title .sub{font-size:.7em;color:#cbd5e1;font-weight:700;margin-top:2px}
-    .adm-hdr-actions{display:flex;align-items:center;gap:6px}
-    .adm-hdr-btn{width:36px;height:36px;border-radius:10px;background:rgba(255,255,255,0.05);border:1px solid rgba(255,255,255,0.1);display:flex;align-items:center;justify-content:center;color:#e2e8f0;cursor:pointer;transition:all .2s ease}
-    .adm-hdr-btn:hover{background:rgba(255,255,255,0.1);color:#fff}
-    .adm-spin{animation:admSpin .8s linear infinite}
-
-    .adm-datenav{display:flex;align-items:center;justify-content:center;gap:4px;margin:16px auto;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:4px;width:fit-content}
-    .adm-nav-btn{padding:8px 16px;border-radius:8px;border:none;background:transparent;color:#94a3b8;font-size:.75em;font-weight:800;cursor:pointer}
-    .adm-nav-btn.active{background:#3b82f6;color:#fff;box-shadow:0 2px 8px rgba(59,130,246,.3)}
-
-    .adm-search-static{display:flex;align-items:center;gap:8px;width:100%;padding:12px 16px;border-radius:12px;border:1px solid rgba(255,255,255,0.08);background:rgba(255,255,255,0.03);margin-bottom:16px}
-    .adm-search-static input{flex:1;background:none;border:none;outline:none;color:#fff;font-size:.85em;font-family:inherit}
-
-    .adm-section{margin-bottom:20px;animation:admFadeIn .4s ease both}
-    .adm-league-hd{display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:0 4px}
-    .adm-league-hd img{width:16px;height:16px;border-radius:3px}
-    .adm-league-hd span{font-size:.75em;font-weight:900;color:#cbd5e1;text-transform:uppercase;letter-spacing:.03em}
-
-    /* Exact Match Card Format */
-    .adm-card{position:relative;overflow:hidden;padding:14px 16px;background:rgba(30,41,59,0.4);backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,0.06);border-radius:14px;margin-bottom:8px;transition:all .25s cubic-bezier(.22,1,.36,1);animation:admSlideIn .3s ease both;cursor:pointer}
-    .adm-card:hover{background:rgba(255,255,255,0.05);border-color:rgba(255,255,255,0.12)}
-    .adm-card.live{border-color:rgba(239,68,68,.3);animation:admLiveGlow 2.5s ease-in-out infinite,admSlideIn .3s ease both}
-    .adm-card.finished{opacity:.7}
-    .adm-card.scheduled{border-left:3px solid rgba(59,130,246,.4)}
-    .adm-card.expanded{border-radius:14px 14px 0 0;margin-bottom:0;border-color:rgba(59,130,246,.3)}
-    .adm-left-bar{position:absolute;left:0;top:0;bottom:0;width:3px;border-radius:0 2px 2px 0}
-
-    .adm-card-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
-    .adm-status{display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:6px;font-size:.55em;font-weight:900;text-transform:uppercase}
-    .adm-status.live-s{color:#ef4444;background:rgba(239,68,68,.15)}
-    .adm-status.ft-s{color:#10b981;background:rgba(16,185,129,.1)}
-    .adm-status.time-s{color:#cbd5e1;background:rgba(255,255,255,0.06);font-size:.65em}
-    .adm-dot{width:6px;height:6px;border-radius:50%;background:#ef4444;animation:admPulse 1.2s ease-in-out infinite;flex-shrink:0}
-    
-    .adm-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:6px;font-size:.5em;font-weight:900;text-transform:uppercase;margin-left:8px}
-    .adm-badge.active{background:rgba(16,185,129,.2);color:#10b981;border:1px solid rgba(16,185,129,.3)}
-    .adm-badge.featured{background:rgba(59,130,246,.2);color:#3b82f6;border:1px solid rgba(59,130,246,.3)}
-    .adm-badge.zoka{background:rgba(245,158,11,.2);color:#f59e0b;border:1px solid rgba(245,158,11,.3)}
-
-    .adm-teams{display:flex;align-items:center;gap:8px}
-    .adm-team-col{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
-    .adm-team-col.home{align-items:flex-end}
-    .adm-team-col.away{align-items:flex-start}
-    .adm-team-row{display:flex;align-items:center;gap:8px;min-width:0}
-    .adm-team-col.home .adm-team-row{flex-direction:row-reverse}
-    .adm-crest{width:22px;height:22px;object-fit:contain;flex-shrink:0;border-radius:4px}
-    .adm-team-name{font-size:.9em;font-weight:800;color:#fff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-    .adm-team-col.home .adm-team-name{text-align:right}
-    
-    .adm-score-box{width:70px;flex-shrink:0;text-align:center;display:flex;align-items:center;justify-content:center}
-    .adm-scores{display:flex;align-items:center;gap:6px}
-    .adm-score-num{font-family:var(--font-display,system-ui);font-variant-numeric:tabular-nums;font-size:1.3em;font-weight:900;min-width:20px;text-align:center;line-height:1}
-    .adm-score-num.live-score{color:#ef4444}
-    .adm-score-num.ft-score{color:#10b981}
-    .adm-sep{color:#64748b;font-size:.75em;font-weight:800;opacity:.5}
-    .adm-vs{font-size:.7em;font-weight:900;color:#64748b;opacity:.4}
-
-    /* Admin Control Panel */
-    .adm-expanded{background:rgba(15,23,42,0.8);border:1px solid rgba(59,130,246,0.2);border-top:none;border-radius:0 0 14px 14px;overflow:hidden;animation:admExpand .35s ease-out both}
-    .adm-exp-section{padding:12px 16px 4px;font-size:.6em;font-weight:900;color:#94a3b8;text-transform:uppercase;letter-spacing:.06em}
-    .adm-toggle-row{display:flex;gap:8px; padding:12px 16px}
-    .adm-toggle-btn{flex:1; display:flex; align-items:center; justify-content:center; gap:6px; padding:10px; border-radius:8px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); color:#94a3b8; font-size:.7em; font-weight:800; cursor:pointer; transition:all .2s}
-    .adm-toggle-btn:hover{background:rgba(255,255,255,0.08); color:#fff}
-    .adm-toggle-btn.on{background:rgba(16,185,129,0.1); border-color:rgba(16,185,129,0.4); color:#10b981}
-    .adm-toggle-btn.zoka-on{background:rgba(245,158,11,0.1); border-color:rgba(245,158,11,0.4); color:#f59e0b}
-
-    .adm-input-grp{display:flex; align-items:center; justify-content:center; gap:16px; padding:8px 16px 16px}
-    .adm-input-label{font-size:.7em; font-weight:800; color:#cbd5e1; margin-bottom:4px; text-align:center}
-    .adm-step{display:flex; align-items:center; gap:8px}
-    .adm-step-btn{width:32px; height:32px; border-radius:8px; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center}
-    .adm-step-btn:hover{background:rgba(59,130,246,0.1)}
-    .adm-step-val{font-family:var(--font-display); font-size:1.4em; font-weight:900; color:#fff; min-width:25px; text-align:center}
-    
-    .adm-save-btn{display:flex; align-items:center; justify-content:center; gap:8px; width:100%; padding:12px; border:none; border-radius:0 0 14px 14px; background:linear-gradient(135deg, #3b82f6, #2563eb); color:#fff; font-weight:900; font-size:.8em; cursor:pointer}
-    .adm-save-btn:hover{filter:brightness(1.1)}
-
-    .adm-empty{display:flex;flex-direction:column;align-items:center;gap:12px;padding:50px 24px;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.05);border-radius:16px;text-align:center}
-    .adm-sk{height:52px;border-radius:14px;background:linear-gradient(90deg,rgba(30,41,59,0.2) 25%,rgba(255,255,255,0.05) 50%,rgba(30,41,59,0.2) 75%);background-size:200% 100%;animation:admShimmer 1.5s ease-in-out infinite;margin-bottom:8px}
-  `;
-  document.head.appendChild(s);
-};
 
 // Helper to extract date
 function extractMatchDate(m) {
@@ -131,8 +30,6 @@ function extractMatchDate(m) {
 }
 
 export default function AdminMatchManager({ date, adminData, onToggleActive, onToggleFeatured, onSetZoka }) {
-  injectStyles();
-  
   const [selectedDate, setSelectedDate] = useState(date || getTodayStr());
   const [fixtures, setFixtures] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -275,7 +172,7 @@ export default function AdminMatchManager({ date, adminData, onToggleActive, onT
         <div className="adm-search-static">
           <Search size={18} style={{ color: '#94a3b8', flexShrink: 0 }} />
           <input type="text" placeholder="Search matches to manage..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
-          {searchQ && <button style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer' }} onClick={() => setSearchQ('')}><X size={18} /></button>}
+          {searchQ && <button style={{ background: 'none', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: 0, display: 'flex' }} onClick={() => setSearchQ('')}><X size={18} /></button>}
         </div>
 
         {/* Fixtures List */}
@@ -284,14 +181,14 @@ export default function AdminMatchManager({ date, adminData, onToggleActive, onT
         ) : grouped.length === 0 ? (
           <div className="adm-empty">
             <div style={{ fontSize: '2rem' }}>⚽</div>
-            <p style={{ color: '#cbd5e1', fontSize: '.85em', fontWeight: 700 }}>No matches found for this date</p>
+            <p style={{ color: '#cbd5e1', fontSize: '.85em', fontWeight: 700, margin: 0 }}>No matches found for this date</p>
           </div>
         ) : (
           <>
             {grouped.map(group => (
               <div key={group.name} className="adm-section">
                 <div className="adm-league-hd">
-                  {group.logo && <img src={group.logo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                  {group.logo && <img src={group.logo} alt="" style={{ width: '16px', height: '16px', borderRadius: '3px' }} onError={e => { e.target.style.display = 'none'; }} />}
                   <span>{group.name}</span>
                 </div>
 
@@ -377,13 +274,13 @@ export default function AdminMatchManager({ date, adminData, onToggleActive, onT
                             <div className="adm-step">
                               <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'h', -1); }}><ChevronDown size={16} /></button>
                               <span className="adm-step-val">{localVal.h}</span>
-                              <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'h', 1); }}><ChevronUp size={16} /></button>
+                              <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'h', 1); }}><ChevronRight size={16} /></button>
                             </div>
                             <span style={{ color:'#64748b', fontWeight: 900 }}>VS</span>
                             <div className="adm-step">
                               <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'a', -1); }}><ChevronDown size={16} /></button>
                               <span className="adm-step-val">{localVal.a}</span>
-                              <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'a', 1); }}><ChevronUp size={16} /></button>
+                              <button className="adm-step-btn" onClick={(e) => { e.stopPropagation(); handleStep(m.id, 'a', 1); }}><ChevronRight size={16} /></button>
                             </div>
                           </div>
                           

@@ -30,7 +30,8 @@
     content="index,follow,max-snippet:-1,max-image-preview:large"
   />
 
-  <meta name="theme-color" content="#07141f" />
+  <!-- Updated to match the new Obsidian dark theme -->
+  <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark" />
 
   <!-- Google Verification -->
@@ -54,16 +55,19 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
-  <meta
-    name="apple-mobile-web-app-status-bar-style"
-    content="black-translucent"
-  />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <!-- Performance -->
+  <!-- Performance & Preconnects (Consolidated) -->
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.googletagmanager.com" />
   <link rel="preconnect" href="https://www.google-analytics.com" crossorigin />
+  
+  <!-- Google Fonts (Only 1 family, optimized weights) -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+  
+  <!-- ★ Preload main app logo -->
+  <link rel="preload" href="/icons/icon-192.png" as="image" />
 
   <!-- Google tag (gtag.js) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
@@ -79,22 +83,9 @@
   <meta property="og:site_name" content="ZOKASCORE" />
   <meta property="og:locale" content="en_KE" />
   <meta property="og:url" content="https://zokascore.xyz/" />
-
-  <meta
-    property="og:title"
-    content="ZOKASCORE | Live Football Scores & Predictions"
-  />
-
-  <meta
-    property="og:description"
-    content="Real-time football scores, predictions, standings, fixtures and leaderboards."
-  />
-
-  <meta
-    property="og:image"
-    content="https://zokascore.xyz/og-image.jpg"
-  />
-
+  <meta property="og:title" content="ZOKASCORE | Live Football Scores & Predictions" />
+  <meta property="og:description" content="Real-time football scores, predictions, standings, fixtures and leaderboards." />
+  <meta property="og:image" content="https://zokascore.xyz/og-image.jpg" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta property="og:image:alt" content="ZOKASCORE" />
@@ -103,23 +94,11 @@
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@zokascore" />
   <meta name="twitter:creator" content="@zokascore" />
+  <meta name="twitter:title" content="ZOKASCORE | Football Predictions & Live Scores" />
+  <meta name="twitter:description" content="Predict football matches, climb leaderboards and follow live scores." />
+  <meta name="twitter:image" content="https://zokascore.xyz/og-image.jpg" />
 
-  <meta
-    name="twitter:title"
-    content="ZOKASCORE | Football Predictions & Live Scores"
-  />
-
-  <meta
-    name="twitter:description"
-    content="Predict football matches, climb leaderboards and follow live scores."
-  />
-
-  <meta
-    name="twitter:image"
-    content="https://zokascore.xyz/og-image.jpg"
-  />
-
-  <!-- WebSite -->
+  <!-- Structured Data -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -133,8 +112,6 @@
     }
   }
   </script>
-
-  <!-- Organization -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -152,8 +129,6 @@
     ]
   }
   </script>
-
-  <!-- WebApplication -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -169,8 +144,6 @@
     }
   }
   </script>
-
-  <!-- Breadcrumb -->
   <script type="application/ld+json">
   {
     "@context":"https://schema.org",
@@ -186,6 +159,47 @@
   }
   </script>
 
+  <!-- ★ STATIC LOADER STYLES (Loads instantly before React) -->
+  <style>
+    body { margin: 0; background: #05070a; }
+    #static-loader {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      background: #05070a; color: #fff;
+      font-family: 'Inter', system-ui, sans-serif;
+      transition: opacity 0.3s ease;
+    }
+    .loader-ball {
+      font-size: 60px;
+      animation: ball-spin 1.2s ease-in-out infinite;
+    }
+    .loader-text {
+      margin-top: 20px;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #10b981;
+      text-transform: uppercase;
+    }
+    .loader-bar {
+      margin-top: 16px;
+      width: 120px;
+      height: 4px;
+      background: rgba(255,255,255,0.1);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    .loader-bar-fill {
+      width: 40%;
+      height: 100%;
+      background: #10b981;
+      border-radius: 4px;
+      animation: bar-slide 1s ease-in-out infinite;
+    }
+    @keyframes ball-spin { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.1) rotate(10deg); } }
+    @keyframes bar-slide { 0% { transform: translateX(-100%); } 100% { transform: translateX(350%); } }
+  </style>
 </head>
 
 <body>
@@ -199,6 +213,13 @@
       </p>
     </div>
   </noscript>
+
+  <!-- ★ STATIC LOADER HTML (Instant First Paint) -->
+  <div id="static-loader">
+    <div class="loader-ball">⚽</div>
+    <div class="loader-text">ZOKASCORE</div>
+    <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+  </div>
 
   <div id="root"></div>
 

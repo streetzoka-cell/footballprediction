@@ -36,7 +36,7 @@ async function generateSitemap() {
       { url: "/mastergames", changefreq: "daily", priority: 0.9 },
       { url: "/leaderboard", changefreq: "daily", priority: 0.85 },
       { url: "/basketball", changefreq: "hourly", priority: 0.85 },
-      { url: "/highlights", changefreq: "hourly", priority: 0.9 }, // Increased priority for News Hub
+      { url: "/highlights", changefreq: "hourly", priority: 0.9 }, 
       { url: "/livestream", changefreq: "daily", priority: 0.75 },
       { url: "/about", changefreq: "monthly", priority: 0.6 },
       { url: "/faq", changefreq: "monthly", priority: 0.55 },
@@ -46,18 +46,17 @@ async function generateSitemap() {
     ];
 
     const dynamicRoutes = [];
+    const processedMatchIds = new Set();
 
-    // ★ 1. Fetch Dynamic Matches from Firestore
-    const today = new Date().toISOString().split("T")[0];
-    const todaySnap = await db.collection("fixture_snapshots").doc(today).get();
-    
-    let matchCount = 0;
-    if (todaySnap.exists) {
-      const data = todaySnap.data();
+    // Helper to extract matches from a snapshot
+    const extractMatches = (snap) => {
+      if (!snap.exists) return;
+      const data = snap.data();
+      // Backend structure is { matches: [], live: [], finished: [] }
       const allMatches = [
-        ...(data.today || []), 
-        ...(data.tomorrow || []), 
-        ...(data.live || [])
+        ...(data.matches || []), 
+        ...(data.live || []),
+        ...(data.finished || [])
       ];
 
       allMatches.forEach((match) => {
@@ -65,28 +64,44 @@ async function generateSitemap() {
         const awayName = match.awayTeam?.name || match.awayTeamName || "Away";
         const matchId = match.id || match.matchId;
         
-        if (matchId) {
+        if (matchId && !processedMatchIds.has(String(matchId))) {
           const slug = `${createSlug(homeName)}-vs-${createSlug(awayName)}`;
           dynamicRoutes.push({
             url: `/match/${matchId}/${slug}`,
             changefreq: "hourly",
             priority: 0.9
           });
-          matchCount++;
+          processedMatchIds.add(String(matchId));
         }
       });
-    }
-    console.log(`Found ${matchCount} matches to add to sitemap.`);
+    };
+
+    // ★ 1. Fetch Dynamic Matches for Today and Tomorrow
+    const today = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    
+    const [todaySnap, tomorrowSnap] = await Promise.all([
+      db.collection("fixture_snapshots").doc(today).get(),
+      db.collection("fixture_snapshots").doc(tomorrow).get()
+    ]);
+    
+    extractMatches(todaySnap);
+    extractMatches(tomorrowSnap);
+    
+    console.log(`Found ${processedMatchIds.size} matches to add to sitemap.`);
 
     // ★ 2. Fetch Dynamic News Posts from Firestore
     const newsSnap = await db.collection("news_posts").orderBy("createdAt", "desc").limit(500).get();
     let newsCount = 0;
     
     newsSnap.forEach(doc => {
+      const postData = doc.data();
+      const titleSlug = createSlug(postData.title || "news");
+      // Frontend expects /highlights/title-slug-id
       dynamicRoutes.push({
-        url: `/highlights/${doc.id}`,
+        url: `/highlights/${titleSlug}-${doc.id}`,
         changefreq: "daily",
-        priority: 0.85 // High priority for SEO
+        priority: 0.85 
       });
       newsCount++;
     });

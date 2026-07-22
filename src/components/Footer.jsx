@@ -91,238 +91,48 @@ const socialLinks = [
   },
 ];
 
-const styles = {
-  footer: {
-    background: "#0a1628",
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-    marginTop: 60,
-    overflowX: "hidden", // Prevents any rogue horizontal scroll
-  },
-  container: {
-    maxWidth: 1280,
-    margin: "0 auto",
-    padding: "0 24px",
-    boxSizing: "border-box", // Ensures padding doesn't add to width
-  },
-  newsletter: {
-    borderBottom: "1px solid rgba(255,255,255,0.06)",
-    padding: "40px 0",
-  },
-  newsletterInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 24,
-    flexWrap: "wrap",
-  },
-  newsletterTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: 600,
-    margin: "0 0 4px 0",
-  },
-  newsletterDesc: {
-    color: "#8899aa",
-    fontSize: 14,
-    margin: 0,
-  },
-  newsletterForm: {
-    display: "flex",
-    width: "100%",
-    maxWidth: 360,
-  },
-  newsletterInput: {
-    flex: 1,
-    minWidth: 0, // Allows input to shrink properly
-    background: "rgba(255,255,255,0.05)",
-    border: "1px solid rgba(255,255,255,0.08)",
-    borderRight: "none",
-    borderRadius: "8px 0 0 8px",
-    padding: "10px 16px",
-    color: "#fff",
-    fontSize: 14,
-    outline: "none",
-  },
-  newsletterBtn: {
-    background: "#16a34a",
-    color: "#fff",
-    border: "none",
-    borderRadius: "0 8px 8px 0",
-    padding: "10px 20px",
-    fontSize: 14,
-    fontWeight: 500,
-    cursor: "pointer",
-    whiteSpace: "nowrap",
-  },
-  main: {
-    padding: "48px 0",
-  },
-  // FIX: Changed from fixed 5 columns to auto-fit to prevent overflow
-  grid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-    gap: 40,
-  },
-  brandLogo: {
-    display: "inline-flex",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 16,
-    textDecoration: "none",
-  },
-  logoIcon: {
-    width: 36,
-    height: 36,
-    background: "#16a34a",
-    borderRadius: 8,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#fff",
-    fontSize: 18,
-  },
-  logoText: {
-    color: "#fff",
-    fontSize: 20,
-    fontWeight: 700,
-    letterSpacing: "-0.3px",
-  },
-  brandDesc: {
-    color: "#8899aa",
-    fontSize: 14,
-    lineHeight: 1.7,
-    margin: "0 0 24px 0",
-    maxWidth: 300,
-  },
-  contactItem: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10,
-    color: "#8899aa",
-    fontSize: 13,
-    textDecoration: "none",
-    marginBottom: 10,
-  },
-  socials: {
-    display: "flex",
-    gap: 8,
-    marginTop: 20,
-  },
-  socialBtn: {
-    width: 36,
-    height: 36,
-    background: "rgba(255,255,255,0.05)",
-    border: "none",
-    borderRadius: 8,
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    color: "#8899aa",
-    cursor: "pointer",
-    textDecoration: "none",
-    transition: "all 0.2s ease",
-  },
-  sectionTitle: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "1px",
-    margin: "0 0 16px 0",
-  },
-  linkList: {
-    listStyle: "none",
-    padding: 0,
-    margin: 0,
-  },
-  linkItem: {
-    marginBottom: 12,
-  },
-  link: {
-    color: "#8899aa",
-    fontSize: 14,
-    textDecoration: "none",
-    transition: "color 0.2s ease",
-  },
-  bottom: {
-    borderTop: "1px solid rgba(255,255,255,0.06)",
-    padding: "20px 0",
-  },
-  bottomInner: {
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    flexWrap: "wrap",
-    gap: 8,
-  },
-  copyright: {
-    color: "#556677",
-    fontSize: 13,
-    margin: 0,
-  },
-  credit: {
-    color: "#556677",
-    fontSize: 13,
-    margin: 0,
-  },
-  creditName: {
-    color: "#fff",
-    fontWeight: 600,
-  },
-};
-
 export default function Footer() {
   return (
-    <footer style={styles.footer}>
-      <div style={styles.container}>
+    <footer className="zoka-footer">
+      <div className="zoka-footer-container">
         {/* Newsletter */}
-        <div style={styles.newsletter}>
-          <div style={styles.newsletterInner}>
-            <div>
-              <h3 style={styles.newsletterTitle}>Stay Updated</h3>
-              <p style={styles.newsletterDesc}>Get the latest predictions and scores in your inbox.</p>
-            </div>
-            <div style={styles.newsletterForm}>
-              <input
-                type="email"
-                placeholder="Enter your email"
-                style={styles.newsletterInput}
-              />
-              <button style={styles.newsletterBtn}>Subscribe</button>
-            </div>
+        <div className="footer-newsletter">
+          <div>
+            <h3 className="footer-newsletter-title">Stay Updated</h3>
+            <p className="footer-newsletter-desc">Get the latest predictions and scores in your inbox.</p>
+          </div>
+          <div className="footer-newsletter-form">
+            <input
+              type="email"
+              placeholder="Enter your email"
+              className="footer-newsletter-input"
+            />
+            <button className="footer-newsletter-btn">Subscribe</button>
           </div>
         </div>
 
         {/* Main Content */}
-        <div style={styles.main}>
-          <div style={styles.grid}>
+        <div className="footer-main">
+          <div className="footer-grid">
             {/* Brand */}
             <div>
-              <Link to="/" style={styles.brandLogo}>
-                <span style={styles.logoIcon}>⚽</span>
-                <span style={styles.logoText}>ZOKASCORE</span>
+              <Link to="/" className="footer-brand-logo">
+                <span className="footer-logo-icon">⚽</span>
+                <span className="footer-logo-text">ZOKASCORE</span>
               </Link>
-              <p style={styles.brandDesc}>
+              <p className="footer-brand-desc">
                 Live football scores, fixtures, predictions, standings, basketball, statistics and sports updates.
               </p>
-              <a href="mailto:zokastreet@gmail.com" style={styles.contactItem}>📧 zokastreet@gmail.com</a>
-              <a href="tel:+254721635810" style={styles.contactItem}>📞 +254 721 635 810</a>
-              <div style={styles.contactItem}>📍 Nairobi, Kenya</div>
-              <div style={styles.socials}>
+              <a href="mailto:zokastreet@gmail.com" className="footer-contact-item">📧 zokastreet@gmail.com</a>
+              <a href="tel:+254721635810" className="footer-contact-item">📞 +254 721 635 810</a>
+              <div className="footer-contact-item">📍 Nairobi, Kenya</div>
+              <div className="footer-socials">
                 {socialLinks.map((s) => (
                   <a
                     key={s.name}
                     href={s.href}
                     aria-label={s.name}
-                    style={styles.socialBtn}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.background = "#16a34a";
-                      e.currentTarget.style.color = "#fff";
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.background = "rgba(255,255,255,0.05)";
-                      e.currentTarget.style.color = "#8899aa";
-                    }}
+                    className="footer-social-btn"
                   >
                     {s.icon}
                   </a>
@@ -333,16 +143,11 @@ export default function Footer() {
             {/* Link Sections */}
             {sections.map((section) => (
               <div key={section.title}>
-                <h4 style={styles.sectionTitle}>{section.title}</h4>
-                <ul style={styles.linkList}>
+                <h4 className="footer-section-title">{section.title}</h4>
+                <ul className="footer-link-list">
                   {section.links.map((link) => (
-                    <li key={link.to} style={styles.linkItem}>
-                      <Link
-                        to={link.to}
-                        style={styles.link}
-                        onMouseEnter={(e) => (e.currentTarget.style.color = "#22c55e")}
-                        onMouseLeave={(e) => (e.currentTarget.style.color = "#8899aa")}
-                      >
+                    <li key={link.to} className="footer-link-item">
+                      <Link to={link.to} className="footer-link">
                         {link.label}
                       </Link>
                     </li>
@@ -354,11 +159,11 @@ export default function Footer() {
         </div>
 
         {/* Bottom Bar */}
-        <div style={styles.bottom}>
-          <div style={styles.bottomInner}>
-            <p style={styles.copyright}>© {year} ZOKASCORE. All rights reserved.</p>
-            <p style={styles.credit}>
-              Built by <span style={styles.creditName}>Kimutai Gibson</span>
+        <div className="footer-bottom">
+          <div className="footer-bottom-inner">
+            <p className="footer-copyright">© {year} ZOKASCORE. All rights reserved.</p>
+            <p className="footer-credit">
+              Built by <span className="footer-credit-name">Kimutai Gibson</span>
             </p>
           </div>
         </div>

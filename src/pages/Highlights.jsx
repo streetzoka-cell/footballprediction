@@ -60,7 +60,7 @@ const calcReadTime = (body) => {
 const BADGES = {
   'Breaking': { color: '#ef4444', bg: 'rgba(239,68,68,.15)', label: '🔴 BREAKING' },
   'Official': { color: '#10b981', bg: 'rgba(16,185,129,.15)', label: '🟢 OFFICIAL' },
-  'Rumour': { color: '#f5c542', bg: 'rgba(245,197,66,.15)', label: '🟡 RUMOUR' },
+  'Rumour': { color: '#fbbf24', bg: 'rgba(251,191,36,.15)', label: '🟡 RUMOUR' },
   'Match Report': { color: '#3b82f6', bg: 'rgba(59,130,246,.15)', label: '🔵 MATCH REPORT' },
   'Transfers': { color: '#f97316', bg: 'rgba(249,115,22,.15)', label: '🟠 TRANSFERS' },
   'Injuries': { color: '#a855f7', bg: 'rgba(168,85,247,.15)', label: '🟣 INJURIES' },
@@ -84,54 +84,9 @@ const REACTIONS = [
 ];
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('news-hub-ultimate-css')) return;
-  const s = document.createElement('style');
-  s.id = 'news-hub-ultimate-css';
-  s.textContent = `
-    .nh-dark { --nh-bg: #0b1018; --nh-surface: #141a24; --nh-surface-hover: #1a212e; --nh-border: rgba(255,255,255,0.08); --nh-text: #f1f5f9; --nh-text-muted: #94a3b8; --nh-accent: #3b82f6; --nh-accent-bg: rgba(59,130,246,0.1); --nh-danger: #ef4444; --nh-danger-bg: rgba(239,68,68,0.1); --nh-shadow: 0 8px 24px rgba(0,0,0,0.3); --nh-gold: #f5c542; --nh-header-bg: rgba(11, 16, 24, 0.95); }
-    .nh-light { --nh-bg: #f0f2f5; --nh-surface: #ffffff; --nh-surface-hover: #f8fafc; --nh-border: #e2e8f0; --nh-text: #1e293b; --nh-text-muted: #64748b; --nh-accent: #2563eb; --nh-accent-bg: #eff6ff; --nh-danger: #dc2626; --nh-danger-bg: #fee2e2; --nh-shadow: 0 8px 24px rgba(0,0,0,0.05); --nh-gold: #eab308; --nh-header-bg: rgba(255, 255, 255, 0.95); }
-    
-    @keyframes nh_fadeUp { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
-    @keyframes nh_shimmer { 0% { background-position: -200% 0; } 100% { background-position: 200% 0; } }
-    @keyframes nh_modal_pop { 0% { transform: scale(0.95); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
-    
-    .nh-shimmer { background: linear-gradient(90deg, var(--nh-surface) 25%, var(--nh-surface-hover) 50%, var(--nh-surface) 75%); background-size: 200% 100%; animation: nh_shimmer 1.5s ease-in-out infinite; }
-    .nh-enter { animation: nh_fadeUp .5s cubic-bezier(.22,1,.36,1) both; }
-    .nh-modal-pop { animation: nh_modal_pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both; }
-    
-    .nh-btn { transition: all .18s cubic-bezier(.22,1,.36,1); cursor: pointer; outline: none; border: none; font-family: inherit; }
-    .nh-btn:hover { transform: translateY(-1px); }
-    .nh-btn:active { transform: scale(0.96); }
-    
-    .nh-scroll::-webkit-scrollbar { width: 6px; height: 6px; }
-    .nh-scroll::-webkit-scrollbar-track { background: transparent; }
-    .nh-scroll::-webkit-scrollbar-thumb { background: var(--nh-border); border-radius: 10px; }
-    
-    .nh-dropzone { border: 2px dashed var(--nh-border); background: var(--nh-surface-hover); border-radius: 12px; padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; display: flex; flex-direction: column; align-items: center; gap: 8px; color: var(--nh-text-muted); }
-    .nh-dropzone:hover { border-color: var(--nh-accent); color: var(--nh-accent); }
-    
-    .nh-fab { position: fixed; bottom: 24px; right: 24px; width: 48px; height: 48px; border-radius: 50%; background: var(--nh-accent); color: #fff; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.3); cursor: pointer; z-index: 50; border: none; transition: transform 0.2s, opacity 0.3s; }
-    .nh-fab:hover { transform: scale(1.1) translateY(-2px); }
-    
-    .nh-read-more { color: var(--nh-accent); font-weight: 700; cursor: pointer; display: inline-block; margin-top: 4px; font-size: 0.8rem; }
-    .nh-load-more { width: 100%; padding: 14px; border-radius: 12px; background: var(--nh-surface); border: 1px solid var(--nh-border); color: var(--nh-text-muted); font-weight: 700; cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
-    .nh-load-more:hover { color: var(--nh-accent); border-color: var(--nh-accent); background: var(--nh-accent-bg); }
-    
-    /* ★ Trending Carousel Snap */
-    .nh-carousel { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x mandatory; }
-    .nh-carousel > div { scroll-snap-align: start; }
-  `;
-  document.head.appendChild(s);
-};
-
-/* ═══════════════════════════════════════════════════════════════
    MAIN NEWS COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Highlights() {
-  injectStyles();
   const { currentUser, userProfile } = useAuth();
   const user = currentUser;
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'super_admin';

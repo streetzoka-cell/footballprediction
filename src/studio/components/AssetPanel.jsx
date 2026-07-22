@@ -4,9 +4,9 @@ import { X } from 'lucide-react';
 
 const STICKERS = ['⚽', '🔥', '🏆', '🟨', '🟥', '👟', '🥅', '💯', '🤯', '👏', '👑', '🚀', '📈', '⚡', '🛡️', '🎯'];
 const BACKGROUNDS = [
-  { name: 'Dark', fill: '#0f172a' }, { name: 'Black', fill: '#000000' }, { name: 'White', fill: '#ffffff' },
+  { name: 'Dark', fill: '#05070a' }, { name: 'Black', fill: '#000000' }, { name: 'White', fill: '#ffffff' },
   { name: 'Pitch', fill: '#15803d' }, { name: 'Blue', fill: '#0ea5e9' }, { name: 'Gold', fill: '#f59e0b' },
-  { name: 'Gradient', fill: 'linear-gradient(135deg, #1e3a8a, #0f172a)' }
+  { name: 'Gradient', fill: 'linear-gradient(135deg, #047857, #05070a)' }
 ];
 
 const SFX = [
@@ -38,30 +38,30 @@ export default function AssetPanel({ onClose }) {
   };
 
   return (
-    <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '24px', height: '100%', overflowY: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ color: '#fff', fontSize: '18px', fontWeight: 800 }}>Assets & Stickers</h2>
-        <button onClick={onClose} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}><X size={20} /></button>
+    <div className="studio-panel-container">
+      <div className="studio-panel-header">
+        <h2 className="studio-panel-title">Assets & Stickers</h2>
+        <button onClick={onClose} className="studio-panel-close"><X size={20} /></button>
       </div>
       
-      <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Backgrounds</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '30px' }}>
+      <div className="studio-section-title">Backgrounds</div>
+      <div className="studio-grid-4">
         {BACKGROUNDS.map((bg, i) => (
-          <button key={i} onClick={() => setBackground(bg)} style={{ background: bg.fill.includes('linear') ? bg.fill : bg.fill, border: '1px solid #334155', borderRadius: '8px', height: '60px', cursor: 'pointer', color: bg.name === 'White' || bg.name === 'Gold' ? '#000' : '#fff', fontSize: '10px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{bg.name}</button>
+          <button key={i} onClick={() => setBackground(bg)} className="studio-bg-btn" style={{ background: bg.fill.includes('linear') ? bg.fill : bg.fill, color: bg.name === 'White' || bg.name === 'Gold' ? '#000' : '#fff' }}>{bg.name}</button>
         ))}
       </div>
 
-      <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Football Stickers</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '10px', marginBottom: '30px' }}>
+      <div className="studio-section-title">Football Stickers</div>
+      <div className="studio-grid-4">
         {STICKERS.map((emoji, i) => (
-          <button key={i} onClick={() => addSticker(emoji)} style={{ background: '#1f2937', border: '1px solid #334155', borderRadius: '12px', height: '70px', cursor: 'pointer', fontSize: '32px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{emoji}</button>
+          <button key={i} onClick={() => addSticker(emoji)} className="studio-sticker-btn">{emoji}</button>
         ))}
       </div>
 
-      <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Sound Effects (SFX)</div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+      <div className="studio-section-title">Sound Effects (SFX)</div>
+      <div className="studio-grid-2">
         {SFX.map((sfx, i) => (
-          <button key={i} onClick={() => addSFX(sfx)} style={{ background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '12px', cursor: 'pointer', color: '#fff', fontSize: '12px', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <button key={i} onClick={() => addSFX(sfx)} className="studio-sfx-btn">
             🎵 {sfx.name}
           </button>
         ))}

@@ -85,7 +85,6 @@ const TEMPLATES = [
   { id: 'pro_hype', title: 'Pro: Hype Beast', category: 'Pro', tags: ['viral', 'hype', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #be185d, #000)', layout: 'pro'} },
   { id: 'pro_cinematic', title: 'Pro: Cinematic Wide', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:140,w:720,h:1000}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #111, #000)', layout: 'pro'} },
   { id: 'pro_signature', title: 'Pro: ZOKA Signature', category: 'Pro', tags: ['viral', 'zoka', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #047857, #000)', layout: 'pro'} },
-
   { id: 'social_pro', title: 'TikTok POV (Exact Match)', category: 'TikTok', tags: ['viral', 'pov', 'exact'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:70,r:35,ring:'accent'}, nameEl: {x:100,y:60,size:30,color:'#fff'}, handleEl: {x:100,y:92,size:24,color:'#aaa'}, caption: {x:50,y:150,size:26,maxW:620,align:'left',color:'#fff'}, topGradient:350, bottomGradient:200, preview: {bg: 'linear-gradient(to bottom, #1e293b, #0f172a)', layout: 'pov'} },
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
@@ -635,7 +634,6 @@ export default function ReactorStudio() {
         const radius = 16;
         const vw = aPiPVid.videoWidth, vh = aPiPVid.videoHeight;
 
-        // Outer frame border
         ctx.save();
         if (frameStyle === 'accent') {
           ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4;
@@ -660,7 +658,6 @@ export default function ReactorStudio() {
         }
         ctx.restore();
 
-        // Draw video clipped to rounded rect
         ctx.save();
         roundRectPath(ctx, pX, pY, pW, pH, radius);
         ctx.clip();
@@ -674,7 +671,6 @@ export default function ReactorStudio() {
         }
         ctx.restore();
 
-        // Inner highlight border
         if (frameStyle !== 'minimal' && frameStyle !== 'glow') {
           ctx.save();
           ctx.strokeStyle = 'rgba(255,255,255,0.25)';
@@ -686,7 +682,6 @@ export default function ReactorStudio() {
       }
     }
     
-    // Render overlay every frame 
     renderOverlayRef.current();
     if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
 
@@ -740,7 +735,6 @@ export default function ReactorStudio() {
       }
     }
 
-    // --- EXPORT UPSCALER: Draw 720x1280 canvas onto 1080x1920 export canvas ---
     if (ui.isExporting && exportCanvasRef.current) {
       const eCtx = exportCanvasRef.current.getContext('2d');
       eCtx.imageSmoothingEnabled = true;
@@ -760,7 +754,6 @@ export default function ReactorStudio() {
     return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
   };
 
-  // --- DRAG HANDLERS (FIXED FOR SCALED PIP) ---
   const handlePointerDown = (e) => {
     if (!editor.editMode && !activeTemplate.isCustom && !media.brollLoaded && !media.cameraOn) return;
     const { x, y } = getCanvasCoords(e);
@@ -819,7 +812,6 @@ export default function ReactorStudio() {
   const handleExportVideo = async (format = 'mp4', fps = 30) => {
     const vid = sourceVideoRef.current; if (!canvasRef.current || ui.isExporting || !vid || !activeClip) return;
     
-    // Create 1080x1920 invisible canvas for true HD export
     const exportC = document.createElement('canvas');
     exportC.width = 1080;
     exportC.height = 1920;
@@ -873,11 +865,10 @@ export default function ReactorStudio() {
     let fileExt = 'webm';
 
     if (format === 'mp4') {
-      // Strictly try to enforce MP4 / H.264 codecs
       const mp4Codecs = [
-        'video/mp4;codecs=avc1.640029,mp4a.40.2', // High 5.0 (best for 1080p 60fps)
-        'video/mp4;codecs=avc1.640028,mp4a.40.2', // High 4.0 (best for 1080p 30fps)
-        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', // Baseline 3.0
+        'video/mp4;codecs=avc1.640029,mp4a.40.2', 
+        'video/mp4;codecs=avc1.640028,mp4a.40.2', 
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 
         'video/mp4;codecs=h264',
         'video/mp4'
       ];
@@ -886,7 +877,6 @@ export default function ReactorStudio() {
       if (mT) {
         fileExt = 'mp4';
       } else {
-        // Graceful fallback to H.264 WebM if browser blocks MP4 (common in Chrome)
         if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
           mT = 'video/webm;codecs=h264';
           fileExt = 'webm';
@@ -902,7 +892,6 @@ export default function ReactorStudio() {
       fileExt = 'webm';
     }
 
-    // Enforce 8-15 Mbps bitrate depending on frame rate
     const bitrate = fps === 60 ? 15000000 : 10000000;
     const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: bitrate });
     
@@ -918,7 +907,7 @@ export default function ReactorStudio() {
       vid.muted = wM; vid.volume = wV; 
       cS.getTracks().forEach(t => t.stop()); 
       if (aC) aC.close(); 
-      exportCanvasRef.current = null; // cleanup
+      exportCanvasRef.current = null; 
     };
     
     const cI = setInterval(() => { 
@@ -965,35 +954,35 @@ export default function ReactorStudio() {
   }, [ui.activeCategory, ui.searchQuery, ui.favorites]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
+    <div className="rs-container">
       <input type="file" ref={el => fileInputRefs.current.video = el} onChange={(e) => handleImport(e, 'video')} accept="video/*" style={{ display: 'none' }} />
       <input type="file" ref={el => fileInputRefs.current.broll = el} onChange={(e) => handleImport(e, 'broll')} accept="video/*" style={{ display: 'none' }} />
       <input type="file" ref={el => fileInputRefs.current.image = el} onChange={(e) => handleImport(e, 'image')} accept="image/*" style={{ display: 'none' }} />
       <input type="file" ref={el => fileInputRefs.current.logo = el} onChange={(e) => handleImport(e, 'logo')} accept="image/*" style={{ display: 'none' }} />
       <input type="file" ref={el => fileInputRefs.current.audio = el} onChange={(e) => handleImport(e, 'audio')} accept="audio/*" style={{ display: 'none' }} />
 
-      <div style={{ padding: '12px 16px', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', zIndex: 10, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-          <button onClick={() => navigate('/studio')} style={topBtnStyle}><ArrowLeft size={18} /></button>
-          <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0, display: 'flex', alignItems: 'center', gap: '8px' }}><Cpu size={18} color="#10b981" /> Reactor Studio Pro</h1>
+      <div className="rs-header">
+        <div className="rs-header-left">
+          <button onClick={() => navigate('/studio')} className="rs-top-btn"><ArrowLeft size={18} /></button>
+          <h1 className="rs-header-title"><Cpu size={18} color="#10b981" /> Reactor Studio Pro</h1>
         </div>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <button onClick={handleClearProject} style={topBtnStyle} title="Clear Project"><Eraser size={16} /> Clear</button>
-          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: true } })} style={topBtnStyle} disabled={ui.isExporting || ui.recordedUrl}><LayoutGrid size={16} /> Templates</button>
+        <div className="rs-header-right">
+          <button onClick={handleClearProject} className="rs-top-btn" title="Clear Project"><Eraser size={16} /> Clear</button>
+          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: true } })} className="rs-top-btn" disabled={ui.isExporting || ui.recordedUrl}><LayoutGrid size={16} /> Templates</button>
           {ui.recordedUrl ? (
             <>
-              <button onClick={() => dispatch({ type: 'SET_UI', payload: { recordedUrl: null } })} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444' }}><Trash2 size={16} /> Discard</button>
-              <a href={ui.recordedUrl} download={`zokascore_clip.${ui.recordedExt || 'webm'}`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none' }}><Download size={16} /> Download .{ui.recordedExt || 'webm'}</a>
+              <button onClick={() => dispatch({ type: 'SET_UI', payload: { recordedUrl: null } })} className="rs-top-btn rs-btn-red"><Trash2 size={16} /> Discard</button>
+              <a href={ui.recordedUrl} download={`zokascore_clip.${ui.recordedExt || 'webm'}`} className="rs-top-btn rs-btn-accent"><Download size={16} /> Download .{ui.recordedExt || 'webm'}</a>
             </>
           ) : (
             <>
-              <button onClick={() => handleExportVideo('mp4', 30)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p MP4 at 30 FPS (~10 Mbps)">
+              <button onClick={() => handleExportVideo('mp4', 30)} disabled={!media.sourceLoaded || ui.isExporting} className="rs-top-btn rs-btn-accent" title="Export 1080p MP4 at 30 FPS (~10 Mbps)">
                 {ui.isExporting && ui.exportFormat === 'mp4' && ui.exportFps === 30 ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} MP4 30fps
               </button>
-              <button onClick={() => handleExportVideo('mp4', 60)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p MP4 at 60 FPS (~15 Mbps)">
+              <button onClick={() => handleExportVideo('mp4', 60)} disabled={!media.sourceLoaded || ui.isExporting} className="rs-top-btn rs-btn-accent" title="Export 1080p MP4 at 60 FPS (~15 Mbps)">
                 {ui.isExporting && ui.exportFormat === 'mp4' && ui.exportFps === 60 ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} MP4 60fps
               </button>
-              <button onClick={() => handleExportVideo('webm', 30)} disabled={!media.sourceLoaded || ui.isExporting} style={{ ...topBtnStyle, background: '#3b82f6', borderColor: '#3b82f6', opacity: !media.sourceLoaded || ui.isExporting ? 0.5 : 1 }} title="Export 1080p WebM (Fast)">
+              <button onClick={() => handleExportVideo('webm', 30)} disabled={!media.sourceLoaded || ui.isExporting} className="rs-top-btn rs-btn-blue" title="Export 1080p WebM (Fast)">
                 {ui.isExporting && ui.exportFormat === 'webm' ? <Loader size={16} className="animate-spin" /> : <Download size={16} />} WebM
               </button>
             </>
@@ -1001,42 +990,42 @@ export default function ReactorStudio() {
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-          <button onClick={() => fileInputRefs.current.video?.click()} style={sideBtnStyle} title="Replace Main Video" disabled={ui.isExporting || ui.recordedUrl}><Upload size={20} /></button>
-          <button onClick={() => fileInputRefs.current.broll?.click()} style={{...sideBtnStyle, color: media.brollLoaded ? '#10b981' : '#64748b'}} title="Add 2nd Video (B-Roll)" disabled={ui.isExporting || ui.recordedUrl}><Film size={20} /></button>
-          <button onClick={() => fileInputRefs.current.image?.click()} style={sideBtnStyle} title="Avatar" disabled={ui.isExporting || ui.recordedUrl}><User size={20} /></button>
-          <button onClick={() => fileInputRefs.current.logo?.click()} style={{...sideBtnStyle, color: media.logoSrc ? '#10b981' : '#64748b'}} title="Upload Brand Logo" disabled={ui.isExporting || ui.recordedUrl}><ImageIcon size={20} /></button>
-          <button onClick={() => fileInputRefs.current.audio?.click()} style={sideBtnStyle} title="Audio" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
-          <button onClick={startCamera} style={{...sideBtnStyle, color: media.cameraOn ? '#10b981' : '#64748b'}} title="Camera" disabled={ui.isExporting || ui.recordedUrl}><Camera size={20} /></button>
-          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGuides: !ui.showGuides } })} style={{...sideBtnStyle, color: ui.showGuides ? '#10b981' : '#64748b'}} title="Guides"><Grid3x3 size={20} /></button>
+      <div className="rs-main">
+        <div className="rs-sidebar">
+          <button onClick={() => fileInputRefs.current.video?.click()} className="rs-side-btn" title="Replace Main Video" disabled={ui.isExporting || ui.recordedUrl}><Upload size={20} /></button>
+          <button onClick={() => fileInputRefs.current.broll?.click()} className={`rs-side-btn ${media.brollLoaded ? 'active' : ''}`} title="Add 2nd Video (B-Roll)" disabled={ui.isExporting || ui.recordedUrl}><Film size={20} /></button>
+          <button onClick={() => fileInputRefs.current.image?.click()} className="rs-side-btn" title="Avatar" disabled={ui.isExporting || ui.recordedUrl}><User size={20} /></button>
+          <button onClick={() => fileInputRefs.current.logo?.click()} className={`rs-side-btn ${media.logoSrc ? 'active' : ''}`} title="Upload Brand Logo" disabled={ui.isExporting || ui.recordedUrl}><ImageIcon size={20} /></button>
+          <button onClick={() => fileInputRefs.current.audio?.click()} className="rs-side-btn" title="Audio" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
+          <button onClick={startCamera} className={`rs-side-btn ${media.cameraOn ? 'active' : ''}`} title="Camera" disabled={ui.isExporting || ui.recordedUrl}><Camera size={20} /></button>
+          <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGuides: !ui.showGuides } })} className={`rs-side-btn ${ui.showGuides ? 'active' : ''}`} title="Guides"><Grid3x3 size={20} /></button>
         </div>
 
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', background: '#000', minHeight: 0 }}>
-          <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', minHeight: 0 }}>
-            <div style={{ position: 'relative', height: '100%', aspectRatio: '9/16', borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)', cursor: (editor.editMode || media.brollLoaded || media.cameraOn) ? 'grab' : 'default' }}
+        <div className="rs-canvas-area">
+          <div className="rs-canvas-wrap">
+            <div className="rs-canvas-frame"
               onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
               onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}>
               <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
               {!media.sourceLoaded && !ui.recordedUrl && (
-                <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer' }} onClick={() => fileInputRefs.current.video?.click()}>
+                <div className="rs-canvas-empty" onClick={() => fileInputRefs.current.video?.click()}>
                   <Upload size={40} style={{ marginBottom: '12px' }} /><p style={{ fontWeight: 700 }}>Import Main Video</p>
                 </div>
               )}
               {ui.recordedUrl && <video src={ui.recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />}
-              {ui.isExporting && <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800 }}><Loader size={12} className="animate-spin" /> EXPORTING</div>}
+              {ui.isExporting && <div className="rs-canvas-exporting"><Loader size={12} className="animate-spin" /> EXPORTING</div>}
             </div>
           </div>
 
           {media.sourceLoaded && (
-            <div style={{ height: '120px', background: '#111827', borderTop: '1px solid #1f2937', padding: '12px 24px', display: 'flex', flexDirection: 'column', gap: '8px', flexShrink: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div className="rs-timeline-bar">
+              <div className="rs-timeline-header">
                 <span style={{ fontSize: '11px', color: '#94a3b8' }}>Playhead: {timeline.currentTime.toFixed(1)}s / {timeline.duration.toFixed(1)}s</span>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  <button onClick={handleSplit} style={{ background: '#3b82f6', border: 'none', color: '#fff', borderRadius: '6px', padding: '6px 12px', cursor: 'pointer', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px' }} disabled={ui.isExporting || ui.recordedUrl}><Scissors size={12} /> Split</button>
+                  <button onClick={handleSplit} className="rs-btn-sm blue" disabled={ui.isExporting || ui.recordedUrl}><Scissors size={12} /> Split</button>
                 </div>
               </div>
-              <div style={{ position: 'relative', height: '60px', background: '#0f172a', borderRadius: '8px', overflow: 'hidden', display: 'flex' }}>
+              <div className="rs-timeline-track">
                 {timeline.clips.map((c) => {
                   const dur = timeline.duration || 1;
                   const wPct = ((c.end - c.start) / dur) * 100;
@@ -1044,32 +1033,32 @@ export default function ReactorStudio() {
                   const isAct = c.id === timeline.activeClipId;
                   return (
                     <div key={c.id} onClick={() => { dispatch({ type: 'SET_TIMELINE', payload: { activeClipId: c.id } }); sourceVideoRef.current.currentTime = c.start; }}
-                      style={{ position: 'absolute', left: `${lPct}%`, width: `${wPct}%`, height: '100%', background: isAct ? '#10b981' : '#334155', border: '1px solid #1f2937', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 4px', cursor: 'grab', boxSizing: 'border-box' }}>
+                      className={`rs-timeline-clip ${isAct ? 'active' : ''}`} style={{ left: `${lPct}%`, width: `${wPct}%` }}>
                       
-                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-l')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-l')} style={{ width: '8px', height: '100%', background: '#1f2937', cursor: 'ew-resize', flexShrink: 0 }}></div>
+                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-l')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-l')} className="rs-timeline-handle"></div>
                       
                       <span style={{ fontSize: '10px', fontWeight: 700, color: '#fff', flex: 1, textAlign: 'center', pointerEvents: 'none' }}>Clip {timeline.clips.indexOf(c) + 1}</span>
                       
-                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-r')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-r')} style={{ width: '8px', height: '100%', background: '#1f2937', cursor: 'ew-resize', flexShrink: 0 }}></div>
+                      <div onMouseDown={(e) => handleTimelineDrag(e, c.id, 'resize-r')} onTouchStart={(e) => handleTimelineDrag(e, c.id, 'resize-r')} className="rs-timeline-handle"></div>
                       
                       {timeline.clips.length > 1 && (
-                        <button onClick={(e) => { e.stopPropagation(); handleDeleteClip(c.id); }} style={{ position: 'absolute', top: '2px', right: '2px', background: 'rgba(0,0,0,0.5)', border: 'none', color: '#fff', cursor: 'pointer', padding: '2px', borderRadius: '2px' }}><X size={10} /></button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDeleteClip(c.id); }} className="rs-timeline-del"><X size={10} /></button>
                       )}
                     </div>
                   );
                 })}
-                <div style={{ position: 'absolute', left: `${(timeline.currentTime / (timeline.duration || 1)) * 100}%`, top: 0, bottom: 0, width: '2px', background: '#ef4444', pointerEvents: 'none' }}></div>
+                <div className="rs-timeline-playhead" style={{ left: `${(timeline.currentTime / (timeline.duration || 1)) * 100}%` }}></div>
               </div>
             </div>
           )}
         </div>
 
-        <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px', flexShrink: 0 }}>
+        <div className="rs-controls-panel">
           
           {/* CROP & ZOOM PANEL */}
           {media.sourceLoaded && (
-            <div style={panelStyle}>
-              <div style={panelTitleStyle}><Crop size={14} /> Crop & Zoom</div>
+            <div className="rs-panel">
+              <div className="rs-panel-title"><Crop size={14} /> Crop & Zoom</div>
               <label style={{ fontSize: '11px', color: '#94a3b8' }}>Zoom: {editor.videoZoom.toFixed(1)}x</label>
               <input type="range" min="1" max="4" step="0.1" value={editor.videoZoom} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { videoZoom: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
               
@@ -1079,32 +1068,32 @@ export default function ReactorStudio() {
               <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Pan Y: {editor.videoPanY.toFixed(1)}</label>
               <input type="range" min="-1" max="1" step="0.1" value={editor.videoPanY} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { videoPanY: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
               
-              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoZoom: 1, videoPanX: 0, videoPanY: 0 } })} style={{ marginTop: '8px', background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#94a3b8', cursor: 'pointer', fontSize: '11px' }}>Reset Crop</button>
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoZoom: 1, videoPanX: 0, videoPanY: 0 } })} className="rs-btn-sm" style={{ marginTop: '8px' }}>Reset Crop</button>
             </div>
           )}
 
           {/* CINEMATIC INTRO PANEL */}
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Sparkles size={14} /> Cinematic Intro</div>
-            <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introEnabled: !editor.introEnabled } })} style={{ ...inputStyle, background: editor.introEnabled ? '#10b981' : '#1f2937', color: editor.introEnabled ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Sparkles size={14} /> Cinematic Intro</div>
+            <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introEnabled: !editor.introEnabled } })} className={`rs-btn-sm ${editor.introEnabled ? 'active' : ''}`} style={{ textAlign: 'center', fontWeight: 700 }}>
               {editor.introEnabled ? 'INTRO ENABLED' : 'ENABLE INTRO'}
             </button>
             {editor.introEnabled && (
               <>
                 <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Animation Style</label>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {INTRO_STYLES.map(s => <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introStyle: s.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: editor.introStyle === s.id ? '#10b981' : '#1f2937', color: editor.introStyle === s.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{s.name}</button>)}
+                  {INTRO_STYLES.map(s => <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introStyle: s.id } })} className={`rs-btn-sm ${editor.introStyle === s.id ? 'active' : ''}`}>{s.name}</button>)}
                 </div>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introWatermark: !editor.introWatermark } })} style={{ marginTop: '8px', background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '8px', color: editor.introWatermark ? '#10b981' : '#94a3b8', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introWatermark: !editor.introWatermark } })} className="rs-btn-sm" style={{ marginTop: '8px', color: editor.introWatermark ? '#10b981' : '#94a3b8', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}>
                   <ImageIcon size={12} /> Watermark After Intro: {editor.introWatermark ? 'On' : 'Off'}
                 </button>
               </>
             )}
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Move size={14} /> Grid Edit Mode</div>
-            <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } })} style={{ ...inputStyle, background: editor.editMode ? '#10b981' : '#1f2937', color: editor.editMode ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700 }}>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Move size={14} /> Grid Edit Mode</div>
+            <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } })} className={`rs-btn-sm ${editor.editMode ? 'active' : ''}`} style={{ textAlign: 'center', fontWeight: 700 }}>
               {editor.editMode ? 'DRAGGING ENABLED' : 'ENABLE FREE DRAG'}
             </button>
             <div style={{ fontSize: '10px', color: '#475569', marginTop: '4px' }}>💡 Tip: PIP can always be dragged if added.</div>
@@ -1112,24 +1101,24 @@ export default function ReactorStudio() {
 
           {/* PIP / REACTION CONTROLS */}
           {(media.brollLoaded || media.cameraOn) && (
-            <div style={panelStyle}>
-              <div style={panelTitleStyle}><Film size={14} /> PIP / Reaction Controls</div>
+            <div className="rs-panel">
+              <div className="rs-panel-title"><Film size={14} /> PIP / Reaction Controls</div>
               
               <label style={{ fontSize: '11px', color: '#94a3b8' }}>PIP Size: {Math.round((editor.pipScale || 1) * 100)}%</label>
               <input type="range" min="0.5" max="2" step="0.05" value={editor.pipScale || 1} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { pipScale: parseFloat(e.target.value) } })} style={{ width: '100%', accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} />
               <div style={{ display: 'flex', gap: '6px' }}>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 0.75 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>S</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.0 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>M</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.5 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>L</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 2.0 } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '4px', color: '#94a3b8', cursor: 'pointer', fontSize: '10px' }}>XL</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 0.75 } })} className="rs-btn-sm">S</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.0 } })} className="rs-btn-sm">M</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 1.5 } })} className="rs-btn-sm">L</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipScale: 2.0 } })} className="rs-btn-sm">XL</button>
               </div>
 
               <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Quick Position</label>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px' }}>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 50, w: 280, h: 380 } } })} style={pipBtnStyle}>↖ Top Left</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 50, w: 280, h: 380 } } })} style={pipBtnStyle}>↗ Top Right</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 830, w: 280, h: 380 } } })} style={pipBtnStyle}>↙ Bot Left</button>
-                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 830, w: 280, h: 380 } } })} style={pipBtnStyle}>↘ Bot Right</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 50, w: 280, h: 380 } } })} className="rs-btn-sm">↖ Top Left</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 50, w: 280, h: 380 } } })} className="rs-btn-sm">↗ Top Right</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 30, y: 830, w: 280, h: 380 } } })} className="rs-btn-sm">↙ Bot Left</button>
+                <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipPos: { x: 410, y: 830, w: 280, h: 380 } } })} className="rs-btn-sm">↘ Bot Right</button>
               </div>
 
               <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Frame Style</label>
@@ -1140,65 +1129,65 @@ export default function ReactorStudio() {
                   { id: 'glow', name: 'Glow' },
                   { id: 'minimal', name: 'Minimal' }
                 ].map(s => (
-                  <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipFrameStyle: s.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: (editor.pipFrameStyle || 'accent') === s.id ? '#10b981' : '#1f2937', color: (editor.pipFrameStyle || 'accent') === s.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{s.name}</button>
+                  <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipFrameStyle: s.id } })} className={`rs-btn-sm ${(editor.pipFrameStyle || 'accent') === s.id ? 'active' : ''}`}>{s.name}</button>
                 ))}
               </div>
             </div>
           )}
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Sparkles size={14} /> Effects & Animations</div>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Sparkles size={14} /> Effects & Animations</div>
             <label style={{ fontSize: '11px', color: '#94a3b8' }}>Video Effect (Ken Burns, Glitch...)</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {VIDEO_EFFECTS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoEffect: f.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: editor.videoEffect === f.id ? '#10b981' : '#1f2937', color: editor.videoEffect === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>)}
+              {VIDEO_EFFECTS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { videoEffect: f.id } })} className={`rs-btn-sm ${editor.videoEffect === f.id ? 'active' : ''}`}>{f.name}</button>)}
             </div>
             <label style={{ fontSize: '11px', color: '#94a3b8', marginTop: '8px' }}>Caption Animation</label>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {TEXT_ANIMATIONS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { textAnimation: f.id } })} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: editor.textAnimation === f.id ? '#10b981' : '#1f2937', color: editor.textAnimation === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>{f.name}</button>)}
+              {TEXT_ANIMATIONS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { textAnimation: f.id } })} className={`rs-btn-sm ${editor.textAnimation === f.id ? 'active' : ''}`}>{f.name}</button>)}
             </div>
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Palette size={14} /> Brand Kit & Fonts</div>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Palette size={14} /> Brand Kit & Fonts</div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-              {BRAND_PRESETS.map(p => <button key={p.name} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { accentColor: p.color } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: p.color, border: editor.accentColor === p.color ? '2px solid #fff' : '2px solid #334155', cursor: 'pointer' }} title={p.name}></button>)}
-              <input type="color" value={editor.accentColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { accentColor: e.target.value } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'none', border: '2px solid #334155', cursor: 'pointer', padding: 0 }} />
+              {BRAND_PRESETS.map(p => <button key={p.name} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { accentColor: p.color } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: p.color, border: editor.accentColor === p.color ? '2px solid #fff' : '2px solid #151b26', cursor: 'pointer' }} title={p.name}></button>)}
+              <input type="color" value={editor.accentColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { accentColor: e.target.value } })} style={{ width: '30px', height: '30px', borderRadius: '50%', background: 'none', border: '2px solid #151b26', cursor: 'pointer', padding: 0 }} />
             </div>
             <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '8px' }}>
-              {Object.keys(FONT_PACKS).map(f => <button key={f} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fontPack: f } })} style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #334155', background: editor.fontPack === f ? '#10b981' : '#1f2937', color: editor.fontPack === f ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer' }}>{f}</button>)}
+              {Object.keys(FONT_PACKS).map(f => <button key={f} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fontPack: f } })} className={`rs-btn-sm ${editor.fontPack === f ? 'active' : ''}`}>{f}</button>)}
             </div>
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Shield size={14} /> Football Assets</div>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Shield size={14} /> Football Assets</div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={editor.homeLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeLogoUrl: e.target.value } })} placeholder="Home Logo URL" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
-              <input type="number" value={editor.homeScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeScore: e.target.value } })} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="text" value={editor.homeLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeLogoUrl: e.target.value } })} placeholder="Home Logo URL" className="rs-input" disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="number" value={editor.homeScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { homeScore: e.target.value } })} className="rs-input" style={{ width: '50px', flex: 'none' }} disabled={ui.isExporting || ui.recordedUrl} />
             </div>
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="text" value={editor.awayLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayLogoUrl: e.target.value } })} placeholder="Away Logo URL" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
-              <input type="number" value={editor.awayScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayScore: e.target.value } })} style={{...inputStyle, width: '50px', flex: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="text" value={editor.awayLogoUrl} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayLogoUrl: e.target.value } })} placeholder="Away Logo URL" className="rs-input" disabled={ui.isExporting || ui.recordedUrl} />
+              <input type="number" value={editor.awayScore} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { awayScore: e.target.value } })} className="rs-input" style={{ width: '50px', flex: 'none' }} disabled={ui.isExporting || ui.recordedUrl} />
             </div>
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><User size={14} /> Social Details & Fonts</div>
-            <input type="text" value={editor.displayName} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { displayName: e.target.value } })} placeholder="Display Name" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
+          <div className="rs-panel">
+            <div className="rs-panel-title"><User size={14} /> Social Details & Fonts</div>
+            <input type="text" value={editor.displayName} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { displayName: e.target.value } })} placeholder="Display Name" className="rs-input" disabled={ui.isExporting || ui.recordedUrl} />
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <input type="color" value={editor.nameColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameColor: e.target.value } })} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Name Color" />
-              <input type="number" value={editor.nameSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Name Size (px)" style={{...inputStyle, width: '100px'}} title="Name Size" />
-              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { showVerified: !editor.showVerified } })} style={{ ...inputStyle, background: editor.showVerified ? '#1d9bf0' : '#1f2937', color: editor.showVerified ? '#fff' : '#94a3b8', textAlign: 'center', cursor: 'pointer', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}><BadgeCheck size={16} /> Tick</button>
+              <input type="color" value={editor.nameColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameColor: e.target.value } })} className="rs-input" style={{ width: '40px', padding: '2px', height: '38px' }} title="Name Color" />
+              <input type="number" value={editor.nameSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { nameSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Name Size (px)" className="rs-input" style={{ width: '100px' }} title="Name Size" />
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { showVerified: !editor.showVerified } })} className={`rs-btn-sm ${editor.showVerified ? 'active' : ''}`} style={{ background: editor.showVerified ? '#1d9bf0' : '#0a0d14', borderColor: editor.showVerified ? '#1d9bf0' : '#151b26' }}><BadgeCheck size={16} /> Tick</button>
             </div>
-            <input type="text" value={editor.username} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { username: e.target.value } })} placeholder="@username" style={inputStyle} disabled={ui.isExporting || ui.recordedUrl} />
-            <textarea value={editor.povCaption} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { povCaption: e.target.value } })} placeholder="Caption" style={{...inputStyle, height: '60px', resize: 'none'}} disabled={ui.isExporting || ui.recordedUrl} />
+            <input type="text" value={editor.username} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { username: e.target.value } })} placeholder="@username" className="rs-input" disabled={ui.isExporting || ui.recordedUrl} />
+            <textarea value={editor.povCaption} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { povCaption: e.target.value } })} placeholder="Caption" className="rs-input" style={{ height: '60px', resize: 'none' }} disabled={ui.isExporting || ui.recordedUrl} />
             <div style={{ display: 'flex', gap: '8px' }}>
-              <input type="color" value={editor.captionColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionColor: e.target.value } })} style={{...inputStyle, width: '40px', padding: '2px', height: '38px'}} title="Caption Color" />
-              <input type="number" value={editor.captionSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Caption Size (px)" style={{...inputStyle, width: '100px'}} title="Caption Size" />
+              <input type="color" value={editor.captionColor} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionColor: e.target.value } })} className="rs-input" style={{ width: '40px', padding: '2px', height: '38px' }} title="Caption Color" />
+              <input type="number" value={editor.captionSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Caption Size (px)" className="rs-input" style={{ width: '100px' }} title="Caption Size" />
             </div>
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Layers size={14} /> Layers</div>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Layers size={14} /> Layers</div>
             {Object.keys(ui.layers).map(key => (
               <label key={key} style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', color: '#cbd5e1', textTransform: 'capitalize', cursor: 'pointer', marginBottom: '6px' }}>
                 <input type="checkbox" checked={ui.layers[key]} onChange={() => dispatch({ type: 'SET_UI', payload: { layers: { ...ui.layers, [key]: !ui.layers[key] } } })} style={{ accentColor: '#10b981' }} disabled={ui.isExporting || ui.recordedUrl} /> {key}
@@ -1206,44 +1195,44 @@ export default function ReactorStudio() {
             ))}
           </div>
 
-          <div style={panelStyle}>
-            <div style={panelTitleStyle}><Sliders size={14} /> Filters & Audio</div>
+          <div className="rs-panel">
+            <div className="rs-panel-title"><Sliders size={14} /> Filters & Audio</div>
             <div style={{ display: 'flex', gap: '8px', overflowX: 'auto' }}>
-              {FILTERS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { filter: f.id } })} style={{ padding: '4px 10px', borderRadius: '20px', border: '1px solid #334155', background: editor.filter === f.id ? '#10b981' : '#1f2937', color: editor.filter === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer', whiteSpace: 'nowrap' }} disabled={ui.isExporting || ui.recordedUrl}>{f.name}</button>)}
+              {FILTERS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { filter: f.id } })} className={`rs-btn-sm ${editor.filter === f.id ? 'active' : ''}`} style={{ borderRadius: '20px', whiteSpace: 'nowrap' }} disabled={ui.isExporting || ui.recordedUrl}>{f.name}</button>)}
             </div>
             <div style={{ display: 'flex', gap: '8px', marginTop: '8px' }}>
-              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} style={{ flex: 1, background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }} disabled={ui.isExporting || ui.recordedUrl}>
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} className="rs-btn-sm" style={{ flex: 1 }} disabled={ui.isExporting || ui.recordedUrl}>
                 {editor.isMuted ? <VolumeX size={12} /> : <Volume2 size={12} />} {editor.isMuted ? 'Muted' : 'Audio On'}
               </button>
-              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fadeIn: !editor.fadeIn } })} style={{ flex: 1, background: editor.fadeIn ? '#10b981' : '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '6px', color: '#fff', cursor: 'pointer', fontSize: '12px' }} disabled={ui.isExporting || ui.recordedUrl}>Fade In: {editor.fadeIn ? 'On' : 'Off'}</button>
+              <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { fadeIn: !editor.fadeIn } })} className={`rs-btn-sm ${editor.fadeIn ? 'active' : ''}`} style={{ flex: 1 }} disabled={ui.isExporting || ui.recordedUrl}>Fade In: {editor.fadeIn ? 'On' : 'Off'}</button>
             </div>
           </div>
         </div>
       </div>
 
-      <div style={{ height: '80px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '24px', padding: '0 24px', flexShrink: 0 }}>
-        <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} style={bottomBtnStyle} title="Mute" disabled={ui.isExporting || ui.recordedUrl}><Volume2 size={20} /></button>
-        <button onClick={togglePreview} disabled={!media.sourceLoaded || ui.isExporting || ui.recordedUrl} style={{ ...bottomBtnStyle, background: '#3b82f6', color: '#fff', width: '64px', height: '64px', opacity: !media.sourceLoaded || ui.isExporting || ui.recordedUrl ? 0.5 : 1 }} title="Preview Active Clip">
+      <div className="rs-bottom-bar">
+        <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} className="rs-bottom-btn" title="Mute" disabled={ui.isExporting || ui.recordedUrl}><Volume2 size={20} /></button>
+        <button onClick={togglePreview} disabled={!media.sourceLoaded || ui.isExporting || ui.recordedUrl} className="rs-bottom-btn rs-play-btn" title="Preview Active Clip">
           {timeline.isPlaying ? <Pause size={28} fill="#fff" /> : <Play size={28} fill="#fff" />}
         </button>
-        <button onClick={() => fileInputRefs.current.audio?.click()} style={bottomBtnStyle} title="Add Sound" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
+        <button onClick={() => fileInputRefs.current.audio?.click()} className="rs-bottom-btn" title="Add Sound" disabled={ui.isExporting || ui.recordedUrl}><Music size={20} /></button>
       </div>
 
       {ui.showGallery && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 100, display: 'flex', justifyContent: 'center', alignItems: 'center' }} onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })}>
-          <div style={{ width: '90%', maxWidth: '900px', height: '85vh', background: '#111827', borderRadius: '16px', border: '1px solid #334155', display: 'flex', flexDirection: 'column', overflow: 'hidden' }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '16px', borderBottom: '1px solid #1f2937', display: 'flex', alignItems: 'center', gap: '12px' }}>
+        <div className="rs-gallery-overlay" onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })}>
+          <div className="rs-gallery-modal" onClick={e => e.stopPropagation()}>
+            <div className="rs-gallery-header">
               <Search size={20} color="#64748b" />
-              <input type="text" value={ui.searchQuery} onChange={(e) => dispatch({ type: 'SET_UI', payload: { searchQuery: e.target.value } })} placeholder="Search templates..." style={{ flex: 1, background: 'none', border: 'none', color: '#fff', fontSize: '16px', outline: 'none' }} />
-              <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })} style={topBtnStyle}><X size={18} /></button>
+              <input type="text" value={ui.searchQuery} onChange={(e) => dispatch({ type: 'SET_UI', payload: { searchQuery: e.target.value } })} placeholder="Search templates..." className="rs-gallery-search" />
+              <button onClick={() => dispatch({ type: 'SET_UI', payload: { showGallery: false } })} className="rs-top-btn"><X size={18} /></button>
             </div>
-            <div style={{ padding: '12px 16px', borderBottom: '1px solid #1f2937', display: 'flex', gap: '8px', overflowX: 'auto' }}>
-              {["All", "Favorites", "Pro", "TikTok", "Instagram", "YouTube", "Gaming", "Podcast", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} style={{ padding: '6px 16px', borderRadius: '20px', border: '1px solid #334155', background: ui.activeCategory === cat ? '#10b981' : '#1f2937', color: ui.activeCategory === cat ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', whiteSpace: 'nowrap' }}>{cat}</button>)}
+            <div className="rs-gallery-cats">
+              {["All", "Favorites", "Pro", "TikTok", "Instagram", "YouTube", "Gaming", "Podcast", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} className={`rs-gallery-cat ${ui.activeCategory === cat ? 'active' : ''}`}>{cat}</button>)}
             </div>
-            <div style={{ flex: 1, padding: '16px', overflowY: 'auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '16px' }}>
+            <div className="rs-gallery-grid">
               {filteredTemplates.map(t => (
-                <div key={t.id} style={{ background: '#1f2937', borderRadius: '12px', overflow: 'hidden', cursor: 'pointer', border: editor.templateId === t.id ? '2px solid #10b981' : '2px solid #334155', position: 'relative' }} onClick={() => applyTemplate(t.id)}>
-                  <div style={{ height: '250px', background: t.preview.bg, display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', gap: '8px', position: 'relative' }}>
+                <div key={t.id} className={`rs-gallery-card ${editor.templateId === t.id ? 'active' : ''}`} onClick={() => applyTemplate(t.id)}>
+                  <div className="rs-gallery-preview" style={{ background: t.preview.bg }}>
                     {t.category === 'Pro' && (
                       <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.5)' }}>
                         <div style={{ width: '40px', height: '40px', background: '#fff', marginBottom: '8px', borderRadius: '4px' }}></div>
@@ -1257,9 +1246,9 @@ export default function ReactorStudio() {
                     {t.preview.layout === 'br' && <div style={{ width: '30px', height: '30px', background: '#fff', borderRadius: '50%', alignSelf: 'flex-end', marginRight: '10px', marginBottom: '10px' }}></div>}
                     {(t.preview.layout === 'center' || t.preview.layout === 'news' || t.preview.layout === 'custom') && <div style={{ width: '60%', height: '10px', background: '#fff', borderRadius: '4px' }}></div>}
                   </div>
-                  <div style={{ padding: '8px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: '12px', fontWeight: 700, color: '#fff' }}>{t.title}</span>
-                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} style={{ background: 'none', border: 'none', cursor: 'pointer', color: ui.favorites.includes(t.id) ? '#f59e0b' : '#64748b' }}><Star size={14} fill={ui.favorites.includes(t.id) ? '#f59e0b' : 'none'} /></button>
+                  <div className="rs-gallery-info">
+                    <span className="rs-gallery-title">{t.title}</span>
+                    <button onClick={(e) => { e.stopPropagation(); toggleFavorite(t.id); }} className={`rs-gallery-fav ${ui.favorites.includes(t.id) ? 'active' : ''}`}><Star size={14} fill={ui.favorites.includes(t.id) ? '#f59e0b' : 'none'} /></button>
                   </div>
                 </div>
               ))}
@@ -1275,11 +1264,3 @@ export default function ReactorStudio() {
     </div>
   );
 }
-
-const topBtnStyle = { display: 'flex', alignItems: 'center', gap: '6px', background: '#1f2937', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' };
-const sideBtnStyle = { width: '40px', height: '40px', borderRadius: '8px', background: '#1f2937', border: '1px solid #334155', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };
-const bottomBtnStyle = { width: '48px', height: '48px', borderRadius: '50%', background: '#1f2937', border: '1px solid #334155', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' };
-const panelStyle = { background: '#0f172a', border: '1px solid #1f2937', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' };
-const panelTitleStyle = { display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' };
-const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', width: '100%', fontSize: '13px' };
-const pipBtnStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '6px', padding: '8px 6px', color: '#94a3b8', cursor: 'pointer', fontSize: '11px', fontWeight: '600', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' };

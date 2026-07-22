@@ -68,7 +68,6 @@
     "react-konva": "^19.2.5",
     "react-router-dom": "^7.18.1",
     "use-image": "^1.1.4",
-    "vite-plugin-pwa": "^1.3.0",
     "zustand": "^5.0.14"
   },
   "devDependencies": {
@@ -85,6 +84,7 @@
     "vite": "^8.1.1",
     "vite-imagetools": "^10.0.1",
     "vite-plugin-compression": "^0.5.1",
-    "vite-plugin-prerender": "^1.0.8"
+    "vite-plugin-prerender": "^1.0.8",
+    "vite-plugin-pwa": "^1.3.0"
   }
 }

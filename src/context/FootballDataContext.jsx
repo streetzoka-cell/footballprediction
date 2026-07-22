@@ -1,5 +1,4 @@
-// src/context/FootballDataContext.jsx
-import { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
+import { createContext, useContext, useState, useEffect, useRef, useCallback, useMemo } from "react";
 import * as ffs from "../services/footballFirestore";
 import { getLocalDateFromUtc, getLocalDateStr } from "../utils/dates";
 
@@ -115,11 +114,12 @@ export function FootballDataProvider({ children }) {
   }, [fetchInitialFixtures, fetchCompetitions]);
 
   useEffect(() => {
-    const timer = setInterval(refreshTodayFixtures, 5 * 60 * 1000);
+    const timer = setInterval(() => {
+      if (!document.hidden) refreshTodayFixtures();
+    }, 5 * 60 * 1000);
     return () => clearInterval(timer);
   }, [refreshTodayFixtures]);
 
-  // Added force parameter for regular background updates
   const getStandings = useCallback(async (code, force = false) => {
     if (!force && standings[code]) return standings[code];
     try {
@@ -135,7 +135,6 @@ export function FootballDataProvider({ children }) {
     return null;
   }, [standings]);
 
-  // Added force parameter for regular background updates
   const getTeams = useCallback(async (code, force = false) => {
     if (!force && teams[code]) return teams[code];
     try {
@@ -151,7 +150,7 @@ export function FootballDataProvider({ children }) {
     return null;
   }, [teams]);
 
-  const fixturesByDate = useCallback(() => {
+  const fixturesByDate = useMemo(() => {
     const groups = {};
     for (const f of fixtures) {
       const localDate = getLocalDateFromUtc(f.utcDate);
@@ -162,10 +161,10 @@ export function FootballDataProvider({ children }) {
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [fixtures]);
 
-  const value = {
+  const value = useMemo(() => ({
     fixtures, liveMatches, competitions, standings, teams, loading, lastUpdated, error,
     getStandings, getTeams, fixturesByDate, refreshFixtures: refreshTodayFixtures, refreshLive: () => {}, loadDateFixtures,
-  };
+  }), [fixtures, liveMatches, competitions, standings, teams, loading, lastUpdated, error, getStandings, getTeams, fixturesByDate, refreshTodayFixtures, loadDateFixtures]);
 
   return (
     <FootballDataContext.Provider value={value}>

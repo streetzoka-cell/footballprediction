@@ -12,71 +12,6 @@ import { todayStr } from '../utils/dates';
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLE INJECTION
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('profile-zoka-v4')) return;
-  const s = document.createElement('style');
-  s.id = 'profile-zoka-v4';
-  s.textContent = `
-    @keyframes zoka_fadeUp{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes zoka_popIn{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
-    @keyframes zoka_shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes zoka_barFill{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-    @keyframes zoka_badgeUnlock{0%{transform:scale(.8) rotate(-5deg);opacity:0}50%{transform:scale(1.05) rotate(1deg)}100%{transform:scale(1) rotate(0);opacity:1}}
-    @keyframes zoka_pulseGlow{0%,100%{box-shadow:0 0 0 0 rgba(0,230,118,.25)}50%{box-shadow:0 0 0 8px rgba(0,230,118,0)}}
-    @keyframes zoka_slideRight{from{opacity:0;transform:translateX(20px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes zoka_countUp{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
-    @keyframes zoka_shine{0%{left:-100%}100%{left:200%}}
-    @keyframes zoka_glowBreathe{0%,100%{box-shadow:0 0 14px rgba(0,230,118,.15)}50%{box-shadow:0 0 28px rgba(0,230,118,.25)}}
-
-    body{overflow-x:hidden;width:100%;max-width:100vw}
-
-    .pro-enter{animation:zoka_fadeUp .6s cubic-bezier(.22,1,.36,1) both}
-    .pro-pop{animation:zoka_popIn .4s cubic-bezier(.22,1,.36,1) both}
-    .pro-bar{transform-origin:left;animation:zoka_barFill .8s cubic-bezier(.22,1,.36,1) both}
-    .pro-badge-unlock{animation:zoka_badgeUnlock .5s cubic-bezier(.22,1,.36,1) both}
-    .pro-slide-r{animation:zoka_slideRight .4s cubic-bezier(.22,1,.36,1) both}
-    .pro-count{animation:zoka_countUp .3s cubic-bezier(.22,1,.36,1) both}
-    .skel-profile{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:zoka_shimmer 1.5s ease-in-out infinite;border-radius:10px}
-
-    .zoka-btn{
-      transition:all .18s cubic-bezier(.22,1,.36,1);
-      cursor:pointer;outline:none;
-      -webkit-tap-highlight-color:transparent;
-    }
-    .zoka-btn:hover{transform:translateY(-1px);filter:brightness(1.08)}
-    .zoka-btn:active{transform:translateY(0) scale(.97);filter:brightness(.95)}
-
-    @media(max-width:768px){
-      .pro-header-inner{flex-direction:column!important;align-items:center!important;text-align:center!important;gap:20px!important}
-      .pro-header-info{align-items:center!important}
-      .pro-header-right{align-items:center!important;flex-direction:row!important;gap:16px!important}
-      .pro-stats-grid{grid-template-columns:repeat(2,1fr)!important;gap:10px!important}
-      .pro-breakdown-bar{height:12px!important}
-      .pro-badge-grid{grid-template-columns:1fr!important}
-      .pro-cta-btns{flex-direction:column!important;align-items:stretch!important}
-      .pro-cta-btns .zoka-btn{width:100%;justify-content:center}
-    }
-
-    @media(max-width:420px){
-      .pro-header-inner{padding:24px 20px!important;gap:16px!important}
-      .pro-avatar{width:76px!important;height:76px!important;font-size:1.7rem!important}
-      .pro-ring{width:96px!important;height:96px!important}
-      .pro-ring-text{font-size:1.3rem!important}
-      .pro-stats-grid{gap:8px!important}
-      .pro-stat-val{font-size:1.7rem!important}
-      .pro-cta-title{font-size:1.4rem!important}
-    }
-  
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-    }
-`;
-  document.head.appendChild(s);
-};
-
-/* ═══════════════════════════════════════════════════════════════
    HELPERS
    ═══════════════════════════════════════════════════════════════ */
 const useInView = (threshold = 0.1) => {
@@ -270,7 +205,6 @@ const ProfileSkeleton = () => (
    MAIN PROFILE COMPONENT
    ═══════════════════════════════════════════════════════════════ */
 export default function Profile() {
-  injectStyles();
   const { currentUser, userProfile, signOut, authLoading } = useAuth();
   const appData = useAppData();
   const navigate = useNavigate();
@@ -395,7 +329,7 @@ export default function Profile() {
           borderRadius: 18, display: 'flex', alignItems: 'center', gap: 28,
           flexWrap: 'wrap', position: 'relative', overflow: 'hidden', marginBottom: 30,
         }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), #69f0ae, transparent)' }} />
+          <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 3, background: 'linear-gradient(90deg, var(--accent), #34d399, transparent)' }} />
 
           <div className="pro-header-inner" style={{ display: 'flex', alignItems: 'center', gap: 28, flex: 1, minWidth: 280 }}>
             <div style={{ position: 'relative', flexShrink: 0 }}>
@@ -403,12 +337,12 @@ export default function Profile() {
                 width: 92, height: 92, borderRadius: '50%',
                 background: isDemo
                   ? 'linear-gradient(135deg, var(--text-muted), rgba(255,255,255,.1))'
-                  : 'linear-gradient(135deg, var(--accent), #69f0ae)',
+                  : 'linear-gradient(135deg, var(--accent), #34d399)',
                 display: 'flex', alignItems: 'center', justifyContent: 'center',
                 fontSize: '2.1rem', fontWeight: 900, color: 'var(--bg-deep)',
                 boxShadow: isDemo
                   ? '0 0 0 3px var(--bg-card), 0 0 0 6px rgba(255,255,255,.1)'
-                  : '0 0 0 3px var(--bg-card), 0 0 0 6px rgba(0,230,118,.3)',
+                  : '0 0 0 3px var(--bg-card), 0 0 0 6px rgba(16,185,129,.3)',
                 fontFamily: 'var(--font-display)',
                 transition: 'all .3s',
               }}>{initials}</div>
@@ -566,9 +500,9 @@ export default function Profile() {
         <div className="pro-enter" style={{
           textAlign: 'center', padding: '52px 28px',
           background: isDemo
-            ? 'linear-gradient(135deg, rgba(0,230,118,.06) 0%, rgba(96,165,250,.04) 100%)'
-            : 'linear-gradient(135deg, rgba(0,230,118,.06) 0%, transparent 100%)',
-          border: `1.5px solid ${isDemo ? 'rgba(0,230,118,.12)' : 'rgba(0,230,118,.08)'}`,
+            ? 'linear-gradient(135deg, rgba(16,185,129,.06) 0%, rgba(96,165,250,.04) 100%)'
+            : 'linear-gradient(135deg, rgba(16,185,129,.06) 0%, transparent 100%)',
+          border: `1.5px solid ${isDemo ? 'rgba(16,185,129,.12)' : 'rgba(16,185,129,.08)'}`,
           borderRadius: 18, position: 'relative', overflow: 'hidden',
         }}>
           <div style={{ position: 'relative' }}>
@@ -580,9 +514,9 @@ export default function Profile() {
                 </p>
                 <button onClick={() => navigate('/login')} className="zoka-btn" style={{
                   display: 'inline-flex', alignItems: 'center', gap: 10,
-                  padding: '14px 36px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                  padding: '14px 36px', borderRadius: 14, background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
                   color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
-                  border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                  border: 'none', boxShadow: '0 6px 24px rgba(16,185,129,.25), inset 0 1px 0 rgba(255,255,255,.2)',
                   minHeight: 56,
                 }}>
                   Sign In <ArrowRight size={18} />
@@ -602,9 +536,9 @@ export default function Profile() {
                 <div className="pro-cta-btns" style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
                   <button onClick={() => navigate('/fixtures')} className="zoka-btn" style={{
                     display: 'inline-flex', alignItems: 'center', gap: 10,
-                    padding: '14px 30px', borderRadius: 14, background: 'linear-gradient(135deg, #00e676 0%, #00c853 50%, #059669 100%)',
+                    padding: '14px 30px', borderRadius: 14, background: 'linear-gradient(135deg, #10b981 0%, #059669 50%, #047857 100%)',
                     color: 'var(--bg-deep)', fontWeight: 900, fontSize: '.94rem',
-                    border: 'none', boxShadow: '0 6px 24px rgba(0,230,118,.25), inset 0 1px 0 rgba(255,255,255,.2)',
+                    border: 'none', boxShadow: '0 6px 24px rgba(16,185,129,.25), inset 0 1px 0 rgba(255,255,255,.2)',
                     minHeight: 56,
                   }}>
                     <Zap size={18} /> {hasData ? "Today's Picks" : 'Browse Fixtures'}

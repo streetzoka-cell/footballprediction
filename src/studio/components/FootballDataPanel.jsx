@@ -16,7 +16,7 @@ export default function FootballDataPanel({ onClose }) {
   const awayScore = match.score?.fullTime?.away ?? 0;
 
   const addScorebug = () => {
-    addLayer({ type: 'rect', x: 40, y: 1750, width: 450, height: 100, fill: 'rgba(0, 0, 0, 0.85)', cornerRadius: 12 });
+    addLayer({ type: 'rect', x: 40, y: 1750, width: 450, height: 100, fill: 'rgba(5, 7, 10, 0.85)', cornerRadius: 12 });
     addLayer({ type: 'image', src: homeLogo, x: 60, y: 1770, width: 60, height: 60 });
     addLayer({ type: 'text', text: homeName, x: 140, y: 1780, fontSize: 28, fill: '#ffffff', fontStyle: 'bold' });
     addLayer({ type: 'text', text: `${homeScore}`, x: 350, y: 1770, fontSize: 40, fill: '#10b981', fontStyle: 'bold' });
@@ -41,7 +41,7 @@ export default function FootballDataPanel({ onClose }) {
   };
 
   const addPlayerCard = (teamName, teamLogo, isHome) => {
-    const bgColor = isHome ? '#1e3a8a' : '#7f1d1d';
+    const bgColor = isHome ? '#047857' : '#7f1d1d';
     const cardX = 340, cardY = 500;
     addLayer({ type: 'rect', x: cardX, y: cardY, width: 400, height: 600, fill: bgColor, cornerRadius: 20 });
     addLayer({ type: 'rect', x: cardX + 10, y: cardY + 10, width: 380, height: 580, fill: 'transparent', stroke: '#fbbf24', strokeWidth: 2, cornerRadius: 16 });
@@ -49,42 +49,39 @@ export default function FootballDataPanel({ onClose }) {
     addLayer({ type: 'text', text: 'ST', x: cardX + 40, y: cardY + 100, fontSize: 30, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' });
     addLayer({ type: 'image', src: teamLogo, x: cardX + 30, y: cardY + 150, width: 60, height: 60 });
     addLayer({ type: 'circle', x: cardX + 200, y: cardY + 250, radius: 80, fill: 'rgba(255,255,255,0.2)' });
-    addLayer({ type: 'rect', x: cardX, y: cardY + 480, width: 400, height: 120, fill: 'rgba(0,0,0,0.4)', cornerRadius: 0 });
+    addLayer({ type: 'rect', x: cardX, y: cardY + 480, width: 400, height: 120, fill: 'rgba(5, 7, 10, 0.4)', cornerRadius: 0 });
     addLayer({ type: 'text', text: 'PLAYER NAME', x: cardX, y: cardY + 510, width: 400, align: 'center', fontSize: 36, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' });
     onClose();
   };
 
   return (
-    <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '24px', height: '100%', overflowY: 'auto' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
-        <h2 style={{ color: '#fff', fontSize: '18px', fontWeight: 800 }}>Football Graphics</h2>
-        <button onClick={onClose} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>Close</button>
+    <div className="studio-panel-container">
+      <div className="studio-panel-header">
+        <h2 className="studio-panel-title">Football Graphics</h2>
+        <button onClick={onClose} className="studio-panel-close"><X size={20} /></button>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#1f2937', padding: '12px', borderRadius: '12px', marginBottom: '20px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <img src={homeLogo} alt="" style={{ width: '24px', height: '24px' }} />
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: '14px' }}>{homeName}</span>
+      <div className="studio-match-bar">
+        <div className="studio-match-team">
+          <img src={homeLogo} alt="" className="studio-match-logo" />
+          <span className="studio-match-name">{homeName}</span>
         </div>
-        <span style={{ color: '#10b981', fontWeight: 900, fontSize: '16px' }}>{homeScore} - {awayScore}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ color: '#fff', fontWeight: 700, fontSize: '14px' }}>{awayName}</span>
-          <img src={awayLogo} alt="" style={{ width: '24px', height: '24px' }} />
+        <span className="studio-match-score">{homeScore} - {awayScore}</span>
+        <div className="studio-match-team">
+          <span className="studio-match-name">{awayName}</span>
+          <img src={awayLogo} alt="" className="studio-match-logo" />
         </div>
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-        <button onClick={addScorebug} style={btnStyle}><Tv size={24} /><span>Scorebug</span><span style={subStyle}>Broadcast overlay</span></button>
-        <button onClick={addFormation} style={btnStyle}><Shirt size={24} /><span>4-3-3 Formation</span><span style={subStyle}>Home team lineup</span></button>
+      <div className="studio-grid-2">
+        <button onClick={addScorebug} className="studio-action-btn"><Tv size={24} /><span>Scorebug</span><span className="studio-action-sub">Broadcast overlay</span></button>
+        <button onClick={addFormation} className="studio-action-btn"><Shirt size={24} /><span>4-3-3 Formation</span><span className="studio-action-sub">Home team lineup</span></button>
       </div>
       <div style={{ marginTop: '24px' }}>
-        <div style={{ fontSize: '12px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '12px' }}>Player Card Builder</div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-          <button onClick={() => addPlayerCard(homeName, homeLogo, true)} style={btnStyle}><User size={24} /><span>{homeName} Card</span><span style={subStyle}>Blue Template</span></button>
-          <button onClick={() => addPlayerCard(awayName, awayLogo, false)} style={btnStyle}><User size={24} /><span>{awayName} Card</span><span style={subStyle}>Red Template</span></button>
+        <div className="studio-section-title">Player Card Builder</div>
+        <div className="studio-grid-2">
+          <button onClick={() => addPlayerCard(homeName, homeLogo, true)} className="studio-action-btn"><User size={24} /><span>{homeName} Card</span><span className="studio-action-sub">Emerald Template</span></button>
+          <button onClick={() => addPlayerCard(awayName, awayLogo, false)} className="studio-action-btn"><User size={24} /><span>{awayName} Card</span><span className="studio-action-sub">Red Template</span></button>
         </div>
       </div>
     </div>
   );
 }
-
-const btnStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '12px', padding: '16px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', color: '#fff', cursor: 'pointer' };
-const subStyle = { fontSize: '10px', color: '#64748b', fontWeight: 600 };

@@ -8,49 +8,6 @@ import {
 import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
-   STYLES
-   ═══════════════════════════════════════════════════════════════ */
-const injectStyles = () => {
-  if (document.getElementById('ls-v2')) return;
-  const s = document.createElement('style');
-  s.id = 'ls-v2';
-  s.textContent = `
-    @keyframes lsUp{from{opacity:0;transform:translateY(18px)}
-body{overflow-x:hidden;width:100%;max-width:100vw}to{opacity:1;transform:translateY(0)}}
-    @keyframes lsPop{0%{transform:scale(.92);opacity:0}100%{transform:scale(1);opacity:1}}
-    @keyframes lsSlide{from{opacity:0;transform:translateX(-12px)}to{opacity:1;transform:translateX(0)}}
-    @keyframes lsShim{0%{background-position:-200% 0}100%{background-position:200% 0}}
-    @keyframes lsPulse{0%,100%{opacity:.6}50%{opacity:1}}
-    @keyframes lsGlow{0%,100%{box-shadow:0 0 12px var(--glow-c, rgba(0,230,118,.15))}50%{box-shadow:0 0 24px var(--glow-c, rgba(0,230,118,.3))}}
-    @keyframes lsFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
-    .ls-up{animation:lsUp .45s cubic-bezier(.22,1,.36,1) both}
-    .ls-pop{animation:lsPop .35s cubic-bezier(.22,1,.36,1) both}
-    .ls-slide{animation:lsSlide .35s cubic-bezier(.22,1,.36,1) both}
-    .ls-shim{background:linear-gradient(90deg,var(--bg-surface) 25%,var(--bg-card) 50%,var(--bg-surface) 75%);background-size:200% 100%;animation:lsShim 1.5s ease-in-out infinite}
-    .ls-pulse{animation:lsPulse 2s ease-in-out infinite}
-    .ls-glow{animation:lsGlow 2s ease-in-out infinite}
-    .ls-float{animation:lsFloat 3s ease-in-out infinite}
-    .zb{transition:all .18s cubic-bezier(.22,1,.36,1);cursor:pointer;outline:none}
-    .zb:hover{transform:translateY(-2px);filter:brightness(1.08)}
-    .zb:active{transform:translateY(0) scale(.97)}
-    .sc{transition:all .25s cubic-bezier(.22,1,.36,1);border-radius:14px;overflow:hidden;background:var(--bg-card);border:1px solid var(--border);position:relative}
-    .sc:hover{transform:translateY(-4px);box-shadow:0 12px 36px rgba(0,0,0,.25)}
-    .sc:hover .sc-arrow{transform:translateX(4px)}
-    .sc:hover .sc-visit{background:var(--bg-deep)}
-    .sc-arrow{transition:transform .2s}
-    .sc-visit{transition:all .2s}
-    .hide-sb::-webkit-scrollbar{display:none}.hide-sb{scrollbar-width:none}
-  
-    @media(prefers-reduced-motion:reduce){
-      *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
-      .carousel-track,.carousel-card,.carousel-header-dots span{animation:none!important}
-      .toggle-hidden-items{transition:none!important}
-    }
-`;
-  document.head.appendChild(s);
-};
-
-/* ═══════════════════════════════════════════════════════════════
    DATA
    ═══════════════════════════════════════════════════════════════ */
 const streamingServices = [
@@ -67,7 +24,7 @@ const streamingServices = [
   { id: 11, name: "Sky Sports", description: "Leading UK sports broadcaster with exclusive Premier League coverage, EFL matches, and comprehensive football analysis and highlights.", competitions: "Premier League, EFL, Scottish Prem", category: "broadcaster", color: "#0072c6", url: "https://www.skysports.com", featured: false },
   { id: 12, name: "Paramount+", description: "Streaming service with Champions League, Europa League and Serie A rights in the United States, plus original football programming.", competitions: "UCL, UEL, Serie A, NWSL", category: "broadcaster", color: "#0064ff", url: "https://www.paramountplus.com", featured: false },
   { id: 13, name: "fuboTV", description: "Sports-first streaming TV service with access to beIN, ESPN, and regional sports networks for comprehensive football coverage.", competitions: "Multiple leagues via channel add-ons", category: "broadcaster", color: "#7800ff", url: "https://www.fubo.tv", featured: false },
-  { id: 14, name: "ONEFOOTBALL", description: "Free-to-air platform legally streaming live football matches from top European leagues to millions of fans globally.", competitions: "Premier League, Serie A, Ligue 1, LaLiga", category: "free", color: "#00c853", url: "https://www.onefootball.com", featured: true },
+  { id: 14, name: "ONEFOOTBALL", description: "Free-to-air platform legally streaming live football matches from top European leagues to millions of fans globally.", competitions: "Premier League, Serie A, Ligue 1, LaLiga", category: "free", color: "#10b981", url: "https://www.onefootball.com", featured: true },
   { id: 15, name: "CONCACAF GO", description: "Official CONCACAF streaming platform for Champions League, Gold Cup, and World Cup qualifiers across North and Central America.", competitions: "Concacaf CL, Gold Cup, WCQ", category: "governing", color: "#003876", url: "https://www.concacafgo.com", featured: false },
   { id: 16, name: "CAF TV", description: "Confederation of African Football's official platform for streaming AFCON, Champions League and World Cup qualifying matches.", competitions: "AFCON, CAF CL, WCQ Africa", category: "governing", color: "#009639", url: "https://www.cafonline.com", featured: false },
   { id: 17, name: "AFC TV", description: "Asian Football Confederation's streaming platform covering Asian Cup, Champions League, and World Cup qualifiers.", competitions: "Asian Cup, AFC CL, WCQ Asia", category: "governing", color: "#c8102e", url: "https://www.the-afc.com", featured: false },
@@ -227,7 +184,6 @@ function ServiceCard({ s, i }) {
    MAIN
    ═══════════════════════════════════════════════════════════════ */
 export default function LiveStream() {
-  injectStyles();
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -262,7 +218,7 @@ export default function LiveStream() {
   const clearSearch = useCallback(() => setSearch(''), []);
 
    return (
-    <div style={{ minHeight: '100vh',overflow:'hidden', background: 'var(--bg-deep)' }}>
+    <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
 
       <SEO
         title="Live Football Streams & Matches | ZOKASCORE"
@@ -273,7 +229,7 @@ export default function LiveStream() {
       />
 
       {/* ── HEADER ── */}
-      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,10,10,.9)', backdropFilter: 'blur(18px)', borderBottom: '1px solid var(--border)' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(5,7,10,.85)', backdropFilter: 'blur(18px)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 940, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-deep)' }}>
@@ -291,7 +247,7 @@ export default function LiveStream() {
 
         {/* ── TITLE ── */}
         <div className="ls-up" style={{ marginBottom: 28, textAlign: 'center' }}>
-          <div className="ls-float" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'rgba(0,230,118,.08)', border: '1px solid rgba(0,230,118,.12)', marginBottom: 14 }}>
+          <div className="ls-float" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 56, height: 56, borderRadius: 16, background: 'rgba(16,185,129,.08)', border: '1px solid rgba(16,185,129,.12)', marginBottom: 14 }}>
             <Tv size={28} style={{ color: 'var(--accent)' }} />
           </div>
           <h1 style={{ fontSize: '1.8rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0, letterSpacing: '-.02em' }}>Where to Watch Live Football</h1>

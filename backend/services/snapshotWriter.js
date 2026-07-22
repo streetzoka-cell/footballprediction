@@ -1,40 +1,58 @@
-/*
- * snapshotWriter.js
- * Writes single-document snapshots that the frontend reads directly.
- *
- * ★ SIZE OPTIMIZATION: Strips match objects down to only the essential 
- * fields required by the frontend. This reduces the document size by 
- * ~90%, allowing 1000+ matches to easily fit inside Firestore's 1MB 
- * document limit without needing complex chunking.
- *
- * ★ MERGE FIX: Only includes arrays that are explicitly passed in the 
- * data payload to prevent accidentally overwriting existing arrays 
- * with empty values.
- */
+// ═══════════════════════════════════════════════════════════════
+// FILE: backend/services/snapshotWriter.js (CURRENT BACKEND)
+// ═══════════════════════════════════════════════════════════════
 
 const { getDb } = require("../config/firebase");
 const logger = require("../utils/logger");
 
+/**
+ * Strip a match to essential fields for snapshots.
+ * MUST include everything frontend api.jsx transformMatch() expects.
+ */
 function stripMatch(m) {
   if (!m) return null;
   return {
     id: m.id,
     date: m.date,
     timestamp: m.timestamp,
+    
+    // Status
     status: m.status,
+    statusLong: m.statusLong || null,  // ★ ADDED
     elapsed: m.elapsed,
+    
+    // League
     leagueId: m.leagueId,
     leagueName: m.leagueName,
     leagueLogo: m.leagueLogo,
+    leagueCountry: m.leagueCountry || null,  // ★ ADDED
+    leagueFlag: m.leagueFlag || null,        // ★ ADDED
+    season: m.season || null,                // ★ ADDED
+    round: m.round || null,                  // ★ ADDED
+    
+    // Teams
     homeTeamId: m.homeTeamId,
     homeTeamName: m.homeTeamName,
     homeTeamLogo: m.homeTeamLogo,
     awayTeamId: m.awayTeamId,
     awayTeamName: m.awayTeamName,
     awayTeamLogo: m.awayTeamLogo,
+    
+    // Scores
     goalsHome: m.goalsHome,
     goalsAway: m.goalsAway,
-    sport: m.sport || "football"
+    
+    // Score Breakdowns (for finished matches) ★ ADDED
+    scoreHalftimeHome: m.scoreHalftimeHome ?? null,
+    scoreHalftimeAway: m.scoreHalftimeAway ?? null,
+    scoreFulltimeHome: m.scoreFulltimeHome ?? null,
+    scoreFulltimeAway: m.scoreFulltimeAway ?? null,
+    scoreExtratimeHome: m.scoreExtratimeHome ?? null,
+    scoreExtratimeAway: m.scoreExtratimeAway ?? null,
+    scorePenaltyHome: m.scorePenaltyHome ?? null,
+    scorePenaltyAway: m.scorePenaltyAway ?? null,
+    
+    sport: m.sport || "football",
   };
 }
 
@@ -42,8 +60,6 @@ class SnapshotWriter {
   async writeFootballSnapshot(dateStr, data) {
     const payload = { sport: "football" };
     
-    // Only add the array if it exists in the payload
-    // This prevents overwriting the 'matches' array with [] when liveFixtures runs
     if (data.matches) payload.matches = data.matches.map(stripMatch);
     if (data.live) payload.live = data.live.map(stripMatch);
     if (data.finished) payload.finished = data.finished.map(stripMatch);
@@ -69,15 +85,11 @@ class SnapshotWriter {
   async _write(collection, docId, data) {
     const db = getDb();
     if (!db) return;
-
     try {
       await db
         .collection(collection)
         .doc(docId)
-        .set({
-          ...data,
-          updatedAt: new Date().toISOString()
-        }, { merge: true });
+        .set({ ...data, updatedAt: new Date().toISOString() }, { merge: true });
     } catch (err) {
       logger.error(`[Snapshot] Write failed ${collection}/${docId}: ${err.message}`);
     }
