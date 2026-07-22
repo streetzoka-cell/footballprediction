@@ -10,7 +10,6 @@ import {
   RefreshCw, Calendar, AlertTriangle, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight, Flame, Camera, Loader
 } from 'lucide-react';
 
-// ★ KEY FIX: Import subscribeToLiveFixtures (LIVE ONLY) not subscribeToTodayFixtures
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { useFootballData } from '../context/FootballDataContext';
 import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime, getEatDateStr } from '../utils/dates';
@@ -191,9 +190,20 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
 
+// ★ FIX: Strictly use EAT (UTC+3) for date extraction to match backend snapshot IDs
 function extractMatchDate(m) {
   if (!m) return '';
-  if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
+  const rawDate = m.utcDate || m.date || (m.timestamp ? new Date(m.timestamp).toISOString() : null);
+  if (rawDate) {
+    try {
+      const d = new Date(rawDate);
+      // Add 3 hours to convert to EAT, then extract date
+      const eat = new Date(d.getTime() + 3 * 3600000);
+      return eat.toISOString().split("T")[0];
+    } catch {
+      return '';
+    }
+  }
   if (m.date && m.date.includes('T')) return m.date.split('T')[0];
   if (m.date) return m.date;
   return '';
@@ -223,6 +233,7 @@ function normalizeMatch(raw, isPrimary) {
   let isLive = isPrimary ? !!raw.isLive : LIVE_STATUSES_SET.has(status);
   let isHT = status === MatchStatus.HT || status === 'BT' || status === MatchStatus.HALF_TIME;
   let isFinished = isPrimary ? !!raw.isFinished : (status === MatchStatus.FINISHED || status === MatchStatus.FT || status === MatchStatus.AET || status === MatchStatus.PEN);
+  let isStarted = false; // ★ FIX: Moved declaration up here to prevent ReferenceError
   
   // ★ 2.5-HOUR SAFETY VALVE: If it's live but 2.5 hours have passed, force it to finish
   if (isLive && timestamp > 0) {
@@ -235,7 +246,24 @@ function normalizeMatch(raw, isPrimary) {
     }
   }
 
-  let isStarted = false;
+  // ★ TIME-BASED FT SHIELD: Auto-finish past matches that backend missed
+  if (!isFinished && !isLive && dateStr) {
+    const todayDateStr = getEatDateStr(0);
+    if (dateStr < todayDateStr) {
+      isFinished = true; isStarted = false; isHT = false; status = 'FT';
+    } else if (dateStr === todayDateStr && timestamp > 0) {
+      const elapsed = Date.now() - timestamp;
+      const hasAnyScore = (raw.homeScore != null && raw.homeScore > 0) ||
+                           (raw.awayScore != null && raw.awayScore > 0) ||
+                           (raw.score?.fullTime?.home != null && raw.score?.fullTime?.home > 0) ||
+                           (raw.score?.fullTime?.away != null && raw.score?.fullTime?.away > 0);
+      // If it started >3 hours ago and has no scores, force FT
+      if (elapsed > (3 * 60 * 60 * 1000) && !hasAnyScore) {
+        isFinished = true; status = 'FT';
+      }
+    }
+  }
+
   if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
     isStarted = true;
   }
@@ -261,6 +289,7 @@ function normalizeMatch(raw, isPrimary) {
     stats: raw.stats || raw.matchStats || [],
   };
 }
+
 
 const MatchCardSkeleton = React.memo(() => (
   <div className="zoka-sk-card">
@@ -618,7 +647,6 @@ export default function Fixtures() {
     return () => clearInterval(interval);
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
-  // ★★★ THE CRITICAL FIX: Use subscribeToLiveFixtures (LIVE ONLY) with strict transition logic ★★★
   useEffect(() => {
     if (selectedDate !== getEatDateStr(0)) return;
     const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
@@ -629,7 +657,6 @@ export default function Fixtures() {
         const next = prev.map(f => {
           const freshMatch = liveMap.get(String(f.id));
           if (freshMatch) {
-            // Only update if something changed
             if (freshMatch.isLive !== f.isLive || freshMatch.isFinished !== f.isFinished || freshMatch.homeScore !== f.homeScore || freshMatch.awayScore !== f.awayScore || freshMatch.minute !== f.minute) {
               changed = true;
               return { ...f, ...freshMatch };
@@ -637,13 +664,11 @@ export default function Fixtures() {
             return f;
           }
           
-          // ★ FIX: If it was live but is NO LONGER in the live feed, it is FINISHED!
           if (f.isLive) {
             changed = true;
             return { ...f, isLive: false, isFinished: true, status: MatchStatus.FT };
           }
           
-          // Mark as started if kickoff passed
           const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
           if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
             changed = true;

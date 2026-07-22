@@ -6,14 +6,11 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
-import { fetchFixtures } from '../utils/api';
+import { subscribeToLiveFixtures } from '../utils/api';
 import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from "../components/SEO";
 
-/* ═══════════════════════════════════════════════════════════════
-   HELPERS
-   ═══════════════════════════════════════════════════════════════ */
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -39,7 +36,6 @@ const calculateAccuracy = (exact, result, total) => {
   return Math.min(100, Math.round(((exact + result) / total) * 100));
 };
 
-/* ── Badge Definitions ── */
 const BADGE_DEFS = [
   { id: 'first-pred', name: 'First Step', icon: '👟', color: '#60a5fa', check: (p) => getPredictions(p) >= 1, hint: 'Make your first prediction' },
   { id: 'pred-10', name: 'Getting Started', icon: '🎯', color: 'var(--accent)', check: (p) => getPredictions(p) >= 10, hint: 'Make 10 predictions' },
@@ -50,9 +46,6 @@ const BADGE_DEFS = [
   { id: 'top-100', name: 'Top 100', icon: '🏆', color: '#eab308', check: (p) => getPoints(p) > 0, hint: 'Score points on the leaderboard' },
 ];
 
-/* ═══════════════════════════════════════════════════════════════
-   SUB-COMPONENTS
-   ═══════════════════════════════════════════════════════════════ */
 const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 0, icon }) => {
   const [val, setVal] = useState(0);
   const [ref, visible] = useInView(0.5);
@@ -174,9 +167,6 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   SKELETON
-   ═══════════════════════════════════════════════════════════════ */
 const ProfileSkeleton = () => (
   <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
     <div style={{ maxWidth: 900, margin: '0 auto', padding: '24px 20px 100px' }}>
@@ -201,40 +191,29 @@ const ProfileSkeleton = () => (
   </div>
 );
 
-/* ═══════════════════════════════════════════════════════════════
-   MAIN PROFILE COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
 export default function Profile() {
   const { currentUser, userProfile, signOut, authLoading } = useAuth();
   const appData = useAppData();
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  // ★ Fetch Live Fixtures for Real-Time Stat Calculation
   const [liveFixtures, setLiveFixtures] = useState([]);
   
+  // ★ FIX: Use subscribeToLiveFixtures instead of setInterval polling
   useEffect(() => {
     if (isDemo) return;
-    let cancelled = false;
-    const loadLive = async () => {
-      try {
-        const res = await fetchFixtures(todayStr());
-        if (!cancelled) setLiveFixtures(res?.matches || []);
-      } catch (e) {}
-    };
-    loadLive();
-    const interval = setInterval(loadLive, 15000); 
-    return () => { cancelled = true; clearInterval(interval); };
+    const unsub = subscribeToLiveFixtures(({ matches }) => {
+      setLiveFixtures(matches || []);
+    });
+    return () => unsub();
   }, [isDemo]);
 
-  // ★ INSTANT LOCAL CALCULATION: Merge historical profile data with today's live results
   const liveStats = useMemo(() => {
     if (isDemo || !currentUser?.uid) return { pts: 0, ex: 0, rs: 0, mi: 0, pred: 0 };
     const uid = currentUser.uid;
     const today = todayStr();
     const userPreds = Object.values(appData.userPredictions || {}).filter(p => p.userId === uid && p.matchDate === today);
     
-    // Merge active predictions with live fixtures to get latest scores
     const matchesMap = new Map();
     (appData.activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
     liveFixtures.forEach(f => {
@@ -277,7 +256,6 @@ export default function Profile() {
     points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
   };
 
-  // ★ Merge historical stats with today's instant stats
   const profile = {
     ...baseProfile,
     points: (baseProfile.points || 0) + liveStats.pts,
@@ -323,7 +301,6 @@ export default function Profile() {
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 20px 100px' }}>
 
-        {/* ═══ PROFILE HEADER ═══ */}
         <div className="pro-enter" style={{
           padding: 34, background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 18, display: 'flex', alignItems: 'center', gap: 28,
@@ -411,7 +388,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* ═══ STATS GRID ═══ */}
         <div className="pro-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 30 }}>
           <AnimatedStat value={points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={17} />} />
           <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={17} />} />
@@ -419,7 +395,6 @@ export default function Profile() {
           <AnimatedStat value={exact} label="Exact Scores" color="#f97116" delay={240} icon={<Flame size={17} />} />
         </div>
 
-        {/* ═══ BREAKDOWN BAR ═══ */}
         <div style={{
           padding: '20px 22px', background: 'var(--bg-card)', border: '1px solid var(--border)',
           borderRadius: 16, marginBottom: 30,
@@ -464,7 +439,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* ═══ BADGES ═══ */}
         <div style={{ marginBottom: 40 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
@@ -496,7 +470,6 @@ export default function Profile() {
           )}
         </div>
 
-        {/* ═══ CTA ═══ */}
         <div className="pro-enter" style={{
           textAlign: 'center', padding: '52px 28px',
           background: isDemo

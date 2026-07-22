@@ -1,14 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X, Zap } from 'lucide-react';
+import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X } from 'lucide-react';
 import SEO from "../components/SEO";
 
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
-/* ═══════════════════════════════════════════════════════════════
-   PASSWORD STRENGTH — BIGGER, CLEARER
-   ═══════════════════════════════════════════════════════════════ */
 const PasswordStrength = ({ password }) => {
   if (!password) return null;
   let score = 0;
@@ -46,9 +43,6 @@ const PasswordStrength = ({ password }) => {
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   INPUT FIELD — BIGGER TOUCH TARGETS, BOLDER
-   ═══════════════════════════════════════════════════════════════ */
 const InputField = ({ icon, type, placeholder, value, onChange, required, minLength, autoFocus, label }) => {
   const [focused, setFocused] = useState(false);
   const [showPass, setShowPass] = useState(false);
@@ -125,9 +119,6 @@ const InputField = ({ icon, type, placeholder, value, onChange, required, minLen
   );
 };
 
-/* ═══════════════════════════════════════════════════════════════
-   FOOTBALL PITCH DECORATION
-   ═══════════════════════════════════════════════════════════════ */
 const PitchDecoration = () => (
   <svg
     width="100%" height="100%"
@@ -150,9 +141,6 @@ const PitchDecoration = () => (
   </svg>
 );
 
-/* ═══════════════════════════════════════════════════════════════
-   MAIN LOGIN COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
 export default function Login() {
   const [isLogin, setIsLogin] = useState(true);
   const [email, setEmail] = useState('');
@@ -163,14 +151,9 @@ export default function Login() {
   const [errorVis, setErrorVis] = useState(false);
   const [modeTrans, setModeTrans] = useState(false);
 
-  // ★ FIX 1: Destructure currentUser and authLoading
   const { currentUser, authLoading, login, register, loginWithGoogle } = useAuth();
   const navigate = useNavigate();
 
-  // ★ FIX 2: Auto-navigate when user becomes authenticated
-  // This handles BOTH: 
-  //   - User returning from Google redirect sign-in
-  //   - User already logged in visiting /login
   useEffect(() => {
     if (!authLoading && currentUser) {
       navigate('/profile', { replace: true });
@@ -192,7 +175,6 @@ export default function Login() {
         if (!displayName.trim()) { setError('Display name is required'); setLoading(false); return; }
         await register(email, password, displayName.trim());
       }
-      // Navigation is now handled by the useEffect above!
     } catch (err) {
       const errors = {
         'auth/user-not-found': 'No account found with this email',
@@ -201,24 +183,21 @@ export default function Login() {
         'auth/weak-password': 'Password must be at least 6 characters',
         'auth/invalid-email': 'Invalid email address',
         'auth/invalid-credential': 'Invalid email or password',
+        'auth/network-request-failed': 'Network error. Check connection or disable ad blockers.'
       };
       setError(errors[err.code] || err.message);
     }
     setLoading(false);
   }, [isLogin, email, password, displayName, login, register]);
 
-  // ★ FIX 3: Updated Google Handler
   const handleGoogle = useCallback(async () => {
     setError('');
     setLoading(true);
     try {
       await loginWithGoogle(); 
-      // For popup flow: user is signed in, the useEffect above will navigate.
-      // For redirect flow: page navigates away to Google. When it returns, 
-      // the useEffect above will detect the user and navigate.
     } catch (err) {
       if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
-        // User closed the popup themselves, don't show a scary error
+        // Ignore
       } else {
         setError('Google sign-in failed. Please try again.');
       }
@@ -251,24 +230,20 @@ export default function Login() {
         robots="noindex,nofollow"
       />
 
-      {/* ── Background Decorations ── */}
       <PitchDecoration />
 
-      {/* Green glow top-left */}
       <div style={{
         position: 'absolute', top: '-25%', left: '-10%',
         width: '70%', height: '65%',
         background: 'radial-gradient(ellipse, rgba(16,185,129,.06) 0%, transparent 65%)',
         pointerEvents: 'none',
       }} />
-      {/* Blue glow bottom-right */}
       <div style={{
         position: 'absolute', bottom: '-15%', right: '-10%',
         width: '60%', height: '55%',
         background: 'radial-gradient(ellipse, rgba(59,130,246,.04) 0%, transparent 65%)',
         pointerEvents: 'none',
       }} />
-      {/* Subtle green accent glow behind card */}
       <div style={{
         position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -55%)',
         width: '120%', height: '60%',
@@ -276,7 +251,6 @@ export default function Login() {
         pointerEvents: 'none',
       }} />
 
-      {/* ── Main Card ── */}
       <div
         className="auth-pop auth-glow"
         style={{
@@ -294,7 +268,6 @@ export default function Login() {
           overflow: 'hidden',
         }}
       >
-        {/* Shine effect on card */}
         <div style={{
           position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%',
           background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.02), transparent)',
@@ -302,9 +275,7 @@ export default function Login() {
           pointerEvents: 'none',
         }} />
 
-        {/* ── Header: Logo + Title ── */}
         <div style={{ textAlign: 'center', marginBottom: 32, position: 'relative' }}>
-          {/* Logo */}
           <div
             className="auth-float"
             style={{
@@ -317,11 +288,9 @@ export default function Login() {
             }}
           >
             <span style={{ color: '#05070a', fontWeight: 900, fontSize: '1.5rem', fontFamily: 'var(--font-display)', textShadow: '0 1px 0 rgba(255,255,255,.15)' }}>Z</span>
-            {/* Glossy top half */}
             <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '45%', background: 'linear-gradient(180deg, rgba(255,255,255,.22) 0%, transparent 100%)', borderRadius: '20px 20px 0 0', pointerEvents: 'none' }} />
           </div>
 
-          {/* Title */}
           <h2 style={{
             margin: 0, fontSize: '1.7rem', fontWeight: 900,
             color: '#f8fafc', letterSpacing: '.01em',
@@ -342,7 +311,6 @@ export default function Login() {
           </p>
         </div>
 
-        {/* ── Error Message ── */}
         {error && (
           <div style={{
             padding: '16px 18px',
@@ -379,7 +347,6 @@ export default function Login() {
           </div>
         )}
 
-        {/* ── Google Button ── */}
         <button
           onClick={handleGoogle}
           disabled={loading}
@@ -412,7 +379,6 @@ export default function Login() {
           Continue with Google
         </button>
 
-        {/* ── Divider ── */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 24 }}>
           <div style={{ flex: 1, height: 1.5, background: '#151b26', borderRadius: 1 }} />
           <span style={{
@@ -425,9 +391,7 @@ export default function Login() {
           <div style={{ flex: 1, height: 1.5, background: '#151b26', borderRadius: 1 }} />
         </div>
 
-        {/* ── Form ── */}
         <form onSubmit={handleSubmit}>
-          {/* Display Name (register only) */}
           <div style={{
             overflow: 'hidden',
             maxHeight: isLogin ? '0px' : '140px',
@@ -445,7 +409,6 @@ export default function Login() {
             />
           </div>
 
-          {/* Email */}
           <InputField
             icon={<Mail size={20} />}
             type="email"
@@ -457,7 +420,6 @@ export default function Login() {
             autoFocus={isLogin}
           />
 
-          {/* Password */}
           <InputField
             icon={<Lock size={20} />}
             type="password"
@@ -469,10 +431,8 @@ export default function Login() {
             minLength={6}
           />
 
-          {/* Password strength (register only) */}
           {!isLogin && <PasswordStrength password={password} />}
 
-          {/* Forgot password (login only) */}
           {isLogin && (
             <div style={{
               display: 'flex', justifyContent: 'flex-end', marginBottom: 24,
@@ -492,7 +452,6 @@ export default function Login() {
             </div>
           )}
 
-          {/* Submit Button */}
           <button
             type="submit"
             className="zoka-btn"
@@ -513,7 +472,6 @@ export default function Login() {
               marginTop: isLogin ? 0 : 8,
             }}
           >
-            {/* Shine on button */}
             <div style={{
               position: 'absolute', top: 0, left: '-100%', width: '50%', height: '100%',
               background: 'linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent)',
@@ -541,7 +499,6 @@ export default function Login() {
           </button>
         </form>
 
-        {/* ── Toggle Mode ── */}
         <div style={{
           textAlign: 'center', marginTop: 28,
           fontSize: '.95rem', fontWeight: 600, color: '#64748b',
@@ -561,7 +518,6 @@ export default function Login() {
           </button>
         </div>
 
-        {/* ── Security Footer ── */}
         <div style={{
           marginTop: 28, padding: '16px 18px',
           background: 'rgba(255,255,255,.02)',
@@ -600,7 +556,6 @@ export default function Login() {
           </div>
         </div>
 
-        {/* ── Football decoration at bottom ── */}
         <div style={{
           textAlign: 'center', marginTop: 20,
           display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   onAuthStateChanged,
   signOut as fbSignOut,
@@ -21,6 +21,12 @@ export function AuthProvider({ children }) {
   const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
+    if (!auth) {
+      console.warn('[Auth] Firebase Auth not initialized.');
+      setAuthLoading(false);
+      return;
+    }
+
     getRedirectResult(auth)
       .then((result) => {
         if (result) console.log('[Auth] Redirect sign-in successful:', result.user.uid);
@@ -29,6 +35,11 @@ export function AuthProvider({ children }) {
   }, []);
 
   useEffect(() => {
+    if (!auth) {
+      setAuthLoading(false);
+      return;
+    }
+
     let unsubscribed = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
@@ -70,11 +81,13 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = useCallback(async (email, password) => {
+    if (!auth) throw new Error('Auth not initialized');
     const cred = await signInWithEmailAndPassword(auth, email, password);
     return cred.user;
   }, []);
 
   const register = useCallback(async (email, password, displayName) => {
+    if (!auth) throw new Error('Auth not initialized');
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     if (displayName) await fbUpdateProfile(cred.user, { displayName });
     
@@ -93,6 +106,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const loginWithGoogle = useCallback(async () => {
+    if (!auth) throw new Error('Auth not initialized');
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -107,6 +121,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
+    if (!auth) throw new Error('Auth not initialized');
     try {
       await fbSignOut(auth);
       setCurrentUser(null);
@@ -118,7 +133,7 @@ export function AuthProvider({ children }) {
   }, []);
 
   const updateProfile = useCallback(async (updates) => {
-    if (!currentUser) throw new Error('Not authenticated');
+    if (!auth || !currentUser) throw new Error('Not authenticated');
 
     if (updates.displayName || updates.photoURL) {
       const authUpdates = {};
@@ -136,17 +151,19 @@ export function AuthProvider({ children }) {
     if (refreshed.exists()) setUserProfile(refreshed.data());
   }, [currentUser]);
 
+  const value = useMemo(() => ({
+    currentUser,
+    userProfile,
+    authLoading,
+    login,
+    register,
+    loginWithGoogle,
+    signOut,
+    updateProfile,
+  }), [currentUser, userProfile, authLoading, login, register, loginWithGoogle, signOut, updateProfile]);
+
   return (
-    <AuthContext.Provider value={{
-      currentUser,
-      userProfile,
-      authLoading,
-      login,
-      register,
-      loginWithGoogle,
-      signOut,
-      updateProfile,
-    }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
