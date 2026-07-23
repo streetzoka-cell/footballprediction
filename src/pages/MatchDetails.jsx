@@ -20,12 +20,12 @@ const LiveTimeline = ({ match, isLive, isFin }) => {
   }, [isLive]);
 
   const { phase, displayMinute, timelineProgress } = useMemo(() => {
-    const kickoffTime = match.date ? new Date(match.date).getTime() : 0;
+    const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
     const elapsedMs = currentTime - kickoffTime;
     const elapsedMins = Math.floor(elapsedMs / 60000);
 
     let p = 'Scheduled';
-    let dM = match.minute || 0;
+    let dM = match?.minute || 0;
     let tP = 0;
 
     if (isLive) {
@@ -116,7 +116,7 @@ export default function MatchDetails() {
         let foundMatch = null;
         const arrays = [yRes?.matches, tRes?.matches, tmRes?.matches];
         for (const arr of arrays) {
-          if (!arr) continue;
+          if (!Array.isArray(arr)) continue;
           foundMatch = arr.find(m => String(m.id) === String(matchId));
           if (foundMatch) break;
         }
@@ -254,7 +254,7 @@ export default function MatchDetails() {
 
 // Extracted to prevent parent re-renders if we ever bring back the 1s interval globally
 const LiveStatusText = ({ match, isLive, isFin }) => {
-  const kickoffTime = match.date ? new Date(match.date).getTime() : 0;
+  const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
   const currentTime = Date.now();
   
   let phase = 'Scheduled';

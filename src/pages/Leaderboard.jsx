@@ -211,7 +211,8 @@ export default function Leaderboard() {
 
   // 2. Subscribe to LIVE FIXTURES globally (Zero-Jank, Visibility Aware)
   useEffect(() => {
-    const unsub = subscribeToLiveFixtures(({ matches }) => {
+    // ★ FIX: Added missing `todayStr()` argument to prevent Firebase crash
+    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches }) => {
       if (!matches) return;
       setLiveFixtures(prev => {
         if (prev.length !== matches.length) return matches;
