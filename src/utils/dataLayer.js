@@ -3,8 +3,8 @@
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth, footballDb } from './firebase';
-import { collection, query, where, doc, limit, getDoc, getDocs, getDocFromServer, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { SPORT, TTL, TIMEOUT, CACHE_KEY, getSnapshotDocId, getRefDocId } from './constants';
+import { collection, query, where, doc, limit, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { SPORT, TTL, TIMEOUT, PATHS, CACHE_KEY, getSnapshotDocId, getRefDocId } from './constants';
 import { eventBus, EVENT } from './eventBus';
 import { todayStr, getWeekStart, getMonthStart } from './dates';
 
@@ -87,44 +87,43 @@ class DataLayer {
   clear() { this._memory.clear(); this._locks.clear(); this._local.deletePrefix(''); eventBus.emit(EVENT.CACHE_INVALIDATED, { cleared: true }); }
   getStats() { return { memoryCacheSize: this._memory.size, pendingLocks: this._locks.size, bgRefreshes: this._bgRefreshInProgress.size, subscribers: this._subscribers.size }; }
 
-  // ★ FIX: Hardened with try/catch and type checking to prevent "e.indexOf is not a function" crash
   subscribeFootballSnapshot(dateStr, cb) {
-    if (!footballDb || typeof dateStr !== 'string') return () => {};
-    try {
-      const ref = doc(footballDb, 'fixture_snapshots', dateStr);
-      return onSnapshot(ref, (snap) => {
-        const data = snap.exists() ? snap.data() : null;
-        this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-        this._local.set(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-        cb(data);
-      }, (err) => console.error("Snapshot listener error:", err));
-    } catch (e) {
-      console.error("Error subscribing to football snapshot:", e);
-      return () => {};
-    }
+    if (!db) return () => {};
+    const ref = doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr);
+    return onSnapshot(ref, (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+      this._local.set(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+      cb(data);
+    }, (err) => console.error("Snapshot listener error:", err));
   }
 
   subscribeBasketballSnapshot(dateStr, cb) {
-    if (!footballDb || typeof dateStr !== 'string') return () => {};
-    try {
-      const ref = doc(footballDb, 'fixture_snapshots', getSnapshotDocId(SPORT.BASKETBALL, dateStr));
-      return onSnapshot(ref, (snap) => {
-        const data = snap.exists() ? snap.data() : null;
-        this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-        this._local.set(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-        cb(data);
-      }, (err) => console.error("Snapshot listener error:", err));
-    } catch (e) {
-      console.error("Error subscribing to basketball snapshot:", e);
-      return () => {};
-    }
+    if (!db) return () => {};
+    const ref = doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr));
+    return onSnapshot(ref, (snap) => {
+      const data = snap.exists() ? snap.data() : null;
+      this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+      this._local.set(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+      cb(data);
+    }, (err) => console.error("Snapshot listener error:", err));
   }
-  
+
+  // Global Live Listener (Timezone independent) - Uses footballDb!
+  subscribeLiveFixtures(cb) {
+    if (!footballDb) return () => {};
+    const q = collection(footballDb, 'liveFixtures');
+    return onSnapshot(q, (snap) => {
+      const matches = snap.docs.map(d => d.data());
+      cb(matches);
+    }, (err) => console.error("Live listener error:", err));
+  }
+
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), async () => {
-      if (!footballDb) return null;
-      const s = await withTimeout(getDocFromServer(doc(footballDb, 'fixture_snapshots', dateStr)), TIMEOUT.SNAPSHOT_READ, null);
+      if (!db) return null;
+      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.FOOTBALL_UPDATED, eventPayload: d => ({ sport: SPORT.FOOTBALL, dateStr, snapshot: d }) });
   }
@@ -132,8 +131,8 @@ class DataLayer {
   async fetchBasketballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), async () => {
-      if (!footballDb) return null;
-      const s = await withTimeout(getDocFromServer(doc(footballDb, 'fixture_snapshots', getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
+      if (!db) return null;
+      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.BASKETBALL_UPDATED, eventPayload: d => ({ sport: SPORT.BASKETBALL, dateStr, snapshot: d }) });
   }
@@ -141,35 +140,34 @@ class DataLayer {
   async fetchSnapshot(sport, dateStr) { return sport === SPORT.BASKETBALL ? this.fetchBasketballSnapshot(dateStr) : this.fetchFootballSnapshot(dateStr); }
 
   async fetchLeagues(sport = SPORT.FOOTBALL) {
-    return this.getOrSet(CACHE_KEY.reference(getRefDocId('leagues', sport)), async () => { if (!footballDb) return []; const s = await withTimeout(getDoc(doc(footballDb, 'reference_data', getRefDocId('leagues', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
+    return this.getOrSet(CACHE_KEY.reference(getRefDocId('leagues', sport)), async () => { if (!db) return []; const s = await withTimeout(getDoc(doc(db, PATHS.REFERENCE_DATA, getRefDocId('leagues', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
   }
 
   async fetchTeams(sport = SPORT.FOOTBALL) {
-    return this.getOrSet(CACHE_KEY.reference(getRefDocId('teams', sport)), async () => { if (!footballDb) return []; const s = await withTimeout(getDoc(doc(footballDb, 'reference_data', getRefDocId('teams', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
+    return this.getOrSet(CACHE_KEY.reference(getRefDocId('teams', sport)), async () => { if (!db) return []; const s = await withTimeout(getDoc(doc(db, PATHS.REFERENCE_DATA, getRefDocId('teams', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
   }
 
   async fetchStandings(sport = SPORT.FOOTBALL) {
-    return this.getOrSet(CACHE_KEY.reference(getRefDocId('standings', sport)), async () => { if (!footballDb) return []; const s = await withTimeout(getDoc(doc(footballDb, 'reference_data', getRefDocId('standings', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
+    return this.getOrSet(CACHE_KEY.reference(getRefDocId('standings', sport)), async () => { if (!db) return []; const s = await withTimeout(getDoc(doc(db, PATHS.REFERENCE_DATA, getRefDocId('standings', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
   }
 
-  // User data and predictions remain on the primary `db`
   async fetchZokaPicks(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.zokaPicks(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDocFromServer(doc(db, 'zoka_picks', dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.ZOKA_PICKS, { event: EVENT.ZOKA_PICKS_UPDATED, eventPayload: d => ({ dateStr, picks: d }) });
+    return this.getOrSet(CACHE_KEY.zokaPicks(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDoc(doc(db, PATHS.ZOKA_PICKS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.ZOKA_PICKS, { event: EVENT.ZOKA_PICKS_UPDATED, eventPayload: d => ({ dateStr, picks: d }) });
   }
 
   async fetchZokaVotes(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.zokaVotes(dateStr), async () => { if (!db) return { stats: {} }; const s = await withTimeout(getDocFromServer(doc(db, 'zoka_vote_stats', dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? { stats: s.data()?.stats || {} } : { stats: {} }; }, TTL.ZOKA_VOTES);
+    return this.getOrSet(CACHE_KEY.zokaVotes(dateStr), async () => { if (!db) return { stats: {} }; const s = await withTimeout(getDoc(doc(db, PATHS.ZOKA_VOTE_STATS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? { stats: s.data()?.stats || {} } : { stats: {} }; }, TTL.ZOKA_VOTES);
   }
 
   async fetchActivePredictions(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.activePredictions(dateStr), async () => {
       if (!db) return [];
-      const s = await withTimeout(getDocFromServer(doc(db, 'prediction_snapshots', dateStr)), TIMEOUT.SNAPSHOT_READ, null);
+      const s = await withTimeout(getDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
       if (s?.exists()) return s.data().predictions || [];
-      const q = await withTimeout(getDocs(query(collection(db, 'active_predictions'), where('matchDate', '==', dateStr))), TIMEOUT.COLLECTION_QUERY, { docs: [] });
+      const q = await withTimeout(getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr))), TIMEOUT.COLLECTION_QUERY, { docs: [] });
       return q?.docs ? q.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0)) : [];
     }, TTL.ACTIVE_PREDICTIONS, { event: EVENT.PREDICTIONS_UPDATED, eventPayload: d => ({ dateStr, predictions: d }) });
   }
@@ -177,8 +175,8 @@ class DataLayer {
   async fetchUserPredictions(uid, dateStr) {
     if (!uid || !db) return {}; dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.userPredictions(uid, dateStr), async () => {
-      let s = await withTimeout(getDocs(query(collection(db, 'user_predictions'), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
-      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, 'user_predictions'), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
+      let s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
+      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
       if (!s || s.empty) return {};
       const map = {}; s.docs.forEach(d => { const data = d.data(); if (data.matchDate && data.matchDate !== dateStr) return; const e = { id: d.id, ...data }; [d.id, data.predId, data.matchId].filter(Boolean).map(String).forEach(k => map[k] = e); }); return map;
     }, TTL.USER_DATA);
@@ -187,8 +185,8 @@ class DataLayer {
   async fetchPredictionResults(uid, dateStr) {
     if (!uid || !db) return { results: [], resultMap: {} }; dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.predictionResults(uid, dateStr), async () => {
-      let s = await withTimeout(getDocs(query(collection(db, 'prediction_results'), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
-      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, 'prediction_results'), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
+      let s = await withTimeout(getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
+      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
       if (!s || s.empty) return { results: [], resultMap: {} };
       const results = [], map = {}; s.docs.forEach(d => { const data = d.data(); if (data.matchDate && data.matchDate !== dateStr) return; results.push({ id: d.id, ...data }); if (data.matchId) map[String(data.matchId)] = { id: d.id, ...data }; }); results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)); return { results, resultMap: map };
     }, TTL.USER_DATA);
@@ -196,17 +194,17 @@ class DataLayer {
 
   async fetchUserPoints(uid) {
     if (!uid || !db) return null;
-    return this.getOrSet(CACHE_KEY.userPoints(uid), async () => { const s = await withTimeout(getDoc(doc(db, 'user_points_total', uid)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.USER_DATA);
+    return this.getOrSet(CACHE_KEY.userPoints(uid), async () => { const s = await withTimeout(getDoc(doc(db, PATHS.USER_POINTS_TOTAL, uid)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.USER_DATA);
   }
 
   async fetchDailyLeaderboard(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.dailyLeaderboard(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDocFromServer(doc(db, 'daily_leaderboard', dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.DAILY_LEADERBOARD, { event: EVENT.DAILY_LEADERBOARD_UPDATED, eventPayload: d => ({ dateStr, leaderboard: d }) });
+    return this.getOrSet(CACHE_KEY.dailyLeaderboard(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.DAILY_LEADERBOARD, { event: EVENT.DAILY_LEADERBOARD_UPDATED, eventPayload: d => ({ dateStr, leaderboard: d }) });
   }
 
   async fetchHistoricalLeaderboard(period) {
     const docId = period === 'goat' ? 'current' : period === 'weekly' ? `weekly_${getWeekStart()}` : period === 'monthly' ? `monthly_${getMonthStart()}` : period;
-    return this.getOrSet(CACHE_KEY.historical(period), async () => { if (!db) return { entries: [], stale: true }; const s = await withTimeout(getDoc(doc(db, 'leaderboard_summaries', docId)), TIMEOUT.SNAPSHOT_READ, null); if (!s?.exists()) return { entries: [], stale: true }; return { entries: s.data().entries || [], stale: false }; }, TTL.HISTORICAL, { event: EVENT.LEADERBOARD_UPDATED, eventPayload: d => ({ period, leaderboard: d }) });
+    return this.getOrSet(CACHE_KEY.historical(period), async () => { if (!db) return { entries: [], stale: true }; const s = await withTimeout(getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId)), TIMEOUT.SNAPSHOT_READ, null); if (!s?.exists()) return { entries: [], stale: true }; return { entries: s.data().entries || [], stale: false }; }, TTL.HISTORICAL, { event: EVENT.LEADERBOARD_UPDATED, eventPayload: d => ({ period, leaderboard: d }) });
   }
 
   getScoreMap(preds) { const m = new Map(); preds?.forEach(p => { if (p.status === 'finished' && p.homeScore != null) m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore }); }); return m; }
@@ -220,9 +218,9 @@ class DataLayer {
 export async function saveUserPrediction({ matchId, homeScore, awayScore, matchDate, extra = {} }) {
   const uid = auth.currentUser?.uid; if (!uid || !matchId) throw new Error('Not signed in');
   const docId = `${uid}_${String(matchId)}`;
-  await setDoc(doc(db, 'user_predictions', docId), { userId: uid, matchId: String(matchId), predId: docId, matchDate: matchDate || todayStr(), homeScore: Number(homeScore), awayScore: Number(awayScore), createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra }, { merge: true });
+  await setDoc(doc(db, PATHS.USER_PREDICTIONS, docId), { userId: uid, matchId: String(matchId), predId: docId, matchDate: matchDate || todayStr(), homeScore: Number(homeScore), awayScore: Number(awayScore), createdAt: serverTimestamp(), updatedAt: serverTimestamp(), ...extra }, { merge: true });
 }
-export async function deleteUserPrediction(matchId) { const uid = auth.currentUser?.uid; if (!uid || !matchId) return; await deleteDoc(doc(db, 'user_predictions', `${uid}_${String(matchId)}`)); }
+export async function deleteUserPrediction(matchId) { const uid = auth.currentUser?.uid; if (!uid || !matchId) return; await deleteDoc(doc(db, PATHS.USER_PREDICTIONS, `${uid}_${String(matchId)}`)); }
 
 export const dataLayer = new DataLayer();
 export default dataLayer;

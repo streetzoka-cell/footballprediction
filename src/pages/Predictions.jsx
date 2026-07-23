@@ -1,7 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
 // ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
-// ★ CLEANED: Cache-first data layer integration, non-blocking admin resolver.
+// ★ FIXED: Missing dateStr argument in subscribeToLiveFixtures causing Firebase crash
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -238,8 +238,8 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
     return null;
   }, [pick.adminPick, isFin, pick.homeScore, pick.awayScore]);
 
-  const vs = voteStats[mid] || { agree: 0, disagree: 0, total: 0 };
-  const myV = userVote[mid];
+  const vs = voteStats?.[mid] || { agree: 0, disagree: 0, total: 0 };
+  const myV = userVote?.[mid];
   const isVoting = votingId === mid;
 
   const homeLogo = pick.homeLogo || pick.homeTeam?.logo || pick.homeTeam?.crest;
@@ -576,7 +576,7 @@ export default function Predictions() {
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
   const isAdmin = userProfile?.role === 'admin';
 
-  const appData = useAppData();
+  const appData = useAppData() || {};
   const {
     activePredictions: featuredPreds,
     zokaPicks,
@@ -586,6 +586,7 @@ export default function Predictions() {
     dailyEntries,
     userStats,
     loading: ctxLoading,
+    currentUserVotes,
   } = appData;
 
   const [selDate, setSelDate] = useState(todayStr());
@@ -615,13 +616,12 @@ export default function Predictions() {
   const currentZoka = isToday ? (zokaPicks?.matches || []) : (nonTodayData.zoka || []);
   const currentUserPreds = isToday ? (ctxUserPreds || {}) : (nonTodayData.userPreds || {});
   const currentResults = isToday ? (ctxPredResults?.results || []) : (nonTodayData.results || []);
-  const currentVotes = isToday ? (appData.currentUserVotes || {}) : (nonTodayData.votes || {});
+  const currentVotes = isToday ? (currentUserVotes || {}) : (nonTodayData.votes || {});
   const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
   const currentLoading = isToday ? ctxLoading : nonTodayLoading;
 
   const fixtureMap = useMemo(() => new Map(liveFixtures.map(f => [String(f.id), f])), [liveFixtures]);
 
-  // ★ STRICT EQUALITY MERGE: Prevents new object creation if nothing changed, saving React.memo re-renders!
   const mergedFeatured = useMemo(() => {
     if (!isToday || !fixtureMap.size) return currentFeatured;
     let changed = false;
@@ -633,7 +633,7 @@ export default function Predictions() {
           return { ...p, status: fx.status || p.status, homeScore: fx.homeScore ?? p.homeScore, awayScore: fx.awayScore ?? p.awayScore, minute: fx.minute ?? p.minute, isLive: fx.isLive || p.isLive, isFinished: fx.isFinished || p.isFinished };
         }
       }
-      return p; // Return original reference
+      return p;
     });
     return changed ? next : currentFeatured;
   }, [currentFeatured, fixtureMap, isToday]);
@@ -795,19 +795,20 @@ export default function Predictions() {
 
   const handleVote = useCallback(async (matchId, vote) => {
     if (!uid) { openLogin(); return; }
-    setVotingId(matchId);
+    const midStr = String(matchId || '');
+    setVotingId(midStr);
     try {
-      const oldVote = currentVotes[matchId];
+      const oldVote = currentVotes[midStr];
       if (oldVote === vote) {
-        await removeZokaVote(uid, matchId, null);
+        await removeZokaVote(uid, midStr, null);
         if (isToday) {
           const key = `zoka_votes_${selDate}`;
           const existing = JSON.parse(localStorage.getItem(key) || '{}');
-          delete existing[matchId];
+          delete existing[midStr];
           localStorage.setItem(key, JSON.stringify(existing));
         }
       } else {
-        await saveZokaVote(uid, matchId, vote);
+        await saveZokaVote(uid, midStr, vote);
       }
     } catch (e) { console.error('[Pred] Vote err:', e); }
     setVotingId(null);
@@ -858,27 +859,39 @@ export default function Predictions() {
   useEffect(() => {
     if (!isToday) return;
     setLiveFixtures([]);
-    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
-      setLiveFixtures(prev => {
-        if (prev.length !== lm.length) return lm || [];
-        let changed = false;
-        for (let i = 0; i < lm.length; i++) {
-          if (prev[i].homeScore !== lm[i].homeScore || prev[i].awayScore !== lm[i].awayScore || prev[i].status !== lm[i].status || prev[i].minute !== lm[i].minute) {
-            changed = true; break;
+    let unsub = () => {};
+    
+    try {
+      // ★ FIX: Added missing `selDate` parameter here! It was passing the callback as the date string, crashing Firebase.
+      unsub = subscribeToLiveFixtures(selDate, ({ matches: lm }) => {
+        setLiveFixtures(prev => {
+          if (!Array.isArray(lm)) return prev;
+          if (prev.length !== lm.length) return lm || [];
+          let changed = false;
+          for (let i = 0; i < lm.length; i++) {
+            if (prev[i]?.homeScore !== lm[i]?.homeScore || prev[i]?.awayScore !== lm[i]?.awayScore || prev[i]?.status !== lm[i]?.status || prev[i]?.minute !== lm[i]?.minute) {
+              changed = true; break;
+            }
           }
-        }
-        return changed ? lm : prev;
+          return changed ? lm : prev;
+        });
+        setNow(Date.now());
       });
-      setNow(Date.now());
-    });
-    return () => unsub();
-  }, [isToday]);
+    } catch (e) {
+      console.error('[Pred] Live sub failed:', e);
+    }
+    
+    return () => { 
+      try { unsub(); } catch {} 
+    };
+  }, [isToday, selDate]);
 
   // Fetch non-today data
   useEffect(() => {
     if (isToday) return;
     let cancelled = false;
     setNonTodayLoading(true);
+    
     Promise.all([
       dataLayer.fetchActivePredictions(selDate).catch(() => []),
       dataLayer.fetchZokaPicks(selDate).catch(() => null),
@@ -889,8 +902,8 @@ export default function Predictions() {
       if (cancelled || !mountedRef.current) return;
       const predMap = {};
       Object.values(preds || {}).forEach(p => {
-        if (p.predId) predMap[p.predId] = p;
-        if (p.matchId) predMap[String(p.matchId)] = p;
+        if (p?.predId) predMap[p.predId] = p;
+        if (p?.matchId) predMap[String(p.matchId)] = p;
       });
       let userVotes = {};
       try { userVotes = JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}'); } catch {}
@@ -903,7 +916,11 @@ export default function Predictions() {
         voteStats: votes?.stats || {},
       });
       setNonTodayLoading(false);
+    }).catch(e => {
+      console.error("[Pred] Non-today fetch failed:", e);
+      setNonTodayLoading(false);
     });
+    
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
@@ -923,7 +940,6 @@ export default function Predictions() {
         const dbPred = currentFeatured.find(p => String(p.matchId) === mid);
         if (dbPred && dbPred.status !== 'finished') {
           resolving.current.add(mid);
-          // Fire-and-forget to prevent UI blocking
           resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
             .catch(e => console.error("Resolve err:", e))
             .finally(() => resolving.current.delete(mid));

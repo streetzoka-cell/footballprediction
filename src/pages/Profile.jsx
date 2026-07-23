@@ -199,10 +199,10 @@ export default function Profile() {
 
   const [liveFixtures, setLiveFixtures] = useState([]);
   
-  // ★ FIX: Use subscribeToLiveFixtures instead of setInterval polling
+  // ★ FIX: Added missing `todayStr()` argument
   useEffect(() => {
     if (isDemo) return;
-    const unsub = subscribeToLiveFixtures(({ matches }) => {
+    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches }) => {
       setLiveFixtures(matches || []);
     });
     return () => unsub();
