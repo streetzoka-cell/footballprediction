@@ -87,29 +87,39 @@ class DataLayer {
   clear() { this._memory.clear(); this._locks.clear(); this._local.deletePrefix(''); eventBus.emit(EVENT.CACHE_INVALIDATED, { cleared: true }); }
   getStats() { return { memoryCacheSize: this._memory.size, pendingLocks: this._locks.size, bgRefreshes: this._bgRefreshInProgress.size, subscribers: this._subscribers.size }; }
 
-  // ★ FIX: Use footballDb for all Football snapshots and reference data
+  // ★ FIX: Hardened with try/catch and type checking to prevent "e.indexOf is not a function" crash
   subscribeFootballSnapshot(dateStr, cb) {
-    if (!footballDb) return () => {};
-    const ref = doc(footballDb, 'fixture_snapshots', dateStr);
-    return onSnapshot(ref, (snap) => {
-      const data = snap.exists() ? snap.data() : null;
-      this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-      this._local.set(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-      cb(data);
-    }, (err) => console.error("Snapshot listener error:", err));
+    if (!footballDb || typeof dateStr !== 'string') return () => {};
+    try {
+      const ref = doc(footballDb, 'fixture_snapshots', dateStr);
+      return onSnapshot(ref, (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+        this._local.set(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+        cb(data);
+      }, (err) => console.error("Snapshot listener error:", err));
+    } catch (e) {
+      console.error("Error subscribing to football snapshot:", e);
+      return () => {};
+    }
   }
 
   subscribeBasketballSnapshot(dateStr, cb) {
-    if (!footballDb) return () => {};
-    const ref = doc(footballDb, 'fixture_snapshots', getSnapshotDocId(SPORT.BASKETBALL, dateStr));
-    return onSnapshot(ref, (snap) => {
-      const data = snap.exists() ? snap.data() : null;
-      this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-      this._local.set(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
-      cb(data);
-    }, (err) => console.error("Snapshot listener error:", err));
+    if (!footballDb || typeof dateStr !== 'string') return () => {};
+    try {
+      const ref = doc(footballDb, 'fixture_snapshots', getSnapshotDocId(SPORT.BASKETBALL, dateStr));
+      return onSnapshot(ref, (snap) => {
+        const data = snap.exists() ? snap.data() : null;
+        this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+        this._local.set(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
+        cb(data);
+      }, (err) => console.error("Snapshot listener error:", err));
+    } catch (e) {
+      console.error("Error subscribing to basketball snapshot:", e);
+      return () => {};
+    }
   }
-
+  
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), async () => {
