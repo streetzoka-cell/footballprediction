@@ -1,6 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
 // ★ FIXED: True Local Time support, single fetch call, clean live merge.
+// ★ FIXED: ID lookup mismatch causing user predictions to not show up in UI.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -70,7 +71,7 @@ function normalizeMatch(raw, isPrimary) {
 
   let isStarted = false;
   if (!isLive && !isFinished && timestamp > 0 && Date.now() > timestamp) {
-    const todayDateStr = todayStr(); // ★ FIX: Use true local time
+    const todayDateStr = todayStr(); 
     const matchDateStr = dateStr || getLocalDateFromUtc(rawDate);
     if (matchDateStr === todayDateStr && (Date.now() - timestamp) < (3 * 60 * 60 * 1000)) {
       isStarted = true;
@@ -128,13 +129,11 @@ function useHomeFixtures() {
   });
   const [loading, setLoading] = useState(true);
   const { fixtures: backupRaw, loadDateFixtures } = useFootballData();
-  const todayDateStr = todayStr(); // ★ FIX: Use true local time
+  const todayDateStr = todayStr(); 
 
   const fetchPrimary = useCallback(async (silent) => {
     if (!silent) setLoading(true);
     try {
-      // ★ FIX: fetchFixtures already fetches the 3-day UTC window and filters for the requested date.
-      // No need to fetch yesterday, today, and tomorrow separately here.
       const res = await fetchFixtures(todayDateStr);
       const tMatches = Array.isArray(res) ? res : (res && res.matches) || [];
       const normalized = tMatches.map(m => normalizeMatch(m, true)).filter(Boolean);
@@ -159,7 +158,6 @@ function useHomeFixtures() {
 
   useEffect(() => { loadDateFixtures(todayDateStr); }, [loadDateFixtures, todayDateStr]);
 
-  // ★ FIX: Use subscribeToTodayFixtures and strict change detection (mirrors Fixtures.jsx)
   useEffect(() => {
     const unsub = subscribeToTodayFixtures(({ matches: lm, live, finished }) => {
       if (!lm || (lm.length === 0 && !live?.length && !finished?.length)) return;
@@ -549,7 +547,7 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
 const ZokaRow = React.memo(({ pick }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
-  const todayDateStr = todayStr(); // ★ FIX: Use true local time
+  const todayDateStr = todayStr(); 
   let ko = 'TBD';
   if (koRaw) {
     try {
@@ -680,7 +678,7 @@ export default function Home() {
   const liveMatches = useMemo(() => dedupedFixtures.filter(f => f.isLive), [dedupedFixtures]);
   const stripMatches = liveMatches.length > 0 ? liveMatches : dedupedFixtures.slice(0, 10);
 
-  const todayDateStr = todayStr(); // ★ FIX: Use true local time
+  const todayDateStr = todayStr(); 
 
   const zokaFlat = useMemo(() => {
     if (!zokaPicks || !zokaPicks.matches) return [];
@@ -701,10 +699,14 @@ export default function Home() {
   const lbVis = ui.showLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
   const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
 
+  // ★ FIX: Map predictions and results strictly by String(matchId)
   const userPredMap = useMemo(() => {
     const m = {};
     if (userPredictions) {
-      Object.values(userPredictions).forEach(p => { m[p.predId || p.matchId] = p; });
+      Object.values(userPredictions).forEach(p => { 
+        if (p.predId) m[p.predId] = p;
+        if (p.matchId) m[String(p.matchId)] = p;
+      });
     }
     return m;
   }, [userPredictions]);
@@ -719,7 +721,7 @@ export default function Home() {
 
   const myPredicted = useMemo(() => {
     if (!activePredictions) return 0;
-    return activePredictions.filter(p => userPredMap[p.id || p.matchId]).length;
+    return activePredictions.filter(p => userPredMap[String(p.matchId)]).length;
   }, [activePredictions, userPredMap]);
 
   const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
@@ -861,8 +863,9 @@ export default function Home() {
               <FeaturedRow
                 key={p.id || String(p.matchId) || i}
                 pred={p}
-                userPred={userPredMap[p.id || p.matchId]}
-                userResult={resultMap[String(p.matchId || p.id)]}
+                // ★ FIX: Lookup strictly by String(p.matchId)
+                userPred={userPredMap[String(p.matchId)]}
+                userResult={resultMap[String(p.matchId)]}
                 isLoggedIn={isLoggedIn}
               />
             ))
