@@ -13,7 +13,7 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { dataLayer } from '../utils/dataLayer';
-import { subscribeToBasketballLiveFixtures } from '../utils/api';
+import { subscribeToBasketballLiveFixtures, fetchBasketballFixtures } from '../utils/api';
 import { getDateRange, todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
 
 import { db } from '../utils/firebase';
@@ -397,7 +397,7 @@ export default function Basketball() {
     if (loadedDatesRef.current.has(date)) return;
     loadedDatesRef.current.add(date);
     try {
-      const res = await dataLayer.fetchBasketballFixtures(date);
+      const res = await fetchBasketballFixtures(date);
       const matches = res?.matches || [];
       setGamesByDate(prev => ({ ...prev, [date]: matches }));
     } catch (err) {
@@ -420,9 +420,9 @@ export default function Basketball() {
 
       try {
         const [yRes, tRes, tmRes] = await Promise.all([
-          dataLayer.fetchBasketballFixtures(yesterdayStr),
-          dataLayer.fetchBasketballFixtures(todayStr),
-          dataLayer.fetchBasketballFixtures(tomorrowStr),
+          fetchBasketballFixtures(yesterdayStr),
+          fetchBasketballFixtures(todayStr),
+          fetchBasketballFixtures(tomorrowStr),
         ]);
 
         if (cancelled) return;
