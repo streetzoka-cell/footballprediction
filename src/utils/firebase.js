@@ -1,15 +1,9 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/firebase.js
-// ZOKA PRO — Offline Persistence & Multi-App Initialization
 // ═══════════════════════════════════════════════════════════════
 
-import { initializeApp, getApps, getApp } from 'firebase/app';
-import { 
-  getFirestore, 
-  initializeFirestore, 
-  persistentLocalCache, 
-  persistentMultipleTabManager 
-} from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 
 /* ═══════════════════════════════════════════════════
@@ -24,7 +18,6 @@ const primaryConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
-
 let app = null;
 let db = null;
 let auth = null;
@@ -35,15 +28,14 @@ if (hasPrimaryConfig) {
   try {
     app = getApps().find(a => a.name === '[DEFAULT]') || initializeApp(primaryConfig);
     
-    // Initialize Firestore with persistent cache (IndexedDB)
+    // ★ FIX: Force memory cache to bypass corrupted IndexedDB schema and prevent 
+    // the "isCorePipeline" INTERNAL ASSERTION FAILED crash.
     try {
       db = initializeFirestore(app, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
+        localCache: memoryLocalCache()
       });
     } catch (cacheErr) {
-      console.warn('[Firebase] Persistent cache failed, using default:', cacheErr.message);
+      console.warn('[Firebase] Memory cache init failed, using default:', cacheErr.message);
       db = getFirestore(app);
     }
 
@@ -75,12 +67,10 @@ if (hasFootballConfig) {
     const existingApp = getApps().find(a => a.name === 'football-data');
     const footballApp = existingApp || initializeApp(footballConfig, 'football-data');
     
-    // Initialize football DB with persistent cache as well
+    // ★ FIX: Force memory cache for the secondary app as well.
     try {
       footballDb = initializeFirestore(footballApp, {
-        localCache: persistentLocalCache({
-          tabManager: persistentMultipleTabManager()
-        })
+        localCache: memoryLocalCache()
       });
     } catch (cacheErr) {
       footballDb = getFirestore(footballApp);
@@ -91,10 +81,8 @@ if (hasFootballConfig) {
   }
 } else {
   console.warn('[FootballFirebase] Missing football env vars. Falling back to primary DB.');
-  // Fallback to primary DB if football vars aren't set
   footballDb = db; 
 }
 
-// Export everything!
 export { app, db, auth, footballDb };
 export default app;
