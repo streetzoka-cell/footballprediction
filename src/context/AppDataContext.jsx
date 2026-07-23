@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import dataLayer from '../utils/dataLayer';
 import { todayStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { CACHE_KEY, calcPoints } from '../utils/constants';
+import { CACHE_KEY, calcPoints, isFinishedStatus, SPORT } from '../utils/constants'; // ★ FIX: Added isFinishedStatus and SPORT to imports
 import { useAuth } from '../context/AuthContext';
 
 const AppDataContext = createContext(null);
@@ -178,7 +178,7 @@ export function AppDataProvider({ children }) {
   const invalidate = useCallback((key) => dataLayer.invalidate(key), []);
   const invalidatePrefix = useCallback((prefix) => dataLayer.invalidatePrefix(prefix), []);
 
-    const computed = useMemo(() => {
+  const computed = useMemo(() => {
     const { dailyLeaderboard, userPoints, predictionResults, activePredictions, userPredictions, _userDataLoaded } = state;
     const dailyEntries = dailyLeaderboard?.entries || [];
     const dailyTop3 = dailyLeaderboard?.top3 || dailyEntries.slice(0, 3);
@@ -211,7 +211,6 @@ export function AppDataProvider({ children }) {
     if (activePredictions && userPredictions) {
       const scoreMap = new Map(); 
       activePredictions.forEach(p => { 
-        // Check both status and isFinished flag
         if ((isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
           scoreMap.set(String(p.matchId), { h: p.homeScore, a: p.awayScore }); 
         }
