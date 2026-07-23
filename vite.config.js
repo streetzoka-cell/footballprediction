@@ -8,7 +8,7 @@ export default defineConfig({
   plugins: [
     react(),
     visualizer({
-      open: false, // Set to true if you want it to open a tab after build
+      open: false,
       gzipSize: true,
       brotliSize: true,
       filename: 'bundle-stats.html'
@@ -32,10 +32,30 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // Cache static assets aggressively
+        // ★ FIX: Clean up old caches and take over immediately
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
+        
+        // Only cache the app shell (static files), never API/Firestore
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // Maximum cache size (50MB)
-        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024
+        maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
+        
+        // ★ FIX: Explicitly tell Workbox to NEVER cache network/API requests
+        runtimeCaching: [
+          {
+            urlPattern: /\/api\//,
+            handler: 'NetworkOnly' 
+          },
+          {
+            urlPattern: /^https:\/\/firestore\.googleapis\.com\//,
+            handler: 'NetworkOnly'
+          },
+          {
+            urlPattern: /^https:\/\/identitytoolkit\.googleapis\.com\//,
+            handler: 'NetworkOnly'
+          }
+        ]
       }
     })
   ],
@@ -43,19 +63,18 @@ export default defineConfig({
     port: 5173,
     host: true,
     hmr: {
-      overlay: false  // ★ ADD THIS LINE ★
+      overlay: false
     }
   },
   build: {
     rollupOptions: {
       output: {
-        // ★ FIX: Changed manualChunks to a function to fix the build error
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('firebase')) return 'firebase-vendor';
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'react-vendor';
             if (id.includes('lucide-react')) return 'ui-vendor';
-            return 'vendor'; // all other node modules
+            return 'vendor';
           }
         }
       },
