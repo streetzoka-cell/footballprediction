@@ -302,6 +302,11 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   const awayTeamName = typeof pred.awayTeam === 'object'
     ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away')
     : (pred.awayTeam || 'Away');
+    
+  // ★ FIX: Extract league name safely to avoid saving an object with undefined fields
+  const leagueName = typeof pred.league === 'object'
+    ? (pred.league?.name || 'Other')
+    : (pred.league || 'Other');
 
   await setDoc(doc(db, PATHS.USER_PREDICTIONS, predId), {
     userId: uid, displayName: displayName || 'Anonymous', matchId, predId,
@@ -309,7 +314,7 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     homeTeam: homeTeamName, awayTeam: awayTeamName,
     homeLogo: pred.homeLogo || pred.homeTeam?.crest || pred.homeTeam?.logo || null,
     awayLogo: pred.awayLogo || pred.awayTeam?.crest || pred.awayTeam?.logo || null,
-    league: pred.league?.name || pred.league || '', kickoff: pred.kickoff || null,
+    league: leagueName, kickoff: pred.kickoff || null,
     createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
   }, { merge: true });
 
