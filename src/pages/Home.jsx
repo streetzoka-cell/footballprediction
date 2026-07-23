@@ -1,15 +1,13 @@
-// ═════════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
-// ★ FIXED: True Local Time support, single fetch call, clean live merge.
-// ★ FIXED: ID lookup mismatch causing user predictions to not show up in UI.
-// ═════════════════════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
   Lock, Crown, Activity, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
-  ChevronRight, Newspaper, Target
+  ChevronRight, Newspaper, Target, TrendingUp
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -665,6 +663,24 @@ export default function Home() {
     };
   }, []);
 
+  // ★ FIX: Accurately compute Stats so they never show 0 unexpectedly
+  const totalPredictors = (dailyStats && dailyStats.players) || (dailyEntries && dailyEntries.length) || 0;
+  
+  const totalPredictionsMade = useMemo(() => {
+    if (dailyStats && dailyStats.preds) return dailyStats.preds;
+    if (!dailyEntries || dailyEntries.length === 0) return 0;
+    return dailyEntries.reduce((sum, u) => sum + (u.predicted || u.preds || 0), 0);
+  }, [dailyEntries, dailyStats]);
+
+  const avgAccuracy = useMemo(() => {
+    if (dailyStats && dailyStats.avg) return parseFloat(dailyStats.avg);
+    if (!dailyEntries || dailyEntries.length === 0) return 0;
+    const totalAcc = dailyEntries.reduce((sum, u) => sum + (u.accuracy || 0), 0);
+    return totalAcc / dailyEntries.length;
+  }, [dailyEntries, dailyStats]);
+  
+  const myPoints = (userStats && (userStats.todayPoints || userStats.points)) || 0;
+
   const dedupedFixtures = useMemo(() => {
     const uniqueIds = new Set();
     return allFixtures.filter(m => {
@@ -699,7 +715,6 @@ export default function Home() {
   const lbVis = ui.showLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
   const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
 
-  // ★ FIX: Map predictions and results strictly by String(matchId)
   const userPredMap = useMemo(() => {
     const m = {};
     if (userPredictions) {
@@ -797,33 +812,33 @@ export default function Home() {
 
         <div className="z-stats">
           <div className="z-chip">
-            <div className="val"><AnimNum value={totalUsers || (dailyStats && dailyStats.players) || 0} delay={200} /></div>
+            <div className="val"><AnimNum value={totalUsers || totalPredictors} delay={200} /></div>
             <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, ((dailyStats && dailyStats.players) || 0 || totalUsers || 0) / 5) + '%', background: '#60a5fa' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || totalUsers || 0) / 5) + '%', background: '#60a5fa' }} /></div>
           </div>
           <div className="z-chip">
-            <div className="val"><AnimNum value={(dailyStats && dailyStats.preds) || 0} delay={280} /></div>
+            <div className="val"><AnimNum value={totalPredictionsMade} delay={280} /></div>
             <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, ((dailyStats && dailyStats.preds) || 0) / 10) + '%', background: '#10b981' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: '#10b981' }} /></div>
           </div>
           <div className="z-chip" style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', right: 8, top: 8 }}>
               <AccuracyRing
-                value={dailyStats && dailyStats.avg ? parseFloat(dailyStats.avg) : 0}
+                value={avgAccuracy}
                 size={36}
                 stroke={3}
-                color={(dailyStats && dailyStats.avg ? parseFloat(dailyStats.avg) : 0) >= 50 ? '#10b981' : (dailyStats && dailyStats.avg ? parseFloat(dailyStats.avg) : 0) >= 25 ? '#fbbf24' : '#ef4444'}
+                color={avgAccuracy >= 50 ? '#10b981' : avgAccuracy >= 25 ? '#fbbf24' : '#ef4444'}
               />
             </div>
-            <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={dailyStats && dailyStats.avg ? Math.round(parseFloat(dailyStats.avg)) : 0} delay={360} suffix="%" /></div>
+            <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={Math.round(avgAccuracy)} delay={360} suffix="%" /></div>
             <div className="lbl">Accuracy</div>
           </div>
           <div className="z-chip">
             <div className="val" style={{ color: isLoggedIn ? '#10b981' : '#64748b' }}>
-              {isLoggedIn ? <AnimNum value={(userStats && userStats.todayPoints) || 0} delay={440} /> : '-'}
+              {isLoggedIn ? <AnimNum value={myPoints} delay={440} /> : '-'}
             </div>
             <div className="lbl">My Points</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, ((userStats && userStats.todayPoints) || 0) / 5) + '%', background: '#10b981' }} /></div>}
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: '#10b981' }} /></div>}
           </div>
         </div>
 
@@ -863,7 +878,6 @@ export default function Home() {
               <FeaturedRow
                 key={p.id || String(p.matchId) || i}
                 pred={p}
-                // ★ FIX: Lookup strictly by String(p.matchId)
                 userPred={userPredMap[String(p.matchId)]}
                 userResult={resultMap[String(p.matchId)]}
                 isLoggedIn={isLoggedIn}
