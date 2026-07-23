@@ -1,5 +1,3 @@
-// src/App.jsx
-
 import { Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
@@ -31,6 +29,7 @@ function AppShell() {
   const [installPrompt, setInstallPrompt] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
+  // ★ Initialize App & Refetch data on focus
   useEffect(() => {
     initApp();
     
@@ -39,7 +38,7 @@ function AppShell() {
       if (document.visibilityState === "visible") {
         clearTimeout(visibilityTimeout);
         visibilityTimeout = setTimeout(() => {
-          initApp();
+          initApp(); // Refetch live football data
           window.dispatchEvent(new CustomEvent("app:refocused"));
         }, 1000);
       }
@@ -86,15 +85,44 @@ function AppShell() {
     return () => window.removeEventListener("beforeinstallprompt", handler);
   }, []);
 
-  // ★ Service Worker Update Listener (Auto-Refresh on new update)
+  // ★ Service Worker Update Listener (Force Auto-Refresh)
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       let refreshing = false;
+      
+      // Listen for controller change and reload the page ONCE
       navigator.serviceWorker.addEventListener('controllerchange', () => {
         if (refreshing) return;
         refreshing = true;
         window.location.reload();
       });
+
+      // Actively force the SW to check for updates
+      const checkForUpdates = async () => {
+        try {
+          const registration = await navigator.serviceWorker.getRegistration();
+          if (registration) {
+            await registration.update(); 
+          }
+        } catch (err) {
+          console.error('SW update failed:', err);
+        }
+      };
+
+      // Check for updates on initial load
+      checkForUpdates();
+
+      // Check for updates when user returns to the tab
+      const handleVisibility = () => {
+        if (document.visibilityState === 'visible') {
+          checkForUpdates();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibility);
+
+      return () => {
+        document.removeEventListener('visibilitychange', handleVisibility);
+      };
     }
   }, []);
 

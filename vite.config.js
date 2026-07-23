@@ -14,7 +14,7 @@ export default defineConfig({
       filename: 'bundle-stats.html'
     }),
     VitePWA({
-      registerType: 'autoUpdate',
+      registerType: 'autoUpdate', // ★ Forces update checks
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png'],
       manifest: {
         name: 'ZokaScore',
@@ -41,7 +41,9 @@ export default defineConfig({
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
         
-        // ★ FIX: Explicitly tell Workbox to NEVER cache network/API requests
+        // ★ CRITICAL FOR FOOTBALL APP: 
+        // This guarantees the SW will NEVER return cached/stale match data.
+        // It will always fetch live scores from the network.
         runtimeCaching: [
           {
             urlPattern: /\/api\//,
