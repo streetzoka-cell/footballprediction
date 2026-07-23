@@ -2,6 +2,7 @@
 // FILE: src/pages/Admin.jsx
 // v15.4 Pro UI — Smart Match Locking, Memoized Tabs, Zero-Jank Admin Panel
 // ★ CLEANED: Robust data normalization, true local time, seamless split-merge fix.
+// ★ FIXED: cleanObj() added to strip undefined values before Firestore writes.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
@@ -43,6 +44,9 @@ import SEO from '../components/SEO';
 const MAX_FEATURED = 10;
 const MAX_ZOKA = 10;
 const SHOW_INIT = 8;
+
+// ★ FIX: Strips undefined values from objects so Firestore doesn't crash
+const cleanObj = (obj) => JSON.parse(JSON.stringify(obj));
 
 const dateOffset = (o = 0) => getLocalDateStr(o); 
 const dateLabel = (d) => {
@@ -388,14 +392,14 @@ export default function Admin() {
   // Handlers
   const handleZokaSaveDraft = useCallback(async (data) => {
     if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...cleanObj(data), updatedAt: serverTimestamp() }, { merge: true });
     dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
   }, [date]);
 
   const handleZokaPublish = useCallback(async (data) => {
     if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...data, isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...cleanObj(data), isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
     dataLayer.invalidate(CACHE_KEY.zokaPicks(date));
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
   }, [date]);
@@ -432,8 +436,9 @@ export default function Admin() {
     const updatedPreds = [...preds, pred];
     setPreds(updatedPreds);
 
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...pred, createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updatedPreds, updatedAt: serverTimestamp() }, { merge: true });
+    // ★ Wrapped in cleanObj() to remove undefined fields
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...cleanObj(pred), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
     
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
@@ -446,7 +451,8 @@ export default function Admin() {
     setPreds(updatedPreds);
 
     await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updatedPreds, updatedAt: serverTimestamp() }, { merge: true });
+    // ★ Wrapped in cleanObj()
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
@@ -461,7 +467,8 @@ export default function Admin() {
     const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true } : p);
     setPreds(updated);
 
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
+    // ★ Wrapped in cleanObj()
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
     await resolveMatchForAllUsers(matchId, h, a, date);
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
@@ -480,7 +487,8 @@ export default function Admin() {
     const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
     setPreds(updated);
 
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: updated, updatedAt: serverTimestamp() }, { merge: true });
+    // ★ Wrapped in cleanObj()
+    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
     await resolveMatchForAllUsers(matchId, h, a, date);
 
     dataLayer.invalidate(CACHE_KEY.activePredictions(date));
