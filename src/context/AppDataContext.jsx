@@ -95,13 +95,13 @@ export function AppDataProvider({ children }) {
     if (needsLoad) await loadUserData(uid); 
   }, [loadUserData]);
 
-  const refreshUserData = useCallback(async (uid) => {
+  const refreshUserData = useCallback(async (uid, dateStr) => {
     const effectiveUid = uid || userIdRef.current; 
     if (!effectiveUid) return; 
-    const today = todayStr();
+    const date = dateStr || todayStr();
     dataLayer.invalidate(CACHE_KEY.userPoints(effectiveUid)); 
-    dataLayer.invalidate(CACHE_KEY.predictionResults(effectiveUid, today)); 
-    dataLayer.invalidate(CACHE_KEY.userPredictions(effectiveUid, today));
+    dataLayer.invalidate(CACHE_KEY.predictionResults(effectiveUid, date)); 
+    dataLayer.invalidate(CACHE_KEY.userPredictions(effectiveUid, date));
     await loadUserData(effectiveUid);
   }, [loadUserData]);
 
@@ -109,16 +109,21 @@ export function AppDataProvider({ children }) {
     const unsubs = [];
     unsubs.push(eventBus.on(EVENT.MATCH_RESOLVED, (p) => { 
       const uid = userIdRef.current; 
-      if (uid && p.affectedUsers?.includes(uid)) refreshUserData(uid); 
+      if (uid && p.affectedUsers?.includes(uid)) refreshUserData(uid, p.dateStr); 
       if (p.dateStr === todayStr()) { 
         dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr())); 
         loadSharedData(); 
       } 
     }));
+    
+    // ★ FIX: Properly invalidate cache for the specific date the prediction was saved for
     unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (p) => { 
       const uid = userIdRef.current; 
-      if (uid && p.uid === uid) refreshUserData(uid); 
+      if (uid && p.uid === uid) {
+        refreshUserData(uid, p.dateStr);
+      } 
     }));
+    
     unsubs.push(eventBus.on(EVENT.DAILY_LEADERBOARD_UPDATED, (p) => { 
       if (!p.dateStr || p.dateStr === todayStr()) { 
         dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(todayStr())); 
@@ -134,9 +139,14 @@ export function AppDataProvider({ children }) {
 
   useEffect(() => { 
     mountedRef.current = true; 
-    // ★ FIX: Invalidate snapshot cache on load to bypass PWA and force fresh Firestore read
+    // ★ FIX: Invalidate ALL relevant caches on load to bypass PWA/localStorage and force fresh Firestore read
     dataLayer.invalidatePrefix('snap:ft:');
     dataLayer.invalidatePrefix('snap:bb:');
+    const today = todayStr();
+    dataLayer.invalidate(CACHE_KEY.activePredictions(today));
+    dataLayer.invalidate(CACHE_KEY.dailyLeaderboard(today));
+    dataLayer.invalidate(CACHE_KEY.zokaPicks(today));
+    
     loadSharedData(); 
     return () => { mountedRef.current = false; }; 
   }, [loadSharedData]);

@@ -2,6 +2,7 @@
 // FILE: src/pages/Leaderboard.jsx
 // v20.6 — Instant Local Rank Calculation, Zero-Jank Live Merge, Memoized
 // ★ CLEANED: Airtight listener bailouts to prevent redundant recalculations.
+// ★ FIXED: Auth destructuring and error logging for onSnapshot.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition, memo } from 'react';
@@ -21,9 +22,9 @@ import { collection, query, where, onSnapshot } from 'firebase/firestore';
 import { subscribeToLiveFixtures } from '../utils/api';
 import SEO from '../components/SEO';
 
-/* ═══════════════════════════════════════
+/* ═════════════════════════
    CONFIG
-   ═══════════════════════════════════════ */
+   ═════════════════════════ */
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
@@ -45,9 +46,9 @@ const TABS = [
   { key: PERIOD.GOAT, label: 'G.O.A.T', Icon: Crown, isGoat: true },
 ];
 
-/* ═══════════════════════════════════════
+/* ═════════════════════════
    MEMOIZED SMALL COMPONENTS
-   ═══════════════════════════════════════ */
+   ═════════════════════════ */
 const AccBar = memo(function AccBar({ value, delay }) {
   const fill = value >= 70 ? 'var(--accent)' : value >= 45 ? 'var(--gold)' : '#ef4444';
   return (
@@ -164,16 +165,19 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay })
   );
 });
 
-/* ═══════════════════════════════════════
+/* ═════════════════════════
    MAIN COMPONENT
-   ═══════════════════════════════════════ */
+   ═════════════════════════ */
 export default function Leaderboard() {
-  const { user: currentUser } = useAuth();
+  // ★ FIX: Safely destructure currentUser (fallback for older AuthContext versions)
+  const auth = useAuth() || {};
+  const currentUser = auth.currentUser || auth.user;
   const uid = currentUser?.uid;
+  
   const nav = useNavigate();
   const searchRef = useRef(null);
 
-  const appData = useAppData();
+  const appData = useAppData() || {};
   
   const [tab, setTab] = useState(PERIOD.DAILY);
   const [search, setSearch] = useState('');
@@ -190,7 +194,8 @@ export default function Leaderboard() {
   // 1. Fetch ALL user predictions for today directly from Firestore
   useEffect(() => {
     if (!db) return;
-    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
+    const today = todayStr();
+    const q = query(collection(db, 'user_predictions'), where('matchDate', '==', today));
     const unsub = onSnapshot(q, snap => {
       const preds = snap.docs.map(d => d.data());
       
@@ -205,14 +210,16 @@ export default function Leaderboard() {
         }
         return changed ? preds : prev;
       });
-    }, () => {});
+    }, (err) => {
+      console.error("[Leaderboard] Failed to fetch user predictions:", err.message);
+    });
     return () => unsub();
   }, []);
 
   // 2. Subscribe to LIVE FIXTURES globally (Zero-Jank, Visibility Aware)
   useEffect(() => {
-    // ★ FIX: Added missing `todayStr()` argument to prevent Firebase crash
-    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches }) => {
+    const today = todayStr();
+    const unsub = subscribeToLiveFixtures(today, ({ matches }) => {
       if (!matches) return;
       setLiveFixtures(prev => {
         if (prev.length !== matches.length) return matches;

@@ -109,7 +109,6 @@ class DataLayer {
     }, (err) => console.error("Snapshot listener error:", err));
   }
 
-  // Global Live Listener (Timezone independent) - Uses footballDb!
   subscribeLiveFixtures(cb) {
     if (!footballDb) return () => {};
     const q = collection(footballDb, 'liveFixtures');
@@ -175,20 +174,34 @@ class DataLayer {
   async fetchUserPredictions(uid, dateStr) {
     if (!uid || !db) return {}; dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.userPredictions(uid, dateStr), async () => {
-      let s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
-      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
+      // ★ FIX: Query ONLY by userId to avoid requiring a composite Firestore index!
+      const s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
       if (!s || s.empty) return {};
-      const map = {}; s.docs.forEach(d => { const data = d.data(); if (data.matchDate && data.matchDate !== dateStr) return; const e = { id: d.id, ...data }; [d.id, data.predId, data.matchId].filter(Boolean).map(String).forEach(k => map[k] = e); }); return map;
+      const map = {}; 
+      s.docs.forEach(d => { 
+        const data = d.data(); 
+        if (data.matchDate && data.matchDate !== dateStr) return; // Filter locally
+        const e = { id: d.id, ...data }; 
+        [d.id, data.predId, data.matchId].filter(Boolean).map(String).forEach(k => map[k] = e); 
+      }); 
+      return map;
     }, TTL.USER_DATA);
   }
 
   async fetchPredictionResults(uid, dateStr) {
     if (!uid || !db) return { results: [], resultMap: {} }; dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.predictionResults(uid, dateStr), async () => {
-      let s = await withTimeout(getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), where('matchDate', '==', dateStr))), TIMEOUT.USER_QUERY, null);
-      if (!s || s.empty) s = await withTimeout(getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
+      const s = await withTimeout(getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
       if (!s || s.empty) return { results: [], resultMap: {} };
-      const results = [], map = {}; s.docs.forEach(d => { const data = d.data(); if (data.matchDate && data.matchDate !== dateStr) return; results.push({ id: d.id, ...data }); if (data.matchId) map[String(data.matchId)] = { id: d.id, ...data }; }); results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)); return { results, resultMap: map };
+      const results = [], map = {}; 
+      s.docs.forEach(d => { 
+        const data = d.data(); 
+        if (data.matchDate && data.matchDate !== dateStr) return; // Filter locally
+        results.push({ id: d.id, ...data }); 
+        if (data.matchId) map[String(data.matchId)] = { id: d.id, ...data }; 
+      }); 
+      results.sort((a, b) => (b.resolvedAt?.seconds || 0) - (a.resolvedAt?.seconds || 0)); 
+      return { results, resultMap: map };
     }, TTL.USER_DATA);
   }
 
