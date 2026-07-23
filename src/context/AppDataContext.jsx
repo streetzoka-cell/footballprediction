@@ -6,7 +6,7 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, us
 import dataLayer from '../utils/dataLayer';
 import { todayStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { CACHE_KEY, calcPoints, isFinishedStatus, SPORT } from '../utils/constants'; // ★ FIX: Added isFinishedStatus and SPORT to imports
+import { CACHE_KEY, calcPoints } from '../utils/constants'; // Removed unused SPORT & isFinishedStatus imports
 import { useAuth } from '../context/AuthContext';
 
 const AppDataContext = createContext(null);
@@ -116,7 +116,6 @@ export function AppDataProvider({ children }) {
       } 
     }));
     
-    // ★ FIX: Properly invalidate cache for the specific date the prediction was saved for
     unsubs.push(eventBus.on(EVENT.USER_PREDICTION_SAVED, (p) => { 
       const uid = userIdRef.current; 
       if (uid && p.uid === uid) {
@@ -139,7 +138,6 @@ export function AppDataProvider({ children }) {
 
   useEffect(() => { 
     mountedRef.current = true; 
-    // ★ FIX: Invalidate ALL relevant caches on load to bypass PWA/localStorage and force fresh Firestore read
     dataLayer.invalidatePrefix('snap:ft:');
     dataLayer.invalidatePrefix('snap:bb:');
     const today = todayStr();
@@ -207,11 +205,12 @@ export function AppDataProvider({ children }) {
       userStats.todayResolved = userStats.todayExact + userStats.todayResult + userStats.todayMiss; 
     }
     
-    // ★ FIX: Locally calculate points for matches that finished but haven't synced to backend yet
+    // ★ FIX: Using p.isFinished directly as it's provided by dataLayer transform. 
+    // This entirely avoids the ReferenceError crash caused by missing function scopes.
     if (activePredictions && userPredictions) {
       const scoreMap = new Map(); 
       activePredictions.forEach(p => { 
-        if ((isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
+        if (p.isFinished && p.homeScore != null) {
           scoreMap.set(String(p.matchId), { h: p.homeScore, a: p.awayScore }); 
         }
       });
