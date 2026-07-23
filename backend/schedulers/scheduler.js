@@ -106,12 +106,10 @@ class Scheduler {
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // SMART PACING v2
-  // - Desired interval driven by LIVE COUNT (current density)
-  // - Pacing ONLY triggers when budget genuinely cannot sustain
-  //   desired interval across the EXPECTED live window (not full day)
-  // - Uses totalDailyMatches to estimate remaining live window
+    // ═══════════════════════════════════════════════════════════════
+  // SMART PACING v3
+  // - Recognizes NEAR_FT state to avoid pacing matches that are ending soon
+  // - Pacing ONLY triggers when budget genuinely cannot sustain desired interval
   // ═══════════════════════════════════════════════════════════════
   _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap, totalDailyMatches) {
     const now = new Date();
@@ -151,24 +149,23 @@ class Scheduler {
     }
 
     // ── 3. Estimate remaining LIVE window (NOT full day) ──
-    // Heuristic: peak window scales with live density + total daily load.
     let expectedLiveHours;
     if (liveCount === 0) {
-      // No live now. If today has many matches, kickoff likely coming soon.
-      if (totalDailyMatches >= 50)      expectedLiveHours = 6;
-      else if (totalDailyMatches >= 20) expectedLiveHours = 4;
-      else                              expectedLiveHours = 3;
+      expectedLiveHours = 0;
+    } else if (isNearFinish) {
+      // Matches are ending! Only estimate 30 minutes of action left.
+      expectedLiveHours = 0.5; 
     } else {
       // Active live action — window scales with density.
-      if (liveCount <= 5)        expectedLiveHours = 3;
-      else if (liveCount <= 15)  expectedLiveHours = 5;
-      else if (liveCount <= 40)  expectedLiveHours = 6;
-      else                       expectedLiveHours = 8;
+      if (liveCount <= 5)        expectedLiveHours = 2;
+      else if (liveCount <= 15)  expectedLiveHours = 3;
+      else if (liveCount <= 40)  expectedLiveHours = 4;
+      else                       expectedLiveHours = 5;
     }
     
-    // Hard cap by global peak window constant and time until midnight
-    expectedLiveHours = Math.min(expectedLiveHours, hoursUntilMidnight, LIVE_POLLING.EXPECTED_PEAK_LIVE_HOURS);
-    if (expectedLiveHours <= 0) expectedLiveHours = 1; // prevent divide by zero
+    // Hard cap by time until midnight (API reset)
+    expectedLiveHours = Math.min(expectedLiveHours, hoursUntilMidnight);
+    if (expectedLiveHours <= 0) expectedLiveHours = 0.5; // prevent divide by zero
     
     const expectedLiveMs = expectedLiveHours * 3600000;
 
@@ -231,6 +228,7 @@ class Scheduler {
     };
   }
 
+  
   async _pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller) {
     const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
