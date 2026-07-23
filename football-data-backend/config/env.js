@@ -1,33 +1,33 @@
-﻿// backend/config/firebase.js
-const admin = require('firebase-admin');
-const env = require('./env');
+﻿// football-data-backend/config/env.js
+require('dotenv').config();
+const path = require('path');
+const fs = require('fs');
 const logger = require('../utils/logger');
 
-let serviceAccount;
+const rootDir = path.resolve(__dirname, '..');
+const defaultPath = path.join(rootDir, 'serviceAccountKey.json');
+const envPath = process.env.FIREBASE_SERVICE_ACCOUNT_PATH 
+  ? path.resolve(rootDir, process.env.FIREBASE_SERVICE_ACCOUNT_PATH) 
+  : defaultPath;
 
-try {
-  serviceAccount = require(env.firebase.serviceAccountPath);
-} catch (err) {
-  logger.error(`[FIREBASE] Cannot load service account from "${env.firebase.serviceAccountPath}"`);
-  logger.error('[FIREBASE] Ensure the JSON file exists and is valid.');
-  process.exit(1);
-}
+// ★ Read SUPPORTED_COMPETITIONS from your .env file
+const compEnv = process.env.SUPPORTED_COMPETITIONS || 'PL,BL1,SA,PD,FL1,CL,WC,DED,BSA,ELC,PPL,EC';
+const competitions = compEnv.split(',').map(c => c.trim());
 
-try {
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+const env = {
+  nodeEnv: process.env.NODE_ENV || 'development',
+  port: process.env.PORT || 3001,
+  firebase: {
+    serviceAccountPath: envPath,
+  },
+  footballData: {
+    apiKey: process.env.FOOTBALL_DATA_API_KEY || '',
+    baseUrl: process.env.FOOTBALL_DATA_BASE_URL || 'https://api.football-data.org/v4',
+  },
+  competitions: competitions,
+  scheduler: {
+    enabled: process.env.SCHEDULER_ENABLED !== 'false'
+  }
+};
 
-  const db = admin.firestore();
-  db.settings({ ignoreUndefinedProperties: true });
-
-  const FieldValue = admin.firestore.FieldValue;
-
-  logger.info(`[FIREBASE] Initialised - project: ${serviceAccount.project_id}`);
-
-  module.exports = { admin, db, FieldValue };
-
-} catch (err) {
-  logger.error('[FIREBASE] Initialization failed: ' + err.message);
-  process.exit(1);
-}
+module.exports = env;

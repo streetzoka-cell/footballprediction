@@ -148,7 +148,7 @@ class DataLayer {
   }
 
   async fetchStandings(sport = SPORT.FOOTBALL) {
-    return this.getOrSet(CACHE_KEY.reference(getRefDocId('standings', sport)), async () => { if (!db) return []; const s = await withTimeout(getDoc(doc(db, PATHS.REFERENCE_DATA, getRefDocId('standings', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
+    return this.getOrSet(CACHE_KEY.reference(getRefDocId('standings', sport)), async () => { if (!db) return []; const s = await withTimeout(getDoc(doc(db, PATHS.REFERENCE_DATA, getRefDocDocId('standings', sport))), TIMEOUT.REFERENCE, null); return s?.exists() ? (s.data().data || []) : []; }, TTL.REFERENCE);
   }
 
   async fetchZokaPicks(dateStr) {

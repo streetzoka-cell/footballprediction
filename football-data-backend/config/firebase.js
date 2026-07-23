@@ -1,15 +1,22 @@
 ﻿// backend/config/firebase.js
 const admin = require('firebase-admin');
+const fs = require('fs');
 const env = require('./env');
 const logger = require('../utils/logger');
 
 let serviceAccount;
 
 try {
-  serviceAccount = require(env.firebase.serviceAccountPath);
+  // Read the file directly from the absolute path provided by env.js
+  if (!fs.existsSync(env.firebase.serviceAccountPath)) {
+    throw new Error(`File does not exist at: ${env.firebase.serviceAccountPath}`);
+  }
+  const fileContent = fs.readFileSync(env.firebase.serviceAccountPath, 'utf8');
+  serviceAccount = JSON.parse(fileContent);
 } catch (err) {
   logger.error(`[FIREBASE] Cannot load service account from "${env.firebase.serviceAccountPath}"`);
-  logger.error('[FIREBASE] Ensure the JSON file exists and is valid.');
+  logger.error('[FIREBASE] Error details: ' + err.message);
+  logger.error('[FIREBASE] Ensure the JSON file exists in your football-data-backend folder.');
   process.exit(1);
 }
 
