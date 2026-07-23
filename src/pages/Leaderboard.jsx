@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
 // v20.6 — Instant Local Rank Calculation, Zero-Jank Live Merge, Memoized
+// ★ CLEANED: Airtight listener bailouts to prevent redundant recalculations.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition, memo } from 'react';
@@ -192,13 +193,17 @@ export default function Leaderboard() {
     const q = query(collection(db, 'user_predictions'), where('matchDate', '==', todayStr()));
     const unsub = onSnapshot(q, snap => {
       const preds = snap.docs.map(d => d.data());
+      
+      // ★ AIRTIGHT BAILOUT: Prevents state update if document contents haven't changed
       setAllUserPreds(prev => {
         if (prev.length !== preds.length) return preds;
-        if (preds.length > 0 && prev[0]?.userId === preds[0]?.userId && prev[0]?.homeScore === preds[0]?.homeScore) {
-          // Basic bail out if it looks identical, prevents excessive recalcs
-          return prev; 
+        let changed = false;
+        for (let i = 0; i < preds.length; i++) {
+          if (prev[i]?.predId !== preds[i]?.predId || prev[i]?.homeScore !== preds[i]?.homeScore || prev[i]?.awayScore !== preds[i]?.awayScore) {
+            changed = true; break;
+          }
         }
-        return preds;
+        return changed ? preds : prev;
       });
     }, () => {});
     return () => unsub();
@@ -216,7 +221,7 @@ export default function Leaderboard() {
             changed = true; break;
           }
         }
-        return changed ? matches : prev; // BAIL OUT IF NOTHING CHANGED
+        return changed ? matches : prev; 
       });
     });
     return () => unsub();

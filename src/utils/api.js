@@ -1,11 +1,13 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
+// ★ RESTORED: Uses daily snapshot listener to avoid DB permission errors.
+// ★ KEPT: 3-day UTC window fetch for true global timezone support.
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
 import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 import { dataLayer } from './dataLayer';
-import { todayStr, yesterdayStr, tomorrowStr, formatTime, isInRolloverWindow } from './dates';
+import { todayStr, yesterdayStr, tomorrowStr, getLocalDateFromUtc, formatTime, isInRolloverWindow } from './dates';
 import { eventBus, EVENT } from './eventBus';
 import {
   SPORT, isLiveStatus, isFinishedStatus, isScheduledStatus,
@@ -99,12 +101,42 @@ function extractMatches(snapshot) {
 function emptyResult(error = null) { return { matches: [], live: [], finished: [], error, updatedAt: null, isRolloverWindow: isInRolloverWindow() }; }
 
 export async function fetchFixtures(dateStr, { forceRefresh = false } = {}) {
-  if (forceRefresh) dataLayer.invalidatePrefix(`snap:ft:${dateStr}`);
+  if (forceRefresh) dataLayer.invalidatePrefix(`snap:ft:`);
   try {
-    const snapshot = await dataLayer.fetchFootballSnapshot(dateStr);
-    if (!snapshot) return emptyResult(null);
-    const result = extractMatches(snapshot);
-    return { ...result, updatedAt: snapshot.updatedAt, error: null, isRolloverWindow: isInRolloverWindow() };
+    // ★ TIMEZONE FIX: Fetch 3 UTC dates to cover all local timezone boundaries
+    const localDate = new Date(dateStr + "T12:00:00Z");
+    const d1 = new Date(localDate.getTime() - 86400000).toISOString().split("T")[0];
+    const d2 = dateStr;
+    const d3 = new Date(localDate.getTime() + 86400000).toISOString().split("T")[0];
+    
+    const [s1, s2, s3] = await Promise.all([
+      dataLayer.fetchFootballSnapshot(d1),
+      dataLayer.fetchFootballSnapshot(d2),
+      dataLayer.fetchFootballSnapshot(d3)
+    ]);
+    
+    const allMatches = [
+      ...(s1?.matches || []), ...(s1?.live || []), ...(s1?.finished || []),
+      ...(s2?.matches || []), ...(s2?.live || []), ...(s2?.finished || []),
+      ...(s3?.matches || []), ...(s3?.live || []), ...(s3?.finished || [])
+    ];
+    
+    // Deduplicate
+    const seen = new Set();
+    const unique = allMatches.filter(m => {
+      const id = String(m.id || m.matchId);
+      if (seen.has(id)) return false;
+      seen.add(id);
+      return true;
+    });
+    
+    // Filter strictly by user's Local Date
+    const filtered = unique.filter(m => getLocalDateFromUtc(m.date) === dateStr);
+    
+    // Transform matches so the frontend UI can read them properly
+    const transformed = filtered.map(transformMatch).filter(Boolean);
+    
+    return { matches: transformed, live: [], finished: [], updatedAt: s2?.updatedAt || s1?.updatedAt || s3?.updatedAt, error: null, isRolloverWindow: isInRolloverWindow() };
   } catch (err) { return emptyResult(err.message); }
 }
 
@@ -113,9 +145,9 @@ export const fetchTomorrowFixtures = () => fetchFixtures(tomorrowStr());
 export async function fetchFinishedFixtures() { try { const snapshot = await dataLayer.fetchFootballSnapshot(todayStr()); return snapshot ? (snapshot.finished || []).map(transformMatch).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : []; } catch { return []; } }
 export async function fetchLiveScores() { try { const snapshot = await dataLayer.fetchFootballSnapshot(todayStr()); return snapshot ? { matches: (snapshot.live || []).map(transformMatch), error: null } : { matches: [], error: null }; } catch (err) { return { matches: [], error: err.message }; } }
 
-// ★ FIX: Use real-time Firestore listeners instead of polling
-export function subscribeToLiveFixtures(callback) {
-  const dateStr = todayStr();
+// ★ RESTORED: Uses daily snapshot listener to avoid DB permission errors.
+// ★ UPGRADED: Accepts dateStr so it works for Yesterday/Today/Tomorrow tabs!
+export function subscribeToLiveFixtures(dateStr, callback) {
   return dataLayer.subscribeFootballSnapshot(dateStr, (snapshot) => {
     if (!snapshot) return callback({ matches: [], live: [], finished: [], hasLive: false, liveCount: 0, error: null });
     const result = extractMatches(snapshot);

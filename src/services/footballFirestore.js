@@ -60,10 +60,12 @@ export async function getFixtures(dateStr, { force = false } = {}) {
     if (local) { memCache.set(cacheKey, local); return local; }
   }
   if (!footballDb) throw new Error('Firestore not initialized');
+  
   const snap = await getDoc(doc(footballDb, COL.FIXTURES, dateStr));
   const result = snap.exists()
     ? { data: snap.data().matches || [], lastUpdated: tsToISO(snap.data().updatedAt) }
     : { data: [], lastUpdated: null };
+    
   memCache.set(cacheKey, result);
   setLocal(cacheKey, result);
   return result;

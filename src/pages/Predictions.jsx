@@ -1,6 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
 // ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
+// ★ CLEANED: Cache-first data layer integration, non-blocking admin resolver.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -906,7 +907,7 @@ export default function Predictions() {
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
-  // Admin auto-resolver
+  // ★ NON-BLOCKING ADMIN AUTO-RESOLVER
   useEffect(() => {
     if (!isAdmin || !isToday || !fixtureMap.size) return;
     const toResolve = mergedFeatured.filter(p => {
@@ -922,7 +923,9 @@ export default function Predictions() {
         const dbPred = currentFeatured.find(p => String(p.matchId) === mid);
         if (dbPred && dbPred.status !== 'finished') {
           resolving.current.add(mid);
+          // Fire-and-forget to prevent UI blocking
           resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
+            .catch(e => console.error("Resolve err:", e))
             .finally(() => resolving.current.delete(mid));
         }
       }

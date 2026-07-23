@@ -1,24 +1,24 @@
 // Budget-optimized — smart midnight rollover, dynamic live polling, smart FT recovery.
+// FIX: Stripped hardcoded EAT (+3 hours) math. Backend now operates purely in UTC.
+// Local time rendering is handled by the frontend.
 
 // ───────────────────────────────────────────────
 // DATES & SEASONS
 // ───────────────────────────────────────────────
 function getCurrentSeason() {
   const now = new Date();
-  const eat = new Date(now.getTime() + 3 * 3600000); 
-  return eat.getUTCMonth() >= 7 ? eat.getUTCFullYear() : eat.getUTCFullYear() - 1;
+  return now.getUTCMonth() >= 7 ? now.getUTCFullYear() : now.getUTCFullYear() - 1;
 }
 
 function getCurrentBasketballSeason() {
   const now = new Date();
-  const eat = new Date(now.getTime() + 3 * 3600000);
-  const year = eat.getUTCFullYear();
-  return eat.getUTCMonth() >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() >= 7 ? `${year}-${year + 1}` : `${year - 1}-${year}`;
 }
 
+// Pure UTC date formatting
 function formatDate(d) {
-  const eat = new Date(d.getTime() + 3 * 3600000);
-  return eat.toISOString().split("T")[0];
+  return d.toISOString().split("T")[0];
 }
 
 function getDateOffset(days) {
@@ -27,12 +27,12 @@ function getDateOffset(days) {
   return formatDate(d);
 }
 
+// Utility for frontend requests (if needed by backend routes)
 function getLocalDateFromUtc(utcDateStr) {
   if (!utcDateStr) return null;
   try {
     const d = new Date(utcDateStr);
-    const eat = new Date(d.getTime() + 3 * 3600000);
-    return eat.toISOString().split("T")[0];
+    return d.toISOString().split("T")[0];
   } catch {
     return null;
   }
@@ -40,7 +40,7 @@ function getLocalDateFromUtc(utcDateStr) {
 
 const SEASON = getCurrentSeason();
 const BASKETBALL_SEASON = getCurrentBasketballSeason();
-const TODAY = formatDate(new Date());
+const TODAY = getDateOffset(0);
 const YESTERDAY = getDateOffset(-1);
 const TOMORROW = getDateOffset(1);
 
@@ -49,12 +49,10 @@ const TOMORROW = getDateOffset(1);
 // ───────────────────────────────────────────────
 const TRACK_ALL_LEAGUES = true;
 
-const BLOCKED_LEAGUE_IDS = new Set([
-  // Add any obscure league IDs here to block them
-]);
+const BLOCKED_LEAGUE_IDS = new Set([]);
 
 const LEAGUES = Object.freeze([
-  // ─── FRIENDLIES & INTERNATIONAL (Active in Summer) ───
+  // ─── FRIENDLIES & INTERNATIONAL ───
   { id: 1,   name: "World Cup",              country: "World",      flag: "🌍", season: SEASON, priority: 1,  tier: 1, active: true },
   { id: 4,   name: "Euro Championship",      country: "World",      flag: "🇪🇺", season: SEASON, priority: 2,  tier: 1, active: true },
   { id: 5,   name: "UEFA Nations League",    country: "World",      flag: "🇪🇺", season: SEASON, priority: 3,  tier: 1, active: true },
@@ -97,7 +95,7 @@ const LEAGUES = Object.freeze([
   { id: 105, name: "Super League",           country: "Greece",     flag: "🇬🇷", season: SEASON, priority: 28, tier: 1, active: true },
   { id: 235, name: "Premiership",            country: "Scotland",   flag: "🏴",  season: SEASON, priority: 29, tier: 2, active: true },
 
-  // ─── SUMMER EUROPEAN LEAGUES (Active July/August) ───
+  // ─── SUMMER EUROPEAN LEAGUES ───
   { id: 106, name: "Ekstraklasa",            country: "Poland",     flag: "🇵🇱", season: SEASON, priority: 30, tier: 2, active: true },
   { id: 333, name: "Premier League",         country: "Ukraine",    flag: "🇺🇦", season: SEASON, priority: 31, tier: 2, active: true },
   { id: 345, name: "First League",           country: "Czechia",    flag: "🇨🇿", season: SEASON, priority: 33, tier: 2, active: true },
@@ -184,7 +182,6 @@ const FINISHED_STATUSES = Object.freeze([
   STATUS.ABANDONED, STATUS.AWARDED, STATUS.WALKOVER,
 ]);
 
-// ★ NEW: Any status that means the match is no longer active
 const RESOLVED_STATUSES = Object.freeze([
   ...FINISHED_STATUSES,
   STATUS.POSTPONED, STATUS.CANCELLED, STATUS.SUSPENDED, STATUS.INTERRUPTED
@@ -239,29 +236,19 @@ const META_DOCS = Object.freeze({
 const API = Object.freeze({ PAGE_SIZE: 100, DAILY_BUDGET: 100 });
 const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTURES_DAILY: "0 3 * * *" });
 
-// ───────────────────────────────────────────────
-// SMART POLLING & BUDGET STRATEGY
-// ───────────────────────────────────────────────
 const LIVE_POLLING = Object.freeze({
-  // ── DAILY CAPS ──
   FOOTBALL_DAILY_LIVE_CAP: 60,
   BASKETBALL_DAILY_LIVE_CAP: 20,
-
-  // ── LIVE-COUNT-BASED INTERVALS (desired) ──
-  IDLE_INTERVAL_MS:        3600000,  // 60 min
-  LOW_LIVE_INTERVAL_MS:    900000,   // 15 min
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   // 10 min
-  HIGH_LIVE_INTERVAL_MS:   300000,   //  5 min
-  MASSIVE_LIVE_INTERVAL_MS:180000,   //  3 min
-  NEAR_FINISH_INTERVAL_MS: 120000,   //  2 min
-
-  // ── BUDGET PROTECTION ──
+  IDLE_INTERVAL_MS:        3600000,  
+  LOW_LIVE_INTERVAL_MS:    900000,   
+  MEDIUM_LIVE_INTERVAL_MS: 600000,   
+  HIGH_LIVE_INTERVAL_MS:   300000,   
+  MASSIVE_LIVE_INTERVAL_MS:180000,   
+  NEAR_FINISH_INTERVAL_MS: 120000,   
   RESERVE_FOR_DAILY_CRON:  15,
   MIN_BUDGET_TO_POLL:      3,
   BUDGET_NORMAL_THRESHOLD: 30,
   BUDGET_CRITICAL_THRESHOLD: 15,
-
-  // ── FT RECOVERY ──
   FT_CONFIRMATION_DELAY_MS: 60000,
   MAX_CONSECUTIVE_ERRORS: 3,
   ERROR_BACKOFF_MS:       60000,

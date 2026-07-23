@@ -1,9 +1,10 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/dataLayer.js
+// ★ FIXED: Cache-first reads for lightning-fast UI. No more network blocking!
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
-import { collection, query, where, doc, limit, getDoc, getDocs, getDocFromServer, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, doc, limit, getDoc, getDocs, setDoc, deleteDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { SPORT, TTL, TIMEOUT, PATHS, CACHE_KEY, getSnapshotDocId, getRefDocId } from './constants';
 import { eventBus, EVENT } from './eventBus';
 import { todayStr, getWeekStart, getMonthStart } from './dates';
@@ -87,7 +88,7 @@ class DataLayer {
   clear() { this._memory.clear(); this._locks.clear(); this._local.deletePrefix(''); eventBus.emit(EVENT.CACHE_INVALIDATED, { cleared: true }); }
   getStats() { return { memoryCacheSize: this._memory.size, pendingLocks: this._locks.size, bgRefreshes: this._bgRefreshInProgress.size, subscribers: this._subscribers.size }; }
 
-  // ★ NEW: Real-time Firestore Listeners for Snapshots (Instant Updates, No Polling)
+  // ★ Real-time Firestore Listeners for Snapshots
   subscribeFootballSnapshot(dateStr, cb) {
     if (!db) return () => {};
     const ref = doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr);
@@ -114,7 +115,8 @@ class DataLayer {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), async () => {
       if (!db) return null;
-      const s = await withTimeout(getDocFromServer(doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
+      // ★ FIX: Use getDoc (cache-first) instead of getDocFromServer
+      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.FOOTBALL_UPDATED, eventPayload: d => ({ sport: SPORT.FOOTBALL, dateStr, snapshot: d }) });
   }
@@ -123,7 +125,8 @@ class DataLayer {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), async () => {
       if (!db) return null;
-      const s = await withTimeout(getDocFromServer(doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
+      // ★ FIX: Use getDoc (cache-first)
+      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.BASKETBALL_UPDATED, eventPayload: d => ({ sport: SPORT.BASKETBALL, dateStr, snapshot: d }) });
   }
@@ -144,19 +147,20 @@ class DataLayer {
 
   async fetchZokaPicks(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.zokaPicks(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDocFromServer(doc(db, PATHS.ZOKA_PICKS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.ZOKA_PICKS, { event: EVENT.ZOKA_PICKS_UPDATED, eventPayload: d => ({ dateStr, picks: d }) });
+    return this.getOrSet(CACHE_KEY.zokaPicks(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDoc(doc(db, PATHS.ZOKA_PICKS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.ZOKA_PICKS, { event: EVENT.ZOKA_PICKS_UPDATED, eventPayload: d => ({ dateStr, picks: d }) });
   }
 
   async fetchZokaVotes(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.zokaVotes(dateStr), async () => { if (!db) return { stats: {} }; const s = await withTimeout(getDocFromServer(doc(db, PATHS.ZOKA_VOTE_STATS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? { stats: s.data()?.stats || {} } : { stats: {} }; }, TTL.ZOKA_VOTES);
+    return this.getOrSet(CACHE_KEY.zokaVotes(dateStr), async () => { if (!db) return { stats: {} }; const s = await withTimeout(getDoc(doc(db, PATHS.ZOKA_VOTE_STATS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? { stats: s.data()?.stats || {} } : { stats: {} }; }, TTL.ZOKA_VOTES);
   }
 
   async fetchActivePredictions(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.activePredictions(dateStr), async () => {
       if (!db) return [];
-      const s = await withTimeout(getDocFromServer(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
+      // ★ FIX: Use getDoc (cache-first)
+      const s = await withTimeout(getDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
       if (s?.exists()) return s.data().predictions || [];
       const q = await withTimeout(getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr))), TIMEOUT.COLLECTION_QUERY, { docs: [] });
       return q?.docs ? q.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0)) : [];
@@ -190,7 +194,7 @@ class DataLayer {
 
   async fetchDailyLeaderboard(dateStr) {
     dateStr = dateStr || todayStr();
-    return this.getOrSet(CACHE_KEY.dailyLeaderboard(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDocFromServer(doc(db, PATHS.DAILY_LEADERBOARD, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.DAILY_LEADERBOARD, { event: EVENT.DAILY_LEADERBOARD_UPDATED, eventPayload: d => ({ dateStr, leaderboard: d }) });
+    return this.getOrSet(CACHE_KEY.dailyLeaderboard(dateStr), async () => { if (!db) return null; const s = await withTimeout(getDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr)), TIMEOUT.SNAPSHOT_READ, null); return s?.exists() ? s.data() : null; }, TTL.DAILY_LEADERBOARD, { event: EVENT.DAILY_LEADERBOARD_UPDATED, eventPayload: d => ({ dateStr, leaderboard: d }) });
   }
 
   async fetchHistoricalLeaderboard(period) {

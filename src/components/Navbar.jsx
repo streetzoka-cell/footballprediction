@@ -1,6 +1,7 @@
 // ═══════════════════════════════════════════════════════════════════════════════════════
 // FILE: src/components/Navbar.jsx
 // ZOKA PRO — Smart Context Sync, Direct Fast Fetch, No Stale Data, Zero Render Jank
+// ★ CLEANED: ProHeader slides in ONLY on Home page. Inner pages are clean.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -80,7 +81,7 @@ const infoSections = [
 ];
 
 /* ═══════════════════════════════════════════════════
-   PRO HEADER COMPONENT
+   PRO HEADER COMPONENT (Only shown on Home)
    ═══════════════════════════════════════════════════ */
 const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
   const featured = useMemo(() => {
@@ -103,48 +104,46 @@ const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
   const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
 
   return (
-    <div className="nv-pro-wrap" onClick={() => nav(m.id ? `/predictions?match=${m.id}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
-      <div className="nv-pro-inner">
-        <div className="nv-pro-tag">
-          {featured.isLive && <span className="nv-pro-live-dot" />}
-          <span>{m.league?.name || 'Featured Match'}</span>
-        </div>
-        <div className="nv-pro-teams">
-          <div className="nv-pro-team">
-            {homeLogo ? <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
-            <span>{homeName}</span>
-          </div>
-          <div className="nv-pro-score-bar">
-            {featured.isLive && m.homeScore != null ? (
-              <>
-                <span className="nv-pro-score nv-pro-score-live">{m.homeScore}</span>
-                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1rem', fontWeight: 700 }}>:</span>
-                <span className="nv-pro-score nv-pro-score-live">{m.awayScore}</span>
-              </>
-            ) : m.kickoff ? (
-              <span className="nv-pro-time"><Clock size={12} /> {koTime}</span>
-            ) : (
-              <span className="nv-pro-vs">VS</span>
-            )}
-          </div>
-          <div className="nv-pro-team nv-pro-team-aw">
-            {awayLogo ? <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
-            <span>{awayName}</span>
-          </div>
-        </div>
-        {featured.isLive && m.minute != null && (
-          <div className="nv-pro-minute">
-            <span className="nv-pro-live-dot" style={{ width: 6, height: 6 }} />
-            <span>{m.minute}'</span>
-          </div>
-        )}
+    <div className="nv-pro-inner" onClick={() => nav(m.id ? `/predictions?match=${m.id}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
+      <div className="nv-pro-tag">
+        {featured.isLive && <span className="nv-pro-live-dot" />}
+        <span>{m.league?.name || 'Featured Match'}</span>
       </div>
+      <div className="nv-pro-teams">
+        <div className="nv-pro-team">
+          {homeLogo ? <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
+          <span>{homeName}</span>
+        </div>
+        <div className="nv-pro-score-bar">
+          {featured.isLive && m.homeScore != null ? (
+            <>
+              <span className="nv-pro-score nv-pro-score-live">{m.homeScore}</span>
+              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1rem', fontWeight: 700 }}>:</span>
+              <span className="nv-pro-score nv-pro-score-live">{m.awayScore}</span>
+            </>
+          ) : m.kickoff ? (
+            <span className="nv-pro-time"><Clock size={12} /> {koTime}</span>
+          ) : (
+            <span className="nv-pro-vs">VS</span>
+          )}
+        </div>
+        <div className="nv-pro-team nv-pro-team-aw">
+          {awayLogo ? <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
+          <span>{awayName}</span>
+        </div>
+      </div>
+      {featured.isLive && m.minute != null && (
+        <div className="nv-pro-minute">
+          <span className="nv-pro-live-dot" style={{ width: 6, height: 6 }} />
+          <span>{m.minute}'</span>
+        </div>
+      )}
     </div>
   );
 });
 
 /* ═══════════════════════════════════════════════════
-   MEMOIZED TICKER ITEM (Prevents re-rendering entire marquee on every score tick)
+   MEMOIZED TICKER ITEM 
    ═══════════════════════════════════════════════════ */
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
@@ -389,11 +388,10 @@ export default function Navbar() {
       } catch { /* silent */ }
     })();
 
-    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches: lm }) => {
       if (!mnt || !lm) return;
       setLiveMatches(lm);
       
-      // ★ FIX: Strict change detection to prevent UI Jank (Marquee re-render stutter)
       setBannerMatches(prev => {
         let changed = false;
         const next = prev.map(f => {
@@ -409,7 +407,6 @@ export default function Navbar() {
             return { ...f, homeScore: liveNorm.homeScore, awayScore: liveNorm.awayScore, isLive: false, isFinished: true, status: liveNorm.status };
           }
 
-          // Only trigger update if score, minute, or status actually changed
           if (f.homeScore !== live.homeScore || f.awayScore !== live.awayScore || f.isLive !== true || f.minute !== live.minute || f.status !== live.status) {
             changed = true;
             return { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, status: live.status || f.status, minute: live.minute ?? f.minute };
@@ -417,7 +414,7 @@ export default function Navbar() {
           
           return f;
         });
-        return changed ? next : prev; // BAIL OUT IF NOTHING CHANGED
+        return changed ? next : prev;
       });
     });
 
@@ -433,7 +430,6 @@ export default function Navbar() {
       notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
       
       setAdminNotifs(prev => {
-        // Prevent re-render if notification bodies/ids are identical
         if (prev.length !== notifs.length) return notifs;
         if (prev[0]?.id !== notifs[0]?.id || prev[0]?.body !== notifs[0]?.body) return notifs;
         return prev;
@@ -498,7 +494,6 @@ export default function Navbar() {
     if (notifOpen && predNotifs.length > 0) {
       setSeenNotifIds(prev => {
         const newSet = new Set(predNotifs.map(n => n.id));
-        // Prevent infinite loop
         if (prev.size === newSet.size && [...newSet].every(id => prev.has(id))) return prev;
         return newSet;
       });
@@ -545,7 +540,7 @@ export default function Navbar() {
     }}>
       <div style={{
         padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        display: 'flex', alignItems: 'center', justifyConent: 'space-between',
         background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)',
       }}>
         <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
@@ -580,7 +575,10 @@ export default function Navbar() {
         path="/"
       />
 
-      <ProHeader matches={bannerMatches} liveMatches={liveMatches} nav={navigate} />
+      {/* ★ NEW: ProHeader only renders on Home with slide animation */}
+      <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
+        <ProHeader matches={bannerMatches} liveMatches={liveMatches} nav={navigate} />
+      </div>
 
       <div style={{
         position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden',

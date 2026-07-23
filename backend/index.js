@@ -6,7 +6,7 @@ const {
   getBasketballRemainingRequests,
   isBasketballConfigured,
 } = require("./config/basketballApi");
-const { COLLECTIONS } = require("./config/constants");
+const { COLLECTIONS, getDateOffset } = require("./config/constants"); // Added getDateOffset
 const env = require("./config/env");
 const logger = require("./utils/logger");
 const cache = require("./utils/cache");
@@ -31,7 +31,6 @@ const LeaguesService = require("./services/leagues");
 const BasketballDailyFixturesService = require("./services/basketballDailyFixtures");
 const BasketballLiveFixturesService = require("./services/basketballLiveFixtures");
 
-// ★ NEW: Import TopMatchesDetailsService
 const TopMatchesDetailsService = require("./services/topMatchesDetails");
 
 // Scheduler
@@ -162,7 +161,35 @@ function startServer() {
     res.json(status);
   });
 
-  // Football Fixtures
+  // ─────────────────────────────────────────────────────────────
+  // DYNAMIC DATE FIXTURES ROUTE (Local Time Support)
+  // ─────────────────────────────────────────────────────────────
+  app.get("/api/fixtures", async (req, res) => {
+    const dateStr = req.query.date; // e.g., 2023-10-25
+    
+    if (!dateStr) {
+      // Fallback to today if no date provided
+      return cachedCollectionEndpoint(req, res, COLLECTIONS.TODAY_FIXTURES);
+    }
+
+    // Map the requested local date to our internal UTC-tracked collections
+    const today = getDateOffset(0);
+    const tomorrow = getDateOffset(1);
+    const yesterday = getDateOffset(-1);
+
+    let collectionName = COLLECTIONS.TODAY_FIXTURES;
+    if (dateStr === today) collectionName = COLLECTIONS.TODAY_FIXTURES;
+    else if (dateStr === tomorrow) collectionName = COLLECTIONS.TOMORROW_FIXTURES;
+    else if (dateStr === yesterday) collectionName = COLLECTIONS.YESTERDAY_FIXTURES;
+    else {
+      // If the date is outside our 3-day window, return empty to save budget
+      return res.json([]);
+    }
+
+    return cachedCollectionEndpoint(req, res, collectionName);
+  });
+
+  // Football Fixtures (Legacy Routes for backward compatibility)
   app.get("/api/fixtures/today", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.TODAY_FIXTURES));
   app.get("/api/fixtures/tomorrow", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.TOMORROW_FIXTURES));
   app.get("/api/fixtures/yesterday", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.YESTERDAY_FIXTURES));
@@ -184,7 +211,7 @@ function startServer() {
   app.get("/api/basketball/teams", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_TEAMS));
   app.get("/api/basketball/standings", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_STANDINGS));
 
-  // ★ NEW: Match Details Endpoint (0 API Calls - Reads strictly from Cache)
+  // Match Details Endpoint (0 API Calls - Reads strictly from Cache)
   app.get("/api/match/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -356,11 +383,11 @@ async function main() {
   startServer();
   setupShutdownHandlers();
 
-  // ★ NEW: Start Top Matches Background Poller (Runs every 5 minutes)
+  // Start Top Matches Background Poller (Runs every 5 minutes)
   const topMatchesService = new TopMatchesDetailsService();
   setInterval(() => {
     topMatchesService.run().catch(err => logger.error(`[TopMatches] Error: ${err.message}`));
-  }, 300000); // 5 minutes
+  }, 300000); 
 
   const duration = Date.now() - startTime;
   const bball = isBasketballConfigured ? "✅ ON" : "⬜ OFF";

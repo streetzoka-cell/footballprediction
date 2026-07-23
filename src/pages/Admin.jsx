@@ -1,6 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Admin.jsx
 // v15.4 Pro UI — Smart Match Locking, Memoized Tabs, Zero-Jank Admin Panel
+// ★ CLEANED: Robust data normalization, true local time, seamless split-merge fix.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
@@ -60,33 +61,37 @@ function extractMatchDate(m) {
 }
 const extractDate = m => extractMatchDate(m);
 
+// ★ UPGRADED: Handles both Primary (flat) and Backup (nested) data structures perfectly
 function normalizeMatch(raw, isPrimary = true) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   const status = raw.status || '';
-  const live = isPrimary 
-    ? (raw.isLive || isLiveStatus(status, 'football')) 
-    : (status === 'IN_PLAY' || status === 'PAUSED' || status === '1H' || status === '2H' || isLiveStatus(status, 'football'));
-  const finished = isPrimary 
-    ? (raw.isFinished || isFinishedStatus(status, 'football')) 
-    : (status === 'FINISHED' || status === 'FT' || status === 'AET' || isFinishedStatus(status, 'football'));
+  
+  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeLogo };
+  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayLogo };
+  const league = raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo };
+
+  const live = isLiveStatus(status, 'football') || !!raw.isLive;
+  const finished = isFinishedStatus(status, 'football') || !!raw.isFinished;
+  
+  const homeScore = raw.homeScore != null ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
+  const awayScore = raw.awayScore != null ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
 
   return {
     id, status, isLive: live, isFinished: finished,
     homeTeam: { 
-      name: raw.homeTeam?.name || 'TBD', 
-      shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD', 
-      crest: raw.homeTeam?.crest || raw.homeLogo 
+      name: homeTeam.name || 'TBD', 
+      shortName: homeTeam.shortName || homeTeam.name || 'TBD', 
+      crest: homeTeam.crest 
     },
     awayTeam: { 
-      name: raw.awayTeam?.name || 'TBD', 
-      shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD', 
-      crest: raw.awayTeam?.crest || raw.awayLogo 
+      name: awayTeam.name || 'TBD', 
+      shortName: awayTeam.shortName || awayTeam.name || 'TBD', 
+      crest: awayTeam.crest 
     },
-    homeScore: isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.homeScore ?? null),
-    awayScore: isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.awayScore ?? null),
-    league: { name: raw.league?.name || raw.competition?.name || 'Other', emblem: raw.league?.emblem || raw.competition?.emblem },
-    competition: raw.competition || raw.league,
+    homeScore, awayScore,
+    league: { name: league.name || 'Other', emblem: league.emblem || league.logo },
+    competition: league,
     utcDate: raw.utcDate || raw.date || raw.kickoff,
     minute: raw.minute || raw.elapsed || null
   };
@@ -729,6 +734,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
     return merged;
   }, [pubMatches]);
 
+  // ★ SEAMLESSLY STITCHED HANDLE SAVE
   const handleSave = useCallback(async () => {
     if (!db || cnt === 0) return;
     setSaving(true);

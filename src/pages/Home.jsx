@@ -1,5 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Home.jsx
+// ★ FIXED: True Local Time support, single fetch call, clean live merge.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
@@ -14,7 +15,7 @@ import { useAuth } from '../context/AuthContext';
 import { useAppData } from '../context/AppDataContext';
 import { useFootballData } from '../context/FootballDataContext';
 import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
-import { getLocalDateStr, getLocalDateFromUtc, getEatDateStr, formatTime } from '../utils/dates';
+import { getLocalDateFromUtc, formatTime, todayStr } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
@@ -69,7 +70,7 @@ function normalizeMatch(raw, isPrimary) {
 
   let isStarted = false;
   if (!isLive && !isFinished && timestamp > 0 && Date.now() > timestamp) {
-    const todayDateStr = getEatDateStr(0); // FIX: Use EAT
+    const todayDateStr = todayStr(); // ★ FIX: Use true local time
     const matchDateStr = dateStr || getLocalDateFromUtc(rawDate);
     if (matchDateStr === todayDateStr && (Date.now() - timestamp) < (3 * 60 * 60 * 1000)) {
       isStarted = true;
@@ -127,21 +128,16 @@ function useHomeFixtures() {
   });
   const [loading, setLoading] = useState(true);
   const { fixtures: backupRaw, loadDateFixtures } = useFootballData();
-  const todayStr = getEatDateStr(0); // FIX: Use EAT
+  const todayDateStr = todayStr(); // ★ FIX: Use true local time
 
   const fetchPrimary = useCallback(async (silent) => {
     if (!silent) setLoading(true);
     try {
-      const [yRes, tRes, tmRes] = await Promise.all([
-        fetchFixtures(getEatDateStr(-1)),
-        fetchFixtures(getEatDateStr(0)),
-        fetchFixtures(getEatDateStr(1))
-      ]);
-      const yMatches = Array.isArray(yRes) ? yRes : (yRes && yRes.matches) || [];
-      const tMatches = Array.isArray(tRes) ? tRes : (tRes && tRes.matches) || [];
-      const tmMatches = Array.isArray(tmRes) ? tmRes : (tmRes && tmRes.matches) || [];
-      const all = [...yMatches, ...tMatches, ...tmMatches];
-      const normalized = all.map(m => normalizeMatch(m, true)).filter(Boolean);
+      // ★ FIX: fetchFixtures already fetches the 3-day UTC window and filters for the requested date.
+      // No need to fetch yesterday, today, and tomorrow separately here.
+      const res = await fetchFixtures(todayDateStr);
+      const tMatches = Array.isArray(res) ? res : (res && res.matches) || [];
+      const normalized = tMatches.map(m => normalizeMatch(m, true)).filter(Boolean);
       
       setPrimaryFixtures(prev => {
         if (prev.length === normalized.length && prev[0]?.id === normalized[0]?.id) {
@@ -153,7 +149,7 @@ function useHomeFixtures() {
       try { localStorage.setItem(STORAGE_KEY_PRIMARY_CACHE_HOME, JSON.stringify(normalized)); } catch (e) { /* ignore */ }
     } catch (e) { /* keep cached on error */ } 
     finally { if (!silent) setLoading(false); }
-  }, []);
+  }, [todayDateStr]);
 
   useEffect(() => {
     fetchPrimary(false);
@@ -161,7 +157,7 @@ function useHomeFixtures() {
     return () => clearInterval(interval);
   }, [fetchPrimary]);
 
-  useEffect(() => { loadDateFixtures(todayStr); }, [loadDateFixtures, todayStr]);
+  useEffect(() => { loadDateFixtures(todayDateStr); }, [loadDateFixtures, todayDateStr]);
 
   // ★ FIX: Use subscribeToTodayFixtures and strict change detection (mirrors Fixtures.jsx)
   useEffect(() => {
@@ -210,12 +206,12 @@ function useHomeFixtures() {
           }
           
           if (!f.isLive && !f.isFinished) {
-            if (f.dateStr && f.dateStr < todayStr) {
+            if (f.dateStr && f.dateStr < todayDateStr) {
               changed = true;
               return { ...f, isLive: false, isFinished: true, isStarted: false, isHT: false, status: MatchStatus.FT };
             }
             const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-            if (f.dateStr === todayStr && ko > 0 && !f.isStarted) {
+            if (f.dateStr === todayDateStr && ko > 0 && !f.isStarted) {
               const elapsed = Date.now() - ko;
               const hasScores = (f.homeScore != null && f.homeScore > 0) || (f.awayScore != null && f.awayScore > 0);
               if (elapsed > (3 * 60 * 60 * 1000) && !hasScores) {
@@ -227,7 +223,7 @@ function useHomeFixtures() {
           
           const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
           if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
-            if (f.dateStr === todayStr && (Date.now() - ko) < (3 * 60 * 60 * 1000)) {
+            if (f.dateStr === todayDateStr && (Date.now() - ko) < (3 * 60 * 60 * 1000)) {
               changed = true;
               return { ...f, isStarted: true, status: MatchStatus.STARTED };
             }
@@ -239,12 +235,11 @@ function useHomeFixtures() {
       });
     });
     return () => unsub();
-  }, [todayStr]);
+  }, [todayDateStr]);
 
   const fixtures = useMemo(() => {
-    const todayPrimary = primaryFixtures.filter(m => m.dateStr === todayStr);
+    const todayPrimary = primaryFixtures.filter(m => m.dateStr === todayDateStr);
     if (todayPrimary.length > 0) {
-      // ★ FIX: Removed backupLive merge. primaryFixtures is the single source of truth.
       const uniqueIds = new Set();
       return todayPrimary.filter(m => {
         const idStr = String(m.id);
@@ -253,7 +248,7 @@ function useHomeFixtures() {
         return true;
       });
     }
-    const backup = (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === todayStr);
+    const backup = (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === todayDateStr);
     const uniqueIds = new Set();
     return backup.filter(m => {
       const idStr = String(m.id);
@@ -261,7 +256,7 @@ function useHomeFixtures() {
       uniqueIds.add(idStr);
       return true;
     });
-  }, [primaryFixtures, backupRaw, todayStr]);
+  }, [primaryFixtures, backupRaw, todayDateStr]);
 
   return { fixtures, loading };
 }
@@ -554,7 +549,7 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
 const ZokaRow = React.memo(({ pick }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
-  const todayDateStr = getEatDateStr(0); // FIX: Use EAT
+  const todayDateStr = todayStr(); // ★ FIX: Use true local time
   let ko = 'TBD';
   if (koRaw) {
     try {
@@ -685,20 +680,20 @@ export default function Home() {
   const liveMatches = useMemo(() => dedupedFixtures.filter(f => f.isLive), [dedupedFixtures]);
   const stripMatches = liveMatches.length > 0 ? liveMatches : dedupedFixtures.slice(0, 10);
 
-  const todayStr = getEatDateStr(0); // FIX: Use EAT
+  const todayDateStr = todayStr(); // ★ FIX: Use true local time
 
   const zokaFlat = useMemo(() => {
     if (!zokaPicks || !zokaPicks.matches) return [];
-    return zokaPicks.matches.map(m => ({ ...m, _d: todayStr }));
-  }, [zokaPicks, todayStr]);
+    return zokaPicks.matches.map(m => ({ ...m, _d: todayDateStr }));
+  }, [zokaPicks, todayDateStr]);
   
   const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
   const featFlat = useMemo(() => {
     if (!activePredictions) return [];
-    return activePredictions.map(m => ({ ...m, _d: todayStr }));
-  }, [activePredictions, todayStr]);
+    return activePredictions.map(m => ({ ...m, _d: todayDateStr }));
+  }, [activePredictions, todayDateStr]);
   
   const featVis = ui.showFeat ? featFlat : featFlat.slice(0, 5);
   const featHidden = Math.max(0, featFlat.length - 5);

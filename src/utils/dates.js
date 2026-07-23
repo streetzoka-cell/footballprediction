@@ -1,30 +1,16 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/dates.js
 // SINGLE SOURCE OF TRUTH for all date operations
-// ★ 100% LOCKED TO EAT (UTC+3) TO MATCH BACKEND PERFECTLY
+// ★ FIXED: Uses native device local time. No more hardcoded EAT!
 // ═══════════════════════════════════════════════════════════════
 
-const EAT_OFFSET_MS = 3 * 60 * 60 * 1000; // UTC+3 for Kenya
-
-// Helper to get EAT date string for fetching backend snapshots
-export function getEatDateStr(offset) {
+// Core date string generator (USER'S LOCAL TIMEZONE)
+export function getLocalDateStr(offset = 0) {
   const d = new Date();
-  d.setUTCDate(d.getUTCDate() + offset);
-  const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-  const y = eat.getUTCFullYear();
-  const m = String(eat.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(eat.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
-
-// Core date string generator (EAT TIMEZONE)
-export function getLocalDateStr(offset) {
-  const d = new Date();
-  d.setUTCDate(d.getUTCDate() + offset);
-  const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-  const y = eat.getUTCFullYear();
-  const m = String(eat.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(eat.getUTCDate()).padStart(2, "0");
+  d.setDate(d.getDate() + offset);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -33,16 +19,19 @@ export const yesterdayStr = () => getLocalDateStr(-1);
 export const tomorrowStr = () => getLocalDateStr(1);
 export const getDateStr = getLocalDateStr;
 
-// Parse UTC timestamps to EAT date strings
+// Parse UTC timestamps to LOCAL date strings
 export function getLocalDateFromUtc(utcDateStr) {
   if (!utcDateStr) return null;
-  const d = new Date(utcDateStr);
-  if (isNaN(d.getTime())) return null;
-  const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-  const y = eat.getUTCFullYear();
-  const m = String(eat.getUTCMonth() + 1).padStart(2, "0");
-  const day = String(eat.getUTCDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  try {
+    const d = new Date(utcDateStr);
+    if (isNaN(d.getTime())) return null;
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch {
+    return null;
+  }
 }
 
 // Format date string for display: "Tue, 15 Jan"
@@ -55,13 +44,12 @@ export function formatDateShort(dateStr) {
   return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
 }
 
-// Format time for display in EAT: "20:00"
+// Format time for display in LOCAL TIME: "20:00"
 export function formatTime(dateStr) {
   if (!dateStr) return '--:--';
   try {
     const d = new Date(dateStr);
-    const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-    return eat.toUTCString().split(' ')[4].substring(0, 5);
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
   } catch {
     return '--:--';
   }
@@ -79,24 +67,22 @@ export function relativeDateLabel(dateStr) {
   return formatDateShort(dateStr);
 }
 
-// Leaderboard period start dates (EAT)
+// Leaderboard period start dates (LOCAL)
 export function getWeekStart() {
   const d = new Date();
-  const day = d.getUTCDay();
-  const diff = d.getUTCDate() - day + (day === 0 ? -6 : 1); // Monday
-  d.setUTCDate(diff);
-  const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-  const y = eat.getUTCFullYear();
-  const m = String(eat.getUTCMonth() + 1).padStart(2, "0");
-  const dayStr = String(eat.getUTCDate()).padStart(2, "0");
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  d.setDate(diff);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const dayStr = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${dayStr}`;
 }
 
 export function getMonthStart() {
   const d = new Date();
-  const eat = new Date(d.getTime() + EAT_OFFSET_MS);
-  const y = eat.getUTCFullYear();
-  const m = String(eat.getUTCMonth() + 1).padStart(2, "0");
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}-01`;
 }
 

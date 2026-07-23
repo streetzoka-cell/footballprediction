@@ -1,4 +1,4 @@
-import"./rolldown-runtime-QTnfLwEv.js";import{At as e,I as t,Nn as n,Nt as r,Q as i,Rn as a,S as o,Xt as s,_n as c,ft as l,g as u,gt as d,j as f,k as p,l as m,sn as h,wn as g,xn as _}from"./react-vendor-DVxlqH4b.js";import{t as v}from"./index-DGKkuP7Q.js";a();var y=g(),b=()=>{if(document.getElementById(`co-about-css`))return;let e=document.createElement(`style`);e.id=`co-about-css`,e.textContent=`
+import"./rolldown-runtime-QTnfLwEv.js";import{At as e,I as t,Nn as n,Nt as r,Q as i,Rn as a,S as o,Xt as s,_n as c,ft as l,g as u,gt as d,j as f,k as p,l as m,sn as h,wn as g,xn as _}from"./react-vendor-DVxlqH4b.js";import{t as v}from"./index-C-pDp4uD.js";a();var y=g(),b=()=>{if(document.getElementById(`co-about-css`))return;let e=document.createElement(`style`);e.id=`co-about-css`,e.textContent=`
 @keyframes co-fade-up{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
 @keyframes co-pop{0%{transform:scale(.9);opacity:0}60%{transform:scale(1.02)}100%{transform:scale(1);opacity:1}}
 @keyframes co-shine{0%{left:-100%}100%{left:200%}}

@@ -1,5 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Fixtures.jsx
+// ★ FIXED: Restored reliable polling, removed duplicate-pushing logic, true local time.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
@@ -12,7 +13,7 @@ import {
 
 import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
 import { useFootballData } from '../context/FootballDataContext';
-import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime, getEatDateStr } from '../utils/dates';
+import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import SEO from '../components/SEO';
 
 // ─── Constants & Config ───
@@ -190,26 +191,17 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
 
-// ★ FIX: Strictly use EAT (UTC+3) for date extraction to match backend snapshot IDs
 function extractMatchDate(m) {
   if (!m) return '';
   const rawDate = m.utcDate || m.date || (m.timestamp ? new Date(m.timestamp).toISOString() : null);
   if (rawDate) {
-    try {
-      const d = new Date(rawDate);
-      // Add 3 hours to convert to EAT, then extract date
-      const eat = new Date(d.getTime() + 3 * 3600000);
-      return eat.toISOString().split("T")[0];
-    } catch {
-      return '';
-    }
+    return getLocalDateFromUtc(rawDate);
   }
   if (m.date && m.date.includes('T')) return m.date.split('T')[0];
   if (m.date) return m.date;
   return '';
 }
 
-// ★ KEY FIX: Added 2.5-HOUR SAFETY VALVE to auto-finish stuck live matches
 function normalizeMatch(raw, isPrimary) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
@@ -233,9 +225,8 @@ function normalizeMatch(raw, isPrimary) {
   let isLive = isPrimary ? !!raw.isLive : LIVE_STATUSES_SET.has(status);
   let isHT = status === MatchStatus.HT || status === 'BT' || status === MatchStatus.HALF_TIME;
   let isFinished = isPrimary ? !!raw.isFinished : (status === MatchStatus.FINISHED || status === MatchStatus.FT || status === MatchStatus.AET || status === MatchStatus.PEN);
-  let isStarted = false; // ★ FIX: Moved declaration up here to prevent ReferenceError
+  let isStarted = false; 
   
-  // ★ 2.5-HOUR SAFETY VALVE: If it's live but 2.5 hours have passed, force it to finish
   if (isLive && timestamp > 0) {
     const twoHalfHoursMs = 2.5 * 60 * 60 * 1000;
     if (Date.now() > timestamp + twoHalfHoursMs) {
@@ -246,9 +237,8 @@ function normalizeMatch(raw, isPrimary) {
     }
   }
 
-  // ★ TIME-BASED FT SHIELD: Auto-finish past matches that backend missed
   if (!isFinished && !isLive && dateStr) {
-    const todayDateStr = getEatDateStr(0);
+    const todayDateStr = todayStr();
     if (dateStr < todayDateStr) {
       isFinished = true; isStarted = false; isHT = false; status = 'FT';
     } else if (dateStr === todayDateStr && timestamp > 0) {
@@ -257,7 +247,6 @@ function normalizeMatch(raw, isPrimary) {
                            (raw.awayScore != null && raw.awayScore > 0) ||
                            (raw.score?.fullTime?.home != null && raw.score?.fullTime?.home > 0) ||
                            (raw.score?.fullTime?.away != null && raw.score?.fullTime?.away > 0);
-      // If it started >3 hours ago and has no scores, force FT
       if (elapsed > (3 * 60 * 60 * 1000) && !hasAnyScore) {
         isFinished = true; status = 'FT';
       }
@@ -289,7 +278,6 @@ function normalizeMatch(raw, isPrimary) {
     stats: raw.stats || raw.matchStats || [],
   };
 }
-
 
 const MatchCardSkeleton = React.memo(() => (
   <div className="zoka-sk-card">
@@ -364,7 +352,7 @@ const ScoreBreakdown = React.memo(({ match, onNavigate }) => {
   const goals = s.goals || [];
   const cards = s.cards || [];
   const periods = [
-    { l: 'Half Time', h: s.halfTime?.home, a: s.halfTime?.away },
+    { l: 'Half Time', h: s.halftime?.home, a: s.halftime?.away },
     { l: 'Full Time', h: s.fullTime?.home ?? match.homeScore, a: s.fullTime?.away ?? match.awayScore },
   ];
   const hasScoreData = periods.some(p => p.h != null || p.a != null);
@@ -559,7 +547,7 @@ export default function Fixtures() {
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   
   const [tab, setTab] = useState(searchParams.get('tab') || 'fixtures');
-  const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || getEatDateStr(0));
+  const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
   const [compFilter, setCompFilter] = useState(searchParams.get('league') || 'ALL');
   
   const [favs, setFavs] = useState(() => { try { return new Set(JSON.parse(localStorage.getItem(STORAGE_KEY_FAVS) || '[]')); } catch { return new Set(); } });
@@ -574,6 +562,9 @@ export default function Fixtures() {
   const [expanded, setExpanded] = useState(null);
   const [searchQ, setSearchQ] = useState('');
   
+  // ★ NEW: Global live state to prevent polling overwrites
+  const [globalLiveMatches, setGlobalLiveMatches] = useState([]);
+
   const deferredSearch = useDeferredValue(searchQ);
   const normalizedSearch = useMemo(() => deferredSearch.trim().toLowerCase(), [deferredSearch]);
 
@@ -598,14 +589,14 @@ export default function Fixtures() {
   useEffect(() => {
     const params = {};
     if (tab !== 'fixtures') params.tab = tab;
-    if (selectedDate !== getEatDateStr(0)) params.date = selectedDate;
+    if (selectedDate !== todayStr()) params.date = selectedDate;
     if (compFilter !== 'ALL') params.league = compFilter;
     setSearchParams(params, { replace: true });
   }, [tab, selectedDate, compFilter, setSearchParams]);
 
   const dates = useMemo(() => {
-    const past = []; for (let i = 14; i >= 2; i--) { const d = getEatDateStr(-i); past.push({ str: d, label: formatDateShort(d) }); }
-    const future = []; for (let i = 2; i <= 15; i++) { const d = getEatDateStr(i); future.push({ str: d, label: formatDateShort(d) }); }
+    const past = []; for (let i = 14; i >= 2; i--) { const d = getLocalDateStr(-i); past.push({ str: d, label: formatDateShort(d) }); }
+    const future = []; for (let i = 2; i <= 15; i++) { const d = getLocalDateStr(i); future.push({ str: d, label: formatDateShort(d) }); }
     return { past, future };
   }, []);
 
@@ -619,20 +610,46 @@ export default function Fixtures() {
     return () => document.removeEventListener('mousedown', handler);
   }, []);
 
-  const isPrimaryDate = [getEatDateStr(-1), getEatDateStr(0), getEatDateStr(1)].includes(selectedDate);
+  const isPrimaryDate = [yesterdayStr(), todayStr(), tomorrowStr()].includes(selectedDate);
+
+  // ★ NEW: Helper to merge live matches into base matches
+  const mergeLiveMatches = useCallback((baseMatches, liveMatches) => {
+    if (!liveMatches || liveMatches.length === 0) return baseMatches;
+    const liveMap = new Map(liveMatches.map(m => [String(m.id), m]));
+    let changed = false;
+    const next = baseMatches.map(f => {
+      const liveMatch = liveMap.get(String(f.id));
+      if (liveMatch) {
+        const normalizedLive = normalizeMatch(liveMatch, true);
+        if (normalizedLive.isLive !== f.isLive || normalizedLive.isFinished !== f.isFinished || normalizedLive.homeScore !== f.homeScore || normalizedLive.awayScore !== f.awayScore || normalizedLive.minute !== f.minute) {
+          changed = true;
+          return { ...f, ...normalizedLive };
+        }
+      }
+      return f;
+    });
+    return changed ? next : baseMatches;
+  }, []);
 
   const fetchPrimary = useCallback(async (date, silent = false) => {
     if (!silent) setPrimaryLoading(true);
     try {
       const res = await fetchFixtures(date);
       const l = Array.isArray(res) ? res : res?.matches || [];
-      setPrimaryFixtures(l.map(m => normalizeMatch(m, true)));
+      let baseMatches = l.map(m => normalizeMatch(m, true));
+      
+      // ★ FIX: Merge any live matches we already have immediately
+      if (globalLiveMatches.length > 0) {
+        baseMatches = mergeLiveMatches(baseMatches, globalLiveMatches);
+      }
+      
+      setPrimaryFixtures(baseMatches);
     } catch (e) {
       setPrimaryFixtures([]);
     } finally {
       if (!silent) setPrimaryLoading(false);
     }
-  }, []);
+  }, [globalLiveMatches, mergeLiveMatches]);
 
   useEffect(() => {
     if (!isPrimaryDate) { setPrimaryFixtures([]); setPrimaryLoading(false); return; }
@@ -647,40 +664,45 @@ export default function Fixtures() {
     return () => clearInterval(interval);
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
+  // ★ RESTORED: Listen to selected date's snapshot for live matches
   useEffect(() => {
-    if (selectedDate !== getEatDateStr(0)) return;
-    const unsub = subscribeToLiveFixtures(({ matches: lm }) => {
+    const unsub = subscribeToLiveFixtures(selectedDate, ({ matches: lm }) => {
       if (!lm) return;
-      const liveMap = new Map(lm.map(m => [String(m.id), normalizeMatch(m, true)]));
-      setPrimaryFixtures(prev => {
-        let changed = false;
-        const next = prev.map(f => {
-          const freshMatch = liveMap.get(String(f.id));
-          if (freshMatch) {
-            if (freshMatch.isLive !== f.isLive || freshMatch.isFinished !== f.isFinished || freshMatch.homeScore !== f.homeScore || freshMatch.awayScore !== f.awayScore || freshMatch.minute !== f.minute) {
-              changed = true;
-              return { ...f, ...freshMatch };
-            }
-            return f;
-          }
-          
-          if (f.isLive) {
-            changed = true;
-            return { ...f, isLive: false, isFinished: true, status: MatchStatus.FT };
-          }
-          
-          const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-          if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
-            changed = true;
-            return { ...f, isStarted: true, status: MatchStatus.STARTED };
-          }
-          return f;
-        });
-        return changed ? next : prev;
-      });
+      setGlobalLiveMatches(lm);
     });
     return () => unsub();
   }, [selectedDate]);
+
+  // ★ NEW: Effect to merge global live matches into primaryFixtures
+  useEffect(() => {
+    if (globalLiveMatches.length === 0) return;
+    
+    setPrimaryFixtures(prev => {
+      const liveForDate = globalLiveMatches.filter(m => extractMatchDate(m) === selectedDate);
+      if (liveForDate.length === 0) return prev;
+      
+      const liveMap = new Map(liveForDate.map(m => [String(m.id), m]));
+      let changed = false;
+      const next = prev.map(f => {
+        const freshMatch = liveMap.get(String(f.id));
+        if (freshMatch) {
+          liveMap.delete(String(f.id)); 
+          const normalizedFresh = normalizeMatch(freshMatch, true);
+          if (normalizedFresh.isLive !== f.isLive || normalizedFresh.isFinished !== f.isFinished || normalizedFresh.homeScore !== f.homeScore || normalizedFresh.awayScore !== f.awayScore || normalizedFresh.minute !== f.minute) {
+            changed = true;
+            return { ...f, ...normalizedFresh };
+          }
+        }
+        return f;
+      });
+      
+      // ★ FIX: Removed the block that pushes liveMap values into the array.
+      // This was causing duplicates when matches bled across timezone boundaries.
+      // The 45-second poll will naturally pick up any matches that belong to this date.
+      
+      return changed ? next : prev;
+    });
+  }, [globalLiveMatches, selectedDate]);
 
   const backupFixtures = useMemo(() => {
     return (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === selectedDate);
@@ -833,9 +855,9 @@ export default function Fixtures() {
         </div>
 
         <div className="zoka-datenav">
-          <button className={`zoka-nav-btn ${selectedDate === getEatDateStr(-1) ? 'active' : ''}`} onClick={() => setSelectedDate(getEatDateStr(-1))}>Yesterday</button>
-          <button className={`zoka-nav-btn ${selectedDate === getEatDateStr(0) ? 'active' : ''}`} onClick={() => setSelectedDate(getEatDateStr(0))}>Today</button>
-          <button className={`zoka-nav-btn ${selectedDate === getEatDateStr(1) ? 'active' : ''}`} onClick={() => setSelectedDate(getEatDateStr(1))}>Tomorrow</button>
+          <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
+          <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
+          <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
           <div className="zoka-more-wrap" ref={moreRef}>
             <button className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}><Calendar size={16} /> More <ChevronDown size={16} /></button>
             {ui.moreDatesOpen && (
