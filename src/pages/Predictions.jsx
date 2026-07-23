@@ -1,7 +1,7 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Predictions.jsx
 // ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
-// ★ FIXED: Missing dateStr argument in subscribeToLiveFixtures causing Firebase crash
+// ★ FIXED: ID lookup mismatch causing saved predictions to not show up in UI.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -326,7 +326,8 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
    PREDICTION CARD (Memoized for performance)
    ═══════════════════════════════════════════════════ */
 const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
-  const mid = pred.id || String(pred.matchId);
+  // ★ FIX: Always use String(pred.matchId) for lookups, never pred.id
+  const mid = String(pred.matchId);
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
   const hasPred = !!userPred;
@@ -468,7 +469,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
     const m = new Map();
     Object.values(userPredsObj || {}).forEach(p => {
       if (p.predId) m.set(p.predId, p);
-      if (p.matchId) m.set(String(p.matchId), p);
+      if (p.matchId) m.set(String(p.matchId), p); // ★ FIX: Use String(p.matchId)
     });
     return m;
   }, [userPredsObj]);
@@ -482,7 +483,8 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
   const stats = useMemo(() => {
     let totalPts = 0, exact = 0, result = 0, miss = 0, pending = 0, predicted = 0;
     preds.forEach(p => {
-      const up = upMap.get(p.id) || upMap.get(String(p.matchId));
+      // ★ FIX: Use String(p.matchId)
+      const up = upMap.get(String(p.matchId));
       if (!up) return;
       predicted++;
       let res = resMap.get(String(p.matchId));
@@ -522,7 +524,8 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
             </div>
           )}
           {preds.map((p, i) => {
-            const up = upMap.get(p.id) || upMap.get(String(p.matchId));
+            // ★ FIX: Use String(p.matchId)
+            const up = upMap.get(String(p.matchId));
             if (!up) return null;
             let res = resMap.get(String(p.matchId));
             if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
@@ -531,7 +534,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
             }
             const rType = res?.resultType;
             return (
-              <div key={p.id} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)' }}>
+              <div key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {typeof p.homeTeam === 'object' ? p.homeTeam?.shortName || p.homeTeam?.name : p.homeTeam} vs {typeof p.awayTeam === 'object' ? p.awayTeam?.shortName || p.awayTeam?.name : p.awayTeam}
@@ -658,7 +661,7 @@ export default function Predictions() {
     const m = new Map();
     Object.values(currentUserPreds).forEach(p => {
       if (p.predId) m.set(p.predId, p);
-      if (p.matchId) m.set(String(p.matchId), p);
+      if (p.matchId) m.set(String(p.matchId), p); // ★ FIX: Ensure matchId is a String
     });
     return m;
   }, [currentUserPreds]);
@@ -672,7 +675,8 @@ export default function Predictions() {
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
     mergedFeatured.forEach(p => {
-      const up = userPredMap.get(p.id) || userPredMap.get(String(p.matchId));
+      // ★ FIX: Use String(p.matchId)
+      const up = userPredMap.get(String(p.matchId));
       if (!up) return;
       pred++;
       let res = resultMap.get(String(p.matchId));
@@ -762,8 +766,9 @@ export default function Predictions() {
   }, [uid, userStats, myDayStats, openLogin]);
 
   const startEdit = useCallback((pred) => {
-    const mid = pred.id || String(pred.matchId);
-    const existing = userPredMap.get(mid) || userPredMap.get(String(pred.matchId));
+    // ★ FIX: Use String(pred.matchId) for editingId
+    const mid = String(pred.matchId);
+    const existing = userPredMap.get(mid);
     setEditingId(mid);
     setEditH(existing ? String(existing.homeScore) : '');
     setEditA(existing ? String(existing.awayScore) : '');
@@ -779,6 +784,7 @@ export default function Predictions() {
     if (isNaN(h) || isNaN(a)) { setToast('Enter valid scores'); return; }
     setSaving(true);
     try {
+      // editingId is already the matchId thanks to the fix above
       const matchId = String(pred.matchId || editingId);
       const matchDate = pred.matchDate || selDate;
       await savePredictionAction(uid, displayName, { ...pred, id: editingId, matchId, matchDate }, h, a);
@@ -903,7 +909,7 @@ export default function Predictions() {
       const predMap = {};
       Object.values(preds || {}).forEach(p => {
         if (p?.predId) predMap[p.predId] = p;
-        if (p?.matchId) predMap[String(p.matchId)] = p;
+        if (p?.matchId) predMap[String(p.matchId)] = p; // ★ FIX: Ensure matchId is String
       });
       let userVotes = {};
       try { userVotes = JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}'); } catch {}
@@ -971,16 +977,18 @@ export default function Predictions() {
 
   const deferredFilter = useDeferredValue(filter);
   const filteredPreds = useMemo(() => {
-    if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId)));
-    if (deferredFilter === 'unpredicted') return mergedFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
+    // ★ FIX: Use String(p.matchId) for all map lookups
+    if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(String(p.matchId)));
+    if (deferredFilter === 'unpredicted') return mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
     if (deferredFilter === 'finished') return mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL));
     return mergedFeatured;
   }, [mergedFeatured, userPredMap, deferredFilter]);
 
   const filterCounts = useMemo(() => ({
     all: mergedFeatured.length,
-    predicted: mergedFeatured.filter(p => userPredMap.get(p.id) || userPredMap.get(String(p.matchId))).length,
-    unpredicted: mergedFeatured.filter(p => !userPredMap.get(p.id) && !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
+    // ★ FIX: Use String(p.matchId) for all map lookups
+    predicted: mergedFeatured.filter(p => userPredMap.get(String(p.matchId))).length,
+    unpredicted: mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
     finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
   }), [mergedFeatured, userPredMap]);
 
@@ -1125,14 +1133,15 @@ export default function Predictions() {
             <div>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} />)}</div>
           ) : filteredPreds.length > 0 ? (
             filteredPreds.map((pred, i) => {
-              const predId = pred.id || String(pred.matchId);
+              // ★ FIX: Use String(pred.matchId) as the key and for lookups!
+              const predId = String(pred.matchId);
               return (
                 <PredCard
                   key={predId}
                   pred={pred}
                   index={i}
                   userPred={userPredMap.get(predId)}
-                  result={resultMap.get(String(pred.matchId))}
+                  result={resultMap.get(predId)}
                   isEditing={editingId === predId}
                   editH={editH}
                   editA={editA}
