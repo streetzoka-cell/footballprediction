@@ -7,7 +7,7 @@ const { api, isBudgetAvailable } = require("../config/api");
 const {
   LEAGUES,
   FINISHED_STATUSES,
-  RESOLVED_STATUSES, // ★ NEW
+  RESOLVED_STATUSES,
   COLLECTIONS,
   getDateOffset,
   META_DOCS,
@@ -50,7 +50,6 @@ class DailyFixturesService {
     logger.info(`[DailyFixtures] Run for ${tomorrowStr} (today: ${todayStr})`);
     const startTime = Date.now();
 
-    // ★ NEW: Check and recover stale matches (e.g. yesterday's games still marked as 1H)
     await this._recoverStaleFixtures(todayStr);
 
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
@@ -62,14 +61,14 @@ class DailyFixturesService {
         if (!needsFill) {
           logger.info(`[DailyFixtures] Cache verified — skipping`);
           await this._writeSnapshot();
-          return { total: 0, writes: 0, apiCalls: 0, duration: 0, deduped: true };
+          return { total: 0, totalToday: this._docCache.today.length, writes: 0, apiCalls: 0, duration: 0, deduped: true };
         }
         
         logger.info(`[DailyFixtures] Some days empty — filling...`);
         const fillResult = await this._fillEmptyDays(yesterdayStr, todayStr, tomorrowStr, { skipTomorrow: true });
         cache.invalidatePrefix("ft:");
         await this._writeSnapshot();
-        return { total: this._docCache.tomorrow.length, writes: fillResult.writes, apiCalls: fillResult.fetches, duration: Date.now() - startTime, deduped: true };
+        return { total: this._docCache.tomorrow.length, totalToday: this._docCache.today.length, writes: fillResult.writes, apiCalls: fillResult.fetches, duration: Date.now() - startTime, deduped: true };
       }
 
       logger.info(`[DailyFixtures] Cache empty after restart — warming up...`);
@@ -79,7 +78,7 @@ class DailyFixturesService {
         const fillResult = await this._fillEmptyDays(yesterdayStr, todayStr, tomorrowStr, { skipTomorrow: true });
         cache.invalidatePrefix("ft:");
         await this._writeSnapshot();
-        return { total: this._docCache.tomorrow.length, writes: fillResult.writes, apiCalls: fillResult.fetches, duration: Date.now() - startTime, deduped: true };
+        return { total: this._docCache.tomorrow.length, totalToday: this._docCache.today.length, writes: fillResult.writes, apiCalls: fillResult.fetches, duration: Date.now() - startTime, deduped: true };
       }
       logger.warn(`[DailyFixtures] Meta says done but no data found — re-fetching`);
     }
@@ -168,17 +167,14 @@ class DailyFixturesService {
     logger.info(`[DailyFixtures] Complete — ${totalApiCalls} API calls, ${duration}ms`);
 
     return {
-      total: fetchTotal, writes: fetchWrites + rolloverYesterday + rolloverToday + fillResult.writes,
+      total: fetchTotal, 
+      totalToday: this._docCache.today.length, // ★ NEW: Provide today's count for the scheduler
+      writes: fetchWrites + rolloverYesterday + rolloverToday + fillResult.writes,
       apiCalls: totalApiCalls, duration, rolloverYesterday, rolloverToday, recoveredFT,
       extraFetches: fillResult.fetches, extraWrites: fillResult.writes, deduped: false, metaUpdated: fetchSuccess,
     };
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // ★ NEW: STALE FT RECOVERY
-  // Finds matches from previous days that were never updated to FT
-  // and smoothly updates them by fetching exact dates from the API.
-  // ═══════════════════════════════════════════════════════════════
   async _recoverStaleFixtures(todayStr) {
     try {
       const [yesterdayDocs, todayDocs] = await Promise.all([
@@ -187,10 +183,8 @@ class DailyFixturesService {
       ]);
 
       const isStale = (d) => {
-        // If it's already resolved (FT, PST, CANC, etc.), it's not stale
         if (RESOLVED_STATUSES.includes(d.status)) return false;
         const matchDateStr = d.date ? new Date(d.date).toISOString().split("T")[0] : null;
-        // If the match date is before today, and it's not resolved, it's stale
         return matchDateStr && matchDateStr < todayStr;
       };
 
@@ -249,7 +243,6 @@ class DailyFixturesService {
           }
         }
 
-        // ★ SAFE WRITE: Pass empty set for prevIds so diffWrite deletes nothing else
         if (yestDocsToWrite.length > 0) {
           await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, yestDocsToWrite, new Set());
           const ftGames = yestDocsToWrite.filter(d => FINISHED_STATUSES.includes(d.status));

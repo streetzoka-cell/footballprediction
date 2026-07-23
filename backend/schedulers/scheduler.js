@@ -106,10 +106,11 @@ class Scheduler {
     );
   }
 
-    // ═══════════════════════════════════════════════════════════════
-  // SMART PACING v3
-  // - Recognizes NEAR_FT state to avoid pacing matches that are ending soon
-  // - Pacing ONLY triggers when budget genuinely cannot sustain desired interval
+  // ═══════════════════════════════════════════════════════════════
+  // SMART PACING v4 — "The Perfect Calculation"
+  // - Estimates remaining polling window based on Total Daily Matches
+  // - Prevents rapid spending when future match waves are expected
+  // - Blasts remaining budget safely when the day is ending
   // ═══════════════════════════════════════════════════════════════
   _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap, totalDailyMatches) {
     const now = new Date();
@@ -124,7 +125,8 @@ class Scheduler {
     const capRemaining = Math.max(0, liveCap - liveUsed);
     const spendableCalls = Math.min(spendableBudget, capRemaining);
 
-    // ── 2. Desired interval (live density tiers) ──
+    // ── 2. Desired Interval (Current Live Density) ──
+    // High density = Top leagues playing simultaneously (e.g., Saturday 15:00 block)
     let liveTier;
     let desired;
 
@@ -148,55 +150,60 @@ class Scheduler {
       desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 3 min
     }
 
-    // ── 3. Estimate remaining LIVE window (NOT full day) ──
-    let expectedLiveHours;
-    if (liveCount === 0) {
-      expectedLiveHours = 0;
-    } else if (isNearFinish) {
-      // Matches are ending! Only estimate 30 minutes of action left.
-      expectedLiveHours = 0.5; 
+    // ── 3. Estimate Remaining Polling Window (The Genius Math) ──
+    // Uses totalDailyMatches to anticipate future match waves.
+    let expectedWindowHours;
+    
+    if (hoursUntilMidnight < 1.5) {
+      // Day is ending, no matter what, window is short.
+      expectedWindowHours = hoursUntilMidnight;
+    } else if (totalDailyMatches >= 80) {
+      // Massive day (e.g., 80+ games). Assume action spans 6+ hours (e.g., 15:00 to 21:00).
+      expectedWindowHours = Math.min(hoursUntilMidnight, 6);
+    } else if (totalDailyMatches >= 30) {
+      // Standard day. Assume action spans 4 hours.
+      expectedWindowHours = Math.min(hoursUntilMidnight, 4);
+    } else if (liveCount > 0) {
+      // Light day. Just polling for the current isolated matches (2 hours).
+      expectedWindowHours = Math.min(hoursUntilMidnight, 2);
     } else {
-      // Active live action — window scales with density.
-      if (liveCount <= 5)        expectedLiveHours = 2;
-      else if (liveCount <= 15)  expectedLiveHours = 3;
-      else if (liveCount <= 40)  expectedLiveHours = 4;
-      else                       expectedLiveHours = 5;
+      // No live matches, but checking for future kickoffs.
+      expectedWindowHours = 1; 
     }
     
-    // Hard cap by time until midnight (API reset)
-    expectedLiveHours = Math.min(expectedLiveHours, hoursUntilMidnight);
-    if (expectedLiveHours <= 0) expectedLiveHours = 0.5; // prevent divide by zero
-    
-    const expectedLiveMs = expectedLiveHours * 3600000;
+    const expectedWindowMs = Math.max(0.5, expectedWindowHours) * 3600000; // Min 0.5h to prevent divide-by-zero
 
-    // ── 4. Smart Pacing ──
-    // Pacing ONLY if expected polls at `desired` would burn more than we have.
+    // ── 4. Smart Pacing Decision ──
     let pacingFloor = 0;
     let isPacing = false;
 
     if (spendableCalls <= 0) {
-      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS; // budget locked
-    } else if (liveCount > 0) {
-      const expectedPollsAtDesired = expectedLiveMs / desired;
+      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS; // Budget locked
+    } else {
+      // How many polls would we make if we used the 'desired' interval for the whole window?
+      const expectedPollsAtDesired = expectedWindowMs / desired;
+      
       if (spendableCalls < expectedPollsAtDesired) {
-        // Genuine scarcity — spread calls across expected live window
-        pacingFloor = expectedLiveMs / spendableCalls;
-        // Hard floor: never pace slower than MIN_POLLS_PER_LIVE_HOUR
-        const maxAllowedFloor = 3600000 / LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR; // 15 min
+        // Genuine scarcity! We must spread calls across the remaining window.
+        pacingFloor = expectedWindowMs / spendableCalls;
+        
+        // Hard floor: never pace slower than MIN_POLLS_PER_LIVE_HOUR (1 poll / 15 min)
+        const maxAllowedFloor = 3600000 / LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR; 
         pacingFloor = Math.min(pacingFloor, maxAllowedFloor);
+        
         if (pacingFloor > desired) isPacing = true;
       }
-      // else: budget is sufficient — use `desired` directly (no pacing!)
+      // else: Budget is sufficient! Poll at the desired rapid interval.
     }
 
-    // ── 5. Budget tier label ──
+    // ── 5. Budget Tier Label ──
     let budgetTier = "HEALTHY";
     if (remaining <= 0)                                budgetTier = "EXHAUSTED";
     else if (spendableBudget <= 0)                     budgetTier = "RESERVE_LOCKED";
     else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) budgetTier = "CRITICAL";
     else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD)   budgetTier = "NORMAL";
 
-    // ── 6. Final interval ──
+    // ── 6. Final Interval ──
     let interval;
     if (spendableCalls <= 0 && liveCount > 0) {
       interval = LIVE_POLLING.IDLE_INTERVAL_MS;
@@ -208,7 +215,7 @@ class Scheduler {
     // Never exceed idle (prevents absurd 1h+ waits caused by leftover bugs)
     interval = Math.min(interval, LIVE_POLLING.IDLE_INTERVAL_MS);
 
-    // ── 7. Mode label ──
+    // ── 7. Mode Label ──
     let mode = liveTier;
     if (spendableCalls <= 0)               mode = "BUDGET_LOCKED";
     else if (isPacing)                     mode = `PACING+${liveTier}`;
@@ -223,12 +230,11 @@ class Scheduler {
       isPacing, 
       spendableCalls,
       hoursUntilMidnight: hoursUntilMidnight.toFixed(1),
-      expectedLiveHours:  expectedLiveHours.toFixed(1),
+      expectedWindowHours:  expectedWindowHours.toFixed(1),
       totalDailyMatches 
     };
   }
 
-  
   async _pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller) {
     const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
@@ -254,7 +260,7 @@ class Scheduler {
         
         // Fetch total daily matches from the daily sync status to understand daily density
         const dailyStatusName = sport === "football" ? "footballDailyFixtures" : "basketballDailyFixtures";
-        const totalDailyMatches = this.syncStatus[dailyStatusName]?.lastResult?.total || 0;
+        const totalDailyMatches = this.syncStatus[dailyStatusName]?.lastResult?.totalToday || this.syncStatus[dailyStatusName]?.lastResult?.total || 0;
 
         const state = this._determinePollingState(
           remaining,
@@ -273,7 +279,7 @@ class Scheduler {
             `[Live: ${liveUsed}/${liveCap} cap, API: ${logRemaining}/${API.DAILY_BUDGET}, ` +
             `LiveMatches: ${liveCount}, NearFT: ${isNearFinish ? "Y" : "N"}, ` +
             `Spendable: ${state.spendableCalls}, TimeLeft: ${state.hoursUntilMidnight}h, ` +
-            `LiveWindow: ${state.expectedLiveHours}h, TotalToday: ${state.totalDailyMatches}]`
+            `LiveWindow: ${state.expectedWindowHours}h, TotalToday: ${state.totalDailyMatches}]`
         );
 
         await this._sleep(state.interval);
@@ -458,6 +464,7 @@ class Scheduler {
       cur.lastDuration = result.duration ?? null;
       cur.lastResult = {
         total: result.total ?? null,
+        totalToday: result.totalToday ?? null, // ★ Capture totalToday
         writes: result.writes ?? null,
         removed: result.removed ?? null,
         apiCalls: result.apiCalls ?? null,
@@ -517,7 +524,7 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Adaptive Schedule v2 ═══");
+    logger.info("[Scheduler] ═══ Adaptive Schedule v4 ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
     logger.info(`    0 live       → 30 min  (IDLE)`);
     logger.info(`    1–5 live     → 15 min  (LIVE_LOW)`);
