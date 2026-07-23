@@ -107,29 +107,26 @@ class Scheduler {
   }
 
   // ═══════════════════════════════════════════════════════════════
-  // GENIUS DYNAMIC PACING ALGORITHM
-  // Calculates exact spendable calls over the live match window.
+  // SMART PACING v2
+  // - Desired interval driven by LIVE COUNT (current density)
+  // - Pacing ONLY triggers when budget genuinely cannot sustain
+  //   desired interval across the EXPECTED live window (not full day)
+  // - Uses totalDailyMatches to estimate remaining live window
   // ═══════════════════════════════════════════════════════════════
   _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap, totalDailyMatches) {
-    // ── 1. Calculate time until midnight UTC (API Reset Time) ──
     const now = new Date();
     const endOfDay = new Date(now);
     endOfDay.setUTCHours(24, 0, 0, 0); 
     const msUntilMidnight = Math.max(0, endOfDay - now);
     const hoursUntilMidnight = msUntilMidnight / 3600000;
 
-    // ── 2. Calculate Safe Spendable Calls ──
-    // Always reserve calls for tomorrow's initial daily fetch
+    // ── 1. Calculate Safe Spendable Calls ──
     const reserveForDaily = LIVE_POLLING.RESERVE_FOR_DAILY_CRON;
-    const spendableBudget = Math.max(0, remaining - reserveForDaily);
-    
-    // Cap remaining is the limit set specifically for live polling
+    const spendableBudget = Math.max(0, (remaining ?? API.DAILY_BUDGET) - reserveForDaily);
     const capRemaining = Math.max(0, liveCap - liveUsed);
-    
-    // The true number of calls we can afford to spend on live polling right now
     const spendableCalls = Math.min(spendableBudget, capRemaining);
 
-    // ── 3. Desired interval from live match count ──
+    // ── 2. Desired interval (live density tiers) ──
     let liveTier;
     let desired;
 
@@ -138,14 +135,14 @@ class Scheduler {
       desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2 min
     } else if (liveCount === 0) {
       liveTier = "IDLE";
-      desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 60 min
-    } else if (liveCount <= 10) {
+      desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 30 min
+    } else if (liveCount <= 5) {
       liveTier = "LIVE_LOW";
       desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
-    } else if (liveCount <= 30) {
+    } else if (liveCount <= 15) {
       liveTier = "LIVE_MED";
       desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
-    } else if (liveCount <= 60) {
+    } else if (liveCount <= 40) {
       liveTier = "LIVE_HIGH";
       desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
     } else {
@@ -153,59 +150,73 @@ class Scheduler {
       desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 3 min
     }
 
-    // ── 4. Dynamic Pacing Floor (The Genius Math) ──
-    // Spreads remaining spendable calls perfectly across the remaining time
+    // ── 3. Estimate remaining LIVE window (NOT full day) ──
+    // Heuristic: peak window scales with live density + total daily load.
+    let expectedLiveHours;
+    if (liveCount === 0) {
+      // No live now. If today has many matches, kickoff likely coming soon.
+      if (totalDailyMatches >= 50)      expectedLiveHours = 6;
+      else if (totalDailyMatches >= 20) expectedLiveHours = 4;
+      else                              expectedLiveHours = 3;
+    } else {
+      // Active live action — window scales with density.
+      if (liveCount <= 5)        expectedLiveHours = 3;
+      else if (liveCount <= 15)  expectedLiveHours = 5;
+      else if (liveCount <= 40)  expectedLiveHours = 6;
+      else                       expectedLiveHours = 8;
+    }
+    
+    // Hard cap by global peak window constant and time until midnight
+    expectedLiveHours = Math.min(expectedLiveHours, hoursUntilMidnight, LIVE_POLLING.EXPECTED_PEAK_LIVE_HOURS);
+    if (expectedLiveHours <= 0) expectedLiveHours = 1; // prevent divide by zero
+    
+    const expectedLiveMs = expectedLiveHours * 3600000;
+
+    // ── 4. Smart Pacing ──
+    // Pacing ONLY if expected polls at `desired` would burn more than we have.
     let pacingFloor = 0;
     let isPacing = false;
 
     if (spendableCalls <= 0) {
-      // Cannot afford to poll anymore, wait 1 hour to recheck
-      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS;
+      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS; // budget locked
     } else if (liveCount > 0) {
-      pacingFloor = msUntilMidnight / spendableCalls;
-      if (pacingFloor > desired) {
-        isPacing = true;
+      const expectedPollsAtDesired = expectedLiveMs / desired;
+      if (spendableCalls < expectedPollsAtDesired) {
+        // Genuine scarcity — spread calls across expected live window
+        pacingFloor = expectedLiveMs / spendableCalls;
+        // Hard floor: never pace slower than MIN_POLLS_PER_LIVE_HOUR
+        const maxAllowedFloor = 3600000 / LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR; // 15 min
+        pacingFloor = Math.min(pacingFloor, maxAllowedFloor);
+        if (pacingFloor > desired) isPacing = true;
       }
+      // else: budget is sufficient — use `desired` directly (no pacing!)
     }
 
-    // ── 5. Hard limit floors (Emergency Budget Tiers) ──
+    // ── 5. Budget tier label ──
     let budgetTier = "HEALTHY";
-    
-    if (remaining <= 0) {
-      budgetTier = "EXHAUSTED";
-    } else if (spendableBudget <= 0) {
-      budgetTier = "RESERVE_LOCKED";       
-    } else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) {
-      budgetTier = "CRITICAL";      
-    } else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) {
-      budgetTier = "NORMAL";        
-    }
+    if (remaining <= 0)                                budgetTier = "EXHAUSTED";
+    else if (spendableBudget <= 0)                     budgetTier = "RESERVE_LOCKED";
+    else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) budgetTier = "CRITICAL";
+    else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD)   budgetTier = "NORMAL";
 
-    // ── 6. Final interval = Math.max(desired, pacingFloor) ──
+    // ── 6. Final interval ──
     let interval;
     if (spendableCalls <= 0 && liveCount > 0) {
-      interval = LIVE_POLLING.IDLE_INTERVAL_MS; // Budget locked, wait 1h
+      interval = LIVE_POLLING.IDLE_INTERVAL_MS;
     } else {
       interval = Math.max(desired, pacingFloor);
     }
+    if (liveCount === 0) interval = LIVE_POLLING.IDLE_INTERVAL_MS;
     
-    // Never exceed idle interval if no live matches
-    if (liveCount === 0) {
-      interval = LIVE_POLLING.IDLE_INTERVAL_MS;
-    }
+    // Never exceed idle (prevents absurd 1h+ waits caused by leftover bugs)
+    interval = Math.min(interval, LIVE_POLLING.IDLE_INTERVAL_MS);
 
-    // ── 7. Human-readable mode label ──
+    // ── 7. Mode label ──
     let mode = liveTier;
-
-    if (spendableCalls <= 0) {
-      mode = "BUDGET_LOCKED";
-    } else if (isPacing) {
-      mode = `PACING+${liveTier}`;
-    } else if (budgetTier === "CRITICAL") {
-      mode = `BUDGET_CRIT+${liveTier}`;
-    } else if (budgetTier === "NORMAL") {
-      mode = `BUDGET_NORMAL+${liveTier}`;
-    }
+    if (spendableCalls <= 0)               mode = "BUDGET_LOCKED";
+    else if (isPacing)                     mode = `PACING+${liveTier}`;
+    else if (budgetTier === "CRITICAL")    mode = `BUDGET_CRIT+${liveTier}`;
+    else if (budgetTier === "NORMAL")      mode = `BUDGET_NORMAL+${liveTier}`;
 
     return { 
       mode, 
@@ -215,6 +226,7 @@ class Scheduler {
       isPacing, 
       spendableCalls,
       hoursUntilMidnight: hoursUntilMidnight.toFixed(1),
+      expectedLiveHours:  expectedLiveHours.toFixed(1),
       totalDailyMatches 
     };
   }
@@ -263,7 +275,7 @@ class Scheduler {
             `[Live: ${liveUsed}/${liveCap} cap, API: ${logRemaining}/${API.DAILY_BUDGET}, ` +
             `LiveMatches: ${liveCount}, NearFT: ${isNearFinish ? "Y" : "N"}, ` +
             `Spendable: ${state.spendableCalls}, TimeLeft: ${state.hoursUntilMidnight}h, ` +
-            `TotalToday: ${state.totalDailyMatches}]`
+            `LiveWindow: ${state.expectedLiveHours}h, TotalToday: ${state.totalDailyMatches}]`
         );
 
         await this._sleep(state.interval);
@@ -507,19 +519,20 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Adaptive Schedule Configuration ═══");
+    logger.info("[Scheduler] ═══ Adaptive Schedule v2 ═══");
     logger.info("  Live-Count Tiers (desired intervals):");
-    logger.info(`    0 live      → 60 min   (IDLE)`);
-    logger.info(`    1–10 live   → 15 min   (LIVE_LOW)`);
-    logger.info(`    11–30 live  → 10 min   (LIVE_MED)`);
-    logger.info(`    31–60 live  →  5 min   (LIVE_HIGH)`);
-    logger.info(`    61+ live    →  3 min   (LIVE_MASS)`);
-    logger.info(`    80'+ / ET   →  2 min   (NEAR_FT)`);
-    logger.info("  Dynamic Pacing: Spends remaining API calls perfectly across remaining time.");
+    logger.info(`    0 live       → 30 min  (IDLE)`);
+    logger.info(`    1–5 live     → 15 min  (LIVE_LOW)`);
+    logger.info(`    6–15 live    → 10 min  (LIVE_MED)`);
+    logger.info(`    16–40 live   →  5 min  (LIVE_HIGH)`);
+    logger.info(`    41+ live     →  3 min  (LIVE_MASS)`);
+    logger.info(`    80'+ / ET    →  2 min  (NEAR_FT)`);
+    logger.info("  Pacing triggers ONLY when expected live-window polls > spendable calls.");
+    logger.info(`  Hard pacing floor: 15 min (MIN_POLLS_PER_LIVE_HOUR=${LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR})`);
     logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);
-    logger.info(`  Reserve for Daily:   ${LIVE_POLLING.RESERVE_FOR_DAILY_CRON} calls protected`);
+    logger.info(`  Reserve for Daily:   ${LIVE_POLLING.RESERVE_FOR_DAILY_CRON} calls`);
     logger.info("[Scheduler] ═════════════════════════════════════");
   }
 }

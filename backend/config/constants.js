@@ -111,7 +111,7 @@ const LEAGUES = Object.freeze([
   { id: 234, name: "Copa Argentina",         country: "Argentina",  flag: "🇦🇷", season: SEASON, priority: 41, tier: 3, active: true },
   { id: 253, name: "MLS",                    country: "USA",        flag: "🇺🇸", season: SEASON, priority: 42, tier: 2, active: true },
   { id: 262, name: "Liga MX",                country: "Mexico",     flag: "🇲🇽", season: SEASON, priority: 43, tier: 2, active: true },
-  { id: 242, name: "Ecuador Serie A",        country: "Ecuador",    flag: "🇪🇨", season: SEASON, priority: 44, tier: 3, active: true },
+  { id: 242, name: "Ecuador Serie A",        country: "Ecuador",    flag: "🇨🇨", season: SEASON, priority: 44, tier: 3, active: true },
   { id: 250, name: "Primera División",       country: "Paraguay",   flag: "🇵🇾", season: SEASON, priority: 45, tier: 3, active: true },
   { id: 263, name: "Primera División",       country: "Chile",      flag: "🇨🇱", season: SEASON, priority: 46, tier: 3, active: true },
   { id: 271, name: "Primera División",       country: "Peru",       flag: "🇵🇪", season: SEASON, priority: 47, tier: 3, active: true },
@@ -237,21 +237,25 @@ const API = Object.freeze({ PAGE_SIZE: 100, DAILY_BUDGET: 100 });
 const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTURES_DAILY: "0 3 * * *" });
 
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 60,
-  BASKETBALL_DAILY_LIVE_CAP: 20,
-  IDLE_INTERVAL_MS:        3600000,  
-  LOW_LIVE_INTERVAL_MS:    900000,   
-  MEDIUM_LIVE_INTERVAL_MS: 600000,   
-  HIGH_LIVE_INTERVAL_MS:   300000,   
-  MASSIVE_LIVE_INTERVAL_MS:180000,   
-  NEAR_FINISH_INTERVAL_MS: 120000,   
-  RESERVE_FOR_DAILY_CRON:  15,
-  MIN_BUDGET_TO_POLL:      3,
-  BUDGET_NORMAL_THRESHOLD: 30,
-  BUDGET_CRITICAL_THRESHOLD: 15,
-  FT_CONFIRMATION_DELAY_MS: 60000,
-  MAX_CONSECUTIVE_ERRORS: 3,
-  ERROR_BACKOFF_MS:       60000,
+  FOOTBALL_DAILY_LIVE_CAP: 90,        // ↑ was 60 — too tight, caused premature pacing
+  BASKETBALL_DAILY_LIVE_CAP: 25,
+  IDLE_INTERVAL_MS:           1800000, // 30 min (was 60) — catch kickoffs faster
+  LOW_LIVE_INTERVAL_MS:       900000,  // 15 min  (1–5 live)
+  MEDIUM_LIVE_INTERVAL_MS:    600000,  // 10 min  (6–15 live)
+  HIGH_LIVE_INTERVAL_MS:      300000,  //  5 min  (16–40 live)
+  MASSIVE_LIVE_INTERVAL_MS:   180000,  //  3 min  (41+ live)
+  NEAR_FINISH_INTERVAL_MS:    120000,  //  2 min  (80'+ / ET / PEN)
+  RESERVE_FOR_DAILY_CRON:     10,      // ↓ was 15 — daily fetch only needs ~3-5 calls
+  MIN_BUDGET_TO_POLL:         3,
+  BUDGET_NORMAL_THRESHOLD:    25,      // ↓ from 30
+  BUDGET_CRITICAL_THRESHOLD:  10,      // ↓ from 15
+  FT_CONFIRMATION_DELAY_MS:   60000,
+  MAX_CONSECUTIVE_ERRORS:     3,
+  ERROR_BACKOFF_MS:           60000,
+
+  // ★ NEW — smart window estimation
+  EXPECTED_PEAK_LIVE_HOURS:   6,   // typical European match-day live window
+  MIN_POLLS_PER_LIVE_HOUR:    4,   // absolute floor: 1 poll / 15 min during live action
 });
 
 const FT_RECOVERY = Object.freeze({ ENABLED: true, MIN_BUDGET_TO_FETCH: 5, COOLDOWN_MS: 900000, DEDUP_KEY: "ftRecoveredAt" });

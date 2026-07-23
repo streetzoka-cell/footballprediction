@@ -1,6 +1,6 @@
 // ═════════════════════════════════════════════════════════════════════════════════
 // FILE: src/pages/Fixtures.jsx
-// ★ FIXED: Restored reliable polling, removed duplicate-pushing logic, true local time.
+// ★ FIXED: Cleaned up live match merging, true local time, premium UI structure.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
@@ -140,14 +140,12 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
       if (prev) {
         if (h != null && prev.h != null && h > prev.h) {
           if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
-          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'home']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'home']])); setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
         }
         if (a != null && prev.a != null && a > prev.a) {
           if (shouldNotify) { addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${h}–${a}`, dur: 3500 }); if (Sound.on) Sound.goal(); setConfettiKey(k => k + 1); }
-          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'away']]));
-          setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
+          setFlashGoals(p => new Set([...p, id])); setScorePops(p => new Map([...p, [id, 'away']])); setTO(`pop-${id}`, () => setScorePops(p => { const n = new Map(p); n.delete(id); return n; }), 600);
           setTO(`flash-${id}`, () => setFlashGoals(p => { const n = new Set(p); n.delete(id); return n; }), 3000);
         }
       }
@@ -194,9 +192,7 @@ const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).so
 function extractMatchDate(m) {
   if (!m) return '';
   const rawDate = m.utcDate || m.date || (m.timestamp ? new Date(m.timestamp).toISOString() : null);
-  if (rawDate) {
-    return getLocalDateFromUtc(rawDate);
-  }
+  if (rawDate) return getLocalDateFromUtc(rawDate);
   if (m.date && m.date.includes('T')) return m.date.split('T')[0];
   if (m.date) return m.date;
   return '';
@@ -230,10 +226,7 @@ function normalizeMatch(raw, isPrimary) {
   if (isLive && timestamp > 0) {
     const twoHalfHoursMs = 2.5 * 60 * 60 * 1000;
     if (Date.now() > timestamp + twoHalfHoursMs) {
-      isLive = false;
-      isHT = false;
-      isFinished = true;
-      status = 'FT';
+      isLive = false; isHT = false; isFinished = true; status = 'FT';
     }
   }
 
@@ -243,28 +236,19 @@ function normalizeMatch(raw, isPrimary) {
       isFinished = true; isStarted = false; isHT = false; status = 'FT';
     } else if (dateStr === todayDateStr && timestamp > 0) {
       const elapsed = Date.now() - timestamp;
-      const hasAnyScore = (raw.homeScore != null && raw.homeScore > 0) ||
-                           (raw.awayScore != null && raw.awayScore > 0) ||
-                           (raw.score?.fullTime?.home != null && raw.score?.fullTime?.home > 0) ||
-                           (raw.score?.fullTime?.away != null && raw.score?.fullTime?.away > 0);
-      if (elapsed > (3 * 60 * 60 * 1000) && !hasAnyScore) {
-        isFinished = true; status = 'FT';
-      }
+      const hasAnyScore = (raw.homeScore != null && raw.homeScore > 0) || (raw.awayScore != null && raw.awayScore > 0) || (raw.score?.fullTime?.home != null && raw.score?.fullTime?.home > 0) || (raw.score?.fullTime?.away != null && raw.score?.fullTime?.away > 0);
+      if (elapsed > (3 * 60 * 60 * 1000) && !hasAnyScore) { isFinished = true; status = 'FT'; }
     }
   }
 
-  if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) {
-    isStarted = true;
-  }
+  if (timestamp > 0 && Date.now() > timestamp && !isLive && !isFinished) isStarted = true;
 
   const homeScore = isPrimary ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
   const awayScore = isPrimary ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
 
   return {
-    id, dateStr, kickoff, timestamp,
-    status, isLive, isHT, isFinished,
-    minute: raw.minute || raw.elapsed || null, 
-    isStarted, 
+    id, dateStr, kickoff, timestamp, status, isLive, isHT, isFinished,
+    minute: raw.minute || raw.elapsed || null, isStarted, 
     homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
     awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
     homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
@@ -274,8 +258,7 @@ function normalizeMatch(raw, isPrimary) {
     homeScore, awayScore,
     leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
     leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
-    score: raw.score, 
-    stats: raw.stats || raw.matchStats || [],
+    score: raw.score, stats: raw.stats || raw.matchStats || [],
   };
 }
 
@@ -562,7 +545,6 @@ export default function Fixtures() {
   const [expanded, setExpanded] = useState(null);
   const [searchQ, setSearchQ] = useState('');
   
-  // ★ NEW: Global live state to prevent polling overwrites
   const [globalLiveMatches, setGlobalLiveMatches] = useState([]);
 
   const deferredSearch = useDeferredValue(searchQ);
@@ -612,7 +594,6 @@ export default function Fixtures() {
 
   const isPrimaryDate = [yesterdayStr(), todayStr(), tomorrowStr()].includes(selectedDate);
 
-  // ★ NEW: Helper to merge live matches into base matches
   const mergeLiveMatches = useCallback((baseMatches, liveMatches) => {
     if (!liveMatches || liveMatches.length === 0) return baseMatches;
     const liveMap = new Map(liveMatches.map(m => [String(m.id), m]));
@@ -638,7 +619,6 @@ export default function Fixtures() {
       const l = Array.isArray(res) ? res : res?.matches || [];
       let baseMatches = l.map(m => normalizeMatch(m, true));
       
-      // ★ FIX: Merge any live matches we already have immediately
       if (globalLiveMatches.length > 0) {
         baseMatches = mergeLiveMatches(baseMatches, globalLiveMatches);
       }
@@ -664,7 +644,6 @@ export default function Fixtures() {
     return () => clearInterval(interval);
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
-  // ★ RESTORED: Listen to selected date's snapshot for live matches
   useEffect(() => {
     const unsub = subscribeToLiveFixtures(selectedDate, ({ matches: lm }) => {
       if (!lm) return;
@@ -673,7 +652,6 @@ export default function Fixtures() {
     return () => unsub();
   }, [selectedDate]);
 
-  // ★ NEW: Effect to merge global live matches into primaryFixtures
   useEffect(() => {
     if (globalLiveMatches.length === 0) return;
     
@@ -695,10 +673,6 @@ export default function Fixtures() {
         }
         return f;
       });
-      
-      // ★ FIX: Removed the block that pushes liveMap values into the array.
-      // This was causing duplicates when matches bled across timezone boundaries.
-      // The 45-second poll will naturally pick up any matches that belong to this date.
       
       return changed ? next : prev;
     });

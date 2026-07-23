@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/api.jsx
-// ★ RESTORED: Uses daily snapshot listener to avoid DB permission errors.
-// ★ KEPT: 3-day UTC window fetch for true global timezone support.
+// ★ FIXED: Prioritizes live and finished matches over scheduled to prevent stale data.
+// ★ FIXED: Properly returns live and finished arrays instead of hardcoding empty arrays.
 // ═══════════════════════════════════════════════════════════════
 
 import { db, auth } from './firebase';
@@ -115,28 +115,43 @@ export async function fetchFixtures(dateStr, { forceRefresh = false } = {}) {
       dataLayer.fetchFootballSnapshot(d3)
     ]);
     
-    const allMatches = [
-      ...(s1?.matches || []), ...(s1?.live || []), ...(s1?.finished || []),
-      ...(s2?.matches || []), ...(s2?.live || []), ...(s2?.finished || []),
-      ...(s3?.matches || []), ...(s3?.live || []), ...(s3?.finished || [])
-    ];
+    // ★ FIX: Prioritize LIVE and FINISHED over scheduled matches to prevent stale scores overriding live data
+    const rawLive = [...(s1?.live || []), ...(s2?.live || []), ...(s3?.live || [])];
+    const rawFinished = [...(s1?.finished || []), ...(s2?.finished || []), ...(s3?.finished || [])];
+    const rawScheduled = [...(s1?.matches || []), ...(s2?.matches || []), ...(s3?.matches || [])];
     
-    // Deduplicate
+    // Deduplicate strictly in priority order (Live > Finished > Scheduled)
     const seen = new Set();
-    const unique = allMatches.filter(m => {
+    const addUnique = (arr) => arr.filter(m => {
       const id = String(m.id || m.matchId);
-      if (seen.has(id)) return false;
+      if (!id || seen.has(id)) return false;
       seen.add(id);
       return true;
     });
     
+    const uniqueLive = addUnique(rawLive);
+    const uniqueFinished = addUnique(rawFinished);
+    const uniqueScheduled = addUnique(rawScheduled);
+    
+    const allUnique = [...uniqueLive, ...uniqueFinished, ...uniqueScheduled];
+    
     // Filter strictly by user's Local Date
-    const filtered = unique.filter(m => getLocalDateFromUtc(m.date) === dateStr);
+    const filtered = allUnique.filter(m => getLocalDateFromUtc(m.date) === dateStr);
     
     // Transform matches so the frontend UI can read them properly
     const transformed = filtered.map(transformMatch).filter(Boolean);
     
-    return { matches: transformed, live: [], finished: [], updatedAt: s2?.updatedAt || s1?.updatedAt || s3?.updatedAt, error: null, isRolloverWindow: isInRolloverWindow() };
+    const liveMatches = transformed.filter(m => m.isLive);
+    const finishedMatches = transformed.filter(m => m.isFinished);
+    
+    return { 
+      matches: transformed, 
+      live: liveMatches, 
+      finished: finishedMatches, 
+      updatedAt: s2?.updatedAt || s1?.updatedAt || s3?.updatedAt, 
+      error: null, 
+      isRolloverWindow: isInRolloverWindow() 
+    };
   } catch (err) { return emptyResult(err.message); }
 }
 
