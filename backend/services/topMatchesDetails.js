@@ -71,11 +71,12 @@ class TopMatchesDetailsService {
 
         this.callsToday += 3;
 
+        // ★ FIX: Use optional chaining (?.) to prevent crash if API returns empty data
         await docRef.set({
           id: matchId,
-          events: eventsRes.data.response || [],
-          lineups: lineupsRes.data.response || [],
-          statistics: statsRes.data.response || [],
+          events: eventsRes.data?.response || [],
+          lineups: lineupsRes.data?.response || [],
+          statistics: statsRes.data?.response || [],
           cachedAt: Date.now()
         }, { merge: true });
 

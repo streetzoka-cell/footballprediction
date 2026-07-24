@@ -14,7 +14,7 @@ export default defineConfig({
       filename: 'bundle-stats.html'
     }),
     VitePWA({
-      registerType: 'autoUpdate', // ★ Forces update checks
+      registerType: 'autoUpdate',
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png'],
       manifest: {
         name: 'ZokaScore',
@@ -32,18 +32,11 @@ export default defineConfig({
         ]
       },
       workbox: {
-        // ★ FIX: Clean up old caches and take over immediately
         skipWaiting: true,
         clientsClaim: true,
         cleanupOutdatedCaches: true,
-        
-        // Only cache the app shell (static files), never API/Firestore
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
-        
-        // ★ CRITICAL FOR FOOTBALL APP: 
-        // This guarantees the SW will NEVER return cached/stale match data.
-        // It will always fetch live scores from the network.
         runtimeCaching: [
           {
             urlPattern: /\/api\//,

@@ -47,12 +47,12 @@ async function generateSitemap() {
 
     const dynamicRoutes = [];
     const processedMatchIds = new Set();
+    const processedTeamIds = new Set();
 
     // Helper to extract matches from a snapshot
     const extractMatches = (snap) => {
       if (!snap.exists) return;
       const data = snap.data();
-      // Backend structure is { matches: [], live: [], finished: [] }
       const allMatches = [
         ...(data.matches || []), 
         ...(data.live || []),
@@ -105,7 +105,7 @@ async function generateSitemap() {
     });
     console.log(`Found ${newsCount} news posts to add to sitemap.`);
 
-    // 🆕 3. Fetch Leagues for Permanent SEO Pages
+    // 3. Fetch Leagues for Permanent SEO Pages
     try {
       const leaguesSnap = await db.collection("fd_competitions").doc("all").get();
       if (leaguesSnap.exists) {
@@ -122,22 +122,29 @@ async function generateSitemap() {
       }
     } catch (e) { console.warn("Could not fetch leagues for sitemap:", e.message); }
 
-    // 🆕 4. Fetch Teams for Permanent SEO Pages
+    // 4. Fetch Teams for Permanent SEO Pages
+    // ★ FIX: Teams are stored inside documents like fd_teams/PL, fd_teams/SA
     try {
       const teamsSnap = await db.collection("fd_teams").get();
       let teamCount = 0;
+      
       teamsSnap.forEach(doc => {
-        const teamData = doc.data();
-        // If fd_teams stores an array of teams in a single doc, adjust accordingly. 
-        // Assuming fd_teams is a collection of team documents.
-        const slug = createSlug(teamData.name || "team");
-        dynamicRoutes.push({
-          url: `/team/${doc.id}/${slug}`,
-          changefreq: "daily",
-          priority: 0.8
+        const teamsArray = doc.data().teams || [];
+        teamsArray.forEach(team => {
+          const teamId = team.id;
+          if (teamId && !processedTeamIds.has(String(teamId))) {
+            const slug = createSlug(team.name || "team");
+            dynamicRoutes.push({
+              url: `/team/${teamId}/${slug}`,
+              changefreq: "daily",
+              priority: 0.8
+            });
+            processedTeamIds.add(String(teamId));
+            teamCount++;
+          }
         });
-        teamCount++;
       });
+      
       console.log(`Found ${teamCount} teams to add to sitemap.`);
     } catch (e) { console.warn("Could not fetch teams for sitemap:", e.message); }
 
