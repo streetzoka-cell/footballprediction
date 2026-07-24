@@ -1,319 +1,374 @@
-import { useEffect, useState, useMemo, useCallback, memo } from 'react';
-import { Link } from 'react-router-dom'; // 🆕 Added
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import { ArrowLeft, Calendar, MapPin, Users, Trophy } from 'lucide-react';
+import SEO from '../components/SEO';
+import { fetchFixtures, fetchYesterdayFixtures, fetchTomorrowFixtures, fetchLeagueStandings, subscribeToLiveFixtures } from "../utils/api";
+import { todayStr as getTodayStr } from "../utils/dates";
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
-/* ═══════════════════════════════════════════════════
-   UTILITIES
-   ═══════════════════════════════════════════════════ */
-const LIVE_SET = new Set(['1H','2H','HT','ET','BT','P','1Q','Q1','2Q','Q2','3Q','Q3','4Q','Q4','OT']);
-const FINISHED_SET = new Set(['FT','AET','PEN','ABD','AWD','WO','completed','FINISHED']);
-
-const isMatchLive = (m) => m.isLive || LIVE_SET.has(m.status) || LIVE_SET.has(m.rawStatus);
-const isMatchFinished = (m) => m.isFinished || FINISHED_SET.has(m.status) || FINISHED_SET.has(m.rawStatus);
-const isMatchScheduled = (m) => !isMatchLive(m) && !isMatchFinished(m) && (m.homeScore == null);
-
-const getConfidence = (h, d, a) => {
-  const m = Math.max(h, d, a);
-  if (m >= 55) return { label: 'High', color: '#10b981' };
-  if (m >= 40) return { label: 'Medium', color: '#fbbf24' };
-  return { label: 'Low', color: '#ef4444' };
-};
-
-// 🆕 Helper for routing slugs
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
-const TeamBadge = memo(({ logo, name, color, abbr }) => {
-  const fallback = color || '#1a1f2b';
-  const initials = abbr || (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3);
-  return (
-    <div className="mc-team-badge" style={{ background: fallback }}>
-      {/* 🆕 Added width, height, and alt text */}
-      {logo ? <img src={logo} alt={`${name} logo`} width="24" height="24" loading="lazy" style={{objectFit: 'contain'}} /> : <span className="abbr">{initials}</span>}
-    </div>
-  );
-});
-
-/* ═══════════════════════════════════════════════════
-   SCORE DISPLAY COMPONENT
-   ═══════════════════════════════════════════════════ */
-const ScoreDisplay = memo(({ predicted, actual, isLive, isFinished, isScheduled, timeStr, goalFlash, scoreKey }) => {
-  if (isScheduled) return <div className="mc-time-display">{timeStr || '--:--'}</div>;
-
-  const hasActual = actual && actual.home != null && actual.away != null;
-  const hasPredicted = predicted && predicted.home != null && predicted.away != null;
-
-  if (isFinished) {
-    if (hasActual) {
-      const hOk = hasPredicted && predicted.home === actual.home;
-      const aOk = hasPredicted && predicted.away === actual.away;
-      const bothOk = hOk && aOk;
-      return (
-        <div className={`mc-score-area ${goalFlash ? 'mc-goal-flash' : ''}`}>
-          <div className={`mc-score-row ${scoreKey === 'changed' ? 'mc-score-pop' : ''}`}>
-            <div className="mc-score-box" style={{ borderColor: hOk ? '#10b981' : '#151b26', color: '#f8fafc', boxShadow: hOk ? '0 0 10px rgba(16,185,129,.2)' : 'none' }}>{actual.home}</div>
-            <span className="mc-score-sep">-</span>
-            <div className="mc-score-box" style={{ borderColor: aOk ? '#10b981' : '#151b26', color: '#f8fafc', boxShadow: aOk ? '0 0 10px rgba(16,185,129,.2)' : 'none' }}>{actual.away}</div>
-          </div>
-          {hasPredicted && (
-            <div className="mc-pred-row">
-              <span>Pred: {predicted.home}-{predicted.away}</span>
-              {bothOk && <span className="mc-exact-tag mc-exact-pop">&#10003; EXACT</span>}
-            </div>
-          )}
-        </div>
-      );
-    }
-    return (
-      <div className="mc-score-area">
-        <div className="mc-score-row">
-          <div className="mc-score-box" style={{ borderColor: '#151b26', color: '#475569' }}>-</div>
-          <span className="mc-score-sep">-</span>
-          <div className="mc-score-box" style={{ borderColor: '#151b26', color: '#475569' }}>-</div>
-        </div>
-        {hasPredicted && (
-          <div className="mc-pred-row">
-            <span>Pred: {predicted.home}-{predicted.away}</span>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  const showScores = hasActual || hasPredicted;
-  const h = hasActual ? actual.home : hasPredicted ? predicted.home : '?';
-  const a = hasActual ? actual.away : hasPredicted ? predicted.away : '?';
-  const isPredOnly = !hasActual && hasPredicted;
-
-  return (
-    <div className={`mc-score-area ${goalFlash ? 'mc-goal-flash' : ''}`}>
-      {showScores && (
-        <div className={`mc-score-row ${scoreKey === 'changed' ? 'mc-score-pop' : ''}`}>
-          <div className="mc-score-box" style={{ borderColor: isPredOnly ? 'rgba(16,185,129,.25)' : '#151b26', color: isLive ? '#ef4444' : isPredOnly ? '#10b981' : '#64748b', boxShadow: isPredOnly ? '0 0 10px rgba(16,185,129,.15)' : 'none' }}>{h}</div>
-          <span className="mc-score-sep">-</span>
-          <div className="mc-score-box" style={{ borderColor: isPredOnly ? 'rgba(16,185,129,.25)' : '#151b26', color: isLive ? '#ef4444' : isPredOnly ? '#10b981' : '#64748b', boxShadow: isPredOnly ? '0 0 10px rgba(16,185,129,.15)' : 'none' }}>{a}</div>
-        </div>
-      )}
-      {hasPredicted && !isPredOnly && (
-        <div className="mc-pred-row">
-          <span>Pred: {predicted.home}-{predicted.away}</span>
-        </div>
-      )}
-      {!hasPredicted && !isScheduled && <div className="mc-score-label">{isLive ? 'LIVE' : ''}</div>}
-    </div>
-  );
-});
-
-const ProbBar = memo(({ label, value, type, delay = 0 }) => {
-  const [w, setW] = useState(0);
-  const isHigh = (type === 'home' && value >= 45) || (type === 'draw' && value >= 30) || (type === 'away' && value >= 45);
+/* ═══════════════════════════════════════════════════════════════
+   ISOLATED LIVE TIMELINE COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+const LiveTimeline = ({ match, isLive, isFin }) => {
+  const [currentTime, setCurrentTime] = useState(Date.now());
 
   useEffect(() => {
-    const t = setTimeout(() => setW(value), 80 + delay);
-    return () => clearTimeout(t);
-  }, [value, delay]);
+    if (!isLive) return;
+    const timer = setInterval(() => setCurrentTime(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, [isLive]);
+
+  const { phase, displayMinute, timelineProgress } = useMemo(() => {
+    // ★ FIX: Added optional chaining to prevent crash if match is undefined
+    const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
+    const elapsedMs = currentTime - kickoffTime;
+    const elapsedMins = Math.floor(elapsedMs / 60000);
+
+    let p = 'Scheduled';
+    let dM = match?.minute || 0;
+    let tP = 0;
+
+    if (isLive) {
+      if (match?.status === '1H') {
+        p = 'First Half';
+        dM = match.minute || Math.min(elapsedMins, 45);
+        tP = (dM / 90) * 100;
+      } else if (match?.status === 'HT') {
+        p = 'Half Time';
+        dM = 45;
+        tP = 50;
+      } else if (match?.status === '2H' || match?.status === 'ET' || match?.status === 'P') {
+        p = match.status === 'ET' ? 'Extra Time' : match.status === 'P' ? 'Penalties' : 'Second Half';
+        const secondHalfMins = Math.max(0, elapsedMins - 60);
+        dM = match.minute || Math.min(45 + secondHalfMins, 90);
+        tP = Math.min((dM / 90) * 100, 100);
+      }
+    } else if (isFin) {
+      p = 'Full Time';
+      dM = 90;
+      tP = 100;
+    } else if (kickoffTime > currentTime) {
+      p = 'Scheduled';
+      const diffMins = Math.floor((kickoffTime - currentTime) / 60000);
+      if (diffMins < 60) p = `Starts in ${diffMins}m`;
+      else p = `Starts in ${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+    }
+
+    return { phase: p, displayMinute: dM, timelineProgress: tP };
+  }, [match, isLive, isFin, currentTime]);
+
+  if (!isLive && !isFin) return null;
 
   return (
-    <div className="mc-prob-row">
-      <span className="mc-prob-label" style={{ color: isHigh ? '#f8fafc' : '#64748b', fontWeight: isHigh ? 700 : 600 }}>{label}</span>
-      <div className="mc-prob-track">
-        <div className={`mc-prob-fill ${type}`} style={{ width: `${w}%` }} />
+    <div className="md-timeline-card">
+      <div className="md-timeline-labels">
+        <span className="md-timeline-label">Kickoff</span>
+        <span className="md-timeline-label">Half Time</span>
+        <span className="md-timeline-label">Full Time</span>
       </div>
-      <span className="mc-prob-value" style={{ color: isHigh ? '#f8fafc' : '#94a3b8' }}>{value}%</span>
+      
+      <div className="md-timeline-track">
+        <div className="md-timeline-marker"></div>
+        <div 
+          className={`md-timeline-fill ${isLive ? 'md-timeline-fill-live' : 'md-timeline-fill-fin'}`} 
+          style={{ width: `${timelineProgress}%` }}
+        ></div>
+        
+        {isLive && (
+          <div 
+            className="md-timeline-dot" 
+            style={{ left: `calc(${timelineProgress}% - 6px)` }}
+          ></div>
+        )}
+      </div>
+      
+      <div className="md-timeline-mins">
+        <span>0'</span>
+        <span>45'</span>
+        <span>90'</span>
+      </div>
     </div>
-  );
-});
-
-/* ═══════════════════════════════════════════════════
-   MAIN COMPONENT (Memoized)
-   ═══════════════════════════════════════════════════ */
-const MatchCardBase = ({
-  match, showOdds = true, showProb = true, compact = false,
-  goalFlash = false, kickOff = false, scoreKey = null,
-  onClick, index = 0,
-}) => {
-  const [hovered, setHovered] = useState(false);
-
-  const live = useMemo(() => isMatchLive(match), [match.status, match.rawStatus, match.isLive]);
-  const finished = useMemo(() => isMatchFinished(match), [match.status, match.rawStatus, match.isFinished]);
-  const scheduled = useMemo(() => isMatchScheduled(match), [match.homeScore, live, finished]);
-
-  const timeStr = useMemo(() => match.kickoff || (match.date ? new Date(match.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''), [match.kickoff, match.date]);
-  const dateStr = useMemo(() => match.date ? new Date(match.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '', [match.date]);
-  
-  const lc = match.league?.color || '#10b981';
-  const hasProbs = showProb && match.homeWinProb != null;
-  const hasOdds = showOdds && match.homeOdds;
-  const cf = useMemo(() => hasProbs ? getConfidence(match.homeWinProb, match.drawProb, match.awayWinProb) : null, [hasProbs, match.homeWinProb, match.drawProb, match.awayWinProb]);
-
-  const predicted = useMemo(() => {
-    if (match.predictedHomeScore != null && match.predictedAwayScore != null) {
-      return { home: match.predictedHomeScore, away: match.predictedAwayScore };
-    }
-    return undefined;
-  }, [match.predictedHomeScore, match.predictedAwayScore]);
-
-  const actual = useMemo(() => {
-    if (!finished) return undefined;
-    if (match.actualHomeScore != null && match.actualAwayScore != null) {
-      return { home: match.actualHomeScore, away: match.actualAwayScore };
-    }
-    if (match.homeScore != null && match.awayScore != null) {
-      const bothZero = match.homeScore === 0 && match.awayScore === 0;
-      const hasMinute = match.minute != null || match.elapsed != null;
-      if (bothZero && !hasMinute) return undefined;
-      return { home: match.homeScore, away: match.awayScore };
-    }
-    return undefined;
-  }, [finished, match.actualHomeScore, match.actualAwayScore, match.homeScore, match.awayScore, match.minute, match.elapsed]);
-
-  const oddsData = useMemo(() => [
-    { label: 'Home', value: match.homeOdds, key: 'home' },
-    { label: 'Draw', value: match.drawOdds, key: 'draw' },
-    { label: 'Away', value: match.awayOdds, key: 'away' },
-  ], [match.homeOdds, match.drawOdds, match.awayOdds]);
-
-  const borderClass = kickOff ? 'mc-ko-glow' : live ? 'mc-live-border' : '';
-  const statusLabel = live ? 'LIVE' : finished ? 'FT' : scheduled ? '' : match.status || '';
-  const statusCls = live ? 'live' : finished ? 'finished' : 'upcoming';
-
-  const handleClick = useCallback((e) => { 
-    if (onClick) onClick(match); 
-  }, [onClick, match]);
-
-  const interactive = !!onClick;
-  
-  // 🆕 Build routing link for the card
-  const matchSlug = `${slugify(match.homeTeam?.name)}-vs-${slugify(match.awayTeam?.name)}`;
-  const matchLink = `/match/${match.id}/${matchSlug}`;
-
-  // 🆕 Wrapper to handle Link while preserving internal onClicks if necessary
-  const CardWrapper = ({ children }) => {
-    if (interactive) {
-      // If it has a specific onClick (e.g., opening a modal), we might not want to navigate.
-      // But for SEO, we want the link to exist. We render a Link but stop propagation.
-      return (
-        <Link to={matchLink} className="mc-card-link" style={{ textDecoration: 'none', color: 'inherit' }} onClick={(e) => e.stopPropagation()}>
-          {children}
-        </Link>
-      );
-    }
-    return <>{children}</>;
-  };
-
-  if (compact) {
-    return (
-      <CardWrapper>
-        <div className={`mc-card mc-interactive ${borderClass} ${goalFlash ? 'mc-goal-flash' : ''}`} onClick={handleClick} style={{ animationDelay: `${index * 30}ms` }}>
-          {live && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5 }} />}
-          <div className="mc-header" style={{ paddingBottom: 6 }}>
-            <div className="mc-league">
-              {/* 🆕 Added width, height, and alt text */}
-              {match.league?.emblem && <img className="mc-league-logo" src={match.league.emblem} alt={`${match.league.name} logo`} width="14" height="14" loading="lazy" style={{objectFit: 'contain'}} />}
-              {!match.league?.emblem && <span className="mc-league-dot" style={{ background: lc }} />}
-              <span>{match.league?.name || 'Other'}</span>
-            </div>
-            {statusLabel && (
-              <span className={`mc-status-badge ${statusCls}`}>
-                {live && <span className="mc-live-dot" />}
-                {statusLabel}
-              </span>
-            )}
-            {!live && !finished && <span style={{ fontSize: '.76rem', color: '#64748b', fontWeight: 600 }}>{timeStr}</span>}
-          </div>
-          <div className="mc-body" style={{ padding: '10px 16px 12px' }}>
-            <div className="mc-team">
-              <TeamBadge logo={match.homeTeam?.logo} name={match.homeTeam?.name} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
-              <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{match.homeTeam?.name || 'TBD'}</span>
-            </div>
-            <ScoreDisplay predicted={predicted} actual={actual} isLive={live} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
-            <div className="mc-team away">
-              <TeamBadge logo={match.awayTeam?.logo} name={match.awayTeam?.name} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
-              <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{match.awayTeam?.name || 'TBD'}</span>
-            </div>
-          </div>
-        </div>
-      </CardWrapper>
-    );
-  }
-
-  return (
-    <CardWrapper>
-      <div
-        className={`mc-card ${interactive ? 'mc-interactive' : ''} ${borderClass} ${goalFlash ? 'mc-goal-flash' : ''}`}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
-        onClick={handleClick}
-        style={{ animationDelay: `${index * 40}ms` }}
-      >
-        {live && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5, zIndex: 1 }} />}
-
-        {kickOff && (
-          <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 2 }}>
-            <span className="mc-ko-badge" style={{ fontSize: '.58rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,.12)', padding: '2px 8px', borderRadius: 5, letterSpacing: '.05em' }}>
-              KICK OFF
-            </span>
-          </div>
-        )}
-
-        <div className="mc-header">
-          <div className="mc-league">
-            {/* 🆕 Added width, height, and alt text */}
-            {match.league?.emblem && <img className="mc-league-logo" src={match.league.emblem} alt={`${match.league.name} logo`} width="14" height="14" loading="lazy" style={{objectFit: 'contain'}} />}
-            {!match.league?.emblem && <span className="mc-league-dot" style={{ background: lc }} />}
-            <span>{match.league?.name || 'Other'}</span>
-            {match.leagueCountry && <span style={{ opacity: .5 }}>· {match.leagueCountry}</span>}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-            {statusLabel && (
-              <span className={`mc-status-badge ${statusCls}`}>
-                {live && <span className="mc-live-dot" />}
-                {statusLabel}
-              </span>
-            )}
-            {live && match.minute != null && <span className="mc-minute">{match.minute}&apos;</span>}
-            {!live && !finished && <span style={{ fontSize: '.68rem', color: '#64748B', fontWeight: 500 }}>{dateStr} · {timeStr}</span>}
-            {hovered && cf && <span className="mc-confidence mc-conf-slide" style={{ color: cf.color, background: `${cf.color}15` }}>{cf.label}</span>}
-          </div>
-        </div>
-
-        <div className="mc-body">
-          <div className="mc-team">
-            <TeamBadge logo={match.homeTeam?.logo} name={match.homeTeam?.name} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
-            <span className="mc-team-name">{match.homeTeam?.name || 'TBD'}</span>
-          </div>
-          <ScoreDisplay predicted={predicted} actual={actual} isLive={live} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
-          <div className="mc-team away">
-            <TeamBadge logo={match.awayTeam?.logo} name={match.awayTeam?.name} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
-            <span className="mc-team-name">{match.awayTeam?.name || 'TBD'}</span>
-          </div>
-        </div>
-
-        {hasProbs && (
-          <div className="mc-probs">
-            <ProbBar label="Home" value={match.homeWinProb} type="home" delay={0} />
-            <ProbBar label="Draw" value={match.drawProb} type="draw" delay={80} />
-            <ProbBar label="Away" value={match.awayWinProb} type="away" delay={160} />
-          </div>
-        )}
-
-        {hasOdds && (
-          <div className="mc-odds">
-            {oddsData.map((o) => (
-              <div key={o.key} className="mc-odds-chip">
-                <div className="mc-odds-chip-label">{o.label}</div>
-                <div className="mc-odds-chip-value">{o.value}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {finished && match.referee && (
-          <div className="mc-meta">
-            <span>⚽ {match.referee}</span>
-          </div>
-        )}
-      </div>
-    </CardWrapper>
   );
 };
 
-export default memo(MatchCardBase);
+const LiveStatusText = ({ match, isLive, isFin }) => {
+  // ★ FIX: Added optional chaining
+  const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
+  const currentTime = Date.now();
+  
+  let phase = 'Scheduled';
+  if (isLive) {
+    if (match?.status === '1H') phase = 'First Half';
+    else if (match?.status === 'HT') phase = 'Half Time';
+    else if (match?.status === '2H') phase = 'Second Half';
+    else if (match?.status === 'ET') phase = 'Extra Time';
+    else if (match?.status === 'P') phase = 'Penalties';
+  } else if (isFin) {
+    phase = 'Full Time';
+  } else if (kickoffTime > currentTime) {
+    const diffMins = Math.floor((kickoffTime - currentTime) / 60000);
+    if (diffMins < 60) phase = `Starts in ${diffMins}m`;
+    else phase = `Starts in ${Math.floor(diffMins / 60)}h ${diffMins % 60}m`;
+  }
+
+  return <>{isLive ? `${phase} ${match?.minute ? `(${match.minute}')` : ''}` : phase}</>;
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   MAIN MATCH DETAILS COMPONENT
+   ═══════════════════════════════════════════════════════════════ */
+export default function MatchDetails() {
+  const { matchId, slug } = useParams();
+  const [match, setMatch] = useState(null);
+  const [standings, setStandings] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe;
+
+    const getMatch = async () => {
+      try {
+        const [yRes, tRes, tmRes] = await Promise.all([
+          fetchYesterdayFixtures(),
+          fetchFixtures(getTodayStr()),
+          fetchTomorrowFixtures()
+        ]);
+        
+        if (!mounted) return;
+        
+        let foundMatch = null;
+        const arrays = [yRes?.matches, tRes?.matches, tmRes?.matches];
+        for (const arr of arrays) {
+          if (!Array.isArray(arr)) continue;
+          foundMatch = arr.find(m => String(m.id) === String(matchId));
+          if (foundMatch) break;
+        }
+        
+        if (mounted) {
+          setMatch(foundMatch);
+          
+          // Fetch Standings for thick content
+          if (foundMatch?.league?.id) {
+            const stand = await fetchLeagueStandings(foundMatch.league.id);
+            if (mounted) setStandings(stand || []);
+          }
+
+          // Subscribe to live updates if match is not finished
+          if (foundMatch && !isFinishedStatus(foundMatch.status, SPORT.FOOTBALL)) {
+            unsubscribe = subscribeToLiveFixtures(getTodayStr(), ({ live, finished }) => {
+              const liveMatch = live?.find(m => String(m.id) === String(matchId));
+              const finMatch = finished?.find(m => String(m.id) === String(matchId));
+              if (liveMatch) setMatch(prev => ({ ...prev, ...liveMatch, isLive: true }));
+              if (finMatch) setMatch(prev => ({ ...prev, ...finMatch, isFinished: true, isLive: false }));
+            });
+          }
+        }
+      } catch (e) {
+        console.error("Match fetch error:", e);
+      } finally {
+        if (mounted) setLoading(false);
+      }
+    };
+    
+    setLoading(true);
+    getMatch();
+    
+    return () => { 
+      if (unsubscribe) unsubscribe(); 
+      mounted = false; 
+    };
+  }, [matchId]);
+
+  const matchData = useMemo(() => {
+    if (!match) return null;
+
+    const isLive = isLiveStatus(match.status, SPORT.FOOTBALL);
+    const isFin = isFinishedStatus(match.status, SPORT.FOOTBALL);
+
+    const safeHomeScore = match.homeScore ?? match.score?.fullTime?.home ?? 0;
+    const safeAwayScore = match.awayScore ?? match.score?.fullTime?.away ?? 0;
+
+    const homeName = match.homeTeam?.name || 'Home Team';
+    const awayName = match.awayTeam?.name || 'Away Team';
+    const homeId = match.homeTeam?.id || match.homeId;
+    const awayId = match.awayTeam?.id || match.awayId;
+    const leagueName = match.league?.name || 'Football';
+    const leagueId = match.league?.id || match.leagueKey;
+
+    let statusClass = 'md-status-sched';
+    if (isLive) statusClass = 'md-status-live';
+    else if (isFin) statusClass = 'md-status-fin';
+
+    return {
+      isLive, isFin, safeHomeScore, safeAwayScore, 
+      homeName, awayName, homeId, awayId, 
+      leagueName, leagueId, statusClass
+    };
+  }, [match]);
+
+  if (loading) {
+    return <div className="md-loader">Loading match...</div>;
+  }
+
+  if (!match || !matchData) {
+    return (
+      <div className="md-error">
+        <div className="md-error-msg">Match not found.</div>
+        <Link to="/fixtures" className="md-back-btn">
+          <ArrowLeft size={16} /> Back to Fixtures
+        </Link>
+      </div>
+    );
+  }
+
+  const { 
+    isLive, isFin, safeHomeScore, safeAwayScore, 
+    homeName, awayName, homeId, awayId, 
+    leagueName, leagueId, statusClass 
+  } = matchData;
+  
+  // SEO Optimized Title & Description
+  const title = `${homeName} vs ${awayName} Prediction, Live Score, H2H & Lineups | ZOKASCORE`;
+  const description = `${homeName} vs ${awayName} live score, prediction, lineups, head-to-head statistics, league standings, kickoff time and match analysis on ZOKASCORE.`;
+
+  // SportsEvent Schema
+  const sportsSchema = {
+    "@context": "https://schema.org",
+    "@type": "SportsEvent",
+    "name": `${homeName} vs ${awayName}`,
+    "sport": "Football",
+    "startDate": match.utcDate || match.date,
+    "endDate": new Date(new Date(match.utcDate || match.date).getTime() + 7200000).toISOString(),
+    "eventStatus": isLive ? "https://schema.org/EventScheduled" : isFin ? "https://schema.org/EventCompleted" : "https://schema.org/EventScheduled",
+    "homeTeam": { "@type": "SportsTeam", "name": homeName },
+    "awayTeam": { "@type": "SportsTeam", "name": awayName },
+    "location": { "@type": "Place", "name": match.venue?.name || leagueName },
+    ...(isFin && { 
+      "result": { 
+        "@type": "SportsResult", 
+        "homeTeamScore": safeHomeScore, 
+        "awayTeamScore": safeAwayScore 
+      } 
+    })
+  };
+
+  // Breadcrumb Schema
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": [
+      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://zokascore.xyz/" },
+      { "@type": "ListItem", "position": 2, "name": "Fixtures", "item": "https://zokascore.xyz/fixtures" },
+      { "@type": "ListItem", "position": 3, "name": leagueName, "item": `https://zokascore.xyz/league/${leagueId}/${slugify(leagueName)}` },
+      { "@type": "ListItem", "position": 4, "name": `${homeName} vs ${awayName}` }
+    ]
+  };
+
+  return (
+    <div className="md-page">
+      <SEO 
+        title={title}
+        description={description}
+        keywords={`${homeName} vs ${awayName}, ${homeName} live score, ${awayName} live score, ${leagueName} predictions`}
+        path={`/match/${matchId}/${slug}`}
+        structuredData={[sportsSchema, breadcrumbSchema]} 
+      />
+      
+      <div className="md-container">
+        <Link to="/fixtures" className="md-back-btn">
+          <ArrowLeft size={16} /> Back to Fixtures
+        </Link>
+
+        {/* HEADER WITH INTERNAL LINKS */}
+        <div className="md-header">
+          <p className="md-league">
+            <Link to={`/league/${leagueId}/${slugify(leagueName)}`}>{leagueName}</Link>
+          </p>
+          <div className="md-teams">
+            <div className="md-team-home">
+              <Link to={`/team/${homeId}/${slugify(homeName)}`}>
+                <h1 className="md-team-name">{homeName}</h1>
+              </Link>
+            </div>
+            <div className="md-score-box">
+              <div className="md-score" style={{ color: isLive ? '#ef4444' : isFin ? '#10b981' : '#fff' }}>
+                {safeHomeScore} - {safeAwayScore}
+              </div>
+            </div>
+            <div className="md-team-away">
+              <Link to={`/team/${awayId}/${slugify(awayName)}`}>
+                <h1 className="md-team-name">{awayName}</h1>
+              </Link>
+            </div>
+          </div>
+          
+          <div className={`md-status-badge ${statusClass}`}>
+            {isLive && <span className="md-live-dot"></span>}
+            <LiveStatusText match={match} isLive={isLive} isFin={isFin} />
+          </div>
+        </div>
+
+        <LiveTimeline match={match} isLive={isLive} isFin={isFin} />
+
+        {/* MATCH INFO BAR */}
+        <div className="md-info-bar">
+          {match.date && (
+            <span className="md-info-item">
+              <Calendar size={12} /> {new Date(match.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}
+            </span>
+          )}
+          {match.venue?.name && (
+            <span className="md-info-item">
+              <MapPin size={12} /> {match.venue.name}
+            </span>
+          )}
+          {match.referee && (
+            <span className="md-info-item">
+              <Users size={12} /> {match.referee}
+            </span>
+          )}
+        </div>
+
+        {/* THICK CONTENT SECTION: LEAGUE STANDINGS */}
+        {standings.length > 0 && (
+          <div className="md-info-card">
+            <Trophy size={28} className="md-info-icon" />
+            <h2 className="md-info-title">League Standings</h2>
+            <div className="standings-mini">
+              {standings.slice(0, 5).map((team, i) => (
+                <div key={team.team.id} className="standing-row" style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 0', borderBottom: '1px solid #151b26' }}>
+                  <span style={{ color: '#64748b' }}>{i + 1}.</span>
+                  <Link to={`/team/${team.team.id}/${slugify(team.team.name)}`} style={{ flex: 1, marginLeft: 10, color: '#f8fafc' }}>
+                    {team.team.name}
+                  </Link>
+                  <span style={{ color: '#10b981', fontWeight: 700 }}>{team.points} pts</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* THICK CONTENT SECTION: H2H & FORM PLACEHOLDER */}
+        <div className="md-info-card">
+          <h2 className="md-info-title">Head to Head & Recent Form</h2>
+          <p className="md-info-text">
+            Detailed head-to-head history and recent form for {homeName} vs {awayName} will be displayed here. 
+            Check back soon for updates!
+          </p>
+        </div>
+
+        {/* INTERNAL LINKING: RELATED MATCHES */}
+        <div className="md-info-card">
+          <h2 className="md-info-title">Related Matches</h2>
+          <Link to="/fixtures" className="md-cta">
+            View All Today's Fixtures
+          </Link>
+        </div>
+
+      </div>
+    </div>
+  );
+}
