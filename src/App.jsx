@@ -10,7 +10,7 @@ import Breadcrumbs from "./components/Breadcrumbs";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 
-import SEO from "./components/SEO";
+
 import StructuredData from "./components/StructuredData";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -139,67 +139,115 @@ function AppShell() {
     setShowInstallBanner(false);
   };
 
-  return (
-    <>
-      <SEO />
-      <StructuredData data={organizationSchema()} />
-      <StructuredData data={websiteSchema()} />
+ return (
+  <>
+    <StructuredData data={organizationSchema()} />
+    <StructuredData data={websiteSchema()} />
 
-      <ScrollToTop />
+    <ScrollToTop />
 
-      {/* ★ PWA Install Banner */}
-      {showInstallBanner && (
-        <div style={{
-          position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)',
-          background: 'rgba(10,15,25,0.95)', border: '1.5px solid rgba(16,185,129,.3)',
-          borderRadius: 14, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 12,
-          zIndex: 9999, boxShadow: '0 10px 30px rgba(0,0,0,.5)', backdropFilter: 'blur(12px)',
-          maxWidth: 'calc(100% - 40px)', animation: 'slideUp .3s ease'
-        }}>
-          <Download size={20} style={{ color: '#10b981' }} />
-          <div style={{ flex: 1 }}>
-            <div style={{ fontSize: '.8rem', fontWeight: 800, color: '#fff' }}>Install ZokaScore</div>
-            <div style={{ fontSize: '.68rem', color: '#94a3b8' }}>Add to home screen for quick access</div>
-          </div>
-          <button onClick={handleInstallClick} style={{
-            background: '#10b981', border: 'none', color: '#000', fontWeight: 800,
-            padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: '.75rem'
-          }}>Install</button>
-          <button onClick={() => setShowInstallBanner(false)} style={{
-            background: 'transparent', border: 'none', color: '#64748b', cursor: 'pointer'
-          }}><X size={16} /></button>
-        </div>
-      )}
+    {showInstallBanner && (
+  <div
+    style={{
+      position: "fixed",
+      bottom: 20,
+      left: "50%",
+      transform: "translateX(-50%)",
+      background: "rgba(10,15,25,0.95)",
+      border: "1.5px solid rgba(16,185,129,.3)",
+      borderRadius: 14,
+      padding: "12px 16px",
+      display: "flex",
+      alignItems: "center",
+      gap: 12,
+      zIndex: 9999,
+      boxShadow: "0 10px 30px rgba(0,0,0,.5)",
+      backdropFilter: "blur(12px)",
+      maxWidth: "calc(100% - 40px)",
+      animation: "slideUp .3s ease",
+    }}
+  >
+    <Download size={20} style={{ color: "#10b981" }} />
+
+    <div style={{ flex: 1 }}>
+      <div
+        style={{
+          fontSize: ".8rem",
+          fontWeight: 800,
+          color: "#fff",
+        }}
+      >
+        Install ZOKASCORE
+      </div>
 
       <div
         style={{
-          display: "flex",
-          flexDirection: "column",
-          minHeight: "100vh",
-          background: "linear-gradient(180deg,#07141f 0%,#06121b 100%)",
+          fontSize: ".68rem",
+          color: "#94a3b8",
+        }}
+      >
+        Add to home screen for quick access
+      </div>
+    </div>
+
+    <button
+      onClick={handleInstallClick}
+      style={{
+        background: "#10b981",
+        border: "none",
+        color: "#000",
+        fontWeight: 800,
+        padding: "6px 12px",
+        borderRadius: 8,
+        cursor: "pointer",
+        fontSize: ".75rem",
+      }}
+    >
+      Install
+    </button>
+
+    <button
+      onClick={() => setShowInstallBanner(false)}
+      style={{
+        background: "transparent",
+        border: "none",
+        color: "#64748b",
+        cursor: "pointer",
+      }}
+    >
+      <X size={16} />
+    </button>
+  </div>
+)}
+    <div
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        minHeight: "100vh",
+        background: "linear-gradient(180deg,#07141f 0%,#06121b 100%)",
+        overflowX: "hidden",
+      }}
+    >
+      <Navbar />
+      <Breadcrumbs />
+
+      <main
+        style={{
+          flex: 1,
+          position: "relative",
+          width: "100%",
           overflowX: "hidden",
         }}
       >
-        <Navbar />
-        <Breadcrumbs />
+        <Suspense fallback={null}>
+          <AppRoutes />
+        </Suspense>
+      </main>
 
-        <main
-          style={{
-            flex: 1,
-            position: "relative",
-            width: "100%",
-            overflowX: "hidden",
-          }}
-        >
-          <Suspense fallback={null}>
-            <AppRoutes />
-          </Suspense>
-        </main>
-
-        <Footer />
-      </div>
-    </>
-  );
+      <Footer />
+    </div>
+  </>
+);
 }
 
 export default function App() {
