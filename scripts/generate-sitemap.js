@@ -122,32 +122,35 @@ async function generateSitemap() {
       }
     } catch (e) { console.warn("Could not fetch leagues for sitemap:", e.message); }
 
-    // 4. Fetch Teams for Permanent SEO Pages
-    // ★ FIX: Teams are stored inside documents like fd_teams/PL, fd_teams/SA
+    // 4. Extract Teams for Permanent SEO Pages
     try {
-      const teamsSnap = await db.collection("fd_teams").get();
-      let teamCount = 0;
+      const allTeams = new Map();
       
-      teamsSnap.forEach(doc => {
-        const teamsArray = doc.data().teams || [];
-        teamsArray.forEach(team => {
-          const teamId = team.id;
-          if (teamId && !processedTeamIds.has(String(teamId))) {
-            const slug = createSlug(team.name || "team");
-            dynamicRoutes.push({
-              url: `/team/${teamId}/${slug}`,
-              changefreq: "daily",
-              priority: 0.8
-            });
-            processedTeamIds.add(String(teamId));
-            teamCount++;
-          }
+      // Loop through today's and tomorrow's matches we already fetched
+      [todaySnap, tomorrowSnap].forEach(snap => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
+        
+        allMatches.forEach(match => {
+          // ★ FIX: Use the flat fields (homeTeamId, homeTeamName) that actually exist in the snapshot
+          if (match.homeTeamId) allTeams.set(String(match.homeTeamId), match.homeTeamName || "Team");
+          if (match.awayTeamId) allTeams.set(String(match.awayTeamId), match.awayTeamName || "Team");
+        });
+      });
+
+      allTeams.forEach((teamName, teamId) => {
+        const slug = createSlug(teamName);
+        dynamicRoutes.push({
+          url: `/team/${teamId}/${slug}`,
+          changefreq: "daily",
+          priority: 0.8
         });
       });
       
-      console.log(`Found ${teamCount} teams to add to sitemap.`);
+      console.log(`Found ${allTeams.size} teams to add to sitemap.`);
     } catch (e) { console.warn("Could not fetch teams for sitemap:", e.message); }
-
+    
     // 5. Generate Sitemap XML
     mkdirSync("./dist", { recursive: true });
     const sitemap = new SitemapStream({ hostname });
