@@ -30,6 +30,8 @@ const LIVE_STATUSES_SET = new Set([
   MatchStatus.IN_PLAY, MatchStatus.PAUSED, MatchStatus.LIVE, '1H', '2H', 'ET', 'BT'
 ]);
 
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
+
 function extractMatchDate(m) {
   if (!m) return '';
   const rawDate = m.utcDate || m.date || (m.timestamp ? new Date(m.timestamp).toISOString() : null);
@@ -95,6 +97,7 @@ function normalizeMatch(raw, isPrimary) {
     awayTeamId: isPrimary ? raw.awayTeam?.id : raw.awayTeam?.id,
     homeScore, awayScore,
     leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
+    leagueId: isPrimary ? (raw.league?.id || raw.leagueKey) : (raw.competition?.id || raw.league?.id),
     leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
     score: raw.score,
     stats: raw.stats || raw.matchStats || [],
@@ -109,8 +112,10 @@ function mapTransformedToNormalized(t) {
     isHT: (t.status === 'HT' || t.status === 'BT'),
     homeName: t.homeTeam?.name || 'TBD', awayName: t.awayTeam?.name || 'TBD',
     homeLogo: t.homeTeam?.logo || null, awayLogo: t.awayTeam?.logo || null,
+    homeTeamId: t.homeTeam?.id, awayTeamId: t.awayTeam?.id,
     homeScore: t.homeScore, awayScore: t.awayScore,
-    leagueName: t.league?.name || 'Other', leagueLogo: t.league?.emblem || null,
+    leagueName: t.league?.name || 'Other', leagueId: t.league?.id || t.leagueKey,
+    leagueLogo: t.league?.emblem || null,
     score: t.score, stats: t.stats || [],
   };
 }
@@ -308,8 +313,6 @@ const getGreeting = () => {
   return { text: 'Good night', icon: <Moon size={16} />, emoji: '\uD83E\uDD89' };
 };
 
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-
 const AnimNum = React.memo(({ value, duration = 600, delay = 0, suffix = '' }) => {
   const [display, setDisplay] = useState(0);
   const raf = React.useRef(null);
@@ -402,13 +405,17 @@ const LiveStripLoader = React.memo(() => (
   </div>
 ));
 
+// ★ UPDATED LiveMini: Wrapped in Link for SEO
 const LiveMini = React.memo(({ match, index }) => {
   const min = match.minute;
   const isLive = match.isLive;
   const hasScore = match.homeScore != null && match.awayScore != null;
+  
+  const matchSlug = `${slugify(match.homeName)}-vs-${slugify(match.awayName)}`;
+  const matchLink = `/match/${match.id}/${matchSlug}`;
 
   return (
-    <div className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26' }}>
+    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26', textDecoration: 'none', color: 'inherit', display: 'block' }}>
       <div className="z-lm-top">
         <span className="z-lm-league">{match.leagueName}</span>
         {isLive && min ? (
@@ -428,10 +435,11 @@ const LiveMini = React.memo(({ match, index }) => {
         <span className="z-lm-name">{match.awayName}</span>
         <span className="z-lm-score" style={{ color: isLive ? '#ef4444' : '#f8fafc' }}>{hasScore ? match.awayScore : '-'}</span>
       </div>
-    </div>
+    </Link>
   );
 });
 
+// ★ UPDATED FeaturedRow: Added width/height/alt to images, linked Teams/Leagues
 const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
@@ -514,12 +522,16 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   if (isLive) sbCls += ' lv';
   if (isFin) sbCls += ' ft';
 
+  const homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
+  const awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
+  const leagueName = pred.league?.name || 'Featured';
+
   return (
     <div className={cls} style={{ borderLeft: '3px solid ' + border }}>
       <div className="z-mh">
         <div className="z-ml">
-          {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pred.league && pred.league.name ? pred.league.name : 'Featured'}</span>
+          {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/league/${pred.league?.id}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {isLive && <span className="z-ldot" />}
@@ -528,13 +540,13 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
       </div>
       <div className="z-tm">
         <div className="z-te">
-          {pred.homeLogo && <img src={pred.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pred.homeTeam && (pred.homeTeam.shortName || pred.homeTeam.name) ? (pred.homeTeam.shortName || pred.homeTeam.name) : 'Home'}</span>
+          {pred.homeLogo && <img src={pred.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${pred.homeTeam?.id}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
-          {pred.awayLogo && <img src={pred.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pred.awayTeam && (pred.awayTeam.shortName || pred.awayTeam.name) ? (pred.awayTeam.shortName || pred.awayTeam.name) : 'Away'}</span>
+          {pred.awayLogo && <img src={pred.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${pred.awayTeam?.id}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">{actionContent}</div>
@@ -542,6 +554,7 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   );
 });
 
+// ★ UPDATED ZokaRow: Added width/height/alt to images, linked Teams/Leagues
 const ZokaRow = React.memo(({ pick }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
@@ -573,24 +586,28 @@ const ZokaRow = React.memo(({ pick }) => {
   if (isFin) sbCls += ' ft';
   else sbCls += ' zk';
 
+  const homeName = pick.homeTeam?.shortName || pick.homeTeam?.name || '?';
+  const awayName = pick.awayTeam?.shortName || pick.awayTeam?.name || '?';
+  const leagueName = pick.league?.name || 'Zoka';
+
   return (
     <div className="z-mc zoka">
       <div className="z-mh">
         <div className="z-ml">
-          {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pick.league && pick.league.name ? pick.league.name : 'Zoka'}</span>
+          {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/league/${pick.league?.id}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="z-st" style={{ color: isFin ? '#10b981' : '#64748b', background: isFin ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.03)' }}>{isFin ? 'FT' : ko}</span>
       </div>
       <div className="z-tm">
         <div className="z-te">
-          {pick.homeLogo && <img src={pick.homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pick.homeTeam && (pick.homeTeam.shortName || pick.homeTeam.name) ? (pick.homeTeam.shortName || pick.homeTeam.name) : '?'}</span>
+          {pick.homeLogo && <img src={pick.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${pick.homeTeam?.id}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
-          {pick.awayLogo && <img src={pick.awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pick.awayTeam && (pick.awayTeam.shortName || pick.awayTeam.name) ? (pick.awayTeam.shortName || pick.awayTeam.name) : '?'}</span>
+          {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${pick.awayTeam?.id}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">
@@ -663,7 +680,6 @@ export default function Home() {
     };
   }, []);
 
-  // ★ FIX: Accurately compute Stats so they never show 0 unexpectedly
   const totalPredictors = (dailyStats && dailyStats.players) || (dailyEntries && dailyEntries.length) || 0;
   
   const totalPredictionsMade = useMemo(() => {
@@ -796,7 +812,8 @@ export default function Home() {
               {newsPosts.concat(newsPosts).map((post, i) => (
                 <Link to={'/highlights/' + slugify(post.title) + '-' + post.id} key={post.id + '-' + i} className="z-newsmini">
                   {post.imageUrl ? (
-                    <img src={post.imageUrl} alt={post.title} className="z-news-img" />
+                    // ★ FIX: Added width, height, and alt to news image
+                    <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{objectFit:'cover'}} loading="lazy" />
                   ) : (
                     <div className="z-news-img-ph"><Newspaper size={18} /></div>
                   )}

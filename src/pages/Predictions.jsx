@@ -2,6 +2,7 @@
 // FILE: src/pages/Predictions.jsx
 // ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
 // ★ FIXED: ID lookup mismatch causing saved predictions to not show up in UI.
+// ★ SEO UPGRADE: Added internal links to Team/League pages, fixed image CLS.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -33,6 +34,8 @@ const LOCK_BEFORE_MINUTES = 60;
 const ZOKA_VISIBLE_COUNT = 5;
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
 const dateOffset = (offset = 0) => getLocalDateStr(offset);
 
@@ -247,6 +250,11 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   const kickoff = parseKickoffTime(pick.kickoff || pick.date);
   const homeName = typeof pick.homeTeam === 'object' ? (pick.homeTeam?.shortName || pick.homeTeam?.name || 'Home') : (pick.homeTeam || 'Home');
   const awayName = typeof pick.awayTeam === 'object' ? (pick.awayTeam?.shortName || pick.awayTeam?.name || 'Away') : (pick.awayTeam || 'Away');
+  
+  const leagueName = pick.league?.name || 'Zoka Pick';
+  const leagueId = pick.league?.id || pick.leagueKey;
+  const homeId = pick.homeTeam?.id || pick.homeTeamId;
+  const awayId = pick.awayTeam?.id || pick.awayTeamId;
 
   let leftColor = 'rgba(245,197,66,.12)';
   if (res?.resultType === 'exact') leftColor = '#10b981';
@@ -260,8 +268,8 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftColor}`, animationDelay: `${index * 30}ms` }}>
       <div className="v21-mh">
         <div className="v21-ml">
-          {pick.league?.emblem && <img src={pick.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pick.league?.name || 'Zoka Pick'}</span>
+          {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/league/${leagueId}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="v21-st" style={{ color: isFin ? '#10b981' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
           {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
@@ -269,8 +277,8 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
       </div>
       <div className="v21-tm">
         <div className="v21-te">
-          {homeLogo && <img src={homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{homeName}</span>
+          {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${homeId}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         {isFin && pick.homeScore != null ? (
           <div className="v21-sb ft">
@@ -292,8 +300,8 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
           </div>
         )}
         <div className="v21-te aw">
-          {awayLogo && <img src={awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{awayName}</span>
+          {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${awayId}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between' }}>
@@ -326,7 +334,6 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
    PREDICTION CARD (Memoized for performance)
    ═══════════════════════════════════════════════════ */
 const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
-  // ★ FIX: Always use String(pred.matchId) for lookups, never pred.id
   const mid = String(pred.matchId);
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
@@ -351,6 +358,11 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const homeName = typeof pred.homeTeam === 'object' ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home') : (pred.homeTeam || 'Home');
   const awayName = typeof pred.awayTeam === 'object' ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') : (pred.awayTeam || 'Away');
   const kickoff = parseKickoffTime(pred.kickoff || pred.date);
+  
+  const leagueName = pred.league?.name || 'Match';
+  const leagueId = pred.league?.id || pred.leagueKey;
+  const homeId = pred.homeTeam?.id || pred.homeTeamId;
+  const awayId = pred.awayTeam?.id || pred.awayTeamId;
 
   let leftColor = 'rgba(255,255,255,0.06)';
   if (isResolved && effectiveResult?.resultType === 'exact') leftColor = '#10b981';
@@ -380,15 +392,15 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftColor}`, animationDelay: `${index * 20}ms` }}>
       <div className="v21-mh">
         <div className="v21-ml">
-          {pred.league?.emblem && <img src={pred.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{pred.league?.name || 'Match'}</span>
+          {pred.league?.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/league/${leagueId}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="v21-st" style={{ color: statusColor, background: statusBg }}>{statusLabel}</span>
       </div>
       <div className="v21-tm">
         <div className="v21-te">
-          {homeLogo && <img src={homeLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{homeName}</span>
+          {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${homeId}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         {isEditing ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -412,8 +424,8 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           <div className="v21-sb"><span className="v21-vs">VS</span></div>
         )}
         <div className="v21-te aw">
-          {awayLogo && <img src={awayLogo} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{awayName}</span>
+          {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={`/team/${awayId}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
@@ -469,7 +481,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
     const m = new Map();
     Object.values(userPredsObj || {}).forEach(p => {
       if (p.predId) m.set(p.predId, p);
-      if (p.matchId) m.set(String(p.matchId), p); // ★ FIX: Use String(p.matchId)
+      if (p.matchId) m.set(String(p.matchId), p);
     });
     return m;
   }, [userPredsObj]);
@@ -483,7 +495,6 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
   const stats = useMemo(() => {
     let totalPts = 0, exact = 0, result = 0, miss = 0, pending = 0, predicted = 0;
     preds.forEach(p => {
-      // ★ FIX: Use String(p.matchId)
       const up = upMap.get(String(p.matchId));
       if (!up) return;
       predicted++;
@@ -524,7 +535,6 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
             </div>
           )}
           {preds.map((p, i) => {
-            // ★ FIX: Use String(p.matchId)
             const up = upMap.get(String(p.matchId));
             if (!up) return null;
             let res = resMap.get(String(p.matchId));
@@ -661,7 +671,7 @@ export default function Predictions() {
     const m = new Map();
     Object.values(currentUserPreds).forEach(p => {
       if (p.predId) m.set(p.predId, p);
-      if (p.matchId) m.set(String(p.matchId), p); // ★ FIX: Ensure matchId is a String
+      if (p.matchId) m.set(String(p.matchId), p);
     });
     return m;
   }, [currentUserPreds]);
@@ -675,7 +685,6 @@ export default function Predictions() {
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
     mergedFeatured.forEach(p => {
-      // ★ FIX: Use String(p.matchId)
       const up = userPredMap.get(String(p.matchId));
       if (!up) return;
       pred++;
@@ -766,7 +775,6 @@ export default function Predictions() {
   }, [uid, userStats, myDayStats, openLogin]);
 
   const startEdit = useCallback((pred) => {
-    // ★ FIX: Use String(pred.matchId) for editingId
     const mid = String(pred.matchId);
     const existing = userPredMap.get(mid);
     setEditingId(mid);
@@ -784,7 +792,6 @@ export default function Predictions() {
     if (isNaN(h) || isNaN(a)) { setToast('Enter valid scores'); return; }
     setSaving(true);
     try {
-      // editingId is already the matchId thanks to the fix above
       const matchId = String(pred.matchId || editingId);
       const matchDate = pred.matchDate || selDate;
       await savePredictionAction(uid, displayName, { ...pred, id: editingId, matchId, matchDate }, h, a);
@@ -829,7 +836,6 @@ export default function Predictions() {
 
   /* ═══ EFFECTS ═══ */
   
-  // Referral Visit Tracking
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const referrer = params.get('ref');
@@ -855,20 +861,17 @@ export default function Predictions() {
     }
   }, [location.search, uid]);
 
-  // 30s interval for lock timers
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
 
-  // Global live subscription
   useEffect(() => {
     if (!isToday) return;
     setLiveFixtures([]);
     let unsub = () => {};
     
     try {
-      // ★ FIX: Added missing `selDate` parameter here! It was passing the callback as the date string, crashing Firebase.
       unsub = subscribeToLiveFixtures(selDate, ({ matches: lm }) => {
         setLiveFixtures(prev => {
           if (!Array.isArray(lm)) return prev;
@@ -892,7 +895,6 @@ export default function Predictions() {
     };
   }, [isToday, selDate]);
 
-  // Fetch non-today data
   useEffect(() => {
     if (isToday) return;
     let cancelled = false;
@@ -909,7 +911,7 @@ export default function Predictions() {
       const predMap = {};
       Object.values(preds || {}).forEach(p => {
         if (p?.predId) predMap[p.predId] = p;
-        if (p?.matchId) predMap[String(p.matchId)] = p; // ★ FIX: Ensure matchId is String
+        if (p?.matchId) predMap[String(p.matchId)] = p; 
       });
       let userVotes = {};
       try { userVotes = JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}'); } catch {}
@@ -930,7 +932,6 @@ export default function Predictions() {
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
-  // ★ NON-BLOCKING ADMIN AUTO-RESOLVER
   useEffect(() => {
     if (!isAdmin || !isToday || !fixtureMap.size) return;
     const toResolve = mergedFeatured.filter(p => {
@@ -977,7 +978,6 @@ export default function Predictions() {
 
   const deferredFilter = useDeferredValue(filter);
   const filteredPreds = useMemo(() => {
-    // ★ FIX: Use String(p.matchId) for all map lookups
     if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(String(p.matchId)));
     if (deferredFilter === 'unpredicted') return mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
     if (deferredFilter === 'finished') return mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL));
@@ -986,7 +986,6 @@ export default function Predictions() {
 
   const filterCounts = useMemo(() => ({
     all: mergedFeatured.length,
-    // ★ FIX: Use String(p.matchId) for all map lookups
     predicted: mergedFeatured.filter(p => userPredMap.get(String(p.matchId))).length,
     unpredicted: mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
     finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
@@ -1133,7 +1132,6 @@ export default function Predictions() {
             <div>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} />)}</div>
           ) : filteredPreds.length > 0 ? (
             filteredPreds.map((pred, i) => {
-              // ★ FIX: Use String(pred.matchId) as the key and for lookups!
               const predId = String(pred.matchId);
               return (
                 <PredCard

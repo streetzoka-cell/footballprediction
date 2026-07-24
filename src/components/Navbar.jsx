@@ -2,6 +2,7 @@
 // FILE: src/components/Navbar.jsx
 // ZOKA PRO — Smart Context Sync, Direct Fast Fetch, No Stale Data, Zero Render Jank
 // ★ CLEANED: ProHeader slides in ONLY on Home page. Inner pages are clean.
+// ★ SEO UPGRADE: Wrapped TickerItem and ProHeader in <Link>, fixed image CLS.
 // ═══════════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -26,6 +27,8 @@ const APP_LOGO = '/icons/icon-192.png';
 /* ═══════════════════════════════════════════════════
    HELPERS & SVG
    ═══════════════════════════════════════════════════ */
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
+
 function normalizeMatch(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
@@ -83,7 +86,7 @@ const infoSections = [
 /* ═══════════════════════════════════════════════════
    PRO HEADER COMPONENT (Only shown on Home)
    ═══════════════════════════════════════════════════ */
-const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
+const ProHeader = React.memo(({ matches, liveMatches }) => {
   const featured = useMemo(() => {
     const liveWithScore = liveMatches.find(m => m.isLive && m.homeScore != null && m.awayScore != null);
     if (liveWithScore) return { match: liveWithScore, isLive: true };
@@ -102,16 +105,18 @@ const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
   const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
+  
+  const matchLink = m.id ? `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}` : '/predictions';
 
   return (
-    <div className="nv-pro-inner" onClick={() => nav(m.id ? `/predictions?match=${m.id}` : '/predictions')} style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
+    <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
       <div className="nv-pro-tag">
         {featured.isLive && <span className="nv-pro-live-dot" />}
         <span>{m.league?.name || 'Featured Match'}</span>
       </div>
       <div className="nv-pro-teams">
         <div className="nv-pro-team">
-          {homeLogo ? <img src={homeLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
+          {homeLogo ? <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit: 'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
           <span>{homeName}</span>
         </div>
         <div className="nv-pro-score-bar">
@@ -128,7 +133,7 @@ const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
           )}
         </div>
         <div className="nv-pro-team nv-pro-team-aw">
-          {awayLogo ? <img src={awayLogo} alt="" className="nv-pro-team-logo" onError={e => { e.target.style.display = 'none'; }} /> : null}
+          {awayLogo ? <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit: 'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
           <span>{awayName}</span>
         </div>
       </div>
@@ -138,7 +143,7 @@ const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
           <span>{m.minute}'</span>
         </div>
       )}
-    </div>
+    </Link>
   );
 });
 
@@ -147,11 +152,15 @@ const ProHeader = React.memo(({ matches, liveMatches, nav }) => {
    ═══════════════════════════════════════════════════ */
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
+  const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
+  const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
+  const matchLink = `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}`;
+  
   return (
-    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap' }}>
+    <Link to={matchLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', textDecoration: 'none' }}>
       <StatusDot status={status} size={7} />
       <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
-        {m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}
+        {homeName}
       </span>
       <span style={{
         background: m.isLive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
@@ -164,12 +173,12 @@ const TickerItem = React.memo(({ m }) => {
         {m.homeScore ?? '?'} - {m.awayScore ?? '?'}
       </span>
       <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
-        {m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}
+        {awayName}
       </span>
       {m.isLive && m.minute != null && (
         <span style={{ fontSize: '.7rem', fontWeight: 800, color: '#10b981', fontFamily: 'ui-monospace, monospace', minWidth: 28, textAlign: 'center' }}>{m.minute}'</span>
       )}
-    </span>
+    </Link>
   );
 });
 
@@ -577,7 +586,7 @@ export default function Navbar() {
 
       {/* ★ NEW: ProHeader only renders on Home with slide animation */}
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
-        <ProHeader matches={bannerMatches} liveMatches={liveMatches} nav={navigate} />
+        <ProHeader matches={bannerMatches} liveMatches={liveMatches} />
       </div>
 
       <div style={{
@@ -648,7 +657,7 @@ export default function Navbar() {
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} className="nv-logo-link">
-              <img src={APP_LOGO} alt="ZokaScore Logo" style={{ width: 42, height: 42, borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(16,185,129,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
+              <img src={APP_LOGO} alt="ZokaScore Logo" width="42" height="42" style={{ borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(16,185,129,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
               <div className="nv-dk" style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
                 <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.02em', color: '#ffffff', whiteSpace: 'nowrap' }}>ZOKA</span>
                 <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.03em', color: '#10b981', whiteSpace: 'nowrap', marginLeft: 2, animation: 'nvScoreGlow 3s ease-in-out infinite' }}>SCORE</span>
@@ -798,7 +807,7 @@ export default function Navbar() {
           background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', overflow: 'hidden' }}>
-            <img src={APP_LOGO} alt="ZokaScore" style={{ width: 36, height: 36, borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px rgba(16,185,129,0.3)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
+            <img src={APP_LOGO} alt="ZokaScore" width="36" height="36" style={{ borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px rgba(16,185,129,0.3)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
             <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fff', letterSpacing: '0.02em' }}>ZOKA<span style={{ color: '#10b981' }}>SCORE</span></span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="nv-action-btn" style={{ width: '36px', height: '36px' }}>
