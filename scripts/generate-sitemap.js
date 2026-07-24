@@ -48,6 +48,7 @@ async function generateSitemap() {
     const dynamicRoutes = [];
     const processedMatchIds = new Set();
     const processedTeamIds = new Set();
+    const processedLeagueIds = new Set();
 
     // Helper to extract matches from a snapshot
     const extractMatches = (snap) => {
@@ -105,52 +106,68 @@ async function generateSitemap() {
     });
     console.log(`Found ${newsCount} news posts to add to sitemap.`);
 
-    // 3. Fetch Leagues for Permanent SEO Pages
+    // 3. Extract Leagues for Permanent SEO Pages
     try {
-      const leaguesSnap = await db.collection("fd_competitions").doc("all").get();
-      if (leaguesSnap.exists) {
-        const comps = leaguesSnap.data().competitions || [];
-        comps.forEach(c => {
-          const slug = createSlug(c.name || "league");
-          dynamicRoutes.push({
-            url: `/league/${c.id}/${slug}`,
-            changefreq: "daily",
-            priority: 0.8
-          });
-        });
-        console.log(`Found ${comps.length} leagues to add to sitemap.`);
-      }
-    } catch (e) { console.warn("Could not fetch leagues for sitemap:", e.message); }
-
-    // 4. Extract Teams for Permanent SEO Pages
-    try {
-      const allTeams = new Map();
-      
-      // Loop through today's and tomorrow's matches we already fetched
       [todaySnap, tomorrowSnap].forEach(snap => {
         if (!snap.exists) return;
         const data = snap.data();
         const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
         
         allMatches.forEach(match => {
-          // ★ FIX: Use the flat fields (homeTeamId, homeTeamName) that actually exist in the snapshot
-          if (match.homeTeamId) allTeams.set(String(match.homeTeamId), match.homeTeamName || "Team");
-          if (match.awayTeamId) allTeams.set(String(match.awayTeamId), match.awayTeamName || "Team");
+          const leagueId = match.leagueId || match.league?.id;
+          const leagueName = match.leagueName || match.league?.name || "League";
+          
+          if (leagueId && !processedLeagueIds.has(String(leagueId))) {
+            const slug = createSlug(leagueName);
+            dynamicRoutes.push({
+              url: `/league/${leagueId}/${slug}`,
+              changefreq: "daily",
+              priority: 0.8
+            });
+            processedLeagueIds.add(String(leagueId));
+          }
         });
       });
+      console.log(`Found ${processedLeagueIds.size} leagues to add to sitemap.`);
+    } catch (e) { console.warn("Could not extract leagues for sitemap:", e.message); }
 
-      allTeams.forEach((teamName, teamId) => {
-        const slug = createSlug(teamName);
-        dynamicRoutes.push({
-          url: `/team/${teamId}/${slug}`,
-          changefreq: "daily",
-          priority: 0.8
+    // 4. Extract Teams for Permanent SEO Pages
+    try {
+      [todaySnap, tomorrowSnap].forEach(snap => {
+        if (!snap.exists) return;
+        const data = snap.data();
+        const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
+        
+        allMatches.forEach(match => {
+          const homeTeamId = match.homeTeamId || match.homeTeam?.id;
+          const homeTeamName = match.homeTeamName || match.homeTeam?.name || "Team";
+          const awayTeamId = match.awayTeamId || match.awayTeam?.id;
+          const awayTeamName = match.awayTeamName || match.awayTeam?.name || "Team";
+
+          if (homeTeamId && !processedTeamIds.has(String(homeTeamId))) {
+            const slug = createSlug(homeTeamName);
+            dynamicRoutes.push({
+              url: `/team/${homeTeamId}/${slug}`,
+              changefreq: "daily",
+              priority: 0.8
+            });
+            processedTeamIds.add(String(homeTeamId));
+          }
+          
+          if (awayTeamId && !processedTeamIds.has(String(awayTeamId))) {
+            const slug = createSlug(awayTeamName);
+            dynamicRoutes.push({
+              url: `/team/${awayTeamId}/${slug}`,
+              changefreq: "daily",
+              priority: 0.8
+            });
+            processedTeamIds.add(String(awayTeamId));
+          }
         });
       });
-      
-      console.log(`Found ${allTeams.size} teams to add to sitemap.`);
-    } catch (e) { console.warn("Could not fetch teams for sitemap:", e.message); }
-    
+      console.log(`Found ${processedTeamIds.size} teams to add to sitemap.`);
+    } catch (e) { console.warn("Could not extract teams for sitemap:", e.message); }
+
     // 5. Generate Sitemap XML
     mkdirSync("./dist", { recursive: true });
     const sitemap = new SitemapStream({ hostname });
