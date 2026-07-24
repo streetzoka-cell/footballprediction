@@ -577,13 +577,12 @@ export default function Navbar() {
 
   return (
     <>
-      <SEO
-        title="ZokaPredict — Live Football Scores & Predictions"
-        description="Live football scores, match predictions, and leaderboard rankings on ZokaPredict."
-        keywords="football live scores, predictions, leaderboard, ZokaPredict"
-        path="/"
+             <SEO
+        title="Football Prediction Leaderboard | ZOKASCORE"
+        description="Compete with football fans, climb the leaderboard, and view the best prediction rankings on ZOKASCORE."
+        keywords="football leaderboard, prediction rankings, ZOKASCORE"
+        robots="index,follow"
       />
-
       {/* ★ NEW: ProHeader only renders on Home with slide animation */}
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
         <ProHeader matches={bannerMatches} liveMatches={liveMatches} />

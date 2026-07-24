@@ -102,7 +102,6 @@ export default function Partners() {
         title="Partner With ZOKASCORE | Sports Advertising"
         description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our sponsored leaderboards, in-app banner ads, and sports partnership deals."
         keywords="sports partnerships, sponsor ZOKASCORE, football advertising, sports marketing, banner ads, sponsored leaderboards"
-        path="/partners"
         robots="index,follow"
       />
 

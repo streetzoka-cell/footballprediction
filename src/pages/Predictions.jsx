@@ -1003,7 +1003,6 @@ export default function Predictions() {
         title="Predict Matches & Win | ZOKASCORE"
         description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
         keywords="football predictions, betting tips, match predictions, soccer tips"
-        path="/predictions"
         robots="index,follow"
       />
 

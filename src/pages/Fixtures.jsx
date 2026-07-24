@@ -428,7 +428,7 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchSta
       <div
         className={cls}
         style={{ animationDelay: idx * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}
-        onClick={(e) => { if (isExp) { e.preventDefault(); } onToggle(isExp ? null : m.id); }}
+        onClick={(e) => { e.preventDefault(); onToggle(isExp ? null : m.id); }}
       >
         {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
         <div className="zoka-card-top">
@@ -641,18 +641,13 @@ export default function Fixtures() {
       const res = await fetchFixtures(date);
       const l = Array.isArray(res) ? res : res?.matches || [];
       let baseMatches = l.map(m => normalizeMatch(m, true));
-
-      if (globalLiveMatches.length > 0) {
-        baseMatches = mergeLiveMatches(baseMatches, globalLiveMatches);
-      }
-
       setPrimaryFixtures(baseMatches);
     } catch (e) {
       setPrimaryFixtures([]);
     } finally {
       if (!silent) setPrimaryLoading(false);
     }
-  }, [globalLiveMatches, mergeLiveMatches]);
+  }, []);
 
   useEffect(() => {
     if (!isPrimaryDate) { setPrimaryFixtures([]); setPrimaryLoading(false); return; }
@@ -829,7 +824,7 @@ export default function Fixtures() {
 
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
-      <SEO title="Football Fixtures, Live Scores & Tables | ZOKA" description="Get the latest football fixtures, live scores, league tables, and match predictions on ZOKA." keywords="football fixtures, live scores, ZOKA" path="/fixtures" robots="index,follow" />
+      <SEO title="Football Fixtures, Live Scores & Tables | ZOKA" description="Get the latest football fixtures, live scores, league tables, and match predictions on ZOKA." keywords="football fixtures, live scores, ZOKA" robots="index,follow" />
       <Confetti active={confettiKey > 0} key={confettiKey} />
       <ToastContainer toasts={toasts} onDismiss={dismissToast} />
 
@@ -1047,7 +1042,7 @@ export default function Fixtures() {
             <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
             {standingsLoading ? (
               <Skeleton count={8} />
-            ) : standingsData && standingsData.length > 0 && standingsData[0]?.table ? (
+            ) : standingsData?.standings?.length > 0 && standingsData.standings[0]?.table ? (
               <div className="zoka-table-wrap">
                 <table className="zoka-table">
                   <thead>
@@ -1065,7 +1060,7 @@ export default function Fixtures() {
                     </tr>
                   </thead>
                   <tbody>
-                    {standingsData[0].table.map(row => (
+                    {standingsData.standings[0].table.map(row => (
                       <tr key={row.team?.id || row.position}>
                         <td>{row.position}</td>
                         <td style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -1099,9 +1094,9 @@ export default function Fixtures() {
             <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
             {teamsLoading ? (
               <Skeleton count={8} />
-            ) : teamsData && teamsData.length > 0 ? (
+            ) : teamsData?.teams?.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-                {teamsData.map(t => (
+                {teamsData.teams.map(t => (
                   <CompCard key={t.id} c={{ name: t.name, emblem: t.crest }} />
                 ))}
               </div>

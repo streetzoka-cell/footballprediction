@@ -419,7 +419,6 @@ export default function Leaderboard() {
         title="Football Prediction Leaderboard | ZOKASCORE"
         description="Compete with football fans, climb the leaderboard, and view the best prediction rankings on ZOKASCORE."
         keywords="football leaderboard, prediction rankings, ZOKASCORE"
-        path="/leaderboard"
         robots="index,follow"
       />
 

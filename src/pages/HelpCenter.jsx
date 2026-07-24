@@ -4,7 +4,7 @@ import SEO from "../components/SEO";
 export default function HelpCenter() {
   return (
     <main className="info-help-text">
-      <SEO title="ZOKASCORE Help Center: Support & Guides" description="Need assistance? Visit the ZOKASCORE Help Center for guides on using our platform, troubleshooting issues, and getting the most out of your experience." keywords="help center, customer support, ZOKASCORE guides, troubleshooting, user guide" path="/help" robots="index,follow" />
+      <SEO title="ZOKASCORE Help Center: Support & Guides" description="Need assistance? Visit the ZOKASCORE Help Center for guides on using our platform, troubleshooting issues, and getting the most out of your experience." keywords="help center, customer support, ZOKASCORE guides, troubleshooting, user guide" robots="index,follow" />
       
       <h1>Help Center</h1>
       <p>Welcome to the ZOKASCORE Help Center. Find answers to common questions and learn how to get the best experience from our platform.</p>

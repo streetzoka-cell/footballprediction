@@ -224,7 +224,6 @@ export default function LiveStream() {
         title="Live Football Streams & Matches | ZOKASCORE"
         description="Find where to watch live football matches through official broadcasters and legal streaming platforms worldwide. Get accurate streaming info on ZOKASCORE."
         keywords="live football streams, watch football online, live soccer, football streaming, live matches"
-        path="/livestream"
         robots="index,follow"
       />
 

@@ -759,7 +759,7 @@ export default function Home() {
 
   return (
     <div className="zoka-home">
-      <SEO title="Football Predictions, Fixtures and Live Scores - ZOKA" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKA" path="/" />
+      <SEO title="Football Predictions, Fixtures and Live Scores - ZOKA" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKA" />
 
       {offline && (
         <div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>

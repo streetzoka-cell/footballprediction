@@ -114,7 +114,6 @@ export default function Advertise() {
         title="Advertise With ZOKASCORE | Sports Marketing"
         description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our premium banner ads and sponsored leaderboard marketing opportunities."
         keywords="advertise on ZOKASCORE, sports marketing, football ads, banner advertising, sponsored leaderboards"
-        path="/advertise"
         robots="index,follow"
       />
 

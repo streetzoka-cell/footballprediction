@@ -130,7 +130,6 @@ export default function Contact() {
         title="Contact ZOKASCORE Support Team"
         description="Need assistance? Contact the ZOKASCORE team for support, bug reports, feature requests, or business partnerships. We're here to help you 24/7."
         keywords="contact ZOKASCORE, customer support, feature request, bug report, business partnership, help center"
-        path="/contact"
         robots="index,follow"
       />
 

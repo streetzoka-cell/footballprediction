@@ -273,7 +273,6 @@ export default function MatchDetails() {
         title={title}
         description={description}
         keywords={`${homeName} vs ${awayName}, ${homeName} live score, ${awayName} live score, ${leagueName} predictions`}
-        path={`/match/${matchId}/${slug}`}
         structuredData={[sportsSchema, breadcrumbSchema]} 
       />
       

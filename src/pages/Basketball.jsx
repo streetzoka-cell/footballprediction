@@ -631,7 +631,6 @@ export default function Basketball() {
         title="Basketball Predictions & Live Scores | ZOKASCORE"
         description="Explore top basketball predictions, live scores, and game fixtures. Get expert analysis for NBA, EuroLeague, and more on ZOKASCORE's basketball hub."
         keywords="basketball predictions, NBA tips, basketball scores, basketball fixtures, hoops predictions"
-        path="/basketball"
         robots="index,follow"
       />
 

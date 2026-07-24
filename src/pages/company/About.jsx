@@ -121,7 +121,6 @@ export default function About() {
         title="About ZOKASCORE | Football Predictions Platform"
         description="Learn more about ZOKASCORE, your trusted platform for football predictions, live scores, and community gaming. Discover our mission and what we offer."
         keywords="about ZOKASCORE, football platform, prediction community, sports gaming, company info"
-        path="/about"
         robots="index,follow"
       />
 

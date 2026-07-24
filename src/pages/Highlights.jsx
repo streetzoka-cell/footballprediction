@@ -348,7 +348,6 @@ export default function Highlights() {
       <SEO 
         title={seoPost ? seoPost.title : "Football News Hub | ZOKASCORE"}
         description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
-        path={seoPost ? `/highlights/${slugify(seoPost.title)}-${seoPost.id}` : '/highlights'}
         image={getSeoImageUrl(seoPost)}
         type="article"
         structuredData={generateJsonLd(seoPost)}

@@ -76,7 +76,7 @@ async function generateSitemap() {
       });
     };
 
-    // ★ 1. Fetch Dynamic Matches for Today and Tomorrow
+    // 1. Fetch Dynamic Matches for Today and Tomorrow
     const today = new Date().toISOString().split("T")[0];
     const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
     
@@ -87,17 +87,15 @@ async function generateSitemap() {
     
     extractMatches(todaySnap);
     extractMatches(tomorrowSnap);
-    
     console.log(`Found ${processedMatchIds.size} matches to add to sitemap.`);
 
-    // ★ 2. Fetch Dynamic News Posts from Firestore
+    // 2. Fetch Dynamic News Posts from Firestore
     const newsSnap = await db.collection("news_posts").orderBy("createdAt", "desc").limit(500).get();
     let newsCount = 0;
     
     newsSnap.forEach(doc => {
       const postData = doc.data();
       const titleSlug = createSlug(postData.title || "news");
-      // Frontend expects /highlights/title-slug-id
       dynamicRoutes.push({
         url: `/highlights/${titleSlug}-${doc.id}`,
         changefreq: "daily",
@@ -107,7 +105,43 @@ async function generateSitemap() {
     });
     console.log(`Found ${newsCount} news posts to add to sitemap.`);
 
-    // ★ 3. Generate Sitemap XML
+    // 🆕 3. Fetch Leagues for Permanent SEO Pages
+    try {
+      const leaguesSnap = await db.collection("fd_competitions").doc("all").get();
+      if (leaguesSnap.exists) {
+        const comps = leaguesSnap.data().competitions || [];
+        comps.forEach(c => {
+          const slug = createSlug(c.name || "league");
+          dynamicRoutes.push({
+            url: `/league/${c.id}/${slug}`,
+            changefreq: "daily",
+            priority: 0.8
+          });
+        });
+        console.log(`Found ${comps.length} leagues to add to sitemap.`);
+      }
+    } catch (e) { console.warn("Could not fetch leagues for sitemap:", e.message); }
+
+    // 🆕 4. Fetch Teams for Permanent SEO Pages
+    try {
+      const teamsSnap = await db.collection("fd_teams").get();
+      let teamCount = 0;
+      teamsSnap.forEach(doc => {
+        const teamData = doc.data();
+        // If fd_teams stores an array of teams in a single doc, adjust accordingly. 
+        // Assuming fd_teams is a collection of team documents.
+        const slug = createSlug(teamData.name || "team");
+        dynamicRoutes.push({
+          url: `/team/${doc.id}/${slug}`,
+          changefreq: "daily",
+          priority: 0.8
+        });
+        teamCount++;
+      });
+      console.log(`Found ${teamCount} teams to add to sitemap.`);
+    } catch (e) { console.warn("Could not fetch teams for sitemap:", e.message); }
+
+    // 5. Generate Sitemap XML
     mkdirSync("./dist", { recursive: true });
     const sitemap = new SitemapStream({ hostname });
     const write = createWriteStream("./dist/sitemap.xml");

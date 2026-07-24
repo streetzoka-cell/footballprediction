@@ -6,7 +6,7 @@ import SEO from '../components/SEO';
 export default function Terms() {
   return (
     <div className="info-page">
-      <SEO title="Terms of Service - ZOKASCORE Rules" description="Review the ZOKASCORE Terms of Service to understand the rules and guidelines for using our football prediction platform, contests, and community features." keywords="terms of service, terms and conditions, ZOKASCORE rules, user agreement, legal terms" path="/terms" robots="index,follow" />
+      <SEO title="Terms of Service - ZOKASCORE Rules" description="Review the ZOKASCORE Terms of Service to understand the rules and guidelines for using our football prediction platform, contests, and community features." keywords="terms of service, terms and conditions, ZOKASCORE rules, user agreement, legal terms" robots="index,follow" />
       
       <div className="info-header" style={{ background: '#0a0d14', borderBottom: '1px solid #151b26', padding: '40px 20px' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>

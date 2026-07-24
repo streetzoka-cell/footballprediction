@@ -1,15 +1,15 @@
 import { Helmet } from "react-helmet-async";
+import { useLocation } from "react-router-dom";
 import { SITE } from "../utils/seo";
 
 export default function SEO({
   title,
   description = SITE.description,
-  path = "/",
   image = SITE.image,
   robots = "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
   keywords = SITE.keywords,
   type = "website",
-  canonical,
+  canonical, // Still allow manual override if needed
   locale = SITE.locale,
   publishedTime,
   modifiedTime,
@@ -17,13 +17,16 @@ export default function SEO({
   structuredData,
   children,
 }) {
+  const location = useLocation();
+
   const pageTitle = title
     ? title.includes(SITE.name)
       ? title
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  const url = canonical || `${SITE.url}${path}`;
+  // ★ FIX: Automatically generate the URL based on current route
+  const url = canonical || `${SITE.url}${location.pathname}${location.search}`;
 
   return (
     <Helmet prioritizeSeoTags>

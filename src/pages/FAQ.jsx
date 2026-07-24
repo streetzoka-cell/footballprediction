@@ -30,7 +30,7 @@ export default function FAQ() {
 
   return (
     <div className="info-page">
-      <SEO title="ZOKASCORE FAQ: Football Predictions Support" description="Find answers to frequently asked questions about ZOKASCORE. Learn how to make predictions, join leaderboards, and manage your account with our FAQ." keywords="FAQ, ZOKASCORE support, help, football predictions questions, account help" path="/faq" robots="index,follow" />
+      <SEO title="ZOKASCORE FAQ: Football Predictions Support" description="Find answers to frequently asked questions about ZOKASCORE. Learn how to make predictions, join leaderboards, and manage your account with our FAQ." keywords="FAQ, ZOKASCORE support, help, football predictions questions, account help" robots="index,follow" />
       
       <div className="info-header">
         <div className="info-header-content">

@@ -140,7 +140,6 @@ export default function Team() {
         title="Meet the ZOKASCORE Developer | Solo Dev Team"
         description="Learn about the solo developer behind ZOKASCORE. Designed, coded, and maintained by one passionate creator dedicated to delivering the ultimate football experience."
         keywords="ZOKASCORE team, solo developer, about the developer, football prediction creator, Kimutai Gibson"
-        path="/team"
         robots="index,follow"
       />
       

@@ -125,7 +125,6 @@ export default function Careers() {
         title="Careers at ZOKASCORE | Join Our Team"
         description="Join the ZOKASCORE team and help build the future of football prediction. We are hiring passionate engineers, creators, and community managers. Apply today!"
         keywords="careers, jobs, ZOKASCORE hiring, remote jobs, software engineering jobs, football jobs, community manager, Kenya tech jobs"
-        path="/careers"
         robots="index,follow"
       />
 

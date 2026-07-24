@@ -638,7 +638,6 @@ export default function MasterGames() {
         title={pageTitle} 
         description={pageDescription} 
         keywords={`${currentCompName}, football table, ${currentCompName} standings, live scores, football fixtures, ZOKASCORE`} 
-        path={`/mastergames?tab=${tab}${selectedCompCode ? `&comp=${selectedCompCode}` : ''}`} 
         robots="index,follow" 
         structuredData={structuredData} 
       />

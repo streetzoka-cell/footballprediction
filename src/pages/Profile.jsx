@@ -295,7 +295,6 @@ export default function Profile() {
         title="My Profile & Settings | ZOKASCORE"
         description="View and manage your ZOKASCORE profile. Update your account settings, track your prediction history, and review your overall leaderboard rankings here."
         keywords="user profile, account settings, ZOKASCORE profile, prediction history, user dashboard"
-        path="/profile"
         robots="noindex,nofollow"
       />
 

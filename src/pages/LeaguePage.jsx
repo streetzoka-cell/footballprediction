@@ -33,10 +33,9 @@ export default function LeaguePage() {
 
   return (
     <div className="md-page">
-      <SEO 
-        title={`${leagueName} Table, Standings & Fixtures | ZOKASCORE`}
+            <SEO 
+        title={`${leagueName} Table, Standings & Fixtures`}
         description={`Live ${leagueName} standings, table, fixtures, and scores on ZOKASCORE.`}
-        path={`/league/${leagueId}/${slug}`}
         structuredData={structuredData}
       />
       
