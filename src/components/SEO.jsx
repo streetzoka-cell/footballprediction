@@ -1,5 +1,3 @@
-// src/components/SEO.jsx
-
 import { Helmet } from "react-helmet-async";
 import { SITE } from "../utils/seo";
 
@@ -91,14 +89,15 @@ export default function SEO({
         />
       )}
 
-      {/* JSON-LD */}
+      {/* JSON-LD (Supports single object or array of objects) */}
       {structuredData && (
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(structuredData),
-          }}
-        />
+        (Array.isArray(structuredData) ? structuredData : [structuredData]).map((data, i) => (
+          <script
+            key={i}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+          />
+        ))
       )}
 
       {children}

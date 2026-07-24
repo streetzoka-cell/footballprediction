@@ -13,8 +13,12 @@ export const Highlights = lazy(() => import("../pages/Highlights"));
 export const LiveStream = lazy(() => import("../pages/LiveStream"));
 export const Leaderboard = lazy(() => import("../pages/Leaderboard"));
 
-// ★ NEW: Dynamic Match Details Page for SEO
+// Dynamic Match Details Page for SEO
 export const MatchDetails = lazy(() => import("../pages/MatchDetails"));
+
+// 🆕 Permanent Team & League Pages for SEO
+export const TeamPage = lazy(() => import("../pages/TeamPage"));
+export const LeaguePage = lazy(() => import("../pages/LeaguePage"));
 
 /* ===============================
    ACCOUNT

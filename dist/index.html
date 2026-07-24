@@ -2,21 +2,19 @@
 <html lang="en-KE">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
+  />
 
-  <title>ZOKASCORE | Live Football Scores, Predictions & Fixtures</title>
+  <!-- Generic Title (React Helmet replaces this per page) -->
+  <title>ZOKASCORE - Live Football Scores, Predictions & Fixtures</title>
 
+  <!-- Generic Description -->
   <meta
     name="description"
-    content="ZOKASCORE delivers live football scores, football predictions, fixtures, standings, basketball updates and match statistics."
+    content="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world."
   />
-
-  <meta
-    name="keywords"
-    content="football, live football scores, football predictions, fixtures, standings, premier league, champions league, la liga, bundesliga, serie a, basketball, zokascore"
-  />
-
-  <meta name="author" content="Kimutai Gibson" />
 
   <meta
     name="robots"
@@ -28,17 +26,47 @@
     content="index,follow,max-snippet:-1,max-image-preview:large"
   />
 
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-
   <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-  <!-- Canonical -->
+  <!-- 🆕 Canonical Tag -->
   <link rel="canonical" href="https://zokascore.xyz/" />
 
-  <!-- Language -->
-  <link rel="alternate" hreflang="en-KE" href="https://zokascore.xyz/" />
-  <link rel="alternate" hreflang="x-default" href="https://zokascore.xyz/" />
+  <!-- 🆕 Sitemap Reference -->
+  <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
+
+  <!-- 🆕 Open Graph / Facebook -->
+  <meta property="og:type" content="website" />
+  <meta property="og:url" content="https://zokascore.xyz/" />
+  <meta property="og:title" content="ZOKASCORE - Live Football Scores & Predictions" />
+  <meta property="og:description" content="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." />
+  <meta property="og:image" content="https://zokascore.xyz/og-image.png" />
+  <meta property="og:site_name" content="ZOKASCORE" />
+  <meta property="og:locale" content="en_GB" />
+
+  <!-- 🆕 Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:url" content="https://zokascore.xyz/" />
+  <meta name="twitter:title" content="ZOKASCORE - Live Football Scores & Predictions" />
+  <meta name="twitter:description" content="Get football predictions, match analysis, fixtures, live scores, and football statistics." />
+  <meta name="twitter:image" content="https://zokascore.xyz/og-image.png" />
+  <meta name="twitter:creator" content="@zokascore" />
+
+  <!-- 🆕 JSON-LD WebSite Schema -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "url": "https://zokascore.xyz",
+    "name": "ZOKASCORE",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://zokascore.xyz/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
 
   <!-- PWA -->
   <link rel="manifest" href="/manifest.webmanifest" />
@@ -46,7 +74,7 @@
   <!-- Icons -->
   <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-  <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-192.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
   <!-- Mobile -->
@@ -80,43 +108,7 @@
     gtag("config", "G-GZ2JTNKCCN");
   </script>
 
-  <!-- Open Graph -->
-  <meta property="og:type" content="website" />
-  <meta property="og:site_name" content="ZOKASCORE" />
-  <meta property="og:locale" content="en_KE" />
-  <meta property="og:url" content="https://zokascore.xyz/" />
-  <meta property="og:title" content="ZOKASCORE | Live Football Scores & Predictions" />
-  <meta
-    property="og:description"
-    content="Live football scores, predictions, fixtures, standings and basketball updates."
-  />
-  <meta property="og:image" content="https://zokascore.xyz/og-image.jpg" />
-  <meta property="og:image:secure_url" content="https://zokascore.xyz/og-image.jpg" />
-  <meta property="og:image:type" content="image/jpeg" />
-  <meta property="og:image:width" content="1200" />
-  <meta property="og:image:height" content="630" />
-
-  <!-- Structured Data -->
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"WebSite",
-    "name":"ZOKASCORE",
-    "url":"https://zokascore.xyz/"
-  }
-  </script>
-
-  <script type="application/ld+json">
-  {
-    "@context":"https://schema.org",
-    "@type":"Organization",
-    "name":"ZOKASCORE",
-    "url":"https://zokascore.xyz/",
-    "logo":"https://zokascore.xyz/icons/icon-512.png"
-  }
-  </script>
-
-  <!-- Initial Loader -->
+  <!-- Loader -->
   <style>
     html,
     body {
@@ -182,14 +174,14 @@
       to { transform: translateX(320%); }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-KSdFXRgb.js"></script>
+  <script type="module" crossorigin src="/assets/index-1v3g9V7p.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-QTnfLwEv.js">
-  <link rel="modulepreload" crossorigin href="/assets/react-vendor-DVxlqH4b.js">
+  <link rel="modulepreload" crossorigin href="/assets/react-vendor-DrkJF46m.js">
   <link rel="modulepreload" crossorigin href="/assets/firebase-vendor-CysCagxc.js">
   <link rel="modulepreload" crossorigin href="/assets/firebase-e00fkVUR.js">
-  <link rel="modulepreload" crossorigin href="/assets/vendor-VgtCbbJD.js">
+  <link rel="modulepreload" crossorigin href="/assets/vendor-NzzEB_C8.js">
   <link rel="stylesheet" crossorigin href="/assets/vendor-1oWo33m3.css">
-  <link rel="stylesheet" crossorigin href="/assets/index-7s5__PqL.css">
+  <link rel="stylesheet" crossorigin href="/assets/index-DFuxPydW.css">
 <link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
 
 <body>

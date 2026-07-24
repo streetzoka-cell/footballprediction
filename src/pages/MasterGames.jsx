@@ -1,9 +1,10 @@
 ﻿// src/pages/MasterGames.jsx
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { Link } from 'react-router-dom';
 import {
   Search, X, Star, Clock, Trophy, Users,
   Zap, Bell, BellOff, RefreshCw, Calendar, 
-  Heart, Share2, Globe, MapPin
+  Heart, Share2, Globe, MapPin, ArrowRight
 } from 'lucide-react';
 import { useFootballData } from '../context/FootballDataContext';
 import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, relativeDateLabel } from '../utils/dates';
@@ -15,6 +16,8 @@ const COMP_NAMES_SEO = {
   PL: "Premier League", PD: "La Liga", SA: "Serie A", BL1: "Bundesliga", FL1: "Ligue 1",
   CL: "Champions League", EC: "European Championship", WC: "World Cup"
 };
+
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
 // ─── Helper Components ───────────────────────────────────────────────
 
@@ -32,11 +35,12 @@ function FormDots({ formStr }) {
 
 function TeamModal({ team, onClose }) {
   if (!team) return null;
+  const teamLink = `/team/${team.id}/${slugify(team.name)}`;
   return (
     <div className="mg8-modal-overlay" onClick={onClose}>
       <div className="mg8-modal" onClick={e => e.stopPropagation()}>
         <button className="mg8-modal-close" onClick={onClose}><X size={18} /></button>
-        {team.crest && <img src={team.crest} alt={team.name} className="mg8-modal-img" onError={e => { e.target.style.display = 'none'; }} />}
+        {team.crest && <img src={team.crest} alt={`${team.name} logo`} width="80" height="80" className="mg8-modal-img" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
         <div className="mg8-modal-name">{team.name}</div>
         {team.tla && <div className="mg8-modal-tla">{team.tla} · Founded {team.founded || 'N/A'}</div>}
         
@@ -71,6 +75,10 @@ function TeamModal({ team, onClose }) {
             </div>
           </div>
         )}
+        
+        <Link to={teamLink} className="mg8-act" style={{ marginTop: '16px', justifyContent: 'center', textDecoration: 'none' }}>
+          View Team Page <ArrowRight size={14} />
+        </Link>
       </div>
     </div>
   );
@@ -145,10 +153,17 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
   if (isExp) cls += ' expanded';
 
   const barColor = isLive ? '#ef4444' : isFt ? 'var(--accent,#10b981)' : 'transparent';
+  
+  const matchSlug = `${slugify(m.homeTeam?.shortName || m.homeTeam?.name)}-vs-${slugify(m.awayTeam?.shortName || m.awayTeam?.name)}`;
+  const matchLink = `/match/${m.id}/${matchSlug}`;
 
   return (
-    <div>
-      <div className={cls} style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isFt) ? 16 : 14 }} onClick={() => onToggle(isExp ? null : m.id)}>
+    <Link to={matchLink} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+      <div 
+        className={cls} 
+        style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isFt) ? 16 : 14 }} 
+        onClick={(e) => { if (isExp) e.preventDefault(); onToggle(isExp ? null : m.id); }}
+      >
         {(isLive || isFt) && <div className="mg8-left-bar" style={{ background: barColor }} />}
         <div className="mg8-card-top">
           <div>
@@ -156,7 +171,7 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
             {isFt && <span className="mg8-status ft-s">FT</span>}
             {!isLive && !isFt && <span className="mg8-status time-s">{time}</span>}
           </div>
-          <div className="mg8-card-actions" onClick={e => e.stopPropagation()}>
+          <div className="mg8-card-actions" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
             <button className={`mg8-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => onFav(m.id)} title="Favourite" aria-label="Toggle favourite">
               <Star size={14} fill={isFav ? '#f59e0b' : 'none'} />
             </button>
@@ -168,7 +183,7 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
         <div className="mg8-teams">
           <div className="mg8-team-col home">
             <div className="mg8-team-row">
-              {m.homeTeam?.crest && <img className="mg8-crest" src={m.homeTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              {m.homeTeam?.crest && <img className="mg8-crest" src={m.homeTeam.crest} alt={`${m.homeTeam.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
               <span className="mg8-team-name">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
             </div>
           </div>
@@ -183,18 +198,22 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
           </div>
           <div className="mg8-team-col away">
             <div className="mg8-team-row">
-              {m.awayTeam?.crest && <img className="mg8-crest" src={m.awayTeam.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
+              {m.awayTeam?.crest && <img className="mg8-crest" src={m.awayTeam.crest} alt={`${m.awayTeam.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
               <span className="mg8-team-name">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
             </div>
           </div>
         </div>
         <div className="mg8-comp-row">
-          {m.competition?.emblem && <img src={m.competition.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+          {m.competition?.emblem && <img src={m.competition.emblem} alt={`${m.competition.name} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
           <span>{m.competition?.name || ''}</span>
         </div>
       </div>
-      {isExp && <div className="mg8-expanded"><ScoreBreakdown match={m} /></div>}
-    </div>
+      {isExp && (
+        <div className="mg8-expanded" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
+          <ScoreBreakdown match={m} />
+        </div>
+      )}
+    </Link>
   );
 }
 
@@ -230,14 +249,17 @@ function StandingsTable({ standings }) {
                 <tbody>
                   {t.map(r => { 
                     const gd = (r.goalsFor || 0) - (r.goalsAgainst || 0); 
+                    const teamLink = `/team/${r.team?.id}/${slugify(r.team?.name)}`;
                     return (
                       <tr key={r.position} className={hasZ ? zoneCls(r.position, total) : ''}>
                         <td className="pos">{r.position}</td>
                         <td>
-                          <div className="team-cell">
-                            {r.team?.crest && <img src={r.team.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-                            <span>{r.team?.shortName || r.team?.name || '–'}</span>
-                          </div>
+                          <Link to={teamLink} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            <div className="team-cell">
+                              {r.team?.crest && <img src={r.team.crest} alt={`${r.team.name} logo`} width="20" height="20" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                              <span>{r.team?.shortName || r.team?.name || '–'}</span>
+                            </div>
+                          </Link>
                         </td>
                         <td className="num-cell">{r.playedGames}</td>
                         <td className="num-cell">{r.won}</td>
@@ -263,13 +285,16 @@ function TeamsGrid({ teams, onSelectTeam }) {
   if (!teams?.length) return null;
   return (
     <div className="mg8-teams-grid">
-      {teams.map(t => (
-        <div key={t.id} className="mg8-team-card" onClick={() => onSelectTeam(t)}>
-          {t.crest && <img src={t.crest} alt="" loading="lazy" onError={e => { e.target.style.display = 'none'; }} />}
-          <div className="name">{t.shortName || t.name}</div>
-          {t.tla && <div className="tla">{t.tla}</div>}
-        </div>
-      ))}
+      {teams.map(t => {
+        const teamLink = `/team/${t.id}/${slugify(t.name)}`;
+        return (
+          <Link to={teamLink} key={t.id} className="mg8-team-card" style={{ textDecoration: 'none', color: 'inherit' }} onClick={() => onSelectTeam(t)}>
+            {t.crest && <img src={t.crest} alt={`${t.name} logo`} width="32" height="32" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <div className="name">{t.shortName || t.name}</div>
+            {t.tla && <div className="tla">{t.tla}</div>}
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -551,13 +576,56 @@ export default function MasterGames() {
   }, [tab, currentCompName]);
 
   const structuredData = useMemo(() => {
+    const schemas = [];
+    
+    // Breadcrumb Schema
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      "itemListElement": [
+        { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://zokascore.xyz/" },
+        { "@type": "ListItem", "position": 2, "name": "Master Games", "item": "https://zokascore.xyz/mastergames" },
+        { "@type": "ListItem", "position": 3, "name": currentCompName }
+      ]
+    });
+
+    // ItemList Schema for Standings/Teams
     if (tab === 'standings' && standingsData?.standings?.[0]?.table) {
-      return { "@context": "https://schema.org", "@type": "ItemList", "name": `${currentCompName} Standings`, "itemListElement": standingsData.standings[0].table.map((row, index) => ({ "@type": "ListItem", "position": index + 1, "item": { "@type": "SportsTeam", "name": row.team?.name || "Unknown", "sport": "Soccer" } })) };
+      schemas.push({ 
+        "@context": "https://schema.org", 
+        "@type": "ItemList", 
+        "name": `${currentCompName} Standings`, 
+        "itemListElement": standingsData.standings[0].table.map((row, index) => ({ 
+          "@type": "ListItem", 
+          "position": index + 1, 
+          "item": { 
+            "@type": "SportsTeam", 
+            "name": row.team?.name || "Unknown", 
+            "sport": "Soccer",
+            "url": `https://zokascore.xyz/team/${row.team?.id}/${slugify(row.team?.name)}`
+          } 
+        })) 
+      });
     }
     if (tab === 'teams' && teamsData?.teams) {
-      return { "@context": "https://schema.org", "@type": "ItemList", "name": `${currentCompName} Teams`, "itemListElement": teamsData.teams.map((team, index) => ({ "@type": "ListItem", "position": index + 1, "item": { "@type": "SportsTeam", "name": team.name, "sport": "Soccer" } })) };
+      schemas.push({ 
+        "@context": "https://schema.org", 
+        "@type": "ItemList", 
+        "name": `${currentCompName} Teams`, 
+        "itemListElement": teamsData.teams.map((team, index) => ({ 
+          "@type": "ListItem", 
+          "position": index + 1, 
+          "item": { 
+            "@type": "SportsTeam", 
+            "name": team.name, 
+            "sport": "Soccer",
+            "url": `https://zokascore.xyz/team/${team.id}/${slugify(team.name)}`
+          } 
+        })) 
+      });
     }
-    return null;
+    
+    return schemas;
   }, [tab, standingsData, teamsData, currentCompName]);
 
   const todayStr = getLocalDateStr(0);
@@ -566,7 +634,14 @@ export default function MasterGames() {
 
   return (
     <div className="mg8-page">
-      <SEO title={pageTitle} description={pageDescription} keywords={`${currentCompName}, football table, ${currentCompName} standings, live scores, football fixtures, ZOKASCORE`} path={`/mastergames?tab=${tab}${selectedCompCode ? `&comp=${selectedCompCode}` : ''}`} robots="index,follow" structuredData={structuredData} />
+      <SEO 
+        title={pageTitle} 
+        description={pageDescription} 
+        keywords={`${currentCompName}, football table, ${currentCompName} standings, live scores, football fixtures, ZOKASCORE`} 
+        path={`/mastergames?tab=${tab}${selectedCompCode ? `&comp=${selectedCompCode}` : ''}`} 
+        robots="index,follow" 
+        structuredData={structuredData} 
+      />
 
       <div className="mg8-wrap">
         <header className="mg8-header">
@@ -617,7 +692,7 @@ export default function MasterGames() {
             <div className="mg8-filters">
               {topComps.map(c => (
                 <button key={c.id} className={`mg8-filter ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => setSelectedCompCode(c.code || String(c.id))}>
-                  {c.emblem && <img src={c.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
+                  {c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />} {c.code || c.name}
                 </button>
               ))}
             </div>
@@ -630,7 +705,7 @@ export default function MasterGames() {
                 {filteredOtherComps.length === 0 && <div className="mg8-empty" style={{ padding: 10 }}><p>No leagues found</p></div>}
                 {filteredOtherComps.map(c => (
                   <button key={c.id} className={`mg8-more-item ${selectedCompCode === (c.code || String(c.id)) ? 'active' : ''}`} onClick={() => { setSelectedCompCode(c.code || String(c.id)); setLeagueSearchOpen(false); setLeagueSearchQ(''); }}>
-                    {c.emblem && <img src={c.emblem} alt="" style={{width:14, height:14, marginRight:6, verticalAlign: 'middle'}} onError={e => { e.target.style.display = 'none'; }} />} {c.name}
+                    {c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain', marginRight:6, verticalAlign: 'middle'}} onError={e => { e.target.style.display = 'none'; }} />} {c.name}
                   </button>
                 ))}
               </div>
@@ -648,7 +723,7 @@ export default function MasterGames() {
               grouped.map(g => (
                 <div key={g.comp?.id || g.comp?.name} className="mg8-section">
                   <div className="mg8-league-hd">
-                    {g.comp?.emblem && <img src={g.comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                    {g.comp?.emblem && <img src={g.comp.emblem} alt={`${g.comp.name} logo`} width="16" height="16" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
                     <span>{g.comp?.name || 'Other'}</span>
                     <span className="cnt">{g.matches.length}</span>
                   </div>

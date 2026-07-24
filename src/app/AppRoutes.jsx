@@ -6,9 +6,9 @@ import {
   AdminRoute,
 } from "./guards";
 
-
-import { ReactorStudio } from "./routes";
+// Import EVERYTHING from ./routes (since your routes file is in src/app/)
 import {
+  ReactorStudio,
   Home,
   Predictions,
   Fixtures,
@@ -18,6 +18,8 @@ import {
   LiveStream,
   Leaderboard,
   MatchDetails,
+  TeamPage, // 🆕 Added
+  LeaguePage, // 🆕 Added
 
   Login,
   Profile,
@@ -72,7 +74,7 @@ export default function AppRoutes() {
       <Route path="/studio/media" element={<Animated><MediaStudio /></Animated>} />
       <Route path="/studio/face-ar" element={<Animated><FaceARStudio /></Animated>} />
 
-      {/* ★ NEWS HUB ROUTES (Order matters: Author before SlugId) ★ */}
+      {/* ================= NEWS HUB ROUTES ================= */}
       <Route path="/highlights" element={<Animated><Highlights /></Animated>} />
       <Route path="/highlights/author/:author" element={<Animated><Highlights /></Animated>} />
       <Route path="/highlights/:slugId" element={<Animated><Highlights /></Animated>} />
@@ -80,8 +82,12 @@ export default function AppRoutes() {
       <Route path="/livestream" element={<Animated><LiveStream /></Animated>} />
       <Route path="/leaderboard" element={<Animated><Leaderboard /></Animated>} />
 
-      {/* ★ NEW: DYNAMIC MATCH DETAILS ROUTE FOR SEO ★ */}
+      {/* ================= DYNAMIC ROUTES ================= */}
       <Route path="/match/:matchId/:slug" element={<Animated><MatchDetails /></Animated>} />
+      
+      {/* 🆕 SEO PERMANENT PAGES */}
+      <Route path="/team/:teamId/:slug" element={<Animated><TeamPage /></Animated>} />
+      <Route path="/league/:leagueId/:slug" element={<Animated><LeaguePage /></Animated>} />
 
       {/* ================= COMPANY ================= */}
       <Route path="/about" element={<Animated><About /></Animated>} />
