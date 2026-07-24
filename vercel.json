@@ -1,9 +1,20 @@
 {
   "rewrites": [
     {
-      "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
+  "rewrites": [
+    {
+      "source": "/(.*)",
+      "has": [
+        {
+          "type": "header",
+          "key": "accept",
+          "value": "text/html.*"
+        }
+      ],
       "destination": "/index.html"
     }
+  ]
+}
   ],
   "headers": [
     {
