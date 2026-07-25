@@ -8,7 +8,8 @@
   />
 
   <!-- Generic Title (React Helmet replaces this per page) -->
-  <title>ZOKASCORE - Live Football Scores, Predictions & Fixtures</title>
+  <title>ZOKASCORE</title>
+  
 
   <!-- Generic Description -->
   <meta
@@ -178,7 +179,7 @@
 
   <noscript>
     <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif">
-      <h1>JavaScript Required</h1>
+      <h1>ZOKASCORE - Live Football Scores & Predictions</h1>
       <p>ZOKASCORE requires JavaScript to display live football scores and predictions.</p>
     </div>
   </noscript>
@@ -186,15 +187,19 @@
   <div id="static-loader">
     <div class="loader-ball">⚽</div>
     <div class="loader-text">ZOKASCORE</div>
-
     <div class="loader-bar">
       <div class="loader-bar-fill"></div>
     </div>
   </div>
 
-  <div id="root"></div>
+  <!-- ★ SEO FALLBACK: Google sees this before React hydrates -->
+  <div id="root">
+    <h1>ZOKASCORE - Live Football Scores, Fixtures & Predictions</h1>
+    <p>Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.</p>
+  </div>
 
   <script type="module" src="/src/main.jsx"></script>
 
 </body>
+
 </html>

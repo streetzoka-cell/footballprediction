@@ -41,11 +41,11 @@
   },
   "homepage": "https://zokascore.xyz",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build && node scripts/generate-sitemap.js",
-    "lint": "eslint .",
-    "preview": "vite preview"
-  },
+  "dev": "vite",
+  "build": "vite build && node scripts/generate-sitemap.js && node scripts/prerender-warmup.js",
+  "lint": "eslint .",
+  "preview": "vite preview"
+},
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",

@@ -4,7 +4,6 @@ import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 
 let serviceAccount;
-
 try {
   if (existsSync("./firebase-adminsdk.json")) {
     serviceAccount = JSON.parse(readFileSync("./firebase-adminsdk.json"));
@@ -20,16 +19,26 @@ try {
 
 initializeApp({ credential: cert(serviceAccount) });
 const db = getFirestore();
-
 const hostname = "https://zokascore.xyz";
-
 const createSlug = (str) => String(str).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || 'match';
+
+async function generateSitemapFile(filename, routes) {
+  if (routes.length === 0) return;
+  const sitemap = new SitemapStream({ hostname });
+  const write = createWriteStream(`./dist/${filename}`);
+  sitemap.pipe(write);
+  routes.forEach(r => sitemap.write(r));
+  sitemap.end();
+  await streamToPromise(sitemap);
+  console.log(`✅ Generated ${filename} with ${routes.length} URLs.`);
+}
 
 async function generateSitemap() {
   try {
     console.log("Starting sitemap generation...");
+    mkdirSync("./dist", { recursive: true });
 
-    const pages = [
+    const staticPages = [
       { url: "/", changefreq: "hourly", priority: 1.0 },
       { url: "/fixtures", changefreq: "hourly", priority: 0.95 },
       { url: "/predictions", changefreq: "hourly", priority: 0.95 },
@@ -45,20 +54,21 @@ async function generateSitemap() {
       { url: "/terms", changefreq: "yearly", priority: 0.3 },
     ];
 
-    const dynamicRoutes = [];
-    const processedMatchIds = new Set();
-    const processedTeamIds = new Set();
-    const processedLeagueIds = new Set();
+    const matchRoutes = [], newsRoutes = [], leagueRoutes = [], teamRoutes = [];
+    const processedMatchIds = new Set(), processedTeamIds = new Set(), processedLeagueIds = new Set();
 
-    // Helper to extract matches from a snapshot
-    const extractMatches = (snap) => {
+    const today = new Date().toISOString().split("T")[0];
+    const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+    
+    const [todaySnap, tomorrowSnap] = await Promise.all([
+      db.collection("fixture_snapshots").doc(today).get(),
+      db.collection("fixture_snapshots").doc(tomorrow).get()
+    ]);
+
+    const extractData = (snap) => {
       if (!snap.exists) return;
       const data = snap.data();
-      const allMatches = [
-        ...(data.matches || []), 
-        ...(data.live || []),
-        ...(data.finished || [])
-      ];
+      const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
 
       allMatches.forEach((match) => {
         const homeName = match.homeTeam?.name || match.homeTeamName || "Home";
@@ -67,118 +77,61 @@ async function generateSitemap() {
         
         if (matchId && !processedMatchIds.has(String(matchId))) {
           const slug = `${createSlug(homeName)}-vs-${createSlug(awayName)}`;
-          dynamicRoutes.push({
-            url: `/match/${matchId}/${slug}`,
-            changefreq: "hourly",
-            priority: 0.9
-          });
+          matchRoutes.push({ url: `/match/${matchId}/${slug}`, changefreq: "hourly", priority: 0.9 });
           processedMatchIds.add(String(matchId));
+        }
+
+        const leagueId = match.leagueId || match.league?.id;
+        const leagueName = match.leagueName || match.league?.name || "League";
+        if (leagueId && !processedLeagueIds.has(String(leagueId))) {
+          leagueRoutes.push({ url: `/league/${leagueId}/${createSlug(leagueName)}`, changefreq: "daily", priority: 0.8 });
+          processedLeagueIds.add(String(leagueId));
+        }
+
+        const homeTeamId = match.homeTeamId || match.homeTeam?.id;
+        const awayTeamId = match.awayTeamId || match.awayTeam?.id;
+
+        if (homeTeamId && !processedTeamIds.has(String(homeTeamId))) {
+          teamRoutes.push({ url: `/team/${homeTeamId}/${createSlug(homeName)}`, changefreq: "daily", priority: 0.8 });
+          processedTeamIds.add(String(homeTeamId));
+        }
+        if (awayTeamId && !processedTeamIds.has(String(awayTeamId))) {
+          teamRoutes.push({ url: `/team/${awayTeamId}/${createSlug(awayName)}`, changefreq: "daily", priority: 0.8 });
+          processedTeamIds.add(String(awayTeamId));
         }
       });
     };
 
-    // 1. Fetch Dynamic Matches for Today and Tomorrow
-    const today = new Date().toISOString().split("T")[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-    
-    const [todaySnap, tomorrowSnap] = await Promise.all([
-      db.collection("fixture_snapshots").doc(today).get(),
-      db.collection("fixture_snapshots").doc(tomorrow).get()
-    ]);
-    
-    extractMatches(todaySnap);
-    extractMatches(tomorrowSnap);
-    console.log(`Found ${processedMatchIds.size} matches to add to sitemap.`);
+    extractData(todaySnap);
+    extractData(tomorrowSnap);
 
-    // 2. Fetch Dynamic News Posts from Firestore
     const newsSnap = await db.collection("news_posts").orderBy("createdAt", "desc").limit(500).get();
-    let newsCount = 0;
-    
     newsSnap.forEach(doc => {
       const postData = doc.data();
-      const titleSlug = createSlug(postData.title || "news");
-      dynamicRoutes.push({
-        url: `/highlights/${titleSlug}-${doc.id}`,
-        changefreq: "daily",
-        priority: 0.85 
-      });
-      newsCount++;
+      newsRoutes.push({ url: `/highlights/${createSlug(postData.title || "news")}-${doc.id}`, changefreq: "daily", priority: 0.85 });
     });
-    console.log(`Found ${newsCount} news posts to add to sitemap.`);
 
-    // 3. Extract Leagues for Permanent SEO Pages
-    try {
-      [todaySnap, tomorrowSnap].forEach(snap => {
-        if (!snap.exists) return;
-        const data = snap.data();
-        const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
-        
-        allMatches.forEach(match => {
-          const leagueId = match.leagueId || match.league?.id;
-          const leagueName = match.leagueName || match.league?.name || "League";
-          
-          if (leagueId && !processedLeagueIds.has(String(leagueId))) {
-            const slug = createSlug(leagueName);
-            dynamicRoutes.push({
-              url: `/league/${leagueId}/${slug}`,
-              changefreq: "daily",
-              priority: 0.8
-            });
-            processedLeagueIds.add(String(leagueId));
-          }
-        });
-      });
-      console.log(`Found ${processedLeagueIds.size} leagues to add to sitemap.`);
-    } catch (e) { console.warn("Could not extract leagues for sitemap:", e.message); }
+    // Generate individual sitemap files
+    await generateSitemapFile("sitemap-pages.xml", staticPages);
+    await generateSitemapFile("sitemap-matches.xml", matchRoutes);
+    await generateSitemapFile("sitemap-teams.xml", teamRoutes);
+    await generateSitemapFile("sitemap-leagues.xml", leagueRoutes);
+    await generateSitemapFile("sitemap-news.xml", newsRoutes);
 
-    // 4. Extract Teams for Permanent SEO Pages
-    try {
-      [todaySnap, tomorrowSnap].forEach(snap => {
-        if (!snap.exists) return;
-        const data = snap.data();
-        const allMatches = [...(data.matches || []), ...(data.live || []), ...(data.finished || [])];
-        
-        allMatches.forEach(match => {
-          const homeTeamId = match.homeTeamId || match.homeTeam?.id;
-          const homeTeamName = match.homeTeamName || match.homeTeam?.name || "Team";
-          const awayTeamId = match.awayTeamId || match.awayTeam?.id;
-          const awayTeamName = match.awayTeamName || match.awayTeam?.name || "Team";
+    // Generate Sitemap Index
+    const indexStream = new SitemapStream({ hostname, lastmodDateOnly: true });
+    const indexWrite = createWriteStream("./dist/sitemap.xml");
+    indexStream.pipe(indexWrite);
+    
+    indexStream.write({ url: "sitemap-pages.xml" });
+    indexStream.write({ url: "sitemap-matches.xml" });
+    indexStream.write({ url: "sitemap-teams.xml" });
+    indexStream.write({ url: "sitemap-leagues.xml" });
+    indexStream.write({ url: "sitemap-news.xml" });
+    indexStream.end();
 
-          if (homeTeamId && !processedTeamIds.has(String(homeTeamId))) {
-            const slug = createSlug(homeTeamName);
-            dynamicRoutes.push({
-              url: `/team/${homeTeamId}/${slug}`,
-              changefreq: "daily",
-              priority: 0.8
-            });
-            processedTeamIds.add(String(homeTeamId));
-          }
-          
-          if (awayTeamId && !processedTeamIds.has(String(awayTeamId))) {
-            const slug = createSlug(awayTeamName);
-            dynamicRoutes.push({
-              url: `/team/${awayTeamId}/${slug}`,
-              changefreq: "daily",
-              priority: 0.8
-            });
-            processedTeamIds.add(String(awayTeamId));
-          }
-        });
-      });
-      console.log(`Found ${processedTeamIds.size} teams to add to sitemap.`);
-    } catch (e) { console.warn("Could not extract teams for sitemap:", e.message); }
-
-    // 5. Generate Sitemap XML
-    mkdirSync("./dist", { recursive: true });
-    const sitemap = new SitemapStream({ hostname });
-    const write = createWriteStream("./dist/sitemap.xml");
-    sitemap.pipe(write);
-
-    [...pages, ...dynamicRoutes].forEach((page) => sitemap.write(page));
-    sitemap.end();
-
-    await streamToPromise(sitemap);
-    console.log("✅ sitemap.xml generated successfully in dist/");
+    await streamToPromise(indexStream);
+    console.log("✅ sitemap.xml index generated successfully in dist/");
 
   } catch (error) {
     console.error("❌ Error generating sitemap:", error);
