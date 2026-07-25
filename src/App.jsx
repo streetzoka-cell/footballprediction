@@ -142,8 +142,7 @@ function AppShell() {
  return (
   <>
     <StructuredData data={organizationSchema()} />
-    <StructuredData data={websiteSchema()} />
-
+    
     <ScrollToTop />
 
     {showInstallBanner && (

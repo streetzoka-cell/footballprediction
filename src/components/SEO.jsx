@@ -9,7 +9,7 @@ export default function SEO({
   robots = "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
   keywords = SITE.keywords,
   type = "website",
-  canonical, // Still allow manual override if needed
+  canonical,
   locale = SITE.locale,
   publishedTime,
   modifiedTime,
@@ -25,28 +25,21 @@ export default function SEO({
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  // ★ FIX: Automatically generate the URL based on current route
   const url = canonical || `${SITE.url}${location.pathname}${location.search}`;
 
   return (
     <Helmet prioritizeSeoTags>
-      {/* Primary */}
       <html lang="en-KE" />
-
       <title>{pageTitle}</title>
-
       <meta charSet="utf-8" />
 
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
       <meta name="author" content={author} />
+      
+      {/* Robots & Googlebot handled dynamically here so Admin pages can be noindex */}
       <meta name="robots" content={robots} />
-      <meta
-        name="googlebot"
-        content="index,follow,max-snippet:-1,max-image-preview:large"
-      />
-
-      <meta name="theme-color" content={SITE.themeColor} />
+      <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
       <link rel="canonical" href={url} />
 
@@ -58,11 +51,9 @@ export default function SEO({
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:locale" content={locale} />
-
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
-
       <meta property="og:image" content={image} />
       <meta property="og:image:secure_url" content={image} />
       <meta property="og:image:type" content="image/jpeg" />
@@ -78,28 +69,13 @@ export default function SEO({
       <meta name="twitter:image" content={image} />
 
       {/* Article */}
-      {publishedTime && (
-        <meta
-          property="article:published_time"
-          content={publishedTime}
-        />
-      )}
+      {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
 
-      {modifiedTime && (
-        <meta
-          property="article:modified_time"
-          content={modifiedTime}
-        />
-      )}
-
-      {/* JSON-LD (Supports single object or array of objects) */}
+      {/* JSON-LD */}
       {structuredData && (
         (Array.isArray(structuredData) ? structuredData : [structuredData]).map((data, i) => (
-          <script
-            key={i}
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-          />
+          <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
         ))
       )}
 
