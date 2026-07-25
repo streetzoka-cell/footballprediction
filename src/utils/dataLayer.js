@@ -8,6 +8,9 @@ import { SPORT, TTL, TIMEOUT, PATHS, CACHE_KEY, getSnapshotDocId, getRefDocId } 
 import { eventBus, EVENT } from './eventBus';
 import { todayStr, getWeekStart, getMonthStart } from './dates';
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 function withTimeout(promise, ms, fallback) {
   let timer;
   const timeout = new Promise((resolve) => { timer = setTimeout(() => resolve(fallback), ms); });
@@ -88,8 +91,11 @@ class DataLayer {
   getStats() { return { memoryCacheSize: this._memory.size, pendingLocks: this._locks.size, bgRefreshes: this._bgRefreshInProgress.size, subscribers: this._subscribers.size }; }
 
   subscribeFootballSnapshot(dateStr, cb) {
-    if (!db) return () => {};
-    const ref = doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr);
+    // Prevent Googlebot from opening WebSocket connections (Fixes GSC XHR errors)
+    if (isGooglebot) return () => {};
+    
+    if (!footballDb) return () => {};
+    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, dateStr); // Changed db to footballDb
     return onSnapshot(ref, (snap) => {
       const data = snap.exists() ? snap.data() : null;
       this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
@@ -99,8 +105,10 @@ class DataLayer {
   }
 
   subscribeBasketballSnapshot(dateStr, cb) {
-    if (!db) return () => {};
-    const ref = doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr));
+    if (isGooglebot) return () => {};
+    
+    if (!footballDb) return () => {};
+    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr)); // Changed db to footballDb
     return onSnapshot(ref, (snap) => {
       const data = snap.exists() ? snap.data() : null;
       this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
@@ -110,6 +118,8 @@ class DataLayer {
   }
 
   subscribeLiveFixtures(cb) {
+    if (isGooglebot) return () => {};
+    
     if (!footballDb) return () => {};
     const q = collection(footballDb, 'liveFixtures');
     return onSnapshot(q, (snap) => {
@@ -121,8 +131,8 @@ class DataLayer {
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), async () => {
-      if (!db) return null;
-      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null);
+      if (!footballDb) return null; // Changed db to footballDb
+      const s = await withTimeout(getDoc(doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); 
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.FOOTBALL_UPDATED, eventPayload: d => ({ sport: SPORT.FOOTBALL, dateStr, snapshot: d }) });
   }
@@ -130,8 +140,8 @@ class DataLayer {
   async fetchBasketballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), async () => {
-      if (!db) return null;
-      const s = await withTimeout(getDoc(doc(db, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
+      if (!footballDb) return null; // Changed db to footballDb
+      const s = await withTimeout(getDoc(doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.BASKETBALL_UPDATED, eventPayload: d => ({ sport: SPORT.BASKETBALL, dateStr, snapshot: d }) });
   }
@@ -174,13 +184,12 @@ class DataLayer {
   async fetchUserPredictions(uid, dateStr) {
     if (!uid || !db) return {}; dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.userPredictions(uid, dateStr), async () => {
-      // ★ FIX: Query ONLY by userId to avoid requiring a composite Firestore index!
       const s = await withTimeout(getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), limit(500))), TIMEOUT.USER_QUERY, null);
       if (!s || s.empty) return {};
       const map = {}; 
       s.docs.forEach(d => { 
         const data = d.data(); 
-        if (data.matchDate && data.matchDate !== dateStr) return; // Filter locally
+        if (data.matchDate && data.matchDate !== dateStr) return; 
         const e = { id: d.id, ...data }; 
         [d.id, data.predId, data.matchId].filter(Boolean).map(String).forEach(k => map[k] = e); 
       }); 
@@ -196,7 +205,7 @@ class DataLayer {
       const results = [], map = {}; 
       s.docs.forEach(d => { 
         const data = d.data(); 
-        if (data.matchDate && data.matchDate !== dateStr) return; // Filter locally
+        if (data.matchDate && data.matchDate !== dateStr) return; 
         results.push({ id: d.id, ...data }); 
         if (data.matchId) map[String(data.matchId)] = { id: d.id, ...data }; 
       }); 

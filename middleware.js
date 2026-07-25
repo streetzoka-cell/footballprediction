@@ -39,7 +39,9 @@ export default function middleware(req) {
       // Return the fully rendered HTML to Google
       return new Response(res.body, {
         status: res.status,
-        headers: res.headers,
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+        },
       });
     }).catch(() => {
       // If Prerender fails, fallback to the normal Vite app

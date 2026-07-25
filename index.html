@@ -148,11 +148,8 @@
     </div>
   </div>
 
-  <!-- ★ SEO FALLBACK: Google sees this before React hydrates -->
-  <div id="root">
-    <h1>ZOKASCORE - Live Football Scores, Fixtures & Predictions</h1>
-    <p>Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.</p>
-  </div>
+  <!-- ★ FIX: Removed inline HTML from #root to prevent React hydration warnings. React will handle all content inside here. -->
+  <div id="root"></div>
 
   <script type="module" src="/src/main.jsx"></script>
 

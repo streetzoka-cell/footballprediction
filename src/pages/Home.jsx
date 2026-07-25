@@ -20,6 +20,9 @@ import { db } from '../utils/firebase';
 import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 const MatchStatus = Object.freeze({
   LIVE: 'LIVE', FT: 'FT', HT: 'HT', STARTED: 'STARTED',
   IN_PLAY: 'IN_PLAY', PAUSED: 'PAUSED', AET: 'AET', PEN: 'PEN',
@@ -162,6 +165,9 @@ function useHomeFixtures() {
   useEffect(() => { loadDateFixtures(todayDateStr); }, [loadDateFixtures, todayDateStr]);
 
   useEffect(() => {
+    // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
+    if (isGooglebot) return;
+    
     const unsub = subscribeToTodayFixtures(({ matches: lm, live, finished }) => {
       if (!lm || (lm.length === 0 && !live?.length && !finished?.length)) return;
       
@@ -267,6 +273,15 @@ function useNews() {
   useEffect(() => {
     if (!db) return;
     const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+    
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+      }).catch(err => console.error("News fetch error:", err));
+      return;
+    }
+
     const unsub = onSnapshot(q, (snap) => {
       const newPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       setPosts(prev => {
@@ -405,7 +420,6 @@ const LiveStripLoader = React.memo(() => (
   </div>
 ));
 
-// ★ UPDATED LiveMini: Wrapped in Link for SEO
 const LiveMini = React.memo(({ match, index }) => {
   const min = match.minute;
   const isLive = match.isLive;
@@ -439,7 +453,6 @@ const LiveMini = React.memo(({ match, index }) => {
   );
 });
 
-// ★ UPDATED FeaturedRow: Added width/height/alt to images, linked Teams/Leagues
 const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
@@ -554,7 +567,6 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   );
 });
 
-// ★ UPDATED ZokaRow: Added width/height/alt to images, linked Teams/Leagues
 const ZokaRow = React.memo(({ pick }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
@@ -607,7 +619,7 @@ const ZokaRow = React.memo(({ pick }) => {
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
           {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${pick.awayTeam?.id}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+          <Link to={`/team/${pick.awayTeam?.id}/${slugify(awayName)}`}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">
@@ -812,7 +824,6 @@ export default function Home() {
               {newsPosts.concat(newsPosts).map((post, i) => (
                 <Link to={'/highlights/' + slugify(post.title) + '-' + post.id} key={post.id + '-' + i} className="z-newsmini">
                   {post.imageUrl ? (
-                    // ★ FIX: Added width, height, and alt to news image
                     <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{objectFit:'cover'}} loading="lazy" />
                   ) : (
                     <div className="z-news-img-ph"><Newspaper size={18} /></div>

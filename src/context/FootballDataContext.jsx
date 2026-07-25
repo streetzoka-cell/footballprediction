@@ -2,6 +2,9 @@ import { createContext, useContext, useState, useEffect, useRef, useCallback, us
 import * as ffs from "../services/footballFirestore";
 import { getLocalDateFromUtc, getLocalDateStr } from "../utils/dates";
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== "undefined" && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 const FootballDataContext = createContext(null);
 
 export function FootballDataProvider({ children }) {
@@ -77,6 +80,9 @@ export function FootballDataProvider({ children }) {
   }, [fetchFixturesForDate]);
 
   useEffect(() => {
+    // Prevent Googlebot from opening WebSocket connections
+    if (isGooglebot) return;
+    
     const unsubscribe = ffs.subscribeLive(
       (result) => {
         if (mountedRef.current) {

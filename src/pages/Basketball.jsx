@@ -17,8 +17,11 @@ import { subscribeToBasketballLiveFixtures, fetchBasketballFixtures } from '../u
 import { getDateRange, todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
 
 import { db } from '../utils/firebase';
-import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
 import SEO from '../components/SEO';
+
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
 
 /* ═══════════════════════════════════════════════════════════════
    CONSTANTS & UTILITIES
@@ -340,7 +343,6 @@ export default function Basketball() {
   const [refreshing, setRefreshing] = useState(false);
   const [liveGames, setLiveGames] = useState([]);
 
-  // Predictions
   const [viewMode, setViewMode] = useState('fixtures');
   const [predictions, setPredictions] = useState({});
   const [showLoginModal, setShowLoginModal] = useState(false);
@@ -360,6 +362,20 @@ export default function Basketball() {
   useEffect(() => {
     if (!currentUser) { setPredictions({}); return; }
     const q = query(collection(db, 'user_bb_predictions'), where('userId', '==', currentUser.uid));
+    
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        const userPreds = {};
+        snap.docs.forEach(d => {
+          const data = d.data();
+          userPreds[data.gameId] = { pick: data.pick, timestamp: data.timestamp };
+        });
+        setPredictions(userPreds);
+      }).catch(err => console.error("Pred fetch error:", err));
+      return;
+    }
+
     const unsub = onSnapshot(q, (snap) => {
       const userPreds = {};
       snap.docs.forEach(d => {
@@ -469,6 +485,9 @@ export default function Basketball() {
      REAL-TIME LIVE — onSnapshot on basketballLiveFixtures
   ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
+    // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
+    if (isGooglebot) return;
+    
     const unsub = subscribeToBasketballLiveFixtures(({ matches }) => {
       setLiveGames(prev => {
         if (prev.length !== matches.length) return matches;
@@ -478,7 +497,7 @@ export default function Basketball() {
             changed = true; break;
           }
         }
-        return changed ? matches : prev; // BAIL OUT IF NOTHING CHANGED
+        return changed ? matches : prev;
       });
 
       if (matches.length === 0) return;
@@ -502,15 +521,12 @@ export default function Basketball() {
             next[dateKey] = updatedGames;
           }
         });
-        return changed ? next : prev; // BAIL OUT IF NOTHING CHANGED
+        return changed ? next : prev;
       });
     });
     return () => unsub();
   }, []);
 
-  /* ═══════════════════════════════════════════════════════════
-     PRE-FETCH extra future dates for predictions view
-  ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     const futureDates = dates.filter(d => d.date > tomorrowStr).slice(0, 7);
     futureDates.forEach(async (d) => {
@@ -520,9 +536,6 @@ export default function Basketball() {
     });
   }, [tomorrowStr, dates, fetchDate]);
 
-  /* ═══════════════════════════════════════════════════════════
-     MANUAL REFRESH
-  ═══════════════════════════════════════════════════════════ */
   const handleRefresh = useCallback(() => {
     if (refreshing) return;
     setRefreshing(true);
@@ -533,9 +546,6 @@ export default function Basketball() {
     fetchDate(selectedDate).finally(() => setRefreshing(false));
   }, [selectedDate, refreshing, fetchDate]);
 
-  /* ═══════════════════════════════════════════════════════════
-     MERGE LIVE DATA INTO CURRENT VIEW
-  ═══════════════════════════════════════════════════════════ */
   const mergedGames = useMemo(() => {
     if (!liveGames.length) return currentGames;
     const liveMap = new Map(liveGames.map(g => [String(g.id), g]));
@@ -548,12 +558,9 @@ export default function Basketball() {
       }
       return g;
     });
-    return changed ? next : currentGames; // BAIL OUT IF NOTHING CHANGED
+    return changed ? next : currentGames;
   }, [currentGames, liveGames]);
 
-  /* ═══════════════════════════════════════════════════════════
-     GROUP BY LEAGUE
-  ═══════════════════════════════════════════════════════════ */
   const grouped = useMemo(() => {
     const map = new Map();
     mergedGames.forEach(g => {
@@ -580,9 +587,6 @@ export default function Basketball() {
   const scheduledLeagues = grouped.filter(l => l.games.some(g => g.isScheduled));
   const finishedLeagues = grouped.filter(l => l.games.every(g => g.isFinished));
 
-  /* ═══════════════════════════════════════════════════════════
-     GAME COUNTS PER DATE
-  ═══════════════════════════════════════════════════════════ */
   const gameCounts = useMemo(() => {
     const counts = {};
     Object.entries(gamesByDate).forEach(([date, games]) => {
@@ -591,9 +595,6 @@ export default function Basketball() {
     return counts;
   }, [gamesByDate]);
 
-  /* ═══════════════════════════════════════════════════════════
-     PREDICT GAMES
-  ═══════════════════════════════════════════════════════════ */
   const todayPredictGames = useMemo(() => {
     return getTopPredictGames(gamesByDate[todayStr] || [], 10);
   }, [gamesByDate, todayStr]);
@@ -611,9 +612,6 @@ export default function Basketball() {
     return dates.filter(d => d.date > tomorrowStr).slice(0, 7);
   }, [dates, tomorrowStr]);
 
-  /* ═══════════════════════════════════════════════════════════
-     SCROLL TO TODAY
-  ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (dateScrollRef.current) {
       const todayEl = dateScrollRef.current.querySelector('[data-date="' + todayStr + '"]');

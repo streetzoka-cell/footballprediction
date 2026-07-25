@@ -1,6 +1,6 @@
 ﻿// src/pages/MasterGames.jsx
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Search, X, Star, Clock, Trophy, Users,
   Zap, Bell, BellOff, RefreshCw, Calendar, 
@@ -84,7 +84,7 @@ function TeamModal({ team, onClose }) {
   );
 }
 
-function ScoreBreakdown({ match }) {
+function ScoreBreakdown({ match, onNavigate }) {
   const s = match.score || {};
   const periods = [
     { l: 'Half Time', h: s.halfTime?.home, a: s.halfTime?.away },
@@ -134,11 +134,36 @@ function ScoreBreakdown({ match }) {
           ))}
         </>
       )}
+      
+      {onNavigate && (
+        <button 
+          className="mg8-view-details" 
+          onClick={() => onNavigate(match)} 
+          style={{ 
+            marginTop: 12, 
+            width: '100%', 
+            padding: '8px', 
+            borderRadius: 8, 
+            background: 'rgba(255,255,255,.04)', 
+            border: '1px solid var(--border)', 
+            color: 'var(--text-secondary)', 
+            fontWeight: 700, 
+            fontSize: '.75rem', 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            gap: 6, 
+            cursor: 'pointer' 
+          }}
+        >
+          View Match Details <ArrowRight size={12} />
+        </button>
+      )}
     </div>
   );
 }
 
-function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif }) {
+function MatchCard({ m, idx, expanded, onToggle, onNavigate, isFav, onFav, isNotif, onNotif }) {
   const isLive = m.status === 'IN_PLAY' || m.status === 'PAUSED';
   const isFt = m.status === 'FINISHED';
   const isSched = m.status === 'SCHEDULED' || m.status === 'TIMED';
@@ -162,7 +187,7 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
       <div 
         className={cls} 
         style={{ animationDelay: idx * 10 + 'ms', paddingLeft: (isLive || isFt) ? 16 : 14 }} 
-        onClick={(e) => { if (isExp) e.preventDefault(); onToggle(isExp ? null : m.id); }}
+        onClick={(e) => { e.preventDefault(); onToggle(isExp ? null : m.id); }}
       >
         {(isLive || isFt) && <div className="mg8-left-bar" style={{ background: barColor }} />}
         <div className="mg8-card-top">
@@ -210,7 +235,7 @@ function MatchCard({ m, idx, expanded, onToggle, isFav, onFav, isNotif, onNotif 
       </div>
       {isExp && (
         <div className="mg8-expanded" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-          <ScoreBreakdown match={m} />
+          <ScoreBreakdown match={m} onNavigate={onNavigate} />
         </div>
       )}
     </Link>
@@ -430,6 +455,7 @@ async function requestNotifPermission() {
 // ─── Main Page Component ────────────────────────────────────────────
 
 export default function MasterGames() {
+  const navigate = useNavigate();
   const { fixtures, liveMatches, competitions, loading, lastUpdated, getStandings, getTeams, refreshFixtures, loadDateFixtures } = useFootballData();
   const { toasts, add: addToast, dismiss: dismissToast } = useToasts();
   const { favs, toggle: toggleFav, isFav } = useFavourites();
@@ -449,6 +475,11 @@ export default function MasterGames() {
   const [leagueSearchOpen, setLeagueSearchOpen] = useState(false);
   const [leagueSearchQ, setLeagueSearchQ] = useState('');
   const [selectedTeam, setSelectedTeam] = useState(null);
+
+  const handleNavigateToMatch = useCallback((match) => {
+    const slug = `${slugify(match.homeTeam?.shortName || match.homeTeam?.name)}-vs-${slugify(match.awayTeam?.shortName || match.awayTeam?.name)}`;
+    navigate(`/match/${match.id}/${slug}`);
+  }, [navigate]);
 
   // Deep Linking
   useEffect(() => {
@@ -475,9 +506,15 @@ export default function MasterGames() {
     const url = window.location.href;
     if (navigator.share) {
       try { await navigator.share({ title: 'ZOKASCORE Football', text: 'Check out this football data on ZOKASCORE!', url }); } catch {}
+    } else if (navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(url);
+        addToast({ type: 'status', st: 'live', msg: 'Link copied to clipboard!', dur: 2000 });
+      } catch {
+        addToast({ type: 'status', st: 'live', msg: 'Could not copy link.', dur: 2000 });
+      }
     } else {
-      navigator.clipboard.writeText(url);
-      addToast({ type: 'status', st: 'live', msg: 'Link copied to clipboard!', dur: 2000 });
+      addToast({ type: 'status', st: 'live', msg: 'Sharing not supported on this device.', dur: 2000 });
     }
   };
 
@@ -726,18 +763,18 @@ export default function MasterGames() {
                     <span>{g.comp?.name || 'Other'}</span>
                     <span className="cnt">{g.matches.length}</span>
                   </div>
-                  {g.matches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />)}
+                  {g.matches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} onNavigate={handleNavigateToMatch} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />)}
                 </div>
               ))
             ))}
 
             {tab === 'live' && (liveMatches.length === 0 ? (
               <div className="mg8-empty"><div className="mg8-empty-icon"><Zap size={22} /></div><p>No live matches</p></div>
-            ) : liveMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />))}
+            ) : liveMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} onNavigate={handleNavigateToMatch} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />))}
 
             {tab === 'favourites' && (favMatches.length === 0 ? (
               <div className="mg8-empty"><div className="mg8-empty-icon"><Heart size={22} /></div><p>No favourited matches</p></div>
-            ) : favMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />))}
+            ) : favMatches.map((m, i) => <MatchCard key={m.id} m={m} idx={i} expanded={expanded} onToggle={setExpanded} onNavigate={handleNavigateToMatch} isFav={isFav(String(m.id))} onFav={toggleFav} isNotif={isNotif(String(m.id))} onNotif={toggleNotif} />))}
 
             {tab === 'standings' && (standingsLoading ? <div className="mg8-sk" /> : standingsData ? <StandingsTable standings={standingsData.standings} /> : <div className="mg8-empty"><div className="mg8-empty-icon"><Trophy size={22} /></div><p>Select a competition above</p></div>)}
 

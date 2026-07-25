@@ -8,6 +8,9 @@ import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 /* ═══════════════════════════════════════════════════════════════
    ISOLATED LIVE TIMELINE COMPONENT
    ═══════════════════════════════════════════════════════════════ */
@@ -21,7 +24,6 @@ const LiveTimeline = ({ match, isLive, isFin }) => {
   }, [isLive]);
 
   const { phase, displayMinute, timelineProgress } = useMemo(() => {
-    // ★ FIX: Added optional chaining to prevent crash if match is undefined
     const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
     const elapsedMs = currentTime - kickoffTime;
     const elapsedMins = Math.floor(elapsedMs / 60000);
@@ -94,7 +96,6 @@ const LiveTimeline = ({ match, isLive, isFin }) => {
 };
 
 const LiveStatusText = ({ match, isLive, isFin }) => {
-  // ★ FIX: Added optional chaining
   const kickoffTime = match?.date ? new Date(match.date).getTime() : 0;
   const currentTime = Date.now();
   
@@ -150,14 +151,13 @@ export default function MatchDetails() {
         if (mounted) {
           setMatch(foundMatch);
           
-          // Fetch Standings for thick content
           if (foundMatch?.league?.id) {
             const stand = await fetchLeagueStandings(foundMatch.league.id);
             if (mounted) setStandings(stand || []);
           }
 
-          // Subscribe to live updates if match is not finished
-          if (foundMatch && !isFinishedStatus(foundMatch.status, SPORT.FOOTBALL)) {
+          // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
+          if (foundMatch && !isFinishedStatus(foundMatch.status, SPORT.FOOTBALL) && !isGooglebot) {
             unsubscribe = subscribeToLiveFixtures(getTodayStr(), ({ live, finished }) => {
               const liveMatch = live?.find(m => String(m.id) === String(matchId));
               const finMatch = finished?.find(m => String(m.id) === String(matchId));
@@ -230,11 +230,9 @@ export default function MatchDetails() {
     leagueName, leagueId, statusClass 
   } = matchData;
   
-  // SEO Optimized Title & Description
   const title = `${homeName} vs ${awayName} Prediction, Live Score, H2H & Lineups | ZOKASCORE`;
   const description = `${homeName} vs ${awayName} live score, prediction, lineups, head-to-head statistics, league standings, kickoff time and match analysis on ZOKASCORE.`;
 
-  // SportsEvent Schema
   const sportsSchema = {
     "@context": "https://schema.org",
     "@type": "SportsEvent",
@@ -255,7 +253,6 @@ export default function MatchDetails() {
     })
   };
 
-  // Breadcrumb Schema
   const breadcrumbSchema = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
@@ -281,7 +278,6 @@ export default function MatchDetails() {
           <ArrowLeft size={16} /> Back to Fixtures
         </Link>
 
-        {/* HEADER WITH INTERNAL LINKS */}
         <div className="md-header">
           <p className="md-league">
             <Link to={`/league/${leagueId}/${slugify(leagueName)}`}>{leagueName}</Link>
@@ -312,7 +308,6 @@ export default function MatchDetails() {
 
         <LiveTimeline match={match} isLive={isLive} isFin={isFin} />
 
-        {/* MATCH INFO BAR */}
         <div className="md-info-bar">
           {match.date && (
             <span className="md-info-item">
@@ -331,7 +326,6 @@ export default function MatchDetails() {
           )}
         </div>
 
-        {/* THICK CONTENT SECTION: LEAGUE STANDINGS */}
         {standings.length > 0 && (
           <div className="md-info-card">
             <Trophy size={28} className="md-info-icon" />
@@ -350,7 +344,6 @@ export default function MatchDetails() {
           </div>
         )}
 
-        {/* THICK CONTENT SECTION: H2H & FORM PLACEHOLDER */}
         <div className="md-info-card">
           <h2 className="md-info-title">Head to Head & Recent Form</h2>
           <p className="md-info-text">
@@ -359,7 +352,6 @@ export default function MatchDetails() {
           </p>
         </div>
 
-        {/* INTERNAL LINKING: RELATED MATCHES */}
         <div className="md-info-card">
           <h2 className="md-info-title">Related Matches</h2>
           <Link to="/fixtures" className="md-cta">

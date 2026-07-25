@@ -13,9 +13,12 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
 import { 
   collection, query, orderBy, onSnapshot, addDoc, updateDoc, 
-  deleteDoc, doc, serverTimestamp, increment, getDoc
+  deleteDoc, doc, serverTimestamp, increment, getDoc, getDocs // ★ FIX: Imported getDocs
 } from 'firebase/firestore';
 import SEO from "../components/SEO";
+
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS & CONFIG
@@ -24,13 +27,11 @@ const slugify = (text) => {
   return String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 };
 
-// Bots can't read Base64, so we use the Node backend proxy URL
 const getSeoImageUrl = (post) => {
   if (!post || !post.imageUrl) return "https://zokascore.xyz/logo.png";
   return `https://zokascore.xyz/api/og-image/${post.id}`;
 };
 
-// ★ NEW: Smart Timestamp Formatter
 const formatTimestamp = (date) => {
   if (!date) return 'Just now';
   const now = new Date();
@@ -132,6 +133,15 @@ export default function Highlights() {
     setLoading(true);
     let q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'));
     
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        setLoading(false);
+      }).catch(err => console.error("News fetch error:", err));
+      return;
+    }
+    
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -173,6 +183,15 @@ export default function Highlights() {
     if (comments[targetId]) return;
 
     const q = query(collection(db, 'news_posts', targetId, 'comments'), orderBy('createdAt', 'desc'));
+    
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+      }).catch(err => console.error("Comments fetch error:", err));
+      return;
+    }
+
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
     });
@@ -181,6 +200,15 @@ export default function Highlights() {
   const fetchCommentsForFeed = (postId) => {
     if (comments[postId]) return; 
     const q = query(collection(db, 'news_posts', postId, 'comments'), orderBy('createdAt', 'desc'));
+    
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
+      }).catch(() => {});
+      return;
+    }
+    
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
     });
@@ -353,7 +381,6 @@ export default function Highlights() {
         structuredData={generateJsonLd(seoPost)}
       />
 
-      {/* ★ FIXED: HEADER WITH STRONG CONTRAST */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-header-bg)', borderBottom: '2px solid var(--nh-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
         <div style={{ maxWidth: 700, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }} onClick={() => { navigate('/highlights'); setActiveFilter('All'); }}>
@@ -494,14 +521,12 @@ export default function Highlights() {
         )}
       </div>
 
-      {/* FLOATING BACK TO TOP */}
       {showScrollTop && (
         <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="nh-fab nh-enter" style={{ animationDuration: '0.3s' }}>
           <ArrowUp size={24} />
         </button>
       )}
 
-      {/* IMAGE LIGHTBOX MODAL */}
       {lightboxImage && (
         <div onClick={() => setLightboxImage(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.95)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20, cursor: 'pointer' }}>
           <img src={lightboxImage} style={{ maxWidth: '100%', maxHeight: '90vh', objectFit: 'contain', borderRadius: 8 }} alt="Expanded view" />
@@ -511,7 +536,6 @@ export default function Highlights() {
         </div>
       )}
 
-      {/* CREATE / EDIT MODAL (Strictly aligns to top of screen) */}
       {isFormOpen && (
         <div onClick={() => setIsFormOpen(false)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: 20, backdropFilter: 'blur(8px)', overflowY: 'auto' }}>
           <div onClick={e => e.stopPropagation()} className="nh-modal-pop" style={{ width: '100%', maxWidth: 550, maxHeight: '90vh', background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', border: '1px solid var(--nh-border)', display: 'flex', flexDirection: 'column', marginTop: '20px' }}>
@@ -565,7 +589,6 @@ export default function Highlights() {
         </div>
       )}
 
-      {/* SHARE MODAL */}
       {shareData && (
         <div onClick={() => setShareData(null)} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.7)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div onClick={e => e.stopPropagation()} className="nh-modal-pop" style={{ background: 'var(--nh-surface)', borderRadius: 16, padding: 24, width: '100%', maxWidth: 320, textAlign: 'center' }}>
@@ -602,7 +625,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
     setShowComments(p => !p);
   };
 
-  // ★ FIX: Read more event propagation
   const handleReadMore = (e) => {
     e.stopPropagation();
     setIsExpanded(true);
@@ -616,7 +638,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
   return (
     <div className="nh-enter" style={{ animationDelay: `${index * 50}ms`, background: 'var(--nh-surface)', borderRadius: 16, overflow: 'hidden', ...heroStyles }}>
       
-      {/* ★ FIXED: IMAGE BANNER FOR ALL POSTS */}
       {post.imageUrl && (
         <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', height: isHero ? 240 : 180, overflow: 'hidden' }}>
           <img src={post.imageUrl} alt={post.title} style={{ width: '100%', height: '100%', objectFit: 'cover', transition: 'transform 0.5s' }} loading="lazy" />
@@ -637,22 +658,18 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
 
       <div style={{ padding: 16 }}>
         
-        {/* UNIFIED CLICKABLE CONTENT AREA */}
         <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }}>
-          {/* If NOT hero, or if Hero has NO image, show the header here */}
           {(!isHero || !post.imageUrl) && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
               <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--nh-accent-bg)', color: 'var(--nh-accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, cursor: 'pointer' }}>{(post.authorName || 'A')[0]}</div>
               <div style={{ flex: 1 }}>
                 <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontWeight: 700, fontSize: '.8rem', cursor: 'pointer' }}>{post.authorName || 'Admin'}</div>
-                {/* ★ NEW: Smart Timestamp */}
                 <div style={{ fontSize: '.7rem', color: 'var(--nh-text-muted)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
               </div>
               {!post.imageUrl && <span style={{ padding: '4px 8px', borderRadius: 4, background: badge.bg, color: badge.color, fontSize: '.6rem', fontWeight: 800 }}>{badge.label}</span>}
             </div>
           )}
 
-          {/* If it IS a hero WITH an image, just show author/timestamp below image */}
           {isHero && post.imageUrl && (
              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} style={{ fontSize: '.75rem', color: 'var(--nh-text-muted)', cursor: 'pointer' }}>By <span style={{ color: 'var(--nh-text)', fontWeight: 700 }}>{post.authorName || 'Admin'}</span></div>
@@ -669,7 +686,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
           {isExpanded && <span className="nh-read-more" onClick={handleShowLess}>Show less</span>}
         </div>
 
-        {/* ★ NEW: ARTICLE ENGAGEMENT METRICS */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 12, fontSize: '.75rem', color: 'var(--nh-text-muted)' }}>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><Eye size={12} /> {post.views || 0}</span>
           <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><MessageCircle size={12} /> {post.commentsCount || 0}</span>
@@ -678,7 +694,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
           )}
         </div>
 
-        {/* ACTIONS (FAST REACTIONS ON FEED) */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 16, paddingTop: 12, borderTop: '1px solid var(--nh-border)' }}>
           <div style={{ display: 'flex', gap: 6, overflowX: 'auto' }} className="nh-scroll">
             {REACTIONS.map(r => {
@@ -699,7 +714,6 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
         </div>
       </div>
 
-      {/* INLINE COMMENT SECTION */}
       {showComments && (
         <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
       )}
@@ -743,7 +757,6 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       )}
 
-      {/* IMAGE IS CLICKABLE TO OPEN LIGHTBOX */}
       {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', maxHeight: 500, objectFit: 'cover', borderBottom: '1px solid var(--nh-border)', cursor: 'pointer' }} loading="lazy" />}
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderTop: '1px solid var(--nh-border)' }}>
@@ -790,7 +803,6 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         </div>
       )}
 
-      {/* BACK TO TOP BUTTON AT BOTTOM OF ARTICLE */}
       <div style={{ padding: '0 16px 24px', textAlign: 'center' }}>
         <button onClick={onBackToTop} className="nh-btn" style={{ background: 'var(--nh-surface-hover)', color: 'var(--nh-text-muted)', padding: '12px 24px', borderRadius: 20, border: '1px solid var(--nh-border)', display: 'inline-flex', alignItems: 'center', gap: 8, fontWeight: 700, fontSize: '.85rem' }}>
           <ArrowUp size={16} /> Back to Top

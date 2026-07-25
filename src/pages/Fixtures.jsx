@@ -15,6 +15,9 @@ import { useFootballData } from '../context/FootballDataContext';
 import { getLocalDateStr, getLocalDateFromUtc, formatDateShort, formatTime, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import SEO from '../components/SEO';
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 // ─── Constants & Config ───
 const STORAGE_KEY_FAVS = "zoka_favs";
 const STORAGE_KEY_PINNED = "zoka_pinned_leagues";
@@ -538,7 +541,7 @@ function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, other
         <div className="zoka-filter-panel" style={{ position: 'static', maxHeight: '300px' }}>
           <input className="zoka-search-static" style={{ width: '100%', marginBottom: '10px' }} placeholder="Type league name..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
           {filteredComps.length === 0 && <div className="zoka-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
-          {filteredComps.map(c => (<button key={c.id} className={`zoka-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { onSelect(c.code); setSearchOpen(false); setSearchQ(''); }}>{c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}{c.name}</button>))}
+          {filteredComps.map(c => (<button key={c.id} className={`zoka-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { onSelect(c.code); setSearchOpen(false); setSearchQ(''); }}>{c.emblem && <img src={c.emblem" alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}{c.name}</button>))}
         </div>
       )}
     </>
@@ -663,6 +666,9 @@ export default function Fixtures() {
   }, [selectedDate, isPrimaryDate, fetchPrimary]);
 
   useEffect(() => {
+    // Prevent Googlebot from opening WebSocket connections (Fixes GSC XHR errors)
+    if (isGooglebot) return;
+
     const unsub = subscribeToLiveFixtures(selectedDate, ({ matches: lm }) => {
       if (!lm) return;
       setGlobalLiveMatches(lm);
@@ -812,7 +818,6 @@ export default function Fixtures() {
 
   const currentLeagueEmblem = useMemo(() => { if (compFilter === 'ALL') return null; return fixtureCompList.find(c => c.value === compFilter)?.emblem || null; }, [compFilter, fixtureCompList]);
 
-  // Auto-select first top competition when entering standings/teams tabs
   useEffect(() => {
     if ((tab === 'standings' || tab === 'teams') && !selectedCompCode && topGlobalComps.length > 0) {
       setSelectedCompCode(topGlobalComps[0].code);

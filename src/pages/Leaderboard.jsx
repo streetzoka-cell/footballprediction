@@ -1,8 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/pages/Leaderboard.jsx
-// v20.6 — Instant Local Rank Calculation, Zero-Jank Live Merge, Memoized
-// ★ CLEANED: Airtight listener bailouts to prevent redundant recalculations.
-// ★ FIXED: Auth destructuring and error logging for onSnapshot.
 // ═══════════════════════════════════════════════════════════════
 
 import React, { useState, useRef, useMemo, useCallback, useEffect, useDeferredValue, startTransition, memo } from 'react';
@@ -18,9 +15,12 @@ import { useAppData } from '../context/AppDataContext';
 import { PERIOD, PERIOD_LABEL, calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, getDocs } from 'firebase/firestore'; // ★ FIX: Imported getDocs
 import { subscribeToLiveFixtures } from '../utils/api';
 import SEO from '../components/SEO';
+
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
 
 /* ═════════════════════════
    CONFIG
@@ -169,7 +169,6 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay })
    MAIN COMPONENT
    ═════════════════════════ */
 export default function Leaderboard() {
-  // ★ FIX: Safely destructure currentUser (fallback for older AuthContext versions)
   const auth = useAuth() || {};
   const currentUser = auth.currentUser || auth.user;
   const uid = currentUser?.uid;
@@ -184,7 +183,6 @@ export default function Leaderboard() {
   const [searchFocused, setSearchFocused] = useState(false);
   const [showCount, setShowCount] = useState(15);
 
-  // Local instant data
   const [allUserPreds, setAllUserPreds] = useState([]);
   const [liveFixtures, setLiveFixtures] = useState([]);
 
@@ -196,10 +194,17 @@ export default function Leaderboard() {
     if (!db) return;
     const today = todayStr();
     const q = query(collection(db, 'user_predictions'), where('matchDate', '==', today));
+    
+    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
+    if (isGooglebot) {
+      getDocs(q).then(snap => {
+        setAllUserPreds(snap.docs.map(d => d.data()));
+      }).catch(err => console.error("[Leaderboard] Failed to fetch user predictions:", err.message));
+      return;
+    }
+
     const unsub = onSnapshot(q, snap => {
       const preds = snap.docs.map(d => d.data());
-      
-      // ★ AIRTIGHT BAILOUT: Prevents state update if document contents haven't changed
       setAllUserPreds(prev => {
         if (prev.length !== preds.length) return preds;
         let changed = false;
@@ -218,6 +223,9 @@ export default function Leaderboard() {
 
   // 2. Subscribe to LIVE FIXTURES globally (Zero-Jank, Visibility Aware)
   useEffect(() => {
+    // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
+    if (isGooglebot) return;
+    
     const today = todayStr();
     const unsub = subscribeToLiveFixtures(today, ({ matches }) => {
       if (!matches) return;
@@ -235,7 +243,6 @@ export default function Leaderboard() {
     return () => unsub();
   }, []);
 
-  // Trigger fetch for historical tabs if not already loaded
   useEffect(() => {
     if (!isDaily && !appData.historicalLeaderboards?.[tab] && appData.loadHistoricalLeaderboard) {
       appData.loadHistoricalLeaderboard(tab);
@@ -246,7 +253,6 @@ export default function Leaderboard() {
   const isLoadingHistorical = !isDaily && !historicalData;
   const isStale = !isDaily && historicalData ? (historicalData.stale ?? true) : false;
 
-  // ★ INSTANT DAILY CALCULATION
   const localDailyEntries = useMemo(() => {
     if (allUserPreds.length === 0) return [];
     
@@ -303,7 +309,6 @@ export default function Leaderboard() {
     return entries;
   }, [allUserPreds, appData.activePredictions, liveFixtures]);
 
-  // ★ MERGE LOGIC
   const entries = useMemo(() => {
     if (isDaily) {
       return localDailyEntries.length > 0 ? localDailyEntries : (appData.dailyEntries || []);
@@ -323,7 +328,7 @@ export default function Leaderboard() {
         const newPreds = (hist.predictions || 0) + (today.predictions || 0);
         const histAccPreds = (hist.accuracy || 0) / 100 * (hist.predictions || 0);
         const todayAccPreds = (today.accuracy || 0) / 100 * (today.predictions || 0);
-        const newAcc = newPreds > 0 ? Math.round((histAccPreds + todayAccPreds) / newPreds * 100) : 0;
+        const newAcc = newPreds > 0 ? Math.round((histAccPreds + todayAccPreds / newPreds * 100) : 0;
         
         map.set(today.uid, {
           ...hist,
@@ -344,7 +349,6 @@ export default function Leaderboard() {
     return merged;
   }, [isDaily, localDailyEntries, appData.dailyEntries, historicalData, isStale]);
 
-  // ★ MERGE STATS
   const stats = useMemo(() => {
     if (isDaily) {
       const list = localDailyEntries.length > 0 ? localDailyEntries : (appData.dailyEntries || []);

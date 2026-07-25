@@ -11,6 +11,9 @@ import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from "../components/SEO";
 
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
@@ -199,9 +202,9 @@ export default function Profile() {
 
   const [liveFixtures, setLiveFixtures] = useState([]);
   
-  // ★ FIX: Added missing `todayStr()` argument
+  // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
   useEffect(() => {
-    if (isDemo) return;
+    if (isDemo || isGooglebot) return;
     const unsub = subscribeToLiveFixtures(todayStr(), ({ matches }) => {
       setLiveFixtures(matches || []);
     });

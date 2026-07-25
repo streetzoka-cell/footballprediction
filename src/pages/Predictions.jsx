@@ -22,10 +22,13 @@ import { dataLayer } from '../utils/dataLayer';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
 import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
-import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
+import { subscribeToLiveFixtures } from '../utils/api'; // Removed unused fetchFixtures
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
 import SEO from '../components/SEO';
+
+// Detect Googlebot to prevent WebSocket errors during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
 
 /* ═══════════════════════════════════════════════════
    CONSTANTS & HELPERS
@@ -465,7 +468,8 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           ) : hasPred ? (
             <>
               <span className="v21-bdg bl"><CheckCircle2 size={8} /> Saved</span>
-              {!isLocked && <button className="v21-b v21-bbl v21-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>
+              {/* ★ FIX: Added missing closing bracket for conditional rendering */}
+              {!isLocked && <button className="v21-b v21-bbl v21-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>}
               <button className="v21-b v21-bshare v21-bsm" onClick={() => onShare(pred, false)}><Share2 size={10} /> Share</button>
             </>
           ) : lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90 ? (
@@ -879,6 +883,10 @@ export default function Predictions() {
 
   useEffect(() => {
     if (!isToday) return;
+    
+    // Prevent Googlebot from opening WebSocket connections (Fixes GSC XHR errors)
+    if (isGooglebot) return;
+
     setLiveFixtures([]);
     let unsub = () => {};
     
