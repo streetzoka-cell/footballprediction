@@ -1,4 +1,3 @@
-// src/studio/pages/StudioHome.jsx
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchFixtures } from '../../utils/api';
@@ -53,109 +52,55 @@ export default function StudioHome() {
   };
 
   const studioTools = [
-    { 
-      title: 'Graphic Editor', 
-      desc: 'Build custom graphics & scoreboards', 
-      icon: <LayoutGrid size={28} />, 
-      bg: 'linear-gradient(135deg, #1e293b, #0f172a)', 
-      route: '/studio/templates' 
-    },
-    { 
-      title: 'Viral Reactor Studio', 
-      desc: 'TikTok/IG Reels templates & effects', 
-      icon: <Zap size={28} />, 
-      bg: 'linear-gradient(135deg, #831843, #4a044e)', 
-      route: '/studio/reactor' 
-    },
-    { 
-      title: 'Web Showcase Studio', 
-      desc: 'Record screen & webcam for demos', 
-      icon: <Monitor size={28} />, 
-      bg: 'linear-gradient(135deg, #155e75, #083344)', 
-      route: '/studio/web-showcase' 
-    },
-    { 
-      title: 'Reaction Cam', 
-      desc: 'Record facecam reactions', 
-      icon: <Camera size={28} />, 
-      bg: 'linear-gradient(135deg, #7f1d1d, #450a0a)', 
-      route: '/studio/media' 
-    },
-    { 
-      title: 'Face AR Studio', 
-      desc: 'Apply AR masks & filters', 
-      icon: <Sparkles size={28} />, 
-      bg: 'linear-gradient(135deg, #312e81, #1e1b4b)', 
-      route: '/studio/face-ar' 
-    },
+    { title: 'Graphic Editor', desc: 'Build custom graphics & scoreboards', icon: <LayoutGrid size={28} />, bg: 'linear-gradient(135deg, #1e293b, #0f172a)', route: '/studio/templates' },
+    { title: 'Viral Reactor Studio', desc: 'TikTok/IG Reels templates & effects', icon: <Zap size={28} />, bg: 'linear-gradient(135deg, #831843, #4a044e)', route: '/studio/reactor' },
+    { title: 'Web Showcase Studio', desc: 'Record screen & webcam for demos', icon: <Monitor size={28} />, bg: 'linear-gradient(135deg, #155e75, #083344)', route: '/studio/web-showcase' },
+    { title: 'Reaction Cam', desc: 'Record facecam reactions', icon: <Camera size={28} />, bg: 'linear-gradient(135deg, #7f1d1d, #450a0a)', route: '/studio/media' },
+    { title: 'Face AR Studio', desc: 'Apply AR masks & filters', icon: <Sparkles size={28} />, bg: 'linear-gradient(135deg, #312e81, #1e1b4b)', route: '/studio/face-ar' },
   ];
 
   return (
-    <div style={{ minHeight: '100vh', padding: '40px 24px', background: '#0a0f1a', color: '#fff' }}>
-      <div style={{ maxWidth: '1100px', margin: '0 auto' }}>
+    <div className="studio-home-page">
+      <div className="studio-home-container">
         
-        {/* Header */}
-        <div style={{ marginBottom: '40px', textAlign: 'center' }}>
-          <h1 style={{ fontSize: '2.8rem', fontWeight: 900, margin: 0, letterSpacing: '-1px', background: 'linear-gradient(to right, #fff, #94a3b8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-            ZOKASCORE Studio
-          </h1>
-          <p style={{ color: '#64748b', margin: '8px 0 0 0', fontSize: '16px' }}>The ultimate toolkit for football creators.</p>
+        <div className="studio-home-header">
+          <h1 className="studio-home-title">ZOKASCORE Studio</h1>
+          <p className="studio-home-subtitle">The ultimate toolkit for football creators.</p>
         </div>
 
-        {/* Studio Tools Grid */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', marginBottom: '60px' }}>
+        <div className="studio-tools-grid">
           {studioTools.map((tool, i) => (
-            <div 
-              key={i} 
-              onClick={() => navigate(tool.route)} 
-              style={{ 
-                ...cardBtnStyle, 
-                background: tool.bg 
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-6px)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
-            >
-              <div style={{ background: 'rgba(255,255,255,0.1)', padding: '14px', borderRadius: '14px', marginBottom: '16px', display: 'inline-flex' }}>
-                {tool.icon}
-              </div>
-              <span style={{ fontSize: '16px', fontWeight: 800 }}>{tool.title}</span>
-              <span style={{ fontSize: '12px', color: 'rgba(255,255,255,0.7)', marginTop: '6px', textAlign: 'center' }}>{tool.desc}</span>
+            <div key={i} className="studio-tool-card" style={{ background: tool.bg }} onClick={() => navigate(tool.route)}>
+              <div className="studio-tool-icon">{tool.icon}</div>
+              <span className="studio-tool-title">{tool.title}</span>
+              <span className="studio-tool-desc">{tool.desc}</span>
             </div>
           ))}
         </div>
 
-        {/* My Projects Section */}
         <div style={{ marginBottom: '60px' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', borderBottom: '1px solid #1f2937', paddingBottom: '12px' }}>
+          <div className="studio-section-header">
             <Folder size={22} color="#10b981" />
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>My Projects</h2>
+            <h2 className="studio-section-title">My Projects</h2>
           </div>
           
           {savedProjects.length === 0 ? (
-            <div style={{ background: '#111827', padding: '40px', borderRadius: '16px', textAlign: 'center', color: '#64748b', border: '1px dashed #334155' }}>
+            <div className="studio-empty-projects">
               <Plus size={32} style={{ marginBottom: '12px', opacity: 0.5 }} />
-              <p style={{ fontWeight: 600, color: '#94a3b8' }}>No saved projects yet</p>
+              <p style={{ fontWeight: 600, color: 'var(--text-secondary)' }}>No saved projects yet</p>
               <p style={{ fontSize: '13px' }}>Pick a tool above to start creating!</p>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '20px' }}>
+            <div className="studio-projects-grid">
               {savedProjects.map(p => (
-                <div 
-                  key={p.id} 
-                  onClick={() => openSavedProject(p)} 
-                  style={{ background: '#111827', borderRadius: '16px', cursor: 'pointer', border: '1px solid #1f2937', overflow: 'hidden', transition: 'all 0.2s' }}
-                  onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateY(-4px)'; e.currentTarget.style.borderColor = '#334155'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.borderColor = '#1f2937'; }}
-                >
-                  <div style={{ height: '140px', background: '#0a0f1a', display: 'flex', alignItems: 'center', justifyContent: 'center', borderBottom: '1px solid #1f2937' }}>
-                    {getProjectIcon(p)}
-                  </div>
-                  <div style={{ padding: '16px' }}>
+                <div key={p.id} className="studio-project-card" onClick={() => openSavedProject(p)}>
+                  <div className="studio-project-thumb">{getProjectIcon(p)}</div>
+                  <div className="studio-project-info">
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start' }}>
-                      <span style={{ fontSize: '14px', fontWeight: 700, color: '#fff' }}>{p.name}</span>
+                      <span className="studio-project-name">{p.name}</span>
                       <button onClick={(e) => handleDelete(e, p.id)} style={{ background: 'none', border: 'none', color: '#ef4444', cursor: 'pointer', padding: '0', display: 'flex' }}><Trash2 size={14} /></button>
                     </div>
-                    <span style={{ fontSize: '11px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
+                    <span className="studio-project-date">
                       <Clock size={10} /> {new Date(p.updatedAt).toLocaleDateString()}
                     </span>
                   </div>
@@ -165,54 +110,30 @@ export default function StudioHome() {
           )}
         </div>
 
-        {/* Quick Create Section */}
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '24px', borderBottom: '1px solid #1f2937', paddingBottom: '12px' }}>
+          <div className="studio-section-header">
             <Zap size={22} color="#f59e0b" />
-            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, margin: 0 }}>Quick Create (Today's Matches)</h2>
+            <h2 className="studio-section-title">Quick Create (Today's Matches)</h2>
           </div>
           
-          <div style={{ display: 'grid', gap: '12px' }}>
+          <div className="studio-quick-create-list">
             {loading ? (
-              <div style={{ background: '#111827', padding: '24px', borderRadius: '12px', textAlign: 'center', color: '#64748b', border: '1px solid #1f2937' }}>
-                Loading today's fixtures...
-              </div>
+              <div className="studio-empty-projects">Loading today's fixtures...</div>
             ) : matches.length === 0 ? (
-              <div style={{ background: '#111827', padding: '24px', borderRadius: '12px', textAlign: 'center', color: '#64748b', border: '1px solid #1f2937' }}>
-                No matches found for today.
-              </div>
+              <div className="studio-empty-projects">No matches found for today.</div>
             ) : (
               matches.map(m => (
-                <div 
-                  key={m.id} 
-                  onClick={() => handleQuickCreate(m)} 
-                  style={{ 
-                    display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-                    background: 'linear-gradient(to right, #111827, #0f172a)', 
-                    padding: '16px 20px', borderRadius: '12px', cursor: 'pointer', 
-                    border: '1px solid #1f2937',
-                    transition: 'all 0.2s'
-                  }}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, #1e293b, #172033)'; e.currentTarget.style.borderColor = '#334155'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, #111827, #0f172a)'; e.currentTarget.style.borderColor = '#1f2937'; }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+                <div key={m.id} className="studio-quick-create-item" onClick={() => handleQuickCreate(m)}>
+                  <div className="studio-match-info">
                     <img src={m.homeTeam?.crest} alt="" style={{ width: '28px', height: '28px' }} onError={(e) => e.target.style.display = 'none'} />
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontWeight: 700, fontSize: '15px' }}>{m.homeTeam?.shortName || m.homeTeam?.name}</span>
-                      <span style={{ fontSize: '11px', color: '#64748b' }}>vs</span>
-                      <span style={{ fontWeight: 700, fontSize: '15px' }}>{m.awayTeam?.shortName || m.awayTeam?.name}</span>
+                      <span className="studio-team-name">{m.homeTeam?.shortName || m.homeTeam?.name}</span>
+                      <span className="studio-vs-text">vs</span>
+                      <span className="studio-team-name">{m.awayTeam?.shortName || m.awayTeam?.name}</span>
                     </div>
                     <img src={m.awayTeam?.crest} alt="" style={{ width: '28px', height: '28px' }} onError={(e) => e.target.style.display = 'none'} />
                   </div>
-                  <button 
-                    style={{ 
-                      background: '#10b981', color: '#fff', border: 'none', 
-                      padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '13px',
-                      display: 'flex', alignItems: 'center', gap: '6px',
-                      cursor: 'pointer'
-                    }}
-                  >
+                  <button className="rs-btn-sm rs-btn-accent" style={{ padding: '8px 16px', fontSize: '13px' }}>
                     <Plus size={14} /> Create
                   </button>
                 </div>
@@ -224,13 +145,3 @@ export default function StudioHome() {
     </div>
   );
 }
-
-const cardBtnStyle = {
-  display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', 
-  color: '#fff', border: '1px solid rgba(255,255,255,0.1)', 
-  padding: '28px 20px', borderRadius: '20px', cursor: 'pointer', 
-  transition: 'transform 0.2s, box-shadow 0.2s',
-  minHeight: '200px',
-  justifyContent: 'center',
-  boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
-};
