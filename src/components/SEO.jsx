@@ -13,7 +13,6 @@ export default function SEO({
   locale = SITE.locale,
   publishedTime,
   modifiedTime,
-  // ★ FIX 1: Hardcoded author name
   author = "Kimutai Gibson",
   structuredData,
   children,
@@ -26,8 +25,8 @@ export default function SEO({
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  // ★ FIX: Automatically generate the URL based on current route
-  const url = canonical || `${SITE.url}${location.pathname}${location.search}`;
+  // ★ FIX: Removed location.search to prevent tracking params (like ?ref=123) from creating duplicate canonical URLs
+  const url = canonical || `${SITE.url}${location.pathname}`;
 
   return (
     <Helmet prioritizeSeoTags>
@@ -64,7 +63,6 @@ export default function SEO({
 
       <meta property="og:image" content={image} />
       <meta property="og:image:secure_url" content={image} />
-      {/* ★ FIX 2: Changed to image/png */}
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />

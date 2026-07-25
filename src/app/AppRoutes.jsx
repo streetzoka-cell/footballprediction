@@ -20,6 +20,7 @@ import {
   MatchDetails,
   TeamPage, // 🆕 Added
   LeaguePage, // 🆕 Added
+  Search,
 
   Login,
   Profile,
@@ -84,7 +85,11 @@ export default function AppRoutes() {
 
       {/* ================= DYNAMIC ROUTES ================= */}
       <Route path="/match/:matchId/:slug" element={<Animated><MatchDetails /></Animated>} />
-      
+            {/* ================= SEARCH ================= */}
+      <Route path="/search" element={<Animated><Search /></Animated>} />
+
+      {/* ================= 404 ================= */}
+      <Route path="*" element={<Animated><NotFound /></Animated>} />
       {/* 🆕 SEO PERMANENT PAGES */}
       <Route path="/team/:teamId/:slug" element={<Animated><TeamPage /></Animated>} />
       <Route path="/league/:leagueId/:slug" element={<Animated><LeaguePage /></Animated>} />

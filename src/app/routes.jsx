@@ -15,6 +15,10 @@ export const Leaderboard = lazy(() => import("../pages/Leaderboard"));
 
 // Dynamic Match Details Page for SEO
 export const MatchDetails = lazy(() => import("../pages/MatchDetails"));
+/* ===============================
+   SEARCH
+=============================== */
+export const Search = lazy(() => import("../pages/Search"));
 
 // 🆕 Permanent Team & League Pages for SEO
 export const TeamPage = lazy(() => import("../pages/TeamPage"));
