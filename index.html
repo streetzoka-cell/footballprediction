@@ -6,6 +6,9 @@
 
   <meta name="color-scheme" content="dark" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
+  
+  <!-- ★ FIX: Added theme-color -->
+  <meta name="theme-color" content="#07141f">
 
   <!-- Sitemap Reference -->
   <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
@@ -14,6 +17,8 @@
   <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <!-- ★ FIX: Added 32x32 favicon (Make sure you have favicon-32.png in your public folder) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
   <!-- Mobile -->
@@ -43,27 +48,91 @@
     gtag("config", "G-GZ2JTNKCCN");
   </script>
 
+  <!-- ★ FIX: JSON-LD WebSite Schema kept here as single source of truth -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "url": "https://zokascore.xyz",
+    "name": "ZOKASCORE",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://zokascore.xyz/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
+  </script>
+
   <!-- Loader -->
   <style>
-    html, body {
-      margin: 0; padding: 0; background: #05070a; color: #fff;
+    html,
+    body {
+      margin: 0;
+      padding: 0;
+      background: #07141f;
+      color: #fff;
       font-family: Inter, system-ui, sans-serif;
     }
-    #root { min-height: 100vh; }
-    #static-loader {
-      position: fixed; inset: 0; display: flex; flex-direction: column;
-      justify-content: center; align-items: center; background: #05070a;
-      z-index: 9999; transition: opacity .3s ease;
+
+    #root {
+      min-height: 100vh;
     }
-    .loader-ball { font-size: 60px; animation: ballSpin 1.2s ease-in-out infinite; }
-    .loader-text { margin-top: 18px; color: #10b981; font-size: 14px; font-weight: 800; letter-spacing: 2px; }
-    .loader-bar { width: 120px; height: 4px; margin-top: 16px; background: rgba(255,255,255,.12); border-radius: 999px; overflow: hidden; }
-    .loader-bar-fill { width: 40%; height: 100%; background: #10b981; animation: loaderMove 1s linear infinite; }
-    @keyframes ballSpin { 0%,100% { transform: scale(1); } 50% { transform: scale(1.1) rotate(12deg); } }
-    @keyframes loaderMove { from { transform: translateX(-120%); } to { transform: translateX(320%); } }
+
+    #static-loader {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      background: #07141f;
+      z-index: 9999;
+      transition: opacity .3s ease;
+    }
+
+    .loader-ball {
+      font-size: 60px;
+      animation: ballSpin 1.2s ease-in-out infinite;
+    }
+
+    .loader-text {
+      margin-top: 18px;
+      color: #10b981;
+      font-size: 14px;
+      font-weight: 800;
+      letter-spacing: 2px;
+    }
+
+    .loader-bar {
+      width: 120px;
+      height: 4px;
+      margin-top: 16px;
+      background: rgba(255,255,255,.12);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .loader-bar-fill {
+      width: 40%;
+      height: 100%;
+      background: #10b981;
+      animation: loaderMove 1s linear infinite;
+    }
+
+    @keyframes ballSpin {
+      0%,100% { transform: scale(1); }
+      50% { transform: scale(1.1) rotate(12deg); }
+    }
+
+    @keyframes loaderMove {
+      from { transform: translateX(-120%); }
+      to { transform: translateX(320%); }
+    }
   </style>
 </head>
+
 <body>
+
   <noscript>
     <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif">
       <h1>ZOKASCORE - Live Football Scores & Predictions</h1>
@@ -74,7 +143,9 @@
   <div id="static-loader">
     <div class="loader-ball">⚽</div>
     <div class="loader-text">ZOKASCORE</div>
-    <div class="loader-bar"><div class="loader-bar-fill"></div></div>
+    <div class="loader-bar">
+      <div class="loader-bar-fill"></div>
+    </div>
   </div>
 
   <!-- ★ SEO FALLBACK: Google sees this before React hydrates -->
@@ -84,5 +155,6 @@
   </div>
 
   <script type="module" src="/src/main.jsx"></script>
+
 </body>
 </html>

@@ -9,11 +9,12 @@ export default function SEO({
   robots = "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
   keywords = SITE.keywords,
   type = "website",
-  canonical,
+  canonical, // Still allow manual override if needed
   locale = SITE.locale,
   publishedTime,
   modifiedTime,
-  author = SITE.author,
+  // ★ FIX 1: Hardcoded author name
+  author = "Kimutai Gibson",
   structuredData,
   children,
 }) {
@@ -25,21 +26,26 @@ export default function SEO({
       : `${title} | ${SITE.name}`
     : SITE.name;
 
+  // ★ FIX: Automatically generate the URL based on current route
   const url = canonical || `${SITE.url}${location.pathname}${location.search}`;
 
   return (
     <Helmet prioritizeSeoTags>
+      {/* Primary */}
       <html lang="en-KE" />
+
       <title>{pageTitle}</title>
+
       <meta charSet="utf-8" />
 
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
       <meta name="author" content={author} />
-      
-      {/* Robots & Googlebot handled dynamically here so Admin pages can be noindex */}
       <meta name="robots" content={robots} />
-      <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
+      <meta
+        name="googlebot"
+        content="index,follow,max-snippet:-1,max-image-preview:large"
+      />
 
       <link rel="canonical" href={url} />
 
@@ -51,12 +57,15 @@ export default function SEO({
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:locale" content={locale} />
+
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
+
       <meta property="og:image" content={image} />
       <meta property="og:image:secure_url" content={image} />
-      <meta property="og:image:type" content="image/jpeg" />
+      {/* ★ FIX 2: Changed to image/png */}
+      <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
 
@@ -69,13 +78,28 @@ export default function SEO({
       <meta name="twitter:image" content={image} />
 
       {/* Article */}
-      {publishedTime && <meta property="article:published_time" content={publishedTime} />}
-      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
+      {publishedTime && (
+        <meta
+          property="article:published_time"
+          content={publishedTime}
+        />
+      )}
 
-      {/* JSON-LD */}
+      {modifiedTime && (
+        <meta
+          property="article:modified_time"
+          content={modifiedTime}
+        />
+      )}
+
+      {/* JSON-LD (Supports single object or array of objects) */}
       {structuredData && (
         (Array.isArray(structuredData) ? structuredData : [structuredData]).map((data, i) => (
-          <script key={i} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }} />
+          <script
+            key={i}
+            type="application/ld+json"
+            dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
+          />
         ))
       )}
 
