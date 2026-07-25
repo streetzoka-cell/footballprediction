@@ -1,0 +1,11 @@
+{
+  "remoteName": "origin",
+  "projects": [
+    {
+      "id": "prj_2wcxcTfRiPLfyGV9zmD5HNjapzPu",
+      "name": "footballprediction",
+      "directory": ".",
+      "orgId": "team_oOnpW4EUE583If0J0sYclbHA"
+    }
+  ]
+}
