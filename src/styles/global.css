@@ -2277,4 +2277,28 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
   background: #2563eb;
   border-color: #2563eb;
   transform: translateY(-1px);
+}/* ★ Mobile Responsive Fixes - Prevent Overlap */
+@media (max-width: 600px) {
+  .rs-header-title { display: none; } /* Hide title on small screens */
+  .rs-top-btn { padding: 6px 8px; font-size: 11px; }
+  .rs-toolbar-right {
+    /* Move toolbar to bottom horizontal pill above timeline */
+    bottom: 120px; 
+    top: auto; 
+    right: 50%; 
+    transform: translateX(50%);
+    flex-direction: row; 
+    gap: 8px;
+    background: rgba(0,0,0,0.6); 
+    padding: 6px; 
+    border-radius: 30px;
+    backdrop-filter: blur(10px); 
+    border: 1px solid #1e293b;
+    width: max-content; 
+    max-width: 95vw; 
+    overflow-x: auto;
+  }
+  .rs-side-btn { width: 36px; height: 36px; }
+  .rs-bottom-controls { padding-bottom: 20px; }
+  .rs-canvas-area { padding: 0; }
 }

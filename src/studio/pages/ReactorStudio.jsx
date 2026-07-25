@@ -2,7 +2,7 @@ import React, { useReducer, useRef, useEffect, useMemo, useCallback } from 'reac
 import { useNavigate, useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX, 
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge
 } from 'lucide-react';
 
 // --- HELPER: WebM Duration Metadata Fixer ---
@@ -64,25 +64,52 @@ const idbClear = async () => new Promise(async (res, rej) => { const tx = (await
 
 // --- HELPER: Draw ZOKA Logo Vector Fallback ---
 const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.fillStyle = color;
+  ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(-size/2, -size/2); ctx.lineTo(size/2, -size/2); ctx.lineTo(size/2, -size/4);
   ctx.lineTo(-size/4, size/4); ctx.lineTo(size/2, size/4); ctx.lineTo(size/2, size/2);
   ctx.lineTo(-size/2, size/2); ctx.lineTo(-size/2, size/4); ctx.lineTo(size/4, -size/4);
-  ctx.lineTo(-size/2, -size/4); ctx.closePath(); ctx.fill();
-  ctx.restore();
+  ctx.lineTo(-size/2, -size/4); ctx.closePath(); ctx.fill(); ctx.restore();
 };
 
 // --- 1. MASSIVE TEMPLATE ENGINE ---
 const TEMPLATES = [
   { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro'} },
   { id: 'pro_goal', title: 'Pro: Goal Machine', category: 'Pro', tags: ['viral', 'goal', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #dc2626, #000)', layout: 'pro'} },
+  { id: 'pro_chills', title: 'Pro: Chill Vibes', category: 'Pro', tags: ['viral', 'chill', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #4338ca, #312e81)', layout: 'pro'} },
+  { id: 'pro_skill', title: 'Pro: Skill Show', category: 'Pro', tags: ['viral', 'skill', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #065f46, #000)', layout: 'pro'} },
+  { id: 'pro_news', title: 'Pro: Breaking News', category: 'Pro', tags: ['viral', 'news', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #0c4a6e, #000)', layout: 'pro'} },
+  { id: 'pro_hype', title: 'Pro: Hype Beast', category: 'Pro', tags: ['viral', 'hype', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #be185d, #000)', layout: 'pro'} },
+  { id: 'pro_cinematic', title: 'Pro: Cinematic Wide', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: {x:0,y:140,w:720,h:1000}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #111, #000)', layout: 'pro'} },
+  { id: 'pro_signature', title: 'Pro: ZOKA Signature', category: 'Pro', tags: ['viral', 'zoka', 'intro'], pip: false, video: {x:0,y:0,w:720,h:1280}, bg:'#000', preview: {bg: 'linear-gradient(135deg, #047857, #000)', layout: 'pro'} },
   { id: 'social_pro', title: 'TikTok POV (Exact Match)', category: 'TikTok', tags: ['viral', 'pov', 'exact'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:70,r:35,ring:'accent'}, nameEl: {x:100,y:60,size:30,color:'#fff'}, handleEl: {x:100,y:92,size:24,color:'#aaa'}, caption: {x:50,y:150,size:26,maxW:620,align:'left',color:'#fff'}, topGradient:350, bottomGradient:200, preview: {bg: 'linear-gradient(to bottom, #1e293b, #0f172a)', layout: 'pov'} },
   { id: 'tiktok_frame', title: 'TikTok Framed (Color)', category: 'TikTok', tags: ['viral', 'frame', 'pov'], pip: false, video: {x:40,y:250,w:640,h:900,border:'#000'}, profile: {x:60,y:60,r:30,ring:'#fff'}, nameEl: {x:110,y:50,size:24,color:'#fff'}, handleEl: {x:110,y:80,size:20,color:'#000'}, caption: {x:60,y:150,size:28,color:'#fff',maxW:600,align:'left'}, bg:'accent', preview: {bg: '#f97316', layout: 'pov'} },
   { id: 'custom', title: 'Custom Studio', category: 'Pro', tags: ['drag', 'resize'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:360,y:640,r:50,ring:'accent'}, username: {x:360,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:400,size:28,maxW:600,center:true}, bg:'#000', isCustom: true, preview: {bg: '#000', layout: 'custom'} },
-  // ... (other templates omitted for brevity, but included in your actual file)
+  { id: 'tiktok_tl', title: 'TikTok Top Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
+  { id: 'tiktok_tr', title: 'TikTok Top Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tr'} },
+  { id: 'tiktok_bl', title: 'TikTok Bottom Left', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#111', layout: 'bl'} },
+  { id: 'tiktok_br', title: 'TikTok Bottom Right', category: 'TikTok', tags: ['viral', 'duet'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:1180,r:35,ring:'accent'}, username: {x:620,y:1175,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:1080,size:24,maxW:680,align:'right'}, bottomGradient:400, preview: {bg: '#111', layout: 'br'} },
+  { id: 'tiktok_face', title: 'TikTok Facecam', category: 'TikTok', tags: ['facecam', 'gaming'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#111', layout: 'tl'} },
+  { id: 'insta_tl', title: 'Insta Story Top Left', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tl'} },
+  { id: 'insta_tr', title: 'Insta Story Top Right', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:670,y:60,r:35,ring:'accent'}, username: {x:620,y:55,size:28,badge:true,badgeColor:'accent',align:'right'}, caption: {x:700,y:120,size:24,maxW:680,align:'right'}, topGradient:350, preview: {bg: '#1a1a1a', layout: 'tr'} },
+  { id: 'insta_bl', title: 'Insta Story Bottom', category: 'Instagram', tags: ['luxury', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:1180,r:35,ring:'accent'}, username: {x:100,y:1175,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:1080,size:24,maxW:680,align:'left'}, bottomGradient:400, preview: {bg: '#1a1a1a', layout: 'bl'} },
+  { id: 'insta_lux', title: 'Insta Luxury Gold', category: 'Instagram', tags: ['luxury', 'gold'], pip: false, video: {x:40,y:80,w:640,h:900,border:'#f59e0b'}, profile: {x:360,y:1100,r:40,ring:'#f59e0b'}, username: {x:360,y:1200,size:36,color:'#fff',center:true,badge:true,badgeColor:'#f59e0b'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
+  { id: 'yt_shorts', title: 'YT Shorts Standard', category: 'YouTube', tags: ['shorts', 'viral'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#0f0f0f', layout: 'tl'} },
+  { id: 'yt_mrbeast', title: 'YT MrBeast Style', category: 'YouTube', tags: ['mrbeast', 'viral'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1100,size:60,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#0f0f0f', layout: 'center'} },
+  { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#1a1a1a', layout: 'tl'} },
+  { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#ec4899'}, profile: {x:360,y:1150,r:35,ring:'#ec4899'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#ec4899'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#10b981'}, profile: {x:360,y:1150,r:35,ring:'#10b981'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#10b981'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'#9146ff'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'#9146ff'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#0e0e10', preview: {bg: '#0e0e10', layout: 'tl'} },
+  { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: {x:0,y:0,w:360,h:1280}, profile: {x:180,y:640,r:50,ring:'accent'}, username: {x:180,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:540,y:640,size:28,maxW:300,center:true}, bg:'#000', preview: {bg: '#111', layout: 'split'} },
+  { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#dc2626',text:'BREAKING NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#dc2626', layout: 'news'} },
+  { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#1d9bf0',text:'MATCH UPDATE',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#1d9bf0', layout: 'news'} },
+  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#10b981',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#10b981', layout: 'news'} },
+  { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#000', preview: {bg: '#000', layout: 'tl'} },
+  { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:80,w:640,h:900,border:'accent'}, profile: {x:360,y:1100,r:40,ring:'#f1f1f1'}, username: {x:360,y:1200,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
+  { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:40,w:640,h:800,border:'accent'}, profile: {x:360,y:1000,r:40,ring:'#f1f1f1'}, username: {x:360,y:1100,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:900,size:28,color:'#000',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
+  { id: 'min_dark', title: 'Minimal Dark', category: 'Minimal', tags: ['dark', 'clean'], pip: false, video: {x:0,y:0,w:720,h:1280}, caption: {x:360,y:1200,size:32,maxW:680,center:true,color:'#fff'}, bg:'#000', preview: {bg: '#000', layout: 'center'} },
 ];
 
 const FONT_PACKS = {
@@ -175,9 +202,8 @@ const initialState = {
     isMuted: false, filter: 'none', fadeIn: false, 
     pipPos: { x: 410, y: 830, w: 280, h: 380 }, pipScale: 1.0, pipFrameStyle: 'accent', profilePos: { x: 50, y: 70, r: 35 },
     introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true,
-    videoZoom: 1, videoPanX: 0, videoPanY: 0,
-    mode: 'video', // 'video' or 'slideshow'
-    slideshowSpeed: 3, slideshowTransition: 'fade'
+    videoZoom: 1, videoPanX: 0, videoPanY: 0, playbackRate: 1.0,
+    mode: 'video', slideshowSpeed: 3, slideshowTransition: 'fade'
   },
   slideshow: { images: [], duration: 0 },
   timeline: { clips: [{ id: 'clip1', start: 0, end: 0 }], activeClipId: 'clip1', duration: 0, currentTime: 0, isPlaying: false },
@@ -212,7 +238,7 @@ export default function ReactorStudio() {
   const audioRef = useRef(null);
   const canvasRef = useRef(null);
   const overlayCanvasRef = useRef(document.createElement('canvas')); 
-  const exportCanvasRef = useRef(null); // 1080x1920 export canvas
+  const exportCanvasRef = useRef(null);
   const fileInputRefs = useRef({ video: null, broll: null, image: null, audio: null, logo: null, images: null });
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
@@ -227,12 +253,11 @@ export default function ReactorStudio() {
   const currentTimeRef = useRef(0);
   const renderOverlayRef = useRef(() => {});
   const mediaRecorderRef = useRef(null);
+  const writableStreamRef = useRef(null);
 
   const { media, editor, slideshow, timeline, ui } = state;
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
-  
   const activeTemplate = templateMap[editor.templateId] || TEMPLATES[0];
-  
   const activeClip = useMemo(() => timeline.clips.find(c => c.id === timeline.activeClipId) || timeline.clips[0], [timeline.clips, timeline.activeClipId]);
 
   useEffect(() => {
@@ -278,7 +303,6 @@ export default function ReactorStudio() {
         const aBlob = await idbGet('audio_track');
         if (aBlob) { audioRef.current.src = URL.createObjectURL(aBlob); audioRef.current.loop = true; dispatch({ type: 'SET_MEDIA', payload: { audioName: 'Restored Audio' } }); }
         
-        // Load Slideshow Images
         const sImages = await idbGet('slideshow_images');
         if (sImages && sImages.length > 0) {
           slideshowImgRefs.current = sImages.map(src => {
@@ -305,6 +329,8 @@ export default function ReactorStudio() {
   useEffect(() => { if (media.logoSrc) logoImgRef.current.src = media.logoSrc; }, [media.logoSrc]);
   useEffect(() => { if (editor.homeLogoUrl) homeLogoRef.current.src = editor.homeLogoUrl; }, [editor.homeLogoUrl]);
   useEffect(() => { if (editor.awayLogoUrl) awayLogoRef.current.src = editor.awayLogoUrl; }, [editor.awayLogoUrl]);
+  useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = editor.isMuted; }, [editor.isMuted]);
+  useEffect(() => { if (sourceVideoRef.current && editor.mode === 'video') sourceVideoRef.current.playbackRate = editor.playbackRate; }, [editor.playbackRate, editor.mode, media.sourceLoaded]);
 
   const handleImport = async (e, type) => {
     const file = e.target.files[0];
@@ -370,8 +396,6 @@ export default function ReactorStudio() {
     window.location.reload();
   };
 
-  useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = editor.isMuted; }, [editor.isMuted]);
-
   const startCamera = async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 1280, facingMode: 'user' }, audio: true });
@@ -392,12 +416,10 @@ export default function ReactorStudio() {
         vid.play(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: true } });
       }
     } else {
-      // Slideshow Play/Pause
       dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: !timeline.isPlaying } });
     }
   };
 
-  // --- DRAWING HELPERS ---
   const drawCover = (ctx, media, dx, dy, dw, dh, crop = { x: 0, y: 0, w: 1, h: 1 }) => {
     const vw = media.videoWidth || media.width, vh = media.videoHeight || media.height; 
     if (!vw || !vh) return;
@@ -426,7 +448,6 @@ export default function ReactorStudio() {
     ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.35); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore();
   };
 
-  // --- 3. OVERLAY CACHING (REF-BASED FOR SMOOTHNESS) ---
   renderOverlayRef.current = () => {
     const oc = overlayCanvasRef.current;
     const ctx = oc.getContext('2d');
@@ -494,7 +515,6 @@ export default function ReactorStudio() {
     }
   };
 
-  // --- 4. MAIN RENDER LOOP ---
   const drawFrameRef = useRef(() => {});
   drawFrameRef.current = () => {
     const canvas = canvasRef.current; if (!canvas) return;
@@ -505,288 +525,110 @@ export default function ReactorStudio() {
 
     const cTime = currentTimeRef.current;
 
-    // --- SLIDESHOW MODE ---
     if (editor.mode === 'slideshow' && slideshow.images.length > 0) {
       if (timeline.isPlaying) {
-        currentTimeRef.current += 1/30; // Simulate 30fps time progression
-        if (currentTimeRef.current >= slideshow.duration) {
-          currentTimeRef.current = 0; // Loop
-        }
+        currentTimeRef.current += (1/30) * editor.playbackRate;
+        if (currentTimeRef.current >= slideshow.duration) currentTimeRef.current = 0;
         dispatch({ type: 'SET_TIMELINE', payload: { currentTime: currentTimeRef.current } });
       }
-
-      const imgDur = editor.slideshowSpeed;
-      const totalDur = slideshow.images.length * imgDur;
-      const loopedTime = currentTimeRef.current % totalDur;
-      const idx = Math.floor(loopedTime / imgDur);
-      const imgProg = (loopedTime % imgDur) / imgDur; // 0 to 1
-
-      const currentImg = slideshowImgRefs.current[idx];
-      const nextImg = slideshowImgRefs.current[(idx + 1) % slideshow.images.length];
-
+      const imgDur = editor.slideshowSpeed; const totalDur = slideshow.images.length * imgDur; const loopedTime = currentTimeRef.current % totalDur;
+      const idx = Math.floor(loopedTime / imgDur); const imgProg = (loopedTime % imgDur) / imgProg;
+      const currentImg = slideshowImgRefs.current[idx]; const nextImg = slideshowImgRefs.current[(idx + 1) % slideshow.images.length];
       if (currentImg && currentImg.complete) {
         ctx.save();
-        if (editor.slideshowTransition === 'zoom_in') {
-          const scale = 1 + imgProg * 0.3;
-          ctx.translate(W/2, H/2);
-          ctx.scale(scale, scale);
-          ctx.translate(-W/2, -H/2);
-        }
-        drawCover(ctx, currentImg, 0, 0, W, H);
-        ctx.restore();
+        if (editor.slideshowTransition === 'zoom_in') { const scale = 1 + imgProg * 0.3; ctx.translate(W/2, H/2); ctx.scale(scale, scale); ctx.translate(-W/2, -H/2); }
+        drawCover(ctx, currentImg, 0, 0, W, H); ctx.restore();
       }
-
-      // Transition to next image
       if (imgProg > 0.7 && nextImg && nextImg.complete) {
         ctx.globalAlpha = (imgProg - 0.7) / 0.3;
-        if (editor.slideshowTransition === 'slide_left') {
-          const offset = (1 - (imgProg - 0.7) / 0.3) * W;
-          drawCover(ctx, nextImg, W - offset, 0, W, H);
-        } else {
-          drawCover(ctx, nextImg, 0, 0, W, H);
-        }
+        if (editor.slideshowTransition === 'slide_left') { const offset = (1 - (imgProg - 0.7) / 0.3) * W; drawCover(ctx, nextImg, W - offset, 0, W, H); } else { drawCover(ctx, nextImg, 0, 0, W, H); }
         ctx.globalAlpha = 1;
       }
-    } 
-    // --- VIDEO MODE ---
-    else if (media.sourceLoaded && sourceVideoRef.current) {
+    } else if (media.sourceLoaded && sourceVideoRef.current) {
       currentTimeRef.current = sourceVideoRef.current.currentTime;
-      if (Math.abs(sourceVideoRef.current.currentTime - timeline.currentTime) > 0.3) {
-        dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sourceVideoRef.current.currentTime } });
-      }
+      if (Math.abs(sourceVideoRef.current.currentTime - timeline.currentTime) > 0.3) dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sourceVideoRef.current.currentTime } });
       if (activeClip) {
         if (sourceVideoRef.current.currentTime < activeClip.start) sourceVideoRef.current.currentTime = activeClip.start;
         if (timeline.isPlaying && sourceVideoRef.current.currentTime >= activeClip.end - 0.05) { sourceVideoRef.current.pause(); sourceVideoRef.current.currentTime = activeClip.start; sourceVideoRef.current.play(); }
       }
-      
       if (ui.layers.video) {
-        ctx.save(); const v = activeTemplate.video;
-        const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
-
+        ctx.save(); const v = activeTemplate.video; const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
         if (editor.videoEffect === 'zoom_in') { const s = 1 + aProg * 0.3; ctx.translate(v.x + v.w/2, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
         else if (editor.videoEffect === 'shake') ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
         else if (editor.videoEffect === 'pulse') { const s = 1 + Math.sin(cTime * 8) * 0.04; ctx.translate(v.x + v.w/2, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
         else if (editor.videoEffect === 'ken_burns') { const s = 1 + aProg * 0.15; const tx = aProg * 30; ctx.translate(v.x + v.w/2 - tx, v.y + v.h/2); ctx.scale(s, s); ctx.translate(-(v.x + v.w/2), -(v.y + v.h/2)); }
-
         ctx.filter = editor.filter;
-        
-        const zoom = editor.videoZoom || 1;
-        const panX = editor.videoPanX || 0;
-        const panY = editor.videoPanY || 0;
-        const cropW = 1 / zoom;
-        const cropH = 1 / zoom;
-        const cropX = (1 - cropW) / 2 + (panX * (1 - cropW) / 2);
-        const cropY = (1 - cropH) / 2 + (panY * (1 - cropH) / 2);
+        const zoom = editor.videoZoom || 1; const panX = editor.videoPanX || 0; const panY = editor.videoPanY || 0;
+        const cropW = 1 / zoom; const cropH = 1 / zoom; const cropX = (1 - cropW) / 2 + (panX * (1 - cropW) / 2); const cropY = (1 - cropH) / 2 + (panY * (1 - cropH) / 2);
         const mainCrop = { x: cropX, y: cropY, w: cropW, h: cropH };
-
         if (editor.videoEffect === 'glitch' || editor.videoEffect === 'rgb_split') {
-          ctx.globalCompositeOperation = 'screen';
-          ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x + (Math.random()*10), v.y, v.w, v.h, mainCrop);
-          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x - (Math.random()*10), v.y, v.w, v.h, mainCrop);
-          ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-        } else {
-          drawCover(ctx, sourceVideoRef.current, v.x, v.y, v.w, v.h, mainCrop);
-        }
+          ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x + (Math.random()*10), v.y, v.w, v.h, mainCrop);
+          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x - (Math.random()*10), v.y, v.w, v.h, mainCrop); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+        } else { drawCover(ctx, sourceVideoRef.current, v.x, v.y, v.w, v.h, mainCrop); }
         ctx.filter = 'none'; ctx.restore();
-
         if (editor.videoEffect === 'flash' && cTime < (activeClip?.start || 0) + 0.5) { ctx.fillStyle = `rgba(255,255,255,${1 - (cTime - (activeClip?.start || 0)) * 2})`; ctx.fillRect(0, 0, W, H); }
         if (editor.fadeIn && cTime < (activeClip?.start || 0) + 1) { ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - (activeClip?.start || 0))})`; ctx.fillRect(0, 0, W, H); }
       }
-      
-      // --- FRAMED & SCALED PIP RENDERING ---
-      const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip;
-      const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
+      const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip; const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
       if (aPiPVid && showPiP) {
-        const baseP = editor.pipPos;
-        const scale = editor.pipScale || 1.0;
-        const pW = Math.round(baseP.w * scale);
-        const pH = Math.round(baseP.h * scale);
-        const pX = Math.round(baseP.x + (baseP.w - pW) / 2);
-        const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
-        const frameStyle = editor.pipFrameStyle || 'accent';
-        const radius = 16;
-        const vw = aPiPVid.videoWidth, vh = aPiPVid.videoHeight;
-
+        const baseP = editor.pipPos; const scale = editor.pipScale || 1.0; const pW = Math.round(baseP.w * scale); const pH = Math.round(baseP.h * scale); const pX = Math.round(baseP.x + (baseP.w - pW) / 2); const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
+        const frameStyle = editor.pipFrameStyle || 'accent'; const radius = 16; const vw = aPiPVid.videoWidth, vh = aPiPVid.videoHeight;
         ctx.save();
-        if (frameStyle === 'accent') {
-          ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4;
-          ctx.fillStyle = editor.accentColor;
-          roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4);
-          ctx.fill();
-        } else if (frameStyle === 'white') {
-          ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4;
-          ctx.fillStyle = '#fff';
-          roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4);
-          ctx.fill();
-        } else if (frameStyle === 'glow') {
-          ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 30;
-          ctx.strokeStyle = editor.accentColor; ctx.lineWidth = 3;
-          roundRectPath(ctx, pX, pY, pW, pH, radius);
-          ctx.stroke();
-        } else if (frameStyle === 'minimal') {
-          ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2;
-          ctx.fillStyle = 'rgba(0,0,0,0.3)';
-          roundRectPath(ctx, pX, pY, pW, pH, radius);
-          ctx.fill();
-        }
+        if (frameStyle === 'accent') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = editor.accentColor; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
+        else if (frameStyle === 'white') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = '#fff'; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
+        else if (frameStyle === 'glow') { ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 30; ctx.strokeStyle = editor.accentColor; ctx.lineWidth = 3; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.stroke(); }
+        else if (frameStyle === 'minimal') { ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2; ctx.fillStyle = 'rgba(0,0,0,0.3)'; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.fill(); }
         ctx.restore();
-
-        ctx.save();
-        roundRectPath(ctx, pX, pY, pW, pH, radius);
-        ctx.clip();
-        if (vw && vh) {
-          if (!media.brollLoaded) {
-            ctx.scale(-1, 1); ctx.translate(-W, 0);
-            drawCover(ctx, aPiPVid, W - pX - pW, pY, pW, pH);
-          } else {
-            drawCover(ctx, aPiPVid, pX, pY, pW, pH);
-          }
-        }
+        ctx.save(); roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.clip();
+        if (vw && vh) { if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); drawCover(ctx, aPiPVid, W - pX - pW, pY, pW, pH); } else { drawCover(ctx, aPiPVid, pX, pY, pW, pH); } }
         ctx.restore();
-
-        if (frameStyle !== 'minimal' && frameStyle !== 'glow') {
-          ctx.save();
-          ctx.strokeStyle = 'rgba(255,255,255,0.25)';
-          ctx.lineWidth = 1;
-          roundRectPath(ctx, pX, pY, pW, pH, radius);
-          ctx.stroke();
-          ctx.restore();
-        }
+        if (frameStyle !== 'minimal' && frameStyle !== 'glow') { ctx.save(); ctx.strokeStyle = 'rgba(255,255,255,0.25)'; ctx.lineWidth = 1; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.stroke(); ctx.restore(); }
       }
     }
-    
-    renderOverlayRef.current();
-    if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
-
+    renderOverlayRef.current(); if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
     if (editor.introEnabled && activeClip && editor.mode === 'video') {
-      const introDur = 3.0;
-      const introP = Math.min((currentTimeRef.current - activeClip.start) / introDur, 1.0);
-      
+      const introDur = 3.0; const introP = Math.min((currentTimeRef.current - activeClip.start) / introDur, 1.0);
       if (introP < 1.0) {
-        ctx.fillStyle = `rgba(0,0,0,${1 - Math.pow(introP, 3)})`;
-        ctx.fillRect(0, 0, W, H);
-        
-        const logo = logoImgRef.current;
-        const hasLogo = logo.src && logo.complete;
-        const lSize = 200;
-        const cx = W / 2;
-        const cy = H / 2;
-        
-        ctx.save();
-        
+        ctx.fillStyle = `rgba(0,0,0,${1 - Math.pow(introP, 3)})`; ctx.fillRect(0, 0, W, H);
+        const logo = logoImgRef.current; const hasLogo = logo.src && logo.complete; const lSize = 200; const cx = W / 2; const cy = H / 2; ctx.save();
         if (editor.introStyle === 'glitch_reveal') {
-          let jitter = (1 - introP) * 40;
-          ctx.globalAlpha = Math.min(introP * 3, 1);
-          if (hasLogo) {
-            ctx.globalCompositeOperation = 'screen';
-            ctx.fillStyle = 'red'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 + jitter, cy - lSize/2, lSize, lSize);
-            ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 - jitter, cy - lSize/2, lSize, lSize);
-            ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; 
-            ctx.drawImage(logo, cx - lSize/2, cy - lSize/2, lSize, lSize);
-          } else {
-            drawZokaLogo(ctx, cx + jitter, cy, lSize/2, 'red');
-            drawZokaLogo(ctx, cx - jitter, cy, lSize/2, 'cyan');
-            drawZokaLogo(ctx, cx, cy, lSize/2, '#fff');
-          }
+          let jitter = (1 - introP) * 40; ctx.globalAlpha = Math.min(introP * 3, 1);
+          if (hasLogo) { ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'red'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 + jitter, cy - lSize/2, lSize, lSize); ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.5; ctx.drawImage(logo, cx - lSize/2 - jitter, cy - lSize/2, lSize, lSize); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1; ctx.drawImage(logo, cx - lSize/2, cy - lSize/2, lSize, lSize); }
+          else { drawZokaLogo(ctx, cx + jitter, cy, lSize/2, 'red'); drawZokaLogo(ctx, cx - jitter, cy, lSize/2, 'cyan'); drawZokaLogo(ctx, cx, cy, lSize/2, '#fff'); }
         } else if (editor.introStyle === 'neon_pulse') {
-          let pulse = Math.sin(introP * Math.PI * 6) * 0.5 + 0.5;
-          ctx.shadowColor = editor.accentColor;
-          ctx.shadowBlur = 40 + (pulse * 30);
-          ctx.globalAlpha = Math.min(introP * 3, 1);
-          if (hasLogo) ctx.drawImage(logo, cx - lSize/2, cy - lSize/2, lSize, lSize);
-          else drawZokaLogo(ctx, cx, cy, lSize/2, '#fff');
-          ctx.shadowBlur = 0;
+          let pulse = Math.sin(introP * Math.PI * 6) * 0.5 + 0.5; ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 40 + (pulse * 30); ctx.globalAlpha = Math.min(introP * 3, 1);
+          if (hasLogo) ctx.drawImage(logo, cx - lSize/2, cy - lSize/2, lSize, lSize); else drawZokaLogo(ctx, cx, cy, lSize/2, '#fff'); ctx.shadowBlur = 0;
         } else if (editor.introStyle === 'slide_zoom') {
-          let scale = 1 + (1 - introP) * 1.5;
-          let yPos = cy - (1 - introP) * 400;
-          ctx.globalAlpha = Math.min(introP * 3, 1);
-          if (hasLogo) ctx.drawImage(logo, cx - (lSize*scale)/2, yPos - (lSize*scale)/2, lSize*scale, lSize*scale);
-          else drawZokaLogo(ctx, cx, yPos, (lSize/2)*scale, '#fff');
+          let scale = 1 + (1 - introP) * 1.5; let yPos = cy - (1 - introP) * 400; ctx.globalAlpha = Math.min(introP * 3, 1);
+          if (hasLogo) ctx.drawImage(logo, cx - (lSize*scale)/2, yPos - (lSize*scale)/2, lSize*scale, lSize*scale); else drawZokaLogo(ctx, cx, yPos, (lSize/2)*scale, '#fff');
         }
-        
         ctx.restore();
       }
     }
-
-    if (ui.isExporting && exportCanvasRef.current) {
-      const eCtx = exportCanvasRef.current.getContext('2d');
-      eCtx.imageSmoothingEnabled = true;
-      eCtx.imageSmoothingQuality = 'high';
-      eCtx.drawImage(canvas, 0, 0, 1080, 1920);
-    }
+    if (ui.isExporting && exportCanvasRef.current) { const eCtx = exportCanvasRef.current.getContext('2d'); eCtx.imageSmoothingEnabled = true; eCtx.imageSmoothingQuality = 'high'; eCtx.drawImage(canvas, 0, 0, 1080, 1920); }
   };
 
-  useEffect(() => {
-    let aF; const l = () => { drawFrameRef.current(); aF = requestAnimationFrame(l); };
-    aF = requestAnimationFrame(l); return () => cancelAnimationFrame(aF);
-  }, []);
+  useEffect(() => { let aF; const l = () => { drawFrameRef.current(); aF = requestAnimationFrame(l); }; aF = requestAnimationFrame(l); return () => cancelAnimationFrame(aF); }, []);
 
-  const getCanvasCoords = (e) => {
-    const r = canvasRef.current.getBoundingClientRect(); const sx = 720 / r.width, sy = 1280 / r.height;
-    const cx = e.touches ? e.touches[0].clientX : e.clientX, cy = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: (cx - r.left) * sx, y: (cy - r.top) * sy };
-  };
+  const getCanvasCoords = (e) => { const r = canvasRef.current.getBoundingClientRect(); const sx = 720 / r.width, sy = 1280 / r.height; const cx = e.touches ? e.touches[0].clientX : e.clientX, cy = e.touches ? e.touches[0].clientY : e.clientY; return { x: (cx - r.left) * sx, y: (cy - r.top) * sy }; };
 
   const handlePointerDown = (e) => {
     if (!editor.editMode && !activeTemplate.isCustom && !media.brollLoaded && !media.cameraOn) return;
     const { x, y } = getCanvasCoords(e);
-    
-    if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { 
-      if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { 
-        dragRef.current = { target: 'profile', offsetX: x - editor.profilePos.x, offsetY: y - editor.profilePos.y }; return; 
-      } 
-    }
-    
-    if (media.brollLoaded || media.cameraOn) { 
-      const baseP = editor.pipPos;
-      const scale = editor.pipScale || 1.0;
-      const pW = Math.round(baseP.w * scale);
-      const pH = Math.round(baseP.h * scale);
-      const pX = Math.round(baseP.x + (baseP.w - pW) / 2);
-      const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
-      
-      if (x >= pX && x <= pX + pW && y >= pY && y <= pY + pH) {
-        dragRef.current = { target: 'pip', offsetX: x - pX, offsetY: y - pY };
-      }
-    }
+    if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { dragRef.current = { target: 'profile', offsetX: x - editor.profilePos.x, offsetY: y - editor.profilePos.y }; return; } }
+    if (media.brollLoaded || media.cameraOn) { const baseP = editor.pipPos; const scale = editor.pipScale || 1.0; const pW = Math.round(baseP.w * scale); const pH = Math.round(baseP.h * scale); const pX = Math.round(baseP.x + (baseP.w - pW) / 2); const pY = Math.round(baseP.y + (baseP.h - pH) / 2); if (x >= pX && x <= pX + pW && y >= pY && y <= pY + pH) { dragRef.current = { target: 'pip', offsetX: x - pX, offsetY: y - pY }; } }
   };
-
   const handlePointerMove = (e) => {
-    if (!dragRef.current.target) return; 
-    e.preventDefault(); 
-    const { x, y } = getCanvasCoords(e); 
-    
-    if (dragRef.current.target === 'pip') { 
-      const baseP = editor.pipPos;
-      const scale = editor.pipScale || 1.0;
-      const pW = Math.round(baseP.w * scale);
-      const pH = Math.round(baseP.h * scale);
-      
-      let nX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - pW));
-      let nY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - pH));
-      
-      const sx = [0, 360 - pW/2, 720 - pW];
-      sx.forEach(pt => { if (Math.abs(nX - pt) < 20) nX = pt; });
-      
-      const newBaseX = nX - (baseP.w - pW) / 2;
-      const newBaseY = nY - (baseP.h - pH) / 2;
-      
-      dispatch({ type: 'SET_EDITOR', payload: { pipPos: { ...baseP, x: newBaseX, y: newBaseY } } }); 
-    } 
-    else if (dragRef.current.target === 'profile') { 
-      let nX = Math.max(editor.profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - editor.profilePos.r)); 
-      let nY = Math.max(editor.profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - editor.profilePos.r)); 
-      dispatch({ type: 'SET_EDITOR', payload: { profilePos: { ...editor.profilePos, x: nX, y: nY } } }); 
-    }
+    if (!dragRef.current.target) return; e.preventDefault(); const { x, y } = getCanvasCoords(e);
+    if (dragRef.current.target === 'pip') { const baseP = editor.pipPos; const scale = editor.pipScale || 1.0; const pW = Math.round(baseP.w * scale); const pH = Math.round(baseP.h * scale); let nX = Math.max(0, Math.min(x - dragRef.current.offsetX, 720 - pW)); let nY = Math.max(0, Math.min(y - dragRef.current.offsetY, 1280 - pH)); const sx = [0, 360 - pW/2, 720 - pW]; sx.forEach(pt => { if (Math.abs(nX - pt) < 20) nX = pt; }); const newBaseX = nX - (baseP.w - pW) / 2; const newBaseY = nY - (baseP.h - pH) / 2; dispatch({ type: 'SET_EDITOR', payload: { pipPos: { ...baseP, x: newBaseX, y: newBaseY } } }); }
+    else if (dragRef.current.target === 'profile') { let nX = Math.max(editor.profilePos.r, Math.min(x - dragRef.current.offsetX, 720 - editor.profilePos.r)); let nY = Math.max(editor.profilePos.r, Math.min(y - dragRef.current.offsetY, 1280 - editor.profilePos.r)); dispatch({ type: 'SET_EDITOR', payload: { profilePos: { ...editor.profilePos, x: nX, y: nY } } }); }
   };
-
   const handlePointerUp = () => dragRef.current.target = null;
 
   const handleExportVideo = async (format = 'mp4', fps = 30) => {
     const vid = sourceVideoRef.current; 
     if (!canvasRef.current || ui.isExporting) return;
     
-    // Check if we have content to export
     if (editor.mode === 'video' && (!vid || !activeClip)) return;
     if (editor.mode === 'slideshow' && slideshow.images.length === 0) return;
     
@@ -798,7 +640,21 @@ export default function ReactorStudio() {
     dispatch({ type: 'SET_UI', payload: { isExporting: true, exportFormat: format, exportFps: fps } });
     dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
     
-    let exportDuration = 0;
+    let exportDuration = 0; 
+    let fileExt = format === 'mp4' ? 'mp4' : 'webm';
+    let useStream = false; 
+    let fileHandle = null;
+
+    if (window.showSaveFilePicker) {
+      try {
+        fileHandle = await window.showSaveFilePicker({
+          suggestedName: `zokascore_clip.${fileExt}`,
+          types: [{ description: 'Video File', accept: { 'video/mp4': ['.mp4'], 'video/webm': ['.webm'] } }]
+        });
+        writableStreamRef.current = await fileHandle.createWritable();
+        useStream = true;
+      } catch (e) { console.log("Save dialog cancelled or not supported. Falling back to memory."); useStream = false; }
+    }
 
     if (editor.mode === 'video') {
       vid.pause(); vid.currentTime = activeClip.start;
@@ -851,7 +707,6 @@ export default function ReactorStudio() {
 
     chunksRef.current = [];
     let mT = 'video/webm';
-    let fileExt = 'webm';
 
     if (format === 'mp4') {
       const mp4Codecs = [
@@ -885,19 +740,34 @@ export default function ReactorStudio() {
     const r = new MediaRecorder(cS, { mimeType: mT, videoBitsPerSecond: bitrate });
     mediaRecorderRef.current = r;
     
-    r.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
-    r.onstop = async () => { 
-      let b = new Blob(chunksRef.current, { type: mT }); 
-      if (fileExt === 'webm') {
-        b = await fixWebmDuration(b, exportDuration * 1000);
+    r.ondataavailable = async (e) => {
+      if (e.data.size > 0) {
+        if (useStream && writableStreamRef.current) { 
+          await writableStreamRef.current.write(e.data); 
+        } else { 
+          chunksRef.current.push(e.data); 
+        }
       }
-      dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(b), recordedExt: fileExt, isExporting: false, exportFormat: null, exportFps: null } }); 
+    };
+    r.onstop = async () => { 
+      if (useStream && writableStreamRef.current) { 
+        await writableStreamRef.current.close(); 
+        alert("Export saved directly to your disk!"); 
+      } else {
+        let b = new Blob(chunksRef.current, { type: mT }); 
+        if (fileExt === 'webm') {
+          b = await fixWebmDuration(b, exportDuration * 1000);
+        }
+        dispatch({ type: 'SET_UI', payload: { recordedUrl: URL.createObjectURL(b), recordedExt: fileExt, isExporting: false, exportFormat: null, exportFps: null } }); 
+      }
       if (vid) vid.pause(); 
       if (audioRef.current) audioRef.current.pause(); 
       if (vid) { vid.muted = editor.isMuted; vid.volume = 1; }
       cS.getTracks().forEach(t => t.stop()); 
       if (aC) aC.close(); 
       exportCanvasRef.current = null; 
+      writableStreamRef.current = null;
+      dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null, exportFps: null } });
     };
     
     const cI = setInterval(() => { 
@@ -919,9 +789,11 @@ export default function ReactorStudio() {
       mediaRecorderRef.current.stop();
     }
     if (sourceVideoRef.current) sourceVideoRef.current.pause();
+    if (writableStreamRef.current) writableStreamRef.current.abort();
     dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
     dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null, exportFps: null } });
     exportCanvasRef.current = null;
+    writableStreamRef.current = null;
   };
 
   const applyTemplate = (id) => {
@@ -1138,6 +1010,13 @@ export default function ReactorStudio() {
             <div>
               <h3 className="rs-panel-title"><Layers size={14} color="#10b981" /> Edit & Layers</h3>
               
+              <div className="rs-panel-box">
+                <h4 className="rs-box-title"><Gauge size={12} /> Playback Speed</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {[0.5, 1.0, 1.5, 2.0].map(s => <button key={s} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { playbackRate: s } })} className={`rs-btn-sm ${editor.playbackRate === s ? 'active' : ''}`}>{s}x</button>)}
+                </div>
+              </div>
+
               {editor.mode === 'slideshow' && (
                 <div className="rs-panel-box">
                   <h4 className="rs-box-title"><Images size={12} /> Slideshow Settings</h4>
