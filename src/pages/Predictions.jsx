@@ -951,29 +951,39 @@ export default function Predictions() {
     return () => { cancelled = true; };
   }, [selDate, isToday, uid]);
 
-  useEffect(() => {
+    useEffect(() => {
     if (!isAdmin || !isToday || !fixtureMap.size) return;
     const toResolve = mergedFeatured.filter(p => {
       const mid = String(p.matchId);
       const fx = fixtureMap.get(mid);
-      return fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null;
+      // Check if fixture is finished and we don't already have it marked as finished in our featured predictions
+      return fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null && p.status !== 'finished';
     });
 
     toResolve.forEach(pred => {
       const mid = String(pred.matchId);
       if (!resolving.current.has(mid)) {
         const fx = fixtureMap.get(mid);
-        const dbPred = currentFeatured.find(p => String(p.matchId) === mid);
-        if (dbPred && dbPred.status !== 'finished') {
-          resolving.current.add(mid);
-          resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
-            .catch(e => console.error("Resolve err:", e))
-            .finally(() => resolving.current.delete(mid));
-        }
+        resolving.current.add(mid);
+        
+        // ★ FIX: Update active_predictions status to finished in Firestore
+        const predId = pred.id || `feat_${todayStr()}_${mid}`;
+        setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { 
+          homeScore: fx.homeScore, 
+          awayScore: fx.awayScore, 
+          status: 'finished', 
+          updatedAt: serverTimestamp() 
+        }, { merge: true }).catch(console.error);
+        
+        resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
+          .catch(e => console.error("Resolve err:", e))
+          .finally(() => resolving.current.delete(mid));
       }
     });
-  }, [isAdmin, isToday, fixtureMap, mergedFeatured, currentFeatured]);
+  }, [isAdmin, isToday, fixtureMap, mergedFeatured]);
 
+
+  
   /* ═══ OTHER MEMOS ═══ */
   const dateList = useMemo(() => {
     const arr = [];
