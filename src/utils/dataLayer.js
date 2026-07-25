@@ -91,11 +91,11 @@ class DataLayer {
   getStats() { return { memoryCacheSize: this._memory.size, pendingLocks: this._locks.size, bgRefreshes: this._bgRefreshInProgress.size, subscribers: this._subscribers.size }; }
 
   subscribeFootballSnapshot(dateStr, cb) {
-    // Prevent Googlebot from opening WebSocket connections (Fixes GSC XHR errors)
+    // ★ FIX: Prevent Googlebot from opening WebSocket connections
     if (isGooglebot) return () => {};
     
     if (!footballDb) return () => {};
-    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, dateStr); // Changed db to footballDb
+    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, dateStr);
     return onSnapshot(ref, (snap) => {
       const data = snap.exists() ? snap.data() : null;
       this._memSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
@@ -108,7 +108,7 @@ class DataLayer {
     if (isGooglebot) return () => {};
     
     if (!footballDb) return () => {};
-    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr)); // Changed db to footballDb
+    const ref = doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr));
     return onSnapshot(ref, (snap) => {
       const data = snap.exists() ? snap.data() : null;
       this._memSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), data, TTL.FIXTURE_SNAPSHOT);
@@ -131,7 +131,7 @@ class DataLayer {
   async fetchFootballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.FOOTBALL, dateStr), async () => {
-      if (!footballDb) return null; // Changed db to footballDb
+      if (!footballDb) return null;
       const s = await withTimeout(getDoc(doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, dateStr)), TIMEOUT.SNAPSHOT_READ, null); 
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.FOOTBALL_UPDATED, eventPayload: d => ({ sport: SPORT.FOOTBALL, dateStr, snapshot: d }) });
@@ -140,7 +140,7 @@ class DataLayer {
   async fetchBasketballSnapshot(dateStr) {
     dateStr = dateStr || todayStr();
     return this.getOrSet(CACHE_KEY.snapshot(SPORT.BASKETBALL, dateStr), async () => {
-      if (!footballDb) return null; // Changed db to footballDb
+      if (!footballDb) return null;
       const s = await withTimeout(getDoc(doc(footballDb, PATHS.FIXTURE_SNAPSHOTS, getSnapshotDocId(SPORT.BASKETBALL, dateStr))), TIMEOUT.SNAPSHOT_READ, null);
       return s?.exists() ? s.data() : null;
     }, TTL.FIXTURE_SNAPSHOT, { event: EVENT.BASKETBALL_UPDATED, eventPayload: d => ({ sport: SPORT.BASKETBALL, dateStr, snapshot: d }) });

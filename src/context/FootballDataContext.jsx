@@ -80,7 +80,7 @@ export function FootballDataProvider({ children }) {
   }, [fetchFixturesForDate]);
 
   useEffect(() => {
-    // Prevent Googlebot from opening WebSocket connections
+    // ★ FIX: Prevent Googlebot from opening WebSocket connections
     if (isGooglebot) return;
     
     const unsubscribe = ffs.subscribeLive(
