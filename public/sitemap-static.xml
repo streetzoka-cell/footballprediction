@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <!-- MAIN -->
+  <url><loc>https://zokascore.xyz/</loc><changefreq>hourly</changefreq><priority>1.0</priority></url>
+  
+  <!-- SPORTS -->
+  <url><loc>https://zokascore.xyz/fixtures</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://zokascore.xyz/predictions</loc><changefreq>hourly</changefreq><priority>0.9</priority></url>
+  <url><loc>https://zokascore.xyz/mastergames</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://zokascore.xyz/basketball</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+  <url><loc>https://zokascore.xyz/highlights</loc><changefreq>daily</changefreq><priority>0.8</priority></url>
+  <url><loc>https://zokascore.xyz/livestream</loc><changefreq>weekly</changefreq><priority>0.7</priority></url>
+  <url><loc>https://zokascore.xyz/leaderboard</loc><changefreq>hourly</changefreq><priority>0.8</priority></url>
+
+  <!-- STUDIO -->
+  <url><loc>https://zokascore.xyz/studio</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/templates</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/editor</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/reactor</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/web-showcase</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/media</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+  <url><loc>https://zokascore.xyz/studio/face-ar</loc><changefreq>weekly</changefreq><priority>0.6</priority></url>
+
+  <!-- COMPANY -->
+  <url><loc>https://zokascore.xyz/about</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/team</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/careers</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/contact</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/partners</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/advertise</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+
+  <!-- SUPPORT -->
+  <url><loc>https://zokascore.xyz/faq</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/help</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+  <url><loc>https://zokascore.xyz/help-center</loc><changefreq>monthly</changefreq><priority>0.5</priority></url>
+
+  <!-- LEGAL -->
+  <url><loc>https://zokascore.xyz/privacy</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+  <url><loc>https://zokascore.xyz/terms</loc><changefreq>yearly</changefreq><priority>0.3</priority></url>
+</urlset>
