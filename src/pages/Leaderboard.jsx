@@ -328,7 +328,7 @@ export default function Leaderboard() {
         const newPreds = (hist.predictions || 0) + (today.predictions || 0);
         const histAccPreds = (hist.accuracy || 0) / 100 * (hist.predictions || 0);
         const todayAccPreds = (today.accuracy || 0) / 100 * (today.predictions || 0);
-        const newAcc = newPreds > 0 ? Math.round((histAccPreds + todayAccPreds / newPreds * 100) : 0;
+        const newAcc = newPreds > 0 ? Math.round((histAccPreds + todayAccPreds) / newPreds * 100) : 0;
         
         map.set(today.uid, {
           ...hist,

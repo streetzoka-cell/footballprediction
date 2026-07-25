@@ -3,6 +3,9 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 
+// Detect Googlebot to prevent SW registration crashes during indexing
+const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+
 // https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
@@ -15,6 +18,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: false, // ★ FIX: Prevent automatic injection so Googlebot doesn't crash
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png'],
       manifest: {
         name: 'ZokaScore',

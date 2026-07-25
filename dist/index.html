@@ -2,78 +2,23 @@
 <html lang="en-KE">
 <head>
   <meta charset="UTF-8" />
-  <meta
-    name="viewport"
-    content="width=device-width, initial-scale=1.0, viewport-fit=cover"
-  />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-  <!-- Generic Title (React Helmet replaces this per page) -->
-  <title>ZOKASCORE</title>
-  
-
-  <!-- Generic Description -->
-  <meta
-    name="description"
-    content="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world."
-  />
-
-  <meta
-    name="robots"
-    content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1"
-  />
-
-  <meta
-    name="googlebot"
-    content="index,follow,max-snippet:-1,max-image-preview:large"
-  />
-
-  <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
+  
+  <!-- ★ FIX: Added theme-color -->
+  <meta name="theme-color" content="#07141f">
 
-
-  <!-- 🆕 Sitemap Reference -->
+  <!-- Sitemap Reference -->
   <link rel="sitemap" type="application/xml" href="/sitemap.xml" />
-
-  <!-- 🆕 Open Graph / Facebook -->
-  <meta property="og:type" content="website" />
-  <meta property="og:url" content="https://zokascore.xyz/" />
-  <meta property="og:title" content="ZOKASCORE - Live Football Scores & Predictions" />
-  <meta property="og:description" content="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." />
-  <meta property="og:image" content="https://zokascore.xyz/og-image.png" />
-  <meta property="og:site_name" content="ZOKASCORE" />
-  <meta property="og:locale" content="en_GB" />
-
-  <!-- 🆕 Twitter -->
-  <meta name="twitter:card" content="summary_large_image" />
-  <meta name="twitter:url" content="https://zokascore.xyz/" />
-  <meta name="twitter:title" content="ZOKASCORE - Live Football Scores & Predictions" />
-  <meta name="twitter:description" content="Get football predictions, match analysis, fixtures, live scores, and football statistics." />
-  <meta name="twitter:image" content="https://zokascore.xyz/og-image.png" />
-  <meta name="twitter:creator" content="@zokascore" />
-
-  <!-- 🆕 JSON-LD WebSite Schema -->
-  <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebSite",
-    "url": "https://zokascore.xyz",
-    "name": "ZOKASCORE",
-    "potentialAction": {
-      "@type": "SearchAction",
-      "target": "https://zokascore.xyz/search?q={search_term_string}",
-      "query-input": "required name=search_term_string"
-    }
-  }
-  </script>
-
-  <!-- PWA -->
-  <link rel="manifest" href="/manifest.webmanifest" />
 
   <!-- Icons -->
   <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+  <!-- ★ FIX: Added 32x32 favicon (Make sure you have favicon-32.png in your public folder) -->
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
   <!-- Mobile -->
@@ -89,22 +34,33 @@
   <link rel="preconnect" href="https://www.google-analytics.com" crossorigin />
 
   <!-- Fonts -->
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
-    rel="stylesheet"
-  />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
   <!-- Preload -->
   <link rel="preload" href="/icons/icon-192.png" as="image" />
 
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
-
   <script>
     window.dataLayer = window.dataLayer || [];
     function gtag(){dataLayer.push(arguments);}
     gtag("js", new Date());
     gtag("config", "G-GZ2JTNKCCN");
+  </script>
+
+  <!-- ★ FIX: JSON-LD WebSite Schema kept here as single source of truth -->
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "url": "https://zokascore.xyz",
+    "name": "ZOKASCORE",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://zokascore.xyz/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
+    }
+  }
   </script>
 
   <!-- Loader -->
@@ -113,7 +69,7 @@
     body {
       margin: 0;
       padding: 0;
-      background: #05070a;
+      background: #07141f;
       color: #fff;
       font-family: Inter, system-ui, sans-serif;
     }
@@ -129,7 +85,7 @@
       flex-direction: column;
       justify-content: center;
       align-items: center;
-      background: #05070a;
+      background: #07141f;
       z-index: 9999;
       transition: opacity .3s ease;
     }
@@ -173,7 +129,7 @@
       to { transform: translateX(320%); }
     }
   </style>
-  <script type="module" crossorigin src="/assets/index-D7IPrE_J.js"></script>
+  <script type="module" crossorigin src="/assets/index-BY0s3zqB.js"></script>
   <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-QTnfLwEv.js">
   <link rel="modulepreload" crossorigin href="/assets/react-vendor-DrkJF46m.js">
   <link rel="modulepreload" crossorigin href="/assets/firebase-vendor-CysCagxc.js">
@@ -181,7 +137,7 @@
   <link rel="modulepreload" crossorigin href="/assets/vendor-NzzEB_C8.js">
   <link rel="stylesheet" crossorigin href="/assets/vendor-1oWo33m3.css">
   <link rel="stylesheet" crossorigin href="/assets/index-DFuxPydW.css">
-<link rel="manifest" href="/manifest.webmanifest"><script id="vite-plugin-pwa:register-sw" src="/registerSW.js"></script></head>
+<link rel="manifest" href="/manifest.webmanifest"></head>
 
 <body>
 
@@ -200,13 +156,9 @@
     </div>
   </div>
 
-  <!-- ★ SEO FALLBACK: Google sees this before React hydrates -->
-  <div id="root">
-    <h1>ZOKASCORE - Live Football Scores, Fixtures & Predictions</h1>
-    <p>Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.</p>
-  </div>
+  <!-- ★ FIX: Removed inline HTML from #root to prevent React hydration warnings. React will handle all content inside here. -->
+  <div id="root"></div>
 
 
 </body>
-
 </html>
