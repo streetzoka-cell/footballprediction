@@ -3,6 +3,7 @@
 // ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
 // ★ FIXED: ID lookup mismatch causing saved predictions to not show up in UI.
 // ★ SEO UPGRADE: Added internal links to Team/League pages, fixed image CLS.
+// ★ SEO UPGRADE: Added BreadcrumbList structured data.
 // ═════════════════════════════════════════════════════════════════════════════════
 
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
@@ -91,6 +92,16 @@ function parseKickoffTime(kickoff) {
 
 const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
 const toastStyle = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' };
+
+// ★ ADDED: Breadcrumb Schema for Google Rich Results
+const breadcrumbSchema = {
+  "@context": "https://schema.org",
+  "@type": "BreadcrumbList",
+  "itemListElement": [
+    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://zokascore.xyz/" },
+    { "@type": "ListItem", "position": 2, "name": "Predictions", "item": "https://zokascore.xyz/predictions" }
+  ]
+};
 
 /* ═══════════════════════════════════════════════════
    ANIMATED NUMBER
@@ -454,7 +465,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           ) : hasPred ? (
             <>
               <span className="v21-bdg bl"><CheckCircle2 size={8} /> Saved</span>
-              {!isLocked && <button className="v21-b v21-bbl v21-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>}
+              {!isLocked && <button className="v21-b v21-bbl v21-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>
               <button className="v21-b v21-bshare v21-bsm" onClick={() => onShare(pred, false)}><Share2 size={10} /> Share</button>
             </>
           ) : lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90 ? (
@@ -1004,6 +1015,7 @@ export default function Predictions() {
         description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
         keywords="football predictions, betting tips, match predictions, soccer tips"
         robots="index,follow"
+        structuredData={breadcrumbSchema} // ★ ADDED SCHEMA HERE
       />
 
       {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
