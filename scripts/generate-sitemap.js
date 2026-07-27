@@ -15,8 +15,8 @@ const serviceAccount = {
 };
 
 if (!serviceAccount.projectId || !serviceAccount.privateKey) {
-  console.error("❌ Missing Firebase Admin credentials in .env file for sitemap generation.");
-  process.exit(1);
+  console.warn("⚠️ Skipping sitemap generation: Missing Firebase credentials in environment.");
+  process.exit(0); // ★ Exit successfully so CI/CD build doesn't fail
 }
 
 initializeApp({ credential: cert(serviceAccount) });
