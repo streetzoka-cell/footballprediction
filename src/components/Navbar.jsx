@@ -11,7 +11,7 @@ import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/cons
 import { todayStr, parseDateAsUTC } from '../utils/dates';
 
 import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc, getDoc } from 'firebase/firestore';
 
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const ADMIN_REMEMBER_KEY = 'nv-admin-remembered';
@@ -289,28 +289,50 @@ export default function Navbar() {
   });
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m)).filter(Boolean).filter(m => m.homeTeam?.name !== 'TBD' && m.awayTeam?.name !== 'TBD'), [rawLive]);
-  const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
-  const dailyEntries = dailyLB?.entries || [];
+  // ★ NEW: Smart Admin State
+  const [isAdmin, setIsAdmin] = useState(userProfile?.role === 'admin' || rememberedAdmin);
 
+  // ★ NEW: Smart Admin Detection via Firestore (users & admin_users collections)
   useEffect(() => {
     if (!isLoggedIn) {
+      setIsAdmin(false);
       try { localStorage.removeItem(ADMIN_REMEMBER_KEY); } catch {}
       setRememberedAdmin(false);
       return;
     }
-    if (userProfile) {
-      if (userProfile.role === 'admin') {
-        try { localStorage.setItem(ADMIN_REMEMBER_KEY, 'true'); } catch {}
-        setRememberedAdmin(true);
-      } else {
-        try { localStorage.removeItem(ADMIN_REMEMBER_KEY); } catch {}
-        setRememberedAdmin(false);
-      }
+    
+    if (userProfile?.role === 'admin' || userProfile?.role === 'staff') {
+      setIsAdmin(true);
+      try { localStorage.setItem(ADMIN_REMEMBER_KEY, 'true'); } catch {}
+      setRememberedAdmin(true);
+      return;
     }
-  }, [isLoggedIn, userProfile]);
 
-  const isAdmin = userProfile ? userProfile.role === 'admin' : rememberedAdmin;
+    const checkAdminStatus = async () => {
+      try {
+        const adminRef = doc(db, 'admin_users', uid);
+        const adminSnap = await getDoc(adminRef);
+        if (adminSnap.exists()) {
+          setIsAdmin(true);
+          try { localStorage.setItem(ADMIN_REMEMBER_KEY, 'true'); } catch {}
+          setRememberedAdmin(true);
+        } else {
+          setIsAdmin(false);
+          try { localStorage.removeItem(ADMIN_REMEMBER_KEY); } catch {}
+          setRememberedAdmin(false);
+        }
+      } catch (err) {
+        // Silently fallback if permission denied or collection doesn't exist
+        setIsAdmin(userProfile?.role === 'admin' || rememberedAdmin);
+      }
+    };
+    
+    checkAdminStatus();
+  }, [isLoggedIn, uid, userProfile, rememberedAdmin]);
+
+  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m)).filter(Boolean).filter(m => m.homeTeam?.name !== 'TBD' && m.awayTeam?.name !== 'TBD'), [rawLive]);
+  const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
+  const dailyEntries = dailyLB?.entries || [];
 
   const searchRef = useRef(null);
   const notifRef = useRef(null);
@@ -456,6 +478,7 @@ export default function Navbar() {
     setMobileOpen(false);
     try { localStorage.removeItem(ADMIN_REMEMBER_KEY); } catch {}
     setRememberedAdmin(false);
+    setIsAdmin(false);
     try { await signOut(); } catch { /* */ }
     navigate('/');
   }, [signOut, navigate]);
@@ -580,6 +603,7 @@ export default function Navbar() {
               })}
               {isLoggedIn ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
+                  {/* ★ NEW: Smart Admin Link Display */}
                   {isAdmin && <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin"><Shield size={18} strokeWidth={2.5} /></Link>}
                   <Link to="/profile" className={`nv-action-btn ${isActive('/profile') ? 'active' : ''}`} title="Profile"><User size={18} strokeWidth={2.5} /></Link>
                 </div>
@@ -591,6 +615,7 @@ export default function Navbar() {
 
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
+            {/* ★ NEW: Smart Admin Link Display for Mobile */}
             {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
             {isLoggedIn && (
               <div ref={mobNotifRef} style={{ position: 'relative' }}>
@@ -663,6 +688,7 @@ export default function Navbar() {
             {isLoggedIn ? (
               <>
                 <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', margin: '14px 0' }} />
+                {/* ★ NEW: Smart Admin Link Display in Mobile Drawer */}
                 {isAdmin && <button onClick={() => handleMobileNav(ADMIN_PATH)} className="nv-mob-link" style={{ color: '#fbbf24' }}><Shield size={20} /> <span style={{ flex: 1 }}>Admin Panel</span> <ChevronRight size={16} style={{ opacity: 0.3 }} /></button>}
                 <button onClick={() => handleMobileNav('/profile')} className="nv-mob-link"><User size={20} /> <span style={{ flex: 1 }}>Profile</span> <ChevronRight size={16} style={{ opacity: 0.3 }} /></button>
                 <button onClick={handleLogout} className="nv-mob-link" style={{ background: 'rgba(239,68,68,0.05)', color: '#ef4444', fontWeight: 700 }}><LogOut size={20} /> <span style={{ flex: 1 }}>Sign Out</span></button>
