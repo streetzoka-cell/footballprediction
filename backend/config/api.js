@@ -16,8 +16,10 @@ const { LIVE_POLLING } = require("./constants");
 // ───────────────────────────────────────────────
 // Daily Request Budget Tracker (from API header)
 // ───────────────────────────────────────────────
+
 let remainingRequests = null;
 let lastResetDate = null;
+let liveRequestsToday = 0;
 
 function getTodayUTC() {
   return new Date().toISOString().split("T")[0];
@@ -25,13 +27,16 @@ function getTodayUTC() {
 
 function resetIfNewDay() {
   const today = getTodayUTC();
+
   if (lastResetDate !== today) {
     remainingRequests = null;
     lastResetDate = today;
     liveRequestsToday = 0;
+
     logger.info(`[API] New day (${today}) — budget + live counter reset`);
   }
 }
+
 
 function getRemainingRequests() {
   resetIfNewDay();
@@ -53,10 +58,7 @@ function updateFromHeader(headerValue) {
   }
 }
 
-// ───────────────────────────────────────────────
-// Live Request Counter
-// ───────────────────────────────────────────────
-let liveRequestsToday = 0;
+
 
 function getLiveRequestsToday() {
   resetIfNewDay();
@@ -73,6 +75,7 @@ function incrementLiveCounter() {
   liveRequestsToday++;
   return liveRequestsToday;
 }
+
 
 // ───────────────────────────────────────────────
 // Axios Instance

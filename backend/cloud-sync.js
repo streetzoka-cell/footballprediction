@@ -2,7 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { initializeFirebase } = require('./config/firebase');
-const { isBasketballConfigured } = require('./config/basketballApi');
+const { isBasketballConfigured } = require("../config/basketballApi");
 const providerManager = require('./providers/providerManager');
 
 // Repositories
