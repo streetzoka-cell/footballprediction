@@ -2,7 +2,7 @@ const path = require('path');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 
 const { initializeFirebase } = require('./config/firebase');
-const { isBasketballConfigured } = require("../config/basketballApi");
+const { isBasketballConfigured } = require('./config/basketballApi');
 const providerManager = require('./providers/providerManager');
 
 // Repositories
@@ -24,7 +24,6 @@ const StandingsService = require('./services/standings');
 const LeaguesService = require('./services/leagues');
 const BasketballDailyFixturesService = require('./services/basketballDailyFixtures');
 const BasketballLiveFixturesService = require('./services/basketballLiveFixtures');
-// ★ FIX: Corrected the path for TeamsService
 const TeamsService = require('./services/teamsService');
 
 async function run() {
@@ -49,7 +48,6 @@ async function run() {
     footballLiveFixtures: new LiveFixturesService(fixturesRepo, ftProcessor, providerManager),
     footballStandings: new StandingsService(standingRepo),
     footballLeagues: new LeaguesService(leagueRepo),
-    // ★ NEW: Add Teams Service
     footballTeams: new TeamsService(teamRepo),
   };
 
@@ -66,13 +64,12 @@ async function run() {
     } else if (job === 'daily') {
       console.log('[CloudSync] Running Daily Fixtures Sync...');
       await services.footballDailyFixtures.run();
-      if (isBasketballConfigured()) await services.basketballDailyFixtures.run();
+      if (isBasketballConfigured) await services.basketballDailyFixtures.run();
     } else if (job === 'standings') {
       console.log('[CloudSync] Running Standings & Leagues Sync...');
       await services.footballStandings.run();
       await services.footballLeagues.run();
     } else if (job === 'teams') {
-      // ★ NEW: Handle teams job
       console.log('[CloudSync] Running Teams Sync...');
       await services.footballTeams.run();
     } else {
@@ -88,4 +85,5 @@ async function run() {
   process.exit(0);
 }
 
+// ★ THIS IS THE MOST IMPORTANT LINE. IT CALLS THE FUNCTION!
 run();
