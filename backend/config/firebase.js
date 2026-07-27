@@ -1,3 +1,15 @@
+/*
+ * firebase.js
+ * Initializes Firebase Admin SDK and exports the Firestore instance
+ */
+
+const admin = require("firebase-admin");
+const env = require("./env");
+const logger = require("../utils/logger");
+const { BATCH_MAX_OPS, WRITE_TIMEOUT_MS } = require("./constants");
+
+let db = null;
+
 // ───────────────────────────────────────────────
 // Initialization
 // ───────────────────────────────────────────────
@@ -12,7 +24,7 @@ function initializeFirebase() {
     console.log('---------------------------');
 
     if (!process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_PRIVATE_KEY) {
-      throw new Error("❌ Missing Firebase Admin environment variables!");
+      throw new Error("❌ Missing Firebase Admin environment variables! Check your GitHub Secrets.");
     }
 
     if (!admin.apps.length) {
@@ -35,3 +47,20 @@ function initializeFirebase() {
     throw error;
   }
 }
+
+function getDb() {
+  if (!db) {
+    throw new Error(
+      "Firebase has not been initialized. Call initializeFirebase() first."
+    );
+  }
+  return db;
+}
+
+// ───────────────────────────────────────────────
+// Export
+// ───────────────────────────────────────────────
+module.exports = Object.freeze({
+  initializeFirebase,
+  getDb,
+});
