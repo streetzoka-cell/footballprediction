@@ -53,7 +53,7 @@ async function run() {
     footballTeams: new TeamsService(teamRepo),
   };
 
-  if (isBasketballConfigured()) {
+  if (isBasketballConfigured) {
     services.basketballDailyFixtures = new BasketballDailyFixturesService(basketballFixturesRepo);
     services.basketballLiveFixtures = new BasketballLiveFixturesService(basketballFixturesRepo, basketballFtProcessor);
   }
@@ -62,7 +62,7 @@ async function run() {
     if (job === 'live') {
       console.log('[CloudSync] Running Live Fixtures Sync...');
       await services.footballLiveFixtures.run();
-      if (isBasketballConfigured()) await services.basketballLiveFixtures.run();
+      if (isBasketballConfigured) await services.basketballLiveFixtures.run();
     } else if (job === 'daily') {
       console.log('[CloudSync] Running Daily Fixtures Sync...');
       await services.footballDailyFixtures.run();
