@@ -1,93 +1,113 @@
-﻿/*
- * liveFixtures.js
- * ★ TIMEZONE FIX: Groups live matches by local date (EAT) to write to correct snapshot docs.
- * ★ SIZE FIX: Caps lastFinishedSnapshot to 50 to prevent 1MB Firestore limit errors.
- * ★ BLACKLIST: Filters out blocked leagues if TRACK_ALL_LEAGUES is true.
- */
-
-const {
-  api, isBudgetAvailable, isLiveCapAvailable, incrementLiveCounter,
-} = require("../config/api");
-const {
-  LEAGUES, LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS, TODAY, getLocalDateFromUtc, BLOCKED_LEAGUE_IDS,
-} = require("../config/constants");
-const { withRetry } = require("../utils/retry");
-const { batchWrite, deleteByIds } = require("../config/firebase");
+﻿const { isLiveCapAvailable, incrementLiveCounter } = require("../config/api");
+const { LIVE_POLLING, TRACK_ALL_LEAGUES, COLLECTIONS, TODAY, getLocalDateFromUtc, BLOCKED_LEAGUE_IDS, LEAGUES } = require("../config/constants");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
+const { calculateMatchScore, categorizeMatch } = require("./matchScoreEngine"); // NEW IMPORT
+
+const providerManager = require('../providers/providerManager'); 
+const fixtureRepository = require('../repositories/fixtureRepository'); 
+const { eventBus, EVENT } = require('../utils/eventBus'); 
 
 class LiveFixturesService {
   constructor(repo, ftProcessor) {
-    if (!repo) throw new Error("FixturesRepository is required.");
+    if (!repo) throw new Error("FixturesRepository is required for FT processing.");
     if (!ftProcessor) throw new Error("FinishedFixturesProcessor is required.");
-    this.repo = repo;
+    
+    this.repo = repo; 
     this.ftProcessor = ftProcessor;
+    
     this.lastLiveSnapshot = new Map();
     this.lastFinishedSnapshot = new Map();
     this.trackedLeagueIds = new Set(LEAGUES.filter((l) => l.active).map((l) => l.id));
   }
 
   async run() {
-    if (!isBudgetAvailable(LIVE_POLLING.MIN_BUDGET_TO_POLL)) return this._emptyResult();
     if (!isLiveCapAvailable()) return this._emptyResult({ capReached: true });
 
-    var startTime = Date.now();
-    var response;
+    const startTime = Date.now();
+    let rawFixtures;
+
     try {
-      response = await withRetry(() => api.get("/fixtures", { params: { live: "all" } }), "LiveFixtures:fetch");
-    } catch (err) { return this._emptyResult(); }
+      rawFixtures = await providerManager.getLive();
+    } catch (err) { 
+      logger.error(`[LiveFixtures] Provider fetch failed: ${err.message}`);
+      return this._emptyResult(); 
+    }
 
     incrementLiveCounter();
-    if (Object.keys(response?.errors || {}).length > 0) return this._emptyResult({ capReached: true });
 
-    var rawFixtures = response?.response || [];
-    
-    // ★ FIX: Apply Blacklist if TRACK_ALL_LEAGUES is true
-    var filtered = TRACK_ALL_LEAGUES 
+    if (!rawFixtures || rawFixtures.length === 0) {
+      if (this.lastLiveSnapshot.size > 0) {
+        const disappearedIds = Array.from(this.lastLiveSnapshot.keys());
+        await this._handleTransitions(disappearedIds);
+        await fixtureRepository.deleteLiveFixtures(disappearedIds);
+        this.lastLiveSnapshot.clear();
+        eventBus.emit(EVENT.CACHE_INVALIDATED, { key: 'ft:live' });
+      }
+      return this._emptyResult();
+    }
+
+    const filtered = TRACK_ALL_LEAGUES 
       ? (BLOCKED_LEAGUE_IDS.size > 0 ? rawFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : rawFixtures)
       : rawFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
 
-    var newDocs = filtered.map((f) => this.normalize(f));
-    var newIds = new Set(newDocs.map((d) => d.id));
-    var oldIds = new Set(this.lastLiveSnapshot.keys());
-    var disappearedIds = [];
+    // NEW: Normalize and Score
+    let newDocs = filtered.map((f) => this.normalize(f)).filter(f => f.homeTeamName && f.awayTeamName && f.homeTeamName !== 'TBD');
+    
+    // Inject scoring. 
+    // ★ FIX: Do NOT drop HIDDEN matches from live updates! 
+    // If a match is already in todayFixtures and it goes live, we MUST update its score.
+    newDocs = newDocs.map(doc => {
+      doc.matchScore = calculateMatchScore(doc);
+      doc.category = categorizeMatch(doc.matchScore);
+      return doc;
+    });
+
+    const newIds = new Set(newDocs.map((d) => d.id));
+    const oldIds = new Set(this.lastLiveSnapshot.keys());
+    const disappearedIds = [];
+    
     oldIds.forEach((id) => { if (!newIds.has(id)) disappearedIds.push(id); });
 
-    var transitioned = 0;
-    if (disappearedIds.length > 0) transitioned = await this._handleTransitions(disappearedIds);
+    let transitioned = 0;
+    if (disappearedIds.length > 0) {
+      transitioned = await this._handleTransitions(disappearedIds);
+    }
 
-    var writeCount = 0;
-    var isFirstPoll = this.lastLiveSnapshot.size === 0;
+    let writeCount = 0;
+    const isFirstPoll = this.lastLiveSnapshot.size === 0;
 
     if (isFirstPoll) {
-      if (newDocs.length > 0) writeCount = await this.repo.batchWrite(COLLECTIONS.LIVE_FIXTURES, newDocs);
+      if (newDocs.length > 0) writeCount = await fixtureRepository.writeLiveFixtures(newDocs);
     } else {
-      var toWrite = newDocs.filter((d) => {
-        var old = this.lastLiveSnapshot.get(d.id);
+      const toWrite = newDocs.filter((d) => {
+        const old = this.lastLiveSnapshot.get(d.id);
         if (!old) return true;
         return d.goalsHome !== old.goalsHome || d.goalsAway !== old.goalsAway || d.status !== old.status || d.elapsed !== old.elapsed;
       });
 
-      if (toWrite.length > 0) writeCount = await this.repo.batchWrite(COLLECTIONS.LIVE_FIXTURES, toWrite);
-      if (disappearedIds.length > 0) await deleteByIds(COLLECTIONS.LIVE_FIXTURES, disappearedIds);
-      if (newDocs.length === 0 && oldIds.size > 0) await deleteByIds(COLLECTIONS.LIVE_FIXTURES, Array.from(oldIds));
+      if (toWrite.length > 0) writeCount = await fixtureRepository.writeLiveFixtures(toWrite);
+      if (disappearedIds.length > 0) await fixtureRepository.deleteLiveFixtures(disappearedIds);
     }
 
     this.lastLiveSnapshot.clear();
     newDocs.forEach((doc) => this.lastLiveSnapshot.set(doc.id, doc));
 
-    var nearFTCount = newDocs.reduce((count, d) => {
-      if (["ET", "BT", "P"].indexOf(d.status) !== -1) return count + 1;
+    const nearFTCount = newDocs.reduce((count, d) => {
+      if (["ET", "BT", "P"].includes(d.status)) return count + 1;
       if (d.elapsed != null && d.elapsed >= 80) return count + 1;
       return count;
     }, 0);
 
-    var dataChanged = writeCount > 0 || disappearedIds.length > 0 || isFirstPoll;
+    const dataChanged = writeCount > 0 || disappearedIds.length > 0 || isFirstPoll;
 
     if (dataChanged) {
       cache.invalidate("ft:live");
       if (transitioned > 0) cache.invalidate("ft:finished");
+
+      eventBus.emit(EVENT.CACHE_INVALIDATED, { key: 'ft:live' });
+      eventBus.emit(EVENT.LIVE_FIXTURES_UPDATED, { count: newDocs.length });
 
       try {
         const liveByDate = {};
@@ -124,29 +144,25 @@ class LiveFixturesService {
   }
 
   async _handleTransitions(disappearedIds) {
-    var toFinish = [];
+    const toFinish = [];
     disappearedIds.forEach((id) => {
-      var lastKnown = this.lastLiveSnapshot.get(id);
+      const lastKnown = this.lastLiveSnapshot.get(id);
       if (!lastKnown) return;
+      
       toFinish.push({
-        id: lastKnown.id, date: lastKnown.date, timestamp: lastKnown.timestamp,
-        status: "FT", statusLong: "Match Finished", elapsed: null,
-        leagueId: lastKnown.leagueId, leagueName: lastKnown.leagueName, leagueCountry: lastKnown.leagueCountry,
-        leagueLogo: lastKnown.leagueLogo, leagueFlag: lastKnown.leagueFlag, season: lastKnown.season, round: lastKnown.round,
-        homeTeamId: lastKnown.homeTeamId, homeTeamName: lastKnown.homeTeamName, homeTeamLogo: lastKnown.homeTeamLogo,
-        awayTeamId: lastKnown.awayTeamId, awayTeamName: lastKnown.awayTeamName, awayTeamLogo: lastKnown.awayTeamLogo,
-        goalsHome: lastKnown.goalsHome, goalsAway: lastKnown.goalsAway,
-        scoreHalftimeHome: lastKnown.scoreHalftimeHome, scoreHalftimeAway: lastKnown.scoreHalftimeAway,
-        scoreFulltimeHome: lastKnown.scoreFulltimeHome, scoreFulltimeAway: lastKnown.scoreFulltimeAway,
-        scoreExtratimeHome: lastKnown.scoreExtratimeHome, scoreExtratimeAway: lastKnown.scoreExtratimeAway,
-        scorePenaltyHome: lastKnown.scorePenaltyHome, scorePenaltyAway: lastKnown.scorePenaltyAway,
-        sport: "football", _updatedAt: new Date().toISOString(),
+        ...lastKnown,
+        status: "FT",
+        statusLong: "Match Finished",
+        elapsed: null,
+        _updatedAt: new Date().toISOString(),
       });
     });
 
     if (toFinish.length === 0) return 0;
+    
     await this.repo.batchUpsertFinished(toFinish);
     cache.invalidate("ft:finished");
+    eventBus.emit(EVENT.CACHE_INVALIDATED, { key: 'ft:finished' });
     
     toFinish.forEach((doc) => this.lastFinishedSnapshot.set(String(doc.id), doc));
 

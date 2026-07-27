@@ -12,6 +12,12 @@ const env = {
   API_BASKETBALL_KEY: process.env.API_BASKETBALL_KEY,
   API_BASKETBALL_BASE_URL: process.env.API_BASKETBALL_BASE_URL,
   
+// ★ NEW: Football-Data.org (Backup / Free Tier Master)
+  footballData: {
+    apiKey: process.env.FOOTBALL_DATA_API_KEY,
+    baseUrl: process.env.FOOTBALL_DATA_BASE_URL || 'https://api.football-data.org/v4'
+  },
+
   // Firebase Admin SDK
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,

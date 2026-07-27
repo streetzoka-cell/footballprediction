@@ -1,8 +1,4 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Home.jsx
-// ═══════════════════════════════════════════════════════════════
-
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Link } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
@@ -11,27 +7,14 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useAppData } from '../context/AppDataContext';
-import { useFootballData } from '../context/FootballDataContext';
-import { fetchFixtures, subscribeToTodayFixtures } from '../utils/api';
-import { getLocalDateFromUtc, formatTime, todayStr } from '../utils/dates';
+import { useHomeMatches } from '../hooks/useFixtures';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
+import { getLocalDateFromUtc, formatTime, todayStr, parseDateAsUTC } from '../utils/dates';
+
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { db } from '../utils/firebase';
-import { collection, query, limit, getDocs, orderBy, onSnapshot } from 'firebase/firestore';
+import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
 import SEO from '../components/SEO';
-
-// Detect Googlebot to prevent WebSocket errors during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
-
-const MatchStatus = Object.freeze({
-  LIVE: 'LIVE', FT: 'FT', HT: 'HT', STARTED: 'STARTED',
-  IN_PLAY: 'IN_PLAY', PAUSED: 'PAUSED', AET: 'AET', PEN: 'PEN',
-  HALF_TIME: 'HALF_TIME', FINISHED: 'FINISHED'
-});
-
-const LIVE_STATUSES_SET = new Set([
-  MatchStatus.IN_PLAY, MatchStatus.PAUSED, MatchStatus.LIVE, '1H', '2H', 'ET', 'BT'
-]);
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
@@ -42,7 +25,7 @@ function extractMatchDate(m) {
   return '';
 }
 
-function normalizeMatch(raw, isPrimary) {
+function normalizeMatch(raw, isPrimary, now) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
   let status = raw.status || '';
@@ -54,7 +37,7 @@ function normalizeMatch(raw, isPrimary) {
   const rawDate = raw.utcDate || raw.date;
   if (rawDate) {
     try {
-      const dt = new Date(rawDate);
+      const dt = parseDateAsUTC(rawDate);
       kickoff = formatTime(rawDate);
       timestamp = dt.getTime();
     } catch (e) { /* ignore */ }
@@ -62,254 +45,76 @@ function normalizeMatch(raw, isPrimary) {
     kickoff = raw.kickoff;
   }
 
-  let isLive = isPrimary ? !!raw.isLive : LIVE_STATUSES_SET.has(status);
-  let isHT = status === MatchStatus.HT || status === 'BT' || status === MatchStatus.HALF_TIME;
-  let isFinished = isPrimary ? !!raw.isFinished : (status === MatchStatus.FINISHED || status === MatchStatus.FT || status === MatchStatus.AET || status === MatchStatus.PEN);
+  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeTeamLogo };
+  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayTeamLogo };
+  const league = raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo };
 
-  if (isLive && timestamp > 0) {
-    if (Date.now() > timestamp + (2.5 * 60 * 60 * 1000)) {
-      isLive = false; isHT = false; isFinished = true; status = 'FT';
-    }
-  }
+  let isLive = isPrimary ? (!!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL)) : isLiveStatus(status, SPORT.FOOTBALL);
+  let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
+  let isFinished = isPrimary ? (!!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL)) : isFinishedStatus(status, SPORT.FOOTBALL);
 
   let isStarted = false;
-  if (!isLive && !isFinished && timestamp > 0 && Date.now() > timestamp) {
-    const todayDateStr = todayStr(); 
-    const matchDateStr = dateStr || getLocalDateFromUtc(rawDate);
-    if (matchDateStr === todayDateStr && (Date.now() - timestamp) < (3 * 60 * 60 * 1000)) {
-      isStarted = true;
+  let isNearFT = false;
+  let displayMinute = raw.minute || raw.elapsed || 0;
+
+  // ★ NEW: Identical to MatchDetails.jsx
+  const kickoffTime = timestamp;
+  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
+
+  let smartStatus = status;
+
+  if (kickoffTime > 0) {
+    // If match is scheduled but time has passed
+    if (!isLive && !isFinished && now > kickoffTime) {
+      if (elapsedMins >= 120) { isFinished = true; status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 105) { isFinished = true; status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 90) { isFinished = true; status = 'FT'; smartStatus = 'FT'; } 
+      else if (elapsedMins >= 45 && elapsedMins < 60) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
+      else { isStarted = true; status = '1H'; smartStatus = '1H'; }
+    }
+    
+    // If match is already marked live/started by API
+    if (isLive || isStarted) {
+      if (elapsedMins >= 120) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 105) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
+      else if (status === '1H' && elapsedMins >= 45 && elapsedMins < 60) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
+      else if (status === '2H' && elapsedMins >= 90) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
+      else if (status === 'HT' || status === 'HALF_TIME') { isHT = true; smartStatus = 'HT'; }
+      else { smartStatus = status; }
+      
+      if (smartStatus === '1H') displayMinute = raw.minute || Math.min(elapsedMins, 45);
+      if (smartStatus === '2H' || smartStatus === 'ET') {
+        const secondHalfMins = Math.max(0, elapsedMins - 60);
+        displayMinute = raw.minute || Math.min(45 + secondHalfMins, 90);
+      }
+      
+      if (elapsedMins >= 75 && !isFinished) isNearFT = true;
     }
   }
 
-  const homeScore = isPrimary
-    ? (raw.homeScore ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null)
-    : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
-  const awayScore = isPrimary
-    ? (raw.awayScore ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null)
-    : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
+  const homeScore = isPrimary ? (raw.homeScore ?? raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null) : (raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
+  const awayScore = isPrimary ? (raw.awayScore ?? raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null) : (raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
 
   return {
     id, dateStr, kickoff, timestamp,
     status, isLive, isHT, isFinished, minute: raw.minute || raw.elapsed || null,
-    isStarted,
-    homeName: isPrimary ? (raw.homeTeam?.name || 'TBD') : (raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD'),
-    awayName: isPrimary ? (raw.awayTeam?.name || 'TBD') : (raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD'),
-    homeLogo: isPrimary ? raw.homeLogo : raw.homeTeam?.crest,
-    awayLogo: isPrimary ? raw.awayLogo : raw.awayTeam?.crest,
-    homeTeamId: isPrimary ? raw.homeTeam?.id : raw.homeTeam?.id,
-    awayTeamId: isPrimary ? raw.awayTeam?.id : raw.awayTeam?.id,
+    displayMinute, // ★ NEW
+    isStarted, isNearFT,
+    homeName: homeTeam.shortName || homeTeam.name || 'TBD',
+    awayName: awayTeam.shortName || awayTeam.name || 'TBD',
+    homeLogo: homeTeam.crest || homeTeam.logo,
+    awayLogo: awayTeam.crest || awayTeam.logo,
+    homeTeamId: homeTeam.id,
+    awayTeamId: awayTeam.id,
     homeScore, awayScore,
-    leagueName: isPrimary ? (raw.league?.name || 'Other') : (raw.competition?.name || raw.league?.name || 'Other'),
-    leagueId: isPrimary ? (raw.league?.id || raw.leagueKey) : (raw.competition?.id || raw.league?.id),
-    leagueLogo: isPrimary ? (raw.league?.emblem || raw.league?.logo) : (raw.competition?.emblem || raw.league?.logo),
+    leagueName: league.name || 'Other',
+    leagueId: league.id || raw.leagueKey,
+    leagueLogo: league.emblem || league.logo,
     score: raw.score,
     stats: raw.stats || raw.matchStats || [],
+    matchScore: raw.matchScore || 0,
+    category: raw.category || 'NORMAL',
   };
-}
-
-function mapTransformedToNormalized(t) {
-  if (!t) return null;
-  return {
-    id: String(t.id), dateStr: getLocalDateFromUtc(t.date), kickoff: t.kickoff, timestamp: t.timestamp,
-    status: t.status || '', isLive: t.isLive || false, isFinished: t.isFinished || false, isStarted: false,
-    isHT: (t.status === 'HT' || t.status === 'BT'),
-    homeName: t.homeTeam?.name || 'TBD', awayName: t.awayTeam?.name || 'TBD',
-    homeLogo: t.homeTeam?.logo || null, awayLogo: t.awayTeam?.logo || null,
-    homeTeamId: t.homeTeam?.id, awayTeamId: t.awayTeam?.id,
-    homeScore: t.homeScore, awayScore: t.awayScore,
-    leagueName: t.league?.name || 'Other', leagueId: t.league?.id || t.leagueKey,
-    leagueLogo: t.league?.emblem || null,
-    score: t.score, stats: t.stats || [],
-  };
-}
-
-const STORAGE_KEY_PRIMARY_CACHE_HOME = "zoka_home_primary_cache_v1";
-const LIVE_REFRESH = 45000;
-
-function useHomeFixtures() {
-  const [primaryFixtures, setPrimaryFixtures] = useState(() => {
-    try {
-      const c = localStorage.getItem(STORAGE_KEY_PRIMARY_CACHE_HOME);
-      return c ? JSON.parse(c) : [];
-    } catch (e) { return []; }
-  });
-  const [loading, setLoading] = useState(true);
-  const { fixtures: backupRaw, loadDateFixtures } = useFootballData();
-  const todayDateStr = todayStr(); 
-
-  const fetchPrimary = useCallback(async (silent) => {
-    if (!silent) setLoading(true);
-    try {
-      const res = await fetchFixtures(todayDateStr);
-      const tMatches = Array.isArray(res) ? res : (res && res.matches) || [];
-      const normalized = tMatches.map(m => normalizeMatch(m, true)).filter(Boolean);
-      
-      setPrimaryFixtures(prev => {
-        if (prev.length === normalized.length && prev[0]?.id === normalized[0]?.id) {
-          return prev;
-        }
-        return normalized;
-      });
-      
-      try { localStorage.setItem(STORAGE_KEY_PRIMARY_CACHE_HOME, JSON.stringify(normalized)); } catch (e) { /* ignore */ }
-    } catch (e) { /* keep cached on error */ } 
-    finally { if (!silent) setLoading(false); }
-  }, [todayDateStr]);
-
-  useEffect(() => {
-    fetchPrimary(false);
-    const interval = setInterval(() => fetchPrimary(true), LIVE_REFRESH);
-    return () => clearInterval(interval);
-  }, [fetchPrimary]);
-
-  useEffect(() => { loadDateFixtures(todayDateStr); }, [loadDateFixtures, todayDateStr]);
-
-  useEffect(() => {
-    // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
-    if (isGooglebot) return;
-    
-    const unsub = subscribeToTodayFixtures(({ matches: lm, live, finished }) => {
-      if (!lm || (lm.length === 0 && !live?.length && !finished?.length)) return;
-      
-      const finishedMap = new Map((finished || []).map(m => [String(m.id), m]));
-      const liveMap = new Map((live || []).map(m => [String(m.id), m]));
-      const allMap = new Map(lm.map(m => [String(m.id), m]));
-      
-      setPrimaryFixtures(prev => {
-        let changed = false;
-        const next = prev.map(f => {
-          const freshFinished = finishedMap.get(String(f.id));
-          if (freshFinished) {
-            if (f.isFinished) return f;
-            const ns = mapTransformedToNormalized(freshFinished);
-            changed = true;
-            if (ns && ns.isFinished) return { ...f, ...ns, isLive: false, isFinished: true, isStarted: false, status: ns.status || MatchStatus.FT };
-            return { ...f, ...ns };
-          }
-          
-          const freshLive = liveMap.get(String(f.id));
-          if (freshLive) {
-            if (f.isFinished) return f;
-            const normFresh = normalizeMatch(freshLive, true);
-            if (normFresh.isFinished) {
-              changed = true;
-              return { ...f, ...normFresh, isLive: false, isFinished: true, status: MatchStatus.FT };
-            }
-            if (f.homeScore !== normFresh.homeScore || f.awayScore !== normFresh.awayScore || f.isLive !== normFresh.isLive || f.minute !== normFresh.minute || f.status !== normFresh.status) {
-              changed = true;
-              return { ...f, ...normFresh, isLive: true };
-            }
-            return f;
-          }
-          
-          const freshAll = allMap.get(String(f.id));
-          if (freshAll) {
-            if (f.isFinished) return f;
-            if (freshAll.isFinished) {
-              const ns = mapTransformedToNormalized(freshAll);
-              changed = true;
-              return { ...f, ...ns, isLive: false, isFinished: true, isStarted: false, status: freshAll.status || MatchStatus.FT };
-            }
-          }
-          
-          if (!f.isLive && !f.isFinished) {
-            if (f.dateStr && f.dateStr < todayDateStr) {
-              changed = true;
-              return { ...f, isLive: false, isFinished: true, isStarted: false, isHT: false, status: MatchStatus.FT };
-            }
-            const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-            if (f.dateStr === todayDateStr && ko > 0 && !f.isStarted) {
-              const elapsed = Date.now() - ko;
-              const hasScores = (f.homeScore != null && f.homeScore > 0) || (f.awayScore != null && f.awayScore > 0);
-              if (elapsed > (3 * 60 * 60 * 1000) && !hasScores) {
-                changed = true;
-                return { ...f, isLive: false, isFinished: true, isStarted: false, status: MatchStatus.FT };
-              }
-            }
-          }
-          
-          const ko = f.timestamp ? new Date(f.timestamp).getTime() : 0;
-          if (!f.isLive && !f.isStarted && ko > 0 && Date.now() > ko && !f.isFinished) {
-            if (f.dateStr === todayDateStr && (Date.now() - ko) < (3 * 60 * 60 * 1000)) {
-              changed = true;
-              return { ...f, isStarted: true, status: MatchStatus.STARTED };
-            }
-          }
-          return f;
-        });
-        
-        return changed ? next : prev;
-      });
-    });
-    return () => unsub();
-  }, [todayDateStr]);
-
-  const fixtures = useMemo(() => {
-    const todayPrimary = primaryFixtures.filter(m => m.dateStr === todayDateStr);
-    if (todayPrimary.length > 0) {
-      const uniqueIds = new Set();
-      return todayPrimary.filter(m => {
-        const idStr = String(m.id);
-        if (uniqueIds.has(idStr)) return false;
-        uniqueIds.add(idStr);
-        return true;
-      });
-    }
-    const backup = (backupRaw || []).map(m => normalizeMatch(m, false)).filter(m => m.dateStr === todayDateStr);
-    const uniqueIds = new Set();
-    return backup.filter(m => {
-      const idStr = String(m.id);
-      if (uniqueIds.has(idStr)) return false;
-      uniqueIds.add(idStr);
-      return true;
-    });
-  }, [primaryFixtures, backupRaw, todayDateStr]);
-
-  return { fixtures, loading };
-}
-
-function useNews() {
-  const [posts, setPosts] = useState([]);
-  useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
-    
-    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
-    if (isGooglebot) {
-      getDocs(q).then(snap => {
-        setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-      }).catch(err => console.error("News fetch error:", err));
-      return;
-    }
-
-    const unsub = onSnapshot(q, (snap) => {
-      const newPosts = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      setPosts(prev => {
-        if (prev.length !== newPosts.length) return newPosts;
-        if (prev[0]?.id !== newPosts[0]?.id) return newPosts;
-        if (prev[0]?.updatedAt?.seconds !== newPosts[0]?.updatedAt?.seconds) return newPosts;
-        return prev;
-      });
-    }, (err) => console.error("News fetch error:", err));
-    return () => unsub();
-  }, [db]);
-  return posts;
-}
-
-function useTotalUsers() {
-  const [count, setCount] = useState(null);
-  useEffect(() => {
-    if (!db) return;
-    getDocs(query(collection(db, 'users'), limit(1)))
-      .then(s => {
-        if (!s.empty) {
-          const data = s.docs[0].data();
-          if (data && data.totalUsers != null) setCount(data.totalUsers);
-        }
-      })
-      .catch(() => {});
-  }, [db]);
-  return count;
 }
 
 const Sunset = (props) => (
@@ -321,11 +126,11 @@ const Sunset = (props) => (
 
 const getGreeting = () => {
   const h = new Date().getHours();
-  if (h < 5) return { text: 'Burning the midnight oil', icon: <Moon size={16} />, emoji: '\uD83E\uDD89' };
-  if (h < 12) return { text: 'Good morning', icon: <Sun size={16} />, emoji: '\u2600\uFE0F' };
-  if (h < 17) return { text: 'Good afternoon', icon: <CloudSun size={16} />, emoji: '\uD83C\uDF24\uFE0F' };
-  if (h < 21) return { text: 'Good evening', icon: <Sunset size={16} />, emoji: '\uD83C\uDF05' };
-  return { text: 'Good night', icon: <Moon size={16} />, emoji: '\uD83E\uDD89' };
+  if (h < 5) return { text: 'Burning the midnight oil', icon: <Moon size={16} />, emoji: '🦉' };
+  if (h < 12) return { text: 'Good morning', icon: <Sun size={16} />, emoji: '☀️' };
+  if (h < 17) return { text: 'Good afternoon', icon: <CloudSun size={16} />, emoji: '🌤️' };
+  if (h < 21) return { text: 'Good evening', icon: <Sunset size={16} />, emoji: '🌆' };
+  return { text: 'Good night', icon: <Moon size={16} />, emoji: '🦉' };
 };
 
 const AnimNum = React.memo(({ value, duration = 600, delay = 0, suffix = '' }) => {
@@ -368,13 +173,10 @@ const ZokaBadge = React.memo(({ pick }) => {
   const ph = pick.homeScore;
   const pa = pick.awayScore;
   if (ph == null || pa == null) return <span className="bdg pn">Pending</span>;
-  
   if (home === ph && away === pa) return <span className="bdg ex"><CheckCircle2 size={8} /> Exact</span>;
-  
   const predOutcome = home > away ? 'H' : home < away ? 'A' : 'D';
   const realOutcome = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
   if (predOutcome === realOutcome) return <span className="bdg rs"><TrendingUp size={8} /> Result</span>;
-  
   return <span className="bdg ms"><XCircle size={8} /> Miss</span>;
 });
 
@@ -421,15 +223,14 @@ const LiveStripLoader = React.memo(() => (
 ));
 
 const LiveMini = React.memo(({ match, index }) => {
-  const min = match.minute;
+  // ★ NEW: Use displayMinute instead of minute
+  const min = match.displayMinute; 
   const isLive = match.isLive;
   const hasScore = match.homeScore != null && match.awayScore != null;
-  
   const matchSlug = `${slugify(match.homeName)}-vs-${slugify(match.awayName)}`;
   const matchLink = `/match/${match.id}/${matchSlug}`;
-
   return (
-    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26', textDecoration: 'none', color: 'inherit', display: 'block' }}>
+    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26', textDecoration: 'none', color: 'inherit', display: 'block' }} title={`${match.homeName} vs ${match.awayName}`}>
       <div className="z-lm-top">
         <span className="z-lm-league">{match.leagueName}</span>
         {isLive && min ? (
@@ -654,32 +455,23 @@ export default function Home() {
   const uid = currentUser ? currentUser.uid : null;
   const greeting = useMemo(() => getGreeting(), []);
 
-  const appData = useAppData();
-  const activePredictions = appData.activePredictions;
-  const zokaPicks = appData.zokaPicks;
-  const dailyEntries = appData.dailyEntries;
-  const dailyStats = appData.dailyStats;
-  const userPredictions = appData.userPredictions;
-  const predictionResults = appData.predictionResults;
-  const userStats = appData.userStats;
-  const ctxLoading = appData.loading;
-  const ensureUserData = appData.ensureUserData;
-
-  const { fixtures: allFixtures, loading: fxLoading } = useHomeFixtures();
+  const { data: homeData = { live: [], featured: [], upcoming: [] }, isLoading: homeLoading } = useHomeMatches();
+  const { data: activePredictions = [] } = useActivePredictions();
+  const { data: userPredictions = {} } = useUserPredictions(uid);
+  const { data: dailyLB = null } = useDailyLeaderboard();
 
   const [offline, setOffline] = useState(!navigator.onLine);
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
-
-  const toggleUI = useCallback((key) => {
-    setUI(prev => ({ ...prev, [key]: !prev[key] }));
+  const [newsPosts, setNewsPosts] = useState([]);
+  
+  // ★ NEW: Local ticker to update minutes every 60s
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 60000);
+    return () => clearInterval(t);
   }, []);
 
-  const totalUsers = useTotalUsers();
-  const newsPosts = useNews();
-
-  useEffect(() => {
-    if (uid) ensureUserData(uid);
-  }, [uid, ensureUserData]);
+  const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
   useEffect(() => {
     const onLine = () => setOffline(false);
@@ -692,51 +484,36 @@ export default function Home() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!db) return;
+    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+    getDocs(q).then(snap => {
+      setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    }).catch(err => console.error("News fetch error:", err));
+  }, [db]);
+
+  const liveMatches = useMemo(() => (homeData.live || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.live, now]);
+  const featuredMatches = useMemo(() => (homeData.featured || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.featured, now]);
+  const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.upcoming, now]);
+  
+  const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches.slice(0, 10));
+
+  const dailyEntries = dailyLB?.entries || [];
+  const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
+  const zokaPicks = dailyLB?.zokaPicks || { matches: [] }; 
+  const userStats = dailyLB?.userStats || { points: 0, exact: 0, result: 0, predicted: 0 };
+  const ctxLoading = homeLoading;
+
   const totalPredictors = (dailyStats && dailyStats.players) || (dailyEntries && dailyEntries.length) || 0;
-  
-  const totalPredictionsMade = useMemo(() => {
-    if (dailyStats && dailyStats.preds) return dailyStats.preds;
-    if (!dailyEntries || dailyEntries.length === 0) return 0;
-    return dailyEntries.reduce((sum, u) => sum + (u.predicted || u.preds || 0), 0);
-  }, [dailyEntries, dailyStats]);
+  const totalPredictionsMade = dailyStats.preds || 0;
+  const avgAccuracy = dailyStats.avg ? parseFloat(dailyStats.avg) : 0;
+  const myPoints = userStats.points || 0;
 
-  const avgAccuracy = useMemo(() => {
-    if (dailyStats && dailyStats.avg) return parseFloat(dailyStats.avg);
-    if (!dailyEntries || dailyEntries.length === 0) return 0;
-    const totalAcc = dailyEntries.reduce((sum, u) => sum + (u.accuracy || 0), 0);
-    return totalAcc / dailyEntries.length;
-  }, [dailyEntries, dailyStats]);
-  
-  const myPoints = (userStats && (userStats.todayPoints || userStats.points)) || 0;
-
-  const dedupedFixtures = useMemo(() => {
-    const uniqueIds = new Set();
-    return allFixtures.filter(m => {
-      const idStr = String(m.id);
-      if (uniqueIds.has(idStr)) return false;
-      uniqueIds.add(idStr);
-      return true;
-    });
-  }, [allFixtures]);
-
-  const liveMatches = useMemo(() => dedupedFixtures.filter(f => f.isLive), [dedupedFixtures]);
-  const stripMatches = liveMatches.length > 0 ? liveMatches : dedupedFixtures.slice(0, 10);
-
-  const todayDateStr = todayStr(); 
-
-  const zokaFlat = useMemo(() => {
-    if (!zokaPicks || !zokaPicks.matches) return [];
-    return zokaPicks.matches.map(m => ({ ...m, _d: todayDateStr }));
-  }, [zokaPicks, todayDateStr]);
-  
+  const zokaFlat = zokaPicks?.matches || [];
   const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
-  const featFlat = useMemo(() => {
-    if (!activePredictions) return [];
-    return activePredictions.map(m => ({ ...m, _d: todayDateStr }));
-  }, [activePredictions, todayDateStr]);
-  
+  const featFlat = activePredictions || [];
   const featVis = ui.showFeat ? featFlat : featFlat.slice(0, 5);
   const featHidden = Math.max(0, featFlat.length - 5);
 
@@ -754,14 +531,6 @@ export default function Home() {
     return m;
   }, [userPredictions]);
 
-  const resultMap = useMemo(() => {
-    const m = {};
-    if (predictionResults && predictionResults.results) {
-      predictionResults.results.forEach(r => { m[String(r.matchId)] = r; });
-    }
-    return m;
-  }, [predictionResults]);
-
   const myPredicted = useMemo(() => {
     if (!activePredictions) return 0;
     return activePredictions.filter(p => userPredMap[String(p.matchId)]).length;
@@ -773,9 +542,7 @@ export default function Home() {
     <div className="zoka-home">
       <SEO title="Football Predictions, Fixtures and Live Scores - ZOKA" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKA" />
 
-      {offline && (
-        <div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>
-      )}
+      {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
         <section className="z-hero">
@@ -798,10 +565,8 @@ export default function Home() {
             <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={11} /></Link>
           </div>
           <div className="z-livestrip">
-            {fxLoading && dedupedFixtures.length === 0 ? (
-              <React.Fragment>
-                <LiveStripLoader /><LiveStripLoader /><LiveStripLoader />
-              </React.Fragment>
+            {ctxLoading && stripMatches.length === 0 ? (
+              <React.Fragment><LiveStripLoader /><LiveStripLoader /><LiveStripLoader /></React.Fragment>
             ) : stripMatches.length > 0 ? (
               stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)
             ) : (
@@ -840,9 +605,9 @@ export default function Home() {
 
         <div className="z-stats">
           <div className="z-chip">
-            <div className="val"><AnimNum value={totalUsers || totalPredictors} delay={200} /></div>
+            <div className="val"><AnimNum value={totalPredictors} delay={200} /></div>
             <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || totalUsers || 0) / 5) + '%', background: '#60a5fa' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || 0) / 5) + '%', background: '#60a5fa' }} /></div>
           </div>
           <div className="z-chip">
             <div className="val"><AnimNum value={totalPredictionsMade} delay={280} /></div>
@@ -907,7 +672,7 @@ export default function Home() {
                 key={p.id || String(p.matchId) || i}
                 pred={p}
                 userPred={userPredMap[String(p.matchId)]}
-                userResult={resultMap[String(p.matchId)]}
+                userResult={null}
                 isLoggedIn={isLoggedIn}
               />
             ))
@@ -998,7 +763,7 @@ export default function Home() {
 
         <div style={{ textAlign: 'center', padding: '24px 0 32px', color: '#334155', fontSize: '.65rem', fontWeight: 600, letterSpacing: '.02em' }}>
           ZOKA SCORE - FOOTBALL INTELLIGENCE
-          <div style={{ marginTop: 4, opacity: 0.5 }}>Data refreshes every {LIVE_REFRESH / 1000}s - Scores protected by FT Shield</div>
+          <div style={{ marginTop: 4, opacity: 0.5 }}>Data refreshes automatically - Scores protected by FT Shield</div>
         </div>
       </div>
     </div>

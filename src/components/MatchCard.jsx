@@ -1,13 +1,8 @@
 import { useEffect, useState, useMemo, useCallback, memo } from 'react';
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
-/* ═══════════════════════════════════════════════════════════════
-   UTILITIES
-   ═══════════════════════════════════════════════════════════════ */
-const LIVE_SET = new Set(['1H','2H','HT','ET','BT','P','1Q','Q1','2Q','Q2','3Q','Q3','4Q','Q4','OT']);
-const FINISHED_SET = new Set(['FT','AET','PEN','ABD','AWD','WO','completed','FINISHED']);
-
-const isMatchLive = (m) => m.isLive || LIVE_SET.has(m.status) || LIVE_SET.has(m.rawStatus);
-const isMatchFinished = (m) => m.isFinished || FINISHED_SET.has(m.status) || FINISHED_SET.has(m.rawStatus);
+const isMatchLive = (m) => m.isLive || isLiveStatus(m.status, SPORT.FOOTBALL) || isLiveStatus(m.rawStatus, SPORT.FOOTBALL);
+const isMatchFinished = (m) => m.isFinished || isFinishedStatus(m.status, SPORT.FOOTBALL) || isFinishedStatus(m.rawStatus, SPORT.FOOTBALL);
 const isMatchScheduled = (m) => !isMatchLive(m) && !isMatchFinished(m) && (m.homeScore == null);
 
 const getConfidence = (h, d, a) => {
@@ -27,16 +22,12 @@ const TeamBadge = memo(({ logo, name, color, abbr }) => {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   ★ FIXED SCORE DISPLAY — No more fake 0-0 or pred-as-result
-   ═══════════════════════════════════════════════════════════════ */
 const ScoreDisplay = memo(({ predicted, actual, isLive, isFinished, isScheduled, timeStr, goalFlash, scoreKey }) => {
   if (isScheduled) return <div className="mc-time-display">{timeStr || '--:--'}</div>;
 
   const hasActual = actual && actual.home != null && actual.away != null;
   const hasPredicted = predicted && predicted.home != null && predicted.away != null;
 
-  // ★ FINISHED: Show actual scores ONLY if we have real data. Otherwise "- -".
   if (isFinished) {
     if (hasActual) {
       const hOk = hasPredicted && predicted.home === actual.home;
@@ -58,7 +49,6 @@ const ScoreDisplay = memo(({ predicted, actual, isLive, isFinished, isScheduled,
         </div>
       );
     }
-    // No actual scores — show dashes, not "?-?" and not prediction
     return (
       <div className="mc-score-area">
         <div className="mc-score-row">
@@ -75,7 +65,6 @@ const ScoreDisplay = memo(({ predicted, actual, isLive, isFinished, isScheduled,
     );
   }
 
-  // ★ LIVE or UPCOMING: Show actual if available, prediction as secondary, or "?-?"
   const showScores = hasActual || hasPredicted;
   const h = hasActual ? actual.home : hasPredicted ? predicted.home : '?';
   const a = hasActual ? actual.away : hasPredicted ? predicted.away : '?';
@@ -120,19 +109,66 @@ const ProbBar = memo(({ label, value, type, delay = 0 }) => {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   MAIN COMPONENT (Memoized)
-   ═══════════════════════════════════════════════════════════════ */
 const MatchCardBase = ({
   match, showOdds = true, showProb = true, compact = false,
   goalFlash = false, kickOff = false, scoreKey = null,
-  onClick, index = 0,
+  onClick, index = 0, now,
 }) => {
   const [hovered, setHovered] = useState(false);
 
   const live = useMemo(() => isMatchLive(match), [match.status, match.rawStatus, match.isLive]);
   const finished = useMemo(() => isMatchFinished(match), [match.status, match.rawStatus, match.isFinished]);
   const scheduled = useMemo(() => isMatchScheduled(match), [match.homeScore, live, finished]);
+
+  const kickoffTime = match.timestamp || (match.date ? new Date(match.date).getTime() : 0);
+  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
+
+  const safeMinute = useMemo(() => {
+    return match.minute ?? match.elapsed ?? match.currentTime ?? null;
+  }, [match.minute, match.elapsed, match.currentTime]);
+
+  // ★ FIX: Exact continuous counting logic with strict backend trust
+  const smartStatus = useMemo(() => {
+    let status = match.status || '';
+    let isLive = live;
+    let isFin = finished;
+    let isSched = scheduled;
+    let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
+
+    if (kickoffTime > 0) {
+      if (!isLive && !isFin && now > kickoffTime) {
+        if (elapsedMins >= 180) { return 'FT'; } // 3 hours hard fallback
+        if (elapsedMins >= 50) { return 'HT'; } // 45 + 5 fallback for HT
+        return '1H';
+      }
+      if (isLive) {
+        if (elapsedMins >= 100) { return 'FT'; } // 90 + 10 fallback for FT
+        if (status === '1H' && elapsedMins >= 50 && elapsedMins < 60) { return 'HT'; } // 45 + 5 fallback for HT
+        if (status === 'HT' || status === 'HALF_TIME') { return 'HT'; }
+        return status;
+      }
+    }
+    return status;
+  }, [match.status, live, finished, scheduled, kickoffTime, now, elapsedMins]);
+
+  const smartIsHT = smartStatus === 'HT' || smartStatus === 'BT' || smartStatus === 'HALF_TIME';
+  const smartIsLive = smartStatus === '1H' || smartStatus === '2H' || smartStatus === 'ET' || smartStatus === 'P' || smartStatus === 'IN_PLAY' || smartStatus === 'PAUSED';
+
+  const displayMinute = useMemo(() => {
+    if (!smartIsLive) return safeMinute || 0;
+    if (smartStatus === '1H') {
+      return safeMinute || Math.min(elapsedMins, 45);
+    }
+    if (smartStatus === '2H' || smartStatus === 'ET') {
+      const secondHalfMins = Math.max(0, elapsedMins - 60);
+      // Continue counting up to 100 if backend is slow but hasn't marked FT
+      if (elapsedMins > 90) {
+        return safeMinute || Math.min(elapsedMins, 100);
+      }
+      return safeMinute || Math.min(45 + secondHalfMins, 90);
+    }
+    return safeMinute || 0;
+  }, [smartIsLive, smartStatus, safeMinute, elapsedMins]);
 
   const timeStr = useMemo(() => match.kickoff || (match.date ? new Date(match.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''), [match.kickoff, match.date]);
   const dateStr = useMemo(() => match.date ? new Date(match.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '', [match.date]);
@@ -142,7 +178,6 @@ const MatchCardBase = ({
   const hasOdds = showOdds && match.homeOdds;
   const cf = useMemo(() => hasProbs ? getConfidence(match.homeWinProb, match.drawProb, match.awayWinProb) : null, [hasProbs, match.homeWinProb, match.drawProb, match.awayWinProb]);
 
-  // ★ FIXED: Guard against false 0-0 from API defaults.
   const predicted = useMemo(() => {
     if (match.predictedHomeScore != null && match.predictedAwayScore != null) {
       return { home: match.predictedHomeScore, away: match.predictedAwayScore };
@@ -150,22 +185,43 @@ const MatchCardBase = ({
     return undefined;
   }, [match.predictedHomeScore, match.predictedAwayScore]);
 
+  // ★ FIX: Bulletproof score extraction - checks ALL possible API live score locations
   const actual = useMemo(() => {
-    if (!finished) return undefined;
-    // Priority 1: Explicit actual scores from prediction results
-    if (match.actualHomeScore != null && match.actualAwayScore != null) {
-      return { home: match.actualHomeScore, away: match.actualAwayScore };
+    const rawHomeScore = match.homeScore != null ? match.homeScore : (
+      match.actualHomeScore ??
+      match.goalsHome ??
+      match.score?.current?.home ??
+      match.score?.live?.home ??
+      match.score?.fullTime?.home ??
+      match.score?.halfTime?.home ??
+      match.score?.regularTime?.home ??
+      match.goals?.home ??
+      null
+    );
+    const rawAwayScore = match.awayScore != null ? match.awayScore : (
+      match.actualAwayScore ??
+      match.goalsAway ??
+      match.score?.current?.away ??
+      match.score?.live?.away ??
+      match.score?.fullTime?.away ??
+      match.score?.halfTime?.away ??
+      match.score?.regularTime?.away ??
+      match.goals?.away ??
+      null
+    );
+
+    if (finished) {
+      if (rawHomeScore != null && rawAwayScore != null) {
+        return { home: rawHomeScore, away: rawAwayScore };
+      }
     }
-    // Priority 2: Match scores — but reject false 0-0 defaults
-    if (match.homeScore != null && match.awayScore != null) {
-      const bothZero = match.homeScore === 0 && match.awayScore === 0;
-      const hasMinute = match.minute != null || match.elapsed != null;
-      // 0-0 with no minute data = likely an API default, not a real result
-      if (bothZero && !hasMinute) return undefined;
-      return { home: match.homeScore, away: match.awayScore };
+    
+    if (smartIsLive || match.isStarted) {
+      return { home: rawHomeScore ?? 0, away: rawAwayScore ?? 0 };
     }
+    
     return undefined;
-  }, [finished, match.actualHomeScore, match.actualAwayScore, match.homeScore, match.awayScore, match.minute, match.elapsed]);
+  }, [finished, smartIsLive, match.isStarted, match.homeScore, match.awayScore, match.actualHomeScore, match.actualAwayScore, match.score, match.goalsHome, match.goalsAway, match.goals]);
 
   const oddsData = useMemo(() => [
     { label: 'Home', value: match.homeOdds, key: 'home' },
@@ -173,9 +229,9 @@ const MatchCardBase = ({
     { label: 'Away', value: match.awayOdds, key: 'away' },
   ], [match.homeOdds, match.drawOdds, match.awayOdds]);
 
-  const borderClass = kickOff ? 'mc-ko-glow' : live ? 'mc-live-border' : '';
-  const statusLabel = live ? 'LIVE' : finished ? 'FT' : scheduled ? '' : match.status || '';
-  const statusCls = live ? 'live' : finished ? 'finished' : 'upcoming';
+  const borderClass = kickOff ? 'mc-ko-glow' : smartIsLive ? 'mc-live-border' : '';
+  const statusLabel = finished ? 'FT' : scheduled ? '' : smartStatus || '';
+  const statusCls = smartIsLive ? 'live' : finished ? 'finished' : 'upcoming';
 
   const handleClick = useCallback(() => { 
     if (onClick) onClick(match); 
@@ -183,33 +239,38 @@ const MatchCardBase = ({
 
   const interactive = !!onClick;
 
+  const homeTeamName = match.homeTeam?.name || match.homeTeamName || 'TBD';
+  const awayTeamName = match.awayTeam?.name || match.awayTeamName || 'TBD';
+  const homeTeamLogo = match.homeTeam?.logo || match.homeTeamLogo || match.homeTeam?.crest;
+  const awayTeamLogo = match.awayTeam?.logo || match.awayTeamLogo || match.awayTeam?.crest;
+
   if (compact) {
     return (
       <div className={`mc-card mc-interactive ${borderClass} ${goalFlash ? 'mc-goal-flash' : ''}`} onClick={handleClick} style={{ animationDelay: `${index * 30}ms` }}>
-        {live && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5 }} />}
+        {smartIsLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5 }} />}
         <div className="mc-header" style={{ paddingBottom: 6 }}>
           <div className="mc-league">
-            {match.league?.emblem && <img className="mc-league-logo" src={match.league.emblem} alt="" />}
-            {!match.league?.emblem && <span className="mc-league-dot" style={{ background: lc }} />}
-            <span>{match.league?.name || 'Other'}</span>
+            {(match.league?.emblem || match.leagueLogo) && <img className="mc-league-logo" src={match.league?.emblem || match.leagueLogo} alt="" />}
+            {!match.league?.emblem && !match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
+            <span>{match.league?.name || match.leagueName || 'Other'}</span>
           </div>
           {statusLabel && (
             <span className={`mc-status-badge ${statusCls}`}>
-              {live && <span className="mc-live-dot" />}
+              {smartIsLive && <span className="mc-live-dot" />}
               {statusLabel}
             </span>
           )}
-          {!live && !finished && <span style={{ fontSize: '.76rem', color: '#64748b', fontWeight: 600 }}>{timeStr}</span>}
+          {!smartIsLive && !finished && <span style={{ fontSize: '.76rem', color: '#64748b', fontWeight: 600 }}>{timeStr}</span>}
         </div>
         <div className="mc-body" style={{ padding: '10px 16px 12px' }}>
           <div className="mc-team">
-            <TeamBadge logo={match.homeTeam?.logo} name={match.homeTeam?.name} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
-            <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{match.homeTeam?.name || 'TBD'}</span>
+            <TeamBadge logo={homeTeamLogo} name={homeTeamName} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
+            <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{homeTeamName}</span>
           </div>
-          <ScoreDisplay predicted={predicted} actual={actual} isLive={live} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
+          <ScoreDisplay predicted={predicted} actual={actual} isLive={smartIsLive} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
           <div className="mc-team away">
-            <TeamBadge logo={match.awayTeam?.logo} name={match.awayTeam?.name} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
-            <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{match.awayTeam?.name || 'TBD'}</span>
+            <TeamBadge logo={awayTeamLogo} name={awayTeamName} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
+            <span className="mc-team-name" style={{ fontSize: '.82rem' }}>{awayTeamName}</span>
           </div>
         </div>
       </div>
@@ -224,7 +285,7 @@ const MatchCardBase = ({
       onClick={handleClick}
       style={{ animationDelay: `${index * 40}ms` }}
     >
-      {live && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5, zIndex: 1 }} />}
+      {smartIsLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5, zIndex: 1 }} />}
 
       {kickOff && (
         <div style={{ position: 'absolute', top: 8, right: 12, zIndex: 2 }}>
@@ -236,33 +297,33 @@ const MatchCardBase = ({
 
       <div className="mc-header">
         <div className="mc-league">
-          {match.league?.emblem && <img className="mc-league-logo" src={match.league.emblem} alt="" />}
-          {!match.league?.emblem && <span className="mc-league-dot" style={{ background: lc }} />}
-          <span>{match.league?.name || 'Other'}</span>
+          {(match.league?.emblem || match.leagueLogo) && <img className="mc-league-logo" src={match.league?.emblem || match.leagueLogo} alt="" />}
+          {!match.league?.emblem && !match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
+          <span>{match.league?.name || match.leagueName || 'Other'}</span>
           {match.leagueCountry && <span style={{ opacity: .5 }}>· {match.leagueCountry}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {statusLabel && (
             <span className={`mc-status-badge ${statusCls}`}>
-              {live && <span className="mc-live-dot" />}
+              {smartIsLive && <span className="mc-live-dot" />}
               {statusLabel}
             </span>
           )}
-          {live && match.minute != null && <span className="mc-minute">{match.minute}&apos;</span>}
-          {!live && !finished && <span style={{ fontSize: '.68rem', color: '#64748B', fontWeight: 500 }}>{dateStr} · {timeStr}</span>}
+          {smartIsLive && displayMinute != null && <span className="mc-minute">{displayMinute}&apos;</span>}
+          {!smartIsLive && !finished && <span style={{ fontSize: '.68rem', color: '#64748B', fontWeight: 500 }}>{dateStr} · {timeStr}</span>}
           {hovered && cf && <span className="mc-confidence mc-conf-slide" style={{ color: cf.color, background: `${cf.color}15` }}>{cf.label}</span>}
         </div>
       </div>
 
       <div className="mc-body">
         <div className="mc-team">
-          <TeamBadge logo={match.homeTeam?.logo} name={match.homeTeam?.name} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
-          <span className="mc-team-name">{match.homeTeam?.name || 'TBD'}</span>
+          <TeamBadge logo={homeTeamLogo} name={homeTeamName} color={match.homeTeam?.color} abbr={match.homeTeam?.abbr} />
+          <span className="mc-team-name">{homeTeamName}</span>
         </div>
-        <ScoreDisplay predicted={predicted} actual={actual} isLive={live} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
+        <ScoreDisplay predicted={predicted} actual={actual} isLive={smartIsLive} isFinished={finished} isScheduled={scheduled} timeStr={timeStr} goalFlash={goalFlash} scoreKey={scoreKey} />
         <div className="mc-team away">
-          <TeamBadge logo={match.awayTeam?.logo} name={match.awayTeam?.name} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
-          <span className="mc-team-name">{match.awayTeam?.name || 'TBD'}</span>
+          <TeamBadge logo={awayTeamLogo} name={awayTeamName} color={match.awayTeam?.color} abbr={match.awayTeam?.abbr} />
+          <span className="mc-team-name">{awayTeamName}</span>
         </div>
       </div>
 
@@ -294,5 +355,4 @@ const MatchCardBase = ({
   );
 };
 
-// ★ Export as memo to prevent unnecessary re-renders
 export default memo(MatchCardBase);

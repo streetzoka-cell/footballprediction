@@ -6,7 +6,6 @@ import {
   AdminRoute,
 } from "./guards";
 
-// Import EVERYTHING from ./routes (since your routes file is in src/app/)
 import {
   ReactorStudio,
   Home,
@@ -18,30 +17,23 @@ import {
   LiveStream,
   Leaderboard,
   MatchDetails,
-  TeamPage, // 🆕 Added
-  LeaguePage, // 🆕 Added
+  TeamPage,
+  LeaguePage,
   Search,
-
   Login,
   Profile,
   Admin,
-
   About,
   PrivacyPolicy,
   Terms,
-
   Team,
   Careers,
   Contact,
   Partners,
   Advertise,
-
   FAQ,
   HelpCenter,
-
   NotFound,
-  
-  // 🆕 Studio Imports
   StudioHome,
   StudioEditor,
   StudioTemplates,
@@ -57,16 +49,12 @@ function Animated({ children }) {
 export default function AppRoutes() {
   return (
     <Routes>
-      {/* ================= MAIN ================= */}
       <Route path="/" element={<Animated><Home /></Animated>} />
-
-      {/* ================= SPORTS ================= */}
       <Route path="/fixtures" element={<Animated><Fixtures /></Animated>} />
       <Route path="/predictions" element={<Animated><Predictions /></Animated>} />
       <Route path="/mastergames" element={<Animated><MasterGames /></Animated>} />
       <Route path="/basketball" element={<Animated><Basketball /></Animated>} />
       
-      {/* ================= ZOKASCORE STUDIO 🆕 ================= */}
       <Route path="/studio" element={<Animated><StudioHome /></Animated>} />
       <Route path="/studio/templates" element={<Animated><StudioTemplates /></Animated>} />
       <Route path="/studio/editor" element={<Animated><StudioEditor /></Animated>} />
@@ -75,7 +63,6 @@ export default function AppRoutes() {
       <Route path="/studio/media" element={<Animated><MediaStudio /></Animated>} />
       <Route path="/studio/face-ar" element={<Animated><FaceARStudio /></Animated>} />
 
-      {/* ================= NEWS HUB ROUTES ================= */}
       <Route path="/highlights" element={<Animated><Highlights /></Animated>} />
       <Route path="/highlights/author/:author" element={<Animated><Highlights /></Animated>} />
       <Route path="/highlights/:slugId" element={<Animated><Highlights /></Animated>} />
@@ -83,18 +70,12 @@ export default function AppRoutes() {
       <Route path="/livestream" element={<Animated><LiveStream /></Animated>} />
       <Route path="/leaderboard" element={<Animated><Leaderboard /></Animated>} />
 
-      {/* ================= DYNAMIC ROUTES ================= */}
       <Route path="/match/:matchId/:slug" element={<Animated><MatchDetails /></Animated>} />
-            {/* ================= SEARCH ================= */}
-      <Route path="/search" element={<Animated><Search /></Animated>} />
-
-      {/* ================= 404 ================= */}
-      <Route path="*" element={<Animated><NotFound /></Animated>} />
-      {/* 🆕 SEO PERMANENT PAGES */}
       <Route path="/team/:teamId/:slug" element={<Animated><TeamPage /></Animated>} />
       <Route path="/league/:leagueId/:slug" element={<Animated><LeaguePage /></Animated>} />
+            
+      <Route path="/search" element={<Animated><Search /></Animated>} />
 
-      {/* ================= COMPANY ================= */}
       <Route path="/about" element={<Animated><About /></Animated>} />
       <Route path="/team" element={<Animated><Team /></Animated>} />
       <Route path="/careers" element={<Animated><Careers /></Animated>} />
@@ -102,42 +83,17 @@ export default function AppRoutes() {
       <Route path="/partners" element={<Animated><Partners /></Animated>} />
       <Route path="/advertise" element={<Animated><Advertise /></Animated>} />
 
-      {/* ================= SUPPORT ================= */}
       <Route path="/faq" element={<Animated><FAQ /></Animated>} />
       <Route path="/help" element={<Animated><HelpCenter /></Animated>} />
       <Route path="/help-center" element={<Animated><HelpCenter /></Animated>} />
       
-      {/* ================= LEGAL ================= */}
       <Route path="/privacy" element={<Animated><PrivacyPolicy /></Animated>} />
       <Route path="/terms" element={<Animated><Terms /></Animated>} />
 
-      {/* ================= AUTH ================= */}
-      <Route
-        path="/login"
-        element={
-          <GuestRoute>
-            <Animated><Login /></Animated>
-          </GuestRoute>
-        }
-      />
-      <Route
-        path="/profile"
-        element={
-          <ProtectedRoute>
-            <Animated><Profile /></Animated>
-          </ProtectedRoute>
-        }
-      />
-      <Route
-        path="/zks-admin-8f9x2-control-panel"
-        element={
-          <AdminRoute>
-            <Animated><Admin /></Animated>
-          </AdminRoute>
-        }
-      />
+      <Route path="/login" element={<GuestRoute><Animated><Login /></Animated></GuestRoute>} />
+      <Route path="/profile" element={<ProtectedRoute><Animated><Profile /></Animated></ProtectedRoute>} />
+      <Route path="/zks-admin-8f9x2-control-panel" element={<AdminRoute><Animated><Admin /></Animated></AdminRoute>} />
 
-      {/* ================= 404 ================= */}
       <Route path="*" element={<Animated><NotFound /></Animated>} />
     </Routes>
   );

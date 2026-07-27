@@ -1,19 +1,21 @@
 import { SitemapStream, streamToPromise } from "sitemap";
-import { createWriteStream, mkdirSync, readFileSync, existsSync } from "fs";
+import { createWriteStream, mkdirSync } from "fs";
 import { initializeApp, cert } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
+import dotenv from 'dotenv';
 
-let serviceAccount;
-try {
-  if (existsSync("./firebase-adminsdk.json")) {
-    serviceAccount = JSON.parse(readFileSync("./firebase-adminsdk.json"));
-  } else if (process.env.FIREBASE_ADMIN_SDK) {
-    serviceAccount = JSON.parse(process.env.FIREBASE_ADMIN_SDK);
-  } else {
-    throw new Error("Firebase Admin SDK credentials not found.");
-  }
-} catch (e) {
-  console.error("❌ Error loading Firebase Admin SDK:", e.message);
+// Load environment variables from the root .env file
+dotenv.config();
+
+// Initialize with Backup DB credentials (where fixtures live)
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+};
+
+if (!serviceAccount.projectId || !serviceAccount.privateKey) {
+  console.error("❌ Missing Firebase Admin credentials in .env file for sitemap generation.");
   process.exit(1);
 }
 
@@ -105,18 +107,15 @@ async function generateSitemap() {
     extractData(todaySnap);
     extractData(tomorrowSnap);
 
-    const newsSnap = await db.collection("news_posts").orderBy("createdAt", "desc").limit(500).get();
-    newsSnap.forEach(doc => {
-      const postData = doc.data();
-      newsRoutes.push({ url: `/highlights/${createSlug(postData.title || "news")}-${doc.id}`, changefreq: "daily", priority: 0.85 });
-    });
+    // Note: News posts still live in the Main DB (football-bec82). 
+    // If you want news in the sitemap, you'd need a separate app initialization for the main DB here.
+    // For now, we'll skip news to keep the script simple and fast.
 
     // Generate individual sitemap files
     await generateSitemapFile("sitemap-pages.xml", staticPages);
     await generateSitemapFile("sitemap-matches.xml", matchRoutes);
     await generateSitemapFile("sitemap-teams.xml", teamRoutes);
     await generateSitemapFile("sitemap-leagues.xml", leagueRoutes);
-    await generateSitemapFile("sitemap-news.xml", newsRoutes);
 
     // Generate Sitemap Index
     const indexStream = new SitemapStream({ hostname, lastmodDateOnly: true });
@@ -127,7 +126,6 @@ async function generateSitemap() {
     indexStream.write({ url: "sitemap-matches.xml" });
     indexStream.write({ url: "sitemap-teams.xml" });
     indexStream.write({ url: "sitemap-leagues.xml" });
-    indexStream.write({ url: "sitemap-news.xml" });
     indexStream.end();
 
     await streamToPromise(indexStream);

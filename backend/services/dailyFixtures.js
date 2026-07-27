@@ -1,9 +1,4 @@
-﻿/*
- * dailyFixtures.js
- * Smart daily fetch with 3-day rollover.
- */
-
-const { api, isBudgetAvailable } = require("../config/api");
+﻿const { api, isBudgetAvailable } = require("../config/api");
 const {
   LEAGUES,
   FINISHED_STATUSES,
@@ -15,10 +10,11 @@ const {
   BLOCKED_LEAGUE_IDS,
 } = require("../config/constants");
 const { getMeta, setMeta } = require("../config/firebase");
-const { withRetry } = require("../utils/retry");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
+const providerManager = require('../providers/providerManager');
+const { calculateMatchScore, categorizeMatch } = require("./matchScoreEngine");
 
 class DailyFixturesService {
   constructor(repo, teamsProcessor) {
@@ -33,16 +29,23 @@ class DailyFixturesService {
     );
 
     this._docCache = {
-      yesterday: [],
-      today: [],
-      tomorrow: [],
-      yesterdayIds: new Set(),
-      todayIds: new Set(),
-      tomorrowIds: new Set(),
+      yesterday: [], today: [], tomorrow: [],
+      yesterdayIds: new Set(), todayIds: new Set(), tomorrowIds: new Set(),
     };
   }
 
-  async run() {
+  // ★ NEW: Helper to check if a date falls on a weekend (Friday, Saturday, Sunday)
+  _isWeekend(dateStr) {
+    if (!dateStr) return false;
+    try {
+      const day = new Date(dateStr + "T00:00:00Z").getUTCDay(); // 0=Sun, 5=Fri, 6=Sat
+      return day === 0 || day === 5 || day === 6;
+    } catch {
+      return false;
+    }
+  }
+
+  async run(force = false) {
     const todayStr = getDateOffset(0);
     const tomorrowStr = getDateOffset(1);
     const yesterdayStr = getDateOffset(-1);
@@ -55,7 +58,14 @@ class DailyFixturesService {
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
-    if (alreadyFetchedToday) {
+    // ★ NEW: If force is true, clear today's cache to force re-fetch and update FT statuses
+    if (force) {
+      logger.info(`[DailyFixtures] Force flag set — clearing today's cache to update statuses`);
+      this._docCache.today = [];
+      this._docCache.todayIds = new Set();
+    }
+
+    if (alreadyFetchedToday && !force) {
       if (this._docCache.tomorrow.length > 0) {
         const needsFill = this._docCache.yesterday.length === 0 || this._docCache.today.length === 0;
         if (!needsFill) {
@@ -168,7 +178,7 @@ class DailyFixturesService {
 
     return {
       total: fetchTotal, 
-      totalToday: this._docCache.today.length, // ★ NEW: Provide today's count for the scheduler
+      totalToday: this._docCache.today.length,
       writes: fetchWrites + rolloverYesterday + rolloverToday + fillResult.writes,
       apiCalls: totalApiCalls, duration, rolloverYesterday, rolloverToday, recoveredFT,
       extraFetches: fillResult.fetches, extraWrites: fillResult.writes, deduped: false, metaUpdated: fetchSuccess,
@@ -213,7 +223,7 @@ class DailyFixturesService {
       let recovered = 0;
 
       for (const dateStr of datesToFetch) {
-        const raw = await withRetry(() => api.get("/fixtures", { params: { date: dateStr } }), `DailyFixtures:recoverStale:${dateStr}`);
+        const raw = { response: await providerManager.getFixtures(dateStr) };
         if (Object.keys(raw?.errors || {}).length > 0) continue;
 
         const allFixtures = raw?.response || [];
@@ -221,7 +231,15 @@ class DailyFixturesService {
           ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
           : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
           
-        const updatedDocs = filtered.map((f) => this.normalize(f));
+        let updatedDocs = filtered.map((f) => this.normalize(f));
+        
+        // Apply scoring to recovered docs
+        updatedDocs = updatedDocs.map(doc => {
+          doc.matchScore = calculateMatchScore(doc);
+          doc.category = categorizeMatch(doc.matchScore);
+          return doc;
+        });
+
         const updatedMap = new Map(updatedDocs.map(d => [String(d.id), d]));
 
         const yestDocsToWrite = [];
@@ -274,11 +292,14 @@ class DailyFixturesService {
       const tomorrowStr = getDateOffset(1);
       const yesterdayStr = getDateOffset(-1);
       
+      const finishedYesterday = this._docCache.yesterday.filter(d => FINISHED_STATUSES.includes(d.status));
+      const finishedToday = this._docCache.today.filter(d => FINISHED_STATUSES.includes(d.status));
+      
       logger.info(`[DailyFixtures] Writing snapshots: Yest(${this._docCache.yesterday.length}), Today(${this._docCache.today.length}), Tom(${this._docCache.tomorrow.length})`);
       
       await Promise.all([
-        snapshotWriter.writeFootballSnapshot(yesterdayStr, { matches: this._docCache.yesterday }),
-        snapshotWriter.writeFootballSnapshot(todayStr, { matches: this._docCache.today }),
+        snapshotWriter.writeFootballSnapshot(yesterdayStr, { matches: this._docCache.yesterday, finished: finishedYesterday }),
+        snapshotWriter.writeFootballSnapshot(todayStr, { matches: this._docCache.today, finished: finishedToday }),
         snapshotWriter.writeFootballSnapshot(tomorrowStr, { matches: this._docCache.tomorrow })
       ]);
       
@@ -287,7 +308,7 @@ class DailyFixturesService {
       logger.error(`[DailyFixtures] Snapshot write failed: ${err.message}`);
     }
   }
-
+  
   async _fillEmptyDays(yesterdayStr, todayStr, tomorrowStr, options = {}) {
     let fetches = 0, writes = 0;
     const filledDays = [];
@@ -312,28 +333,51 @@ class DailyFixturesService {
   async _fetchDayForCollection(dateStr, dayKey, collection) {
     if (!isBudgetAvailable(1)) return { fetches: 0, writes: 0 };
     try {
-      const raw = await withRetry(() => api.get("/fixtures", { params: { date: dateStr } }), `DailyFixtures:${dayKey}:fill`);
+      const raw = { response: await providerManager.getFixtures(dateStr) };
       const errors = raw?.errors || {};
       if (Object.keys(errors).length > 0) return { fetches: 1, writes: 0 };
 
       const allFixtures = raw?.response || [];
-      const filtered = TRACK_ALL_LEAGUES 
-        ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
-        : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
+      
+      const filtered = allFixtures.filter(f => {
+        const matchDate = f.fixture?.date ? new Date(f.fixture.date).toISOString().split('T')[0] : null;
+        return matchDate === dateStr;
+      }).filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id));
         
-      const docs = filtered.map((f) => this.normalize(f));
+      let docs = filtered.map((f) => this.normalize(f));
+      
+      // INTELLIGENCE INJECTION: Score and categorize
+      docs = docs.map(doc => {
+        doc.matchScore = calculateMatchScore(doc);
+        doc.category = categorizeMatch(doc.matchScore);
+        return doc;
+      });
+
+      // THE BOUNCER: Drop all hidden matches before writing to Firestore
+      let qualityDocs = docs.filter(doc => doc.category !== 'HIDDEN');
+      
+      // ★ NEW: Weekend Limiter
+      // On Fridays, Saturdays, and Sundays, cap the matches to 450 to prevent overloading the frontend
+      if (this._isWeekend(dateStr) && qualityDocs.length > 450) {
+        qualityDocs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+        qualityDocs = qualityDocs.slice(0, 450);
+        logger.info(`[DailyFixtures] ${dayKey} weekend limit applied: truncated to 450 matches`);
+      }
+      
+      logger.info(`[DailyFixtures] ${dayKey} filter: ${allFixtures.length} fetched -> ${filtered.length} valid date -> ${qualityDocs.length} quality matches (Score >= 30)`);
 
       let written = 0, newIds = new Set();
-      if (docs.length > 0) {
-        const result = await this.repo.diffWrite(collection, docs, this._docCache[`${dayKey}Ids`]);
+      if (qualityDocs.length > 0) {
+        const result = await this.repo.diffWrite(collection, qualityDocs, this._docCache[`${dayKey}Ids`]);
         written = result.written;
         newIds = result.newIds;
       }
 
-      this._docCache[dayKey] = docs;
+      this._docCache[dayKey] = qualityDocs;
       this._docCache[`${dayKey}Ids`] = newIds;
       return { fetches: 1, writes: written };
     } catch (err) {
+      logger.error(`[DailyFixtures] Fetch failed for ${dayKey}: ${err.message}`);
       return { fetches: 1, writes: 0 };
     }
   }
@@ -346,13 +390,15 @@ class DailyFixturesService {
       if (yesterdayDocs.length > 0) { this._docCache.yesterday = yesterdayDocs; this._docCache.yesterdayIds = new Set(yesterdayDocs.map((d) => String(d.id))); }
       if (todayDocs.length > 0) { this._docCache.today = todayDocs; this._docCache.todayIds = new Set(todayDocs.map((d) => String(d.id))); }
       if (tomorrowDocs.length > 0) { this._docCache.tomorrow = tomorrowDocs; this._docCache.tomorrowIds = new Set(tomorrowDocs.map((d) => String(d.id))); }
-    } catch (err) {}
+    } catch (err) {
+      logger.error(`[DailyFixtures] Warmup cache failed: ${err.message}`);
+    }
   }
 
   async _fetchTomorrow(tomorrowStr) {
     let raw;
     try {
-      raw = await withRetry(() => api.get("/fixtures", { params: { date: tomorrowStr } }), "DailyFixtures:tomorrow");
+      raw = { response: await providerManager.getFixtures(tomorrowStr) };
     } catch (err) { throw err; }
 
     if (Object.keys(raw?.errors || {}).length > 0) return { total: 0, writes: 0, raw: [], newIds: new Set() };
@@ -362,16 +408,33 @@ class DailyFixturesService {
       ? (BLOCKED_LEAGUE_IDS.size > 0 ? allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id)) : allFixtures)
       : allFixtures.filter((f) => this.trackedLeagueIds.has(f.league?.id));
       
-    logger.info(`[DailyFixtures] Tomorrow API returned ${allFixtures.length} matches. Filtered to ${filtered.length}.`);
+    let docs = filtered.map((f) => this.normalize(f));
+    
+    // INTELLIGENCE INJECTION: Score and categorize
+    docs = docs.map(doc => {
+      doc.matchScore = calculateMatchScore(doc);
+      doc.category = categorizeMatch(doc.matchScore);
+      return doc;
+    });
 
-    const docs = filtered.map((f) => this.normalize(f));
+    // THE BOUNCER: Drop all hidden matches
+    let qualityDocs = docs.filter(doc => doc.category !== 'HIDDEN');
+
+    // ★ NEW: Weekend Limiter for Tomorrow
+    if (this._isWeekend(tomorrowStr) && qualityDocs.length > 450) {
+      qualityDocs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+      qualityDocs = qualityDocs.slice(0, 450);
+      logger.info(`[DailyFixtures] Tomorrow weekend limit applied: truncated to 450 matches`);
+    }
+
+    logger.info(`[DailyFixtures] Tomorrow API returned ${allFixtures.length} matches. Filtered to ${qualityDocs.length} quality matches.`);
 
     let written = 0, newIds = new Set();
-    if (docs.length > 0) {
-      const result = await this.repo.diffWrite(COLLECTIONS.TOMORROW_FIXTURES, docs, this._docCache.tomorrowIds);
+    if (qualityDocs.length > 0) {
+      const result = await this.repo.diffWrite(COLLECTIONS.TOMORROW_FIXTURES, qualityDocs, this._docCache.tomorrowIds);
       written = result.written;
       newIds = result.newIds;
-      this._docCache.tomorrow = docs;
+      this._docCache.tomorrow = qualityDocs;
       this._docCache.tomorrowIds = newIds;
     } else {
       if (this._docCache.tomorrowIds.size > 0) {
@@ -380,7 +443,7 @@ class DailyFixturesService {
         this._docCache.tomorrowIds = new Set();
       }
     }
-    return { total: filtered.length, writes: written, raw: filtered, newIds };
+    return { total: qualityDocs.length, writes: written, raw: qualityDocs, newIds };
   }
 
   normalize(fixture) {

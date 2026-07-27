@@ -1,9 +1,9 @@
 // FILE: src/pages/LiveStream.jsx
 import { useState, useMemo, useCallback } from 'react';
 import {
-  ExternalLink, Tv, Search, Globe, Filter, X, Info,
+  ExternalLink, Tv, Search, Globe, Info,
   Play, Star, Shield, Radio, MonitorSmartphone, Wifi,
-  ChevronRight, Zap, Eye
+  ChevronRight, Zap, Eye, X
 } from 'lucide-react';
 import SEO from "../components/SEO";
 
@@ -125,7 +125,9 @@ function ServiceCard({ s, i }) {
         textDecoration: 'none',
         border: '1px solid var(--border)',
         animationDelay: `${(i + 4) * 40}ms`,
-        cursor: 'pointer'
+        cursor: 'pointer',
+        position: 'relative',
+        overflow: 'hidden'
       }}
     >
       {/* Left accent */}

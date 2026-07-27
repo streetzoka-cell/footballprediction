@@ -1,0 +1,66 @@
+name: Zokascore Backend Cron
+
+on:
+  schedule:
+    # Run "live" sync every 5 minutes
+    - cron: "*/5 * * * *"
+    # Run "daily" sync at 3:00 AM UTC every day
+    - cron: "0 3 * * *"
+    # Run "standings" sync at 4:00 AM UTC every Monday
+    - cron: "0 4 * * 1"
+    # ★ NEW: Run "teams" sync at 4:00 AM UTC every Wednesday
+    - cron: "0 4 * * 3"
+  workflow_dispatch:
+    inputs:
+      job:
+        description: 'Sync job to run (live, daily, standings, teams)'
+        required: true
+        default: 'live'
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Dependencies
+        run: npm ci
+        working-directory: ./backend
+
+      - name: Determine Job
+        id: job
+        env:
+          INPUT_JOB: ${{ github.event.inputs.job }}
+          SCHEDULE: ${{ github.event.schedule }}
+        run: |
+          if [ -n "$INPUT_JOB" ]; then
+            echo "job=$INPUT_JOB" >> $GITHUB_OUTPUT
+          elif [ "$SCHEDULE" == "0 3 * * *" ]; then
+            echo "job=daily" >> $GITHUB_OUTPUT
+          elif [ "$SCHEDULE" == "0 4 * * 1" ]; then
+            echo "job=standings" >> $GITHUB_OUTPUT
+          elif [ "$SCHEDULE" == "0 4 * * 3" ]; then
+            echo "job=teams" >> $GITHUB_OUTPUT
+          else
+            echo "job=live" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run Sync Engine
+        env:
+          FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
+          FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
+          FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
+          API_FOOTBALL_KEY: ${{ secrets.API_FOOTBALL_KEY }}
+          API_FOOTBALL_BASE_URL: ${{ secrets.API_FOOTBALL_BASE_URL }}
+          API_BASKETBALL_KEY: ${{ secrets.API_BASKETBALL_KEY }}
+          API_BASKETBALL_BASE_URL: ${{ secrets.API_BASKETBALL_BASE_URL }}
+          # ★ NEW: Add Football-Data.org API Key
+          FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
+        run: node cloud-sync.js ${{ steps.job.outputs.job }}
+        working-directory: ./backend

@@ -1,8 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Basketball.jsx
-// v20.3 — Reactive Data Layer, Smart Live Merging, Zero Render Jank
-// ═══════════════════════════════════════════════════════════════
-
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -12,23 +7,52 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { dataLayer } from '../utils/dataLayer';
-import { subscribeToBasketballLiveFixtures, fetchBasketballFixtures } from '../utils/api';
-import { getDateRange, todayStr as getTodayStr, getLocalDateStr } from '../utils/dates';
+import { useFixtures, useLiveMatches } from '../hooks/useFixtures';
+import { useQueryClient } from '@tanstack/react-query';
+import { getDateRange, todayStr as getTodayStr, getLocalDateStr, formatTime } from '../utils/dates';
 
 import { db } from '../utils/firebase';
-import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot, getDocs } from 'firebase/firestore';
+import { PATHS, getBasketballLeaguePriority, getLeagueColor, isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
+import { eventBus, EVENT } from '../utils/eventBus';
+import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
-// Detect Googlebot to prevent WebSocket errors during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
-
-/* ═══════════════════════════════════════════════════════════════
-   CONSTANTS & UTILITIES
-   ═══════════════════════════════════════════════════════════════ */
-function getBasketballLeaguePriority(key) {
-  const p = { 'NBA': 100, 'EUROLEAGUE': 90, 'EUROCUP': 80, 'NCAAB': 70, 'ACB': 60, 'BBL': 50, 'LNB': 50 };
-  return p[String(key)?.toUpperCase()] || 0;
+function normalizeBasketballGame(raw) {
+  if (!raw) return null;
+  const status = raw.status || '';
+  const isLive = isLiveStatus(status, SPORT.BASKETBALL);
+  const isFinished = isFinishedStatus(status, SPORT.BASKETBALL);
+  
+  return {
+    id: String(raw.id),
+    status,
+    isLive,
+    isFinished,
+    isScheduled: !isLive && !isFinished,
+    date: raw.date,
+    kickoff: raw.date ? formatTime(raw.date) : '',
+    league: { 
+      name: raw.leagueName || 'Other', 
+      emblem: raw.leagueLogo, 
+      color: getLeagueColor(raw.leagueId),
+      country: raw.leagueCountry 
+    },
+    leagueKey: String(raw.leagueId),
+    homeTeam: { name: raw.homeTeamName, logo: raw.homeTeamLogo },
+    awayTeam: { name: raw.awayTeamName, logo: raw.awayTeamLogo },
+    homeLogo: raw.homeTeamLogo,
+    awayLogo: raw.awayTeamLogo,
+    homeScore: raw.pointsHome ?? raw.homeScore,
+    awayScore: raw.pointsAway ?? raw.awayScore,
+    minute: raw.elapsed,
+    score: {
+      q1: { home: raw.q1Home, away: raw.q1Away },
+      q2: { home: raw.q2Home, away: raw.q2Away },
+      q3: { home: raw.q3Home, away: raw.q3Away },
+      q4: { home: raw.q4Home, away: raw.q4Away },
+      ot: { home: raw.otHome, away: raw.otAway },
+    }
+  };
 }
 
 function gamePriorityScore(g) {
@@ -46,9 +70,6 @@ function getTopPredictGames(gamesList, count = 10) {
   return scored.slice(0, count);
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   SKELETON COMPONENTS
-   ═══════════════════════════════════════════════════════════════ */
 const SkeletonCard = memo(({ delay = 0 }) => (
   <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', marginBottom: 8, animation: `bb_fadeInUp .35s ease ${delay}ms both` }}>
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
@@ -74,9 +95,6 @@ const SkeletonGroup = memo(() => (
   </div>
 ));
 
-/* ═══════════════════════════════════════════════════════════════
-   ERROR SCREEN
-   ═══════════════════════════════════════════════════════════════ */
 const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
   const cfg = {
     NETWORK: { icon: <WifiOff size={24} />, bg: 'rgba(239,68,68,.1)', color: '#ef4444', t: 'Connection error', d: 'Could not reach Firestore. Check your internet connection.' },
@@ -95,9 +113,6 @@ const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   SUB-COMPONENTS
-   ═══════════════════════════════════════════════════════════════ */
 const TeamLogo = memo(({ src, name }) => {
   if (!src) return (
     <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>
@@ -130,9 +145,6 @@ const ScoreDisplay = memo(({ score, isLive }) => {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   GAME CARD
-   ═══════════════════════════════════════════════════════════════ */
 const GameCard = memo(function GameCard({ game, index = 0 }) {
   const hasQuarters = game.score?.q1?.home !== null && game.score?.q1?.home !== undefined;
   const showQuarters = hasQuarters && (game.isLive || game.isFinished);
@@ -213,9 +225,6 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   LEAGUE SECTION
-   ═══════════════════════════════════════════════════════════════ */
 const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex = 0 }) {
   return (
     <div style={{ animation: `bb_slideInLeft .4s cubic-bezier(.4,0,.2,1) ${sectionIndex * 80}ms both` }}>
@@ -231,9 +240,6 @@ const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex 
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   PREDICTION CARD
-   ═══════════════════════════════════════════════════════════════ */
 const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onRemove, loggedIn, index }) {
   const isLive = game.isLive;
   const isFinished = game.isFinished;
@@ -301,9 +307,6 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   LOGIN PROMPT MODAL
-   ═══════════════════════════════════════════════════════════════ */
 const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20, backdropFilter: 'blur(4px)' }}>
@@ -322,12 +325,10 @@ const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
   );
 });
 
-/* ═══════════════════════════════════════════════════════════════
-   MAIN BASKETBALL COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
 export default function Basketball() {
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
   const dates = useMemo(() => getDateRange(9, -1), []);
   const todayStr = useMemo(() => getTodayStr(), []);
@@ -337,11 +338,16 @@ export default function Basketball() {
   const windowDates = useMemo(() => [yesterdayStr, todayStr, tomorrowStr], [yesterdayStr, todayStr, tomorrowStr]);
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [gamesByDate, setGamesByDate] = useState({});
-  const [loading, setLoading] = useState(true);
+  
+   const { data: rawFixtures = [], isLoading: loading } = useFixtures(selectedDate, 'basketball');
+  const { data: rawLive = [] } = useLiveMatches('basketball');
+  
+  // Normalize raw backend data to expected UI shapes
+  const gamesByDate = useMemo(() => ({ [selectedDate]: rawFixtures.map(normalizeBasketballGame) }), [rawFixtures, selectedDate]);
+  const liveGames = useMemo(() => rawLive.map(normalizeBasketballGame), [rawLive]);
+  
   const [error, setError] = useState(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [liveGames, setLiveGames] = useState([]);
 
   const [viewMode, setViewMode] = useState('fixtures');
   const [predictions, setPredictions] = useState({});
@@ -350,32 +356,14 @@ export default function Basketball() {
   const [predictDay, setPredictDay] = useState('today');
   const [upcomingOpen, setUpcomingOpen] = useState(false);
 
-  const loadedDatesRef = useRef(new Set());
   const dateScrollRef = useRef(null);
-  const initialLoadDone = useRef(false);
 
   const currentGames = gamesByDate[selectedDate] || [];
 
-  /* ═══════════════════════════════════════════════════════════
-     PREDICTIONS — real-time from Firestore
-  ═══════════════════════════════════════════════════════════ */
   useEffect(() => {
     if (!currentUser) { setPredictions({}); return; }
     const q = query(collection(db, 'user_bb_predictions'), where('userId', '==', currentUser.uid));
     
-    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
-    if (isGooglebot) {
-      getDocs(q).then(snap => {
-        const userPreds = {};
-        snap.docs.forEach(d => {
-          const data = d.data();
-          userPreds[data.gameId] = { pick: data.pick, timestamp: data.timestamp };
-        });
-        setPredictions(userPreds);
-      }).catch(err => console.error("Pred fetch error:", err));
-      return;
-    }
-
     const unsub = onSnapshot(q, (snap) => {
       const userPreds = {};
       snap.docs.forEach(d => {
@@ -398,153 +386,24 @@ export default function Basketball() {
     if (!gameId || !pick) return;
     const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
     await setDoc(predRef, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
+    eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, sport: 'basketball' });
   }, [currentUser]);
 
   const handleRemovePredict = useCallback(async (gameId) => {
     if (!currentUser) return;
     const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
     await deleteDoc(predRef);
+    eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, removed: true, sport: 'basketball' });
   }, [currentUser]);
-
-  /* ═══════════════════════════════════════════════════════════
-     FETCH ONE DATE from DataLayer (24h Cache)
-  ═══════════════════════════════════════════════════════════ */
-  const fetchDate = useCallback(async (date) => {
-    if (loadedDatesRef.current.has(date)) return;
-    loadedDatesRef.current.add(date);
-    try {
-      const res = await fetchBasketballFixtures(date);
-      const matches = res?.matches || [];
-      setGamesByDate(prev => ({ ...prev, [date]: matches }));
-    } catch (err) {
-      console.warn('[Basketball] Fetch error for', date, err.message);
-    }
-  }, []);
-
-  /* ═══════════════════════════════════════════════════════════
-     INITIAL LOAD — fetch all 3 window dates in parallel
-  ═══════════════════════════════════════════════════════════ */
-  useEffect(() => {
-    if (initialLoadDone.current) return;
-    initialLoadDone.current = true;
-
-    let cancelled = false;
-
-    (async () => {
-      setLoading(true);
-      setError(null);
-
-      try {
-        const [yRes, tRes, tmRes] = await Promise.all([
-          fetchBasketballFixtures(yesterdayStr),
-          fetchBasketballFixtures(todayStr),
-          fetchBasketballFixtures(tomorrowStr),
-        ]);
-
-        if (cancelled) return;
-
-        const yMatches = yRes?.matches || [];
-        const tMatches = tRes?.matches || [];
-        const tmMatches = tmRes?.matches || [];
-
-        loadedDatesRef.current.add(yesterdayStr);
-        loadedDatesRef.current.add(todayStr);
-        loadedDatesRef.current.add(tomorrowStr);
-
-        setGamesByDate({
-          [yesterdayStr]: yMatches,
-          [todayStr]: tMatches,
-          [tomorrowStr]: tmMatches,
-        });
-
-        if (tRes?.error) setError(tRes.error);
-      } catch (err) {
-        if (!cancelled) {
-          console.warn('[Basketball] Initial load error:', err.message);
-          setError('NETWORK');
-        }
-      }
-
-      if (!cancelled) setLoading(false);
-    })();
-
-    return () => { cancelled = true; };
-  }, [yesterdayStr, todayStr, tomorrowStr]);
-
-  /* ═══════════════════════════════════════════════════════════
-     LOAD ON DATE CHANGE
-  ═══════════════════════════════════════════════════════════ */
-  useEffect(() => {
-    if (initialLoadDone.current && !windowDates.includes(selectedDate)) {
-      fetchDate(selectedDate);
-    }
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [selectedDate, windowDates, fetchDate]);
-
-  /* ═══════════════════════════════════════════════════════════
-     REAL-TIME LIVE — onSnapshot on basketballLiveFixtures
-  ═══════════════════════════════════════════════════════════ */
-  useEffect(() => {
-    // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
-    if (isGooglebot) return;
-    
-    const unsub = subscribeToBasketballLiveFixtures(({ matches }) => {
-      setLiveGames(prev => {
-        if (prev.length !== matches.length) return matches;
-        let changed = false;
-        for (let i = 0; i < matches.length; i++) {
-          if (prev[i].homeScore !== matches[i].homeScore || prev[i].awayScore !== matches[i].awayScore || prev[i].status !== matches[i].status || prev[i].minute !== matches[i].minute) {
-            changed = true; break;
-          }
-        }
-        return changed ? matches : prev;
-      });
-
-      if (matches.length === 0) return;
-
-      const liveMap = new Map(matches.map(m => [String(m.id), m]));
-      setGamesByDate(prev => {
-        let changed = false;
-        const next = { ...prev };
-        Object.keys(next).forEach(dateKey => {
-          let dateChanged = false;
-          const updatedGames = next[dateKey].map(g => {
-            const live = liveMap.get(String(g.id));
-            if (live && (g.homeScore !== live.homeScore || g.awayScore !== live.awayScore || g.status !== live.status || g.minute !== live.minute)) {
-              dateChanged = true;
-              return { ...g, ...live };
-            }
-            return g;
-          });
-          if (dateChanged) {
-            changed = true;
-            next[dateKey] = updatedGames;
-          }
-        });
-        return changed ? next : prev;
-      });
-    });
-    return () => unsub();
-  }, []);
-
-  useEffect(() => {
-    const futureDates = dates.filter(d => d.date > tomorrowStr).slice(0, 7);
-    futureDates.forEach(async (d) => {
-      if (!loadedDatesRef.current.has(d.date)) {
-        fetchDate(d.date);
-      }
-    });
-  }, [tomorrowStr, dates, fetchDate]);
 
   const handleRefresh = useCallback(() => {
     if (refreshing) return;
     setRefreshing(true);
     setError(null);
-    loadedDatesRef.current.delete(selectedDate);
-
-    dataLayer.invalidate(`snap:bb:${selectedDate}`);
-    fetchDate(selectedDate).finally(() => setRefreshing(false));
-  }, [selectedDate, refreshing, fetchDate]);
+    queryClient.invalidateQueries(['fixtures', selectedDate]);
+    queryClient.invalidateQueries(['liveMatches']);
+    setTimeout(() => setRefreshing(false), 500);
+  }, [refreshing, selectedDate, queryClient]);
 
   const mergedGames = useMemo(() => {
     if (!liveGames.length) return currentGames;
@@ -632,7 +491,6 @@ export default function Basketball() {
         robots="index,follow"
       />
 
-      {/* ═══ HEADER ═══ */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,14,23,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', animation: 'bb_slideDown .4s ease' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -653,7 +511,6 @@ export default function Basketball() {
           </div>
         </div>
 
-        {/* ── Sport switcher ── */}
         <div style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div className="sport-switch">
             <button className="sport-pill inactive" onClick={() => navigate('/fixtures')}>
@@ -671,7 +528,6 @@ export default function Basketball() {
           </span>
         </div>
 
-        {/* ── View mode tabs ── */}
         <div style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px', display: 'flex', gap: 4 }}>
           <button className="zoka-btn" onClick={() => setViewMode('fixtures')} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '.78rem', background: viewMode === 'fixtures' ? '#1D428A' : 'transparent', color: viewMode === 'fixtures' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
             <CalendarDays size={14} /> Fixtures
@@ -684,7 +540,6 @@ export default function Basketball() {
           </button>
         </div>
 
-        {/* ── Date scroller (fixtures mode) ── */}
         {viewMode === 'fixtures' && (
           <div ref={dateScrollRef} className="date-scroll-hide" style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px 10px', display: 'flex', gap: 4, overflowX: 'auto' }}>
             {dates.map((d, i) => {
@@ -707,14 +562,12 @@ export default function Basketball() {
         )}
       </div>
 
-      {/* ═══ CONTENT ═══ */}
       <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px 80px' }}>
 
-        {/* ══════ FIXTURES VIEW ══════ */}
         {viewMode === 'fixtures' && (
           <>
             {error && !loading && (
-              <ErrorScreen error={error} onRetry={() => { setError(null); loadedDatesRef.current.delete(selectedDate); handleRefresh(); }} />
+              <ErrorScreen error={error} onRetry={() => { setError(null); handleRefresh(); }} />
             )}
 
             {loading && !error ? (
@@ -770,7 +623,6 @@ export default function Basketball() {
           </>
         )}
 
-        {/* ══════ PREDICT VIEW ══════ */}
         {viewMode === 'predict' && (
           <div className="bb-enter">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -793,7 +645,6 @@ export default function Basketball() {
               )}
             </div>
 
-            {/* Today's Predictions */}
             <div style={{ marginBottom: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <CalendarDays size={14} color="#60a5fa" />
@@ -816,7 +667,6 @@ export default function Basketball() {
               )}
             </div>
 
-            {/* Tomorrow's Predictions */}
             <div style={{ marginBottom: 24 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                 <CalendarDays size={14} color="#f59e0b" />
@@ -839,7 +689,6 @@ export default function Basketball() {
               )}
             </div>
 
-            {/* Upcoming Predictions */}
             <div style={{ marginBottom: 24 }}>
               <button className="zoka-btn" onClick={() => setUpcomingOpen(!upcomingOpen)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '.82rem' }}>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>

@@ -9,6 +9,11 @@ const {
   isBasketballConfigured,
 } = require("../config/basketballApi");
 const logger = require("../utils/logger");
+const RangeFixturesService = require("../services/rangeFixturesService"); // ★ NEW IMPORT
+
+const MS_PER_HOUR = 3600000;
+const MIN_POLL_INTERVAL_MS = 180000;
+const MIN_WINDOW_HOURS = 0.5;
 
 class Scheduler {
   constructor(services = {}) {
@@ -18,6 +23,7 @@ class Scheduler {
     this.cronTimers = [];
     this.syncStatus = {};
     this.activeSleepControllers = new Set();
+    this.activeJobs = new Set();
 
     for (const name of Object.keys(services)) {
       this.syncStatus[name] = this._createInitialStatus();
@@ -29,10 +35,14 @@ class Scheduler {
     logger.info(" Initial Sync (meta-aware)");
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
+    // ★ NEW: Run Range Fetcher on startup to update 10 days back / 14 days forward
+    const rangeService = new RangeFixturesService();
+    await this._executeCustomJob("RangeFixtures", rangeService);
+
     await this._tryRun("footballLiveFixtures");
     if (isBasketballConfigured) await this._tryRun("basketballLiveFixtures");
 
-    await this._tryRun("footballDailyFixtures");
+    await this._executeJob("footballDailyFixtures", this.services.footballDailyFixtures, true, true);
     if (isBasketballConfigured) await this._tryRun("basketballDailyFixtures");
 
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
@@ -47,15 +57,51 @@ class Scheduler {
     this._startLivePolling("football");
     if (isBasketballConfigured) this._startLivePolling("basketball");
 
-    this._startCron("footballDailyFixtures", SCHEDULER.FIXTURES_DAILY);
-    if (isBasketballConfigured)
-      this._startCron("basketballDailyFixtures", SCHEDULER.BASKETBALL_FIXTURES_DAILY);
+    this._scheduleRecurring(
+      "footballDailyFixtures",
+      () => this._getMsUntilDaily(SCHEDULER.FIXTURES_DAILY),
+      () => this._getMsUntilDaily(SCHEDULER.FIXTURES_DAILY)
+    );
+
+    if (isBasketballConfigured) {
+      this._scheduleRecurring(
+        "basketballDailyFixtures",
+        () => this._getMsUntilDaily(SCHEDULER.BASKETBALL_FIXTURES_DAILY),
+        () => this._getMsUntilDaily(SCHEDULER.BASKETBALL_FIXTURES_DAILY)
+      );
+    }
+
+    // ★ NEW: Schedule Range Fetcher at 12:00 AM UTC daily
+    this._scheduleRangeFetcher();
 
     this._logSchedule();
     logger.info("[Scheduler] Started.");
   }
 
-  stop() {
+  _scheduleRangeFetcher() {
+    const runRange = async () => {
+      if (!this.running) return;
+      const rangeService = new RangeFixturesService();
+      await this._executeCustomJob("RangeFixtures", rangeService);
+      
+      if (this.running) {
+        // Schedule for next day at 12:00 AM UTC (Midnight)
+        const next = new Date();
+        next.setUTCHours(0, 0, 0, 0); // ★ FIX: 12 AM UTC
+        if (next <= new Date()) next.setUTCDate(next.getUTCDate() + 1);
+        const ms = next - new Date();
+        this.cronTimers.push(setTimeout(runRange, ms));
+      }
+    };
+    
+    // Schedule the first run
+    const initialNext = new Date();
+    initialNext.setUTCHours(0, 0, 0, 0); // ★ FIX: 12 AM UTC
+    if (initialNext <= new Date()) initialNext.setUTCDate(initialNext.getUTCDate() + 1);
+    this.cronTimers.push(setTimeout(runRange, initialNext - new Date()));
+  }
+
+  async stop() {
     this.running = false;
 
     for (const ctrl of this.pollingControllers) ctrl.stop = true;
@@ -69,19 +115,113 @@ class Scheduler {
     }
     this.activeSleepControllers.clear();
 
+    if (this.activeJobs.size > 0) {
+      logger.info(`[Scheduler] Waiting for ${this.activeJobs.size} active job(s) to finish...`);
+      await Promise.allSettled([...this.activeJobs]);
+    }
+
     logger.info("[Scheduler] Stopped.");
   }
 
   getStatus() {
     return {
       running: this.running,
-      jobs: { ...this.syncStatus },
+      jobs: structuredClone(this.syncStatus),
     };
   }
 
+  _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap) {
+    const now = new Date();
+    const endOfDay = new Date(now);
+    endOfDay.setUTCHours(24, 0, 0, 0);
+    const msUntilMidnight = Math.max(0, endOfDay - now);
+    const hoursUntilMidnight = msUntilMidnight / MS_PER_HOUR;
+
+    const reserveForDaily = LIVE_POLLING.RESERVE_FOR_DAILY_CRON;
+    const spendableBudget = Math.max(0, (remaining ?? API.DAILY_BUDGET) - reserveForDaily);
+    const capRemaining = Math.max(0, liveCap - liveUsed);
+    const spendableCalls = Math.min(spendableBudget, capRemaining);
+
+    const { tier: liveTier, interval: desired } = this._classifyLiveTier(liveCount, isNearFinish);
+
+    let expectedWindowHours;
+    if (isNearFinish) {
+      expectedWindowHours = Math.min(hoursUntilMidnight, 1);
+    } else if (liveCount > 40) {
+      expectedWindowHours = Math.min(hoursUntilMidnight, 3);
+    } else if (liveCount > 0) {
+      expectedWindowHours = Math.min(hoursUntilMidnight, 2);
+    } else {
+      expectedWindowHours = hoursUntilMidnight;
+    }
+    const expectedWindowMs = Math.max(MIN_WINDOW_HOURS, expectedWindowHours) * MS_PER_HOUR;
+
+    let interval = desired;
+    let isPacing = false;
+
+    if (spendableCalls > 0) {
+      const maxAffordableInterval = expectedWindowMs / spendableCalls;
+      if (maxAffordableInterval > desired) {
+        interval = maxAffordableInterval;
+        isPacing = true;
+      }
+    } else {
+      interval = LIVE_POLLING.IDLE_INTERVAL_MS;
+    }
+
+    if (liveCount === 0) interval = LIVE_POLLING.IDLE_INTERVAL_MS;
+    if (interval < MIN_POLL_INTERVAL_MS) interval = MIN_POLL_INTERVAL_MS;
+    if (interval > LIVE_POLLING.IDLE_INTERVAL_MS) interval = LIVE_POLLING.IDLE_INTERVAL_MS;
+
+    const budgetTier = this._classifyBudgetTier(remaining, spendableBudget);
+    const mode = this._labelMode(liveTier, spendableCalls, isPacing, budgetTier);
+
+    return {
+      mode,
+      interval,
+      liveTier,
+      budgetTier,
+      isPacing,
+      spendableCalls,
+      hoursUntilMidnight: hoursUntilMidnight.toFixed(1),
+      expectedWindowHours: expectedWindowHours.toFixed(1),
+    };
+  }
+
+  _classifyLiveTier(liveCount, isNearFinish) {
+    if (liveCount === 0) return { tier: "IDLE", interval: LIVE_POLLING.IDLE_INTERVAL_MS };
+    if (liveCount <= 5) return { tier: "LIVE_LOW", interval: LIVE_POLLING.LOW_LIVE_INTERVAL_MS };
+    if (liveCount <= 15) return { tier: "LIVE_MED", interval: LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS };
+    if (liveCount <= 40) return { tier: "LIVE_HIGH", interval: LIVE_POLLING.HIGH_LIVE_INTERVAL_MS };
+    
+    let tier = "LIVE_MASS";
+    let interval = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;
+
+    if (isNearFinish) {
+      tier = "NEAR_FT";
+      interval = Math.max(interval, LIVE_POLLING.NEAR_FINISH_INTERVAL_MS);
+    }
+    return { tier, interval };
+  }
+
+  _classifyBudgetTier(remaining, spendableBudget) {
+    if (remaining <= 0) return "EXHAUSTED";
+    if (spendableBudget <= 0) return "RESERVE_LOCKED";
+    if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) return "CRITICAL";
+    if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD) return "NORMAL";
+    return "HEALTHY";
+  }
+
+  _labelMode(liveTier, spendableCalls, isPacing, budgetTier) {
+    if (spendableCalls <= 0) return "BUDGET_LOCKED";
+    if (isPacing) return `PACING+${liveTier}`;
+    if (budgetTier === "CRITICAL") return `BUDGET_CRIT+${liveTier}`;
+    if (budgetTier === "NORMAL") return `BUDGET_NORMAL+${liveTier}`;
+    return liveTier;
+  }
+
   _startLivePolling(sport) {
-    const serviceName =
-      sport === "football" ? "footballLiveFixtures" : "basketballLiveFixtures";
+    const serviceName = sport === "football" ? "footballLiveFixtures" : "basketballLiveFixtures";
     const service = this.services[serviceName];
 
     if (!service) {
@@ -89,153 +229,20 @@ class Scheduler {
       return;
     }
 
-    const getBudget =
-      sport === "football" ? getRemainingRequests : getBasketballRemainingRequests;
-    const getLiveCount =
-      sport === "football" ? getLiveRequestsToday : getBasketballLiveRequestsToday;
-    const liveCap =
-      sport === "football"
-        ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP
-        : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
+    const getBudget = sport === "football" ? getRemainingRequests : getBasketballRemainingRequests;
+    const getLiveCount = sport === "football" ? getLiveRequestsToday : getBasketballLiveRequestsToday;
+    const liveCap = sport === "football" ? LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP : LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP;
+    const displayBudget = API.DAILY_BUDGET;
 
     const controller = { stop: false };
     this.pollingControllers.push(controller);
 
-    this._pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller).catch(
+    this._pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller, displayBudget).catch(
       (err) => logger.error(`[Scheduler] ${sport} polling crashed: ${err.message}`)
     );
   }
 
-  // ═══════════════════════════════════════════════════════════════
-  // SMART PACING v4 — "The Perfect Calculation"
-  // - Estimates remaining polling window based on Total Daily Matches
-  // - Prevents rapid spending when future match waves are expected
-  // - Blasts remaining budget safely when the day is ending
-  // ═══════════════════════════════════════════════════════════════
-  _determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap, totalDailyMatches) {
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setUTCHours(24, 0, 0, 0); 
-    const msUntilMidnight = Math.max(0, endOfDay - now);
-    const hoursUntilMidnight = msUntilMidnight / 3600000;
-
-    // ── 1. Calculate Safe Spendable Calls ──
-    const reserveForDaily = LIVE_POLLING.RESERVE_FOR_DAILY_CRON;
-    const spendableBudget = Math.max(0, (remaining ?? API.DAILY_BUDGET) - reserveForDaily);
-    const capRemaining = Math.max(0, liveCap - liveUsed);
-    const spendableCalls = Math.min(spendableBudget, capRemaining);
-
-    // ── 2. Desired Interval (Current Live Density) ──
-    // High density = Top leagues playing simultaneously (e.g., Saturday 15:00 block)
-    let liveTier;
-    let desired;
-
-    if (isNearFinish && liveCount > 0) {
-      liveTier = "NEAR_FT";
-      desired = LIVE_POLLING.NEAR_FINISH_INTERVAL_MS;       // 2 min
-    } else if (liveCount === 0) {
-      liveTier = "IDLE";
-      desired = LIVE_POLLING.IDLE_INTERVAL_MS;              // 30 min
-    } else if (liveCount <= 5) {
-      liveTier = "LIVE_LOW";
-      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;          // 15 min
-    } else if (liveCount <= 15) {
-      liveTier = "LIVE_MED";
-      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;       // 10 min
-    } else if (liveCount <= 40) {
-      liveTier = "LIVE_HIGH";
-      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;         // 5 min
-    } else {
-      liveTier = "LIVE_MASS";
-      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;      // 3 min
-    }
-
-    // ── 3. Estimate Remaining Polling Window (The Genius Math) ──
-    // Uses totalDailyMatches to anticipate future match waves.
-    let expectedWindowHours;
-    
-    if (hoursUntilMidnight < 1.5) {
-      // Day is ending, no matter what, window is short.
-      expectedWindowHours = hoursUntilMidnight;
-    } else if (totalDailyMatches >= 80) {
-      // Massive day (e.g., 80+ games). Assume action spans 6+ hours (e.g., 15:00 to 21:00).
-      expectedWindowHours = Math.min(hoursUntilMidnight, 6);
-    } else if (totalDailyMatches >= 30) {
-      // Standard day. Assume action spans 4 hours.
-      expectedWindowHours = Math.min(hoursUntilMidnight, 4);
-    } else if (liveCount > 0) {
-      // Light day. Just polling for the current isolated matches (2 hours).
-      expectedWindowHours = Math.min(hoursUntilMidnight, 2);
-    } else {
-      // No live matches, but checking for future kickoffs.
-      expectedWindowHours = 1; 
-    }
-    
-    const expectedWindowMs = Math.max(0.5, expectedWindowHours) * 3600000; // Min 0.5h to prevent divide-by-zero
-
-    // ── 4. Smart Pacing Decision ──
-    let pacingFloor = 0;
-    let isPacing = false;
-
-    if (spendableCalls <= 0) {
-      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS; // Budget locked
-    } else {
-      // How many polls would we make if we used the 'desired' interval for the whole window?
-      const expectedPollsAtDesired = expectedWindowMs / desired;
-      
-      if (spendableCalls < expectedPollsAtDesired) {
-        // Genuine scarcity! We must spread calls across the remaining window.
-        pacingFloor = expectedWindowMs / spendableCalls;
-        
-        // Hard floor: never pace slower than MIN_POLLS_PER_LIVE_HOUR (1 poll / 15 min)
-        const maxAllowedFloor = 3600000 / LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR; 
-        pacingFloor = Math.min(pacingFloor, maxAllowedFloor);
-        
-        if (pacingFloor > desired) isPacing = true;
-      }
-      // else: Budget is sufficient! Poll at the desired rapid interval.
-    }
-
-    // ── 5. Budget Tier Label ──
-    let budgetTier = "HEALTHY";
-    if (remaining <= 0)                                budgetTier = "EXHAUSTED";
-    else if (spendableBudget <= 0)                     budgetTier = "RESERVE_LOCKED";
-    else if (remaining <= LIVE_POLLING.BUDGET_CRITICAL_THRESHOLD) budgetTier = "CRITICAL";
-    else if (remaining <= LIVE_POLLING.BUDGET_NORMAL_THRESHOLD)   budgetTier = "NORMAL";
-
-    // ── 6. Final Interval ──
-    let interval;
-    if (spendableCalls <= 0 && liveCount > 0) {
-      interval = LIVE_POLLING.IDLE_INTERVAL_MS;
-    } else {
-      interval = Math.max(desired, pacingFloor);
-    }
-    if (liveCount === 0) interval = LIVE_POLLING.IDLE_INTERVAL_MS;
-    
-    // Never exceed idle (prevents absurd 1h+ waits caused by leftover bugs)
-    interval = Math.min(interval, LIVE_POLLING.IDLE_INTERVAL_MS);
-
-    // ── 7. Mode Label ──
-    let mode = liveTier;
-    if (spendableCalls <= 0)               mode = "BUDGET_LOCKED";
-    else if (isPacing)                     mode = `PACING+${liveTier}`;
-    else if (budgetTier === "CRITICAL")    mode = `BUDGET_CRIT+${liveTier}`;
-    else if (budgetTier === "NORMAL")      mode = `BUDGET_NORMAL+${liveTier}`;
-
-    return { 
-      mode, 
-      interval, 
-      liveTier, 
-      budgetTier, 
-      isPacing, 
-      spendableCalls,
-      hoursUntilMidnight: hoursUntilMidnight.toFixed(1),
-      expectedWindowHours:  expectedWindowHours.toFixed(1),
-      totalDailyMatches 
-    };
-  }
-
-  async _pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller) {
+  async _pollingLoop(serviceName, service, getBudget, getLiveCount, liveCap, controller, displayBudget) {
     const sport = serviceName.includes("basketball") ? "basketball" : "football";
     let consecutiveErrors = 0;
     let liveCount = 0;
@@ -258,28 +265,20 @@ class Scheduler {
         const remaining = getBudget();
         const liveUsed = getLiveCount();
         
-        // Fetch total daily matches from the daily sync status to understand daily density
         const dailyStatusName = sport === "football" ? "footballDailyFixtures" : "basketballDailyFixtures";
         const totalDailyMatches = this.syncStatus[dailyStatusName]?.lastResult?.totalToday || this.syncStatus[dailyStatusName]?.lastResult?.total || 0;
 
-        const state = this._determinePollingState(
-          remaining,
-          liveCount,
-          isNearFinish,
-          liveUsed,
-          liveCap,
-          totalDailyMatches
-        );
+        const state = this._determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap);
 
         const intervalMin = (state.interval / 60000).toFixed(1);
-        const logRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
+        const logRemaining = remaining !== null ? remaining : displayBudget;
         
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} [${state.mode}] Next poll in ${intervalMin}m ` +
-            `[Live: ${liveUsed}/${liveCap} cap, API: ${logRemaining}/${API.DAILY_BUDGET}, ` +
+            `[Live: ${liveUsed}/${liveCap} cap, API: ${logRemaining}/${displayBudget}, ` +
             `LiveMatches: ${liveCount}, NearFT: ${isNearFinish ? "Y" : "N"}, ` +
             `Spendable: ${state.spendableCalls}, TimeLeft: ${state.hoursUntilMidnight}h, ` +
-            `LiveWindow: ${state.expectedWindowHours}h, TotalToday: ${state.totalDailyMatches}]`
+            `LiveWindow: ${state.expectedWindowHours}h, TotalToday: ${totalDailyMatches}]`
         );
 
         await this._sleep(state.interval);
@@ -289,25 +288,25 @@ class Scheduler {
         const nowLiveUsed = getLiveCount();
 
         if (nowRemaining !== null && nowRemaining <= 0) {
-          logger.warn(
-            `[Scheduler] ${sport.toUpperCase()} paused — budget 0/${API.DAILY_BUDGET}`
-          );
+          logger.warn(`[Scheduler] ${sport.toUpperCase()} paused — budget 0/${displayBudget}`);
           continue;
         }
 
         if (nowRemaining !== null && nowRemaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
-          logger.warn(
-            `[Scheduler] ${sport.toUpperCase()} skipped — budget below MIN_BUDGET_TO_POLL`
-          );
+          logger.warn(`[Scheduler] ${sport.toUpperCase()} skipped — budget below MIN_BUDGET_TO_POLL`);
           continue;
         }
 
         const prevHadLive = liveCount > 0;
-        const result = await service.run();
+        
+        const jobPromise = service.run();
+        this.activeJobs.add(jobPromise);
+        const result = await jobPromise.finally(() => this.activeJobs.delete(jobPromise));
+        
         consecutiveErrors = 0;
         this._updateStatus(serviceName, "success", result);
 
-        const actuallyPolled = result && result.polled !== false;
+        const actuallyPolled = result?.polled !== false;
 
         if (actuallyPolled) {
           liveCount = result.liveCount ?? result.total ?? 0;
@@ -316,14 +315,13 @@ class Scheduler {
 
         const recoveredFT = result?.recoveredFT || 0;
         const capReached = result?.capReached === true;
-
-        const logNowRemaining = nowRemaining !== null ? nowRemaining : API.DAILY_BUDGET;
+        const logNowRemaining = nowRemaining !== null ? nowRemaining : displayBudget;
 
         logger.info(
           `[Scheduler] ${sport.toUpperCase()} sync done. ` +
             `Live: ${liveCount} match(es). NearFT: ${isNearFinish ? "Yes" : "No"}. ` +
             `FT→: ${recoveredFT}. Cap: ${nowLiveUsed}/${liveCap}${capReached ? " (REACHED)" : ""}. ` +
-            `Budget: ${logNowRemaining}/${API.DAILY_BUDGET}`
+            `Budget: ${logNowRemaining}/${displayBudget}`
         );
 
         if (
@@ -333,29 +331,7 @@ class Scheduler {
           FT_RECOVERY.ENABLED &&
           logNowRemaining > FT_RECOVERY.MIN_BUDGET_TO_FETCH
         ) {
-          logger.info(
-            `[Scheduler] ${sport.toUpperCase()} live session ended. ` +
-              `Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`
-          );
-          await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
-          if (controller.stop) break;
-
-          // ★ NEW: Trigger Daily Fixtures immediately to check & update all matches (even yesterday's) to FT
-          const dailyServiceName = sport === "football" ? "footballDailyFixtures" : "basketballDailyFixtures";
-          const dailyService = this.services[dailyServiceName];
-          
-          if (dailyService) {
-            logger.info(
-              `[Scheduler] ${sport.toUpperCase()} executing immediate ${dailyServiceName} ` +
-              `to ensure all finished matches (including yesterday) are updated to FT...`
-            );
-            await this._executeJob(dailyServiceName, dailyService);
-            logger.info(`[Scheduler] ${sport.toUpperCase()} immediate FT confirmation via ${dailyServiceName} completed.`);
-          } else {
-            // Fallback to live service if daily service is somehow missing
-            logger.info(`[Scheduler] ${sport.toUpperCase()} executing immediate FT confirmation poll...`);
-            await this._executeJob(serviceName, service);
-          }
+          await this._handleLiveSessionEnd(sport, serviceName, service);
         }
       } catch (err) {
         consecutiveErrors++;
@@ -367,9 +343,7 @@ class Scheduler {
         );
 
         if (consecutiveErrors >= LIVE_POLLING.MAX_CONSECUTIVE_ERRORS) {
-          logger.error(
-            `[Scheduler] ${sport.toUpperCase()} polling stopped — max errors reached`
-          );
+          logger.error(`[Scheduler] ${sport.toUpperCase()} polling stopped — max errors reached`);
           break;
         }
 
@@ -378,39 +352,70 @@ class Scheduler {
     }
   }
 
-  _startCron(serviceName, cronExpr) {
+  async _handleLiveSessionEnd(sport, serviceName, service) {
+    logger.info(
+      `[Scheduler] ${sport.toUpperCase()} live session ended. ` +
+        `Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`
+    );
+    await this._sleep(LIVE_POLLING.FT_CONFIRMATION_DELAY_MS);
+    if (!this.running) return;
+
+    const dailyServiceName = sport === "football" ? "footballDailyFixtures" : "basketballDailyFixtures";
+    const dailyService = this.services[dailyServiceName];
+    
+    if (dailyService) {
+      logger.info(
+        `[Scheduler] ${sport.toUpperCase()} executing immediate ${dailyServiceName} ` +
+        `to ensure all finished matches (including yesterday) are updated to FT...`
+      );
+      await this._executeJob(dailyServiceName, dailyService);
+      logger.info(`[Scheduler] ${sport.toUpperCase()} immediate FT confirmation via ${dailyServiceName} completed.`);
+    } else {
+      logger.info(`[Scheduler] ${sport.toUpperCase()} executing immediate FT confirmation poll...`);
+      await this._executeJob(serviceName, service);
+    }
+  }
+
+  _scheduleRecurring(serviceName, getInitialDelayMs, getIntervalMs) {
     const service = this.services[serviceName];
     if (!service) {
-      logger.warn(`[Scheduler] ${serviceName} not registered — skipping cron`);
+      logger.warn(`[Scheduler] ${serviceName} not registered — skipping`);
       return;
     }
 
     const run = async () => {
       if (!this.running) return;
 
+      const jobPromise = service.run();
+      this.activeJobs.add(jobPromise);
+
       try {
         logger.info(`[Scheduler] Cron → ${serviceName}`);
-        const result = await service.run();
+        const result = await jobPromise;
         this._updateStatus(serviceName, "success", result);
       } catch (err) {
         this._updateStatus(serviceName, "error", null, err);
         logger.error(`[Scheduler] Cron ${serviceName} failed: ${err.message}`);
+      } finally {
+        this.activeJobs.delete(jobPromise);
       }
 
       if (this.running) {
-        const ms = this._getMsUntilCron(cronExpr);
-        const timer = setTimeout(run, ms);
+        const timer = setTimeout(run, getIntervalMs());
         this.cronTimers.push(timer);
       }
     };
 
-    const ms = this._getMsUntilCron(cronExpr);
-    const timer = setTimeout(run, ms);
+    const timer = setTimeout(run, getInitialDelayMs());
     this.cronTimers.push(timer);
   }
 
-  _getMsUntilCron(cronExpr) {
+  _getMsUntilDaily(cronExpr) {
     const parts = cronExpr.trim().split(/\s+/);
+    if (parts.length < 2) {
+      throw new Error(`Invalid cron expression: ${cronExpr}. Expected format: "M H"`);
+    }
+    
     const minute = parseInt(parts[0], 10);
     const hour = parseInt(parts[1], 10);
 
@@ -423,7 +428,6 @@ class Scheduler {
     }
 
     const minMs = next - now;
-    logger.info(`[Scheduler] Next "${cronExpr}" in ${Math.round(minMs / 60000)} min`);
     return minMs;
   }
 
@@ -436,26 +440,48 @@ class Scheduler {
     await this._executeJob(serviceName, service, true);
   }
 
-  async _executeJob(name, service, initial = false) {
+  async _executeJob(name, service, initial = false, force = false) {
     const status = this.syncStatus[name];
-    if (status.status === "running") {
+    if (status && status.status === "running") {
       logger.warn(`[Scheduler] ${name} still running — skip`);
       return;
     }
 
+    if (status) status.status = "running";
+    const jobPromise = service.run(force);
+    this.activeJobs.add(jobPromise);
+
     try {
-      status.status = "running";
       logger.info(`[Scheduler] ${initial ? "Initial" : "Cron"} → ${name}`);
-      const result = await service.run();
+      const result = await jobPromise;
       this._updateStatus(name, "success", result);
     } catch (err) {
       this._updateStatus(name, "error", null, err);
       logger.error(`[Scheduler] ${name} failed: ${err.message}`);
+    } finally {
+      this.activeJobs.delete(jobPromise);
+    }
+  }
+
+  // ★ NEW: Custom job executor for services that don't take a `force` argument (like RangeFixtures)
+  async _executeCustomJob(name, service) {
+    const jobPromise = service.run();
+    this.activeJobs.add(jobPromise);
+
+    try {
+      logger.info(`[Scheduler] Custom Job → ${name}`);
+      await jobPromise;
+    } catch (err) {
+      logger.error(`[Scheduler] Custom Job ${name} failed: ${err.message}`);
+    } finally {
+      this.activeJobs.delete(jobPromise);
     }
   }
 
   _updateStatus(name, status, result = null, error = null) {
     const cur = this.syncStatus[name];
+    if (!cur) return; // Safety check
+    
     cur.status = status;
     cur.lastSync = new Date().toISOString();
     cur.totalRuns++;
@@ -464,7 +490,7 @@ class Scheduler {
       cur.lastDuration = result.duration ?? null;
       cur.lastResult = {
         total: result.total ?? null,
-        totalToday: result.totalToday ?? null, // ★ Capture totalToday
+        totalToday: result.totalToday ?? null,
         writes: result.writes ?? null,
         removed: result.removed ?? null,
         apiCalls: result.apiCalls ?? null,
@@ -524,16 +550,15 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Adaptive Schedule v4 ═══");
-    logger.info("  Live-Count Tiers (desired intervals):");
-    logger.info(`    0 live       → 30 min  (IDLE)`);
-    logger.info(`    1–5 live     → 15 min  (LIVE_LOW)`);
-    logger.info(`    6–15 live    → 10 min  (LIVE_MED)`);
-    logger.info(`    16–40 live   →  5 min  (LIVE_HIGH)`);
-    logger.info(`    41+ live     →  3 min  (LIVE_MASS)`);
-    logger.info(`    80'+ / ET    →  2 min  (NEAR_FT)`);
-    logger.info("  Pacing triggers ONLY when expected live-window polls > spendable calls.");
-    logger.info(`  Hard pacing floor: 15 min (MIN_POLLS_PER_LIVE_HOUR=${LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR})`);
+    logger.info("[Scheduler] ═══ Adaptive Schedule v6 ═══");
+    logger.info("  Density-Aware Polling Intervals:");
+    logger.info("    0 live       → 30 min  (IDLE)");
+    logger.info("    1–5 live     → 15 min  (LIVE_LOW)");
+    logger.info("    6–15 live    → 10 min  (LIVE_MED)");
+    logger.info("    16–40 live   →  5 min  (LIVE_HIGH)");
+    logger.info("    41+ live     →  3 min  (LIVE_MASS)");
+    logger.info("    80'+ / ET    →  5 min  (NEAR_FT)");
+    logger.info("  Budget Pacing dynamically adjusts interval if calls are running low.");
     logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);

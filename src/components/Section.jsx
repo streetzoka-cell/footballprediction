@@ -1,3 +1,4 @@
+// section.jsx
 export default function Section({ title, icon: Icon, children }) {
   return (
     <section className="info-section">

@@ -1,14 +1,8 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/utils/firebase.js
-// ═══════════════════════════════════════════════════════════════
-
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, initializeFirestore, memoryLocalCache } from 'firebase/firestore';
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getRemoteConfig } from "firebase/remote-config";
 
-/* ═══════════════════════════════════════════════════
-   1. PRIMARY APP (Auth, User Predictions, Leaderboards)
-   ═══════════════════════════════════════════════════ */
 const primaryConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
@@ -21,6 +15,7 @@ const primaryConfig = {
 let app = null;
 let db = null;
 let auth = null;
+let remoteConfig = null;
 
 const hasPrimaryConfig = Object.values(primaryConfig).every(v => v);
 
@@ -28,18 +23,23 @@ if (hasPrimaryConfig) {
   try {
     app = getApps().find(a => a.name === '[DEFAULT]') || initializeApp(primaryConfig);
     
-    // ★ FIX: Force memory cache to bypass corrupted IndexedDB schema and prevent 
-    // the "isCorePipeline" INTERNAL ASSERTION FAILED crash.
     try {
+      // ★ FIX: Use persistentLocalCache so data survives app reloads and backend sleep!
       db = initializeFirestore(app, {
-        localCache: memoryLocalCache()
+        localCache: persistentLocalCache({ 
+          tabManager: persistentMultipleTabManager()
+        })
       });
     } catch (cacheErr) {
-      console.warn('[Firebase] Memory cache init failed, using default:', cacheErr.message);
+      console.warn('[Firebase] Persistent cache init failed, using default:', cacheErr.message);
       db = getFirestore(app);
     }
 
     auth = getAuth(app);
+    
+    // Initialize Remote Config safely
+    remoteConfig = getRemoteConfig(app);
+    remoteConfig.settings.minimumFetchIntervalMillis = 3600000; // 1 hour
   } catch (e) {
     console.error('[Firebase] Primary init failed:', e.message);
   }
@@ -47,42 +47,5 @@ if (hasPrimaryConfig) {
   console.warn('[Firebase] Missing primary environment variables. Check your .env file.');
 }
 
-/* ═══════════════════════════════════════════════════
-   2. FOOTBALL DATA APP (Secondary App for Fixtures)
-   ═══════════════════════════════════════════════════ */
-const footballConfig = {
-  apiKey: import.meta.env.VITE_FOOTBALL_FB_API_KEY,
-  authDomain: import.meta.env.VITE_FOOTBALL_FB_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FOOTBALL_FB_PROJECT_ID,
-  storageBucket: import.meta.env.VITE_FOOTBALL_FB_STORAGE_BUCKET,
-  messagingSenderId: import.meta.env.VITE_FOOTBALL_FB_MESSAGING_SENDER_ID,
-  appId: import.meta.env.VITE_FOOTBALL_FB_APP_ID,
-};
-
-let footballDb = null;
-const hasFootballConfig = Object.values(footballConfig).every(v => v);
-
-if (hasFootballConfig) {
-  try {
-    const existingApp = getApps().find(a => a.name === 'football-data');
-    const footballApp = existingApp || initializeApp(footballConfig, 'football-data');
-    
-    // ★ FIX: Force memory cache for the secondary app as well.
-    try {
-      footballDb = initializeFirestore(footballApp, {
-        localCache: memoryLocalCache()
-      });
-    } catch (cacheErr) {
-      footballDb = getFirestore(footballApp);
-    }
-
-  } catch (e) {
-    console.error('[FootballFirebase] Init failed:', e.message);
-  }
-} else {
-  console.warn('[FootballFirebase] Missing football env vars. Falling back to primary DB.');
-  footballDb = db; 
-}
-
-export { app, db, auth, footballDb };
+export { app, db, auth, remoteConfig };
 export default app;

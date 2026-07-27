@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx (Ultimate Pro News Hub - Final)
+// FILE: src/pages/Highlights.jsx
 // ═══════════════════════════════════════════════════════════════
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -13,12 +13,13 @@ import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
 import { 
   collection, query, orderBy, onSnapshot, addDoc, updateDoc, 
-  deleteDoc, doc, serverTimestamp, increment, getDoc, getDocs // ★ FIX: Imported getDocs
+  deleteDoc, doc, serverTimestamp, increment, getDoc, getDocs 
 } from 'firebase/firestore';
-import SEO from "../components/SEO";
 
-// Detect Googlebot to prevent WebSocket errors during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
+// ★ NEW: Using Zustand for Theme and Constants for Paths
+import { usePreferencesStore } from '../store/usePreferencesStore';
+import { PATHS } from '../utils/constants';
+import SEO from "../components/SEO";
 
 /* ═══════════════════════════════════════════════════════════════
    HELPERS & CONFIG
@@ -96,7 +97,9 @@ export default function Highlights() {
   const urlPostId = slugId && slugId !== 'author' ? slugId.split('-').pop() : null;
   const navigate = useNavigate();
 
-  const [theme, setTheme] = useState('dark');
+  // ★ NEW: Replaced local theme state with global Zustand store
+  const { theme, toggleTheme } = usePreferencesStore();
+  
   const [posts, setPosts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [activeFilter, setActiveFilter] = useState('All');
@@ -133,15 +136,6 @@ export default function Highlights() {
     setLoading(true);
     let q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'));
     
-    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
-    if (isGooglebot) {
-      getDocs(q).then(snap => {
-        setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-        setLoading(false);
-      }).catch(err => console.error("News fetch error:", err));
-      return;
-    }
-    
     const unsub = onSnapshot(q, (snap) => {
       setPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
       setLoading(false);
@@ -165,7 +159,8 @@ export default function Highlights() {
         updateDoc(doc(db, 'news_posts', urlPostId), { views: increment(1) }).catch(()=>{});
 
         if (postData.relatedMatchId) {
-          getDoc(doc(db, 'active_predictions', postData.relatedMatchId)).then(mSnap => {
+          // ★ NEW: Using PATHS constant
+          getDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, postData.relatedMatchId)).then(mSnap => {
             if (mSnap.exists()) setRelatedMatch({ id: mSnap.id, ...mSnap.data() });
           });
         }
@@ -183,14 +178,6 @@ export default function Highlights() {
     if (comments[targetId]) return;
 
     const q = query(collection(db, 'news_posts', targetId, 'comments'), orderBy('createdAt', 'desc'));
-    
-    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
-    if (isGooglebot) {
-      getDocs(q).then(snap => {
-        setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
-      }).catch(err => console.error("Comments fetch error:", err));
-      return;
-    }
 
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [targetId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
@@ -200,14 +187,6 @@ export default function Highlights() {
   const fetchCommentsForFeed = (postId) => {
     if (comments[postId]) return; 
     const q = query(collection(db, 'news_posts', postId, 'comments'), orderBy('createdAt', 'desc'));
-    
-    // ★ FIX: Use getDocs for Googlebot to prevent WebSocket errors during indexing
-    if (isGooglebot) {
-      getDocs(q).then(snap => {
-        setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
-      }).catch(() => {});
-      return;
-    }
     
     onSnapshot(q, (snap) => {
       setComments(prev => ({ ...prev, [postId]: snap.docs.map(d => ({ id: d.id, ...d.data() })) }));
@@ -231,7 +210,6 @@ export default function Highlights() {
   }, [posts, activeFilter, authorFilter, savedPosts]);
 
   const trendingPosts = useMemo(() => [...posts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5), [posts]);
-  const toggleTheme = () => setTheme(t => t === 'dark' ? 'light' : 'dark');
 
   const openCreate = () => {
     setEditingPost(null);

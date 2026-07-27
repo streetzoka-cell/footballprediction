@@ -1,15 +1,10 @@
-const BASE_URL =
-  (typeof import.meta !== "undefined" &&
-    import.meta.env?.VITE_FOOTBALL_API_URL) ||
-  "http://localhost:3001/api";
-
 function request(path, options = {}) {
   const controller = new AbortController();
-  const timeout = options.timeout || 10000;
+  const timeout = options.timeout || 15000; // ★ FIX: Increased to 15s for Vercel cold starts
 
   const timer = setTimeout(() => controller.abort(), timeout);
 
-  return fetch(BASE_URL + path, {
+  return fetch(`/api/v1${path}`, {
     method: options.method || "GET",
     headers: {
       Accept: "application/json",
@@ -32,12 +27,14 @@ function request(path, options = {}) {
 }
 
 export const footballApi = {
-  getFixtures: () => request("/fixtures"),
-  getLive: () => request("/live"),
-  getToday: () => request("/today"),
-  getFinished: () => request("/finished"),
-  getCompetitions: () => request("/competitions"),
-  getStandings: (code) => request(`/standings/${code}`),
-  getTeams: (code) => request(`/teams/${code}`),
-  getHealth: () => request("/health"),
+  // NEW: Fetch categorized home data (Live, Featured, Upcoming)
+  getHomeData: () => request(`/matches?view=home`),
+  
+  getFixtures: (dateStr, sport = 'football') => request(`/matches?date=${dateStr}&sport=${sport}`),
+  getLive: (sport = 'football') => request(`/matches?status=live&sport=${sport}`),
+  getFinished: (sport = 'football') => request(`/matches?status=finished&sport=${sport}`),
+  getCompetitions: () => request(`/competitions`),
+  getStandings: (code) => request(`/standings?code=${code}`),
+  getTeams: (code) => request(`/teams?code=${code}`),
+  getHealth: () => request(`/health`),
 };

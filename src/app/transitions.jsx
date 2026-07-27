@@ -1,21 +1,14 @@
-import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 export default function PageTransition({ children }) {
-  const { pathname } = useLocation();
-
-  const [visible, setVisible] = useState(false);
-
-  useEffect(() => {
-    setVisible(false);
-
-    const t = setTimeout(() => setVisible(true), 30);
-
-    return () => clearTimeout(t);
-  }, [pathname]);
-
+  const location = useLocation();
+  
   return (
-    <div className={`page-transition-wrapper ${visible ? 'page-transition-visible' : 'page-transition-hidden'}`}>
+    <div 
+      key={location.pathname} 
+      className="page-transition-wrapper"
+      style={{ animation: 'zoka-page-enter 0.25s cubic-bezier(0.22, 1, 0.36, 1) both' }}
+    >
       {children}
     </div>
   );

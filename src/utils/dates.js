@@ -4,6 +4,20 @@
 // ★ FIXED: Uses native device local time. No more hardcoded EAT!
 // ═══════════════════════════════════════════════════════════════
 
+// ★ NEW: Helper to safely parse dates as UTC if they lack timezone info
+export function parseDateAsUTC(dateStr) {
+  if (!dateStr) return new Date(NaN);
+  if (typeof dateStr !== 'string') return new Date(dateStr);
+  
+  // Check if it already has 'Z' or a timezone offset like +00:00
+  if (dateStr.endsWith('Z') || dateStr.includes('+') || (dateStr.length > 10 && dateStr.indexOf('-', 10) !== -1)) {
+    return new Date(dateStr);
+  }
+  
+  // Otherwise, assume it's UTC and append 'Z'
+  return new Date(dateStr + 'Z');
+}
+
 // Core date string generator (USER'S LOCAL TIMEZONE)
 export function getLocalDateStr(offset = 0) {
   const d = new Date();
@@ -23,7 +37,7 @@ export const getDateStr = getLocalDateStr;
 export function getLocalDateFromUtc(utcDateStr) {
   if (!utcDateStr) return null;
   try {
-    const d = new Date(utcDateStr);
+    const d = parseDateAsUTC(utcDateStr);
     if (isNaN(d.getTime())) return null;
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -48,7 +62,7 @@ export function formatDateShort(dateStr) {
 export function formatTime(dateStr) {
   if (!dateStr) return '--:--';
   try {
-    const d = new Date(dateStr);
+    const d = parseDateAsUTC(dateStr);
     return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
   } catch {
     return '--:--';

@@ -53,6 +53,33 @@
   --max-width: 1200px;
 }
 
+/* ========== Design System: Light Mode ========== */
+[data-theme="light"] {
+  --bg-deep: #f8fafc;
+  --bg-primary: #f1f5f9;
+  --bg-surface: #ffffff;
+  --bg-card: #ffffff;
+  --bg-card-hover: #f8fafc;
+  --bg-elevated: #f1f5f9;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #334155;
+  --text-muted: #64748b;
+  
+  --accent: #059669;
+  --accent-dim: #047857;
+  --accent-glow: rgba(5, 150, 105, 0.15);
+  --accent-glow-strong: rgba(5, 150, 105, 0.3);
+  
+  --border: #e2e8f0;
+  --border-light: #cbd5e1;
+  --border-hover: #94a3b8;
+  
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.05), 0 1px 3px rgba(0,0,0,0.02);
+  --shadow-elevated: 0 12px 40px rgba(0,0,0,0.08);
+  --shadow-accent: 0 8px 24px rgba(5, 150, 105, 0.15);
+}
+
 html {
   scroll-behavior: smooth;
   -webkit-font-smoothing: antialiased;
@@ -2301,4 +2328,21 @@ body { font-family: 'Inter', system-ui, -apple-system, sans-serif; }
   .rs-side-btn { width: 36px; height: 36px; }
   .rs-bottom-controls { padding-bottom: 20px; }
   .rs-canvas-area { padding: 0; }
+}
+
+@keyframes zoka-page-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.995);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Hide scrollbar during transition to prevent layout jump */
+.page-transition-wrapper {
+  will-change: transform, opacity;
+  transform-origin: center top;
 }

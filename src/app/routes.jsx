@@ -1,9 +1,5 @@
 import { lazy } from "react";
 
-/* ===============================
-   MAIN PAGES
-=============================== */
-
 export const Home = lazy(() => import("../pages/Home"));
 export const Predictions = lazy(() => import("../pages/Predictions"));
 export const Fixtures = lazy(() => import("../pages/Fixtures"));
@@ -13,36 +9,19 @@ export const Highlights = lazy(() => import("../pages/Highlights"));
 export const LiveStream = lazy(() => import("../pages/LiveStream"));
 export const Leaderboard = lazy(() => import("../pages/Leaderboard"));
 
-// Dynamic Match Details Page for SEO
 export const MatchDetails = lazy(() => import("../pages/MatchDetails"));
-/* ===============================
-   SEARCH
-=============================== */
 export const Search = lazy(() => import("../pages/Search"));
 
-// 🆕 Permanent Team & League Pages for SEO
 export const TeamPage = lazy(() => import("../pages/TeamPage"));
 export const LeaguePage = lazy(() => import("../pages/LeaguePage"));
-
-/* ===============================
-   ACCOUNT
-=============================== */
 
 export const Login = lazy(() => import("../pages/Login"));
 export const Profile = lazy(() => import("../pages/Profile"));
 export const Admin = lazy(() => import("../pages/Admin"));
 
-/* ===============================
-   INFO & LEGAL
-=============================== */
-
 export const About = lazy(() => import("../pages/company/About"));
 export const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
 export const Terms = lazy(() => import("../pages/Terms"));
-
-/* ===============================
-   COMPANY
-=============================== */
 
 export const Team = lazy(() => import("../pages/company/Team"));
 export const Careers = lazy(() => import("../pages/company/Careers"));
@@ -50,22 +29,11 @@ export const Contact = lazy(() => import("../pages/company/Contact"));
 export const Partners = lazy(() => import("../pages/company/Partners"));
 export const Advertise = lazy(() => import("../pages/company/Advertise"));
 
-/* ===============================
-   SUPPORT
-=============================== */
-
 export const FAQ = lazy(() => import("../pages/FAQ"));
 export const HelpCenter = lazy(() => import("../pages/HelpCenter"));
 
-/* ===============================
-   ERROR
-=============================== */
-
 export const NotFound = lazy(() => import("../pages/NotFound"));
 
-/* ===============================
-   ZOKASCORE STUDIO 🆕
-=============================== */
 export const ReactorStudio = lazy(() => import("../studio/pages/ReactorStudio"));
 export const StudioHome = lazy(() => import("../studio/pages/StudioHome"));
 export const StudioEditor = lazy(() => import("../studio/pages/StudioEditor"));

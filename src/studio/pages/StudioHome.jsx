@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchFixtures } from '../../utils/api';
-import { getLocalDateStr } from '../../utils/dates';
+import { footballApi } from "../../services/footballApi";
+import { getLocalDateStr, todayStr } from '../../utils/dates';
 import { useEditorStore } from '../store/editorStore';
 import { fetchUserProjects, deleteProject } from '../services/studioService';
 import { LayoutGrid, Clock, Trash2, Video, Image, Plus, Folder, Camera, Sparkles, Monitor, Film, Zap } from 'lucide-react';
@@ -17,7 +17,7 @@ export default function StudioHome() {
     const loadInitialData = async () => {
       try {
         const today = getLocalDateStr(0);
-        const res = await fetchFixtures(today);
+const res = await footballApi.getFixtures(today);
         const list = Array.isArray(res) ? res : res?.matches || [];
         setMatches(list.slice(0, 10));
         const projects = fetchUserProjects();

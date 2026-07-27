@@ -3,10 +3,6 @@ import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import { visualizer } from 'rollup-plugin-visualizer'
 
-// Detect Googlebot to prevent SW registration crashes during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
-
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
@@ -18,7 +14,7 @@ export default defineConfig({
     }),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: false, // ★ FIX: Prevent automatic injection so Googlebot doesn't crash
+      injectRegister: false,
       includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png'],
       manifest: {
         name: 'ZokaScore',
@@ -33,6 +29,29 @@ export default defineConfig({
           { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png' },
           { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+        ],
+        shortcuts: [
+          {
+            name: 'Live Fixtures',
+            short_name: 'Fixtures',
+            description: "View today's football fixtures",
+            url: '/fixtures',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Make Predictions',
+            short_name: 'Predict',
+            description: "Predict today's matches",
+            url: '/predictions',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          },
+          {
+            name: 'Leaderboard',
+            short_name: 'Ranks',
+            description: 'View the daily leaderboard',
+            url: '/leaderboard',
+            icons: [{ src: '/icons/icon-192.png', sizes: '192x192' }]
+          }
         ]
       },
       workbox: {
@@ -58,21 +77,35 @@ export default defineConfig({
       }
     })
   ],
+  // ★ FIX: Tell Vite to ignore backend packages so it doesn't crash the frontend
+  optimizeDeps: {
+    exclude: ['firebase-admin']
+  },
+ // vite.config.js
   server: {
     port: 5173,
     host: true,
-    hmr: {
-      overlay: false
+    hmr: { overlay: false },
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3099',
+        changeOrigin: true,
+      }
     }
   },
+
+  
   build: {
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('firebase')) return 'firebase-vendor';
+            if (id.includes('@tanstack')) return 'tanstack-vendor';
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router')) return 'react-vendor';
+            if (id.includes('framer-motion')) return 'animation-vendor';
             if (id.includes('lucide-react')) return 'ui-vendor';
+            if (id.includes('@ffmpeg') || id.includes('@mediapipe') || id.includes('konva')) return 'studio-vendor';
             return 'vendor';
           }
         }

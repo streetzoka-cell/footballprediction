@@ -5,14 +5,11 @@ import {
   Mail, Star, ArrowRight, Zap, Lock, TrendingUp
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useAppData } from '../context/AppDataContext';
-import { subscribeToLiveFixtures } from '../utils/api';
+import { useUserPredictions, useActivePredictions, useUserPoints } from '../hooks/useUserData';
+import { useLiveMatches } from '../hooks/useFixtures';
 import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from "../components/SEO";
-
-// Detect Googlebot to prevent WebSocket errors during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
 
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
@@ -30,10 +27,10 @@ const useInView = (threshold = 0.1) => {
   return [ref, visible];
 };
 
-const getPredictions = (p) => p?.predictions || 0;
-const getExact = (p) => p?.correctScore || 0;
-const getResult = (p) => p?.correctResult || 0;
-const getPoints = (p) => p?.points || 0;
+const getPredictions = (p) => p?.predictions || p?.predictionsCount || 0;
+const getExact = (p) => p?.correctScore || p?.exactCount || 0;
+const getResult = (p) => p?.correctResult || p?.resultCount || 0;
+const getPoints = (p) => p?.points || p?.totalPoints || 0;
 const calculateAccuracy = (exact, result, total) => {
   if (!total || total < 1) return 0;
   return Math.min(100, Math.round(((exact + result) / total) * 100));
@@ -196,29 +193,23 @@ const ProfileSkeleton = () => (
 
 export default function Profile() {
   const { currentUser, userProfile, signOut, authLoading } = useAuth();
-  const appData = useAppData();
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  const [liveFixtures, setLiveFixtures] = useState([]);
-  
-  // ★ FIX: Added Googlebot check to prevent WebSocket errors during indexing
-  useEffect(() => {
-    if (isDemo || isGooglebot) return;
-    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches }) => {
-      setLiveFixtures(matches || []);
-    });
-    return () => unsub();
-  }, [isDemo]);
+  // ★ Enterprise Data Fetching
+  const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
+  const { data: activePredictions = [] } = useActivePredictions(todayStr());
+  const { data: userPoints = null } = useUserPoints(currentUser?.uid);
+  const { data: liveFixtures = [] } = useLiveMatches();
 
   const liveStats = useMemo(() => {
     if (isDemo || !currentUser?.uid) return { pts: 0, ex: 0, rs: 0, mi: 0, pred: 0 };
     const uid = currentUser.uid;
     const today = todayStr();
-    const userPreds = Object.values(appData.userPredictions || {}).filter(p => p.userId === uid && p.matchDate === today);
+    const userPreds = Object.values(userPredictions || {}).filter(p => p.userId === uid && p.matchDate === today);
     
     const matchesMap = new Map();
-    (appData.activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
+    (activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
     liveFixtures.forEach(f => {
       const matchId = String(f.id);
       const existing = matchesMap.get(matchId);
@@ -250,7 +241,7 @@ export default function Profile() {
     });
     
     return { pts, ex, rs, mi, pred };
-  }, [isDemo, currentUser, appData.userPredictions, appData.activePredictions, liveFixtures]);
+  }, [isDemo, currentUser, userPredictions, activePredictions, liveFixtures]);
 
   if (authLoading) return <ProfileSkeleton />;
 
@@ -259,12 +250,14 @@ export default function Profile() {
     points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
   };
 
+  const dbPoints = userPoints || {};
   const profile = {
     ...baseProfile,
-    points: (baseProfile.points || 0) + liveStats.pts,
-    predictions: (baseProfile.predictions || 0) + liveStats.pred,
-    correctScore: (baseProfile.correctScore || 0) + liveStats.ex,
-    correctResult: (baseProfile.correctResult || 0) + liveStats.rs,
+    ...dbPoints,
+    points: (dbPoints.totalPoints || 0) + liveStats.pts,
+    predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
+    correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
+    correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
   };
 
   const exact = getExact(profile);

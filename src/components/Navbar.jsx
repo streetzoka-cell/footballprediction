@@ -1,10 +1,3 @@
-// ═══════════════════════════════════════════════════════════════════════════════════════
-// FILE: src/components/Navbar.jsx
-// ZOKA PRO — Smart Context Sync, Direct Fast Fetch, No Stale Data, Zero Render Jank
-// ★ CLEANED: ProHeader slides in ONLY on Home page. Inner pages are clean.
-// ★ SEO UPGRADE: Wrapped TickerItem and ProHeader in <Link>, fixed image CLS.
-// ═══════════════════════════════════════════════════════════════════════════════════════
-
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -12,41 +5,95 @@ import {
   Clock, Target, ChevronRight, ChevronDown
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useAppData } from '../context/AppDataContext';
-import { fetchFixtures, subscribeToLiveFixtures } from '../utils/api';
+import { useLiveMatches } from '../hooks/useFixtures';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/constants';
-import { todayStr } from '../utils/dates';
+import { todayStr, parseDateAsUTC } from '../utils/dates';
+
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import SEO from '../components/SEO';
 
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const ADMIN_REMEMBER_KEY = 'nv-admin-remembered';
 const APP_LOGO = '/icons/icon-192.png';
 
-/* ═══════════════════════════════════════════════════
-   HELPERS & SVG
-   ═══════════════════════════════════════════════════ */
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
 function normalizeMatch(raw) {
   if (!raw) return null;
   const id = String(raw.id || raw.matchId);
-  const status = raw.status || '';
-  const isLive = raw.isLive || isLiveStatus(status, SPORT.FOOTBALL);
-  const isFinished = raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL);
+  let status = raw.status || '';
   
-  const homeScore = raw.homeScore ?? raw.score?.fullTime?.home ?? null;
-  const awayScore = raw.awayScore ?? raw.score?.fullTime?.away ?? null;
+  const isLive = !!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL);
+  const isFinished = !!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL);
+  
+  const homeScore = raw.homeScore ?? raw.goalsHome ?? raw.score?.fullTime?.home ?? null;
+  const awayScore = raw.awayScore ?? raw.goalsAway ?? raw.score?.fullTime?.away ?? null;
+
+  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, logo: raw.homeTeamLogo, crest: raw.homeTeamLogo };
+  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, logo: raw.awayTeamLogo, crest: raw.awayTeamLogo };
+  const league = raw.league || raw.competition || { name: raw.leagueName };
+
+  let kickoff = 'TBD';
+  let timestamp = 0;
+  const rawDate = raw.utcDate || raw.date;
+  
+  if (rawDate) {
+    try {
+      const d = parseDateAsUTC(rawDate);
+      timestamp = d.getTime();
+      kickoff = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    } catch {}
+  } else if (raw.kickoff) {
+    kickoff = raw.kickoff;
+  }
+
+  // ★ NEW: Smart Status & Local Minute Ticker
+  let displayMinute = raw.minute || raw.elapsed || 0;
+  const now = Date.now();
+  const kickoffTime = timestamp;
+  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
+
+  let smartStatus = status;
+
+  if (kickoffTime > 0) {
+    // If match is scheduled but time has passed
+    if (!isLive && !isFinished && now > kickoffTime) {
+      if (elapsedMins >= 120) { status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 105) { status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 90) { status = 'FT'; smartStatus = 'FT'; } 
+      else if (elapsedMins >= 45 && elapsedMins < 60) { status = 'HT'; smartStatus = 'HT'; }
+      else { status = '1H'; smartStatus = '1H'; }
+    }
+    
+    // If match is already marked live/started by API
+    if (isLive) {
+      if (elapsedMins >= 120) { status = 'FT'; smartStatus = 'FT'; }
+      else if (elapsedMins >= 105) { status = 'FT'; smartStatus = 'FT'; }
+      else if (status === '1H' && elapsedMins >= 45 && elapsedMins < 60) { status = 'HT'; smartStatus = 'HT'; }
+      else if (status === '2H' && elapsedMins >= 90) { status = 'FT'; smartStatus = 'FT'; }
+      else if (status === 'HT' || status === 'HALF_TIME') { smartStatus = 'HT'; }
+      else { smartStatus = status; }
+      
+      if (smartStatus === '1H') displayMinute = raw.minute || Math.min(elapsedMins, 45);
+      if (smartStatus === '2H' || smartStatus === 'ET') {
+        const secondHalfMins = Math.max(0, elapsedMins - 60);
+        displayMinute = raw.minute || Math.min(45 + secondHalfMins, 90);
+      }
+    }
+  }
 
   return {
     id, status, isLive, isFinished,
-    homeTeam: { name: raw.homeTeam?.name || 'TBD', shortName: raw.homeTeam?.shortName || raw.homeTeam?.name || 'TBD', logo: raw.homeTeam?.logo || raw.homeTeam?.crest },
-    awayTeam: { name: raw.awayTeam?.name || 'TBD', shortName: raw.awayTeam?.shortName || raw.awayTeam?.name || 'TBD', logo: raw.awayTeam?.logo || raw.awayTeam?.crest },
+    homeTeam: { name: homeTeam.name || 'TBD', shortName: homeTeam.shortName || homeTeam.name || 'TBD', logo: homeTeam.logo || homeTeam.crest },
+    awayTeam: { name: awayTeam.name || 'TBD', shortName: awayTeam.shortName || awayTeam.name || 'TBD', logo: awayTeam.logo || awayTeam.crest },
     homeScore, awayScore,
-    league: { name: raw.league?.name || raw.competition?.name || 'Other' },
+    league: { name: league.name || 'Other' },
     minute: raw.minute || raw.elapsed || null,
-    kickoff: raw.kickoff || (raw.date ? new Date(raw.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : 'TBD')
+    displayMinute, // ★ NEW
+    kickoff,
+    matchScore: raw.matchScore || 0,
+    category: raw.category || 'NORMAL',
   };
 }
 
@@ -83,9 +130,6 @@ const infoSections = [
   { title: "Legal", links: [["🔒 Privacy Policy", "/privacy"], ["📋 Terms of Service", "/terms"]] },
 ];
 
-/* ═══════════════════════════════════════════════════
-   PRO HEADER COMPONENT (Only shown on Home)
-   ═══════════════════════════════════════════════════ */
 const ProHeader = React.memo(({ matches, liveMatches }) => {
   const featured = useMemo(() => {
     const liveWithScore = liveMatches.find(m => m.isLive && m.homeScore != null && m.awayScore != null);
@@ -105,18 +149,17 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
   const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
-  
   const matchLink = m.id ? `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}` : '/predictions';
 
   return (
-    <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }}>
+    <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }} title={`${homeName} vs ${awayName}`}>
       <div className="nv-pro-tag">
         {featured.isLive && <span className="nv-pro-live-dot" />}
         <span>{m.league?.name || 'Featured Match'}</span>
       </div>
       <div className="nv-pro-teams">
         <div className="nv-pro-team">
-          {homeLogo ? <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit: 'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
+          {homeLogo ? <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
           <span>{homeName}</span>
         </div>
         <div className="nv-pro-score-bar">
@@ -133,23 +176,21 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
           )}
         </div>
         <div className="nv-pro-team nv-pro-team-aw">
-          {awayLogo ? <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit: 'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
+          {awayLogo ? <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
           <span>{awayName}</span>
         </div>
       </div>
-      {featured.isLive && m.minute != null && (
+      {/* ★ NEW: Use displayMinute */}
+      {featured.isLive && m.displayMinute != null && (
         <div className="nv-pro-minute">
           <span className="nv-pro-live-dot" style={{ width: 6, height: 6 }} />
-          <span>{m.minute}'</span>
+          <span>{m.displayMinute}'</span>
         </div>
       )}
     </Link>
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   MEMOIZED TICKER ITEM 
-   ═══════════════════════════════════════════════════ */
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
   const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
@@ -157,11 +198,9 @@ const TickerItem = React.memo(({ m }) => {
   const matchLink = `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}`;
   
   return (
-    <Link to={matchLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', textDecoration: 'none' }}>
+    <Link to={matchLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', textDecoration: 'none' }} title={`${homeName} vs ${awayName}`}>
       <StatusDot status={status} size={7} />
-      <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
-        {homeName}
-      </span>
+      <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>{homeName}</span>
       <span style={{
         background: m.isLive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
         borderRadius: 6, padding: '3px 12px', fontWeight: 900, fontSize: '.8rem', letterSpacing: '0.05em',
@@ -172,28 +211,19 @@ const TickerItem = React.memo(({ m }) => {
       }}>
         {m.homeScore ?? '?'} - {m.awayScore ?? '?'}
       </span>
-      <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>
-        {awayName}
-      </span>
-      {m.isLive && m.minute != null && (
-        <span style={{ fontSize: '.7rem', fontWeight: 800, color: '#10b981', fontFamily: 'ui-monospace, monospace', minWidth: 28, textAlign: 'center' }}>{m.minute}'</span>
+      <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>{awayName}</span>
+      {/* ★ NEW: Use displayMinute */}
+      {m.isLive && m.displayMinute != null && (
+        <span style={{ fontSize: '.7rem', fontWeight: 800, color: '#10b981', fontFamily: 'ui-monospace, monospace', minWidth: 28, textAlign: 'center' }}>{m.displayMinute}'</span>
       )}
     </Link>
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   MEMOIZED NOTIFICATION ITEM
-   ═══════════════════════════════════════════════════ */
 const NotifItem = React.memo(({ n }) => {
   if (n.type === 'admin') {
     return (
-      <div style={{
-        padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
-        borderBottom: '1px solid rgba(255,255,255,0.04)',
-        background: 'rgba(59,130,246,0.05)', borderLeft: '3px solid rgba(59,130,246,0.5)',
-        animation: 'nvNotifSlide 0.3s ease both',
-      }}>
+      <div style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid rgba(255,255,255,0.04)', background: 'rgba(59,130,246,0.05)', borderLeft: '3px solid rgba(59,130,246,0.5)', animation: 'nvNotifSlide 0.3s ease both' }}>
         <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>📣</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: '0.85rem', fontWeight: 800, color: '#fff', marginBottom: 3 }}>{n.title}</div>
@@ -215,17 +245,10 @@ const NotifItem = React.memo(({ n }) => {
   const labelColor = isExact ? '#10b981' : isResult ? '#fbbf24' : '#ef4444';
 
   return (
-    <div key={n.id} style={{
-      padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14,
-      borderBottom: '1px solid rgba(255,255,255,0.04)',
-      background: bgColor, borderLeft: `3px solid ${borderColor}`,
-      animation: 'nvNotifSlide 0.3s ease both',
-    }}>
+    <div key={n.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid rgba(255,255,255,0.04)', background: bgColor, borderLeft: `3px solid ${borderColor}`, animation: 'nvNotifSlide 0.3s ease both' }}>
       <span style={{ fontSize: '1.3rem', flexShrink: 0 }}>{icon}</span>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', marginBottom: 4, textTransform: 'uppercase' }}>
-          {n.homeTeam} vs {n.awayTeam}
-        </div>
+        <div style={{ fontSize: '0.85rem', fontWeight: 700, color: '#fff', marginBottom: 4, textTransform: 'uppercase' }}>{n.homeTeam} vs {n.awayTeam}</div>
         <div style={{ fontSize: '0.72rem', color: '#94a3b8', display: 'flex', alignItems: 'center', gap: 10 }}>
           <span>Pred: <span style={{ color: '#fff', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{n.predScore}</span></span>
           <span>Act: <span style={{ color: '#fff', fontWeight: 700, fontFamily: 'ui-monospace, monospace' }}>{n.actualScore}</span></span>
@@ -233,18 +256,13 @@ const NotifItem = React.memo(({ n }) => {
       </div>
       <div style={{ textAlign: 'right', flexShrink: 0 }}>
         <div style={{ fontSize: '0.55rem', fontWeight: 900, color: labelColor, letterSpacing: '0.1em', marginBottom: 4, textTransform: 'uppercase' }}>{label}</div>
-        {n.points > 0 && (
-          <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: 'nvPointsCount 0.4s ease both' }}>+{n.points}</div>
-        )}
+        {n.points > 0 && <div style={{ fontSize: '0.95rem', fontWeight: 900, color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: 'nvPointsCount 0.4s ease both' }}>+{n.points}</div>}
         <div style={{ fontSize: '0.6rem', color: '#64748b', marginTop: 2, fontFamily: 'ui-monospace, monospace' }}>{timeAgo(n.time)}</div>
       </div>
     </div>
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   MAIN COMPONENT
-   ═══════════════════════════════════════════════════ */
 export default function Navbar() {
   const { currentUser, userProfile, signOut } = useAuth();
   const location = useLocation();
@@ -252,7 +270,10 @@ export default function Navbar() {
   const uid = currentUser?.uid;
   const isLoggedIn = !!uid;
 
-  const appData = useAppData();
+  const { data: rawLive = [] } = useLiveMatches();
+  const { data: activePreds = [] } = useActivePredictions(todayStr());
+  const { data: userPredsObj = {} } = useUserPredictions(uid, todayStr());
+  const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
@@ -268,9 +289,9 @@ export default function Navbar() {
   });
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  // Direct fast state for matches to bypass FootballDataContext stale cache
-  const [bannerMatches, setBannerMatches] = useState([]);
-  const [liveMatches, setLiveMatches] = useState([]);
+  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m)).filter(Boolean).filter(m => m.homeTeam?.name !== 'TBD' && m.awayTeam?.name !== 'TBD'), [rawLive]);
+  const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
+  const dailyEntries = dailyLB?.entries || [];
 
   useEffect(() => {
     if (!isLoggedIn) {
@@ -299,15 +320,10 @@ export default function Navbar() {
   const isHome = location.pathname === '/';
   const isActive = useCallback((p) => location.pathname === p, [location.pathname]);
 
-  const activePreds = appData.activePredictions || [];
-  const allPreds = useMemo(() => Object.values(appData.userPredictions || {}), [appData.userPredictions]);
-  const dailyEntries = appData.dailyLeaderboard?.entries || [];
-
   const scoreMap = useMemo(() => {
     const m = new Map();
     activePreds.forEach(p => {
-      if (p.status === 'finished' && p.homeScore != null)
-        m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore, homeTeam: p.homeTeam, awayTeam: p.awayTeam });
+      if (p.status === 'finished' && p.homeScore != null) m.set(String(p.matchId), { h: p.homeScore, a: p.awayScore, homeTeam: p.homeTeam, awayTeam: p.awayTeam });
     });
     return m;
   }, [activePreds]);
@@ -353,21 +369,14 @@ export default function Navbar() {
 
   const predNotifs = useMemo(() => {
     const combined = [];
-    adminNotifs.forEach(n => {
-      combined.push({ id: n.id, type: 'admin', title: n.title, body: n.body, time: n.createdAt?.toMillis?.() || 0 });
-    });
+    adminNotifs.forEach(n => combined.push({ id: n.id, type: 'admin', title: n.title, body: n.body, time: n.createdAt?.toMillis?.() || 0 }));
     if (uid) {
       Object.values(userPredMap).forEach(p => {
         const actual = scoreMap.get(String(p.matchId));
         if (!actual) return;
         const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
         if (r.type === 'pending') return;
-        combined.push({
-          id: `pred-${p.predId}`, type: r.type, points: r.points,
-          homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away',
-          predScore: `${p.homeScore}-${p.awayScore}`, actualScore: `${actual.h}-${actual.a}`,
-          time: p.updatedAt?.toMillis?.() || p.createdAt?.toMillis?.() || 0,
-        });
+        combined.push({ id: `pred-${p.predId}`, type: r.type, points: r.points, homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away', predScore: `${p.homeScore}-${p.awayScore}`, actualScore: `${actual.h}-${actual.a}`, time: p.updatedAt?.toMillis?.() || p.createdAt?.toMillis?.() || 0 });
       });
     }
     return combined.sort((a, b) => b.time - a.time);
@@ -376,68 +385,19 @@ export default function Navbar() {
   const notifCount = useMemo(() => predNotifs.filter(n => !seenNotifIds.has(n.id)).length, [predNotifs, seenNotifIds]);
 
   const tickerMatches = useMemo(() => {
-    if (bannerMatches.length === 0) return [];
-    const live = bannerMatches.filter(m => m.isLive);
-    const finished = bannerMatches.filter(m => m.isFinished && !m.isLive).slice(0, 5);
-    const upcoming = bannerMatches.filter(m => !m.isLive && !m.isFinished).slice(0, 5);
+    if (liveMatches.length === 0) return [];
+    const live = liveMatches.filter(m => m.isLive);
+    const finished = liveMatches.filter(m => m.isFinished && !m.isLive).slice(0, 5);
+    const upcoming = liveMatches.filter(m => !m.isLive && !m.isFinished).slice(0, 5);
     return [...live, ...finished, ...upcoming];
-  }, [bannerMatches]);
+  }, [liveMatches]);
 
-  /* ═══ EFFECTS ═══ */
-  // Direct fetch and subscribe to live fixtures
-  useEffect(() => {
-    let mnt = true;
-    (async () => {
-      try {
-        const res = await fetchFixtures(todayStr());
-        if (mnt && res) {
-          const l = Array.isArray(res) ? res : res?.matches || [];
-          setBannerMatches(l.map(m => normalizeMatch(m)).filter(Boolean));
-        }
-      } catch { /* silent */ }
-    })();
-
-    const unsub = subscribeToLiveFixtures(todayStr(), ({ matches: lm }) => {
-      if (!mnt || !lm) return;
-      setLiveMatches(lm);
-      
-      setBannerMatches(prev => {
-        let changed = false;
-        const next = prev.map(f => {
-          if (f.isFinished) return f; // Sticky FT Shield
-
-          const live = lm.find(m => String(m.id) === String(f.id));
-          if (!live) return f;
-
-          const liveNorm = normalizeMatch(live);
-          
-          if (liveNorm.isFinished) {
-            changed = true;
-            return { ...f, homeScore: liveNorm.homeScore, awayScore: liveNorm.awayScore, isLive: false, isFinished: true, status: liveNorm.status };
-          }
-
-          if (f.homeScore !== live.homeScore || f.awayScore !== live.awayScore || f.isLive !== true || f.minute !== live.minute || f.status !== live.status) {
-            changed = true;
-            return { ...f, homeScore: live.homeScore ?? f.homeScore, awayScore: live.awayScore ?? f.awayScore, isLive: true, isFinished: false, status: live.status || f.status, minute: live.minute ?? f.minute };
-          }
-          
-          return f;
-        });
-        return changed ? next : prev;
-      });
-    });
-
-    return () => { mnt = false; if (unsub) unsub(); };
-  }, []);
-
-  // Only fetch Admin Notifications directly
   useEffect(() => {
     if (!db) { setAdminNotifs([]); return; }
     const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
     const unsub = onSnapshot(q, (snap) => {
       const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      
       setAdminNotifs(prev => {
         if (prev.length !== notifs.length) return notifs;
         if (prev[0]?.id !== notifs[0]?.id || prev[0]?.body !== notifs[0]?.body) return notifs;
@@ -447,7 +407,6 @@ export default function Navbar() {
     return () => unsub();
   }, [db, uid]);
 
-  // Scroll listener with strict bail-out
   useEffect(() => {
     const fn = () => {
       if (!rafRef.current) { 
@@ -467,36 +426,20 @@ export default function Navbar() {
   useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setInfoOpen(false); }, [location.pathname]);
 
   useEffect(() => {
-    if (mobileOpen) {
-      document.body.style.overflow = 'hidden';
-      document.body.style.position = 'fixed';
-      document.body.style.width = '100%';
-    } else {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-    }
-    return () => {
-      document.body.style.overflow = '';
-      document.body.style.position = '';
-      document.body.style.width = '';
-    };
+    if (mobileOpen) { document.body.style.overflow = 'hidden'; document.body.style.position = 'fixed'; document.body.style.width = '100%'; } 
+    else { document.body.style.overflow = ''; document.body.style.position = ''; document.body.style.width = ''; }
+    return () => { document.body.style.overflow = ''; document.body.style.position = ''; document.body.style.width = ''; };
   }, [mobileOpen]);
 
   useEffect(() => {
     const fn = (e) => {
       if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) {
-        setNotifOpen(false);
-      }
+      if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
     };
     document.addEventListener('keydown', fn);
     document.addEventListener('mousedown', fn);
-    return () => {
-      document.removeEventListener('keydown', fn);
-      document.removeEventListener('mousedown', fn);
-    };
+    return () => { document.removeEventListener('keydown', fn); document.removeEventListener('mousedown', fn); };
   }, []);
 
   useEffect(() => {
@@ -509,7 +452,6 @@ export default function Navbar() {
     }
   }, [notifOpen, predNotifs]);
 
-  /* ═══ HANDLERS ═══ */
   const handleLogout = useCallback(async () => {
     setMobileOpen(false);
     try { localStorage.removeItem(ADMIN_REMEMBER_KEY); } catch {}
@@ -526,46 +468,22 @@ export default function Navbar() {
     }
   }, [searchQuery, navigate]);
 
-  const handleMobileNav = useCallback((to) => { 
-    setMobileOpen(false); 
-    setTimeout(() => navigate(to), 250);
-  }, [navigate]);
+  const handleMobileNav = useCallback((to) => { setMobileOpen(false); setTimeout(() => navigate(to), 250); }, [navigate]);
 
-  /* ═══ DERIVED MEMOS FOR RENDER ═══ */
-  const tickerContent = useMemo(() => {
-    return tickerMatches.length > 0 ? tickerMatches.map((m) => <TickerItem key={`t-${m.id}`} m={m} />) : null;
-  }, [tickerMatches]);
-
+  const tickerContent = useMemo(() => tickerMatches.length > 0 ? tickerMatches.map((m) => <TickerItem key={`t-${m.id}`} m={m} />) : null, [tickerMatches]);
   const hasLive = useMemo(() => tickerMatches.some(m => m.isLive), [tickerMatches]);
 
   const renderNotifDropdown = useCallback(() => (
-    <div style={{
-      position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)',
-      background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)',
-      borderRadius: 16, overflow: 'hidden',
-      boxShadow: '0 20px 60px rgba(0,0,0,0.6)',
-      animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both',
-      backdropFilter: 'blur(20px)'
-    }}>
-      <div style={{
-        padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)',
-        display: 'flex', alignItems: 'center', justifyConent: 'space-between',
-        background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)',
-      }}>
-        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <Bell size={16} style={{ color: '#10b981' }} /> Notifications
-        </span>
-        {predNotifs.length > 0 && (
-          <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(16,185,129,0.2)' }}>{predNotifs.length} New</span>
-        )}
+    <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)', background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both', backdropFilter: 'blur(20px)' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyConent: 'space-between', background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)' }}>
+        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}><Bell size={16} style={{ color: '#10b981' }} /> Notifications</span>
+        {predNotifs.length > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(16,185,129,0.2)' }}>{predNotifs.length} New</span>}
       </div>
       {predNotifs.length === 0 ? (
         <div style={{ padding: '40px 24px', textAlign: 'center' }}>
-          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <Target size={28} style={{ color: '#4a5568', opacity: 0.5 }} />
-          </div>
+          <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.03)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 16px', border: '1px solid rgba(255,255,255,0.05)' }}><Target size={28} style={{ color: '#4a5568', opacity: 0.5 }} /></div>
           <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#94a3b8', marginBottom: 4 }}>No results yet</div>
-          <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5}}>Make predictions and check back<br />after matches end</div>
+          <div style={{ fontSize: '0.8rem', color: '#64748b', lineHeight: 1.5 }}>Make predictions and check back<br />after matches end</div>
         </div>
       ) : (
         <div style={{ maxHeight: 400, overflowY: 'auto' }} className="nv-mob-scroll">
@@ -575,78 +493,35 @@ export default function Navbar() {
     </div>
   ), [predNotifs]);
 
-    return (
+  return (
     <>
-      
-      {/* ★ NEW: ProHeader only renders on Home with slide animation */}
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
-        <ProHeader matches={bannerMatches} liveMatches={liveMatches} />
+        <ProHeader matches={liveMatches} liveMatches={liveMatches} />
       </div>
 
-      <div style={{
-        position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden',
-        display: 'flex', alignItems: 'center',
-        background: 'linear-gradient(180deg, #000000 0%, #05070a 100%)',
-        borderBottom: '1px solid rgba(16,185,129,0.1)',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
-      }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden', display: 'flex', alignItems: 'center', background: 'linear-gradient(180deg, #000000 0%, #05070a 100%)', borderBottom: '1px solid rgba(16,185,129,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(90deg, rgba(0,0,0,0.8) 0%, transparent 10%, transparent 90%, rgba(0,0,0,0.8) 100%)' }} />
         {hasLive && (
-          <div style={{
-            position: 'absolute', left: 12, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6,
-            background: 'linear-gradient(135deg, #dc2626, #ef4444)', borderRadius: 8, padding: '4px 14px',
-            fontSize: '0.65rem', fontWeight: 900, color: 'white', letterSpacing: '0.15em', textTransform: 'uppercase',
-            boxShadow: '0 0 20px rgba(239,68,68,0.6)', animation: 'nvPulseGreen 2s ease-in-out infinite',
-          }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', animation: 'nvLiveDot 1.2s ease-in-out infinite', boxShadow: '0 0 8px rgba(255,255,255,0.9)' }} />
-            LIVE
+          <div style={{ position: 'absolute', left: 12, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #dc2626, #ef4444)', borderRadius: 8, padding: '4px 14px', fontSize: '0.65rem', fontWeight: 900, color: 'white', letterSpacing: '0.15em', textTransform: 'uppercase', boxShadow: '0 0 20px rgba(239,68,68,0.6)', animation: 'nvPulseGreen 2s ease-in-out infinite' }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#fff', animation: 'nvLiveDot 1.2s ease-in-out infinite', boxShadow: '0 0 8px rgba(255,255,255,0.9)' }} /> LIVE
           </div>
         )}
         {tickerContent ? (
-          <div style={{
-            flex: 1, overflow: 'hidden', marginLeft: hasLive ? 90 : 16, marginRight: 16,
-            maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)',
-            WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)',
-          }}>
-            <div style={{ 
-              display: 'inline-flex', 
-              alignItems: 'center', 
-              gap: 30, 
-              animation: 'nvMarquee 240s linear infinite', 
-              color: 'rgba(255,255,255,0.92)',
-              willChange: 'transform',
-              backfaceVisibility: 'hidden',
-              WebkitFontSmoothing: 'antialiased'
-            }}>
-              {tickerContent}
-              <span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
-              {tickerContent}
-              <span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
+          <div style={{ flex: 1, overflow: 'hidden', marginLeft: hasLive ? 90 : 16, marginRight: 16, maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)' }}>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, animation: 'nvMarquee 240s linear infinite', color: 'rgba(255,255,255,0.92)', willChange: 'transform', backfaceVisibility: 'hidden', WebkitFontSmoothing: 'antialiased' }}>
+              {tickerContent}<span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
+              {tickerContent}<span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
             </div>
           </div>
         ) : (
-          <div style={{ flex: 1, textAlign: 'center', fontSize: '.85rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '.05em', textTransform: 'uppercase' }}>
-            ⚽ zokascore.xyz — Live football scores & predictions
-          </div>
+          <div style={{ flex: 1, textAlign: 'center', fontSize: '.85rem', fontWeight: 700, color: 'rgba(255,255,255,0.4)', letterSpacing: '.05em', textTransform: 'uppercase' }}>⚽ zokascore.xyz — Live football scores & predictions</div>
         )}
       </div>
 
-      <nav className="nv-main-nav" style={{
-        position: 'sticky', top: 42, zIndex: 1000, height: 68,
-        background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)',
-        backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none',
-        WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none',
-        borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`,
-        boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none',
-        transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)',
-        willChange: 'background, backdrop-filter, box-shadow',
-      }}>
+      <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', alignItems: 'center', gap: 12 }}>
-          
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center' }}>
-            <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home">
-              <Home size={16} strokeWidth={2.5} /> Home
-            </Link>
+            <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home"><Home size={16} strokeWidth={2.5} /> Home</Link>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
@@ -662,29 +537,13 @@ export default function Navbar() {
           </div>
 
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, justifyContent: 'flex-end' }}>
-            
             <div ref={searchRef} style={{ position: 'relative' }}>
-              <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search">
-                <Search size={18} strokeWidth={2.5} />
-              </button>
+              <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
               {searchOpen && (
-                <form onSubmit={handleSearch} style={{
-                  position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300,
-                  background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)',
-                  borderRadius: 12, overflow: 'hidden',
-                  boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)',
-                  animation: 'nvFadeUp 0.2s ease both',
-                  display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46,
-                  backdropFilter: 'blur(20px)'
-                }}>
+                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }}>
                   <Search size={16} style={{ color: '#10b981', flexShrink: 0 }} />
-                  <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{
-                    flex: 1, background: 'none', border: 'none', outline: 'none',
-                    color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0,
-                  }} />
-                  {searchQuery && (
-                    <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>
-                  )}
+                  <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0 }} />
+                  {searchQuery && <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>}
                 </form>
               )}
             </div>
@@ -693,17 +552,7 @@ export default function Navbar() {
               <div ref={notifRef} style={{ position: 'relative' }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
                   <Bell size={18} strokeWidth={2.5} />
-                  {notifCount > 0 && (
-                    <span style={{
-                      position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px',
-                      background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white',
-                      fontSize: '0.55rem', fontWeight: 900,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      border: '2px solid #05070a',
-                      boxShadow: '0 0 12px rgba(239,68,68,0.6)',
-                      animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
-                    }}>{notifCount > 9 ? '9+' : notifCount}</span>
-                  )}
+                  {notifCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a', boxShadow: '0 0 12px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
                 </button>
                 {notifOpen && renderNotifDropdown()}
               </div>
@@ -714,9 +563,7 @@ export default function Navbar() {
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
                 <span style={{ fontWeight: 900, fontSize: '0.9rem', color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: pointsHover ? 'nvPointsCount 0.4s ease both' : 'none' }}>{userStats.points.toLocaleString()}</span>
                 <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '3px 8px', borderRadius: 4, opacity: 0.8, letterSpacing: '0.05em' }}>PTS</span>
-                {streak > 0 && (
-                  <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#f97316', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 4, opacity: pointsHover ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>🔥{streak}</span>
-                )}
+                {streak > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#f97316', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 4, opacity: pointsHover ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>🔥{streak}</span>}
               </div>
             )}
 
@@ -725,102 +572,55 @@ export default function Navbar() {
                 const active = isActive(link.to);
                 return (
                   <Link key={link.to} to={link.to} className={`nv-nav-link ${active ? 'active' : ''}`}>
-                    <span style={{ fontSize: '0.8rem', opacity: active ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>{link.emoji}</span>
-                    {link.label}
-                    {link.isLive && (
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                        <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} />
-                        <span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#ef4444', letterSpacing: '0.1em' }}>LIVE</span>
-                      </span>
-                    )}
-                    {link.badge && (
-                      <span style={{ fontSize: '0.45rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '2px 6px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>
-                    )}
+                    <span style={{ fontSize: '0.8rem', opacity: active ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>{link.emoji}</span>{link.label}
+                    {link.isLive && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} /><span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#ef4444', letterSpacing: '0.1em' }}>LIVE</span></span>}
+                    {link.badge && <span style={{ fontSize: '0.45rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '2px 6px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>}
                   </Link>
                 );
               })}
-
               {isLoggedIn ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
-                  {isAdmin && (
-                    <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin">
-                      <Shield size={18} strokeWidth={2.5} />
-                    </Link>
-                  )}
-                  <Link to="/profile" className={`nv-action-btn ${isActive('/profile') ? 'active' : ''}`} title="Profile">
-                    <User size={18} strokeWidth={2.5} />
-                  </Link>
+                  {isAdmin && <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin"><Shield size={18} strokeWidth={2.5} /></Link>}
+                  <Link to="/profile" className={`nv-action-btn ${isActive('/profile') ? 'active' : ''}`} title="Profile"><User size={18} strokeWidth={2.5} /></Link>
                 </div>
               ) : (
-                <Link to="/login" className="nv-auth-btn" title="Sign In" style={{ marginLeft: 10 }}>
-                  <Zap size={16} strokeWidth={2.5} /> Sign In
-                </Link>
+                <Link to="/login" className="nv-auth-btn" title="Sign In" style={{ marginLeft: 10 }}><Zap size={16} strokeWidth={2.5} /> Sign In</Link>
               )}
             </div>
           </div>
 
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
-            <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home">
-              <Home size={18} strokeWidth={2.5} />
-            </Link>
-            {isLoggedIn && isAdmin && (
-              <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}>
-                <Shield size={18} strokeWidth={2.5} />
-              </Link>
-            )}
+            <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
+            {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
             {isLoggedIn && (
               <div ref={mobNotifRef} style={{ position: 'relative' }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ color: notifCount > 0 ? '#ef4444' : '#64748b', borderColor: notifCount > 0 ? 'rgba(239,68,68,0.2)' : 'transparent', background: notifCount > 0 ? 'rgba(239,68,68,0.1)' : 'transparent', animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
                   <Bell size={18} strokeWidth={2.5} />
-                  {notifCount > 0 && (
-                    <span style={{
-                      position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px',
-                      background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a',
-                      boxShadow: '0 0 10px rgba(239,68,68,0.6)',
-                      animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both',
-                    }}>{notifCount > 9 ? '9+' : notifCount}</span>
-                  )}
+                  {notifCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a', boxShadow: '0 0 10px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
                 </button>
                 {notifOpen && renderNotifDropdown()}
               </div>
             )}
-            <button onClick={() => setMobileOpen(true)} className="nv-action-btn" aria-label="Open menu">
-              <Menu size={24} strokeWidth={2.5} />
-            </button>
+            <button onClick={() => setMobileOpen(true)} className="nv-action-btn" aria-label="Open menu"><Menu size={24} strokeWidth={2.5} /></button>
           </div>
         </div>
       </nav>
 
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
       <div className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
-        
-        <div className="nv-mob-header" style={{
-          padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          borderBottom: '1px solid rgba(16,185,129,0.1)', position: 'sticky', top: 0, zIndex: 3,
-          background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)'
-        }}>
+        <div className="nv-mob-header" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(16,185,129,0.1)', position: 'sticky', top: 0, zIndex: 3, background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', overflow: 'hidden' }}>
             <img src={APP_LOGO} alt="ZokaScore" width="36" height="36" style={{ borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px rgba(16,185,129,0.3)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
             <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fff', letterSpacing: '0.02em' }}>ZOKA<span style={{ color: '#10b981' }}>SCORE</span></span>
           </div>
-          <button onClick={() => setMobileOpen(false)} className="nv-action-btn" style={{ width: '36px', height: '36px' }}>
-            <X size={20} strokeWidth={2.5} />
-          </button>
+          <button onClick={() => setMobileOpen(false)} className="nv-action-btn" style={{ width: '36px', height: '36px' }}><X size={20} strokeWidth={2.5} /></button>
         </div>
 
         <div className="nv-mob-scroll">
           {isLoggedIn && userProfile && (
             <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, rgba(16,185,129,0.05) 0%, transparent 100%)', animation: 'nvMobUserIn 0.45s ease 0.08s both' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-                <div style={{
-                  width: 52, height: 52, borderRadius: 14, flexShrink: 0,
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 40%, #047857 100%)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: '1.3rem', fontWeight: 900, color: '#05070a',
-                  boxShadow: '0 4px 20px rgba(16,185,129,0.3), inset 0 1px 0 rgba(255,255,255,0.2)',
-                  position: 'relative', overflow: 'hidden',
-                }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, background: 'linear-gradient(135deg, #10b981 0%, #059669 40%, #047857 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 900, color: '#05070a', boxShadow: '0 4px 20px rgba(16,185,129,0.3), inset 0 1px 0 rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden' }}>
                   {(userProfile.displayName || userProfile.username || 'U')[0].toUpperCase()}
                   <div style={{ position: 'absolute', top: 0, left: '-100%', width: '60%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)', animation: 'nvShine 4s ease-in-out 1s infinite' }} />
                 </div>
@@ -836,12 +636,7 @@ export default function Navbar() {
                   { label: 'Rank', value: userRank ? `#${userRank}` : '—', color: '#a855f7', icon: '🏆' },
                   { label: 'Streak', value: streak > 0 ? `${streak}🔥` : '—', color: '#f97316', icon: '🔥' },
                 ].map((s, i) => (
-                  <div key={s.label} style={{
-                    textAlign: 'center', padding: '12px 4px', borderRadius: 12,
-                    background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)',
-                    animation: `nvMobStatPop 0.4s cubic-bezier(0.34,1.56,0.64,1) ${0.15 + i * 0.07}s both`,
-                    transition: 'all 0.2s ease',
-                  }}>
+                  <div key={s.label} style={{ textAlign: 'center', padding: '12px 4px', borderRadius: 12, background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', animation: `nvMobStatPop 0.4s cubic-bezier(0.34,1.56,0.64,1) ${0.15 + i * 0.07}s both`, transition: 'all 0.2s ease' }}>
                     <div style={{ fontSize: '1.1rem', marginBottom: 4 }}>{s.icon}</div>
                     <div style={{ fontSize: '0.9rem', fontWeight: 900, color: s.color, fontFamily: 'ui-monospace, monospace', lineHeight: 1.2 }}>{s.value}</div>
                     <div style={{ fontSize: '0.55rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', marginTop: 4 }}>{s.label}</div>
@@ -855,23 +650,11 @@ export default function Navbar() {
             {LINKS.map((link, i) => {
               const active = isActive(link.to);
               return (
-                <button
-                  key={link.to}
-                  onClick={() => handleMobileNav(link.to)}
-                  className={`nv-mob-link ${active ? 'active' : ''}`}
-                  style={{ animation: `nvMobItemIn 0.35s ease ${0.04 + i * 0.04}s both`, marginBottom: '4px' }}
-                >
+                <button key={link.to} onClick={() => handleMobileNav(link.to)} className={`nv-mob-link ${active ? 'active' : ''}`} style={{ animation: `nvMobItemIn 0.35s ease ${0.04 + i * 0.04}s both`, marginBottom: '4px' }}>
                   <span style={{ fontSize: '1.1rem', width: 28, textAlign: 'center', flexShrink: 0 }}>{link.emoji}</span>
                   <span style={{ flex: 1 }}>{link.label}</span>
-                  {link.isLive && (
-                    <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.6rem', fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                      <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} />
-                      LIVE
-                    </span>
-                  )}
-                  {link.badge && (
-                    <span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '3px 8px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>
-                  )}
+                  {link.isLive && <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.6rem', fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.1em' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} /> LIVE</span>}
+                  {link.badge && <span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '3px 8px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>}
                   <ChevronRight size={16} style={{ opacity: 0.3 }} />
                 </button>
               );
@@ -880,66 +663,30 @@ export default function Navbar() {
             {isLoggedIn ? (
               <>
                 <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', margin: '14px 0' }} />
-                {isAdmin && (
-                  <button onClick={() => handleMobileNav(ADMIN_PATH)} className="nv-mob-link" style={{ color: '#fbbf24' }}>
-                    <Shield size={20} /> <span style={{ flex: 1 }}>Admin Panel</span> <ChevronRight size={16} style={{ opacity: 0.3 }} />
-                  </button>
-                )}
-                <button onClick={() => handleMobileNav('/profile')} className="nv-mob-link">
-                  <User size={20} /> <span style={{ flex: 1 }}>Profile</span> <ChevronRight size={16} style={{ opacity: 0.3 }} />
-                </button>
-                <button onClick={handleLogout} className="nv-mob-link" style={{ background: 'rgba(239,68,68,0.05)', color: '#ef4444', fontWeight: 700 }}>
-                  <LogOut size={20} /> <span style={{ flex: 1 }}>Sign Out</span>
-                </button>
+                {isAdmin && <button onClick={() => handleMobileNav(ADMIN_PATH)} className="nv-mob-link" style={{ color: '#fbbf24' }}><Shield size={20} /> <span style={{ flex: 1 }}>Admin Panel</span> <ChevronRight size={16} style={{ opacity: 0.3 }} /></button>}
+                <button onClick={() => handleMobileNav('/profile')} className="nv-mob-link"><User size={20} /> <span style={{ flex: 1 }}>Profile</span> <ChevronRight size={16} style={{ opacity: 0.3 }} /></button>
+                <button onClick={handleLogout} className="nv-mob-link" style={{ background: 'rgba(239,68,68,0.05)', color: '#ef4444', fontWeight: 700 }}><LogOut size={20} /> <span style={{ flex: 1 }}>Sign Out</span></button>
               </>
             ) : (
               <>
                 <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.08), transparent)', margin: '14px 0' }} />
-                <button onClick={() => handleMobileNav('/login')} className="nv-auth-btn" style={{ width: '100%', padding: '16px', fontSize: '0.9rem' }}>
-                  <Zap size={18} strokeWidth={2.5} /> Sign In Now
-                </button>
+                <button onClick={() => handleMobileNav('/login')} className="nv-auth-btn" style={{ width: '100%', padding: '16px', fontSize: '0.9rem' }}><Zap size={18} strokeWidth={2.5} /> Sign In Now</button>
               </>
             )}
 
             <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.1), transparent)', margin: '18px 0' }} />
-
-            <button
-              onClick={() => setInfoOpen(p => !p)}
-              className="nv-mob-link"
-              style={{
-                border: `1px solid ${infoOpen ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'}`,
-                background: infoOpen ? 'rgba(16,185,129,0.05)' : 'transparent',
-                color: infoOpen ? '#10b981' : '#64748b',
-              }}
-            >
+            <button onClick={() => setInfoOpen(p => !p)} className="nv-mob-link" style={{ border: `1px solid ${infoOpen ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'}`, background: infoOpen ? 'rgba(16,185,129,0.05)' : 'transparent', color: infoOpen ? '#10b981' : '#64748b' }}>
               <span style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: infoOpen ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)', fontSize: '0.95rem' }}>ℹ️</span>
               <span style={{ flex: 1 }}>About, Help & Legal</span>
               <ChevronDown size={18} style={{ opacity: 0.5, transition: 'transform 0.35s cubic-bezier(0.22,1,0.36,1)', transform: infoOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>
-
-            <div style={{
-              maxHeight: infoOpen ? '500px' : '0', overflow: 'hidden',
-              transition: 'max-height 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.35s ease, padding 0.35s ease',
-              opacity: infoOpen ? 1 : 0, paddingLeft: 8, paddingRight: 8,
-              paddingTop: infoOpen ? 12 : 0, paddingBottom: infoOpen ? 8 : 0,
-            }}>
+            <div style={{ maxHeight: infoOpen ? '500px' : '0', overflow: 'hidden', transition: 'max-height 0.45s cubic-bezier(0.22,1,0.36,1), opacity 0.35s ease, padding 0.35s ease', opacity: infoOpen ? 1 : 0, paddingLeft: 8, paddingRight: 8, paddingTop: infoOpen ? 12 : 0, paddingBottom: infoOpen ? 8 : 0 }}>
               <div style={{ animation: infoOpen ? 'nvInfoExpand 0.35s ease 0.1s both' : 'none' }}>
                 {infoSections.map((sec, si) => (
                   <div key={sec.title} style={{ marginBottom: si < infoSections.length - 1 ? 16 : 0 }}>
-                    <div style={{ fontWeight: 800, color: '#64748b', marginBottom: 8, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.12em', paddingLeft: 12 }}>
-                      {sec.title}
-                    </div>
+                    <div style={{ fontWeight: 800, color: '#64748b', marginBottom: 8, fontSize: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.12em', paddingLeft: 12 }}>{sec.title}</div>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      {sec.links.map(([label, to], li) => (
-                        <button
-                          key={to}
-                          onClick={() => handleMobileNav(to)}
-                          className="nv-mob-link"
-                          style={{ fontSize: '0.9rem', padding: '10px 14px' }}
-                        >
-                          {label}
-                        </button>
-                      ))}
+                      {sec.links.map(([label, to], li) => <button key={to} onClick={() => handleMobileNav(to)} className="nv-mob-link" style={{ fontSize: '0.9rem', padding: '10px 14px' }}>{label}</button>)}
                     </div>
                   </div>
                 ))}

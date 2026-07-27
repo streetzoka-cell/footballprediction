@@ -1,17 +1,12 @@
 const { getDb } = require("../config/firebase");
 const logger = require("../utils/logger");
 
-// Top tier league IDs from API-Football to prioritize when truncating
-const PRIORITY_LEAGUE_IDS = new Set([1, 2, 3, 4, 5, 848, 39, 140, 135, 78, 61, 40, 94, 88, 253]);
-
 /**
  * Strip a match to essential fields for snapshots.
- * ★ FIX: Omit null/undefined/empty values to prevent exceeding Firestore's 1MB document limit.
  */
 function stripMatch(m) {
   if (!m) return null;
   
-  // Base object with mandatory fields
   const stripped = {
     id: m.id,
     date: m.date,
@@ -30,9 +25,10 @@ function stripMatch(m) {
     goalsHome: m.goalsHome,
     goalsAway: m.goalsAway,
     sport: m.sport || "football",
+    matchScore: m.matchScore || 0,       // NEW: Pass score to frontend
+    category: m.category || 'NORMAL',    // NEW: Pass category to frontend
   };
 
-  // Only add optional fields if they have valid values to save space
   if (m.statusLong) stripped.statusLong = m.statusLong;
   if (m.leagueCountry) stripped.leagueCountry = m.leagueCountry;
   if (m.leagueFlag) stripped.leagueFlag = m.leagueFlag;
@@ -52,44 +48,28 @@ function stripMatch(m) {
 }
 
 /**
- * ★ FIX: Process matches to strip empty fields, and truncate if exceeding Firestore limits.
- * Firestore max document size is 1MB (~1,048,576 bytes). 650 matches safely fits this limit.
+ * Process matches to strip empty fields, and truncate if exceeding Firestore limits.
  */
 function processMatches(matches, limit = 650) {
   if (!matches || matches.length === 0) return [];
   
   let processed = matches.map(stripMatch).filter(Boolean);
   
-  // If we are well under the limit, return as is
   if (processed.length <= limit) return processed;
   
-  logger.warn(`[Snapshot] Match count (${processed.length}) exceeds safe limit (${limit}). Truncating obscure leagues...`);
+  logger.warn(`[Snapshot] Match count (${processed.length}) exceeds safe limit (${limit}). Truncating by matchScore...`);
   
-  // 1. Keep priority leagues (Premier League, La Liga, Serie A, etc.)
-  let priorityMatches = processed.filter(m => PRIORITY_LEAGUE_IDS.has(Number(m.leagueId)));
+  // Sort by matchScore descending to keep the most important matches
+  processed.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
   
-  // 2. If priority leagues are too many, slice them
-  if (priorityMatches.length > limit) {
-    return priorityMatches.slice(0, limit);
-  }
-  
-  // 3. If we still need more to reach the limit, add non-priority matches
-  const remaining = limit - priorityMatches.length;
-  if (remaining > 0) {
-    const nonPriorityMatches = processed.filter(m => !PRIORITY_LEAGUE_IDS.has(Number(m.leagueId)));
-    priorityMatches = priorityMatches.concat(nonPriorityMatches.slice(0, remaining));
-  }
-  
-  return priorityMatches;
+  return processed.slice(0, limit);
 }
 
 class SnapshotWriter {
   async writeFootballSnapshot(dateStr, data) {
     const payload = { sport: "football" };
     
-    // ★ Cap scheduled matches to 650 to avoid Firestore 1MB limit
     if (data.matches) payload.matches = processMatches(data.matches, 650);
-    // Live and finished arrays rarely exceed limits, but we cap them just to be safe
     if (data.live) payload.live = processMatches(data.live, 100);
     if (data.finished) payload.finished = processMatches(data.finished, 400);
     

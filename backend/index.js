@@ -1,12 +1,11 @@
 const express = require("express");
-
 const { initializeFirebase, getDb } = require("./config/firebase");
 const { getRemainingRequests } = require("./config/api");
 const {
   getBasketballRemainingRequests,
   isBasketballConfigured,
 } = require("./config/basketballApi");
-const { COLLECTIONS, getDateOffset } = require("./config/constants"); // Added getDateOffset
+const { COLLECTIONS, getDateOffset } = require("./config/constants");
 const env = require("./config/env");
 const logger = require("./utils/logger");
 const cache = require("./utils/cache");
@@ -30,17 +29,17 @@ const StandingsService = require("./services/standings");
 const LeaguesService = require("./services/leagues");
 const BasketballDailyFixturesService = require("./services/basketballDailyFixtures");
 const BasketballLiveFixturesService = require("./services/basketballLiveFixtures");
-
-const TopMatchesDetailsService = require("./services/topMatchesDetails");
+// ★ NEW: Import TeamsService correctly
+const TeamsService = require("./services/teamsService");
 
 // Scheduler
 const Scheduler = require("./schedulers/scheduler");
+const providerManager = require('./providers/providerManager');
 
 let scheduler = null;
 let server = null;
 let isShuttingDown = false;
 
-// Cache TTLs (24h). Cleared explicitly by scheduler on writes.
 const CACHE_TTL = {
   LIVE: 86400000,
   TODAY: 86400000,
@@ -50,7 +49,6 @@ const CACHE_TTL = {
   REFERENCE: 86400000,
 };
 
-// Client Cache TTLs (browser revalidation)
 const CLIENT_CACHE_TTL = {
   LIVE: 15,
   TODAY: 30,
@@ -101,12 +99,11 @@ async function cachedCollectionEndpoint(req, res, collectionName) {
   } catch (err) {
     logger.error(`[API] Error reading ${collectionName}: ${err.message}`);
 
-    // Fallback to stale cache on error
-    const staleEntry = cache._store.get(cacheKey);
+    const staleEntry = cache.getStale ? cache.getStale(cacheKey) : null; 
     if (staleEntry) {
       logger.warn(`[API] Returning stale cache for ${collectionName}`);
       res.set("Cache-Control", `public, max-age=0, must-revalidate`);
-      return res.json(staleEntry.data);
+      return res.json(staleEntry);
     }
 
     res.status(500).json({ error: "Internal server error" });
@@ -116,7 +113,6 @@ async function cachedCollectionEndpoint(req, res, collectionName) {
 function startServer() {
   const app = express();
 
-  // CORS
   app.use((req, res, next) => {
     res.header("Access-Control-Allow-Origin", "*");
     res.header("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -125,7 +121,6 @@ function startServer() {
     next();
   });
 
-  // Health Check
   app.get("/health", (req, res) => {
     const jobStatus = scheduler?.getStatus() ?? null;
     const degraded = jobStatus?.jobs
@@ -154,25 +149,19 @@ function startServer() {
 
   app.get("/health/simple", (_, res) => res.send("OK"));
 
-  // Scheduler Status (Visibility)
   app.get("/api/scheduler/status", (req, res) => {
     const status = scheduler?.getStatus() ?? null;
     if (!status) return res.status(404).json({ error: "Scheduler not initialized" });
     res.json(status);
   });
 
-  // ─────────────────────────────────────────────────────────────
-  // DYNAMIC DATE FIXTURES ROUTE (Local Time Support)
-  // ─────────────────────────────────────────────────────────────
   app.get("/api/fixtures", async (req, res) => {
-    const dateStr = req.query.date; // e.g., 2023-10-25
+    const dateStr = req.query.date;
     
     if (!dateStr) {
-      // Fallback to today if no date provided
       return cachedCollectionEndpoint(req, res, COLLECTIONS.TODAY_FIXTURES);
     }
 
-    // Map the requested local date to our internal UTC-tracked collections
     const today = getDateOffset(0);
     const tomorrow = getDateOffset(1);
     const yesterday = getDateOffset(-1);
@@ -182,28 +171,24 @@ function startServer() {
     else if (dateStr === tomorrow) collectionName = COLLECTIONS.TOMORROW_FIXTURES;
     else if (dateStr === yesterday) collectionName = COLLECTIONS.YESTERDAY_FIXTURES;
     else {
-      // If the date is outside our 3-day window, return empty to save budget
       return res.json([]);
     }
 
     return cachedCollectionEndpoint(req, res, collectionName);
   });
 
-  // Football Fixtures (Legacy Routes for backward compatibility)
   app.get("/api/fixtures/today", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.TODAY_FIXTURES));
   app.get("/api/fixtures/tomorrow", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.TOMORROW_FIXTURES));
   app.get("/api/fixtures/yesterday", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.YESTERDAY_FIXTURES));
   app.get("/api/fixtures/live", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.LIVE_FIXTURES));
   app.get("/api/fixtures/finished", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.FINISHED_FIXTURES));
 
-  // Basketball Fixtures
   app.get("/api/basketball/today", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_TODAY_FIXTURES));
   app.get("/api/basketball/tomorrow", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_TOMORROW_FIXTURES));
   app.get("/api/basketball/yesterday", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_YESTERDAY_FIXTURES));
   app.get("/api/basketball/live", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_LIVE_FIXTURES));
   app.get("/api/basketball/finished", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_FINISHED_FIXTURES));
 
-  // Reference Data
   app.get("/api/leagues", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.LEAGUES));
   app.get("/api/teams", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.TEAMS));
   app.get("/api/standings", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.STANDINGS));
@@ -211,7 +196,6 @@ function startServer() {
   app.get("/api/basketball/teams", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_TEAMS));
   app.get("/api/basketball/standings", (req, res) => cachedCollectionEndpoint(req, res, COLLECTIONS.BASKETBALL_STANDINGS));
 
-  // Match Details Endpoint (0 API Calls - Reads strictly from Cache)
   app.get("/api/match/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -229,7 +213,6 @@ function startServer() {
     }
   });
 
-  // Manual Recovery
   app.get("/api/recover", async (req, res) => {
     const sport = req.query.sport || "all";
 
@@ -259,7 +242,6 @@ function startServer() {
     }
   });
 
-  // OG Image Proxy
   app.get("/api/og-image/:postId", async (req, res) => {
     try {
       const db = getDb();
@@ -285,7 +267,151 @@ function startServer() {
     }
   });
 
-  // 404 Fallback
+  app.get("/api/v1/matches", async (req, res) => {
+    const { status, date, sport, view } = req.query;
+    const db = getDb();
+    
+    const prefix = sport === 'basketball' ? 'basketball_' : '';
+
+    try {
+      if (view === 'home') {
+        const today = getDateOffset(0);
+        const snap = await db.collection('fixture_snapshots').doc(`${prefix}${today}`).get();
+        
+        if (!snap.exists) {
+          return res.status(200).json({ live: [], featured: [], upcoming: [] });
+        }
+
+        const data = snap.data();
+        const allMatches = [
+          ...(data.matches || []),
+          ...(data.live || []),
+          ...(data.finished || [])
+        ];
+
+        const uniqueMatches = Array.from(new Map(allMatches.map(m => [String(m.id), m])).values());
+        const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
+        
+        const live = uniqueMatches.filter(m => liveStatuses.includes(m.status));
+        const upcoming = uniqueMatches.filter(m => m.status === 'NS' || m.status === 'TBD');
+        const featured = upcoming.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT');
+
+        return res.status(200).json({
+          live: live.slice(0, 20),
+          featured: featured.slice(0, 15),
+          upcoming: upcoming.slice(0, 30)
+        });
+      }
+
+      if (status === 'live') {
+        const snaps = await Promise.all([
+          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(0)}`).get(),
+          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(-1)}`).get(),
+          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(1)}`).get()
+        ]);
+        
+        let allMatches = [];
+        snaps.forEach(snap => {
+          if (snap.exists) {
+            allMatches = allMatches.concat(snap.data().matches || [], snap.data().live || []);
+          }
+        });
+        
+        const liveStatuses = sport === 'basketball' 
+          ? ['1Q', 'Q1', '2Q', 'Q2', '3Q', 'Q3', '4Q', 'Q4', 'OT', 'HT', 'LIVE']
+          : ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
+        
+        let liveMatches = allMatches.filter(m => liveStatuses.includes(m.status));
+        const uniqueLive = Array.from(new Map(liveMatches.map(m => [String(m.id), m])).values());
+
+        return res.json(uniqueLive);
+      }
+      
+      if (status === 'finished') {
+        const today = getDateOffset(0);
+        const snap = await db.collection('fixture_snapshots').doc(`${prefix}${today}`).get();
+        if (snap.exists) {
+          return res.json(snap.data().finished || []);
+        }
+        return res.json([]);
+      }
+      
+      if (date) {
+        const snaps = await Promise.all([
+          db.collection('fixture_snapshots').doc(`${prefix}${date}`).get(),
+          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(-1)}`).get(),
+          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(1)}`).get()
+        ]);
+        
+        let allMatches = [];
+        snaps.forEach(snap => {
+          if (snap.exists) {
+            allMatches = allMatches.concat(snap.data().matches || [], snap.data().live || [], snap.data().finished || []);
+          }
+        });
+        
+        const uniqueMatches = Array.from(new Map(allMatches.map(m => [String(m.id), m])).values());
+        return res.json(uniqueMatches);
+      }
+      
+      return res.status(400).json({ error: "Missing date, status, or view parameter" });
+    } catch (err) {
+      logger.error(`[API] Error reading matches snapshot: ${err.message}`);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/v1/competitions", async (req, res) => {
+    const db = getDb();
+    try {
+      const snap = await db.collection('reference_data').doc('leagues').get();
+      if (snap.exists) return res.json(snap.data().data || []);
+      return res.json([]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/v1/teams", async (req, res) => {
+    const db = getDb();
+    try {
+      const snap = await db.collection('reference_data').doc('teams').get();
+      if (snap.exists) return res.json(snap.data().data || []);
+      return res.json([]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/v1/standings", async (req, res) => {
+    const db = getDb();
+    try {
+      const snap = await db.collection('reference_data').doc('standings').get();
+      if (snap.exists) return res.json(snap.data().data || []);
+      return res.json([]);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.get("/api/v1/system/status", (req, res) => {
+    const jobStatus = scheduler?.getStatus() ?? null;
+    res.json({
+      status: "healthy",
+      budget: {
+        football: getRemainingRequests() ?? "unknown",
+        basketball: isBasketballConfigured ? getBasketballRemainingRequests() ?? "disabled" : "disabled",
+      },
+      cache: cache.stats(),
+      scheduler: {
+        running: jobStatus?.running ?? false,
+        jobs: jobStatus?.jobs ?? {},
+      },
+      uptime: Math.round(process.uptime()),
+      timestamp: new Date().toISOString()
+    });
+  });
+
   app.use((req, res) => {
     res.status(404).json({ error: "Not found" });
   });
@@ -303,9 +429,10 @@ function setupShutdownHandlers() {
     isShuttingDown = true;
 
     logger.info(`[Shutdown] Initiated by ${source}`);
-    if (scheduler) scheduler.stop();
-
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    
+    if (scheduler) {
+      await scheduler.stop();
+    }
 
     if (server) {
       await new Promise((resolve) => server.close(resolve));
@@ -352,14 +479,18 @@ async function main() {
   const ftProcessor = new FinishedFixturesProcessor(fixturesRepo);
   const teamsProcessor = new TeamsProcessor(teamRepo);
   const basketballFtProcessor = new BasketballFinishedFixturesProcessor(basketballFixturesRepo);
+  
+  // ★ FIX: Instantiate TeamsService here where teamRepo is available
+  const teamsService = new TeamsService(teamRepo);
 
   const services = {
-    footballDailyFixtures: new DailyFixturesService(fixturesRepo, teamsProcessor),
-    footballLiveFixtures: new LiveFixturesService(fixturesRepo, ftProcessor),
+    footballDailyFixtures: new DailyFixturesService(fixturesRepo, teamsProcessor, providerManager),
+    footballLiveFixtures: new LiveFixturesService(fixturesRepo, ftProcessor, providerManager),
     footballStandings: new StandingsService(standingRepo),
     footballLeagues: new LeaguesService(leagueRepo),
+    footballTeams: teamsService, 
   };
-
+  
   if (isBasketballConfigured) {
     logger.info("[Startup] Basketball enabled");
     services.basketballDailyFixtures = new BasketballDailyFixturesService(basketballFixturesRepo);
@@ -382,12 +513,6 @@ async function main() {
   scheduler.start();
   startServer();
   setupShutdownHandlers();
-
-  // Start Top Matches Background Poller (Runs every 5 minutes)
-  const topMatchesService = new TopMatchesDetailsService();
-  setInterval(() => {
-    topMatchesService.run().catch(err => logger.error(`[TopMatches] Error: ${err.message}`));
-  }, 300000); 
 
   const duration = Date.now() - startTime;
   const bball = isBasketballConfigured ? "✅ ON" : "⬜ OFF";

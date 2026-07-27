@@ -8,16 +8,17 @@ const {
 } = require("../config/firebase");
 
 class FixturesRepository {
-
   async diffWrite(collectionPath, docs, previousIds) {
     const newIdSet = new Set(docs.map((d) => String(d.id)));
     const toDelete = previousIds
       ? [...previousIds].filter((id) => !newIdSet.has(id))
       : [];
+      
     let deleted = 0;
     if (toDelete.length > 0) {
       deleted = await deleteByIds(collectionPath, toDelete);
     }
+    
     let written = 0;
     if (docs.length > 0) {
       written = await batchWrite(collectionPath, docs);
@@ -27,11 +28,6 @@ class FixturesRepository {
 
   async removeByIds(collectionPath, ids) {
     return deleteByIds(collectionPath, ids);
-  }
-
-  // ★ THIS IS THE FIX — was missing before
-  async batchWrite(collectionPath, docs) {
-    return batchWrite(collectionPath, docs);
   }
 
   async replaceYesterday(docs) {
@@ -48,26 +44,19 @@ class FixturesRepository {
 
   async getAllTomorrow() {
     const database = getDb();
-    const snapshot = await database
-      .collection(COLLECTIONS.TOMORROW_FIXTURES)
-      .get();
+    const snapshot = await database.collection(COLLECTIONS.TOMORROW_FIXTURES).get();
     return snapshot.docs.map((doc) => doc.data());
   }
   
-    async getAllYesterday() {
+  async getAllYesterday() {
     const database = getDb();
-    const snapshot = await database
-      .collection(COLLECTIONS.YESTERDAY_FIXTURES)
-      .get();
+    const snapshot = await database.collection(COLLECTIONS.YESTERDAY_FIXTURES).get();
     return snapshot.docs.map((doc) => doc.data());
   }
 
-   
   async getAllToday() {
     const database = getDb();
-    const snapshot = await database
-      .collection(COLLECTIONS.TODAY_FIXTURES)
-      .get();
+    const snapshot = await database.collection(COLLECTIONS.TODAY_FIXTURES).get();
     return snapshot.docs.map((doc) => doc.data());
   }
 

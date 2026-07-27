@@ -1,13 +1,6 @@
-// ═════════════════════════════════════════════════════════════════════════════════
-// FILE: src/pages/Predictions.jsx
-// ZOKA PRO — Lightning Fast, Memoized, No Double Fetching, Zero Render Jank
-// ★ FIXED: ID lookup mismatch causing saved predictions to not show up in UI.
-// ★ SEO UPGRADE: Added internal links to Team/League pages, fixed image CLS.
-// ★ SEO UPGRADE: Added BreadcrumbList structured data.
-// ═════════════════════════════════════════════════════════════════════════════════
-
 import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Clock, CheckCircle2, TrendingUp, Target, BarChart3,
   Star, Save, Trophy, Lock, LogIn, ChevronDown, ChevronRight,
@@ -17,22 +10,15 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useAppData } from '../context/AppDataContext';
-import { dataLayer } from '../utils/dataLayer';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/usePredictions'; // Assumed path based on previous context
+import { useLiveMatches } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr } from '../utils/dates';
-import { calcPoints, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
-import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../hooks/useMatchData';
-import { subscribeToLiveFixtures } from '../utils/api'; // Removed unused fetchFixtures
+import { calcPoints, SPORT, isLiveStatus, isFinishedStatus, PATHS } from '../utils/constants';
+import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../services/predictions';
 import { db } from '../utils/firebase';
-import { doc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
-// Detect Googlebot to prevent WebSocket errors during indexing
-const isGooglebot = typeof navigator !== 'undefined' && /googlebot|Googlebot/i.test(navigator.userAgent);
-
-/* ═══════════════════════════════════════════════════
-   CONSTANTS & HELPERS
-   ═══════════════════════════════════════════════════ */
 const FUTURE_DAYS = 3;
 const LOCK_BEFORE_MINUTES = 60;
 const ZOKA_VISIBLE_COUNT = 5;
@@ -40,7 +26,6 @@ const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-
 const dateOffset = (offset = 0) => getLocalDateStr(offset);
 
 const dateLabel = (d) => {
@@ -96,7 +81,6 @@ function parseKickoffTime(kickoff) {
 const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
 const toastStyle = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' };
 
-// ★ ADDED: Breadcrumb Schema for Google Rich Results
 const breadcrumbSchema = {
   "@context": "https://schema.org",
   "@type": "BreadcrumbList",
@@ -106,9 +90,6 @@ const breadcrumbSchema = {
   ]
 };
 
-/* ═══════════════════════════════════════════════════
-   ANIMATED NUMBER
-   ═══════════════════════════════════════════════════ */
 const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   const [d, setD] = useState(0);
   const raf = useRef(null);
@@ -128,9 +109,6 @@ const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   return <>{d}</>;
 });
 
-/* ═══════════════════════════════════════════════════
-   SMALL COMPONENTS
-   ═══════════════════════════════════════════════════ */
 const Skeleton = memo(function Skeleton() { return <div className="v21-skel" />; });
 
 const ResultBadge = memo(function ResultBadge({ result, isCalculating }) {
@@ -169,9 +147,6 @@ const LoginModal = memo(function LoginModal({ onClose, nav }) {
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   DATE STRIP
-   ═══════════════════════════════════════════════════ */
 const DateStrip = memo(function DateStrip({ date, onChange, dates, hasDataMap }) {
   const stripRef = useRef(null);
   const today = todayStr();
@@ -224,9 +199,6 @@ const DateStrip = memo(function DateStrip({ date, onChange, dates, hasDataMap })
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   SCORE STEPPER (Glass UI)
-   ═══════════════════════════════════════════════════ */
 const ScoreStepper = memo(function ScoreStepper({ value, onChange }) {
   const num = value === '' || value == null ? null : parseInt(value, 10);
   const display = num != null && !isNaN(num) ? num : '';
@@ -239,12 +211,9 @@ const ScoreStepper = memo(function ScoreStepper({ value, onChange }) {
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   ZOKA PICK CARD (Memoized for performance)
-   ═══════════════════════════════════════════════════ */
 const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVote, onVote, votingId, onShare }) {
-  const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
-  const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL);
+  const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL) || pick.isFinished;
+  const isLive = isLiveStatus(pick.status, SPORT.FOOTBALL) || pick.isLive;
   const mid = String(pick.matchId);
 
   const res = useMemo(() => {
@@ -344,13 +313,10 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   PREDICTION CARD (Memoized for performance)
-   ═══════════════════════════════════════════════════ */
 const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
   const mid = String(pred.matchId);
-  const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL);
-  const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL);
+  const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || pred.isFinished;
+  const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive;
   const hasPred = !!userPred;
 
   const localResult = useMemo(() => {
@@ -468,7 +434,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           ) : hasPred ? (
             <>
               <span className="v21-bdg bl"><CheckCircle2 size={8} /> Saved</span>
-              {/* ★ FIX: Added missing closing bracket for conditional rendering */}
               {!isLocked && <button className="v21-b v21-bbl v21-bsm" onClick={() => onEdit(pred)}><Pencil size={9} /> Edit</button>}
               <button className="v21-b v21-bshare v21-bsm" onClick={() => onShare(pred, false)}><Share2 size={10} /> Share</button>
             </>
@@ -485,9 +450,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   RESULTS OVERLAY (Centered Modal)
-   ═══════════════════════════════════════════════════ */
 const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
   useEffect(() => { if (overlayBoxRef.current) overlayBoxRef.current.scrollTop = 0; }, []);
@@ -514,7 +476,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
       if (!up) return;
       predicted++;
       let res = resMap.get(String(p.matchId));
-      if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+      if ((!res || res.resultType === 'pending') && (isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
         const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
         res = { ...r, resultType: r.type };
       }
@@ -553,7 +515,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
             const up = upMap.get(String(p.matchId));
             if (!up) return null;
             let res = resMap.get(String(p.matchId));
-            if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+            if ((!res || res.resultType === 'pending') && (isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
               const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
               res = { ...r, resultType: r.type };
             }
@@ -592,30 +554,16 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
   );
 });
 
-/* ═══════════════════════════════════════════════════
-   MAIN COMPONENT
-   ═══════════════════════════════════════════════════ */
 export default function Predictions() {
   const { currentUser, userProfile } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  
   const uid = currentUser?.uid;
   const loggedIn = !!uid;
   const displayName = currentUser?.displayName || currentUser?.email?.split('@')[0] || 'Anonymous';
   const isAdmin = userProfile?.role === 'admin';
-
-  const appData = useAppData() || {};
-  const {
-    activePredictions: featuredPreds,
-    zokaPicks,
-    zokaVoteStats,
-    userPredictions: ctxUserPreds,
-    predictionResults: ctxPredResults,
-    dailyEntries,
-    userStats,
-    loading: ctxLoading,
-    currentUserVotes,
-  } = appData;
 
   const [selDate, setSelDate] = useState(todayStr());
   const [now, setNow] = useState(Date.now());
@@ -630,72 +578,106 @@ export default function Predictions() {
   const [editA, setEditA] = useState('');
   const [saving, setSaving] = useState(false);
   const [votingId, setVotingId] = useState(null);
-
-  const [nonTodayData, setNonTodayData] = useState({ featured: null, zoka: null, userPreds: {}, results: [], votes: {} });
-  const [nonTodayLoading, setNonTodayLoading] = useState(false);
+  const [currentUserVotes, setCurrentUserVotes] = useState({});
+  
   const mountedRef = useRef(true);
-  const [liveFixtures, setLiveFixtures] = useState([]);
-
   const resolving = useRef(new Set());
-  const isToday = selDate === todayStr();
 
-  /* ═══ DERIVED DATA ═══ */
-  const currentFeatured = isToday ? (featuredPreds || []) : (nonTodayData.featured || []);
-  const currentZoka = isToday ? (zokaPicks?.matches || []) : (nonTodayData.zoka || []);
-  const currentUserPreds = isToday ? (ctxUserPreds || {}) : (nonTodayData.userPreds || {});
-  const currentResults = isToday ? (ctxPredResults?.results || []) : (nonTodayData.results || []);
-  const currentVotes = isToday ? (currentUserVotes || {}) : (nonTodayData.votes || {});
-  const currentVoteStats = isToday ? (zokaVoteStats || {}) : (nonTodayData.voteStats || {});
-  const currentLoading = isToday ? ctxLoading : nonTodayLoading;
+  const { data: activePredictions = [], isLoading: loadingActive } = useActivePredictions(selDate);
+  const { data: userPredictions = {}, isLoading: loadingPreds } = useUserPredictions(uid, selDate);
+  const { data: dailyLB = null } = useDailyLeaderboard(selDate);
+  const { data: zokaPicksData = null } = useZokaPicks(selDate);
+  const { data: zokaVotesData = { stats: {} } } = useZokaVotes(selDate);
+  const { data: userPoints = null } = useUserPoints(uid);
+  const { data: liveFixtures = [] } = useLiveMatches();
+
+  const { data: officialResults = [] } = useQuery({
+    queryKey: ['userResults', uid, selDate],
+    queryFn: async () => {
+      if (!uid || !db || !selDate) return [];
+      const q = query(collection(db, PATHS.PREDICTION_RESULTS), where('userId', '==', uid), where('matchDate', '==', selDate));
+      const snap = await getDocs(q);
+      return snap.docs.map(d => d.data());
+    },
+    enabled: !!uid && !!selDate,
+    staleTime: 60 * 1000,
+  });
+
+  const featuredPreds = activePredictions;
+  const zokaPicks = zokaPicksData;
+  const zokaVoteStats = zokaVotesData?.stats || {};
+  const ctxUserPreds = userPredictions;
+  const dailyEntries = dailyLB?.entries || [];
+  const userStats = userPoints || {};
+  const ctxLoading = loadingActive || loadingPreds;
 
   const fixtureMap = useMemo(() => new Map(liveFixtures.map(f => [String(f.id), f])), [liveFixtures]);
 
-  const mergedFeatured = useMemo(() => {
-    if (!isToday || !fixtureMap.size) return currentFeatured;
-    let changed = false;
-    const next = currentFeatured.map(p => {
-      const fx = fixtureMap.get(String(p.matchId));
-      if (fx) {
-        if (p.status !== fx.status || p.homeScore !== fx.homeScore || p.awayScore !== fx.awayScore || p.minute !== fx.minute || p.isLive !== fx.isLive || p.isFinished !== fx.isFinished) {
-          changed = true;
-          return { ...p, status: fx.status || p.status, homeScore: fx.homeScore ?? p.homeScore, awayScore: fx.awayScore ?? p.awayScore, minute: fx.minute ?? p.minute, isLive: fx.isLive || p.isLive, isFinished: fx.isFinished || p.isFinished };
-        }
-      }
-      return p;
-    });
-    return changed ? next : currentFeatured;
-  }, [currentFeatured, fixtureMap, isToday]);
+  useEffect(() => {
+    try { setCurrentUserVotes(JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}')); } catch { setCurrentUserVotes({}); }
+  }, [selDate]);
 
-  const mergedZoka = useMemo(() => {
-    if (!isToday || !fixtureMap.size) return currentZoka;
+  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) for live merging
+  const mergedFeatured = useMemo(() => {
+    if (!fixtureMap.size) return featuredPreds;
     let changed = false;
-    const next = currentZoka.map(p => {
+    const next = featuredPreds.map(p => {
       const fx = fixtureMap.get(String(p.matchId));
       if (fx) {
-        if (p.status !== fx.status || p.homeScore !== fx.homeScore || p.awayScore !== fx.awayScore || p.minute !== fx.minute) {
+        const fxStatus = fx.status || p.status;
+        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home ?? p.homeScore;
+        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away ?? p.awayScore;
+        const fxMinute = fx.minute ?? fx.elapsed ?? p.minute;
+        const fxIsLive = isLiveStatus(fxStatus, SPORT.FOOTBALL) || p.isLive;
+        const fxIsFin = isFinishedStatus(fxStatus, SPORT.FOOTBALL) || p.isFinished;
+        
+        if (p.status !== fxStatus || p.homeScore !== fxHome || p.awayScore !== fxAway || p.minute !== fxMinute || p.isLive !== fxIsLive || p.isFinished !== fxIsFin) {
           changed = true;
-          return { ...p, status: fx.status || p.status, homeScore: fx.homeScore ?? p.homeScore, awayScore: fx.awayScore ?? p.awayScore, minute: fx.minute ?? p.minute };
+          return { ...p, status: fxStatus, homeScore: fxHome, awayScore: fxAway, minute: fxMinute, isLive: fxIsLive, isFinished: fxIsFin };
         }
       }
       return p;
     });
-    return changed ? next : currentZoka;
-  }, [currentZoka, fixtureMap, isToday]);
+    return changed ? next : featuredPreds;
+  }, [featuredPreds, fixtureMap]);
+
+  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) for live merging
+  const mergedZoka = useMemo(() => {
+    if (!fixtureMap.size) return zokaPicks?.matches || [];
+    const baseZoka = zokaPicks?.matches || [];
+    let changed = false;
+    const next = baseZoka.map(p => {
+      const fx = fixtureMap.get(String(p.matchId));
+      if (fx) {
+        const fxStatus = fx.status || p.status;
+        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home ?? p.homeScore;
+        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away ?? p.awayScore;
+        const fxMinute = fx.minute ?? fx.elapsed ?? p.minute;
+        
+        if (p.status !== fxStatus || p.homeScore !== fxHome || p.awayScore !== fxAway || p.minute !== fxMinute) {
+          changed = true;
+          return { ...p, status: fxStatus, homeScore: fxHome, awayScore: fxAway, minute: fxMinute };
+        }
+      }
+      return p;
+    });
+    return changed ? next : baseZoka;
+  }, [zokaPicks, fixtureMap]);
 
   const userPredMap = useMemo(() => {
     const m = new Map();
-    Object.values(currentUserPreds).forEach(p => {
+    Object.values(ctxUserPreds).forEach(p => {
       if (p.predId) m.set(p.predId, p);
       if (p.matchId) m.set(String(p.matchId), p);
     });
     return m;
-  }, [currentUserPreds]);
+  }, [ctxUserPreds]);
 
   const resultMap = useMemo(() => {
     const m = new Map();
-    currentResults.forEach(r => m.set(String(r.matchId), r));
+    officialResults.forEach(r => m.set(String(r.matchId), r));
     return m;
-  }, [currentResults]);
+  }, [officialResults]);
 
   const myDayStats = useMemo(() => {
     let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
@@ -704,7 +686,7 @@ export default function Predictions() {
       if (!up) return;
       pred++;
       let res = resultMap.get(String(p.matchId));
-      if ((!res || res.resultType === 'pending') && isFinishedStatus(p.status, SPORT.FOOTBALL) && p.homeScore != null) {
+      if ((!res || res.resultType === 'pending') && (isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
         const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
         res = { ...r, resultType: r.type };
       }
@@ -716,7 +698,6 @@ export default function Predictions() {
     return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
   }, [mergedFeatured, userPredMap, resultMap]);
 
-  /* ═══ HANDLERS (useCallback) ═══ */
   const openLogin = useCallback(() => setShowLogin(true), []);
   
   const handleShare = useCallback(async (pred, isZoka = false) => {
@@ -814,33 +795,39 @@ export default function Predictions() {
       setEditH('');
       setEditA('');
       setToast(`${h}-${a} saved`);
+      queryClient.invalidateQueries(['userPredictions', uid, selDate]);
     } catch (e) {
       console.error('[Pred] Save err:', e);
       setToast('Save failed');
     }
     setSaving(false);
-  }, [uid, editingId, editH, editA, selDate, displayName]);
+  }, [uid, editingId, editH, editA, selDate, displayName, queryClient]);
 
   const handleVote = useCallback(async (matchId, vote) => {
     if (!uid) { openLogin(); return; }
     const midStr = String(matchId || '');
     setVotingId(midStr);
     try {
-      const oldVote = currentVotes[midStr];
+      const oldVote = currentUserVotes[midStr];
       if (oldVote === vote) {
         await removeZokaVote(uid, midStr, null);
-        if (isToday) {
-          const key = `zoka_votes_${selDate}`;
-          const existing = JSON.parse(localStorage.getItem(key) || '{}');
-          delete existing[midStr];
-          localStorage.setItem(key, JSON.stringify(existing));
-        }
+        setCurrentUserVotes(prev => {
+          const n = { ...prev }; delete n[midStr]; 
+          try { localStorage.setItem(`zoka_votes_${selDate}`, JSON.stringify(n)); } catch {}
+          return n;
+        });
       } else {
         await saveZokaVote(uid, midStr, vote);
+        setCurrentUserVotes(prev => {
+          const n = { ...prev, [midStr]: vote };
+          try { localStorage.setItem(`zoka_votes_${selDate}`, JSON.stringify(n)); } catch {}
+          return n;
+        });
       }
+      queryClient.invalidateQueries(['zokaVotes', selDate]);
     } catch (e) { console.error('[Pred] Vote err:', e); }
     setVotingId(null);
-  }, [uid, openLogin, currentVotes, isToday, selDate]);
+  }, [uid, openLogin, currentUserVotes, selDate, queryClient]);
 
   const handleDateChange = useCallback((d) => {
     setSelDate(d);
@@ -848,8 +835,6 @@ export default function Predictions() {
     setZokaExpanded(false);
     cancelEdit();
   }, [cancelEdit]);
-
-  /* ═══ EFFECTS ═══ */
   
   useEffect(() => {
     const params = new URLSearchParams(location.search);
@@ -881,110 +866,41 @@ export default function Predictions() {
     return () => clearInterval(id);
   }, []);
 
+  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) in Admin Auto-Resolve
   useEffect(() => {
-    if (!isToday) return;
-    
-    // Prevent Googlebot from opening WebSocket connections (Fixes GSC XHR errors)
-    if (isGooglebot) return;
-
-    setLiveFixtures([]);
-    let unsub = () => {};
-    
-    try {
-      unsub = subscribeToLiveFixtures(selDate, ({ matches: lm }) => {
-        setLiveFixtures(prev => {
-          if (!Array.isArray(lm)) return prev;
-          if (prev.length !== lm.length) return lm || [];
-          let changed = false;
-          for (let i = 0; i < lm.length; i++) {
-            if (prev[i]?.homeScore !== lm[i]?.homeScore || prev[i]?.awayScore !== lm[i]?.awayScore || prev[i]?.status !== lm[i]?.status || prev[i]?.minute !== lm[i]?.minute) {
-              changed = true; break;
-            }
-          }
-          return changed ? lm : prev;
-        });
-        setNow(Date.now());
-      });
-    } catch (e) {
-      console.error('[Pred] Live sub failed:', e);
-    }
-    
-    return () => { 
-      try { unsub(); } catch {} 
-    };
-  }, [isToday, selDate]);
-
-  useEffect(() => {
-    if (isToday) return;
-    let cancelled = false;
-    setNonTodayLoading(true);
-    
-    Promise.all([
-      dataLayer.fetchActivePredictions(selDate).catch(() => []),
-      dataLayer.fetchZokaPicks(selDate).catch(() => null),
-      uid ? dataLayer.fetchUserPredictions(uid, selDate).catch(() => ({})) : Promise.resolve({}),
-      uid ? dataLayer.fetchPredictionResults(uid, selDate).catch(() => ({ results: [] })) : Promise.resolve({ results: [] }),
-      dataLayer.fetchZokaVotes(selDate).catch(() => ({ stats: {} })),
-    ]).then(([featured, zoka, preds, results, votes]) => {
-      if (cancelled || !mountedRef.current) return;
-      const predMap = {};
-      Object.values(preds || {}).forEach(p => {
-        if (p?.predId) predMap[p.predId] = p;
-        if (p?.matchId) predMap[String(p.matchId)] = p; 
-      });
-      let userVotes = {};
-      try { userVotes = JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}'); } catch {}
-      setNonTodayData({
-        featured: featured || [],
-        zoka: zoka?.matches || [],
-        userPreds: predMap,
-        results: results?.results || [],
-        votes: userVotes,
-        voteStats: votes?.stats || {},
-      });
-      setNonTodayLoading(false);
-    }).catch(e => {
-      console.error("[Pred] Non-today fetch failed:", e);
-      setNonTodayLoading(false);
-    });
-    
-    return () => { cancelled = true; };
-  }, [selDate, isToday, uid]);
-
-    useEffect(() => {
-    if (!isAdmin || !isToday || !fixtureMap.size) return;
+    if (!isAdmin || !liveFixtures.length) return;
     const toResolve = mergedFeatured.filter(p => {
       const mid = String(p.matchId);
       const fx = fixtureMap.get(mid);
-      // Check if fixture is finished and we don't already have it marked as finished in our featured predictions
-      return fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null && p.status !== 'finished';
+      const fxHome = fx?.goalsHome ?? fx?.homeScore ?? fx?.score?.fullTime?.home;
+      const fxAway = fx?.goalsAway ?? fx?.awayScore ?? fx?.score?.fullTime?.away;
+      return fx && isFinishedStatus(fx.status, SPORT.FOOTBALL) && fxHome != null && fxAway != null && p.status !== 'finished';
     });
 
     toResolve.forEach(pred => {
       const mid = String(pred.matchId);
       if (!resolving.current.has(mid)) {
         const fx = fixtureMap.get(mid);
+        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home;
+        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away;
+        
         resolving.current.add(mid);
         
-        // ★ FIX: Update active_predictions status to finished in Firestore
-        const predId = pred.id || `feat_${todayStr()}_${mid}`;
+        const predId = pred.id || `feat_${selDate}_${mid}`;
         setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { 
-          homeScore: fx.homeScore, 
-          awayScore: fx.awayScore, 
+          homeScore: fxHome, 
+          awayScore: fxAway, 
           status: 'finished', 
           updatedAt: serverTimestamp() 
         }, { merge: true }).catch(console.error);
         
-        resolveMatchForAllUsers(mid, fx.homeScore, fx.awayScore, pred.matchDate || todayStr())
+        resolveMatchForAllUsers(mid, fxHome, fxAway, pred.matchDate || selDate)
           .catch(e => console.error("Resolve err:", e))
           .finally(() => resolving.current.delete(mid));
       }
     });
-  }, [isAdmin, isToday, fixtureMap, mergedFeatured]);
+  }, [isAdmin, mergedFeatured, fixtureMap, selDate, liveFixtures]);
 
-
-  
-  /* ═══ OTHER MEMOS ═══ */
   const dateList = useMemo(() => {
     const arr = [];
     for (let i = -14; i <= FUTURE_DAYS; i++) arr.push(dateOffset(i));
@@ -993,10 +909,10 @@ export default function Predictions() {
 
   const hasDataMap = useMemo(() => {
     const m = {};
-    if (currentFeatured.length > 0) m[selDate] = true;
-    if (currentZoka.length > 0) m[selDate] = true;
+    if (mergedFeatured.length > 0) m[selDate] = true;
+    if (mergedZoka.length > 0) m[selDate] = true;
     return m;
-  }, [currentFeatured, currentZoka, selDate]);
+  }, [mergedFeatured, mergedZoka, selDate]);
 
   const visibleZoka = useMemo(() => {
     if (mergedZoka.length <= ZOKA_VISIBLE_COUNT) return mergedZoka;
@@ -1009,7 +925,7 @@ export default function Predictions() {
   const filteredPreds = useMemo(() => {
     if (deferredFilter === 'predicted') return mergedFeatured.filter(p => userPredMap.get(String(p.matchId)));
     if (deferredFilter === 'unpredicted') return mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL));
-    if (deferredFilter === 'finished') return mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL));
+    if (deferredFilter === 'finished') return mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished);
     return mergedFeatured;
   }, [mergedFeatured, userPredMap, deferredFilter]);
 
@@ -1017,7 +933,7 @@ export default function Predictions() {
     all: mergedFeatured.length,
     predicted: mergedFeatured.filter(p => userPredMap.get(String(p.matchId))).length,
     unpredicted: mergedFeatured.filter(p => !userPredMap.get(String(p.matchId)) && !isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
-    finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL)).length,
+    finished: mergedFeatured.filter(p => isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished).length,
   }), [mergedFeatured, userPredMap]);
 
   const myRank = useMemo(() => {
@@ -1025,7 +941,6 @@ export default function Predictions() {
     return dailyEntries.find(u => u.uid === uid) || null;
   }, [dailyEntries, uid]);
 
-  /* ═══ RENDER ═══ */
   return (
     <div className="v21-page">
       <SEO
@@ -1033,7 +948,7 @@ export default function Predictions() {
         description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
         keywords="football predictions, betting tips, match predictions, soccer tips"
         robots="index,follow"
-        structuredData={breadcrumbSchema} // ★ ADDED SCHEMA HERE
+        structuredData={breadcrumbSchema}
       />
 
       {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
@@ -1135,7 +1050,7 @@ export default function Predictions() {
               </div>
             </div>
             {visibleZoka.map((pick, i) => (
-              <ZokaPickCard key={pick.matchId || i} pick={pick} index={i} voteStats={currentVoteStats} userVote={currentVotes} onVote={handleVote} votingId={votingId} onShare={handleShare} />
+              <ZokaPickCard key={pick.matchId || i} pick={pick} index={i} voteStats={zokaVoteStats} userVote={currentUserVotes} onVote={handleVote} votingId={votingId} onShare={handleShare} />
             ))}
             {hiddenZokaCount > 0 && !zokaExpanded && (
               <button className="v21-zoka-more" onClick={() => setZokaExpanded(true)}>
@@ -1157,7 +1072,7 @@ export default function Predictions() {
             <span className="v21-sec-badge">{filteredPreds.length}</span>
           </div>
 
-          {currentLoading ? (
+          {ctxLoading ? (
             <div>{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} />)}</div>
           ) : filteredPreds.length > 0 ? (
             filteredPreds.map((pred, i) => {
@@ -1216,7 +1131,7 @@ export default function Predictions() {
       <SaveToast show={!!toast} score={toast} />
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} nav={nav} />}
       {showResults && (
-        <ResultsOverlay date={selDate} preds={mergedFeatured} userPredsObj={currentUserPreds} results={currentResults} onClose={() => setShowResults(false)} nav={nav} />
+        <ResultsOverlay date={selDate} preds={mergedFeatured} userPredsObj={ctxUserPreds} results={officialResults} onClose={() => setShowResults(false)} nav={nav} />
       )}
     </div>
   );
