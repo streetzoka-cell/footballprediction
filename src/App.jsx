@@ -23,13 +23,22 @@ import { initAnalytics } from "./utils/analytics";
 import { Download, X, RefreshCw, WifiOff, CheckCircle } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
+// Pro Branded Loading Screen
+const PageLoader = () => (
+  <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: "24px" }}>
+    <div style={{ width: 64, height: 64, borderRadius: 18, background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "nvLogoFloat 2s ease-in-out infinite" }}>
+      <img src="/icons/icon-192.png" width="48" height="48" alt="Logo" style={{ borderRadius: 14 }} />
+    </div>
+    <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "#10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
+  </div>
+);
+
 function AppShell() {
   const location = useLocation();
   
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
 
-  // ★ Phase 10: Enterprise PWA Registration & Update Prompt
   const {
     needRefresh: [needRefresh, setNeedRefresh],
     offlineReady: [offlineReady, setOfflineReady],
@@ -37,7 +46,7 @@ function AppShell() {
   } = useRegisterSW({
     onRegistered(r) {
       console.log("PWA Registered");
-      if (r) setInterval(() => r.update(), 60 * 60 * 1000); // Check for updates every hour
+      if (r) setInterval(() => r.update(), 60 * 60 * 1000);
     },
     onRegisterError(error) {
       console.error("PWA Registration error", error);
@@ -48,7 +57,6 @@ function AppShell() {
     initApp();
     initAnalytics();
 
-    // ★ Add Google Analytics Script dynamically
     const script = document.createElement('script');
     script.src = 'https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN';
     script.async = true;
@@ -81,7 +89,6 @@ function AppShell() {
     };
   }, []);
 
-  // Remove static loader once React mounts
   useEffect(() => {
     const staticLoader = document.getElementById('static-loader');
     if (staticLoader) {
@@ -100,7 +107,6 @@ function AppShell() {
     }
   }, [location.pathname, location.search]);
 
-  // PWA Install Banner Logic
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -125,7 +131,7 @@ function AppShell() {
   };
 
   const handleUpdateNow = () => {
-    updateServiceWorker(true); // true forces reload
+    updateServiceWorker(true);
   };
 
   return (
@@ -134,7 +140,6 @@ function AppShell() {
       
       <ScrollToTop />
 
-      {/* PWA Install Banner */}
       {showInstallBanner && (
         <div style={toastStyle}>
           <Download size={20} style={{ color: "#10b981", flexShrink: 0 }} />
@@ -147,7 +152,6 @@ function AppShell() {
         </div>
       )}
 
-      {/* PWA Update Ready Banner */}
       {needRefresh && (
         <div style={toastStyle}>
           <RefreshCw size={20} style={{ color: "#fbbf24", flexShrink: 0 }} />
@@ -160,7 +164,6 @@ function AppShell() {
         </div>
       )}
 
-      {/* PWA Offline Ready Banner */}
       {offlineReady && (
         <div style={toastStyle}>
           <CheckCircle size={20} style={{ color: "#10b981", flexShrink: 0 }} />
@@ -177,7 +180,7 @@ function AppShell() {
         <Breadcrumbs />
 
         <main style={{ flex: 1, position: "relative", width: "100%", overflowX: "hidden" }}>
-          <Suspense fallback={null}>
+          <Suspense fallback={<PageLoader />}>
             <AppRoutes />
           </Suspense>
         </main>
@@ -188,7 +191,6 @@ function AppShell() {
   );
 }
 
-// Toast Styles
 const toastStyle = {
   position: "fixed", bottom: 20, left: "50%", transform: "translateX(-50%)",
   background: "rgba(10,15,25,0.95)", border: "1.5px solid rgba(16,185,129,.3)",

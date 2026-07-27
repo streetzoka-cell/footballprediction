@@ -1,79 +1,68 @@
-import { useEffect, useState } from "react";
+import React from 'react';
 
 export default function AppLoader() {
-  const messages = [
-    "Loading today's fixtures...",
-    "Fetching live scores...",
-    "Preparing predictions...",
-    "Updating league tables...",
-    "Checking today's matches...",
-    "Finding trending fixtures...",
-    "Loading basketball games...",
-    "Connecting to live servers...",
-    "Almost kick-off...",
-    "Welcome to ZOKASCORE",
-  ];
-
-  const [message, setMessage] = useState(messages[0]);
-  const [progress, setProgress] = useState(10);
-  const [rotate, setRotate] = useState(0);
-
-  useEffect(() => {
-    document.title = "⚽ Loading... | ZOKASCORE";
-
-    const messageTimer = setInterval(() => {
-      setMessage((current) => {
-        const index = messages.indexOf(current);
-        return messages[(index + 1) % messages.length];
-      });
-    }, 2000);
-
-    const progressTimer = setInterval(() => {
-      setProgress((prev) => {
-        if (prev >= 95) return 95;
-        return prev + Math.floor(Math.random() * 7) + 2;
-      });
-    }, 500);
-
-    const ballTimer = setInterval(() => {
-      setRotate((prev) => prev + 40);
-    }, 1500);
-
-    return () => {
-      clearInterval(messageTimer);
-      clearInterval(progressTimer);
-      clearInterval(ballTimer);
-    };
-  }, []);
-
   return (
-    <div className="zoka-loader-container">
-      <div className="zoka-loader-content">
-        <div className="zoka-loader-live-badge">
-          <span className="zoka-loader-dot"></span>
-          LIVE
-        </div>
+    <div style={{
+      minHeight: '100vh',
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      justifyContent: 'center',
+      background: 'radial-gradient(circle at 50% 50%, #0d1a25 0%, #05070a 80%)',
+      gap: '28px',
+      overflow: 'hidden',
+      position: 'relative',
+      zIndex: 9999
+    }}>
+      <style>{`
+        @keyframes proLogoFloat {
+          0%, 100% { transform: translateY(0px) scale(1); box-shadow: 0 0 30px rgba(16,185,129,0.2); }
+          50% { transform: translateY(-8px) scale(1.02); box-shadow: 0 10px 40px rgba(16,185,129,0.4); }
+        }
+        @keyframes proSpinner {
+          0% { transform: rotate(0deg); }
+          100% { transform: rotate(360deg); }
+        }
+        @keyframes proTextGlow {
+          0%, 100% { text-shadow: 0 0 8px rgba(16,185,129,0.4); opacity: 0.8; }
+          50% { text-shadow: 0 0 16px rgba(16,185,129,0.9); opacity: 1; }
+        }
+      `}</style>
+      
+      <div style={{
+        width: 80,
+        height: 80,
+        borderRadius: 22,
+        background: 'linear-gradient(135deg, rgba(16,185,129,0.15) 0%, rgba(5,150,105,0.05) 100%)',
+        border: '1px solid rgba(16,185,129,0.2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        animation: 'proLogoFloat 2.5s ease-in-out infinite',
+        backdropFilter: 'blur(4px)'
+      }}>
+        <img src="/icons/icon-192.png" alt="ZOKA Logo" width="56" height="56" style={{ borderRadius: 14 }} />
+      </div>
 
-        <div
-          className="zoka-loader-ball"
-          style={{ transform: `translateY(-10px) rotate(${rotate}deg)` }}
-        >
-          ⚽
-        </div>
+      <div style={{
+        width: 32,
+        height: 32,
+        border: '3px solid rgba(255,255,255,0.05)',
+        borderTopColor: '#10b981',
+        borderRadius: '50%',
+        animation: 'proSpinner 0.8s linear infinite'
+      }} />
 
-        <h1 className="zoka-loader-logo">ZOKASCORE</h1>
-        <p className="zoka-loader-text">{message}</p>
-
-        <div className="zoka-loader-progress-outer">
-          <div
-            className="zoka-loader-progress-inner"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
-
-        <p className="zoka-loader-tagline">
-          LIVE SCORES • PREDICTIONS • LEADERBOARD
-        </p>
+      <div style={{
+        color: '#10b981',
+        fontSize: '0.75rem',
+        fontWeight: 800,
+        letterSpacing: '0.2em',
+        textTransform: 'uppercase',
+        animation: 'proTextGlow 2s ease-in-out infinite',
+        fontFamily: 'system-ui, sans-serif'
+      }}>
+        Initializing ZOKASCORE
       </div>
     </div>
   );
