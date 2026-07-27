@@ -37,8 +37,8 @@ function initializeFirebase() {
       });
     }
 
-    db = admin.firestore();
-    db.settings({ ignoreUndefinedProperties: true });
+        db = admin.firestore();
+    db.settings({ ignoreUndefinedProperties: true, preferRest: true });
 
     logger.info("[Firebase] Firestore initialized.");
     return db;
