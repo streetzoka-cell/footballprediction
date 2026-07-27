@@ -20,27 +20,36 @@ function initializeFirebase() {
   try {
     logger.info("[Firebase] Initializing...");
 
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        credential: admin.credential.cert({
-          projectId: env.FIREBASE_PROJECT_ID,
-          clientEmail: env.FIREBASE_CLIENT_EMAIL,
-          privateKey: env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-        }),
-      });
-    }
+    const privateKey = env.FIREBASE_PRIVATE_KEY
+  ?.replace(/^"|"$/g, '')     // remove opening and closing quotes
+  .replace(/\\n/g, '\n');     // convert escaped newlines
+
+if (!privateKey) {
+  throw new Error("FIREBASE_PRIVATE_KEY is missing");
+}
+
+admin.initializeApp({
+  credential: admin.credential.cert({
+    projectId: env.FIREBASE_PROJECT_ID,
+    clientEmail: env.FIREBASE_CLIENT_EMAIL,
+    privateKey,
+  }),
+});
 
     db = admin.firestore();
-    // ★ preferRest: true forces HTTP/REST instead of gRPC, fixing the DECODER routines error!
-    db.settings({ ignoreUndefinedProperties: true, preferRest: true });
+    db.settings({
+      ignoreUndefinedProperties: true,
+      preferRest: true,
+    });
 
     logger.info("[Firebase] Firestore initialized.");
     return db;
   } catch (error) {
-    logger.error(`[Firebase] Initialization failed: ${error.message}`);
+    logger.error(`[Firebase] Initialization failed: ${error.stack}`);
     throw error;
   }
 }
+
 
 function getDb() {
   if (!db) {
