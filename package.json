@@ -49,13 +49,13 @@
     "email": "streetzoka@gmail.com"
   },
   "homepage": "https://zokascore.xyz",
-    "scripts": {
+      "scripts": {
     "dev": "vite",
     "build": "vite build && node ./scripts/generate-sitemap.js",
-    "lint": "eslint .",
+    "lint": "eslint src",
     "preview": "vite preview"
   },
-  
+
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
