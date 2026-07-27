@@ -9,6 +9,8 @@ import { useUserPredictions, useActivePredictions, useUserPoints } from '../hook
 import { useLiveMatches } from '../hooks/useFixtures';
 import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
+import { db } from '../utils/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import SEO from "../components/SEO";
 
 const useInView = (threshold = 0.1) => {
@@ -196,6 +198,41 @@ export default function Profile() {
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
+  // ★ NEW: Smart Admin Detection State
+  const [isAdmin, setIsAdmin] = useState(userProfile?.role === 'admin');
+
+  // ★ NEW: Check admin_users collection dynamically
+  useEffect(() => {
+    if (!currentUser?.uid) {
+      setIsAdmin(false);
+      return;
+    }
+    
+    // Immediate fallback to userProfile role
+    if (userProfile?.role === 'admin' || userProfile?.role === 'staff') {
+      setIsAdmin(true);
+      return;
+    }
+
+    // Smart check: Look inside `admin_users` collection
+    const checkAdminStatus = async () => {
+      try {
+        const adminRef = doc(db, 'admin_users', currentUser.uid);
+        const adminSnap = await getDoc(adminRef);
+        if (adminSnap.exists()) {
+          setIsAdmin(true);
+        } else {
+          setIsAdmin(false);
+        }
+      } catch (err) {
+        // Silently fallback if permission denied or collection doesn't exist
+        setIsAdmin(userProfile?.role === 'admin');
+      }
+    };
+    
+    checkAdminStatus();
+  }, [currentUser, userProfile]);
+
   // ★ Enterprise Data Fetching
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
@@ -333,11 +370,18 @@ export default function Profile() {
                 display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
               }}>
                 {profile.displayName}
-                {profile.role === 'admin' && (
+                {/* ★ NEW: Smart Admin Badge */}
+                {isAdmin && (
                   <span style={{
-                    fontSize: '.66rem', padding: '3px 10px', borderRadius: 7,
-                    background: 'rgba(239,68,68,.12)', color: '#ef4444', fontWeight: 700,
-                  }}>ADMIN</span>
+                    fontSize: '.66rem', padding: '4px 10px', borderRadius: 8,
+                    background: 'linear-gradient(135deg, rgba(239,68,68,.2), rgba(245,158,11,.15))', 
+                    color: '#fbbf24', fontWeight: 800,
+                    border: '1px solid rgba(245,158,11,.3)',
+                    display: 'inline-flex', alignItems: 'center', gap: 4,
+                    boxShadow: '0 0 12px rgba(239,68,68,.15)'
+                  }}>
+                    <Shield size={11} /> ADMIN
+                  </span>
                 )}
               </h2>
               <div style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: '.88rem', color: 'var(--text-muted)', marginTop: 5, justifyContent: 'center' }}>
