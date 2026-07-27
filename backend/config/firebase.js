@@ -3,8 +3,7 @@
  * Initializes Firebase Admin SDK and exports the Firestore instance
  */
 
-const adminimport = require("firebase-admin");
-const admin = adminimport.default || adminimport; // ★ fix esm/commonjs wrapper
+const admin = require("firebase-admin");
 const env = require("./env");
 const logger = require("../utils/logger");
 const { BATCH_MAX_OPS, WRITE_TIMEOUT_MS } = require("./constants");
