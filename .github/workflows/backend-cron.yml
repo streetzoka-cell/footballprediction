@@ -51,8 +51,9 @@ jobs:
             echo "job=live" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run Sync Engine
+            - name: Run Sync Engine
         env:
+          NODE_OPTIONS: "--openssl-legacy-provider" # ★ ADD THIS LINE
           FIREBASE_PROJECT_ID: ${{ secrets.FIREBASE_PROJECT_ID }}
           FIREBASE_CLIENT_EMAIL: ${{ secrets.FIREBASE_CLIENT_EMAIL }}
           FIREBASE_PRIVATE_KEY: ${{ secrets.FIREBASE_PRIVATE_KEY }}
@@ -60,7 +61,6 @@ jobs:
           API_FOOTBALL_BASE_URL: ${{ secrets.API_FOOTBALL_BASE_URL }}
           API_BASKETBALL_KEY: ${{ secrets.API_BASKETBALL_KEY }}
           API_BASKETBALL_BASE_URL: ${{ secrets.API_BASKETBALL_BASE_URL }}
-          # ★ NEW: Add Football-Data.org API Key
           FOOTBALL_DATA_API_KEY: ${{ secrets.FOOTBALL_DATA_API_KEY }}
         run: node cloud-sync.js ${{ steps.job.outputs.job }}
         working-directory: ./backend
