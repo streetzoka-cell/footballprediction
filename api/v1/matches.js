@@ -1,5 +1,4 @@
 import { initializeDb } from '../_firebase.js';
-import { validateMatch } from './_schemas.js';
 
 export default async function handler(req, res) {
   res.setHeader('Cache-Control', 's-maxage=60, stale-while-revalidate=30');
@@ -26,15 +25,13 @@ export default async function handler(req, res) {
       ];
 
       const uniqueMatches = Array.from(new Map(allMatches.map(m => [String(m.id), m])).values());
-      const validMatches = uniqueMatches.map(validateMatch).filter(Boolean);
 
       const liveStatuses = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
       
-      const live = validMatches.filter(m => liveStatuses.includes(m.status));
-      const upcoming = validMatches.filter(m => m.status === 'NS' || m.status === 'TBD');
+      const live = uniqueMatches.filter(m => liveStatuses.includes(m.status));
+      const upcoming = uniqueMatches.filter(m => m.status === 'NS' || m.status === 'TBD');
       const featured = upcoming.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT');
 
-      // ★ FIX: Removed .slice() limits so frontend gets ALL matches
       return res.status(200).json({
         live: live,
         featured: featured,
@@ -42,7 +39,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // Live Logic (Checks today, yesterday, tomorrow in case of midnight crossover)
+    // Live Logic
     if (status === 'live') {
       const today = new Date().toISOString().split('T')[0];
       const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
@@ -67,9 +64,8 @@ export default async function handler(req, res) {
       
       const liveMatches = allMatches.filter(m => liveStatuses.includes(m.status));
       const uniqueLive = Array.from(new Map(liveMatches.map(m => [String(m.id), m])).values());
-      const validLive = uniqueLive.map(validateMatch).filter(Boolean);
 
-      return res.status(200).json({ data: validLive });
+      return res.status(200).json({ data: uniqueLive });
     }
     
     // Finished Logic
@@ -78,13 +74,12 @@ export default async function handler(req, res) {
       const snap = await db.collection('fixture_snapshots').doc(`${prefix}${today}`).get();
       if (snap.exists) {
         const finished = snap.data().finished || [];
-        const validFinished = finished.map(validateMatch).filter(Boolean);
-        return res.status(200).json({ data: validFinished });
+        return res.status(200).json({ data: finished });
       }
       return res.status(200).json({ data: [] });
     }
     
-          // ★ FIX: Strict Date Logic - ONLY fetch the exact date requested
+    // Strict Date Logic
     if (date) {
       const snap = await db.collection('fixture_snapshots').doc(`${prefix}${date}`).get();
       
@@ -99,11 +94,8 @@ export default async function handler(req, res) {
       
       const uniqueMatches = Array.from(new Map(allMatches.map(m => [String(m.id), m])).values());
       
-      // ★ FIX: Return raw unique matches. Do not use validateMatch here, 
-      // as it was dropping hundreds of valid matches due to strict typing.
       return res.status(200).json({ data: uniqueMatches });
     }
-     
     
     return res.status(400).json({ error: "Invalid date, status, or view parameter" });
     

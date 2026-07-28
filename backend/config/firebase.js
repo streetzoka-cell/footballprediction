@@ -23,8 +23,7 @@ function initializeFirebase() {
 
     db = admin.firestore();
     db.settings({ 
-      ignoreUndefinedProperties: true, 
-      preferRest: true
+      ignoreUndefinedProperties: true 
     });
     
     logger.info("[Firebase] Firestore initialized.");
@@ -75,13 +74,13 @@ async function smartWrite(collectionPath, docId, data, ttlSeconds) {
   return { written: true };
 }
 
-// ★ FIX: CHUNK_SIZE reduced to 100 to prevent network socket drops completely
+// ★ FIX: Reduced chunk size to 50 to completely prevent socket drops
 async function smartBatchWrite(collectionPath, docs, ttlSeconds) {
   const database = getDb();
   let written = 0, skipped = 0;
   if (!docs.length) return { written, skipped };
 
-  const CHUNK_SIZE = 100; 
+  const CHUNK_SIZE = 50; 
   
   for (let i = 0; i < docs.length; i += CHUNK_SIZE) {
     const chunk = docs.slice(i, i + CHUNK_SIZE);
@@ -106,7 +105,7 @@ async function batchWrite(collectionPath, documents) {
   if (!documents.length) return 0;
   let totalWritten = 0;
   
-  const CHUNK_SIZE = 100;
+  const CHUNK_SIZE = 50;
   for (let i = 0; i < documents.length; i += CHUNK_SIZE) {
     const chunk = documents.slice(i, i + CHUNK_SIZE);
     const batch = database.batch();
@@ -128,7 +127,7 @@ async function deleteByIds(collectionPath, ids) {
   const colRef = database.collection(collectionPath);
   let totalDeleted = 0;
   
-  const CHUNK_SIZE = 100;
+  const CHUNK_SIZE = 50;
   for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
     const chunk = ids.slice(i, i + CHUNK_SIZE);
     const batch = database.batch();

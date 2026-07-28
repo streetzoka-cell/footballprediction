@@ -49,13 +49,12 @@
     "email": "streetzoka@gmail.com"
   },
   "homepage": "https://zokascore.xyz",
-      "scripts": {
+  "scripts": {
     "dev": "vite",
     "build": "node ./scripts/validate-deployment.js && vite build && node ./scripts/generate-sitemap.js",
     "lint": "eslint src",
     "preview": "vite preview"
   },
-
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
@@ -70,11 +69,11 @@
     "firebase-admin": "^12.7.0",
     "framer-motion": "^12.42.2",
     "konva": "^10.3.0",
-    "lucide-react": "^1.25.0",
+    "lucide-react": "^1.27.0",
     "nprogress": "^0.2.0",
     "prop-types": "^15.8.1",
-    "react": "^19.2.7",
-    "react-dom": "^19.2.7",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
     "react-helmet-async": "^3.0.0",
     "react-icons": "^5.7.0",
     "react-instantsearch": "^7.41.0",

@@ -9,6 +9,7 @@ const matchDetailsRepo = require('../repositories/matchDetailsRepository');
 const videosRepo = require('../repositories/videosRepository');
 const cacheInfoRepo = require('../repositories/cacheInfoRepository');
 const { writeFootballSnapshot } = require('./snapshotWriter');
+const { calculateMatchScore, categorizeMatch } = require('./matchScoreEngine');
 const logger = require('../utils/logger');
 const { withRetry } = require('../utils/retry');
 const { eventBus, EVENT } = require('../utils/eventBus');
@@ -41,7 +42,6 @@ class SmartScheduler {
     this.cronJobs.push(cron.schedule(SCHEDULER.ODDS_EVENING, () => this.syncOdds(), { timezone: 'UTC' }));
     this.cronJobs.push(cron.schedule(SCHEDULER.VIDEOS, () => this.syncVideos(), { timezone: 'UTC' }));
 
-    // Run initial syncs sequentially
     setTimeout(async () => {
       await this.syncTodayFixtures();
       await this.syncTomorrowFixtures();
@@ -65,6 +65,16 @@ class SmartScheduler {
     logger.info('[SmartScheduler] Stopped.');
   }
 
+  _prepareFixtures(matches) {
+    let scored = matches.map(doc => {
+      doc.matchScore = calculateMatchScore(doc);
+      doc.category = categorizeMatch(doc.matchScore);
+      return doc;
+    });
+    scored.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    return scored.slice(0, 500);
+  }
+
   async syncTodayFixtures() {
     if (!this.running) return;
     const dateStr = formatDate(new Date());
@@ -74,12 +84,14 @@ class SmartScheduler {
       try { matches = await goalApi.getFixtures(dateStr); } 
       catch (err) { matches = await livescoreApi.getFixtures(dateStr); }
       
-      const { written } = await withRetry(() => fixturesRepo.upsertFixtures(matches, dateStr), 'FixturesRepo.upsertFixtures');
-      await writeFootballSnapshot(dateStr, { matches });
+      const safeMatches = this._prepareFixtures(matches);
       
-      await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: matches.length, written, date: dateStr });
+      // ★ FIX: Only write the snapshot to save Firebase bandwidth and prevent timeouts
+      await writeFootballSnapshot(dateStr, { matches: safeMatches });
+      
+      await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: safeMatches.length, written: 0, date: dateStr });
       eventBus.emit(EVENT.DAILY_FIXTURES_UPDATED, { date: dateStr });
-      logger.info(`[Scheduler] ✓ Today: ${matches.length} fixtures, ${written} writes`);
+      logger.info(`[Scheduler] ✓ Today: ${safeMatches.length} fixtures saved to snapshot`);
     } catch (err) { logger.error(`[Scheduler] ✗ Today fixtures failed: ${err.message}`); }
   }
 
@@ -92,12 +104,12 @@ class SmartScheduler {
       try { matches = await goalApi.getFixtures(dateStr); } 
       catch (err) { matches = await livescoreApi.getFixtures(dateStr); }
       
-      const { written } = await withRetry(() => fixturesRepo.upsertFixtures(matches, dateStr), 'FixturesRepo.upsertFixtures');
-      await writeFootballSnapshot(dateStr, { matches });
+      const safeMatches = this._prepareFixtures(matches);
+      await writeFootballSnapshot(dateStr, { matches: safeMatches });
       
-      await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: matches.length, written, date: dateStr });
+      await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: safeMatches.length, written: 0, date: dateStr });
       eventBus.emit(EVENT.DAILY_FIXTURES_UPDATED, { date: dateStr });
-      logger.info(`[Scheduler] ✓ Tomorrow: ${matches.length} fixtures, ${written} writes`);
+      logger.info(`[Scheduler] ✓ Tomorrow: ${safeMatches.length} fixtures saved to snapshot`);
     } catch (err) { logger.error(`[Scheduler] ✗ Tomorrow fixtures failed: ${err.message}`); }
   }
 
@@ -110,13 +122,14 @@ class SmartScheduler {
       try { matches = await goalApi.getFixtures(dateStr); } 
       catch (err) { matches = await livescoreApi.getFixtures(dateStr); }
       
-      const finished = matches.filter(m => STATUS.FOOTBALL_FINISHED.includes(m.status));
-      const { written } = await withRetry(() => fixturesRepo.upsertResults(finished, dateStr), 'FixturesRepo.upsertResults');
-      await writeFootballSnapshot(dateStr, { matches, finished });
+      const safeMatches = this._prepareFixtures(matches);
+      const finished = safeMatches.filter(m => STATUS.FOOTBALL_FINISHED.includes(m.status));
       
-      await cacheInfoRepo.update(COLLECTIONS.RESULTS, { count: finished.length, written, date: dateStr });
+      await writeFootballSnapshot(dateStr, { matches: safeMatches, finished });
+      
+      await cacheInfoRepo.update(COLLECTIONS.RESULTS, { count: finished.length, written: 0, date: dateStr });
       eventBus.emit(EVENT.DAILY_FIXTURES_UPDATED, { date: dateStr });
-      logger.info(`[Scheduler] ✓ Yesterday: ${finished.length} results, ${written} writes`);
+      logger.info(`[Scheduler] ✓ Yesterday: ${finished.length} results saved to snapshot`);
     } catch (err) { logger.error(`[Scheduler] ✗ Yesterday results failed: ${err.message}`); }
   }
 
@@ -146,15 +159,11 @@ class SmartScheduler {
         const scorers = await goalApi.getTopScorers(league.id, league.season);
         await topScorersRepo.upsert(league.id, scorers, { id: league.id, name: league.name, country: league.country, logo: league.flag });
         ok++;
-      } catch (err) {
-        fail++;
-        if (err.message.includes('disabled')) break;
-      }
+      } catch (err) { fail++; if (err.message.includes('disabled')) break; }
     }
     logger.info(`[Scheduler] ✓ Top scorers: ${ok} ok, ${fail} fail`);
   }
 
-  // ★ FIX: Wrapped entirely in try/catch to prevent Unhandled Rejection
   async syncPredictions() {
     if (!this.running) return;
     try {
@@ -167,18 +176,12 @@ class SmartScheduler {
           const data = await goalApi.getPredictions(m.id);
           await matchDetailsRepo.upsertPredictions(m.id, data);
           ok++;
-        } catch (err) {
-          fail++;
-          if (err.message.includes('disabled')) break;
-        }
+        } catch (err) { fail++; if (err.message.includes('disabled')) break; }
       }
       logger.info(`[Scheduler] ✓ Predictions: ${ok} ok, ${fail} fail`);
-    } catch (err) {
-      logger.error(`[Scheduler] ✗ Predictions failed: ${err.message}`);
-    }
+    } catch (err) { logger.error(`[Scheduler] ✗ Predictions failed: ${err.message}`); }
   }
 
-  // ★ FIX: Wrapped entirely in try/catch to prevent Unhandled Rejection
   async syncOdds() {
     if (!this.running) return;
     try {
@@ -191,15 +194,10 @@ class SmartScheduler {
           const data = await goalApi.getOdds(m.id);
           await matchDetailsRepo.upsertOdds(m.id, data);
           ok++;
-        } catch (err) {
-          fail++;
-          if (err.message.includes('disabled')) break;
-        }
+        } catch (err) { fail++; if (err.message.includes('disabled')) break; }
       }
       logger.info(`[Scheduler] ✓ Odds: ${ok} ok, ${fail} fail`);
-    } catch (err) {
-      logger.error(`[Scheduler] ✗ Odds failed: ${err.message}`);
-    }
+    } catch (err) { logger.error(`[Scheduler] ✗ Odds failed: ${err.message}`); }
   }
 
   async syncVideos() {
@@ -260,7 +258,7 @@ class SmartScheduler {
         const liveCap = LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP;
 
         if (remaining !== null && remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
-          logger.warn(`[Scheduler] Live polling skipped — budget low (${remaining})`);
+          logger.warn(`[Scheduler] Live polling skipped — GoalAPI budget low (${remaining})`);
           this.livePollTimer = setTimeout(poll, LIVE_POLLING.IDLE_INTERVAL_MS);
           return;
         }
@@ -273,7 +271,7 @@ class SmartScheduler {
           try { matches = await goalApi.getLive(); } catch (err) { }
         }
 
-        await fixturesRepo.replaceLive(matches);
+        // ★ FIX: Only write to snapshot for live to prevent timeout
         const todayStr = formatDate(new Date());
         await writeFootballSnapshot(todayStr, { live: matches });
         eventBus.emit(EVENT.LIVE_FIXTURES_UPDATED);
