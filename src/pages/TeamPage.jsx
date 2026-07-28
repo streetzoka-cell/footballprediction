@@ -20,9 +20,10 @@ export default function TeamPage() {
 
   const isLoading = todayLoad || yestLoad || tomLoad;
 
+  // ★ FIX: The new backend returns flat `homeTeamId` and `awayTeamId`.
   const fixtures = [...todayFx, ...yestFx, ...tomFx].filter(m => {
-    const homeId = m.homeTeam?.id || m.homeTeamId;
-    const awayId = m.awayTeam?.id || m.awayTeamId;
+    const homeId = m.homeTeamId || m.homeTeam?.id;
+    const awayId = m.awayTeamId || m.awayTeam?.id;
     return String(homeId) === String(teamId) || String(awayId) === String(teamId);
   });
 
@@ -56,7 +57,8 @@ export default function TeamPage() {
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {fixtures.map(m => {
-                const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
+                // ★ FIX: Use flat fields directly
+                const matchLink = buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name);
                 return (
                   <Link 
                     to={matchLink} 
@@ -77,14 +79,14 @@ export default function TeamPage() {
                     onMouseLeave={(e) => e.currentTarget.style.background = 'var(--bg-surface)'}
                   >
                     <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ fontWeight: 700, fontSize: '.85rem' }}>{m.homeName}</span>
+                      <span style={{ fontWeight: 700, fontSize: '.85rem' }}>{m.homeName || m.homeTeam?.name || 'TBD'}</span>
                       <span style={{ color: 'var(--text-muted)', fontSize: '.75rem' }}>vs</span>
-                      <span style={{ fontWeight: 700, fontSize: '.85rem' }}>{m.awayName}</span>
+                      <span style={{ fontWeight: 700, fontSize: '.85rem' }}>{m.awayName || m.awayTeam?.name || 'TBD'}</span>
                     </div>
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', fontSize: '.8rem' }}>
                       <Calendar size={12} /> 
-                      {m.utcDate || m.date ? new Date(m.utcDate || m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'TBD'} 
-                      <span style={{ marginLeft: '5px', color: 'var(--accent)', fontWeight: 600 }}>{formatTime(m.utcDate || m.date)}</span>
+                      {m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'TBD'} 
+                      <span style={{ marginLeft: '5px', color: 'var(--accent)', fontWeight: 600 }}>{formatTime(m.date)}</span>
                     </span>
                   </Link>
                 );

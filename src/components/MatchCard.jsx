@@ -136,7 +136,7 @@ const MatchCardBase = ({
 
     if (kickoffTime > 0) {
       if (!isLive && !isFin && now > kickoffTime) {
-        if (elapsedMins >= 180) { return 'FT'; }
+        if (elapsedMins >= 120) { return 'FT'; }
         if (elapsedMins >= 50) { return 'HT'; }
         return '1H';
       }
@@ -236,7 +236,6 @@ const MatchCardBase = ({
 
   const interactive = !!onClick;
 
-  // ★ FIX: Use normalized fields (homeName, homeLogo, leagueName) with fallbacks
   const homeTeamName = match.homeName || match.homeTeam?.name || match.homeTeamName || 'TBD';
   const awayTeamName = match.awayName || match.awayTeam?.name || match.awayTeamName || 'TBD';
   const homeTeamLogo = match.homeLogo || match.homeTeam?.logo || match.homeTeamLogo || match.homeTeam?.crest;

@@ -1,30 +1,45 @@
-const { batchWrite, deleteByIds, getDb } = require('../config/firebase');
-const { validateMatch } = require('../domain/schemas');
-const { COLLECTIONS } = require('../config/constants');
-const logger = require('../utils/logger');
+const { COLLECTIONS, TTL } = require('../config/constants');
+const { smartBatchWrite, clearCollection, getDb } = require('../config/firebase');
 
-class FixtureRepository {
-  async getLiveFixtures() {
+class FixturesRepository {
+  async upsertFixtures(matches, dateStr) {
+    const tagged = matches.map(m => ({ ...m, date: dateStr || m.date?.split('T')[0] }));
+    return smartBatchWrite(COLLECTIONS.FIXTURES, tagged, TTL.FIXTURES);
+  }
+
+  async getByDate(dateStr) {
+    try {
+      const db = getDb();
+      const snap = await db.collection(COLLECTIONS.FIXTURES).where('date', '==', dateStr).get();
+      return snap.docs.map(d => d.data());
+    } catch (err) {
+      logger.error(`[FixturesRepo] getByDate failed: ${err.message}`);
+      return []; // Return empty array on network failure
+    }
+  }
+
+  async getLive() {
     const db = getDb();
-    const snapshot = await db.collection(COLLECTIONS.LIVE_FIXTURES).get();
-    return snapshot.docs.map(doc => validateMatch(doc.data())).filter(Boolean);
+    const snap = await db.collection(COLLECTIONS.LIVE_FIXTURES).get();
+    return snap.docs.map(d => d.data());
   }
 
-  async writeLiveFixtures(matches) {
-    const validMatches = matches.map(validateMatch).filter(Boolean);
-    if (validMatches.length === 0) return 0;
-    
-    const written = await batchWrite(COLLECTIONS.LIVE_FIXTURES, validMatches);
-    logger.info(`[FixtureRepo] Wrote ${written} live fixtures.`);
-    return written;
+  async replaceLive(matches) {
+    await clearCollection(COLLECTIONS.LIVE_FIXTURES);
+    if (!matches.length) return { written: 0 };
+    return smartBatchWrite(COLLECTIONS.LIVE_FIXTURES, matches, TTL.LIVE_FIXTURES);
   }
 
-  async deleteLiveFixtures(ids) {
-    if (!ids || ids.length === 0) return 0;
-    const deleted = await deleteByIds(COLLECTIONS.LIVE_FIXTURES, ids);
-    logger.info(`[FixtureRepo] Deleted ${deleted} stale live fixtures.`);
-    return deleted;
+  async getResults(dateStr) {
+    const db = getDb();
+    const snap = await db.collection(COLLECTIONS.RESULTS).where('date', '==', dateStr).get();
+    return snap.docs.map(d => d.data());
+  }
+
+  async upsertResults(matches, dateStr) {
+    const tagged = matches.map(m => ({ ...m, date: dateStr || m.date?.split('T')[0] }));
+    return smartBatchWrite(COLLECTIONS.RESULTS, tagged, TTL.RESULTS);
   }
 }
 
-module.exports = new FixtureRepository();
+module.exports = new FixturesRepository();

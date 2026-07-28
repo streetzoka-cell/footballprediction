@@ -1,44 +1,28 @@
 // backend/config/footballUniverse.js
+//
+// ★ FIX: The previous version keyed LEAGUE_UNIVERSE by classic API-Football
+// numeric IDs (39, 140, 135...). Your fixtures now come from Goal API, whose
+// league IDs look like "cmr77dvkr005nrx06lp7rvp49". Those numeric keys never
+// matched anything, so every match silently fell through to the TIER_3
+// default — FEATURED/IMPORTANT/HIDDEN categorization was running on
+// constants, not real data.
+//
+// Fix: build the map directly from your own LEAGUES config in constants.js,
+// which already carries a `tier` field per league and uses the correct
+// Goal API IDs. One source of truth — no separate ID list to keep in sync.
+const { LEAGUES } = require('./constants');
+
 const LEAGUE_TIERS = Object.freeze({
-  TIER_1: { score: 100, limit: 'unlimited' }, // Champions League, EPL, World Cup
-  TIER_2: { score: 75, limit: 'unlimited' },  // Eredivisie, MLS, Saudi Pro League
-  TIER_3: { score: 50, limit: 'unlimited' },  // Lower European leagues, Top African/Asian
-  TIER_4: { score: 15, limit: 'hidden' }      // Amateur, Youth, Deep Lower leagues
+  TIER_1: { score: 100, limit: 'unlimited' }, // World Cup, Champions League, EPL, La Liga...
+  TIER_2: { score: 75, limit: 'unlimited' },  // Championship, Serie B, 2. Bundesliga...
+  TIER_3: { score: 50, limit: 'unlimited' },  // Everything else tracked but not top/second tier
+  TIER_4: { score: 15, limit: 'hidden' },     // Reserved for amateur/youth if you add them later
 });
 
-// Map API-Football league IDs to Tiers
-const LEAGUE_UNIVERSE = Object.freeze({
-  1: 'TIER_1',    // World Cup
-  2: 'TIER_1',    // Champions League
-  3: 'TIER_1',    // Europa League
-  4: 'TIER_1',    // Euro Championship
-  39: 'TIER_1',   // Premier League
-  140: 'TIER_1',  // La Liga
-  135: 'TIER_1',  // Serie A
-  78: 'TIER_1',   // Bundesliga
-  61: 'TIER_1',   // Ligue 1
-  13: 'TIER_1',   // Copa Libertadores
-  71: 'TIER_1',   // Brazil Serie A
-  128: 'TIER_1',  // Argentina Primera División
-  253: 'TIER_1',  // MLS
-  262: 'TIER_1',  // Liga MX
-  307: 'TIER_1',  // Saudi Pro League
-  
-  40: 'TIER_2',   // Championship
-  136: 'TIER_2',  // Serie B
-  79: 'TIER_2',   // 2. Bundesliga
-  62: 'TIER_2',   // Ligue 2
-  141: 'TIER_2',  // Segunda División
-  94: 'TIER_2',   // Primeira Liga
-  88: 'TIER_2',   // Eredivisie
-  203: 'TIER_2',  // Süper Lig
-  10: 'TIER_2',   // Club Friendlies (High tier friendlies)
-  
-  235: 'TIER_3',  // Premiership (Scotland)
-  113: 'TIER_3',  // Allsvenskan
-  103: 'TIER_3',  // Eliteserien
-  218: 'TIER_3',  // Bundesliga (Austria)
-  207: 'TIER_3',  // Super League (Switzerland)
-});
+const LEAGUE_UNIVERSE = Object.freeze(
+  Object.fromEntries(
+    LEAGUES.map((l) => [l.id, `TIER_${l.tier || 3}`])
+  )
+);
 
 module.exports = { LEAGUE_TIERS, LEAGUE_UNIVERSE };

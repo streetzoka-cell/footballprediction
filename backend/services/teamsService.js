@@ -4,7 +4,7 @@ const { LEAGUES } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
-const providerManager = require("../providers/providerManager");
+const providerManager = require("../config/providerManager");
 const { FREE_LEAGUES_MAP } = require("../config/freeLeagues");
 
 class TeamsService {

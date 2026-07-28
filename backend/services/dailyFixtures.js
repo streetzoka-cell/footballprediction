@@ -13,7 +13,7 @@ const { getMeta, setMeta } = require("../config/firebase");
 const cache = require("../utils/cache");
 const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
-const providerManager = require('../providers/providerManager');
+const providerManager = require('../config/providerManager');
 const { calculateMatchScore, categorizeMatch } = require("./matchScoreEngine");
 
 class DailyFixturesService {

@@ -18,8 +18,9 @@ export default function LeaguePage() {
   
   const leagueName = slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'League';
   
-  // Extract the table array correctly
-  const standingsTable = standingsData?.[0]?.standings?.[0] || [];
+  // ★ FIX: Backend returns { id, name, country, logo, flag, season, standings: [...] }
+  // The array of teams is inside `standingsData.standings[0]` (or just `standings` depending on league format)
+  const standingsTable = standingsData?.standings?.[0] || [];
   const path = `/league/${leagueId}/${slug}`;
 
   // ★ Centralized SEO generation
@@ -60,7 +61,7 @@ export default function LeaguePage() {
 
               {standingsTable.map((team, i) => (
                 <div 
-                  key={team.teamId || team.rank} 
+                  key={team.team?.id || team.rank} 
                   style={{ 
                     display: 'grid', 
                     gridTemplateColumns: '30px 1fr 40px 40px 40px 40px 50px', 
@@ -77,18 +78,19 @@ export default function LeaguePage() {
                 >
                   <span style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '.85rem' }}>{team.rank || i + 1}</span>
                   <Link 
-                    to={buildTeamRoute(team.teamId, team.teamName)} 
+                    to={buildTeamRoute(team.team?.id, team.team?.name)} 
                     style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '.9rem' }}
                   >
-                    {team.teamLogo && <img src={team.teamLogo} alt={team.teamName} width="18" height="18" style={{ objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />}
+                    {team.team?.logo && <img src={team.team?.logo} alt={team.team?.name} width="18" height="18" style={{ objectFit: 'contain' }} onError={(e) => e.target.style.display = 'none'} />}
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {team.teamName}
+                      {team.team?.name || 'TBD'}
                     </span>
                   </Link>
-                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.played}</span>
-                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.win}</span>
-                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.draw}</span>
-                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.lose}</span>
+                  {/* ★ FIX: Backend nests stats inside `all` */}
+                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.all?.played ?? '-'}</span>
+                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.all?.win ?? '-'}</span>
+                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.all?.draw ?? '-'}</span>
+                  <span style={{ textAlign: 'center', fontSize: '.8rem', color: 'var(--text-secondary)' }}>{team.all?.lose ?? '-'}</span>
                   <span style={{ textAlign: 'right', fontSize: '.9rem', color: 'var(--accent)', fontWeight: 800 }}>{team.points}</span>
                 </div>
               ))}

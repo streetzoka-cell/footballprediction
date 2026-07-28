@@ -1,7 +1,7 @@
 const { getDb } = require("../config/firebase");
 const { getDateOffset } = require("../config/constants");
 const { calculateMatchScore, categorizeMatch } = require("./matchScoreEngine");
-const providerManager = require("../providers/providerManager");
+const providerManager = require("../config/providerManager");
 const logger = require("../utils/logger");
 
 class RangeFixturesService {
@@ -74,7 +74,7 @@ class RangeFixturesService {
       if (!matchesByDate.has(matchDateStr)) matchesByDate.set(matchDateStr, []);
       matchesByDate.get(matchDateStr).push(doc);
     });
-    
+
 
     let totalWrites = 0;
 

@@ -9,13 +9,14 @@ import { useLiveMatches } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/constants';
 import { todayStr } from '../utils/dates';
+
+// ★ FIX: Correct import path for matchEngine
 import { normalizeMatch } from '../engine/matchEngine';
 
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 
 // ★ Centralized imports
-
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
 
@@ -69,12 +70,13 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
   if (!featured) return null;
 
   const m = featured.match;
-    const homeLogo = m.homeLogo;
-  const awayLogo = m.awayLogo;
-  const homeName = m.homeName || 'TBD';
-  const awayName = m.awayName || 'TBD';  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
+  // ★ FIX: Read flat fields directly
+  const homeLogo = m.homeLogo || m.homeTeam?.logo;
+  const awayLogo = m.awayLogo || m.awayTeam?.logo;
+  const homeName = m.homeName || m.homeTeam?.name || 'TBD';
+  const awayName = m.awayName || m.awayTeam?.name || 'TBD';
+  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
   
-  // ★ Using centralized route builder
   const matchLink = m.id ? buildMatchRoute(m.id, homeName, awayName) : '/predictions';
 
   return (
@@ -118,9 +120,9 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
 
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
-    const homeName = m.homeName || 'TBD';
-  const awayName = m.awayName || 'TBD';  
-  // ★ Using centralized route builder
+  // ★ FIX: Read flat fields directly
+  const homeName = m.homeName || m.homeTeam?.name || 'TBD';
+  const awayName = m.awayName || m.awayTeam?.name || 'TBD';
   const matchLink = buildMatchRoute(m.id, homeName, awayName);
   
   return (
@@ -209,21 +211,16 @@ export default function Navbar() {
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
-  // ★ SECURE ADMIN STATE (Removed localStorage hack)
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  // ★ Using centralized normalizeMatch from matchEngine
+  // ★ FIX: Use correct normalizeMatch import
   const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m, true, Date.now())).filter(Boolean), [rawLive]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
 
-  // ★ SECURE ADMIN CHECK: Listen to admin_users collection in real-time
   useEffect(() => {
-    if (!uid) {
-      setIsAdmin(false);
-      return;
-    }
+    if (!uid) { setIsAdmin(false); return; }
     const adminRef = doc(db, 'admin_users', uid);
     const unsub = onSnapshot(adminRef, (docSnap) => {
       setIsAdmin(docSnap.exists());
@@ -395,7 +392,7 @@ export default function Navbar() {
 
   const renderNotifDropdown = useCallback(() => (
     <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)', background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both', backdropFilter: 'blur(20px)' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyConent: 'space-between', background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)' }}>
+      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)' }}>
         <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}><Bell size={16} style={{ color: '#10b981' }} /> Notifications</span>
         {predNotifs.length > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(16,185,129,0.2)' }}>{predNotifs.length} New</span>}
       </div>
@@ -460,7 +457,7 @@ export default function Navbar() {
             <div ref={searchRef} style={{ position: 'relative' }}>
               <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
               {searchOpen && (
-                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }}>
+                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }} emitsChange={true}>
                   <Search size={16} style={{ color: '#10b981', flexShrink: 0 }} />
                   <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0 }} />
                   {searchQuery && <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>}

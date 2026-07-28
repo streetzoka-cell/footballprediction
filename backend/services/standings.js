@@ -3,7 +3,7 @@ const { LEAGUES, SEASON } = require("../config/constants");
 const { withRetry } = require("../utils/retry");
 const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
-const providerManager = require("../providers/providerManager"); // ★ NEW IMPORT
+const providerManager = require("../config/providerManager"); // ★ NEW IMPORT
 
 class StandingsService {
   constructor(standingRepository) {
