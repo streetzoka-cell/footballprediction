@@ -2,16 +2,13 @@
 import { Link } from 'react-router-dom';
 import { Brain, Flame, Target, TrendingUp, Loader, ChevronRight } from 'lucide-react';
 import { useFixtures } from '../hooks/useFixtures';
-import { getLocalDateFromUtc, formatTime, todayStr, yesterdayStr, tomorrowStr, parseDateAsUTC } from '../utils/dates';
+import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import SEO from '../components/SEO';
+import { ListSkeleton, ErrorState } from '../components/StateFeedback';
+import EmptyState from '../components/EmptyState';
 
-// ==========================================
-// HELPER FUNCTIONS & COMPONENTS
-// ==========================================
-
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-
+// Helper functions directly related to UI display only
 const getConfidence = (h, d, a) => {
   const m = Math.max(h, d, a);
   if (m >= 55) return { label: 'High', color: '#10b981' };
@@ -116,20 +113,19 @@ const ProbBar = memo(({ label, value, type, delay = 0 }) => {
   );
 });
 
-const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact = false, goalFlash = false, kickOff = false, scoreKey = null, onClick, index = 0, now }) => {
+const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact = false, goalFlash = false, kickOff = false, scoreKey = null, onClick, index = 0 }) => {
   const [hovered, setHovered] = useState(false);
 
+  // ★ Clean usage of normalized properties from matchEngine
   const live = useMemo(() => isLiveStatus(match.status, SPORT.FOOTBALL) || !!match.isLive, [match.status, match.isLive]);
   const finished = useMemo(() => isFinishedStatus(match.status, SPORT.FOOTBALL) || !!match.isFinished, [match.status, match.isFinished]);
   const scheduled = useMemo(() => !live && !finished && (match.homeScore == null), [match.homeScore, live, finished]);
 
-  const safeMinute = useMemo(() => match.minute ?? match.elapsed ?? match.currentTime ?? null, [match.minute, match.elapsed, match.currentTime]);
-  const displayMinute = match.displayMinute || safeMinute || 0;
+  const displayMinute = match.displayMinute || 0;
+  const timeStr = match.kickoff;
+  const dateStr = match.dateStr; 
 
-  const timeStr = useMemo(() => match.kickoff || (match.date ? new Date(match.date).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : ''), [match.kickoff, match.date]);
-  const dateStr = useMemo(() => match.date ? new Date(match.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '', [match.date]);
-  
-  const lc = match.league?.color || '#10b981';
+  const lc = '#10b981';
   const hasProbs = showProb && match.homeWinProb != null;
   const hasOdds = showOdds && match.homeOdds;
   const cf = useMemo(() => hasProbs ? getConfidence(match.homeWinProb, match.drawProb, match.awayWinProb) : null, [hasProbs, match.homeWinProb, match.drawProb, match.awayWinProb]);
@@ -140,17 +136,13 @@ const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact =
   }, [match.predictedHomeScore, match.predictedAwayScore]);
 
   const actual = useMemo(() => {
-    const rawHomeScore = match.homeScore != null ? match.homeScore : (
-      match.actualHomeScore ?? match.goalsHome ?? match.score?.current?.home ?? match.score?.live?.home ?? match.score?.fullTime?.home ?? match.score?.halfTime?.home ?? match.score?.regularTime?.home ?? match.goals?.home ?? null
-    );
-    const rawAwayScore = match.awayScore != null ? match.awayScore : (
-      match.actualAwayScore ?? match.goalsAway ?? match.score?.current?.away ?? match.score?.live?.away ?? match.score?.fullTime?.away ?? match.score?.halfTime?.away ?? match.score?.regularTime?.away ?? match.goals?.away ?? null
-    );
+    const rawHomeScore = match.homeScore;
+    const rawAwayScore = match.awayScore;
 
     if (finished && rawHomeScore != null && rawAwayScore != null) return { home: rawHomeScore, away: rawAwayScore };
     if (live || match.isStarted) return { home: rawHomeScore ?? 0, away: rawAwayScore ?? 0 };
     return undefined;
-  }, [finished, live, match.isStarted, match.homeScore, match.awayScore, match.actualHomeScore, match.actualAwayScore, match.score, match.goalsHome, match.goalsAway, match.goals]);
+  }, [finished, live, match.isStarted, match.homeScore, match.awayScore]);
 
   const oddsData = useMemo(() => [
     { label: '1', value: match.homeOdds, key: 'home' },
@@ -165,10 +157,10 @@ const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact =
   const handleClick = () => { if (onClick) onClick(match); };
   const interactive = !!onClick;
 
-  const homeTeamName = match.homeTeam?.name || match.homeName || 'TBD';
-  const awayTeamName = match.awayTeam?.name || match.awayName || 'TBD';
-  const homeTeamLogo = match.homeTeam?.logo || match.homeLogo || match.homeTeam?.crest;
-  const awayTeamLogo = match.awayTeam?.logo || match.awayLogo || match.awayTeam?.crest;
+  const homeTeamName = match.homeName;
+  const awayTeamName = match.awayName;
+  const homeTeamLogo = match.homeLogo;
+  const awayTeamLogo = match.awayLogo;
 
   return (
     <div
@@ -182,9 +174,9 @@ const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact =
 
       <div className="mc-header">
         <div className="mc-league">
-          {(match.league?.emblem || match.leagueLogo) && <img className="mc-league-logo" src={match.league?.emblem || match.leagueLogo} alt="" />}
-          {!match.league?.emblem && !match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
-          <span>{match.league?.name || match.leagueName || 'Other'}</span>
+          {match.leagueLogo && <img className="mc-league-logo" src={match.leagueLogo} alt="" />}
+          {!match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
+          <span>{match.leagueName}</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {statusLabel && (
@@ -233,133 +225,12 @@ const MatchCardBase = memo(({ match, showOdds = true, showProb = true, compact =
   );
 });
 
-// ==========================================
-// CORE NORMALIZATION & PAGE
-// ==========================================
-
-function extractMatchDate(m) {
-  if (!m) return '';
-  const rawDate = m.utcDate || m.date;
-  if (rawDate && rawDate.length === 10) return rawDate;
-  if (rawDate) return getLocalDateFromUtc(rawDate);
-  if (m.timestamp) {
-    const d = new Date(m.timestamp);
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  }
-  return '';
-}
-
-function normalizeMatch(raw, isPrimary, now) {
-  if (!raw) return null;
-  const id = String(raw.id || raw.matchId);
-  let status = raw.status || '';
-
-  let dateStr = extractMatchDate(raw);
-  let kickoff = 'TBD';
-  let timestamp = 0;
-
-  const rawDate = raw.utcDate || raw.date;
-  if (rawDate) {
-    try {
-      const dt = parseDateAsUTC(rawDate);
-      kickoff = formatTime(rawDate);
-      timestamp = dt.getTime();
-    } catch {}
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
-  }
-
-  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeTeamLogo };
-  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayTeamLogo };
-  const league = raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo };
-
-  let isLive = isPrimary ? (!!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL)) : isLiveStatus(status, SPORT.FOOTBALL);
-  let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  let isFinished = isPrimary ? (!!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL)) : isFinishedStatus(status, SPORT.FOOTBALL);
-
-  let isStarted = false;
-  let isNearFT = false;
-  let displayMinute = raw.minute || raw.elapsed || 0;
-
-  const kickoffTime = timestamp;
-  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
-  let smartStatus = status;
-
-  if (kickoffTime > 0) {
-    if (!isLive && !isFinished && now > kickoffTime) {
-      if (elapsedMins >= 180) { isFinished = true; status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 50) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
-      else { isStarted = true; status = '1H'; smartStatus = '1H'; displayMinute = raw.minute || Math.min(elapsedMins, 45); }
-    }
-
-    if (isLive || isStarted) {
-      if (elapsedMins >= 100) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
-      else if ((status === '1H' || status === 'IN_PLAY') && elapsedMins >= 50 && elapsedMins < 60) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
-      else if (status === 'HT' || status === 'HALF_TIME') { isHT = true; smartStatus = 'HT'; }
-      else { smartStatus = status; }
-
-      if (smartStatus === '1H') displayMinute = raw.minute || Math.min(elapsedMins, 45);
-      if (smartStatus === '2H' || smartStatus === 'ET') {
-        const secondHalfMins = Math.max(0, elapsedMins - 60);
-        displayMinute = raw.minute || Math.min(45 + secondHalfMins, 90);
-        if (elapsedMins > 90 && !isFinished) displayMinute = raw.minute || Math.min(elapsedMins, 100);
-      }
-      if (elapsedMins >= 75 && !isFinished) isNearFT = true;
-    }
-  }
-
-  let homeScore = raw.homeScore != null ? raw.homeScore : (
-    raw.goalsHome ?? raw.score?.current?.home ?? raw.score?.live?.home ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? raw.score?.regularTime?.home ?? raw.goals?.home ?? null
-  );
-  let awayScore = raw.awayScore != null ? raw.awayScore : (
-    raw.goalsAway ?? raw.score?.current?.away ?? raw.score?.live?.away ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? raw.score?.regularTime?.away ?? raw.goals?.away ?? null
-  );
-
-  if (!isLive && !isHT && !isFinished) {
-    homeScore = null;
-    awayScore = null;
-  }
-
-  return {
-    id, dateStr, kickoff, timestamp,
-    status: smartStatus, isLive, isHT, isFinished,
-    minute: raw.minute || raw.elapsed || null,
-    displayMinute, isStarted, isNearFT,
-    homeName: homeTeam.shortName || homeTeam.name || 'TBD',
-    awayName: awayTeam.shortName || awayTeam.name || 'TBD',
-    homeLogo: homeTeam.crest || homeTeam.logo,
-    awayLogo: awayTeam.crest || awayTeam.logo,
-    homeTeamId: homeTeam.id,
-    awayTeamId: awayTeam.id,
-    homeScore, awayScore,
-    leagueName: league.name || 'Other',
-    leagueId: league.id || raw.leagueKey,
-    leagueLogo: league.emblem || league.logo,
-    score: raw.score, stats: raw.stats || raw.matchStats || [],
-    matchScore: raw.matchScore || 0,
-    category: raw.category || 'NORMAL',
-    homeWinProb: raw.homeWinProb ?? raw.prediction?.homeWinProb ?? null,
-    drawProb: raw.drawProb ?? raw.prediction?.drawProb ?? null,
-    awayWinProb: raw.awayWinProb ?? raw.prediction?.awayWinProb ?? null,
-    predictedHomeScore: raw.predictedHomeScore ?? raw.prediction?.homeScore ?? null,
-    predictedAwayScore: raw.predictedAwayScore ?? raw.prediction?.awayScore ?? null,
-    homeOdds: raw.homeOdds ?? raw.odds?.home ?? null,
-    drawOdds: raw.drawOdds ?? raw.odds?.draw ?? null,
-    awayOdds: raw.awayOdds ?? raw.odds?.away ?? null,
-  };
-}
-
 export default function MasterGames() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
-  const { data: rawFixtures = [], isLoading } = useFixtures(selectedDate);
+  const { data: rawFixtures = [], isLoading, error } = useFixtures(selectedDate);
   
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000); 
-    return () => clearInterval(t);
-  }, []);
-
-  const allMatches = useMemo(() => rawFixtures.map(m => normalizeMatch(m, true, now)).filter(m => m && m.dateStr === selectedDate), [rawFixtures, selectedDate, now]);
+  // ★ Hooks return normalized data directly. No mapping needed here.
+  const allMatches = useMemo(() => rawFixtures.filter(m => m.dateStr === selectedDate), [rawFixtures, selectedDate]);
 
   // Smart Filtering: Only include matches that are Featured OR have AI Probabilities OR High MatchScore
   const smartMatches = useMemo(() => {
@@ -382,10 +253,21 @@ export default function MasterGames() {
   const isYesterday = selectedDate === yesterdayStr();
   const isTomorrow = selectedDate === tomorrowStr();
 
+  if (error && smartMatches.length === 0) {
+    return (
+      <div className="zoka-page">
+        <SEO title="Football AI Predictions" />
+        <div className="zoka-wrap" style={{ paddingTop: '20px' }}>
+          <ErrorState error={error} />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="zoka-page">
       <SEO 
-        title="Football AI Predictions, Smart Value Picks & Match Intelligence | ZOKA" 
+        title="Football AI Predictions, Smart Value Picks & Match Intelligence" 
         description="Discover high-value football matches, AI predictions, and deep statistical insights on ZOKA. Filter out the noise and focus on the smartest matches today." 
         keywords="AI football predictions, smart value bets, match intelligence, ZOKA predictions" 
         robots="index,follow" 
@@ -406,18 +288,18 @@ export default function MasterGames() {
         </div>
 
         {isLoading && smartMatches.length === 0 ? (
-          <div style={{ display: 'flex', justifyContent: 'center', padding: '40px' }}>
-            <Loader size={24} className="animate-spin" style={{ color: 'var(--text-muted)' }} />
-          </div>
+          <ListSkeleton count={5} />
         ) : smartMatches.length === 0 ? (
-          <div className="zoka-empty">
-            <div className="zoka-empty-icon"><Brain size={28} /></div>
-            <p>No smart matches or AI predictions available for this date.</p>
-            <p className="zoka-empty-hint">Check back later or view all standard fixtures.</p>
-            <Link to="/fixtures" className="zoka-cta" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', borderRadius: 8, background: 'rgba(16,185,129,.1)', color: '#10b981', textDecoration: 'none', fontWeight: 700, fontSize: '.85rem' }}>
-              View All Fixtures <ChevronRight size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />
-            </Link>
-          </div>
+          <EmptyState 
+            icon={Brain} 
+            title="No smart matches or AI predictions available for this date." 
+            hint="Check back later or view all standard fixtures." 
+            action={
+              <Link to="/fixtures" className="zoka-cta" style={{ display: 'inline-block', marginTop: 16, padding: '10px 20px', borderRadius: 8, background: 'rgba(16,185,129,.1)', color: '#10b981', textDecoration: 'none', fontWeight: 700, fontSize: '.85rem' }}>
+                View All Fixtures <ChevronRight size={14} style={{ display: 'inline', verticalAlign: 'middle' }} />
+              </Link>
+            }
+          />
         ) : (
           <>
             {highConf.length > 0 && (
@@ -426,7 +308,7 @@ export default function MasterGames() {
                   <Flame size={18} style={{ color: '#ef4444' }} />
                   <span className="zoka-league-name">High Confidence Value</span>
                 </div>
-                {highConf.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} now={now} />)}
+                {highConf.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} />)}
               </div>
             )}
 
@@ -436,7 +318,7 @@ export default function MasterGames() {
                   <Target size={18} style={{ color: '#fbbf24' }} />
                   <span className="zoka-league-name">Medium Confidence</span>
                 </div>
-                {medConf.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} now={now} />)}
+                {medConf.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} />)}
               </div>
             )}
 
@@ -446,7 +328,7 @@ export default function MasterGames() {
                   <TrendingUp size={18} style={{ color: '#3b82f6' }} />
                   <span className="zoka-league-name">Smart Featured Matches</span>
                 </div>
-                {otherSmart.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} now={now} />)}
+                {otherSmart.map((m, i) => <MatchCardBase key={m.id} match={m} index={i} />)}
               </div>
             )}
           </>

@@ -7,11 +7,12 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useUserPredictions, useActivePredictions, useUserPoints } from '../hooks/useUserData';
 import { useLiveMatches } from '../hooks/useFixtures';
-import { calcPoints, SPORT, isFinishedStatus } from '../utils/constants';
+import { SPORT, isFinishedStatus } from '../utils/constants';
 import { todayStr } from '../utils/dates';
-import SEO from "../components/SEO";
+import SEO from '../components/SEO';
 
-// ★ NEW IMPORTS FOR SECURE ADMIN CHECK
+// ★ Centralized imports
+import { calculateUserStats } from '../engine/predictionEngine';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
 
@@ -200,16 +201,13 @@ export default function Profile() {
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  // ★ SECURE ADMIN STATE
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // ★ Enterprise Data Fetching
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPoints = null } = useUserPoints();
   const { data: liveFixtures = [] } = useLiveMatches();
 
-  // ★ SECURE ADMIN CHECK: Listen to admin_users collection in real-time
   useEffect(() => {
     if (!currentUser?.uid) {
       setIsAdmin(false);
@@ -224,46 +222,8 @@ export default function Profile() {
     return () => unsub();
   }, [currentUser, db]);
 
-  const liveStats = useMemo(() => {
-    if (isDemo || !currentUser?.uid) return { pts: 0, ex: 0, rs: 0, mi: 0, pred: 0 };
-    const uid = currentUser.uid;
-    const today = todayStr();
-    const userPreds = Object.values(userPredictions || {}).filter(p => p.userId === uid && p.matchDate === today);
-    
-    const matchesMap = new Map();
-    (activePredictions || []).forEach(p => matchesMap.set(String(p.matchId), p));
-    liveFixtures.forEach(f => {
-      const matchId = String(f.id);
-      const existing = matchesMap.get(matchId);
-      if (existing) {
-        matchesMap.set(matchId, {
-          ...existing,
-          status: f.status || existing.status,
-          homeScore: f.homeScore ?? existing.homeScore,
-          awayScore: f.awayScore ?? existing.awayScore,
-          isLive: f.isLive || existing.isLive,
-          isFinished: f.isFinished || existing.isFinished,
-        });
-      }
-    });
-
-    let pts = 0, ex = 0, rs = 0, mi = 0, pred = 0;
-    userPreds.forEach(p => {
-      pred++;
-      const match = matchesMap.get(String(p.matchId));
-      if (match && isFinishedStatus(match.status, SPORT.FOOTBALL) && match.homeScore != null) {
-        const r = calcPoints(p.homeScore, p.awayScore, match.homeScore, match.awayScore);
-        if (r.type !== 'pending') {
-          pts += r.points;
-          if (r.type === 'exact') ex++;
-          else if (r.type === 'result') rs++;
-          else mi++;
-        }
-      }
-    });
-    
-    return { pts, ex, rs, mi, pred };
-  }, [isDemo, currentUser, userPredictions, activePredictions, liveFixtures]);
+  // ★ REFACTORED: Use centralized engine for live stats calculation
+  const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
 
   if (authLoading) return <ProfileSkeleton />;
 
@@ -310,7 +270,7 @@ export default function Profile() {
   return (
     <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
       <SEO
-        title="My Profile & Settings | ZOKASCORE"
+        title="My Profile & Settings"
         description="View and manage your ZOKASCORE profile. Update your account settings, track your prediction history, and review your overall leaderboard rankings here."
         keywords="user profile, account settings, ZOKASCORE profile, prediction history, user dashboard"
         robots="noindex,nofollow"
@@ -355,7 +315,6 @@ export default function Profile() {
                 display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
               }}>
                 {profile.displayName}
-                {/* ★ SECURE ADMIN BADGE */}
                 {isAdmin && (
                   <span style={{
                     fontSize: '.66rem', padding: '3px 10px', borderRadius: 7,

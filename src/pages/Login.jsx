@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X } from 'lucide-react';
-import SEO from "../components/SEO";
+import SEO from '../components/SEO';
 
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
@@ -223,7 +223,7 @@ export default function Login() {
       overflow: 'hidden',
     }}>
       <SEO
-        title="Login to Your Account | ZOKASCORE"
+        title="Login to Your Account"
         description="Securely log in to your ZOKASCORE account to access premium football predictions, track your leaderboard progress, and manage your gaming profile here."
         keywords="login, ZOKASCORE account, user login, secure access, member login"
         path="/login"

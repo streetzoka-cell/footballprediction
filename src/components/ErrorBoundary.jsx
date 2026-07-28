@@ -1,4 +1,5 @@
 import React from "react";
+import { useObservabilityStore } from "../store/useObservabilityStore";
 
 export default class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -6,12 +7,20 @@ export default class ErrorBoundary extends React.Component {
     this.state = { hasError: false };
   }
 
-  static getDerivedStateFromError() {
+  static getDerivedStateFromError(error) {
     return { hasError: true };
   }
 
   componentDidCatch(error, info) {
     console.error("ErrorBoundary caught:", error, info);
+    
+    // Log to observability store, but don't block navigation
+    useObservabilityStore.getState().logError({
+      message: error.message,
+      stack: error.stack,
+      type: 'react_boundary',
+      info: info.componentStack
+    });
   }
 
   render() {

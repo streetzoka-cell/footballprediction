@@ -9,10 +9,10 @@ const {
   isBasketballConfigured,
 } = require("../config/basketballApi");
 const logger = require("../utils/logger");
-const RangeFixturesService = require("../services/rangeFixturesService"); // ★ NEW IMPORT
+const RangeFixturesService = require("../services/rangeFixturesService");
 
 const MS_PER_HOUR = 3600000;
-const MIN_POLL_INTERVAL_MS = 180000;
+const MIN_POLL_INTERVAL_MS = 15000; 
 const MIN_WINDOW_HOURS = 0.5;
 
 class Scheduler {
@@ -35,7 +35,6 @@ class Scheduler {
     logger.info(" Initial Sync (meta-aware)");
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 
-    // ★ NEW: Run Range Fetcher on startup to update 10 days back / 14 days forward
     const rangeService = new RangeFixturesService();
     await this._executeCustomJob("RangeFixtures", rangeService);
 
@@ -50,7 +49,7 @@ class Scheduler {
     logger.info("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
   }
 
-  start() {
+    start() {
     this.running = true;
     logger.info("[Scheduler] Starting smart scheduler...");
 
@@ -71,8 +70,12 @@ class Scheduler {
       );
     }
 
-    // ★ NEW: Schedule Range Fetcher at 12:00 AM UTC daily
     this._scheduleRangeFetcher();
+
+    // ★ Re-enabled Reference Data Syncs
+    this._scheduleRecurring("footballLeagues", () => this._getMsUntilDaily("0 4 * * *"), () => this._getMsUntilDaily("0 4 * * *"));
+    this._scheduleRecurring("footballStandings", () => this._getMsUntilDaily("0 5 * * *"), () => this._getMsUntilDaily("0 5 * * *"));
+    this._scheduleRecurring("footballTeams", () => this._getMsUntilDaily("0 6 * * *"), () => this._getMsUntilDaily("0 6 * * *"));
 
     this._logSchedule();
     logger.info("[Scheduler] Started.");
@@ -85,18 +88,16 @@ class Scheduler {
       await this._executeCustomJob("RangeFixtures", rangeService);
       
       if (this.running) {
-        // Schedule for next day at 12:00 AM UTC (Midnight)
         const next = new Date();
-        next.setUTCHours(0, 0, 0, 0); // ★ FIX: 12 AM UTC
+        next.setUTCHours(0, 0, 0, 0);
         if (next <= new Date()) next.setUTCDate(next.getUTCDate() + 1);
         const ms = next - new Date();
         this.cronTimers.push(setTimeout(runRange, ms));
       }
     };
     
-    // Schedule the first run
     const initialNext = new Date();
-    initialNext.setUTCHours(0, 0, 0, 0); // ★ FIX: 12 AM UTC
+    initialNext.setUTCHours(0, 0, 0, 0);
     if (initialNext <= new Date()) initialNext.setUTCDate(initialNext.getUTCDate() + 1);
     this.cronTimers.push(setTimeout(runRange, initialNext - new Date()));
   }
@@ -463,7 +464,6 @@ class Scheduler {
     }
   }
 
-  // ★ NEW: Custom job executor for services that don't take a `force` argument (like RangeFixtures)
   async _executeCustomJob(name, service) {
     const jobPromise = service.run();
     this.activeJobs.add(jobPromise);
@@ -480,7 +480,7 @@ class Scheduler {
 
   _updateStatus(name, status, result = null, error = null) {
     const cur = this.syncStatus[name];
-    if (!cur) return; // Safety check
+    if (!cur) return;
     
     cur.status = status;
     cur.lastSync = new Date().toISOString();
@@ -550,19 +550,16 @@ class Scheduler {
   }
 
   _logSchedule() {
-    logger.info("[Scheduler] ═══ Adaptive Schedule v6 ═══");
+    logger.info("[Scheduler] ═══ Adaptive Schedule v6 (Greedy Mode) ═══");
     logger.info("  Density-Aware Polling Intervals:");
-    logger.info("    0 live       → 30 min  (IDLE)");
-    logger.info("    1–5 live     → 15 min  (LIVE_LOW)");
-    logger.info("    6–15 live    → 10 min  (LIVE_MED)");
-    logger.info("    16–40 live   →  5 min  (LIVE_HIGH)");
-    logger.info("    41+ live     →  3 min  (LIVE_MASS)");
-    logger.info("    80'+ / ET    →  5 min  (NEAR_FT)");
-    logger.info("  Budget Pacing dynamically adjusts interval if calls are running low.");
+    logger.info("    0 live       → 5 min   (IDLE)");
+    logger.info("    1–5 live     → 30 sec  (LIVE_LOW)");
+    logger.info("    6–15 live    → 30 sec  (LIVE_MED)");
+    logger.info("    16–40 live   → 30 sec  (LIVE_HIGH)");
+    logger.info("    41+ live     → 30 sec  (LIVE_MASS)");
+    logger.info("    80'+ / ET    → 15 sec  (NEAR_FT)");
     logger.info(`  Football Live Cap:   ${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}/day`);
-    logger.info(`  Basketball Live Cap: ${LIVE_POLLING.BASKETBALL_DAILY_LIVE_CAP}/day`);
     logger.info(`  Daily API Budget:    ${API.DAILY_BUDGET}`);
-    logger.info(`  Reserve for Daily:   ${LIVE_POLLING.RESERVE_FOR_DAILY_CRON} calls`);
     logger.info("[Scheduler] ═════════════════════════════════════");
   }
 }

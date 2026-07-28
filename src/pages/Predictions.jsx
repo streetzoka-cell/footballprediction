@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useCallback, useRef, useDeferredValue, memo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/usePredictions'; // Assumed path based on previous context
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
 import { useLiveMatches } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus, PATHS } from '../utils/constants';
@@ -19,13 +19,18 @@ import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
+// ★ Centralized imports
+import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
+import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
+import { ListSkeleton, ErrorState } from '../components/StateFeedback';
+import EmptyState from '../components/EmptyState';
+
 const FUTURE_DAYS = 3;
 const LOCK_BEFORE_MINUTES = 60;
 const ZOKA_VISIBLE_COUNT = 5;
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 const dateOffset = (offset = 0) => getLocalDateStr(offset);
 
 const dateLabel = (d) => {
@@ -252,7 +257,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
       <div className="v21-mh">
         <div className="v21-ml">
           {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/league/${leagueId}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+          <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="v21-st" style={{ color: isFin ? '#10b981' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
           {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
@@ -261,7 +266,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
       <div className="v21-tm">
         <div className="v21-te">
           {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${homeId}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+          <Link to={buildTeamRoute(homeId, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         {isFin && pick.homeScore != null ? (
           <div className="v21-sb ft">
@@ -284,7 +289,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
         )}
         <div className="v21-te aw">
           {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${awayId}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+          <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between' }}>
@@ -351,7 +356,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   else if (isFin) leftColor = 'rgba(16,185,129,.2)';
   else if (isLive) leftColor = 'rgba(239,68,68,.3)';
   else if (hasPred) leftColor = '#60a5fa';
-  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90) leftColor = 'rgba(245,197,66,.3)';
+  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90) leftColor = 'rgba(245,197,36,.3)';
 
   let cardCls = 'v21-mc';
   if (isEditing) cardCls += ' editing';
@@ -373,14 +378,14 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
       <div className="v21-mh">
         <div className="v21-ml">
           {pred.league?.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/league/${leagueId}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+          <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="v21-st" style={{ color: statusColor, background: statusBg }}>{statusLabel}</span>
       </div>
       <div className="v21-tm">
         <div className="v21-te">
           {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${homeId}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+          <Link to={buildTeamRoute(homeId, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         {isEditing ? (
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -405,7 +410,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
         )}
         <div className="v21-te aw">
           {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${awayId}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+          <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
@@ -535,10 +540,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
             );
           })}
           {stats.predicted === 0 && (
-            <div className="v21-empty" style={{ marginTop: 8 }}>
-              <Target size={20} style={{ color: '#94a3b8', display: 'block', margin: '0 auto 6px' }} />
-              <p>No predictions for this day</p>
-            </div>
+            <EmptyState icon={Target} title="No predictions for this day" />
           )}
           {stats.allResolved && (
             <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center' }}>
@@ -617,52 +619,9 @@ export default function Predictions() {
     try { setCurrentUserVotes(JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}')); } catch { setCurrentUserVotes({}); }
   }, [selDate]);
 
-  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) for live merging
-  const mergedFeatured = useMemo(() => {
-    if (!fixtureMap.size) return featuredPreds;
-    let changed = false;
-    const next = featuredPreds.map(p => {
-      const fx = fixtureMap.get(String(p.matchId));
-      if (fx) {
-        const fxStatus = fx.status || p.status;
-        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home ?? p.homeScore;
-        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away ?? p.awayScore;
-        const fxMinute = fx.minute ?? fx.elapsed ?? p.minute;
-        const fxIsLive = isLiveStatus(fxStatus, SPORT.FOOTBALL) || p.isLive;
-        const fxIsFin = isFinishedStatus(fxStatus, SPORT.FOOTBALL) || p.isFinished;
-        
-        if (p.status !== fxStatus || p.homeScore !== fxHome || p.awayScore !== fxAway || p.minute !== fxMinute || p.isLive !== fxIsLive || p.isFinished !== fxIsFin) {
-          changed = true;
-          return { ...p, status: fxStatus, homeScore: fxHome, awayScore: fxAway, minute: fxMinute, isLive: fxIsLive, isFinished: fxIsFin };
-        }
-      }
-      return p;
-    });
-    return changed ? next : featuredPreds;
-  }, [featuredPreds, fixtureMap]);
-
-  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) for live merging
-  const mergedZoka = useMemo(() => {
-    if (!fixtureMap.size) return zokaPicks?.matches || [];
-    const baseZoka = zokaPicks?.matches || [];
-    let changed = false;
-    const next = baseZoka.map(p => {
-      const fx = fixtureMap.get(String(p.matchId));
-      if (fx) {
-        const fxStatus = fx.status || p.status;
-        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home ?? p.homeScore;
-        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away ?? p.awayScore;
-        const fxMinute = fx.minute ?? fx.elapsed ?? p.minute;
-        
-        if (p.status !== fxStatus || p.homeScore !== fxHome || p.awayScore !== fxAway || p.minute !== fxMinute) {
-          changed = true;
-          return { ...p, status: fxStatus, homeScore: fxHome, awayScore: fxAway, minute: fxMinute };
-        }
-      }
-      return p;
-    });
-    return changed ? next : baseZoka;
-  }, [zokaPicks, fixtureMap]);
+  // ★ REFACTORED: Use centralized engine for merging live data
+  const mergedFeatured = useMemo(() => mergeLiveIntoPredictions(featuredPreds, fixtureMap), [featuredPreds, fixtureMap]);
+  const mergedZoka = useMemo(() => mergeLiveIntoPredictions(zokaPicks?.matches || [], fixtureMap), [zokaPicks, fixtureMap]);
 
   const userPredMap = useMemo(() => {
     const m = new Map();
@@ -679,24 +638,8 @@ export default function Predictions() {
     return m;
   }, [officialResults]);
 
-  const myDayStats = useMemo(() => {
-    let pts = 0, ex = 0, rs = 0, mi = 0, pn = 0, pred = 0;
-    mergedFeatured.forEach(p => {
-      const up = userPredMap.get(String(p.matchId));
-      if (!up) return;
-      pred++;
-      let res = resultMap.get(String(p.matchId));
-      if ((!res || res.resultType === 'pending') && (isFinishedStatus(p.status, SPORT.FOOTBALL) || p.isFinished) && p.homeScore != null) {
-        const r = calcPoints(up.homeScore, up.awayScore, p.homeScore, p.awayScore);
-        res = { ...r, resultType: r.type };
-      }
-      if (!res || res.resultType === 'pending') { pn++; return; }
-      if (res.resultType === 'exact') { ex++; pts += (res.points || 10); }
-      else if (res.resultType === 'result') { rs++; pts += (res.points || 3); }
-      else mi++;
-    });
-    return { pts, ex, rs, mi, pn, pred, allResolved: pred > 0 && pn === 0, accuracy: pred > 0 ? Math.round(((ex + rs) / pred) * 100) : 0 };
-  }, [mergedFeatured, userPredMap, resultMap]);
+  // ★ REFACTORED: Use centralized engine for user stats calculation
+  const myDayStats = useMemo(() => calculateUserStats(Object.values(ctxUserPreds), mergedFeatured, officialResults), [ctxUserPreds, mergedFeatured, officialResults]);
 
   const openLogin = useCallback(() => setShowLogin(true), []);
   
@@ -866,7 +809,6 @@ export default function Predictions() {
     return () => clearInterval(id);
   }, []);
 
-  // FIX: Correctly map flat backend fields (goalsHome/goalsAway) in Admin Auto-Resolve
   useEffect(() => {
     if (!isAdmin || !liveFixtures.length) return;
     const toResolve = mergedFeatured.filter(p => {
@@ -948,7 +890,7 @@ export default function Predictions() {
         description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
         keywords="football predictions, betting tips, match predictions, soccer tips"
         robots="index,follow"
-        structuredData={breadcrumbSchema}
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Predictions", path: "/predictions" }]}
       />
 
       {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
@@ -1102,11 +1044,11 @@ export default function Predictions() {
               );
             })
           ) : (
-            <div className="v21-empty">
-              <Target size={20} style={{ color: '#94a3b8', display: 'block', margin: '0 auto 6px' }} />
-              <p>{filter === 'predicted' ? 'No predictions yet' : filter === 'finished' ? 'No finished matches' : filter === 'unpredicted' ? 'All predicted!' : 'No featured matches'}</p>
-              <p className="h" style={{ fontSize: '.66rem', color: '#64748b', marginTop: 4 }}>{filter === 'all' ? 'Check back later' : 'Try another filter'}</p>
-            </div>
+            <EmptyState 
+              icon={Target} 
+              title={filter === 'predicted' ? 'No predictions yet' : filter === 'finished' ? 'No finished matches' : filter === 'unpredicted' ? 'All predicted!' : 'No featured matches'} 
+              hint={filter === 'all' ? 'Check back later' : 'Try another filter'} 
+            />
           )}
         </div>
 

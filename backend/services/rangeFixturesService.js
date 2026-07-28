@@ -9,16 +9,15 @@ class RangeFixturesService {
     const startTime = Date.now();
     const db = getDb();
     
-    const pastDate = getDateOffset(-10);
-    const futureDate = getDateOffset(14);
+    // Only fetch the next 3 days (no past dates)
+    const futureDate = getDateOffset(3);
     
-    logger.info(`[RangeFixtures] Fetching from ${pastDate} to ${futureDate} using FootballData.org...`);
+    logger.info(`[RangeFixtures] Fetching from today to ${futureDate}...`);
 
     let rawMatches = [];
     
-    // ★ FIX: Split the range into 8-day chunks to avoid 400 Bad Request (API limit is 10 days)
-    const chunkSize = 8;
-    let currentStart = new Date(pastDate);
+    const chunkSize = 4; // 4 days at a time
+    let currentStart = new Date(getDateOffset(0));
     const end = new Date(futureDate);
 
     while (currentStart <= end) {
@@ -37,7 +36,6 @@ class RangeFixturesService {
         logger.error(`[RangeFixtures] Failed to fetch chunk ${fromStr} to ${toStr}: ${err.message}`);
       }
 
-      // Move to the next day after the current chunk
       currentStart = new Date(currentEnd);
       currentStart.setDate(currentStart.getDate() + 1);
     }
@@ -49,8 +47,10 @@ class RangeFixturesService {
 
     const matchesByDate = new Map();
     
-    rawMatches.forEach(fixture => {
+       rawMatches.forEach(fixture => {
       const f = fixture.fixture, l = fixture.league, t = fixture.teams, g = fixture.goals, s = fixture.score;
+      
+      // ★ Extract the actual date string (YYYY-MM-DD) from the match's ISO date
       const matchDateStr = f.date ? new Date(f.date).toISOString().split('T')[0] : null;
       if (!matchDateStr) return;
 
@@ -70,9 +70,11 @@ class RangeFixturesService {
       doc.matchScore = calculateMatchScore(doc);
       doc.category = categorizeMatch(doc.matchScore);
 
+      // ★ Group by the actual match date, not the requested date
       if (!matchesByDate.has(matchDateStr)) matchesByDate.set(matchDateStr, []);
       matchesByDate.get(matchDateStr).push(doc);
     });
+    
 
     let totalWrites = 0;
 

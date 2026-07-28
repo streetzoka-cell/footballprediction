@@ -1,8 +1,6 @@
+// src/app/guards.jsx
 import { Navigate, useLocation } from "react-router-dom";
-import { useState, useEffect } from "react";
 import { useAuth } from "../context/AuthContext";
-import { db } from "../utils/firebase";
-import { doc, getDoc } from "firebase/firestore";
 import AppLoader from "../components/AppLoader";
 
 export function ProtectedRoute({ children }) {
@@ -30,51 +28,19 @@ export function GuestRoute({ children }) {
   return children;
 }
 
+// ★ REFACTORED: Removed the extra Firestore getDoc call. 
+// The AuthContext already securely fetches and monitors the user's role via onSnapshot.
 export function AdminRoute({ children }) {
   const { currentUser, userProfile, authLoading } = useAuth();
   const location = useLocation();
-  
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [checkingAdmin, setCheckingAdmin] = useState(true);
 
-  useEffect(() => {
-    const verifyAdmin = async () => {
-      if (authLoading) return;
-      
-      if (!currentUser) {
-        setIsAdmin(false);
-        setCheckingAdmin(false);
-        return;
-      }
-
-      // 1. Fast check: Check if role is already in userProfile
-      if (userProfile?.role === 'admin' || userProfile?.role === 'staff') {
-        setIsAdmin(true);
-        setCheckingAdmin(false);
-        return;
-      }
-
-      // 2. Smart check: Look inside `admin_users` collection dynamically
-      try {
-        const adminSnap = await getDoc(doc(db, 'admin_users', currentUser.uid));
-        setIsAdmin(adminSnap.exists());
-      } catch (err) {
-        console.error("Admin check failed:", err);
-        setIsAdmin(false);
-      }
-      setCheckingAdmin(false);
-    };
-
-    verifyAdmin();
-  }, [authLoading, currentUser, userProfile]);
-
-  if (authLoading || checkingAdmin) return <AppLoader />;
+  if (authLoading || (currentUser && !userProfile)) return <AppLoader />;
 
   if (!currentUser) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (!isAdmin) {
+  if (userProfile?.role !== 'admin' && userProfile?.role !== 'staff') {
     return <Navigate to="/" replace />;
   }
 

@@ -15,7 +15,7 @@ export default defineConfig({
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: false,
-      includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png'],
+      includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png', 'loader.css'],
       manifest: {
         name: 'ZokaScore',
         short_name: 'Zoka',
@@ -62,6 +62,30 @@ export default defineConfig({
         maximumFileSizeToCacheInBytes: 50 * 1024 * 1024,
         runtimeCaching: [
           {
+            urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'google-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
+            urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'gstatic-fonts-cache',
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
+              },
+              cacheableResponse: { statuses: [0, 200] }
+            }
+          },
+          {
             urlPattern: /\/api\//,
             handler: 'NetworkOnly' 
           },
@@ -75,13 +99,13 @@ export default defineConfig({
           }
         ]
       }
-    })
-  ],
+    }) // ★ FIX: Added missing closing parenthesis and comma here
+  ], // ★ FIX: Closed the plugins array
   // ★ FIX: Tell Vite to ignore backend packages so it doesn't crash the frontend
   optimizeDeps: {
     exclude: ['firebase-admin']
   },
- // vite.config.js
+  // vite.config.js
   server: {
     port: 5173,
     host: true,
@@ -93,8 +117,6 @@ export default defineConfig({
       }
     }
   },
-
-  
   build: {
     rollupOptions: {
       output: {

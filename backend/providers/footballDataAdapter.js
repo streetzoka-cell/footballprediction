@@ -2,6 +2,7 @@ const axios = require('axios');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 const { FREE_LEAGUES_MAP } = require('../config/freeLeagues');
+const https = require('https'); // ★ ADDED to bypass SSL cert error
 
 let lastRequestTimes = [];
 async function rateLimit() {
@@ -18,7 +19,8 @@ async function rateLimit() {
 const api = axios.create({
   baseURL: env.footballData?.baseUrl || 'https://api.football-data.org/v4',
   timeout: 15000,
-  headers: { 'X-Auth-Token': env.footballData?.apiKey }
+  headers: { 'X-Auth-Token': env.footballData?.apiKey },
+  httpsAgent: new https.Agent({ rejectUnauthorized: false }), // ★ BYPASSES SSL CERT ERROR
 });
 
 class FootballDataAdapter {

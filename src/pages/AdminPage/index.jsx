@@ -15,8 +15,10 @@ import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, rebuildPeriodLeaderboard, rebuildAllLeaderboards } from '../../services/predictions';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
+// ★ Centralized imports
+import { normalizeMatch, extractMatchDate } from "../../engine/matchEngine";
+import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm } from './components/common';
 import SEO from '../../components/SEO';
-import { useMounted, cleanObj, dateLabel, extractDate, normalizeMatch, isLive, isFin, Toast, Confirm } from './components/common';
 
 import DashboardTab from './components/DashboardTab';
 import AnalyticsTab from './components/AnalyticsTab';
@@ -32,7 +34,7 @@ import SystemHealthTab from './components/SystemHealthTab';
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
-  { key: 'logs', label: 'Backend Logs', icon: ScrollText },
+  { key: 'logs', label: 'NOC & Logs', icon: ScrollText },
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
   { key: 'featured', label: 'Featured', icon: Radio },
   { key: 'results', label: 'Results', icon: Trophy },

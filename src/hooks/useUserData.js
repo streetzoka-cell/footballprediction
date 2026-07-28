@@ -1,7 +1,9 @@
+// src/hooks/useUserData.js
 import { useQuery } from '@tanstack/react-query';
 import { db } from '../utils/firebase';
 import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
 import { PATHS } from '../utils/constants';
+import { getWeekStart, getMonthStart, todayStr } from '../utils/dates';
 
 export function useActivePredictions(dateStr) {
   return useQuery({
@@ -24,7 +26,6 @@ export function useUserPredictions(uid, dateStr) {
     queryKey: ['userPredictions', uid, dateStr],
     queryFn: async () => {
       if (!uid || !db || !dateStr) return {};
-      // OPTIMIZATION: Query Firestore directly for this date instead of fetching 500 docs
       const q = query(
         collection(db, PATHS.USER_PREDICTIONS), 
         where('userId', '==', uid), 
@@ -90,6 +91,43 @@ export function useUserPoints(uid) {
       return snap.exists() ? snap.data() : null;
     },
     enabled: !!uid,
+    staleTime: 60 * 1000,
+  });
+}
+
+// ★ NEW: Centralized Leaderboard Hooks
+export function useWeeklyLeaderboard() {
+  return useQuery({
+    queryKey: ['leaderboard', 'weekly'],
+    queryFn: async () => {
+      if (!db) return null;
+      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, `weekly_${getWeekStart()}`));
+      return snap.exists() ? snap.data() : null;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useMonthlyLeaderboard() {
+  return useQuery({
+    queryKey: ['leaderboard', 'monthly'],
+    queryFn: async () => {
+      if (!db) return null;
+      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, `monthly_${getMonthStart()}`));
+      return snap.exists() ? snap.data() : null;
+    },
+    staleTime: 60 * 1000,
+  });
+}
+
+export function useGoatLeaderboard() {
+  return useQuery({
+    queryKey: ['leaderboard', 'goat'],
+    queryFn: async () => {
+      if (!db) return null;
+      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'));
+      return snap.exists() ? snap.data() : null;
+    },
     staleTime: 60 * 1000,
   });
 }

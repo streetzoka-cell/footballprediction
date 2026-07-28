@@ -8,7 +8,11 @@ import { useFixtures, useLiveMatches, useStandings } from '../hooks/useFixtures'
 import { footballApi } from '../services/footballApi';
 import MatchIntelligence from '../components/MatchIntelligence';
 
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
+// ★ Centralized imports
+import { normalizeMatch } from '../engine/matchEngine';
+import { seoGenerators } from '../utils/seoBuilder';
+import { buildLeagueRoute, buildTeamRoute } from '../utils/routes';
+import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 
 const LiveTimeline = ({ match, isLive, isFin }) => {
   const [currentTime, setCurrentTime] = useState(Date.now());
@@ -154,9 +158,9 @@ export default function MatchDetails() {
     return allMatches.find(m => String(m.id) === String(matchId) || String(m.matchId) === String(matchId));
   }, [todayFixtures, yesterdayFixtures, tomorrowFixtures, liveMatches, matchId]);
 
-  const leagueId = baseMatch?.league?.id || baseMatch?.leagueId;
+  const standingsLeagueId = baseMatch?.league?.id || baseMatch?.leagueId;
   
-  const { data: standingsData = [] } = useStandings(leagueId);
+  const { data: standingsData = [] } = useStandings(standingsLeagueId);
   const standingsTable = standingsData?.[0]?.standings?.[0] || [];
 
   const [intelligence, setIntelligence] = useState(null);
@@ -182,95 +186,36 @@ export default function MatchDetails() {
     return () => { mounted = false; };
   }, [baseMatch]);
 
+  // ★ REFACTORED: Use the centralized engine instead of duplicating 80 lines of time logic
   const matchData = useMemo(() => {
     if (!baseMatch) return null;
-
-    let status = baseMatch.status;
-    let isLive = isLiveStatus(status, SPORT.FOOTBALL) || !!baseMatch.isLive;
-    let isFin = isFinishedStatus(status, SPORT.FOOTBALL) || !!baseMatch.isFinished;
-    let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-
-    const matchTime = baseMatch.date ? new Date(baseMatch.date).getTime() : 0;
-    const elapsedMins = Math.floor((Date.now() - matchTime) / 60000);
-
-    if (matchTime > 0) {
-      if (!isLive && !isFin && Date.now() > matchTime) {
-        if (elapsedMins >= 180) { 
-          isFin = true; status = 'FT';
-        } else if (elapsedMins >= 50) { 
-          isHT = true; status = 'HT';
-        } else {
-          isLive = true; status = '1H';
-        }
-      }
-
-      if (isLive) {
-        if (status === 'HT' || status === 'HALF_TIME') {
-          isHT = true;
-        }
-      }
-    }
-
-    let safeHomeScore = baseMatch.homeScore ?? baseMatch.goalsHome ?? baseMatch.pointsHome ?? baseMatch.score?.fullTime?.home ?? baseMatch.score?.current?.home ?? baseMatch.score?.live?.home ?? baseMatch.score?.regularTime?.home ?? baseMatch.goals?.home ?? 0;
-    let safeAwayScore = baseMatch.awayScore ?? baseMatch.goalsAway ?? baseMatch.pointsAway ?? baseMatch.score?.fullTime?.away ?? baseMatch.score?.current?.away ?? baseMatch.score?.live?.away ?? baseMatch.score?.regularTime?.away ?? baseMatch.goals?.away ?? 0;
-
-    if (!isLive && !isFin && safeHomeScore === 0 && safeAwayScore === 0) {
-      if (matchTime === 0 || Date.now() < matchTime) {
-        safeHomeScore = null;
-        safeAwayScore = null;
-      }
-    }
-
+    const normalized = normalizeMatch(baseMatch, true, Date.now());
+    
     const homeTeam = baseMatch.homeTeam || { name: baseMatch.homeTeamName || 'Home Team', id: baseMatch.homeTeamId };
     const awayTeam = baseMatch.awayTeam || { name: baseMatch.awayTeamName || 'Away Team', id: baseMatch.awayTeamId };
     const league = baseMatch.league || baseMatch.competition || { name: baseMatch.leagueName || 'Football', id: baseMatch.leagueId };
 
-    const homeName = homeTeam.shortName || homeTeam.name || 'Home Team';
-    const awayName = awayTeam.shortName || awayTeam.name || 'Away Team';
-    const homeId = homeTeam.id || baseMatch.homeTeamId;
-    const awayId = awayTeam.id || baseMatch.awayTeamId;
-    const leagueName = league.name || 'Football';
-
-    let statusClass = 'md-status-sched';
-    if (isLive) statusClass = 'md-status-live';
-    else if (isFin) statusClass = 'md-status-fin';
-
-    let displayMinute = baseMatch.minute || baseMatch.elapsed || 0;
-    let addedMinute = 0;
-    if (isLive) {
-      if (status === '1H') {
-        let localMinute = baseMatch.minute || Math.min(elapsedMins, 45);
-        if (localMinute > 45) {
-          addedMinute = localMinute - 45;
-          displayMinute = 45;
-        } else {
-          displayMinute = localMinute;
-        }
-      } else if (status === '2H' || status === 'ET') {
-        const secondHalfMins = Math.max(0, elapsedMins - 60);
-        let localMinute = baseMatch.minute || (45 + secondHalfMins);
-        if (localMinute > 90) {
-          addedMinute = localMinute - 90;
-          displayMinute = 90;
-        } else {
-          displayMinute = localMinute;
-        }
-      }
-    }
-
     return {
-      isLive, isFin, safeHomeScore, safeAwayScore, 
-      homeName, awayName, homeId, awayId, 
-      leagueName, leagueId, statusClass,
+      isLive: normalized.isLive,
+      isFin: normalized.isFinished,
+      safeHomeScore: normalized.homeScore,
+      safeAwayScore: normalized.awayScore,
+      homeName: normalized.homeName,
+      awayName: normalized.awayName,
+      homeId: homeTeam.id || baseMatch.homeTeamId,
+      awayId: awayTeam.id || baseMatch.awayTeamId,
+      leagueName: normalized.leagueName,
+      leagueId: normalized.leagueId,
+      statusClass: normalized.isLive ? 'md-status-live' : normalized.isFinished ? 'md-status-fin' : 'md-status-sched',
       date: baseMatch.date,
       venue: baseMatch.venue,
       referee: baseMatch.referee,
-      minute: displayMinute,
-      addedMinute,
-      status,
+      minute: normalized.displayMinute,
+      addedMinute: normalized.addedMinute,
+      status: normalized.status,
       category: baseMatch.category || 'NORMAL'
     };
-  }, [baseMatch, leagueId]);
+  }, [baseMatch]);
 
   if (!baseMatch || !matchData) {
     return (
@@ -290,51 +235,19 @@ export default function MatchDetails() {
   const { 
     isLive, isFin, safeHomeScore, safeAwayScore, 
     homeName, awayName, homeId, awayId, 
-    leagueName, statusClass, date, venue, referee, minute, addedMinute, status, category
+    leagueName, leagueId, statusClass, date, venue, referee, minute, addedMinute, status, category
   } = matchData;
   
-  const title = `${homeName} vs ${awayName} Prediction, Live Score, H2H & AI Analysis | ZOKASCORE`;
-  const description = `${homeName} vs ${awayName} live score, AI match prediction, xG timeline, head-to-head statistics, league standings, kickoff time and match analysis on ZOKASCORE.`;
-
-  const sportsSchema = {
-    "@context": "https://schema.org",
-    "@type": "SportsEvent",
-    "name": `${homeName} vs ${awayName}`,
-    "sport": "Football",
-    "startDate": date,
-    "endDate": new Date(new Date(date).getTime() + 7200000).toISOString(),
-    "eventStatus": isLive ? "https://schema.org/EventScheduled" : isFin ? "https://schema.org/EventCompleted" : "https://schema.org/EventScheduled",
-    "homeTeam": { "@type": "SportsTeam", "name": homeName },
-    "awayTeam": { "@type": "SportsTeam", "name": awayName },
-    "location": { "@type": "Place", "name": venue?.name || leagueName },
-    ...(isFin && { 
-      "result": { 
-        "@type": "SportsResult", 
-        "homeTeamScore": safeHomeScore, 
-        "awayTeamScore": safeAwayScore 
-      } 
-    })
-  };
-
-  const breadcrumbSchema = {
-    "@context": "https://schema.org",
-    "@type": "BreadcrumbList",
-    "itemListElement": [
-      { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://zokascore.xyz/" },
-      { "@type": "ListItem", "position": 2, "name": "Fixtures", "item": "https://zokascore.xyz/fixtures" },
-      { "@type": "ListItem", "position": 3, "name": leagueName, "item": `https://zokascore.xyz/league/${leagueId}/${slugify(leagueName)}` },
-      { "@type": "ListItem", "position": 4, "name": `${homeName} vs ${awayName}` }
-    ]
-  };
+  // ★ REFACTORED: Use centralized SEO builder
+  const seoProps = seoGenerators.matchPage({
+    homeName, awayName, leagueName, date, venue, isLive, isFinished: isFin, 
+    homeScore: safeHomeScore, awayScore: safeAwayScore, 
+    path: `/match/${matchId}/`
+  });
 
   return (
     <div className="md-page" style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: 'var(--text-primary)' }}>
-      <SEO 
-        title={title}
-        description={description}
-        keywords={`${homeName} vs ${awayName}, ${homeName} live score, ${awayName} live score, ${leagueName} predictions`}
-        structuredData={[sportsSchema, breadcrumbSchema]} 
-      />
+      <SEO {...seoProps} />
       
       <div className="md-container" style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
         <Link to="/fixtures" className="md-back-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.85rem', marginBottom: 20, background: 'var(--bg-card)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
@@ -343,14 +256,14 @@ export default function MatchDetails() {
 
         <div className="md-header" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 24, textAlign: 'center' }}>
           <p className="md-league" style={{ marginBottom: 16, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
-            <Link to={`/league/${leagueId}/${slugify(leagueName)}`} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{leagueName}</Link>
+            <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.05em' }}>{leagueName}</Link>
             {category === 'FEATURED' && (
               <span style={{ fontSize: '0.6rem', fontWeight: 900, color: '#fbbf24', background: 'rgba(251,191,36,0.12)', padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(251,191,36,0.2)' }}>★ TOP MATCH</span>
             )}
           </p>
           <div className="md-teams" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
             <div className="md-team-home" style={{ flex: 1 }}>
-              <Link to={`/team/${homeId}/${slugify(homeName)}`} style={{ textDecoration: 'none' }}>
+              <Link to={buildTeamRoute(homeId, homeName)} style={{ textDecoration: 'none' }}>
                 <h1 className="md-team-name" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>{homeName}</h1>
               </Link>
             </div>
@@ -365,7 +278,7 @@ export default function MatchDetails() {
               )}
             </div>
             <div className="md-team-away" style={{ flex: 1 }}>
-              <Link to={`/team/${awayId}/${slugify(awayName)}`} style={{ textDecoration: 'none' }}>
+              <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none' }}>
                 <h1 className="md-team-name" style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--text-primary)' }}>{awayName}</h1>
               </Link>
             </div>
@@ -421,7 +334,7 @@ export default function MatchDetails() {
               {standingsTable.slice(0, 5).map((team, i) => (
                 <div key={team.teamId || team.rank} className="standing-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
                   <span style={{ color: 'var(--text-muted)', fontWeight: 700, width: 24 }}>{team.rank || i + 1}.</span>
-                  <Link to={`/team/${team.teamId}/${slugify(team.teamName)}`} style={{ flex: 1, marginLeft: 10, color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '.9rem' }}>
+                  <Link to={buildTeamRoute(team.teamId, team.teamName)} style={{ flex: 1, marginLeft: 10, color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '.9rem' }}>
                     {team.teamName}
                   </Link>
                   <span style={{ color: '#10b981', fontWeight: 800, fontSize: '.9rem' }}>{team.points} pts</span>

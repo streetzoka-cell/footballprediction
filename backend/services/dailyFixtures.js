@@ -34,11 +34,10 @@ class DailyFixturesService {
     };
   }
 
-  // ★ NEW: Helper to check if a date falls on a weekend (Friday, Saturday, Sunday)
   _isWeekend(dateStr) {
     if (!dateStr) return false;
     try {
-      const day = new Date(dateStr + "T00:00:00Z").getUTCDay(); // 0=Sun, 5=Fri, 6=Sat
+      const day = new Date(dateStr + "T00:00:00Z").getUTCDay();
       return day === 0 || day === 5 || day === 6;
     } catch {
       return false;
@@ -58,7 +57,6 @@ class DailyFixturesService {
     const meta = await getMeta(META_DOCS.FOOTBALL_SCHEDULER);
     const alreadyFetchedToday = meta?.lastDailyFetchDate === todayStr;
 
-    // ★ NEW: If force is true, clear today's cache to force re-fetch and update FT statuses
     if (force) {
       logger.info(`[DailyFixtures] Force flag set — clearing today's cache to update statuses`);
       this._docCache.today = [];
@@ -94,18 +92,19 @@ class DailyFixturesService {
     }
 
     let rolloverYesterday = 0, rolloverToday = 0, rolloverDeleted = 0, recoveredFT = 0;
-    const yesterdayDocs = this._docCache.today;
-    const todayDocs = this._docCache.tomorrow;
+    const yesterdayDocs = this._docCache.today; // Today becomes yesterday
+    const todayDocs = this._docCache.tomorrow; // Tomorrow becomes today
     const yesterdayPrevIds = this._docCache.todayIds;
     const todayPrevIds = this._docCache.tomorrowIds;
 
     try {
+      // ★ SMART ROLLOVER: Only push yesterday's matches to Firestore if they are Finished (FT)
       if (yesterdayDocs.length > 0) {
-        const r = await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, yesterdayDocs, yesterdayPrevIds);
-        rolloverYesterday = r.written;
-        rolloverDeleted += r.deleted;
         const ftGames = yesterdayDocs.filter((d) => FINISHED_STATUSES.includes(d.status));
         if (ftGames.length > 0) {
+          const r = await this.repo.diffWrite(COLLECTIONS.YESTERDAY_FIXTURES, ftGames, yesterdayPrevIds);
+          rolloverYesterday = r.written;
+          rolloverDeleted += r.deleted;
           await this.repo.batchUpsertFinished(ftGames);
           recoveredFT = ftGames.length;
         }
@@ -126,7 +125,7 @@ class DailyFixturesService {
           rolloverDeleted += d;
         }
       }
-      logger.info(`[DailyFixtures] Rollover: ${rolloverYesterday}→yesterday, ${rolloverToday}→today, ${recoveredFT} FT, ${rolloverDeleted} stale deleted`);
+      logger.info(`[DailyFixtures] Rollover: ${rolloverYesterday}→yesterday (FT only), ${rolloverToday}→today, ${recoveredFT} FT, ${rolloverDeleted} stale deleted`);
     } catch (err) {
       logger.error(`[DailyFixtures] Rollover failed: ${err.message}`);
     }
@@ -233,7 +232,6 @@ class DailyFixturesService {
           
         let updatedDocs = filtered.map((f) => this.normalize(f));
         
-        // Apply scoring to recovered docs
         updatedDocs = updatedDocs.map(doc => {
           doc.matchScore = calculateMatchScore(doc);
           doc.category = categorizeMatch(doc.matchScore);
@@ -337,27 +335,22 @@ class DailyFixturesService {
       const errors = raw?.errors || {};
       if (Object.keys(errors).length > 0) return { fetches: 1, writes: 0 };
 
-      const allFixtures = raw?.response || [];
+           const allFixtures = raw?.response || [];
       
-      const filtered = allFixtures.filter(f => {
-        const matchDate = f.fixture?.date ? new Date(f.fixture.date).toISOString().split('T')[0] : null;
-        return matchDate === dateStr;
-      }).filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id));
+      // ★ FIX: Removed strict date check. Accept whatever the API returns.
+      const filtered = allFixtures.filter(f => !BLOCKED_LEAGUE_IDS.has(f.league?.id));
         
       let docs = filtered.map((f) => this.normalize(f));
       
-      // INTELLIGENCE INJECTION: Score and categorize
+      
       docs = docs.map(doc => {
         doc.matchScore = calculateMatchScore(doc);
         doc.category = categorizeMatch(doc.matchScore);
         return doc;
       });
 
-      // THE BOUNCER: Drop all hidden matches before writing to Firestore
       let qualityDocs = docs.filter(doc => doc.category !== 'HIDDEN');
       
-      // ★ NEW: Weekend Limiter
-      // On Fridays, Saturdays, and Sundays, cap the matches to 450 to prevent overloading the frontend
       if (this._isWeekend(dateStr) && qualityDocs.length > 450) {
         qualityDocs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
         qualityDocs = qualityDocs.slice(0, 450);
@@ -410,17 +403,14 @@ class DailyFixturesService {
       
     let docs = filtered.map((f) => this.normalize(f));
     
-    // INTELLIGENCE INJECTION: Score and categorize
     docs = docs.map(doc => {
       doc.matchScore = calculateMatchScore(doc);
       doc.category = categorizeMatch(doc.matchScore);
       return doc;
     });
 
-    // THE BOUNCER: Drop all hidden matches
     let qualityDocs = docs.filter(doc => doc.category !== 'HIDDEN');
 
-    // ★ NEW: Weekend Limiter for Tomorrow
     if (this._isWeekend(tomorrowStr) && qualityDocs.length > 450) {
       qualityDocs.sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
       qualityDocs = qualityDocs.slice(0, 450);
