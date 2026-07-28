@@ -1,18 +1,17 @@
+/*
+ * eventBus.js
+ */
 const EventEmitter = require('events');
 const logger = require('./logger');
 
 class ZokaEventBus extends EventEmitter {
   constructor() {
     super();
-    // Prevent memory leak warnings as we attach more workers/listeners
     this.setMaxListeners(20);
   }
 
   emit(event, payload) {
-    // Use debug to prevent log spam during frequent events (e.g. cache invalidation)
     logger.debug(`[EventBus] Emitting: ${event}`);
-    
-    // Defensive boundary: prevent a single failing listener from crashing the process
     try {
       super.emit(event, payload);
     } catch (err) {

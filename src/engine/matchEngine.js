@@ -1,64 +1,36 @@
-// src/engine/matchEngine.js
 import { formatTime, getLocalDateFromUtc, parseDateAsUTC } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, isScheduledStatus, SPORT, getLeagueColor } from '../utils/constants';
 
-/**
- * Extracts and standardizes the tournament stage from a raw match object.
- * Returns an object { type: 'final'|'weekend'|'group'|'knockout'|'league', name: string } or null.
- */
 export function extractTournamentStage(raw) {
   if (!raw) return null;
-
   const stageKeywords = {
-    final: ['final', 'finals', 'championship', 'super bowl'],
-    weekend: ['weekend', 'usl w'],
+    final: ['final', 'finals', 'championship'],
+    weekend: ['weekend'],
     group: ['group', 'group stage', 'league stage'],
-    knockout: ['knockout', 'ro16', 'round of 16', 'quarterfinal', 'semi-final', 'semifinal', 'playoff', 'playoffs', 'bracket']
+    knockout: ['knockout', 'ro16', 'round of 16', 'quarterfinal', 'semi-final', 'semifinal', 'playoff']
   };
-
-  const explicitStage = raw.tournamentStage || raw.stage || raw.stageType || (raw.season && raw.season.stage);
-  
+  const explicitStage = raw.tournamentStage || raw.stage || raw.round;
   if (explicitStage) {
     const lowerStage = explicitStage.toLowerCase();
-
-    // Check for exact match
     for (const [type, keywords] of Object.entries(stageKeywords)) {
-      if (keywords.includes(lowerStage)) {
-        return { type, name: explicitStage };
-      }
-    }
-
-    // Check for partial match (if a keyword is included within the string)
-    for (const [type, keywords] of Object.entries(stageKeywords)) {
-      if (keywords.some(keyword => lowerStage.includes(keyword))) {
-        return { type, name: explicitStage };
-      }
+      if (keywords.some(keyword => lowerStage.includes(keyword))) return { type, name: explicitStage };
     }
   }
-
-  // Fallback to raw.type or null
   return raw.type ? { type: raw.type, name: raw.type } : null;
 }
 
-/**
- * Extracts the local date string (YYYY-MM-DD) from a raw match object.
- */
 export function extractMatchDate(m) {
   if (!m) return '';
-  const rawDate = m.utcDate || m.date;
+  const rawDate = m.date;
   if (rawDate && rawDate.length === 10) return rawDate;
   if (rawDate) return getLocalDateFromUtc(rawDate);
   if (m.timestamp) {
-    const d = new Date(m.timestamp);
+    const d = new Date(m.timestamp * 1000); // backend sends seconds, not ms
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
   }
   return '';
 }
 
-/**
- * Core normalization function for all football matches.
- * Standardizes API responses into a single predictable shape.
- */
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
   
@@ -68,7 +40,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   
   let kickoff = 'TBD';
   let timestamp = 0;
-  const rawDate = raw.utcDate || raw.date;
+  const rawDate = raw.date;
   
   if (rawDate) {
     try {
@@ -76,27 +48,35 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       kickoff = formatTime(rawDate);
       timestamp = dt.getTime();
     } catch { /* ignore */ }
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
   }
 
-  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeTeamLogo };
-  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayTeamLogo };
+  const homeTeam = {
+    id: String(raw.homeTeamId || raw.homeTeam?.id || ''),
+    name: raw.homeTeamName || raw.homeTeam?.name || 'TBD',
+    crest: raw.homeTeamLogo || raw.homeTeam?.logo || raw.homeTeamCrest || null
+  };
+  const awayTeam = {
+    id: String(raw.awayTeamId || raw.awayTeam?.id || ''),
+    name: raw.awayTeamName || raw.awayTeam?.name || 'TBD',
+    crest: raw.awayTeamLogo || raw.awayTeam?.logo || raw.awayTeamCrest || null
+  };
   
-  // REFACTORED: Inject tournamentStage into the league object
   const league = {
-    ...(raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo }),
+    id: String(raw.leagueId || raw.league?.id || ''),
+    name: raw.leagueName || raw.league?.name || 'Other',
+    emblem: raw.leagueLogo || raw.league?.logo || raw.leagueEmblem || null,
+    country: raw.leagueCountry || raw.league?.country || null,
+    flag: raw.leagueFlag || raw.league?.flag || null,
+    season: raw.season || raw.league?.season || null,
+    round: raw.round || raw.league?.round || null,
     tournamentStage: extractTournamentStage(raw)
   };
 
-  let isLive = isPrimary ? (!!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL)) : isLiveStatus(status, SPORT.FOOTBALL);
-  let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  let isFinished = isPrimary ? (!!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL)) : isFinishedStatus(status, SPORT.FOOTBALL);
-
+  let isLive = isLiveStatus(status, SPORT.FOOTBALL);
+  let isHT = status === 'HT' || status === 'BT';
+  let isFinished = isFinishedStatus(status, SPORT.FOOTBALL);
   let isStarted = false;
-  let isNearFT = false;
   let displayMinute = raw.minute || raw.elapsed || 0;
-  let addedMinute = 0;
 
   const kickoffTime = timestamp;
   const elapsedMins = Math.floor((now - kickoffTime) / 60000);
@@ -108,56 +88,30 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       else if (elapsedMins >= 50) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
       else { isStarted = true; status = '1H'; smartStatus = '1H'; }
     }
-
     if (isLive || isStarted) {
       if (elapsedMins >= 100) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
-      else if (status === 'HT' || status === 'HALF_TIME') { isHT = true; smartStatus = 'HT'; }
+      else if (status === 'HT') { isHT = true; smartStatus = 'HT'; }
       else { smartStatus = status; }
-
-      if (smartStatus === '1H') {
-        let localMinute = raw.minute || Math.min(elapsedMins, 45);
-        if (localMinute > 45) { addedMinute = localMinute - 45; displayMinute = 45; } 
-        else { displayMinute = localMinute; }
-      }
-      
-      if (smartStatus === '2H' || smartStatus === 'ET') {
-        const secondHalfMins = Math.max(0, elapsedMins - 60);
-        let localMinute = raw.minute || (45 + secondHalfMins);
-        if (localMinute > 90) { addedMinute = localMinute - 90; displayMinute = 90; } 
-        else { displayMinute = localMinute; }
-      }
-      if (elapsedMins >= 75 && !isFinished) isNearFT = true;
     }
   }
 
-  const homeScore = isPrimary ? (raw.homeScore ?? raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null) : (raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
-  const awayScore = isPrimary ? (raw.awayScore ?? raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null) : (raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
+  const homeScore = raw.homeScore ?? raw.goalsHome ?? raw.score?.fulltime?.home ?? raw.score?.halftime?.home ?? null;
+  const awayScore = raw.awayScore ?? raw.goalsAway ?? raw.score?.fulltime?.away ?? raw.score?.halftime?.away ?? null;
 
   return {
     id, dateStr, kickoff, timestamp, status: smartStatus, isLive, isHT, isFinished,
     minute: raw.minute || raw.elapsed || null,
-    displayMinute, addedMinute, isStarted, isNearFT,
-    homeName: homeTeam.shortName || homeTeam.name || 'TBD',
-    awayName: awayTeam.shortName || awayTeam.name || 'TBD',
-    homeLogo: homeTeam.crest || homeTeam.logo,
-    awayLogo: awayTeam.crest || awayTeam.logo,
+    displayMinute, isStarted,
+    homeName: homeTeam.name, awayName: awayTeam.name,
+    homeLogo: homeTeam.crest, awayLogo: awayTeam.crest,
     homeTeamId: homeTeam.id, awayTeamId: awayTeam.id,
     homeScore, awayScore,
-    leagueName: league.name || 'Other',
-    leagueId: league.id || raw.leagueKey,
-    leagueLogo: league.emblem || league.logo,
-    tournamentStage: league.tournamentStage, // <-- Added here
-    score: raw.score, stats: raw.stats || raw.matchStats || [],
+    leagueName: league.name, leagueId: league.id, leagueLogo: league.emblem,
+    leagueCountry: league.country, leagueFlag: league.flag,
+    tournamentStage: league.tournamentStage,
+    score: raw.score || {},
     matchScore: raw.matchScore || 0,
     category: raw.category || 'NORMAL',
-    homeWinProb: raw.homeWinProb ?? raw.prediction?.homeWinProb ?? null,
-    drawProb: raw.drawProb ?? raw.prediction?.drawProb ?? null,
-    awayWinProb: raw.awayWinProb ?? raw.prediction?.awayWinProb ?? null,
-    predictedHomeScore: raw.predictedHomeScore ?? raw.prediction?.homeScore ?? null,
-    predictedAwayScore: raw.predictedAwayScore ?? raw.prediction?.awayScore ?? null,
-    homeOdds: raw.homeOdds ?? raw.odds?.home ?? null,
-    drawOdds: raw.drawOdds ?? raw.odds?.draw ?? null,
-    awayOdds: raw.awayOdds ?? raw.odds?.away ?? null,
   };
 }
 
@@ -178,7 +132,7 @@ export function normalizeBasketballGame(raw) {
       emblem: raw.leagueLogo, 
       color: getLeagueColor(raw.leagueId),
       country: raw.leagueCountry,
-      tournamentStage: extractTournamentStage(raw) // <-- Added here
+      tournamentStage: extractTournamentStage(raw)
     },
     leagueKey: String(raw.leagueId),
     homeTeam: { name: raw.homeTeamName, logo: raw.homeTeamLogo },
@@ -197,5 +151,4 @@ export function normalizeBasketballGame(raw) {
   };
 }
 
-// Optional alias to fix broken imports elsewhere without changing AdminPage
 export const extractDate = extractMatchDate;

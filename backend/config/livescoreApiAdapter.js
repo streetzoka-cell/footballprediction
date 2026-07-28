@@ -1,7 +1,8 @@
 const axios = require('axios');
 const https = require('https'); 
-const env = require('../config/env');
+const env = require('./env');
 const logger = require('../utils/logger');
+const { withRetry } = require('../utils/retry');
 
 // ───────────────────────────────────────────────
 // Live-Score API Budget Tracker (1500/day)
@@ -46,53 +47,36 @@ const api = axios.create({
 class LivescoreApiAdapter {
   async getLive() {
     if (!isBudgetAvailable(1)) throw new Error('LivescoreAPI budget exhausted');
-    try {
+    
+    return withRetry(async () => {
       decrementBudget(1);
       const res = await api.get('/matches/live.json');
       const matches = res.data?.data?.match || [];
       logger.info(`[LivescoreAPI] Successfully fetched ${matches.length} live matches.`);
       return matches.map(this.normalizeMatch);
-    } catch (err) {
-      if (err.response) {
-        logger.error(`[LivescoreAPI] Live API Error ${err.response.status}: ${JSON.stringify(err.response.data)}`);
-      } else {
-        logger.error(`[LivescoreAPI] Live Network Error: ${err.message}`);
-      }
-      throw err;
-    }
+    }, 'LivescoreAPI.getLive');
   }
 
   async getFixtures(dateStr) {
     if (!isBudgetAvailable(1)) throw new Error('LivescoreAPI budget exhausted');
-    try {
+    
+    return withRetry(async () => {
       decrementBudget(1);
       const res = await api.get('/fixtures/matches.json', { params: { from: dateStr, to: dateStr } });
       const matches = res.data?.data?.match || [];
       logger.info(`[LivescoreAPI] Successfully fetched ${matches.length} fixtures for ${dateStr}.`);
       return matches.map(this.normalizeMatch);
-    } catch (err) {
-      if (err.response) {
-        logger.error(`[LivescoreAPI] Fixtures API Error ${err.response.status}: ${JSON.stringify(err.response.data)}`);
-      } else {
-        logger.error(`[LivescoreAPI] Fixtures Network Error: ${err.message}`);
-      }
-      throw err;
-    }
+    }, 'LivescoreAPI.getFixtures');
   }
 
-  // ───────────────────────────────────────────────
-  // Normalizer (Maps Live-Score API to your exact API-Football shape)
-  // ───────────────────────────────────────────────
   normalizeMatch(m) {
-    // The API uses 'time' for status (e.g., "FT", "HT", "1H", "NS")
-    const shortStatus = m.time || 'NS';
+    const shortStatus = m.time || 'ns';
     const statusMap = { 'IN PLAY': '1H', 'HALF TIME': 'HT', 'FINISHED': 'FT', 'NOT STARTED': 'NS' };
     const mappedStatus = statusMap[(shortStatus || '').toUpperCase()] || shortStatus;
     
     const scores = (m.score || '0-0').split('-').map(s => s.trim());
     const htScores = (m.ht_score || ' - ').split('-').map(s => s.trim());
-    
-    // ★ FIX: Extract nested objects safely
+
     const competition = m.competition || {};
     const country = m.country || {};
     const home = m.home || {};
@@ -129,10 +113,9 @@ class LivescoreApiAdapter {
   }
 }
 
-// ★ EXPORTED INSTANCE AND FUNCTIONS
 const instance = new LivescoreApiAdapter();
 instance.isBudgetAvailable = isBudgetAvailable;
-instance.getRemainingRequests = getRemainingRequests;
+instance.getRemaining = getRemainingRequests;
 
 module.exports = instance;
-module.exports.getRemainingRequests = getRemainingRequests;
+module.exports.getRemaining = getRemainingRequests;

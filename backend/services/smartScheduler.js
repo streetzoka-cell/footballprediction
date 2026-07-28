@@ -8,9 +8,9 @@ const topScorersRepo = require('../repositories/topScorersRepository');
 const matchDetailsRepo = require('../repositories/matchDetailsRepository');
 const videosRepo = require('../repositories/videosRepository');
 const cacheInfoRepo = require('../repositories/cacheInfoRepository');
-const { writeFootballSnapshot } = require('./snapshotWriter'); // ★ FIX: Snapshot writer
+const { writeFootballSnapshot } = require('./snapshotWriter');
 const logger = require('../utils/logger');
-const { withRetry } = require('../utils/retry'); // ★ FIX: Retry writes
+const { withRetry } = require('../utils/retry');
 const { eventBus, EVENT } = require('../utils/eventBus');
 const cron = require('node-cron');
 
@@ -41,7 +41,7 @@ class SmartScheduler {
     this.cronJobs.push(cron.schedule(SCHEDULER.ODDS_EVENING, () => this.syncOdds(), { timezone: 'UTC' }));
     this.cronJobs.push(cron.schedule(SCHEDULER.VIDEOS, () => this.syncVideos(), { timezone: 'UTC' }));
 
-    // ★ FIX: Run initial syncs sequentially so they don't compete for Firestore connections
+    // Run initial syncs sequentially
     setTimeout(async () => {
       await this.syncTodayFixtures();
       await this.syncTomorrowFixtures();
@@ -74,10 +74,7 @@ class SmartScheduler {
       try { matches = await goalApi.getFixtures(dateStr); } 
       catch (err) { matches = await livescoreApi.getFixtures(dateStr); }
       
-      // ★ FIX: withRetry on Firestore write to prevent batch timeouts
       const { written } = await withRetry(() => fixturesRepo.upsertFixtures(matches, dateStr), 'FixturesRepo.upsertFixtures');
-      
-      // ★ FIX: Write the aggregated snapshot the frontend reads
       await writeFootballSnapshot(dateStr, { matches });
       
       await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: matches.length, written, date: dateStr });
@@ -96,8 +93,6 @@ class SmartScheduler {
       catch (err) { matches = await livescoreApi.getFixtures(dateStr); }
       
       const { written } = await withRetry(() => fixturesRepo.upsertFixtures(matches, dateStr), 'FixturesRepo.upsertFixtures');
-      
-      // ★ FIX: Write the aggregated snapshot
       await writeFootballSnapshot(dateStr, { matches });
       
       await cacheInfoRepo.update(COLLECTIONS.FIXTURES, { count: matches.length, written, date: dateStr });
@@ -117,8 +112,6 @@ class SmartScheduler {
       
       const finished = matches.filter(m => STATUS.FOOTBALL_FINISHED.includes(m.status));
       const { written } = await withRetry(() => fixturesRepo.upsertResults(finished, dateStr), 'FixturesRepo.upsertResults');
-      
-      // ★ FIX: Write ALL of yesterday's matches, plus a `finished` slice
       await writeFootballSnapshot(dateStr, { matches, finished });
       
       await cacheInfoRepo.update(COLLECTIONS.RESULTS, { count: finished.length, written, date: dateStr });
@@ -146,6 +139,7 @@ class SmartScheduler {
   async syncTopScorers() {
     if (!this.running) return;
     let ok = 0, fail = 0;
+    logger.info(`[Scheduler] → Top scorers sync (${LEAGUES.length} leagues)`);
     for (const league of LEAGUES) {
       if (!goalApi.isBudgetAvailable(1)) break;
       try {
@@ -160,42 +154,52 @@ class SmartScheduler {
     logger.info(`[Scheduler] ✓ Top scorers: ${ok} ok, ${fail} fail`);
   }
 
+  // ★ FIX: Wrapped entirely in try/catch to prevent Unhandled Rejection
   async syncPredictions() {
     if (!this.running) return;
-    const dateStr = formatDate(new Date());
-    const matches = await fixturesRepo.getByDate(dateStr);
-    let ok = 0, fail = 0;
-    for (const m of matches) {
-      if (!goalApi.isBudgetAvailable(1)) break;
-      try {
-        const data = await goalApi.getPredictions(m.id);
-        await matchDetailsRepo.upsertPredictions(m.id, data);
-        ok++;
-      } catch (err) {
-        fail++;
-        if (err.message.includes('disabled')) break;
+    try {
+      const dateStr = formatDate(new Date());
+      const matches = await fixturesRepo.getByDate(dateStr);
+      let ok = 0, fail = 0;
+      for (const m of matches) {
+        if (!goalApi.isBudgetAvailable(1)) break;
+        try {
+          const data = await goalApi.getPredictions(m.id);
+          await matchDetailsRepo.upsertPredictions(m.id, data);
+          ok++;
+        } catch (err) {
+          fail++;
+          if (err.message.includes('disabled')) break;
+        }
       }
+      logger.info(`[Scheduler] ✓ Predictions: ${ok} ok, ${fail} fail`);
+    } catch (err) {
+      logger.error(`[Scheduler] ✗ Predictions failed: ${err.message}`);
     }
-    logger.info(`[Scheduler] ✓ Predictions: ${ok} ok, ${fail} fail`);
   }
 
+  // ★ FIX: Wrapped entirely in try/catch to prevent Unhandled Rejection
   async syncOdds() {
     if (!this.running) return;
-    const dateStr = formatDate(new Date());
-    const matches = await fixturesRepo.getByDate(dateStr);
-    let ok = 0, fail = 0;
-    for (const m of matches) {
-      if (!goalApi.isBudgetAvailable(1)) break;
-      try {
-        const data = await goalApi.getOdds(m.id);
-        await matchDetailsRepo.upsertOdds(m.id, data);
-        ok++;
-      } catch (err) {
-        fail++;
-        if (err.message.includes('disabled')) break;
+    try {
+      const dateStr = formatDate(new Date());
+      const matches = await fixturesRepo.getByDate(dateStr);
+      let ok = 0, fail = 0;
+      for (const m of matches) {
+        if (!goalApi.isBudgetAvailable(1)) break;
+        try {
+          const data = await goalApi.getOdds(m.id);
+          await matchDetailsRepo.upsertOdds(m.id, data);
+          ok++;
+        } catch (err) {
+          fail++;
+          if (err.message.includes('disabled')) break;
+        }
       }
+      logger.info(`[Scheduler] ✓ Odds: ${ok} ok, ${fail} fail`);
+    } catch (err) {
+      logger.error(`[Scheduler] ✗ Odds failed: ${err.message}`);
     }
-    logger.info(`[Scheduler] ✓ Odds: ${ok} ok, ${fail} fail`);
   }
 
   async syncVideos() {
@@ -270,16 +274,12 @@ class SmartScheduler {
         }
 
         await fixturesRepo.replaceLive(matches);
-        
-        // ★ FIX: Write live matches to the snapshot doc so the frontend sees them
         const todayStr = formatDate(new Date());
         await writeFootballSnapshot(todayStr, { live: matches });
-        
         eventBus.emit(EVENT.LIVE_FIXTURES_UPDATED);
 
         const liveCount = matches.length;
         const isNearFinish = matches.some(m => (m.elapsed || m.minute || 0) >= 80);
-        
         const state = this._determinePollingState(remaining, liveCount, isNearFinish, liveUsed, liveCap);
         const interval = state.interval;
 

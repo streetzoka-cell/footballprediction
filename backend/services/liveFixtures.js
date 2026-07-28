@@ -5,7 +5,7 @@ const logger = require("../utils/logger");
 const snapshotWriter = require("./snapshotWriter");
 const { calculateMatchScore, categorizeMatch } = require("./matchScoreEngine"); // NEW IMPORT
 
-const providerManager = require('../providers/providerManager'); 
+const providerManager = require('../config/providerManager'); 
 const fixtureRepository = require('../repositories/fixtureRepository'); 
 const { eventBus, EVENT } = require('../utils/eventBus'); 
 

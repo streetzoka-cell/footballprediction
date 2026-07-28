@@ -7,6 +7,8 @@ import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
+// ★ FIX: Import normalizeMatch to map the flat backend data
+import { normalizeMatch } from '../engine/matchEngine';
 
 // Helper functions directly related to UI display only
 const getConfidence = (h, d, a) => {
@@ -229,8 +231,12 @@ export default function MasterGames() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
   const { data: rawFixtures = [], isLoading, error } = useFixtures(selectedDate);
   
-  // ★ Hooks return normalized data directly. No mapping needed here.
-  const allMatches = useMemo(() => rawFixtures.filter(m => m.dateStr === selectedDate), [rawFixtures, selectedDate]);
+  // ★ FIX: Map raw fixtures through the normalizeMatch engine first
+  const allMatches = useMemo(() => {
+    return rawFixtures
+      .map(m => normalizeMatch(m, true, Date.now()))
+      .filter(m => m && m.dateStr === selectedDate);
+  }, [rawFixtures, selectedDate]);
 
   // Smart Filtering: Only include matches that are Featured OR have AI Probabilities OR High MatchScore
   const smartMatches = useMemo(() => {

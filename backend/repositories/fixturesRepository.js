@@ -1,76 +1,40 @@
-const { COLLECTIONS } = require("../config/constants");
-const {
-  batchWrite,
-  deleteByIds,
-  clearCollection,
-  replaceCollection,
-  getDb,
-} = require("../config/firebase");
+const { COLLECTIONS, TTL } = require('../config/constants');
+const { smartBatchWrite, clearCollection, getDb } = require('../config/firebase');
 
 class FixturesRepository {
-  async diffWrite(collectionPath, docs, previousIds) {
-    const newIdSet = new Set(docs.map((d) => String(d.id)));
-    const toDelete = previousIds
-      ? [...previousIds].filter((id) => !newIdSet.has(id))
-      : [];
-      
-    let deleted = 0;
-    if (toDelete.length > 0) {
-      deleted = await deleteByIds(collectionPath, toDelete);
-    }
-    
-    let written = 0;
-    if (docs.length > 0) {
-      written = await batchWrite(collectionPath, docs);
-    }
-    return { deleted, written, newIds: newIdSet };
+  async upsertFixtures(matches, dateStr) {
+    const tagged = matches.map(m => ({ ...m, date: dateStr || m.date?.split('T')[0] }));
+    return smartBatchWrite(COLLECTIONS.FIXTURES, tagged, TTL.FIXTURES);
   }
 
-  async removeByIds(collectionPath, ids) {
-    return deleteByIds(collectionPath, ids);
+  async getByDate(dateStr) {
+    const db = getDb();
+    const snap = await db.collection(COLLECTIONS.FIXTURES).where('date', '==', dateStr).get();
+    return snap.docs.map(d => d.data());
   }
 
-  async replaceYesterday(docs) {
-    return replaceCollection(COLLECTIONS.YESTERDAY_FIXTURES, docs);
+  async getLive() {
+    const db = getDb();
+    const snap = await db.collection(COLLECTIONS.LIVE_FIXTURES).get();
+    return snap.docs.map(d => d.data());
   }
 
-  async replaceToday(docs) {
-    return replaceCollection(COLLECTIONS.TODAY_FIXTURES, docs);
+  async replaceLive(matches) {
+    await clearCollection(COLLECTIONS.LIVE_FIXTURES);
+    if (!matches.length) return { written: 0 };
+    return smartBatchWrite(COLLECTIONS.LIVE_FIXTURES, matches, TTL.LIVE_FIXTURES);
   }
 
-  async replaceTomorrow(docs) {
-    return replaceCollection(COLLECTIONS.TOMORROW_FIXTURES, docs);
+  async getResults(dateStr) {
+    const db = getDb();
+    const snap = await db.collection(COLLECTIONS.RESULTS).where('date', '==', dateStr).get();
+    return snap.docs.map(d => d.data());
   }
 
-  async getAllTomorrow() {
-    const database = getDb();
-    const snapshot = await database.collection(COLLECTIONS.TOMORROW_FIXTURES).get();
-    return snapshot.docs.map((doc) => doc.data());
-  }
-  
-  async getAllYesterday() {
-    const database = getDb();
-    const snapshot = await database.collection(COLLECTIONS.YESTERDAY_FIXTURES).get();
-    return snapshot.docs.map((doc) => doc.data());
-  }
-
-  async getAllToday() {
-    const database = getDb();
-    const snapshot = await database.collection(COLLECTIONS.TODAY_FIXTURES).get();
-    return snapshot.docs.map((doc) => doc.data());
-  }
-
-  async replaceLive(docs) {
-    return replaceCollection(COLLECTIONS.LIVE_FIXTURES, docs);
-  }
-
-  async clearLive() {
-    return clearCollection(COLLECTIONS.LIVE_FIXTURES);
-  }
-
-  async batchUpsertFinished(docs) {
-    return batchWrite(COLLECTIONS.FINISHED_FIXTURES, docs);
+  async upsertResults(matches, dateStr) {
+    const tagged = matches.map(m => ({ ...m, date: dateStr || m.date?.split('T')[0] }));
+    return smartBatchWrite(COLLECTIONS.RESULTS, tagged, TTL.RESULTS);
   }
 }
 
-module.exports = FixturesRepository;
+module.exports = new FixturesRepository();

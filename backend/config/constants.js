@@ -1,5 +1,4 @@
 // Budget-optimized — smart midnight rollover, dynamic live polling, smart FT recovery.
-// ★ Upgraded for 1500 calls/day limit (Greedy & Instant polling)
 
 // ───────────────────────────────────────────────
 // DATES & SEASONS
@@ -108,44 +107,111 @@ const BASKETBALL_STATUS = Object.freeze({ NOT_STARTED: "NS", FIRST_QUARTER: "1Q"
 const BASKETBALL_LIVE_STATUSES = Object.freeze([ BASKETBALL_STATUS.FIRST_QUARTER, BASKETBALL_STATUS.BETWEEN_Q1_Q2, BASKETBALL_STATUS.SECOND_QUARTER, BASKETBALL_STATUS.BETWEEN_Q2_Q3, BASKETBALL_STATUS.THIRD_QUARTER, BASKETBALL_STATUS.BETWEEN_Q3_Q4, BASKETBALL_STATUS.FOURTH_QUARTER, BASKETBALL_STATUS.OVERTIME ]);
 const BASKETBALL_FINISHED_STATUSES = Object.freeze([ BASKETBALL_STATUS.FINISHED, BASKETBALL_STATUS.ABANDONED ]);
 
+// ───────────────────────────────────────────────
+// FIRESTORE UNIFIED COLLECTIONS
+// ───────────────────────────────────────────────
 const COLLECTIONS = Object.freeze({
-  LIVE_FIXTURES: "liveFixtures", YESTERDAY_FIXTURES: "yesterdayFixtures", TODAY_FIXTURES: "todayFixtures", TOMORROW_FIXTURES: "tomorrowFixtures", FINISHED_FIXTURES: "finishedFixtures", STANDINGS: "standings", LEAGUES: "leagues", TEAMS: "teams", BASKETBALL_LIVE_FIXTURES: "basketballLiveFixtures", BASKETBALL_YESTERDAY_FIXTURES: "basketballYesterdayFixtures", BASKETBALL_TODAY_FIXTURES: "basketballTodayFixtures", BASKETBALL_TOMORROW_FIXTURES: "basketballTomorrowFixtures", BASKETBALL_FINISHED_FIXTURES: "basketballFinishedFixtures", BASKETBALL_STANDINGS: "basketballStandings", BASKETBALL_LEAGUES: "basketballLeagues", BASKETBALL_TEAMS: "basketballTeams", META: "meta",
+  FIXTURES: "fixtures", 
+  LIVE_FIXTURES: "liveFixtures",
+  RESULTS: "results",
+  STANDINGS: "standings",
+  TOP_SCORERS: "topScorers",
+  TEAMS: "teams",
+  PLAYERS: "players",
+  PREDICTIONS: "predictions",
+  ODDS: "odds",
+  LINEUPS: "lineups",
+  STATISTICS: "statistics",
+  VIDEOS: "videos",
+  CACHE_INFO: "cacheInfo",
+
+  // Legacy collections (preserved for compatibility)
+  YESTERDAY_FIXTURES: "yesterdayFixtures", 
+  TODAY_FIXTURES: "todayFixtures", 
+  TOMORROW_FIXTURES: "tomorrowFixtures", 
+  FINISHED_FIXTURES: "finishedFixtures", 
+  LEAGUES: "leagues", 
+  BASKETBALL_LIVE_FIXTURES: "basketballLiveFixtures", 
+  BASKETBALL_YESTERDAY_FIXTURES: "basketballYesterdayFixtures", 
+  BASKETBALL_TODAY_FIXTURES: "basketballTodayFixtures", 
+  BASKETBALL_TOMORROW_FIXTURES: "basketballTomorrowFixtures", 
+  BASKETBALL_FINISHED_FIXTURES: "basketballFinishedFixtures", 
+  BASKETBALL_STANDINGS: "basketballStandings", 
+  BASKETBALL_LEAGUES: "basketballLeagues", 
+  BASKETBALL_TEAMS: "basketballTeams", 
+  META: "meta",
 });
+
 const META_DOCS = Object.freeze({ FOOTBALL_SCHEDULER: "footballScheduler", BASKETBALL_SCHEDULER: "basketballScheduler", FOOTBALL_BUDGET: "footballBudget", BASKETBALL_BUDGET: "basketballBudget" });
 
 // ───────────────────────────────────────────────
-// API & SCHEDULER (★ Upgraded for 1500 calls/day)
+// TTLs (in seconds)
 // ───────────────────────────────────────────────
-const API = Object.freeze({ PAGE_SIZE: 100, DAILY_BUDGET: 1500 });
-const SCHEDULER = Object.freeze({ FIXTURES_DAILY: "0 3 * * *", BASKETBALL_FIXTURES_DAILY: "0 3 * * *" });
+const TTL = Object.freeze({
+  FIXTURES: 24 * 3600,
+  LIVE_FIXTURES: 60,
+  RESULTS: 30 * 24 * 3600,
+  STANDINGS: 6 * 3600,
+  TOP_SCORERS: 24 * 3600,
+  TEAMS: 30 * 24 * 3600,
+  PLAYERS: 7 * 24 * 3600,
+  PREDICTIONS: 24 * 3600,
+  ODDS: 4 * 3600,
+  LINEUPS: 24 * 3600,
+  STATISTICS: 5 * 60,
+  VIDEOS: 1 * 3600,
+});
+
+// ───────────────────────────────────────────────
+// SMART SCHEDULER INTERVALS
+// ───────────────────────────────────────────────
+const SCHEDULER = Object.freeze({
+  TODAY_FIXTURES: '5 0 * * *',
+  TOMORROW_FIXTURES: '10 0 * * *',
+  YESTERDAY_RESULTS: '15 0 * * *',
+  STANDINGS: '0 */6 * * *',
+  TOP_SCORERS: '0 6 * * *',
+  ODDS_MORNING: '0 8 * * *',
+  ODDS_AFTERNOON: '0 15 * * *',
+  ODDS_EVENING: '0 18 * * *',
+  VIDEOS: '0 * * * *',
+  PREDICTIONS: '0 7 * * *',
+  FIXTURES_DAILY: "0 3 * * *",
+  BASKETBALL_FIXTURES_DAILY: "0 3 * * *",
+});
+
+// ───────────────────────────────────────────────
+// API & ADAPTIVE LIVE POLLING
+// ───────────────────────────────────────────────
+const API = Object.freeze({ PAGE_SIZE: 100, DAILY_BUDGET: 800, RESERVE: 100 });
 
 const LIVE_POLLING = Object.freeze({
-  FOOTBALL_DAILY_LIVE_CAP: 1000,
+  FOOTBALL_DAILY_LIVE_CAP: 250,
   BASKETBALL_DAILY_LIVE_CAP: 100,
-  IDLE_INTERVAL_MS:           300000,
-  LOW_LIVE_INTERVAL_MS:       30000,
-  MEDIUM_LIVE_INTERVAL_MS:    30000,
-  HIGH_LIVE_INTERVAL_MS:      30000,
-  MASSIVE_LIVE_INTERVAL_MS:   30000,
-  NEAR_FINISH_INTERVAL_MS:    15000,
-  RESERVE_FOR_DAILY_CRON:     100,
-  MIN_BUDGET_TO_POLL:         10,
-  BUDGET_NORMAL_THRESHOLD:    500,
-  BUDGET_CRITICAL_THRESHOLD:  150,
-  FT_CONFIRMATION_DELAY_MS:   15000,
-  MAX_CONSECUTIVE_ERRORS:     3,
-  ERROR_BACKOFF_MS:           30000,
+  IDLE_INTERVAL_MS: 15 * 60 * 1000,
+  LOW_LIVE_INTERVAL_MS: 3 * 60 * 1000,
+  MEDIUM_LIVE_INTERVAL_MS: 90 * 1000,
+  HIGH_LIVE_INTERVAL_MS: 60 * 1000,
+  MASSIVE_LIVE_INTERVAL_MS: 60 * 1000,
+  NEAR_FINISH_INTERVAL_MS: 30 * 1000,
+  MIN_BUDGET_TO_POLL: 20,
+  FT_CONFIRMATION_DELAY_MS: 10 * 60 * 1000,
+  RESERVE_FOR_DAILY_CRON: 100,
+  BUDGET_NORMAL_THRESHOLD: 500,
+  BUDGET_CRITICAL_THRESHOLD: 150,
+  MAX_CONSECUTIVE_ERRORS: 3,
+  ERROR_BACKOFF_MS: 30000,
 });
 
 const FT_RECOVERY = Object.freeze({ ENABLED: true, MIN_BUDGET_TO_FETCH: 10, COOLDOWN_MS: 900000, DEDUP_KEY: "ftRecoveredAt" });
 const RETRY = Object.freeze({ MAX_ATTEMPTS: 3, BASE_DELAY_MS: 2000, MAX_DELAY_MS: 30000, JITTER: true });
 const BATCH_MAX_OPS = 450;
-const WRITE_TIMEOUT_MS = 30000;
+const WRITE_TIMEOUT_MS = 60000;
 const SPORT = Object.freeze({ FOOTBALL: "football", BASKETBALL: "basketball" });
 
 module.exports = Object.freeze({
   TODAY, YESTERDAY, TOMORROW, formatDate, getDateOffset, getLocalDateFromUtc,
   LEAGUES, SEASON, STATUS, LIVE_STATUSES, FINISHED_STATUSES, RESOLVED_STATUSES,
   BASKETBALL_LEAGUES, BASKETBALL_SEASON, BASKETBALL_STATUS, BASKETBALL_LIVE_STATUSES, BASKETBALL_FINISHED_STATUSES,
-  COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY, RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT, TRACK_ALL_LEAGUES, BLOCKED_LEAGUE_IDS,
+  COLLECTIONS, META_DOCS, API, SCHEDULER, LIVE_POLLING, FT_RECOVERY, RETRY, BATCH_MAX_OPS, WRITE_TIMEOUT_MS, SPORT, TRACK_ALL_LEAGUES, BLOCKED_LEAGUE_IDS, TTL,
 });

@@ -1,11 +1,8 @@
 {
-  "name": "footballprediction-backend",
+  "name": "zokascore-backend",
   "version": "1.0.0",
-  "description": "Football Prediction Backend - API-Football sync service with Firebase Firestore",
-  "private": true,
+  "description": "ZOKASCORE Smart Data Pipeline & API Gateway",
   "main": "index.js",
-  "author": "Kim",
-  "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
@@ -13,28 +10,20 @@
     "start": "node index.js",
     "dev": "node --watch index.js",
     "pm2:start": "pm2 start ecosystem.config.js",
-    "pm2:stop": "pm2 stop footballprediction-backend",
-    "pm2:restart": "pm2 restart footballprediction-backend",
-    "pm2:reload": "pm2 reload footballprediction-backend",
-    "pm2:delete": "pm2 delete footballprediction-backend",
-    "pm2:logs": "pm2 logs footballprediction-backend",
-    "pm2:monit": "pm2 monit",
-    "pm2:save": "pm2 save",
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
+    "pm2:stop": "pm2 stop zokascore-backend",
+    "pm2:restart": "pm2 restart zokascore-backend",
+    "pm2:logs": "pm2 logs zokascore-backend"
   },
   "dependencies": {
-  
     "@sentry/node": "^10.68.0",
     "axios": "^1.7.0",
+    "cors": "^2.8.5",
     "dotenv": "^16.6.1",
     "express": "^4.21.0",
     "firebase-admin": "^12.7.0",
+    "node-cron": "^3.0.3",
     "winston": "^3.15.0",
     "winston-daily-rotate-file": "^5.0.0",
     "zod": "^4.4.3"
-  },
-  "devDependencies": {
-    "eslint": "^10.8.0"
   }
 }

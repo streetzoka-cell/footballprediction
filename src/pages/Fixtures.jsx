@@ -6,13 +6,12 @@ import {
   RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, ArrowRight, Flame, Camera, Loader
 } from 'lucide-react';
 
-import { useFixtures, useLiveMatches, useCompetitions, useStandings, useTeams } from '../hooks/useFixtures';
+import { useFixtures, useLiveMatches, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
-// ★ Centralized utilities and routes
 import { normalizeMatch } from '../engine/matchEngine';
 import { buildMatchRoute, buildLeagueRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
@@ -20,7 +19,6 @@ import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
 
-const TOP_5_CODES = ['PL', 'PD', 'SA', 'BL1', 'FL1'];
 const TOP_TEAMS_LIST = [
   'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
   'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
@@ -129,7 +127,7 @@ function useNotifications({ liveMatches, isFav, tab, addToast }) {
           setStatusAnims(p => new Map([...p, [id, { type: 'ft', t: Date.now() }]]));
           setTO(`sa-${id}`, () => setStatusAnims(p => { const n = new Map(p); n.delete(id); return n; }), 3500);
         }
-        if ((curr === 'HALF_TIME' || curr === 'HT') && prev !== 'HALF_TIME' && prev !== 'HT') {
+        if ((curr === 'HALF_TIME' || curr === 'HT' || curr === 'PAUSED') && prev !== 'HALF_TIME' && prev !== 'HT' && prev !== 'PAUSED') {
           if (shouldNotify) addToast({ type: 'status', st: 'ht', msg: pick(CMT.ht), detail: `${m.homeName} vs ${m.awayName}`, dur: 3000 });
           if (Sound.on) Sound.whistle('ht');
           setStatusAnims(p => new Map([...p, [id, { type: 'ht', t: Date.now() }]]));
@@ -187,93 +185,6 @@ const Confetti = React.memo(({ active }) => {
   );
 });
 
-const ScoreBreakdown = React.memo(({ match, onNavigate }) => {
-  if (match.isStarted && !match.isLive) {
-    return (
-      <div className="zoka-empty" style={{ padding: '30px', textAlign: 'center', borderRadius: '0 0 14px 14px' }}>
-        <Clock size={24} style={{ marginBottom: '10px', color: '#475569' }} />
-        <div style={{ color: '#e2e8f0', fontWeight: 700, marginBottom: '6px' }}>Match in Progress</div>
-        <div style={{ color: '#64748b', fontSize: '.9em' }}>Live coverage not available. Results will be shown at Full Time.</div>
-      </div>
-    );
-  }
-  const s = match.score || {};
-  const stats = match.stats || [];
-  const goals = s.goals || [];
-  const cards = s.cards || [];
-  const periods = [
-    { l: 'Half Time', h: s.halftime?.home, a: s.halftime?.away },
-    { l: 'Full Time', h: s.fulltime?.home ?? match.homeScore, a: s.fulltime?.away ?? match.awayScore },
-  ];
-  const hasScoreData = periods.some(p => p.h != null || p.a != null);
-  const hasEvents = goals.length > 0 || cards.length > 0;
-  const hasStatsData = stats.length > 0;
-  if (!hasScoreData && !hasEvents && !hasStatsData) return <div className="zoka-empty" style={{ borderRadius: 0, padding: '20px' }}>Details appear once the match begins</div>;
-  const events = [...goals.map(g => ({ ...g, eventType: 'goal' })), ...cards.map(c => ({ ...c, eventType: 'card' }))].sort((a, b) => (a.minute || 0) - (b.minute || 0));
-
-  return (
-    <div style={{ padding: '8px 0 0' }}>
-      {hasScoreData && (
-        <>
-          <div className="zoka-exp-section">Score Breakdown</div>
-          {periods.filter(p => p.h != null || p.a != null).map(p => (
-            <div key={p.l} className="zoka-exp-row"><span className="zoka-exp-label">{p.l}</span><span className="zoka-exp-val">{p.h ?? '-'} – {p.a ?? '-'}</span></div>
-          ))}
-        </>
-      )}
-      {hasEvents && (
-        <>
-          <div className="zoka-exp-section">Match Events</div>
-          <div className="zoka-timeline">
-            {events.map((e, i) => {
-              const isGoal = e.eventType === 'goal';
-              const isYellow = e.type === 'YELLOW_CARD';
-              const isRed = e.type === 'RED_CARD';
-              const isHome = e.team?.id === match.homeTeamId || e.team?.name === match.homeName;
-              const prevEvent = events[i-1];
-              const showHTDivider = prevEvent && prevEvent.minute <= 45 && e.minute > 45;
-              return (
-                <React.Fragment key={i}>
-                  {showHTDivider && <div className="zoka-timeline-divider">HALF TIME</div>}
-                  <div className={`zoka-timeline-row ${isHome ? 'home' : 'away'}`}>
-                    <span className="zoka-timeline-min">{e.minute != null ? `${e.minute}'` : ''}</span>
-                    <span className="zoka-timeline-icon">{isGoal ? '⚽' : isYellow ? '🟨' : isRed ? '🟥' : '⚠️'}</span>
-                    <span className="zoka-timeline-text">{e.scorer?.name || e.player?.name || 'Unknown'}</span>
-                  </div>
-                </React.Fragment>
-              );
-            })}
-          </div>
-        </>
-      )}
-      {hasStatsData && (
-        <>
-          <div className="zoka-exp-section">Match Stats</div>
-          {stats.map((stat, i) => {
-            const homeVal = parseFloat(stat.home) || 0;
-            const awayVal = parseFloat(stat.away) || 0;
-            const total = homeVal + awayVal;
-            const homePct = total > 0 ? (homeVal / total) * 100 : 50;
-            const awayPct = total > 0 ? (awayVal / total) * 100 : 50;
-            return (
-              <div key={i} className="zoka-stat-bar">
-                <span className="zoka-stat-val home">{stat.home}</span>
-                <div className="zoka-stat-track">
-                  <div className="zoka-stat-fill home" style={{ width: `${homePct}%` }} />
-                  <div className="zoka-stat-fill away" style={{ width: `${awayPct}%` }} />
-                  <span className="zoka-stat-label">{stat.type}</span>
-                </div>
-                <span className="zoka-stat-val away">{stat.away}</span>
-              </div>
-            );
-          })}
-        </>
-      )}
-      <button className="zoka-view-details" onClick={() => onNavigate(match.id)}>View Match Details <ArrowRight size={14} /></button>
-    </div>
-  );
-});
-
 const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchState, isFav, onFav, onReactNow }) => {
   const isLive = m.isLive; 
   const isHT = m.isHT; 
@@ -302,7 +213,6 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchSta
   if (isExp) cls += ' expanded';
   
   const barColor = isLive ? (isNearFT ? '#f97316' : '#ef4444') : isStarted ? '#fbbf24' : isFt ? '#10b981' : 'transparent';
-  
   const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
 
   return (
@@ -380,12 +290,6 @@ const MatchCard = React.memo(({ m, idx, expanded, onToggle, onNavigate, matchSta
           </div>
         )}
       </div>
-      {isExp && (
-        <div className="zoka-expanded" onClick={(e) => { e.preventDefault(); e.stopPropagation(); }}>
-          <div className="zoka-react-banner" onClick={(e) => { e.preventDefault(); e.stopPropagation(); onReactNow(m); }}><Camera size={16} /> React Now</div>
-          <ScoreBreakdown match={m} onNavigate={onNavigate} />
-        </div>
-      )}
     </Link>
   );
 });
@@ -413,21 +317,24 @@ const LeagueSection = React.memo(({ group, expanded, onToggle, onNavigate, isExp
   );
 });
 
-const CompCard = React.memo(({ c }) => (
-  <div className="zoka-team-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', textAlign: 'left' }}>
-    {c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} onError={e => { e.target.style.display = 'none'; }} />}
-    <div className="name">{c.name}</div>
-  </div>
-));
-
-function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, otherGlobalComps }) {
+// ★ FIX: Derive league list dynamically from the fixtures themselves instead of old hardcoded IDs
+function CompetitionSelector({ selectedLeagueId, onSelect, availableLeagues }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQ, setSearchQ] = useState('');
-  const filteredComps = useMemo(() => { if (!searchQ.trim()) return otherGlobalComps; return otherGlobalComps.filter(c => (c.name || '').toLowerCase().includes(searchQ.toLowerCase())); }, [otherGlobalComps, searchQ]);
+  const filteredLeagues = useMemo(() => { 
+    if (!searchQ.trim()) return availableLeagues; 
+    return availableLeagues.filter(l => (l.name || '').toLowerCase().includes(searchQ.toLowerCase())); 
+  }, [availableLeagues, searchQ]);
+
   return (
     <>
       <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
-        {topGlobalComps.map(c => (<button key={c.id} className={`zoka-pill ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => onSelect(c.code)}>{c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}{c.code || c.name}</button>))}
+        {availableLeagues.slice(0, 8).map(l => (
+          <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => onSelect(l.id)}>
+            {l.emblem && <img src={l.emblem} alt={`${l.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            {l.name}
+          </button>
+        ))}
       </div>
       <button className="zoka-pill" style={{ width: '100%', marginBottom: '10px', borderRadius: '12px', padding: '12px 16px' }} onClick={() => setSearchOpen(p => !p)}>
         <Search size={16} />{searchOpen ? 'Close All Leagues Search' : 'Search All Other Leagues'}<ChevronDown size={16} style={{ marginLeft: 'auto', opacity: 0.6 }} />
@@ -435,8 +342,13 @@ function CompetitionSelector({ selectedCompCode, onSelect, topGlobalComps, other
       {searchOpen && (
         <div className="zoka-filter-panel" style={{ position: 'static', maxHeight: '300px' }}>
           <input className="zoka-search-static" style={{ width: '100%', marginBottom: '10px' }} placeholder="Type league name..." value={searchQ} onChange={e => setSearchQ(e.target.value)} />
-          {filteredComps.length === 0 && <div className="zoka-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
-          {filteredComps.map(c => (<button key={c.id} className={`zoka-filter-item ${selectedCompCode === c.code ? 'active' : ''}`} onClick={() => { onSelect(c.code); setSearchOpen(false); setSearchQ(''); }}>{c.emblem && <img src={c.emblem} alt={`${c.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}{c.name}</button>))}
+          {filteredLeagues.length === 0 && <div className="zoka-empty" style={{ padding: '12px' }}><p>No leagues found</p></div>}
+          {filteredLeagues.map(l => (
+            <button key={l.id} className={`zoka-filter-item ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => { onSelect(l.id); setSearchOpen(false); setSearchQ(''); }}>
+              {l.emblem && <img src={l.emblem} alt={`${l.name} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+              {l.name}
+            </button>
+          ))}
         </div>
       )}
     </>
@@ -450,7 +362,6 @@ export default function Fixtures() {
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
   const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const { data: rawLive = [] } = useLiveMatches();
-  const { data: competitions = [] } = useCompetitions();
   const queryClient = useQueryClient();
   
   const { soundEnabled, favorites, pinnedLeagues, toggleSound, toggleFavorite, togglePinnedLeague } = usePreferencesStore();
@@ -465,36 +376,30 @@ export default function Fixtures() {
   const [ui, setUI] = useState({ moreDatesOpen: false, leagueFilterOpen: false, showLiveOnly: false, showAllTopMatches: false, showAllLiveMatches: false });
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
-  const [selectedCompCode, setSelectedCompCode] = useState(null);
-  const { data: standingsData = [], isLoading: standingsLoading } = useStandings(selectedCompCode);
-  const { data: teamsData = [], isLoading: teamsLoading } = useTeams(selectedCompCode);
+  // ★ FIX: Use dynamic League ID (String) instead of hardcoded codes
+  const [selectedLeagueId, setSelectedLeagueId] = useState(null);
+  const { data: standingsData = null, isLoading: standingsLoading } = useStandings(selectedLeagueId);
+  const { data: teamsData = [], isLoading: teamsLoading } = useTeams(selectedLeagueId);
 
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
 
-  // ★ RESTORED `now` state to force dynamic time recalculation (Live minutes, HT, FT)
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 30000); 
     return () => clearInterval(t);
   }, []);
 
-  // ★ Map raw data through engine, merge live, and filter strictly by date
   const allFixtures = useMemo(() => {
     const map = new Map();
-    
-    // Normalize rawFixtures
     rawFixtures.forEach(m => {
       const normM = normalizeMatch(m, true, now);
       if (normM) map.set(String(normM.id), normM);
     });
-
-    // Normalize rawLive and merge
     rawLive.forEach(m => {
       const normM = normalizeMatch(m, true, now);
       if (!normM) return;
-      
       const existing = map.get(String(normM.id));
       if (existing) {
         const trulyLive = normM.isLive || isLiveStatus(normM.status, SPORT.FOOTBALL);
@@ -510,22 +415,15 @@ export default function Fixtures() {
           status: normM.status || existing.status,
         });
       } else {
-        // Only add live matches if they belong to the selected date
-        if (normM.dateStr === selectedDate) {
-          map.set(String(normM.id), normM);
-        }
+        if (normM.dateStr === selectedDate) map.set(String(normM.id), normM);
       }
     });
-
-    
-    // The API gateway already ensures we get the correct matches for the date requested.
     return Array.from(map.values());
   }, [rawFixtures, rawLive, selectedDate, now]);
+
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
 
-  useEffect(() => {
-    Sound.on = soundEnabled;
-  }, [soundEnabled]);
+  useEffect(() => { Sound.on = soundEnabled; }, [soundEnabled]);
 
   useEffect(() => {
     const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false })); };
@@ -553,18 +451,15 @@ export default function Fixtures() {
 
   const [timeFilter, setTimeFilter] = useState('all');
 
-      const displayFixtures = useMemo(() => {
+  const displayFixtures = useMemo(() => {
     let list = allFixtures;
     if (compFilter !== 'ALL') list = list.filter(m => String(m.leagueName) === compFilter);
     if (timeFilter === 'live') list = list.filter(m => m.isLive);
     else if (timeFilter === 'finished') list = list.filter(m => m.isFinished);
     if (ui.showLiveOnly) list = list.filter(m => m.isLive);
     if (searchQ.trim()) { const terms = searchQ.trim().toLowerCase().split(/\s+/).filter(Boolean); if (terms.length) list = list.filter(m => matchQ(m, terms)); }
-    
-    
     return list; 
   }, [allFixtures, compFilter, ui.showLiveOnly, searchQ, timeFilter]);
-
 
   const topMatches = useMemo(() => {
     return allFixtures.filter(m => {
@@ -573,9 +468,7 @@ export default function Fixtures() {
       const isTopAway = [...TOP_TEAMS_SET].some(t => away.includes(t));
       return isTopHome || isTopAway;
     }).sort(sortMatches); 
-    // ★ FIX: Removed .slice(0, 10) to show ALL top matches
   }, [allFixtures]);
-
 
   const visibleTopMatches = ui.showAllTopMatches ? topMatches : topMatches.slice(0, 2);
   const hiddenTopCount = topMatches.length - 2;
@@ -606,9 +499,16 @@ export default function Fixtures() {
 
   const toggleLeagueExpand = useCallback((leagueName) => { setExpandedLeagues(prev => { const n = new Set(prev); if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName); return n; }); }, []);
 
-  const globalCompList = useMemo(() => (competitions || []).map(c => ({ id: String(c.id), code: c.code, name: c.name, emblem: c.emblem })).sort((a, b) => (a.name || '').localeCompare(b.name || '')), [competitions]);
-  const topGlobalComps = useMemo(() => globalCompList.filter(c => TOP_5_CODES.includes(c.code)), [globalCompList]);
-  const otherGlobalComps = useMemo(() => globalCompList.filter(c => !TOP_5_CODES.includes(c.code)), [globalCompList]);
+  // ★ FIX: Build availableLeagues directly from fetched fixtures
+  const availableLeagues = useMemo(() => {
+    const map = new Map();
+    allFixtures.forEach(m => {
+      if (!map.has(m.leagueId)) {
+        map.set(m.leagueId, { id: m.leagueId, name: m.leagueName, emblem: m.leagueLogo });
+      }
+    });
+    return Array.from(map.values()).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
+  }, [allFixtures]);
 
   const liveCount = useMemo(() => allFixtures.filter(m => m.isLive).length, [allFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favorites.includes(String(m.id))), [displayFixtures, favorites]);
@@ -620,14 +520,8 @@ export default function Fixtures() {
   const handleMatchToggle = useCallback((matchId) => { setExpanded(prev => prev === matchId ? null : matchId); }, []);
   const handleNavigateToMatch = useCallback((matchId) => {
     const m = displayFixtures.find(x => String(x.id) === String(matchId));
-    if (m) { 
-      navigate(buildMatchRoute(m.id, m.homeName, m.awayName)); 
-    }
+    if (m) navigate(buildMatchRoute(m.id, m.homeName, m.awayName)); 
   }, [displayFixtures, navigate]);
-
-  const handleReactNow = useCallback((match) => {
-    navigate('/studio/reactor', { state: { fixtureId: match.id, homeTeam: match.homeName, awayTeam: match.awayName, homeLogo: match.homeLogo, awayLogo: match.awayLogo, score: { home: match.homeScore, away: match.awayScore }, minute: match.minute, scorer: match.homeScore > match.awayScore ? match.homeName : match.awayName, competition: match.leagueName } });
-  }, [navigate]);
 
   const handleRefresh = useCallback(async () => { 
     queryClient.invalidateQueries(['fixtures', selectedDate]);
@@ -635,17 +529,17 @@ export default function Fixtures() {
   }, [queryClient, selectedDate]);
 
   const onSearchChange = useCallback((e) => { setSearchQ(e.target.value); }, []);
-
   const currentLeagueEmblem = useMemo(() => { if (compFilter === 'ALL') return null; return displayFixtures.find(m => m.leagueName === compFilter)?.leagueLogo || null; }, [compFilter, displayFixtures]);
 
   useEffect(() => {
-    if ((tab === 'standings' || tab === 'teams') && !selectedCompCode && topGlobalComps.length > 0) {
-      setSelectedCompCode(topGlobalComps[0].code);
+    if ((tab === 'standings' || tab === 'teams') && !selectedLeagueId && availableLeagues.length > 0) {
+      // Auto-select Premier League if available, else first available
+      const pl = availableLeagues.find(l => l.name === 'Premier League');
+      setSelectedLeagueId(pl ? pl.id : availableLeagues[0].id);
     }
-  }, [tab, selectedCompCode, topGlobalComps]);
+  }, [tab, selectedLeagueId, availableLeagues]);
 
-  const standingsLeague = standingsData?.[0] || null;
-  const standingsTable = standingsLeague?.standings?.[0] || [];
+  const standingsTable = standingsData?.standings?.[0] || [];
 
   if (fixturesError && allFixtures.length === 0) {
     return (
@@ -707,7 +601,7 @@ export default function Fixtures() {
         </div>
 
         <div className="zoka-tabs">
-          {['fixtures', 'favourites', 'standings', 'teams', 'competitions'].map(t => (
+          {['fixtures', 'favourites', 'standings', 'teams'].map(t => (
             <button key={t} className={`zoka-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
               {t.charAt(0).toUpperCase() + t.slice(1)}
             </button>
@@ -722,17 +616,8 @@ export default function Fixtures() {
 
         {tab === 'fixtures' && (
           <div className="zoka-pill-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
-            {[
-              { key: 'all', label: 'All Matches' },
-              { key: 'live', label: 'Live (Real-time)' },
-              { key: 'finished', label: 'Finished Results' },
-            ].map(tf => (
-              <button 
-                key={tf.key} 
-                className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`}
-                onClick={() => setTimeFilter(tf.key)}
-                style={{ flexShrink: 0, padding: '8px 16px', borderRadius: '8px', fontSize: '.8rem', fontWeight: 700, background: timeFilter === tf.key ? '#10b981' : 'var(--bg-card)', color: timeFilter === tf.key ? '#05070a' : 'var(--text-muted)', border: `1px solid ${timeFilter === tf.key ? '#10b981' : 'var(--border)'}` }}
-              >
+            {[{ key: 'all', label: 'All Matches' }, { key: 'live', label: 'Live (Real-time)' }, { key: 'finished', label: 'Finished Results' }].map(tf => (
+              <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: '8px', fontSize: '.8rem', fontWeight: 700, background: timeFilter === tf.key ? '#10b981' : 'var(--bg-card)', color: timeFilter === tf.key ? '#05070a' : 'var(--text-muted)', border: `1px solid ${timeFilter === tf.key ? '#10b981' : 'var(--border)'}` }}>
                 {tf.label}
               </button>
             ))}
@@ -747,7 +632,7 @@ export default function Fixtures() {
                   <Flame size={18} style={{ color: '#fbbf24' }} />
                   <span className="zoka-league-name">Top Matches</span>
                 </div>
-                {visibleTopMatches.map((m, i) => <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} onReactNow={handleReactNow} />)}
+                {visibleTopMatches.map((m, i) => <MatchCard key={`top-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} />)}
                 {hiddenTopCount > 0 && (
                   <button className="zoka-show-more" onClick={() => toggleUI('showAllTopMatches')}>
                     {ui.showAllTopMatches ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -763,7 +648,7 @@ export default function Fixtures() {
                   <TrendingUp size={18} style={{ color: '#ef4444' }} />
                   <span className="zoka-league-name">Live Matches</span>
                 </div>
-                {visibleLiveMatches.map((m, i) => <MatchCard key={`live-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} onReactNow={handleReactNow} />)}
+                {visibleLiveMatches.map((m, i) => <MatchCard key={`live-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} />)}
                 {hiddenLiveCount > 0 && (
                   <button className="zoka-show-more" onClick={() => toggleUI('showAllLiveMatches')}>
                     {ui.showAllLiveMatches ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -808,26 +693,18 @@ export default function Fixtures() {
             {fixturesLoading && isPrimaryDate ? (
               <ListSkeleton count={5} />
             ) : displayFixtures.length === 0 ? (
-              <EmptyState 
-                icon={Calendar} 
-                title="No fixtures scheduled for this date." 
-                hint="Try another date or clear your search." 
-                action={searchQ ? <button className="zoka-empty-action" onClick={() => setSearchQ('')}>Clear Search</button> : null}
-              />
+              <EmptyState icon={Calendar} title="No fixtures scheduled for this date." hint="Try another date or clear your search." action={searchQ ? <button className="zoka-empty-action" onClick={() => setSearchQ('')}>Clear Search</button> : null} />
             ) : (
               <>
                 {favMatches.length > 0 && (
                   <div className="zoka-section">
-                    <div className="zoka-league-hd">
-                      <Star size={18} className="zoka-fav-icon" />
-                      <span className="zoka-league-name">Favourites</span>
-                    </div>
-                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} onReactNow={handleReactNow} />)}
+                    <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
+                    {favMatches.map((m, i) => <MatchCard key={`fav-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={isFav(m.id)} onFav={toggleFavorite} />)}
                   </div>
                 )}
 
                 {topLeagues.map(group => (
-                  <LeagueSection key={group.name} group={group} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} isExpanded={expandedLeagues.has(group.name)} toggleLeagueExpand={toggleLeagueExpand} matchState={matchState} isFav={isFav} onFav={toggleFavorite} isPinned={isPinned(group.name)} onTogglePin={togglePinnedLeague} onReactNow={handleReactNow} />
+                  <LeagueSection key={group.name} group={group} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} isExpanded={expandedLeagues.has(group.name)} toggleLeagueExpand={toggleLeagueExpand} matchState={matchState} isFav={isFav} onFav={toggleFavorite} isPinned={isPinned(group.name)} onTogglePin={togglePinnedLeague} />
                 ))}
 
                 {otherLeagues.length > 0 && !ui.leagueFilterOpen && (
@@ -837,29 +714,8 @@ export default function Fixtures() {
                 )}
 
                 {(ui.leagueFilterOpen || compFilter !== 'ALL') && otherLeagues.map(group => (
-                  <LeagueSection key={group.name} group={group} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} isExpanded={expandedLeagues.has(group.name)} toggleLeagueExpand={toggleLeagueExpand} matchState={matchState} isFav={isFav} onFav={toggleFavorite} isPinned={isPinned(group.name)} onTogglePin={togglePinnedLeague} onReactNow={handleReactNow} />
+                  <LeagueSection key={group.name} group={group} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} isExpanded={expandedLeagues.has(group.name)} toggleLeagueExpand={toggleLeagueExpand} matchState={matchState} isFav={isFav} onFav={toggleFavorite} isPinned={isPinned(group.name)} onTogglePin={togglePinnedLeague} />
                 ))}
-
-                <div className="zoka-seo-links">
-                  <h3>Today's Match Links</h3>
-                  {displayFixtures.slice(0, 50).map(m => (
-                    <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link" rel="bookmark">
-                      {m.homeName} vs {m.awayName}
-                    </Link>
-                  ))}
-                </div>
-
-                <div className="zoka-seo-links" style={{ marginTop: '20px' }}>
-                  <h3>Explore Leagues</h3>
-                  {[...new Set(allFixtures.map(m => m.leagueName))].map(name => {
-                     const m = allFixtures.find(x => x.leagueName === name);
-                     return (
-                       <Link key={m?.leagueId || name} to={buildLeagueRoute(m?.leagueId, name)} className="zoka-seo-link">
-                         {name}
-                       </Link>
-                     );
-                  })}
-                </div>
               </>
             )}
           </>
@@ -867,47 +723,37 @@ export default function Fixtures() {
 
         {tab === 'favourites' && (
           <div className="zoka-section">
-            <div className="zoka-league-hd">
-              <Star size={18} className="zoka-fav-icon" />
-              <span className="zoka-league-name">Favourites</span>
-            </div>
+            <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
             {favMatches.length > 0 ? (
-              favMatches.map((m, i) => (
-                <MatchCard key={`favtab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={true} onFav={toggleFavorite} onReactNow={handleReactNow} />
-              ))
+              favMatches.map((m, i) => <MatchCard key={`favtab-${m.id}-${i}`} m={m} idx={i} expanded={expanded} onToggle={handleMatchToggle} onNavigate={handleNavigateToMatch} matchState={matchState} isFav={true} onFav={toggleFavorite} />)
             ) : (
-              <EmptyState 
-                icon={Star} 
-                title="No favourite matches for this date." 
-                hint="Tap the star icon on any match to add it here." 
-              />
+              <EmptyState icon={Star} title="No favourite matches for this date." hint="Tap the star icon on any match to add it here." />
             )}
           </div>
         )}
 
         {tab === 'standings' && (
           <>
-            <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
+            <CompetitionSelector selectedLeagueId={selectedLeagueId} onSelect={setSelectedLeagueId} availableLeagues={availableLeagues} />
             {standingsLoading ? (
               <ListSkeleton count={8} />
             ) : standingsTable.length > 0 ? (
               <div className="zoka-tbl-wrap">
                 <table className="zoka-tbl">
                   <thead>
-                    <tr>
-                      <th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th>
-                    </tr>
+                    <tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>
                   </thead>
                   <tbody>
                     {standingsTable.map(row => (
-                      <tr key={row.teamId || row.rank}>
+                      <tr key={row.team?.id || row.rank}>
                         <td>{row.rank}</td>
                         <td style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {row.teamLogo && <img src={row.teamLogo} alt="" width="20" height="20" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-                          {row.teamName || 'TBD'}
+                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                          {row.team?.name || 'TBD'}
                         </td>
-                        <td>{row.played}</td><td>{row.win}</td><td>{row.draw}</td><td>{row.lose}</td><td>{row.goalsFor}</td><td>{row.goalsAgainst}</td>
-                        <td>{row.goalDiff > 0 ? '+' : ''}{row.goalDiff}</td>
+                        <td>{row.all?.played}</td><td>{row.all?.win}</td><td>{row.all?.draw}</td><td>{row.all?.lose}</td>
+                        <td>{row.all?.goals?.for}</td><td>{row.all?.goals?.against}</td>
+                        <td>{row.goalsDiff > 0 ? '+' : ''}{row.goalsDiff}</td>
                         <td style={{ fontWeight: 700 }}>{row.points}</td>
                       </tr>
                     ))}
@@ -922,27 +768,22 @@ export default function Fixtures() {
 
         {tab === 'teams' && (
           <>
-            <CompetitionSelector selectedCompCode={selectedCompCode} onSelect={setSelectedCompCode} topGlobalComps={topGlobalComps} otherGlobalComps={otherGlobalComps} />
+            <CompetitionSelector selectedLeagueId={selectedLeagueId} onSelect={setSelectedLeagueId} availableLeagues={availableLeagues} />
             {teamsLoading ? (
               <ListSkeleton count={8} />
             ) : teamsData.length > 0 ? (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
                 {teamsData.map(t => (
-                  <CompCard key={t.id} c={{ name: t.name, emblem: t.logo }} />
+                  <div key={t.id} className="zoka-team-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', textAlign: 'left' }}>
+                    {t.logo && <img src={t.logo} alt={`${t.name} logo`} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} onError={e => { e.target.style.display = 'none'; }} />}
+                    <div className="name">{t.name}</div>
+                  </div>
                 ))}
               </div>
             ) : (
               <EmptyState icon={Users} title="Select a competition to view teams." />
             )}
           </>
-        )}
-
-        {tab === 'competitions' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
-            {globalCompList.map(c => (
-              <CompCard key={c.id} c={{ name: c.name, emblem: c.emblem }} />
-            ))}
-          </div>
         )}
       </div>
     </div>
