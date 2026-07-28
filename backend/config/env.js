@@ -5,7 +5,7 @@ dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 const env = {
   // Server
-  PORT: process.env.PORT || 5000,
+  PORT: process.env.PORT || 3099,
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
   
   // GOAL API (Primary)

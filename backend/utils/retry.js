@@ -1,70 +1,42 @@
-﻿/*
- * retry.js
- * Generic retry helper with exponential backoff.
+﻿const env = require('../config/env');
+const logger = require('./logger');
+
+/**
+ * Retries a given async function with exponential backoff.
+ * 
+ * @param {Function} fn - The async function to execute
+ * @param {string} name - The name of the operation (for logging)
+ * @param {number} maxAttempts - Max retry attempts (default: 3)
+ * @param {number} baseDelayMs - Base delay in ms (default: 2000)
  */
-const { RETRY } = require("../config/constants");
-const logger = require("./logger");
-
-class RetryError extends Error {
-  constructor(message, { originalError, attempts } = {}) {
-    super(message);
-    this.name = "RetryError";
-    this.originalError = originalError;
-    this.attempts = attempts;
-  }
-}
-
-async function withRetry(fn, label = "operation", options = {}) {
-  const maxAttempts = options.maxAttempts ?? RETRY.MAX_ATTEMPTS;
-  const baseDelay = options.baseDelay ?? RETRY.BASE_DELAY_MS;
-  const maxDelay = options.maxDelay ?? RETRY.MAX_DELAY_MS;
-  const useJitter = options.jitter ?? RETRY.JITTER;
-
-  let lastError;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+async function withRetry(fn, name, maxAttempts = 3, baseDelayMs = 2000) {
+  let attempt = 1;
+  
+  while (attempt <= maxAttempts) {
     try {
       return await fn();
     } catch (err) {
-      lastError = err;
-      const status = err.response?.status;
-      const code = err.code;
+      const isLastAttempt = attempt === maxAttempts;
+      const delay = baseDelayMs * Math.pow(2, attempt - 1);
+      
+      if (err.code === 'BUDGET_EXHAUSTED' || err.message.includes('budget')) {
+        throw err; // Don't retry if we're out of API budget
+      }
+      
+      if (err.response?.status === 403 || err.response?.status === 404) {
+        throw err; // Don't retry forbidden or not found
+      }
 
-      if (status === 401 || status === 403) {
-        logger.error(`[${label}] Auth failed (${status}) — no retry`);
-        throw err;
-      }
-      if (status === 400 || status === 404 || status === 422) {
-        logger.error(`[${label}] Client error (${status}) — no retry`);
-        throw err;
-      }
-      if (status === 429) {
-        logger.error(`[${label}] Rate limited (429) — no retry`);
-        throw err;
-      }
-      if (code === "BUDGET_EXHAUSTED") {
-        logger.error(`[${label}] Budget exhausted — no retry`);
+      if (isLastAttempt) {
+        logger.error(`[Retry] ✗ ${name} failed after ${maxAttempts} attempts: ${err.message}`);
         throw err;
       }
 
-      if (attempt >= maxAttempts) {
-        logger.error(`[${label}] Failed after ${maxAttempts} attempts: ${err.message}`);
-        throw new RetryError(err.message, { originalError: err, attempts: maxAttempts });
-      }
-
-      const exponential = Math.min(baseDelay * Math.pow(2, attempt - 1), maxDelay);
-      const jitter = useJitter ? Math.random() * 1000 : 0;
-      const delay = Math.round(exponential + jitter);
-
-      logger.warn(`[${label}] Attempt ${attempt}/${maxAttempts} failed (${status ?? "network"}). Retrying in ${delay}ms...`);
-      await sleep(delay);
+      logger.warn(`[Retry] ⏳ ${name} attempt ${attempt} failed. Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+      attempt++;
     }
   }
-  throw lastError;
 }
 
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-module.exports = { RetryError, withRetry };
+module.exports = { withRetry };

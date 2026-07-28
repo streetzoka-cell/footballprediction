@@ -115,40 +115,4 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-export function normalizeBasketballGame(raw) {
-  if (!raw) return null;
-  const status = raw.status || '';
-  const isLive = isLiveStatus(status, SPORT.BASKETBALL);
-  const isFinished = isFinishedStatus(status, SPORT.BASKETBALL);
-  
-  return {
-    id: String(raw.id),
-    status, isLive, isFinished,
-    isScheduled: !isLive && !isFinished,
-    date: raw.date,
-    kickoff: raw.date ? formatTime(raw.date) : '',
-    league: { 
-      name: raw.leagueName || 'Other', 
-      emblem: raw.leagueLogo, 
-      color: getLeagueColor(raw.leagueId),
-      country: raw.leagueCountry,
-      tournamentStage: extractTournamentStage(raw)
-    },
-    leagueKey: String(raw.leagueId),
-    homeTeam: { name: raw.homeTeamName, logo: raw.homeTeamLogo },
-    awayTeam: { name: raw.awayTeamName, logo: raw.awayTeamLogo },
-    homeLogo: raw.homeTeamLogo, awayLogo: raw.awayTeamLogo,
-    homeScore: raw.pointsHome ?? raw.homeScore,
-    awayScore: raw.pointsAway ?? raw.awayScore,
-    minute: raw.elapsed,
-    score: {
-      q1: { home: raw.q1Home, away: raw.q1Away },
-      q2: { home: raw.q2Home, away: raw.q2Away },
-      q3: { home: raw.q3Home, away: raw.q3Away },
-      q4: { home: raw.q4Home, away: raw.q4Away },
-      ot: { home: raw.otHome, away: raw.otAway },
-    }
-  };
-}
-
 export const extractDate = extractMatchDate;
