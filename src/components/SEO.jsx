@@ -1,6 +1,7 @@
+// src/components/SEO.jsx
 import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
-import { SITE } from "../utils/seo";
+import { SITE } from "../utils/seoBuilder";
 
 export default function SEO({
   title,
@@ -9,12 +10,13 @@ export default function SEO({
   robots = "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1",
   keywords = SITE.keywords,
   type = "website",
-  canonical, // Still allow manual override if needed
+  canonical,
   locale = SITE.locale,
   publishedTime,
   modifiedTime,
   author = "Kimutai Gibson",
   structuredData,
+  breadcrumbs, // ★ NEW: Pass an array of { name, path } to auto-generate BreadcrumbList schema
   children,
 }) {
   const location = useLocation();
@@ -25,26 +27,39 @@ export default function SEO({
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  // ★ FIX: Removed location.search to prevent tracking params (like ?ref=123) from creating duplicate canonical URLs
+  // Prevent tracking params from creating duplicate canonicals
   const url = canonical || `${SITE.url}${location.pathname}`;
+
+  // Combine all structured data
+  const schemas = [];
+  if (structuredData) {
+    if (Array.isArray(structuredData)) schemas.push(...structuredData);
+    else schemas.push(structuredData);
+  }
+  if (breadcrumbs && breadcrumbs.length > 0) {
+    schemas.push({
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: breadcrumbs.map((item, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        name: item.name,
+        item: `${SITE.url}${item.path}`,
+      })),
+    });
+  }
 
   return (
     <Helmet prioritizeSeoTags>
       {/* Primary */}
       <html lang="en-KE" />
-
       <title>{pageTitle}</title>
-
       <meta charSet="utf-8" />
-
       <meta name="description" content={description} />
       <meta name="keywords" content={keywords} />
       <meta name="author" content={author} />
       <meta name="robots" content={robots} />
-      <meta
-        name="googlebot"
-        content="index,follow,max-snippet:-1,max-image-preview:large"
-      />
+      <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
       <link rel="canonical" href={url} />
 
@@ -56,11 +71,9 @@ export default function SEO({
       <meta property="og:type" content={type} />
       <meta property="og:site_name" content={SITE.name} />
       <meta property="og:locale" content={locale} />
-
       <meta property="og:title" content={pageTitle} />
       <meta property="og:description" content={description} />
       <meta property="og:url" content={url} />
-
       <meta property="og:image" content={image} />
       <meta property="og:image:secure_url" content={image} />
       <meta property="og:image:type" content="image/png" />
@@ -75,31 +88,18 @@ export default function SEO({
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
 
-      {/* Article */}
-      {publishedTime && (
-        <meta
-          property="article:published_time"
-          content={publishedTime}
-        />
-      )}
+      {/* Article Meta */}
+      {publishedTime && <meta property="article:published_time" content={publishedTime} />}
+      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
 
-      {modifiedTime && (
-        <meta
-          property="article:modified_time"
-          content={modifiedTime}
+      {/* Structured Data (JSON-LD) */}
+      {schemas.map((data, i) => (
+        <script
+          key={i}
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
         />
-      )}
-
-      {/* JSON-LD (Supports single object or array of objects) */}
-      {structuredData && (
-        (Array.isArray(structuredData) ? structuredData : [structuredData]).map((data, i) => (
-          <script
-            key={i}
-            type="application/ld+json"
-            dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
-          />
-        ))
-      )}
+      ))}
 
       {children}
     </Helmet>

@@ -5,6 +5,7 @@ const {
   getBasketballRemainingRequests,
   isBasketballConfigured,
 } = require("./config/basketballApi");
+const { getRemainingRequests: getLivescoreRemaining } = require("./providers/livescoreApiAdapter");
 const { COLLECTIONS, getDateOffset } = require("./config/constants");
 const env = require("./config/env");
 const logger = require("./utils/logger");
@@ -26,11 +27,10 @@ const BasketballFinishedFixturesProcessor = require("./services/basketballFinish
 const DailyFixturesService = require("./services/dailyFixtures");
 const LiveFixturesService = require("./services/liveFixtures");
 const StandingsService = require("./services/standings");
-const LeaguesService = require("./services/leagues");
+const LeaguesService = require("./services/leaguesService");
+const TeamsService = require("./services/teamsService");
 const BasketballDailyFixturesService = require("./services/basketballDailyFixtures");
 const BasketballLiveFixturesService = require("./services/basketballLiveFixtures");
-// ★ NEW: Import TeamsService correctly
-const TeamsService = require("./services/teamsService");
 
 // Scheduler
 const Scheduler = require("./schedulers/scheduler");
@@ -132,6 +132,7 @@ function startServer() {
       uptime: Math.round(process.uptime()),
       timestamp: new Date().toISOString(),
       budget: {
+        livescore: getLivescoreRemaining() ?? "unknown",
         football: getRemainingRequests() ?? "unknown",
         basketball: isBasketballConfigured
           ? getBasketballRemainingRequests() ?? "disabled"
@@ -267,7 +268,7 @@ function startServer() {
     }
   });
 
-  app.get("/api/v1/matches", async (req, res) => {
+    app.get("/api/v1/matches", async (req, res) => {
     const { status, date, sport, view } = req.query;
     const db = getDb();
     
@@ -297,9 +298,9 @@ function startServer() {
         const featured = upcoming.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT');
 
         return res.status(200).json({
-          live: live.slice(0, 20),
-          featured: featured.slice(0, 15),
-          upcoming: upcoming.slice(0, 30)
+          live: live,
+          featured: featured,
+          upcoming: upcoming
         });
       }
 
@@ -336,19 +337,18 @@ function startServer() {
         return res.json([]);
       }
       
+      // ★ FIX: Strict Date Logic - ONLY fetch the exact date requested
       if (date) {
-        const snaps = await Promise.all([
-          db.collection('fixture_snapshots').doc(`${prefix}${date}`).get(),
-          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(-1)}`).get(),
-          db.collection('fixture_snapshots').doc(`${prefix}${getDateOffset(1)}`).get()
-        ]);
+        const snap = await db.collection('fixture_snapshots').doc(`${prefix}${date}`).get();
         
         let allMatches = [];
-        snaps.forEach(snap => {
-          if (snap.exists) {
-            allMatches = allMatches.concat(snap.data().matches || [], snap.data().live || [], snap.data().finished || []);
-          }
-        });
+        if (snap.exists) {
+          allMatches = allMatches.concat(
+            snap.data().matches || [], 
+            snap.data().live || [], 
+            snap.data().finished || []
+          );
+        }
         
         const uniqueMatches = Array.from(new Map(allMatches.map(m => [String(m.id), m])).values());
         return res.json(uniqueMatches);
@@ -361,6 +361,7 @@ function startServer() {
     }
   });
 
+  
   app.get("/api/v1/competitions", async (req, res) => {
     const db = getDb();
     try {
@@ -399,6 +400,7 @@ function startServer() {
     res.json({
       status: "healthy",
       budget: {
+        livescore: getLivescoreRemaining() ?? "unknown",
         football: getRemainingRequests() ?? "unknown",
         basketball: isBasketballConfigured ? getBasketballRemainingRequests() ?? "disabled" : "disabled",
       },
@@ -480,7 +482,7 @@ async function main() {
   const teamsProcessor = new TeamsProcessor(teamRepo);
   const basketballFtProcessor = new BasketballFinishedFixturesProcessor(basketballFixturesRepo);
   
-  // ★ FIX: Instantiate TeamsService here where teamRepo is available
+  // ★ FIX: Initialize teamsService
   const teamsService = new TeamsService(teamRepo);
 
   const services = {
@@ -501,18 +503,36 @@ async function main() {
 
   scheduler = new Scheduler(services);
 
-  try {
-    await scheduler.runInitialSync();
-    await new Promise((resolve) => setTimeout(resolve, 3000));
-  } catch (error) {
-    logger.error(`[Startup] Initial sync error: ${error.message}`);
-  }
+  // Start server instantly, run sync in background
+  startServer();
+  setupShutdownHandlers();
 
   if (process.send) process.send("ready");
 
+  // Run initial sync in the background
+  scheduler.runInitialSync().catch(err => logger.error(`[Startup] Initial sync error: ${err.message}`));
   scheduler.start();
-  startServer();
-  setupShutdownHandlers();
+
+  // Backend Heartbeat for Vercel Gateway NOC
+  setInterval(async () => {
+    try {
+      const db = getDb();
+      const status = scheduler?.getStatus() ?? null;
+      await db.collection('meta').doc('backend_status').set({
+        status: 'healthy',
+        uptime: Math.round(process.uptime()),
+        budget: {
+          livescore: getLivescoreRemaining() ?? "unknown",
+          football: getRemainingRequests() ?? "unknown",
+          basketball: isBasketballConfigured ? getBasketballRemainingRequests() ?? "disabled" : "disabled",
+        },
+        scheduler: status,
+        updatedAt: new Date().toISOString()
+      });
+    } catch (err) {
+      logger.error(`[Heartbeat] Failed: ${err.message}`);
+    }
+  }, 60000);
 
   const duration = Date.now() - startTime;
   const bball = isBasketballConfigured ? "✅ ON" : "⬜ OFF";

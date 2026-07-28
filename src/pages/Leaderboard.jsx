@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, startTransition, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
@@ -8,13 +7,13 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useDailyLeaderboard } from '../hooks/useUserData';
+import { useDailyLeaderboard, useWeeklyLeaderboard, useMonthlyLeaderboard, useGoatLeaderboard } from '../hooks/useUserData';
 import { useLiveMatches } from '../hooks/useFixtures';
-import { PERIOD, PERIOD_LABEL, PATHS } from '../utils/constants';
-import { todayStr, getWeekStart, getMonthStart } from '../utils/dates';
-import { db } from '../utils/firebase';
-import { doc, getDoc } from 'firebase/firestore';
+import { PERIOD, PERIOD_LABEL } from '../utils/constants';
+import { todayStr } from '../utils/dates';
 import SEO from '../components/SEO';
+import { ListSkeleton, ErrorState } from '../components/StateFeedback';
+import EmptyState from '../components/EmptyState';
 
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
@@ -150,9 +149,12 @@ export default function Leaderboard() {
   const nav = useNavigate();
   const searchRef = useRef(null);
 
-  // ★ Enterprise Data Fetching (TanStack Query)
-  // Daily is fetched via custom hook, others are fetched via inline queries to the pre-calculated summaries
+  // ★ Clean hook usage. No more inline getDoc calls for leaderboards.
   const { data: dailyLB = null, isLoading: loadingDaily } = useDailyLeaderboard(todayStr());
+  const { data: weeklyLB = null, isLoading: loadingWeekly } = useWeeklyLeaderboard();
+  const { data: monthlyLB = null, isLoading: loadingMonthly } = useMonthlyLeaderboard();
+  const { data: goatLB = null, isLoading: loadingGoat } = useGoatLeaderboard();
+  
   const { data: liveFixtures = [] } = useLiveMatches(); // Still fetched to keep cache warm app-wide
   
   const [tab, setTab] = useState(PERIOD.DAILY);
@@ -161,34 +163,6 @@ export default function Leaderboard() {
   const [showCount, setShowCount] = useState(15);
 
   const deferredSearch = useDeferredValue(search);
-
-  // ★ Fetch Weekly, Monthly, and GOAT leaderboards from pre-calculated backend summaries
-  const { data: weeklyLB = null, isLoading: loadingWeekly } = useQuery({
-    queryKey: ['leaderboard', 'weekly'],
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, `weekly_${getWeekStart()}`));
-      return snap.exists() ? snap.data() : null;
-    },
-    staleTime: 60 * 1000,
-  });
-
-  const { data: monthlyLB = null, isLoading: loadingMonthly } = useQuery({
-    queryKey: ['leaderboard', 'monthly'],
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, `monthly_${getMonthStart()}`));
-      return snap.exists() ? snap.data() : null;
-    },
-    staleTime: 60 * 1000,
-  });
-
-  const { data: goatLB = null, isLoading: loadingGoat } = useQuery({
-    queryKey: ['leaderboard', 'goat'],
-    queryFn: async () => {
-      const snap = await getDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'));
-      return snap.exists() ? snap.data() : null;
-    },
-    staleTime: 60 * 1000,
-  });
 
   const activeLB = useMemo(() => {
     if (tab === PERIOD.WEEKLY) return weeklyLB;
@@ -294,13 +268,13 @@ export default function Leaderboard() {
           </div>
 
           {loading ? (
-            <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 40, padding: '32px 0' }}>
-              {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
-            </div>
+             <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 40, padding: '32px 0' }}>
+               {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
+             </div>
           ) : filteredTop3.length >= 1 ? (
             <div className="lb-podium">{filteredTop3.slice(0, 3).map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
           ) : (
-            <div className="lb-empty" style={{ marginBottom: 40 }}>No predictions yet — be the first!</div>
+            <EmptyState icon={Trophy} title="No predictions yet — be the first!" />
           )}
 
           <div className="lb-search-wrap">

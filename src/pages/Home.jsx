@@ -9,113 +9,17 @@ import {
 import { useAuth } from '../context/AuthContext';
 import { useHomeMatches } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
-import { getLocalDateFromUtc, formatTime, todayStr, parseDateAsUTC } from '../utils/dates';
 
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
-import { db } from '../utils/firebase';
-import { collection, query, limit, getDocs, orderBy } from 'firebase/firestore';
+import { todayStr } from '../utils/dates';
+import { calcPoints } from '../utils/constants';
+
+// ★ Using centralized engines and builders
+import { slugify } from '../utils/format';
+import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
-
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-
-function extractMatchDate(m) {
-  if (!m) return '';
-  const rawDate = m.utcDate || m.date || (m.timestamp ? new Date(m.timestamp).toISOString() : null);
-  if (rawDate) return getLocalDateFromUtc(rawDate);
-  return '';
-}
-
-function normalizeMatch(raw, isPrimary, now) {
-  if (!raw) return null;
-  const id = String(raw.id || raw.matchId);
-  let status = raw.status || '';
-
-  let dateStr = extractMatchDate(raw);
-  let kickoff = 'TBD';
-  let timestamp = 0;
-
-  const rawDate = raw.utcDate || raw.date;
-  if (rawDate) {
-    try {
-      const dt = parseDateAsUTC(rawDate);
-      kickoff = formatTime(rawDate);
-      timestamp = dt.getTime();
-    } catch (e) { /* ignore */ }
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
-  }
-
-  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeTeamLogo };
-  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayTeamLogo };
-  const league = raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo };
-
-  let isLive = isPrimary ? (!!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL)) : isLiveStatus(status, SPORT.FOOTBALL);
-  let isHT = status === 'HT' || status === 'BT' || status === 'HALF_TIME';
-  let isFinished = isPrimary ? (!!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL)) : isFinishedStatus(status, SPORT.FOOTBALL);
-
-  let isStarted = false;
-  let isNearFT = false;
-  let displayMinute = raw.minute || raw.elapsed || 0;
-
-  // ★ NEW: Identical to MatchDetails.jsx
-  const kickoffTime = timestamp;
-  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
-
-  let smartStatus = status;
-
-  if (kickoffTime > 0) {
-    // If match is scheduled but time has passed
-    if (!isLive && !isFinished && now > kickoffTime) {
-      if (elapsedMins >= 120) { isFinished = true; status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 105) { isFinished = true; status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 90) { isFinished = true; status = 'FT'; smartStatus = 'FT'; } 
-      else if (elapsedMins >= 45 && elapsedMins < 60) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
-      else { isStarted = true; status = '1H'; smartStatus = '1H'; }
-    }
-    
-    // If match is already marked live/started by API
-    if (isLive || isStarted) {
-      if (elapsedMins >= 120) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 105) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
-      else if (status === '1H' && elapsedMins >= 45 && elapsedMins < 60) { isHT = true; status = 'HT'; smartStatus = 'HT'; }
-      else if (status === '2H' && elapsedMins >= 90) { isFinished = true; isLive = false; isHT = false; status = 'FT'; smartStatus = 'FT'; }
-      else if (status === 'HT' || status === 'HALF_TIME') { isHT = true; smartStatus = 'HT'; }
-      else { smartStatus = status; }
-      
-      if (smartStatus === '1H') displayMinute = raw.minute || Math.min(elapsedMins, 45);
-      if (smartStatus === '2H' || smartStatus === 'ET') {
-        const secondHalfMins = Math.max(0, elapsedMins - 60);
-        displayMinute = raw.minute || Math.min(45 + secondHalfMins, 90);
-      }
-      
-      if (elapsedMins >= 75 && !isFinished) isNearFT = true;
-    }
-  }
-
-  const homeScore = isPrimary ? (raw.homeScore ?? raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null) : (raw.goalsHome ?? raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
-  const awayScore = isPrimary ? (raw.awayScore ?? raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null) : (raw.goalsAway ?? raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
-
-  return {
-    id, dateStr, kickoff, timestamp,
-    status, isLive, isHT, isFinished, minute: raw.minute || raw.elapsed || null,
-    displayMinute, // ★ NEW
-    isStarted, isNearFT,
-    homeName: homeTeam.shortName || homeTeam.name || 'TBD',
-    awayName: awayTeam.shortName || awayTeam.name || 'TBD',
-    homeLogo: homeTeam.crest || homeTeam.logo,
-    awayLogo: awayTeam.crest || awayTeam.logo,
-    homeTeamId: homeTeam.id,
-    awayTeamId: awayTeam.id,
-    homeScore, awayScore,
-    leagueName: league.name || 'Other',
-    leagueId: league.id || raw.leagueKey,
-    leagueLogo: league.emblem || league.logo,
-    score: raw.score,
-    stats: raw.stats || raw.matchStats || [],
-    matchScore: raw.matchScore || 0,
-    category: raw.category || 'NORMAL',
-  };
-}
+import { ListSkeleton } from '../components/StateFeedback';
+import { normalizeMatch } from '../engine/matchEngine';
 
 const Sunset = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -223,17 +127,17 @@ const LiveStripLoader = React.memo(() => (
 ));
 
 const LiveMini = React.memo(({ match, index }) => {
-  // ★ NEW: Use displayMinute instead of minute
+  // ★ Ensure we are reading the flat normalized properties
   const min = match.displayMinute; 
   const isLive = match.isLive;
   const hasScore = match.homeScore != null && match.awayScore != null;
-  const matchSlug = `${slugify(match.homeName)}-vs-${slugify(match.awayName)}`;
-  const matchLink = `/match/${match.id}/${matchSlug}`;
+  const matchLink = buildMatchRoute(match.id, match.homeName, match.awayName);
+  
   return (
     <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26', textDecoration: 'none', color: 'inherit', display: 'block' }} title={`${match.homeName} vs ${match.awayName}`}>
       <div className="z-lm-top">
         <span className="z-lm-league">{match.leagueName}</span>
-        {isLive && min ? (
+        {isLive && min != null ? (
           <div className="z-lm-status">
             <span className="z-ldot" style={{ width: 4, height: 4 }} />
             <span style={{ fontSize: '.62rem', fontWeight: 800, color: '#ef4444', fontFamily: 'var(--font-display,system-ui)' }}>{min}&apos;</span>
@@ -253,6 +157,7 @@ const LiveMini = React.memo(({ match, index }) => {
     </Link>
   );
 });
+
 
 const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
@@ -345,7 +250,7 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
       <div className="z-mh">
         <div className="z-ml">
           {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/league/${pred.league?.id}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+          <Link to={buildLeagueRoute(pred.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
           {isLive && <span className="z-ldot" />}
@@ -355,12 +260,12 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
       <div className="z-tm">
         <div className="z-te">
           {pred.homeLogo && <img src={pred.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${pred.homeTeam?.id}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+          <Link to={buildTeamRoute(pred.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
           {pred.awayLogo && <img src={pred.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${pred.awayTeam?.id}/${slugify(awayName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+          <Link to={buildTeamRoute(pred.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">{actionContent}</div>
@@ -408,19 +313,19 @@ const ZokaRow = React.memo(({ pick }) => {
       <div className="z-mh">
         <div className="z-ml">
           {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/league/${pick.league?.id}/${slugify(leagueName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+          <Link to={buildLeagueRoute(pick.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="z-st" style={{ color: isFin ? '#10b981' : '#64748b', background: isFin ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.03)' }}>{isFin ? 'FT' : ko}</span>
       </div>
       <div className="z-tm">
         <div className="z-te">
           {pick.homeLogo && <img src={pick.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${pick.homeTeam?.id}/${slugify(homeName)}`} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+          <Link to={buildTeamRoute(pick.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
           {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={`/team/${pick.awayTeam?.id}/${slugify(awayName)}`}>{awayName}</Link>
+          <Link to={buildTeamRoute(pick.awayTeam?.id, awayName)}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">
@@ -455,16 +360,16 @@ export default function Home() {
   const uid = currentUser ? currentUser.uid : null;
   const greeting = useMemo(() => getGreeting(), []);
 
+  // ★ Clean data fetching via hooks. No more manual normalizeMatch mapping in the UI!
   const { data: homeData = { live: [], featured: [], upcoming: [] }, isLoading: homeLoading } = useHomeMatches();
-  const { data: activePredictions = [] } = useActivePredictions();
-  const { data: userPredictions = {} } = useUserPredictions(uid);
-  const { data: dailyLB = null } = useDailyLeaderboard();
+  const { data: activePredictions = [] } = useActivePredictions(todayStr());
+  const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
+  const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
 
   const [offline, setOffline] = useState(!navigator.onLine);
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
   const [newsPosts, setNewsPosts] = useState([]);
   
-  // ★ NEW: Local ticker to update minutes every 60s
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60000);
@@ -485,19 +390,29 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (!db) return;
-    const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
-    getDocs(q).then(snap => {
-      setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
-    }).catch(err => console.error("News fetch error:", err));
-  }, [db]);
+    // Note: You can abstract this into a useNewsPosts hook later
+    import('../utils/firebase').then(({ db }) => {
+      if (!db) return;
+      import('firebase/firestore').then(({ collection, query, limit, getDocs, orderBy }) => {
+        const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+        getDocs(q).then(snap => {
+          setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }).catch(err => console.error("News fetch error:", err));
+      });
+    });
+  }, []);
 
+   // ★ Added `now` to dependency arrays so live minutes tick up and statuses update to FT dynamically
   const liveMatches = useMemo(() => (homeData.live || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.live, now]);
   const featuredMatches = useMemo(() => (homeData.featured || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.featured, now]);
   const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.upcoming, now]);
-  
-  const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches.slice(0, 10));
 
+
+
+  const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
+
+
+  
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   const zokaPicks = dailyLB?.zokaPicks || { matches: [] }; 
@@ -540,7 +455,11 @@ export default function Home() {
 
   return (
     <div className="zoka-home">
-      <SEO title="Football Predictions, Fixtures and Live Scores - ZOKA" description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." keywords="football predictions, live scores, fixtures, ZOKA" />
+      <SEO 
+        title="Football Predictions, Fixtures and Live Scores" 
+        description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." 
+        keywords="football predictions, live scores, fixtures, ZOKA" 
+      />
 
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
@@ -587,7 +506,7 @@ export default function Home() {
             </div>
             <div className="z-news-marquee">
               {newsPosts.concat(newsPosts).map((post, i) => (
-                <Link to={'/highlights/' + slugify(post.title) + '-' + post.id} key={post.id + '-' + i} className="z-newsmini">
+                <Link to={buildHighlightRoute(post.id, post.title)} key={post.id + '-' + i} className="z-newsmini">
                   {post.imageUrl ? (
                     <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{objectFit:'cover'}} loading="lazy" />
                   ) : (
@@ -663,9 +582,7 @@ export default function Home() {
             <div className="z-sech-line" />
           </div>
           {ctxLoading ? (
-            <React.Fragment>
-              {[0, 1, 2, 3].map(i => <div key={i} className="z-skel" style={{ height: 90, marginBottom: 8 }} />)}
-            </React.Fragment>
+            <ListSkeleton count={4} />
           ) : featVis.length > 0 ? (
             featVis.map((p, i) => (
               <FeaturedRow
@@ -697,9 +614,7 @@ export default function Home() {
             <Link to="/leaderboard" className="z-strip-link">Full <ArrowUpRight size={11} /></Link>
           </div>
           {ctxLoading ? (
-            <React.Fragment>
-              {[0, 1, 2, 3, 4].map(i => <div key={i} className="z-skel" style={{ height: 48, marginBottom: 6 }} />)}
-            </React.Fragment>
+            <ListSkeleton count={5} />
           ) : dailyEntries && dailyEntries.length > 0 ? (
             <div>
               <MiniPodium entries={dailyEntries} />

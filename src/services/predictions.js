@@ -1,3 +1,4 @@
+// src/services/predictions.js
 import { db } from '../utils/firebase';
 import { 
   collection, query, where, doc, setDoc, getDoc, getDocs, writeBatch, 
@@ -5,7 +6,8 @@ import {
 } from 'firebase/firestore';
 import { todayStr, getWeekStart, getMonthStart } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { PATHS, calcPoints, RESULT_TYPE } from '../utils/constants';
+import { PATHS, calcPoints } from '../utils/constants';
+import { buildDailySummaryData, buildPeriodSummaryData } from '../engine/leaderboardEngine';
 
 export async function savePrediction(uid, displayName, pred, h, a) {
   if (!db) throw new Error('Firestore not initialized');
@@ -34,8 +36,6 @@ export async function saveZokaVote(uid, matchId, vote) {
   if (!db) return;
   const dateStr = todayStr();
   const voteRef = doc(db, PATHS.ZOKA_VOTE_STATS, dateStr);
-  
-  // Use dot notation to safely increment without overwriting sibling matches
   const fieldPath = `stats.${matchId}`;
   await setDoc(voteRef, {
     [`${fieldPath}.agree`]: increment(vote === 'agree' ? 1 : 0),
@@ -44,7 +44,6 @@ export async function saveZokaVote(uid, matchId, vote) {
     updatedAt: serverTimestamp(),
     date: dateStr,
   }, { merge: true });
-  
   eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr });
 }
 
@@ -53,7 +52,7 @@ export async function removeZokaVote(uid, matchId, newVote) {
   const dateStr = todayStr();
   const key = `zoka_votes_${dateStr}`;
   let existing = {};
-  try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch (err) {}
+  try { existing = JSON.parse(localStorage.getItem(key) || '{}'); } catch {}
   const oldV = existing[matchId];
 
   await runTransaction(db, async (transaction) => {
@@ -86,6 +85,7 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
     const numH = Number(actualH), numA = Number(actualA);
     if (isNaN(numH) || isNaN(numA)) return 0;
 
+    // 1. Prevent double resolution
     const statusRef = doc(db, PATHS.MATCH_RESOLUTION_STATUS, dateKey);
     let alreadyResolved = false;
     await runTransaction(db, async (transaction) => {
@@ -95,9 +95,9 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
       resolvedMatches.push(String(matchId));
       transaction.set(statusRef, { resolvedMatches, lastResolvedAt: serverTimestamp(), date: dateKey }, { merge: true });
     });
-
     if (alreadyResolved) return 0;
 
+    // 2. Fetch and calculate points for all users
     const predsSnap = await getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('matchId', '==', String(matchId))));
     if (predsSnap.empty) return 0;
 
@@ -114,14 +114,14 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
 
       resolvedList.push({ userId: uid, displayName: p.displayName || 'Player', matchId: String(matchId), points, resultType, actualH: numH, actualA: numA });
 
-      batch.set(doc(db, 'prediction_results', `${uid}_${matchId}`), {
+      batch.set(doc(db, PATHS.PREDICTION_RESULTS, `${uid}_${matchId}`), {
         userId: uid, matchId: String(matchId), predId: `${uid}_${matchId}`, matchDate: p.matchDate || dateKey,
         homeTeam: p.homeTeam || 'Home', awayTeam: p.awayTeam || 'Away', homeLogo: p.homeLogo || null, awayLogo: p.awayLogo || null,
         league: p.league || '', kickoff: p.kickoff || null, predictedHome: p.homeScore, predictedAway: p.awayScore,
         actualHome: numH, actualAway: numA, points, resultType, resolvedAt: serverTimestamp(),
       }, { merge: true });
 
-      batch.set(doc(db, 'user_points_total', uid), {
+      batch.set(doc(db, PATHS.USER_POINTS_TOTAL, uid), {
         totalPoints: increment(points), exactCount: increment(resultType === 'exact' ? 1 : 0),
         resultCount: increment(resultType === 'result' ? 1 : 0), missCount: increment(resultType === 'miss' ? 1 : 0),
         predictionsCount: increment(1), updatedAt: serverTimestamp(),
@@ -137,6 +137,7 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
 
     if (ops > 0) await batch.commit();
 
+    // 3. Update Zoka Picks meta if this match was a Zoka Pick
     const metaBatch = writeBatch(db);
     const zokaSnap = await getDoc(doc(db, PATHS.ZOKA_PICKS, dateKey));
     let zokaChanged = false;
@@ -165,26 +166,6 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
   }
 }
 
-function computeStats(entries) {
-  if (!entries.length) return { avg: '0.0', preds: 0, exact: 0, players: 0 };
-  return {
-    avg: (entries.reduce((s, u) => s + u.accuracy, 0) / entries.length).toFixed(1),
-    preds: entries.reduce((s, u) => s + u.predictions, 0),
-    exact: entries.reduce((s, u) => s + u.exact, 0),
-    players: entries.length,
-  };
-}
-
-function rankEntries(list) {
-  return list
-    .sort((a, b) => b.points - a.points || b.exact - a.exact || b.result - a.result)
-    .map((u, i) => ({
-      ...u,
-      rank: i + 1,
-      accuracy: u.resolved > 0 ? Math.round(((u.exact + u.result) / u.resolved) * 100) : 0,
-    }));
-}
-
 export async function rebuildDailySummary(dateStr) {
   if (!db) return;
   dateStr = dateStr || todayStr();
@@ -194,31 +175,15 @@ export async function rebuildDailySummary(dateStr) {
     if (predsSnap.empty) predsSnap = await getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '!=', '')));
     const activeSnap = await getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr)));
 
-    const scoreMap = {};
-    activeSnap.docs.forEach((d) => { const p = d.data(); if (p.status === 'finished' && p.homeScore != null) scoreMap[String(p.matchId)] = { h: p.homeScore, a: p.awayScore }; });
-
-    const userStats = {};
-    resultsSnap.docs.forEach((d) => {
-      const r = d.data();
-      if (!userStats[r.userId]) userStats[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
-      const u = userStats[r.userId]; u.predictions++; u.resolved++; u.points += r.points || 0;
-      if (r.resultType === RESULT_TYPE.EXACT) u.exact++; else if (r.resultType === RESULT_TYPE.RESULT) u.result++; else u.miss++;
+    const summaryData = buildDailySummaryData(resultsSnap, predsSnap, activeSnap);
+    
+    await setDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr), {
+      ...summaryData,
+      updatedAt: serverTimestamp(),
+      date: dateStr
     });
 
-    const resolvedIds = new Set(resultsSnap.docs.map((d) => String(d.data().matchId)));
-    predsSnap.docs.forEach((d) => {
-      const p = d.data(); if (p.matchDate && p.matchDate !== dateStr) return; const mid = String(p.matchId);
-      if (resolvedIds.has(mid)) { if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || 'Player'; return; }
-      if (!userStats[p.userId]) userStats[p.userId] = { uid: p.userId, displayName: p.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
-      const u = userStats[p.userId]; u.predictions++; const actual = scoreMap[mid]; if (!actual) return; u.resolved++;
-      const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a); u.points += r.points;
-      if (r.type === RESULT_TYPE.EXACT) u.exact++; else if (r.type === RESULT_TYPE.RESULT) u.result++; else u.miss++;
-    });
-
-    const entries = rankEntries(Object.values(userStats).filter((u) => u.predictions > 0));
-    await setDoc(doc(db, PATHS.DAILY_LEADERBOARD, dateStr), { entries, top3: entries.slice(0, 3), rest: entries.slice(3), stats: computeStats(entries), scoreMap, updatedAt: serverTimestamp(), date: dateStr });
-
-    eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries });
+    eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries: summaryData.entries });
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr });
   } catch (e) { console.error('[Summary] Rebuild failed:', e); }
 }
@@ -227,30 +192,55 @@ export async function rebuildGoatLeaderboard() {
   if (!db) return;
   try {
     const snap = await getDocs(collection(db, PATHS.USER_POINTS_TOTAL));
-    const entries = rankEntries(snap.docs.map((d) => ({ id: d.id, ...d.data() })).filter((u) => (u.predictionsCount || 0) > 0).map((u) => ({ uid: u.id, displayName: u.displayName || 'Player', points: u.totalPoints || 0, predictions: u.predictionsCount || 0, exact: u.exactCount || 0, result: u.resultCount || 0, miss: u.missCount || 0, resolved: u.predictionsCount || 0 })));
-    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'), { entries, top3: entries.slice(0, 3), rest: entries.slice(3), stats: computeStats(entries), updatedAt: serverTimestamp() });
-    eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries });
+    const mappedList = snap.docs.map((d) => {
+      const u = d.data();
+      return {
+        uid: d.id,
+        displayName: u.displayName || 'Player',
+        points: u.totalPoints || 0,
+        predictions: u.predictionsCount || 0,
+        exact: u.exactCount || 0,
+        result: u.resultCount || 0,
+        miss: u.missCount || 0,
+        resolved: u.predictionsCount || 0
+      };
+    }).filter((u) => u.predictions > 0);
+
+    const summaryData = buildPeriodSummaryData({ docs: mappedList.map(u => ({ data: () => u })) }, 'goat', null);
+    
+    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, 'current'), {
+      ...summaryData,
+      updatedAt: serverTimestamp()
+    });
+    eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries: summaryData.entries });
   } catch (e) { console.error('[GOAT] Rebuild failed:', e); }
 }
 
 export async function rebuildPeriodLeaderboard(period, startDate) {
   if (!db) return;
-  if (!startDate) { if (period === 'weekly') startDate = getWeekStart(); else if (period === 'monthly') startDate = getMonthStart(); else return; }
-  const docId = period === 'goat' ? 'current' : period === 'weekly' ? `weekly_${startDate}` : `monthly_${startDate}`;
+  if (!startDate) {
+    if (period === 'weekly') startDate = getWeekStart();
+    else if (period === 'monthly') startDate = getMonthStart();
+    else return;
+  }
+  const docId = period === 'goat' ? 'current' : `${period}_${startDate}`;
   try {
     const snap = await getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))));
-    const userMap = {};
-    snap.docs.forEach((d) => {
-      const r = d.data(); if (!userMap[r.userId]) userMap[r.userId] = { uid: r.userId, displayName: 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0 };
-      const u = userMap[r.userId]; u.predictions++; u.resolved++; u.points += r.points || 0;
-      if (r.resultType === RESULT_TYPE.EXACT) u.exact++; else if (r.resultType === RESULT_TYPE.RESULT) u.result++; else u.miss++;
+    const summaryData = buildPeriodSummaryData(snap, period, startDate);
+    
+    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId), {
+      ...summaryData,
+      updatedAt: serverTimestamp()
     });
-    const entries = rankEntries(Object.values(userMap).filter((u) => u.predictions > 0));
-    await setDoc(doc(db, PATHS.LEADERBOARD_SUMMARIES, docId), { entries, top3: entries.slice(0, 3), rest: entries.slice(3), stats: computeStats(entries), period, startDate, updatedAt: serverTimestamp() });
-    eventBus.emit(EVENT.LEADERBOARD_UPDATED, { period, entries });
+    eventBus.emit(EVENT.LEADERBOARD_UPDATED, { period, entries: summaryData.entries });
   } catch (e) { console.error(`[Period] Rebuild ${period} failed:`, e); }
 }
 
 export async function rebuildAllLeaderboards() {
-  await Promise.all([rebuildDailySummary(todayStr()), rebuildGoatLeaderboard(), rebuildPeriodLeaderboard('weekly'), rebuildPeriodLeaderboard('monthly')]);
+  await Promise.all([
+    rebuildDailySummary(todayStr()),
+    rebuildGoatLeaderboard(),
+    rebuildPeriodLeaderboard('weekly'),
+    rebuildPeriodLeaderboard('monthly')
+  ]);
 }

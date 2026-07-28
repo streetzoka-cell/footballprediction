@@ -10,13 +10,11 @@ import Breadcrumbs from "./components/Breadcrumbs";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 
-import StructuredData from "./components/StructuredData";
-import ErrorBoundary from "./components/ErrorBoundary";
+// ★ Updated imports: Using centralized SEO and seoBuilder
+import SEO from "./components/SEO";
+import { organizationSchema, websiteSchema } from "./utils/schema";
 
-import {
-  organizationSchema,
-  websiteSchema,
-} from "./utils/schema";
+import ErrorBoundary from "./components/ErrorBoundary";
 
 import { initApp } from "./utils/init";
 import { initAnalytics } from "./utils/analytics";
@@ -136,7 +134,15 @@ function AppShell() {
 
   return (
     <>
-      <StructuredData data={organizationSchema()} />
+      {/* ★ Updated: Using centralized SEO component */}
+      <SEO 
+        title="ZOKASCORE | Live Football Scores, Predictions & AI Intelligence" 
+        description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." 
+        keywords="football predictions, live scores, fixtures, ZOKASCORE, soccer, premier league, la liga, champions league"
+        path="/" 
+        robots="index,follow"
+        structuredData={[organizationSchema(), websiteSchema()]} 
+      />
       
       <ScrollToTop />
 

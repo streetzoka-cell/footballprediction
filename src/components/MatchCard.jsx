@@ -127,7 +127,6 @@ const MatchCardBase = ({
     return match.minute ?? match.elapsed ?? match.currentTime ?? null;
   }, [match.minute, match.elapsed, match.currentTime]);
 
-  // ★ FIX: Exact continuous counting logic with strict backend trust
   const smartStatus = useMemo(() => {
     let status = match.status || '';
     let isLive = live;
@@ -137,13 +136,13 @@ const MatchCardBase = ({
 
     if (kickoffTime > 0) {
       if (!isLive && !isFin && now > kickoffTime) {
-        if (elapsedMins >= 180) { return 'FT'; } // 3 hours hard fallback
-        if (elapsedMins >= 50) { return 'HT'; } // 45 + 5 fallback for HT
+        if (elapsedMins >= 180) { return 'FT'; }
+        if (elapsedMins >= 50) { return 'HT'; }
         return '1H';
       }
       if (isLive) {
-        if (elapsedMins >= 100) { return 'FT'; } // 90 + 10 fallback for FT
-        if (status === '1H' && elapsedMins >= 50 && elapsedMins < 60) { return 'HT'; } // 45 + 5 fallback for HT
+        if (elapsedMins >= 100) { return 'FT'; }
+        if (status === '1H' && elapsedMins >= 50 && elapsedMins < 60) { return 'HT'; }
         if (status === 'HT' || status === 'HALF_TIME') { return 'HT'; }
         return status;
       }
@@ -161,7 +160,6 @@ const MatchCardBase = ({
     }
     if (smartStatus === '2H' || smartStatus === 'ET') {
       const secondHalfMins = Math.max(0, elapsedMins - 60);
-      // Continue counting up to 100 if backend is slow but hasn't marked FT
       if (elapsedMins > 90) {
         return safeMinute || Math.min(elapsedMins, 100);
       }
@@ -185,7 +183,6 @@ const MatchCardBase = ({
     return undefined;
   }, [match.predictedHomeScore, match.predictedAwayScore]);
 
-  // ★ FIX: Bulletproof score extraction - checks ALL possible API live score locations
   const actual = useMemo(() => {
     const rawHomeScore = match.homeScore != null ? match.homeScore : (
       match.actualHomeScore ??
@@ -239,10 +236,14 @@ const MatchCardBase = ({
 
   const interactive = !!onClick;
 
-  const homeTeamName = match.homeTeam?.name || match.homeTeamName || 'TBD';
-  const awayTeamName = match.awayTeam?.name || match.awayTeamName || 'TBD';
-  const homeTeamLogo = match.homeTeam?.logo || match.homeTeamLogo || match.homeTeam?.crest;
-  const awayTeamLogo = match.awayTeam?.logo || match.awayTeamLogo || match.awayTeam?.crest;
+  // ★ FIX: Use normalized fields (homeName, homeLogo, leagueName) with fallbacks
+  const homeTeamName = match.homeName || match.homeTeam?.name || match.homeTeamName || 'TBD';
+  const awayTeamName = match.awayName || match.awayTeam?.name || match.awayTeamName || 'TBD';
+  const homeTeamLogo = match.homeLogo || match.homeTeam?.logo || match.homeTeamLogo || match.homeTeam?.crest;
+  const awayTeamLogo = match.awayLogo || match.awayTeam?.logo || match.awayTeamLogo || match.awayTeam?.crest;
+  const leagueName = match.leagueName || match.league?.name || 'Other';
+  const leagueLogo = match.leagueLogo || match.league?.emblem || match.league?.logo;
+  const leagueCountry = match.leagueCountry || match.league?.country;
 
   if (compact) {
     return (
@@ -250,9 +251,9 @@ const MatchCardBase = ({
         {smartIsLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5 }} />}
         <div className="mc-header" style={{ paddingBottom: 6 }}>
           <div className="mc-league">
-            {(match.league?.emblem || match.leagueLogo) && <img className="mc-league-logo" src={match.league?.emblem || match.leagueLogo} alt="" />}
-            {!match.league?.emblem && !match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
-            <span>{match.league?.name || match.leagueName || 'Other'}</span>
+            {leagueLogo && <img className="mc-league-logo" src={leagueLogo} alt="" />}
+            {!leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
+            <span>{leagueName}</span>
           </div>
           {statusLabel && (
             <span className={`mc-status-badge ${statusCls}`}>
@@ -297,10 +298,10 @@ const MatchCardBase = ({
 
       <div className="mc-header">
         <div className="mc-league">
-          {(match.league?.emblem || match.leagueLogo) && <img className="mc-league-logo" src={match.league?.emblem || match.leagueLogo} alt="" />}
-          {!match.league?.emblem && !match.leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
-          <span>{match.league?.name || match.leagueName || 'Other'}</span>
-          {match.leagueCountry && <span style={{ opacity: .5 }}>· {match.leagueCountry}</span>}
+          {leagueLogo && <img className="mc-league-logo" src={leagueLogo} alt="" />}
+          {!leagueLogo && <span className="mc-league-dot" style={{ background: lc }} />}
+          <span>{leagueName}</span>
+          {leagueCountry && <span style={{ opacity: .5 }}>· {leagueCountry}</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
           {statusLabel && (

@@ -1,63 +1,46 @@
-    html,
-    body {
-      margin: 0;
-      padding: 0;
-      background: #07141f;
-      color: #fff;
-      font-family: Inter, system-ui, sans-serif;
-    }
-
-    #root {
-      min-height: 100vh;
-    }
-
-    #static-loader {
-      position: fixed;
-      inset: 0;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      align-items: center;
-      background: #07141f;
-      z-index: 9999;
-      transition: opacity .3s ease;
-    }
-
-    .loader-ball {
-      font-size: 60px;
-      animation: ballSpin 1.2s ease-in-out infinite;
-    }
-
-    .loader-text {
-      margin-top: 18px;
-      color: #10b981;
-      font-size: 14px;
-      font-weight: 800;
-      letter-spacing: 2px;
-    }
-
-    .loader-bar {
-      width: 120px;
-      height: 4px;
-      margin-top: 16px;
-      background: rgba(255,255,255,.12);
-      border-radius: 999px;
-      overflow: hidden;
-    }
-
-    .loader-bar-fill {
-      width: 40%;
-      height: 100%;
-      background: #10b981;
-      animation: loaderMove 1s linear infinite;
-    }
-
-    @keyframes ballSpin {
-      0%,100% { transform: scale(1); }
-      50% { transform: scale(1.1) rotate(12deg); }
-    }
-
-    @keyframes loaderMove {
-      from { transform: translateX(-120%); }
-      to { transform: translateX(320%); }
-    }
+#static-loader {
+  position: fixed;
+  inset: 0;
+  background: #05070a;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+  transition: opacity 0.3s ease;
+}
+.loader-ball {
+  font-size: 3rem;
+  margin-bottom: 16px;
+  animation: loader-bounce 1.2s infinite ease-in-out;
+}
+.loader-text {
+  font-size: 1.5rem;
+  font-weight: 900;
+  letter-spacing: 4px;
+  color: #10b981;
+  text-shadow: 0 0 12px rgba(16,185,129,0.5);
+  margin-bottom: 24px;
+}
+.loader-bar {
+  width: 120px;
+  height: 4px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.loader-bar-fill {
+  width: 40%;
+  height: 100%;
+  background: #10b981;
+  border-radius: 2px;
+  animation: loader-slide 1.2s infinite ease-in-out;
+}
+@keyframes loader-bounce {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+@keyframes loader-slide {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(350%); }
+}

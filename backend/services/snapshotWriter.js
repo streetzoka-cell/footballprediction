@@ -50,7 +50,7 @@ function stripMatch(m) {
 /**
  * Process matches to strip empty fields, and truncate if exceeding Firestore limits.
  */
-function processMatches(matches, limit = 650) {
+function processMatches(matches, limit = 1000) { // ★ FIX: Increased limit from 650 to 1000
   if (!matches || matches.length === 0) return [];
   
   let processed = matches.map(stripMatch).filter(Boolean);
@@ -69,9 +69,10 @@ class SnapshotWriter {
   async writeFootballSnapshot(dateStr, data) {
     const payload = { sport: "football" };
     
-    if (data.matches) payload.matches = processMatches(data.matches, 650);
-    if (data.live) payload.live = processMatches(data.live, 100);
-    if (data.finished) payload.finished = processMatches(data.finished, 400);
+    // ★ FIX: Pass 1000 as the limit
+    if (data.matches) payload.matches = processMatches(data.matches, 1000);
+    if (data.live) payload.live = processMatches(data.live, 1000);
+    if (data.finished) payload.finished = processMatches(data.finished, 1000);
     
     return this._write("fixture_snapshots", dateStr, payload);
   }
@@ -79,13 +80,14 @@ class SnapshotWriter {
   async writeBasketballSnapshot(dateStr, data) {
     const payload = { sport: "basketball" };
     
-    if (data.matches) payload.matches = processMatches(data.matches, 650);
-    if (data.live) payload.live = processMatches(data.live, 100);
-    if (data.finished) payload.finished = processMatches(data.finished, 400);
+    if (data.matches) payload.matches = processMatches(data.matches, 1000);
+    if (data.live) payload.live = processMatches(data.live, 1000);
+    if (data.finished) payload.finished = processMatches(data.finished, 1000);
     
     return this._write("fixture_snapshots", `basketball_${dateStr}`, payload);
   }
 
+  
   writeReference(type, sport, data) {
     const docId = sport === "basketball" ? `bb_${type}` : type;
     return this._write("reference_data", docId, { data, sport, type });

@@ -1,9 +1,16 @@
 // src/utils/schema.js
-import { SITE } from "./seo";
 
-/* ===========================
-   ORGANIZATION
-=========================== */
+export const SITE = {
+  name: "ZOKASCORE",
+  url: "https://zokascore.xyz",
+  description: "Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.",
+  image: "https://zokascore.xyz/og-image.png",
+  keywords: "football predictions, live scores, fixtures, ZOKASCORE, soccer, premier league, la liga, champions league",
+  locale: "en_GB",
+  twitter: "@zokascore",
+  themeColor: "#0a0f1a",
+};
+
 export function organizationSchema() {
   return {
     "@context": "https://schema.org",
@@ -22,9 +29,6 @@ export function organizationSchema() {
   };
 }
 
-/* ===========================
-   WEBSITE
-=========================== */
 export function websiteSchema() {
   return {
     "@context": "https://schema.org",
@@ -40,9 +44,6 @@ export function websiteSchema() {
   };
 }
 
-/* ===========================
-   WEBPAGE
-=========================== */
 export function webpageSchema({ title, description, path }) {
   return {
     "@context": "https://schema.org",
@@ -54,9 +55,6 @@ export function webpageSchema({ title, description, path }) {
   };
 }
 
-/* ===========================
-   COLLECTION PAGE
-=========================== */
 export function collectionSchema({ title, description, path }) {
   return {
     "@context": "https://schema.org",
@@ -67,9 +65,6 @@ export function collectionSchema({ title, description, path }) {
   };
 }
 
-/* ===========================
-   FAQ
-=========================== */
 export function faqSchema(items) {
   return {
     "@context": "https://schema.org",
@@ -82,9 +77,6 @@ export function faqSchema(items) {
   };
 }
 
-/* ===========================
-   BREADCRUMBS
-=========================== */
 export function breadcrumbSchema(items) {
   return {
     "@context": "https://schema.org",

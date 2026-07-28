@@ -26,7 +26,10 @@ export function useFixtures(dateStr, sport = 'football') {
     queryKey: ['fixtures', dateStr, sport],
     queryFn: async () => {
       const res = await footballApi.getFixtures(dateStr, sport);
-      return Array.isArray(res) ? res : (res.data || []);
+      // ★ FIX: Safely extract array whether it's nested in `data` or returned directly
+      if (Array.isArray(res)) return res;
+      if (res && Array.isArray(res.data)) return res.data;
+      return [];
     },
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,

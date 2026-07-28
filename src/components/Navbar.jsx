@@ -8,90 +8,19 @@ import { useAuth } from '../context/AuthContext';
 import { useLiveMatches } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/constants';
-import { todayStr, parseDateAsUTC } from '../utils/dates';
+import { todayStr } from '../utils/dates';
+import { normalizeMatch } from '../engine/matchEngine';
 
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 
+// ★ Centralized imports
+
+import { slugify } from '../utils/format';
+import { buildMatchRoute } from '../utils/routes';
+
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const APP_LOGO = '/icons/icon-192.png';
-
-const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
-
-function normalizeMatch(raw) {
-  if (!raw) return null;
-  const id = String(raw.id || raw.matchId);
-  let status = raw.status || '';
-  
-  const isLive = !!raw.isLive || isLiveStatus(status, SPORT.FOOTBALL);
-  const isFinished = !!raw.isFinished || isFinishedStatus(status, SPORT.FOOTBALL);
-  
-  const homeScore = raw.homeScore ?? raw.goalsHome ?? raw.score?.fullTime?.home ?? null;
-  const awayScore = raw.awayScore ?? raw.goalsAway ?? raw.score?.fullTime?.away ?? null;
-
-  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, logo: raw.homeTeamLogo, crest: raw.homeTeamLogo };
-  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, logo: raw.awayTeamLogo, crest: raw.awayTeamLogo };
-  const league = raw.league || raw.competition || { name: raw.leagueName };
-
-  let kickoff = 'TBD';
-  let timestamp = 0;
-  const rawDate = raw.utcDate || raw.date;
-  
-  if (rawDate) {
-    try {
-      const d = parseDateAsUTC(rawDate);
-      timestamp = d.getTime();
-      kickoff = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-    } catch {}
-  } else if (raw.kickoff) {
-    kickoff = raw.kickoff;
-  }
-
-  let displayMinute = raw.minute || raw.elapsed || 0;
-  const now = Date.now();
-  const kickoffTime = timestamp;
-  const elapsedMins = Math.floor((now - kickoffTime) / 60000);
-
-  let smartStatus = status;
-
-  if (kickoffTime > 0) {
-    if (!isLive && !isFinished && now > kickoffTime) {
-      if (elapsedMins >= 120) { status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 105) { status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 90) { status = 'FT'; smartStatus = 'FT'; } 
-      else if (elapsedMins >= 45 && elapsedMins < 60) { status = 'HT'; smartStatus = 'HT'; }
-      else { status = '1H'; smartStatus = '1H'; }
-    }
-    
-    if (isLive) {
-      if (elapsedMins >= 120) { status = 'FT'; smartStatus = 'FT'; }
-      else if (elapsedMins >= 105) { status = 'FT'; smartStatus = 'FT'; }
-      else if (status === '1H' && elapsedMins >= 45 && elapsedMins < 60) { status = 'HT'; smartStatus = 'HT'; }
-      else if (status === '2H' && elapsedMins >= 90) { status = 'FT'; smartStatus = 'FT'; }
-      else if (status === 'HT' || status === 'HALF_TIME') { smartStatus = 'HT'; }
-      else { smartStatus = status; }
-      
-      if (smartStatus === '1H') displayMinute = raw.minute || Math.min(elapsedMins, 45);
-      if (smartStatus === '2H' || smartStatus === 'ET') {
-        const secondHalfMins = Math.max(0, elapsedMins - 60);
-        displayMinute = raw.minute || Math.min(45 + secondHalfMins, 90);
-      }
-    }
-  }
-
-  return {
-    id, status, isLive, isFinished,
-    homeTeam: { name: homeTeam.name || 'TBD', shortName: homeTeam.shortName || homeTeam.name || 'TBD', logo: homeTeam.logo || homeTeam.crest },
-    awayTeam: { name: awayTeam.name || 'TBD', shortName: awayTeam.shortName || awayTeam.name || 'TBD', logo: awayTeam.logo || awayTeam.crest },
-    homeScore, awayScore,
-    league: { name: league.name || 'Other' },
-    minute: raw.minute || raw.elapsed || null,
-    displayMinute, 
-    kickoff,
-    matchScore: raw.matchScore || 0,
-    category: raw.category || 'NORMAL',
-  };
-}
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -140,18 +69,19 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
   if (!featured) return null;
 
   const m = featured.match;
-  const homeLogo = m.homeTeam?.logo;
-  const awayLogo = m.awayTeam?.logo;
-  const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
-  const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
-  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
-  const matchLink = m.id ? `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}` : '/predictions';
+    const homeLogo = m.homeLogo;
+  const awayLogo = m.awayLogo;
+  const homeName = m.homeName || 'TBD';
+  const awayName = m.awayName || 'TBD';  const koTime = m.kickoff?.includes('T') ? m.kickoff.split('T')[1]?.split(':').slice(0, 2).join(':') || '' : m.kickoff || '';
+  
+  // ★ Using centralized route builder
+  const matchLink = m.id ? buildMatchRoute(m.id, homeName, awayName) : '/predictions';
 
   return (
     <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }} title={`${homeName} vs ${awayName}`}>
       <div className="nv-pro-tag">
         {featured.isLive && <span className="nv-pro-live-dot" />}
-        <span>{m.league?.name || 'Featured Match'}</span>
+        <span>{m.leagueName || 'Featured Match'}</span>
       </div>
       <div className="nv-pro-teams">
         <div className="nv-pro-team">
@@ -188,9 +118,10 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
 
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
-  const homeName = m.homeTeam?.shortName || m.homeTeam?.name || 'TBD';
-  const awayName = m.awayTeam?.shortName || m.awayTeam?.name || 'TBD';
-  const matchLink = `/match/${m.id}/${slugify(homeName)}-vs-${slugify(awayName)}`;
+    const homeName = m.homeName || 'TBD';
+  const awayName = m.awayName || 'TBD';  
+  // ★ Using centralized route builder
+  const matchLink = buildMatchRoute(m.id, homeName, awayName);
   
   return (
     <Link to={matchLink} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, whiteSpace: 'nowrap', textDecoration: 'none' }} title={`${homeName} vs ${awayName}`}>
@@ -282,7 +213,8 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m)).filter(Boolean).filter(m => m.homeTeam?.name !== 'TBD' && m.awayTeam?.name !== 'TBD'), [rawLive]);
+  // ★ Using centralized normalizeMatch from matchEngine
+  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m, true, Date.now())).filter(Boolean), [rawLive]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
 

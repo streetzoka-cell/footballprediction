@@ -1,69 +1,91 @@
-const { api, isBudgetAvailable } = require('../config/api');
-const footballData = require('./footballDataAdapter');
-const { FREE_LEAGUES_MAP } = require('../config/freeLeagues');
+const livescoreApi = require('./livescoreApiAdapter');
+const goalApi = require('./goalApiAdapter');
 const logger = require('../utils/logger');
 
 class ProviderManager {
+  // ★ FIXTURES: GOAL API -> Live-Score API
   async getFixtures(dateStr) {
-    if (isBudgetAvailable(1)) {
-      try {
-        const response = await api.get('/fixtures', { params: { date: dateStr } });
-        if (response?.response) return response.response;
-      } catch (err) {
-        logger.warn(`[ProviderManager] API-Football failed for fixtures: ${err.message}. Attempting fallback...`);
-      }
-    } else {
-      logger.warn('[ProviderManager] API-Football budget exhausted. Using fallback.');
+    try {
+      const data = await goalApi.getFixtures(dateStr);
+      if (data && data.length > 0) return data;
+    } catch (err) {
+      logger.warn(`[ProviderManager] GOAL API failed for fixtures: ${err.message}. Falling back...`);
     }
-    return await footballData.fetchFixtures(dateStr);
+
+    if (livescoreApi.isBudgetAvailable(1)) {
+      try {
+        const data = await livescoreApi.getFixtures(dateStr);
+        if (data) return data;
+      } catch (err) {
+        logger.warn(`[ProviderManager] Live-Score API failed for fixtures: ${err.message}.`);
+      }
+    }
+
+    return [];
   }
 
   async getFixturesRange(fromDate, toDate) {
-    return await footballData.fetchFixturesRange(fromDate, toDate);
+    try {
+      let allMatches = [];
+      let currentDate = new Date(fromDate);
+      const endDate = new Date(toDate);
+      
+      while (currentDate <= endDate) {
+        const dateStr = currentDate.toISOString().split('T')[0];
+        const matches = await this.getFixtures(dateStr);
+        allMatches = allMatches.concat(matches);
+        currentDate.setDate(currentDate.getDate() + 1);
+      }
+      
+      logger.info(`[ProviderManager] Range fetch complete: ${allMatches.length} matches from ${fromDate} to ${toDate}`);
+      return allMatches;
+    } catch (err) {
+      logger.warn(`[ProviderManager] Range fetch failed: ${err.message}`);
+      return [];
+    }
   }
 
+  // ★ LIVE: Live-Score API -> GOAL API
   async getLive() {
-    if (isBudgetAvailable(1)) {
+    if (livescoreApi.isBudgetAvailable(1)) {
       try {
-        const response = await api.get('/fixtures', { params: { live: 'all' } });
-        if (response?.response) return response.response;
+        const data = await livescoreApi.getLive();
+        if (data) return data;
       } catch (err) {
-        logger.warn(`[ProviderManager] API-Football failed for live: ${err.message}. Attempting fallback...`);
+        logger.warn(`[ProviderManager] Live-Score API failed for live: ${err.message}. Falling back...`);
       }
-    } else {
-      logger.warn('[ProviderManager] API-Football budget exhausted. Using fallback.');
     }
-    return await footballData.fetchLive();
+
+    try {
+      const data = await goalApi.getLive();
+      if (data && data.length > 0) return data;
+    } catch (err) {
+      logger.warn(`[ProviderManager] GOAL API failed for live: ${err.message}.`);
+    }
+
+    return [];
   }
 
+  // ★ STANDINGS: GOAL API ONLY
   async getStandings(leagueId, season) {
-    if (FREE_LEAGUES_MAP[leagueId]) {
-      try {
-        logger.info(`[ProviderManager] Routing Standings to FootballData (League: ${leagueId})`);
-        return await footballData.fetchStandings(leagueId);
-      } catch (err) {
-        logger.warn(`[ProviderManager] FootballData failed for standings: ${err.message}. Attempting API-Football...`);
-      }
+    try {
+      logger.info(`[ProviderManager] Routing Standings to GOAL API (League: ${leagueId})`);
+      return await goalApi.getStandings(leagueId, season);
+    } catch (err) {
+      logger.warn(`[ProviderManager] GOAL API failed for standings: ${err.message}.`);
+      return { response: [] };
     }
-    if (isBudgetAvailable(1)) {
-      return await api.get("/standings", { params: { league: leagueId, season: season } });
-    }
-    throw new Error('Budget exhausted and no fallback available for standings');
   }
 
+  // ★ TEAMS: GOAL API ONLY
   async getTeams(leagueId) {
-    if (FREE_LEAGUES_MAP[leagueId]) {
-      try {
-        logger.info(`[ProviderManager] Routing Teams to FootballData (League: ${leagueId})`);
-        return await footballData.fetchTeams(leagueId);
-      } catch (err) {
-        logger.warn(`[ProviderManager] FootballData failed for teams: ${err.message}. Attempting API-Football...`);
-      }
+    try {
+      logger.info(`[ProviderManager] Routing Teams to GOAL API (League: ${leagueId})`);
+      return await goalApi.getTeams(leagueId);
+    } catch (err) {
+      logger.warn(`[ProviderManager] GOAL API failed for teams: ${err.message}.`);
+      return { response: [] };
     }
-    if (isBudgetAvailable(1)) {
-      return await api.get("/teams", { params: { league: leagueId } });
-    }
-    throw new Error('Budget exhausted and no fallback available for teams');
   }
 }
 

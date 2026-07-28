@@ -51,7 +51,7 @@
   "homepage": "https://zokascore.xyz",
       "scripts": {
     "dev": "vite",
-    "build": "vite build && node ./scripts/generate-sitemap.js",
+    "build": "node ./scripts/validate-deployment.js && vite build && node ./scripts/generate-sitemap.js",
     "lint": "eslint src",
     "preview": "vite preview"
   },
