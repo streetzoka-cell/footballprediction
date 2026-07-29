@@ -1,8 +1,7 @@
-
 import React, { useState, useEffect, memo } from 'react';
 import { BarChart3, Eye, Users, MousePointerClick, TrendingUp } from 'lucide-react';
 import { db } from '../../../utils/firebase';
-import { collection, getDocs, limit as limitQ } from 'firebase/firestore';
+import { collection, getDocs, query, limit } from 'firebase/firestore'; // ★ Fixed import
 import { Skel } from './common';
 
 const AnalyticsTab = memo(function AnalyticsTab({ toast }) {
@@ -13,13 +12,12 @@ const AnalyticsTab = memo(function AnalyticsTab({ toast }) {
     const fetchStats = async () => {
       if (!db) return;
       try {
-        const userSnap = await getDocs(collection(db, 'users'), limitQ(1));
-        const predSnap = await getDocs(collection(db, 'predictions_history'), limitQ(1));
+        // ★ Fixed Firestore query syntax
+        const userSnap = await getDocs(query(collection(db, 'users'), limit(1)));
+        const predSnap = await getDocs(query(collection(db, 'predictions_history'), limit(1)));
         
-        // Note: If you have Google Analytics connected, you would fetch it here.
-        // We are mocking page views as we don't have the GA endpoint exposed here.
         setStats({
-          totalUsers: userSnap.size, // This is exact if under 1 doc limit, otherwise it's just a boolean
+          totalUsers: userSnap.size, 
           totalPredictions: predSnap.size,
           totalPageViews: 'Connect GA'
         });

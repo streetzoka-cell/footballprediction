@@ -15,9 +15,9 @@ import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, rebuildPeriodLeaderboard, rebuildAllLeaderboards } from '../../services/predictions';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
-// ★ Centralized imports
-import { normalizeMatch, extractMatchDate } from "../../engine/matchEngine";
-import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm } from './components/common';
+// ★ Centralized imports (Fixed extractDate import)
+import { normalizeMatch } from "../../engine/matchEngine";
+import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import SEO from '../../components/SEO';
 
 import DashboardTab from './components/DashboardTab';
