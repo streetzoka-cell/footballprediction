@@ -3,7 +3,6 @@ import { Cpu, AlertTriangle, Activity, Terminal, X, Wifi, Zap } from 'lucide-rea
 import { footballApi } from '../../../services/footballApi';
 import { Skel, Empty } from './common';
 
-// Hacker-themed Terminal Modal
 const TerminalModal = ({ isOpen, onClose, logs }) => {
   const scrollContainerRef = useRef(null);
 
@@ -19,14 +18,12 @@ const TerminalModal = ({ isOpen, onClose, logs }) => {
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
       <div style={{ background: '#050505', border: '1px solid rgba(16, 185, 129, 0.3)', width: '90vw', maxWidth: '900px', height: '70vh', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 40px rgba(16, 185, 129, 0.15)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         
-        {/* Terminal Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'rgba(16, 185, 129, 0.05)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: '0.85rem' }}>
             <Terminal size={14} /> root@zoka-api:~/logs$           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}><X size={18} /></button>
         </div>
 
-        {/* Terminal Body */}
         <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', color: '#00ff00', fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem', lineHeight: 1.5, textShadow: '0 0 5px rgba(0, 255, 0, 0.3)' }}>
           {logs.length === 0 ? (
             <div style={{ color: '#64748b' }}>Waiting for data stream...</div>
@@ -104,10 +101,8 @@ const SystemHealthTab = memo(function SystemHealthTab() {
   const errorCount = metrics?.errorCount ?? 0;
   const cacheHits = metrics?.cacheHits ?? 0;
 
-  // ★ NEW: Calculate API Budget Used and Remaining
-  const budgetDaily = health?.budgetDaily ?? 100;
-  const budgetRemaining = health?.budgetRemaining ?? 0;
-  const budgetUsed = budgetDaily - budgetRemaining;
+  // ★ NEW: Extract Quota Stats
+  const quota = metrics?.quota || { liveUsed: 0, liveRemaining: 77, ftUsed: 0, ftRemaining: 12, fallbackUsed: 0, fallbackRemaining: 3 };
 
   return (
     <div className="ae">
@@ -144,37 +139,36 @@ const SystemHealthTab = memo(function SystemHealthTab() {
         </div>
       </div>
 
-      {/* ★ NEW: API Budget Section */}
+      {/* ★ NEW: Logical API Budget Section */}
       <div className="asec">
-        <h3 className="ast"><Zap size={15} /> API Football Budget</h3>
+        <h3 className="ast"><Zap size={15} /> API Quota Manager (100/Day)</h3>
         <div className="asg">
           <div className="astat">
-            <span className="n bl">{budgetUsed}</span>
-            <span className="l">Requests Used</span>
+            <span className="n bl">{quota.liveUsed} / {quota.liveUsed + quota.liveRemaining}</span>
+            <span className="l">Live Polls</span>
           </div>
           <div className="astat">
-            <span className="n gn">{budgetRemaining}</span>
-            <span className="l">Requests Remaining</span>
+            <span className="n gn">{quota.ftUsed} / {quota.ftUsed + quota.ftRemaining}</span>
+            <span className="l">FT Updates (2h)</span>
           </div>
           <div className="astat">
-            <span className="n gd">{budgetDaily}</span>
-            <span className="l">Daily Limit</span>
+            <span className="n gd">{quota.fallbackUsed} / {quota.fallbackUsed + quota.fallbackRemaining}</span>
+            <span className="l">FD Fallbacks</span>
           </div>
         </div>
         
-        {/* Visual Progress Bar */}
         <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', height: '10px', overflow: 'hidden' }}>
           <div 
             style={{ 
-              width: `${(budgetUsed / budgetDaily) * 100}%`, 
+              width: `${((quota.liveUsed + quota.ftUsed + quota.fallbackUsed) / 100) * 100}%`, 
               height: '100%', 
-              background: budgetRemaining > 20 ? '#10b981' : '#ef4444',
+              background: (quota.liveUsed + quota.ftUsed + quota.fallbackUsed) > 90 ? '#ef4444' : '#10b981',
               transition: 'width 0.5s ease'
             }} 
           />
         </div>
         <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'right' }}>
-          {Math.round((budgetUsed / budgetDaily) * 100)}% Consumed Today
+          {quota.liveUsed + quota.ftUsed + quota.fallbackUsed} / 100 Logical Calls Used Today
         </p>
       </div>
 

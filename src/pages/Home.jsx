@@ -18,7 +18,17 @@ import { slugify } from '../utils/format';
 import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
 import { ListSkeleton } from '../components/StateFeedback';
-import { normalizeMatch } from '../engine/matchEngine';
+import { normalizeMatch, applySmartMinute } from '../engine/matchEngine'; // ★ NEW IMPORT
+
+// ★ NEW: Ticking clock hook
+function useNow(interval = 10000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return now;
+}
 
 const Sunset = (props) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" {...props}>
@@ -356,6 +366,7 @@ export default function Home() {
   const isLoggedIn = !!currentUser;
   const uid = currentUser ? currentUser.uid : null;
   const greeting = useMemo(() => getGreeting(), []);
+  const now = useNow(10000); // ★ NEW: Tick every 10s
 
   const { data: homeData = { live: [], featured: [], upcoming: [] }, isLoading: homeLoading } = useHomeMatches();
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
@@ -366,7 +377,6 @@ export default function Home() {
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
   const [newsPosts, setNewsPosts] = useState([]);
   
-  const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 60000);
     return () => clearInterval(t);
@@ -397,9 +407,10 @@ export default function Home() {
     });
   }, []);
 
-  const liveMatches = useMemo(() => (homeData.live || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.live, now]);
-  const featuredMatches = useMemo(() => (homeData.featured || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.featured, now]);
-  const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.upcoming, now]);
+  // ★ FIX: Apply smart minute and filter hidden matches
+  const liveMatches = useMemo(() => (homeData.live || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.live, now]);
+  const featuredMatches = useMemo(() => (homeData.featured || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.featured, now]);
+  const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.upcoming, now]);
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 

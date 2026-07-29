@@ -1,3 +1,4 @@
+// backend-v1/src/scheduler/index.js
 const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
@@ -9,7 +10,7 @@ const logger = require('../utils/logger');
 const CRON = {
   TODAY_FIXTURES: '5 0 * * *',
   TOMORROW_FIXTURES: '10 0 * * *',
-  FINISHED_FIXTURES: '15 0 * * *',
+  FINISHED_FIXTURES: '0 */2 * * *', // ★ Runs every 2 hours (12 calls/day max)
   STANDINGS: '0 */6 * * *',
 };
 

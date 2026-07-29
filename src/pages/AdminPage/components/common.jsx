@@ -20,11 +20,14 @@ export const dateLabel = (d) => {
 
 export function extractMatchDate(m) {
   if (!m) return '';
+  // ★ FIX: Prioritize the pre-calculated dateStr from the frontend engine
+  if (m.dateStr) return m.dateStr;
   if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
   if (m.date && m.date.includes('T')) return m.date.split('T')[0];
   if (m.date) return m.date;
   return '';
 }
+
 export const extractDate = m => extractMatchDate(m);
 
 export const sortByImportance = (a, b) => (b.matchScore || 0) - (a.matchScore || 0);
