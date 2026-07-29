@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
-import { useFixtures } from '../../hooks/useFixtures';
+import { useFixtures, useLiveMatches } from '../../hooks/useFixtures'; // ★ Added useLiveMatches
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../utils/firebase';
 import { todayStr, getLocalDateStr } from '../../utils/dates';
@@ -15,7 +15,7 @@ import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, rebuildPeriodLeaderboard, rebuildAllLeaderboards } from '../../services/predictions';
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
-// ★ Centralized imports (Fixed extractDate import)
+// ★ Centralized imports
 import { normalizeMatch } from "../../engine/matchEngine";
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import SEO from '../../components/SEO';
@@ -60,8 +60,24 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState(null);
   const [rebuilding, setRebuilding] = useState(null);
 
+  // ★ EXACTLY SAME AS FIXTURES PAGE
   const { data: rawFixtures = [], isLoading: fxLoading } = useFixtures(date);
-  const allFixtures = useMemo(() => rawFixtures.map(m => normalizeMatch(m, true)), [rawFixtures]);
+  const { data: rawLive = [] } = useLiveMatches();
+
+  const allFixtures = useMemo(() => {
+    const map = new Map();
+    (rawFixtures || []).forEach(m => { if (m) map.set(String(m.id), m); });
+    (rawLive || []).forEach(m => {
+      if (!m) return;
+      const existing = map.get(String(m.id));
+      if (existing) {
+        map.set(String(m.id), { ...existing, ...m });
+      } else if (extractDate(m) === date) {
+        map.set(String(m.id), m);
+      }
+    });
+    return Array.from(map.values()).map(m => normalizeMatch(m, true));
+  }, [rawFixtures, rawLive, date]);
 
   const showToast = useCallback((message, type = 'ok') => setToast({ message, type }), []);
 
