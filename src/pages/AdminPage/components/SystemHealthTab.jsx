@@ -1,5 +1,5 @@
 import React, { useState, useEffect, memo, useRef, useCallback } from 'react';
-import { Cpu, AlertTriangle, Activity, Terminal, X, Trash2, Wifi } from 'lucide-react';
+import { Cpu, AlertTriangle, Activity, Terminal, X, Wifi, Zap } from 'lucide-react';
 import { footballApi } from '../../../services/footballApi';
 import { Skel, Empty } from './common';
 
@@ -7,7 +7,6 @@ import { Skel, Empty } from './common';
 const TerminalModal = ({ isOpen, onClose, logs }) => {
   const scrollContainerRef = useRef(null);
 
-  // ★ FIX: Manually scroll ONLY the terminal container, not the whole window
   useEffect(() => {
     if (isOpen && scrollContainerRef.current) {
       scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
@@ -53,15 +52,13 @@ const SystemHealthTab = memo(function SystemHealthTab() {
 
   const fetchData = useCallback(async () => {
     try {
-      // 1. Fetch Health
       const healthData = await footballApi.getHealth();
       setHealth(healthData);
       
-      // 2. Fetch Metrics & Logs (Assuming backend exposes these)
       try {
         const metricsRes = await fetch('https://api.zokascore.xyz/api/v1/monitoring/metrics');
         if (metricsRes.ok) setMetrics(await metricsRes.json());
-      } catch (e) { /* Ignore if endpoint doesn't exist yet */ }
+      } catch (e) { /* Ignore */ }
 
       try {
         const logsRes = await fetch('https://api.zokascore.xyz/api/v1/monitoring/logs');
@@ -81,7 +78,7 @@ const SystemHealthTab = memo(function SystemHealthTab() {
 
   useEffect(() => {
     fetchData();
-    const interval = setInterval(fetchData, 5000); // Poll every 5s for live updates
+    const interval = setInterval(fetchData, 5000); 
     return () => clearInterval(interval);
   }, [fetchData]);
 
@@ -107,9 +104,13 @@ const SystemHealthTab = memo(function SystemHealthTab() {
   const errorCount = metrics?.errorCount ?? 0;
   const cacheHits = metrics?.cacheHits ?? 0;
 
+  // ★ NEW: Calculate API Budget Used and Remaining
+  const budgetDaily = health?.budgetDaily ?? 100;
+  const budgetRemaining = health?.budgetRemaining ?? 0;
+  const budgetUsed = budgetDaily - budgetRemaining;
+
   return (
     <div className="ae">
-      {/* Hacker Theme CSS injected */}
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
         @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
@@ -141,6 +142,40 @@ const SystemHealthTab = memo(function SystemHealthTab() {
             <span className="l">Active Errors</span>
           </div>
         </div>
+      </div>
+
+      {/* ★ NEW: API Budget Section */}
+      <div className="asec">
+        <h3 className="ast"><Zap size={15} /> API Football Budget</h3>
+        <div className="asg">
+          <div className="astat">
+            <span className="n bl">{budgetUsed}</span>
+            <span className="l">Requests Used</span>
+          </div>
+          <div className="astat">
+            <span className="n gn">{budgetRemaining}</span>
+            <span className="l">Requests Remaining</span>
+          </div>
+          <div className="astat">
+            <span className="n gd">{budgetDaily}</span>
+            <span className="l">Daily Limit</span>
+          </div>
+        </div>
+        
+        {/* Visual Progress Bar */}
+        <div style={{ marginTop: '16px', background: 'rgba(255,255,255,0.05)', borderRadius: '8px', height: '10px', overflow: 'hidden' }}>
+          <div 
+            style={{ 
+              width: `${(budgetUsed / budgetDaily) * 100}%`, 
+              height: '100%', 
+              background: budgetRemaining > 20 ? '#10b981' : '#ef4444',
+              transition: 'width 0.5s ease'
+            }} 
+          />
+        </div>
+        <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '6px', textAlign: 'right' }}>
+          {Math.round((budgetUsed / budgetDaily) * 100)}% Consumed Today
+        </p>
       </div>
 
       <div className="asec">
