@@ -1,12 +1,12 @@
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import SEO from '../components/SEO';
-import { useEngineStandings } from '../zokascore_engine/hooks';
+import { useStandings } from '../hooks/useFixtures';
 import { buildTeamRoute } from '../utils/routes';
 
 export default function LeaguePage() {
   const { leagueId, slug } = useParams();
-  const { data: standingsData, isLoading } = useEngineStandings(leagueId);
+  const { data: standingsData, isLoading } = useStandings(leagueId);
   
   const leagueName = slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'League';
   const standingsTable = standingsData?.standings?.[0] || [];
