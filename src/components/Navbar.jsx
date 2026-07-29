@@ -143,7 +143,6 @@ const TickerItem = React.memo(({ m }) => {
   );
 });
 
-// ★ NEW: Floating Pinned Matches Widget
 const PinnedMatchesWidget = React.memo(({ pinnedMatches, allLive }) => {
   const pinned = allLive.filter(m => pinnedMatches.includes(String(m.id)));
   if (pinned.length === 0) return null;
@@ -230,28 +229,30 @@ export default function Navbar() {
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
-  const [isAdmin, setIsAdmin] = useState(false);
+  // ★ FIX: Instant Admin Detection from UserProfile
+  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'staff';
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  // ★ FIX: rawLive is ALREADY normalized by the useLiveMatches hook! Do not normalize it again.
   const liveMatches = useMemo(() => rawLive || [], [rawLive]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
   
-  // ★ NEW: Get pinnedMatches from store
   const { pinnedMatches = [] } = usePreferencesStore();
 
   useEffect(() => {
-    if (!uid) { setIsAdmin(false); return; }
-    const adminRef = doc(db, 'admin_users', uid);
-    const unsub = onSnapshot(adminRef, (docSnap) => {
-      setIsAdmin(docSnap.exists());
-    }, (err) => {
-      console.error("Admin check error:", err);
-      setIsAdmin(false);
-    });
+    if (!db) { setAdminNotifs([]); return; }
+    const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
+    const unsub = onSnapshot(q, (snap) => {
+      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
+      setAdminNotifs(prev => {
+        if (prev.length !== notifs.length) return notifs;
+        if (prev[0]?.id !== notifs[0]?.id || prev[0]?.body !== notifs[0]?.body) return notifs;
+        return prev;
+      });
+    }, () => {});
     return () => unsub();
-  }, [uid, db]);
+  }, [db, uid]);
 
   const searchRef = useRef(null);
   const notifRef = useRef(null);
@@ -332,21 +333,6 @@ export default function Navbar() {
     const upcoming = liveMatches.filter(m => !m.isLive && !m.isFinished).slice(0, 5);
     return [...live, ...finished, ...upcoming];
   }, [liveMatches]);
-
-  useEffect(() => {
-    if (!db) { setAdminNotifs([]); return; }
-    const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
-    const unsub = onSnapshot(q, (snap) => {
-      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setAdminNotifs(prev => {
-        if (prev.length !== notifs.length) return notifs;
-        if (prev[0]?.id !== notifs[0]?.id || prev[0]?.body !== notifs[0]?.body) return notifs;
-        return prev;
-      });
-    }, () => {});
-    return () => unsub();
-  }, [db, uid]);
 
   useEffect(() => {
     const fn = () => {
@@ -436,7 +422,6 @@ export default function Navbar() {
     <>
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
         <ProHeader matches={liveMatches} liveMatches={liveMatches} />
-        {/* ★ NEW: Floating Pinned Matches Widget */}
         <PinnedMatchesWidget pinnedMatches={pinnedMatches} allLive={liveMatches} />
       </div>
 
@@ -460,12 +445,14 @@ export default function Navbar() {
       </div>
 
       <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
-        <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'grid', gridTemplateColumns: 'auto 1fr auto auto', alignItems: 'center', gap: 12 }}>
-          <div className="nv-dk" style={{ display: 'flex', alignItems: 'center' }}>
-            <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home"><Home size={16} strokeWidth={2.5} /> Home</Link>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minWidth: 0 }}>
+        {/* ★ FIX: Changed from grid to flex to prevent overflow on large screens */}
+        <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
+          
+          {/* LEFT SECTION: Home & Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+            <div className="nv-dk" style={{ display: 'flex', alignItems: 'center' }}>
+              <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home"><Home size={16} strokeWidth={2.5} /> Home</Link>
+            </div>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} className="nv-logo-link">
               <img src={APP_LOGO} alt="ZokaScore Logo" width="42" height="42" style={{ borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(16,185,129,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
               <div className="nv-dk" style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
@@ -477,11 +464,12 @@ export default function Navbar() {
             </Link>
           </div>
 
-          <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, justifyContent: 'flex-end' }}>
-            <div ref={searchRef} style={{ position: 'relative' }}>
+          {/* RIGHT SECTION: Actions & Links (Shrinks safely) */}
+          <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
               {searchOpen && (
-                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }} emitsChange={true}>
+                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }}>
                   <Search size={16} style={{ color: '#10b981', flexShrink: 0 }} />
                   <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0 }} />
                   {searchQuery && <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>}
@@ -490,7 +478,7 @@ export default function Navbar() {
             </div>
 
             {isLoggedIn && (
-              <div ref={notifRef} style={{ position: 'relative' }}>
+              <div ref={notifRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
                   <Bell size={18} strokeWidth={2.5} />
                   {notifCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a', boxShadow: '0 0 12px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
@@ -500,7 +488,7 @@ export default function Navbar() {
             )}
 
             {isLoggedIn && userStats.resolved > 0 && (
-              <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)}>
+              <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)} style={{ flexShrink: 0 }}>
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
                 <span style={{ fontWeight: 900, fontSize: '0.9rem', color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: pointsHover ? 'nvPointsCount 0.4s ease both' : 'none' }}>{userStats.points.toLocaleString()}</span>
                 <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '3px 8px', borderRadius: 4, opacity: 0.8, letterSpacing: '0.05em' }}>PTS</span>
@@ -508,7 +496,8 @@ export default function Navbar() {
               </div>
             )}
 
-            <div className="nv-dk-links-container">
+            {/* ★ FIX: Added overflowX: 'auto' and minWidth: 0 to prevent layout breaking on large screens */}
+            <div className="nv-dk-links-container" style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
               {LINKS.map((link) => {
                 const active = isActive(link.to);
                 return (
@@ -520,17 +509,18 @@ export default function Navbar() {
                 );
               })}
               {isLoggedIn ? (
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, flexShrink: 0 }}>
                   {isAdmin && <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin"><Shield size={18} strokeWidth={2.5} /></Link>}
                   <Link to="/profile" className={`nv-action-btn ${isActive('/profile') ? 'active' : ''}`} title="Profile"><User size={18} strokeWidth={2.5} /></Link>
                 </div>
               ) : (
-                <Link to="/login" className="nv-auth-btn" title="Sign In" style={{ marginLeft: 10 }}><Zap size={16} strokeWidth={2.5} /> Sign In</Link>
+                <Link to="/login" className="nv-auth-btn" title="Sign In" style={{ marginLeft: 10, flexShrink: 0 }}><Zap size={16} strokeWidth={2.5} /> Sign In</Link>
               )}
             </div>
           </div>
 
-          <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
+          {/* Mobile menu button */}
+          <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
             {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
             {isLoggedIn && (
