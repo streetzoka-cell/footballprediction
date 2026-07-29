@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
-  Clock, Target, ChevronRight, ChevronDown, Pin
+  Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLiveMatches } from '../hooks/useFixtures';
@@ -39,18 +39,18 @@ const StatusDot = React.memo(({ status, size = 6 }) => {
 const LINKS = [
   { to: '/', label: 'Home', emoji: '🏠' },
   { to: '/fixtures', label: 'Fixtures', emoji: '⚽' },
-  { to: '/highlights', label: 'Highlights & NEWS', emoji: '🎬' },
+  { to: '/highlights', label: 'Highlights', emoji: '🎬' },
   { to: '/predictions', label: 'Predictions', emoji: '🎯', badge: 'NEW' },
   { to: '/basketball', label: 'Hoops', emoji: '🏀' },
   { to: '/leaderboard', label: 'Ranks', emoji: '🏆' },
-  { to: '/mastergames', label: 'other Games', emoji: '🎮' },
+  { to: '/mastergames', label: 'Games', emoji: '🎮' },
   { to: '/studio', label: 'Studio', emoji: '🎨', badge: 'NEW' },
   { to: '/livestream', label: 'Stream', emoji: '📡', isLive: true },
 ];
 
 const infoSections = [
   { title: "Company", links: [["ℹ️ About", "/about"], ["📧 Contact", "/contact"], ["💼 Careers", "/careers"], ["🤝 Partners", "/partners"], ["📢 Advertise", "/advertise"], ["👥 Team", "/team"]] },
-  { title: "Support", links: [["❓ Help Center", "/help"], ["❓ FAQ", "/faq"]] },
+  { title: "Support", links: [["❓ Help Center", "/help-center"], ["❓ FAQ", "/faq"]] },
   { title: "Legal", links: [["🔒 Privacy Policy", "/privacy"], ["📋 Terms of Service", "/terms"]] },
 ];
 
@@ -222,6 +222,7 @@ export default function Navbar() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false); // ★ NEW: Desktop More dropdown
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -229,7 +230,6 @@ export default function Navbar() {
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
-  // ★ FIX: Instant Admin Detection from UserProfile
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'staff';
   const [adminNotifs, setAdminNotifs] = useState([]);
 
@@ -257,6 +257,7 @@ export default function Navbar() {
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const mobNotifRef = useRef(null);
+  const moreRef = useRef(null); // ★ NEW: Ref for More dropdown
   const rafRef = useRef(false);
 
   const isHome = location.pathname === '/';
@@ -350,7 +351,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', fn);
   }, []);
 
-  useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setInfoOpen(false); }, [location.pathname]);
+  useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setInfoOpen(false); setMoreOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     if (mobileOpen) { document.body.style.overflow = 'hidden'; document.body.style.position = 'fixed'; document.body.style.width = '100%'; } 
@@ -360,9 +361,10 @@ export default function Navbar() {
 
   useEffect(() => {
     const fn = (e) => {
-      if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); }
+      if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setMoreOpen(false); }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); // ★ NEW
     };
     document.addEventListener('keydown', fn);
     document.addEventListener('mousedown', fn);
@@ -445,7 +447,6 @@ export default function Navbar() {
       </div>
 
       <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
-        {/* ★ FIX: Changed from grid to flex to prevent overflow on large screens */}
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
           
           {/* LEFT SECTION: Home & Logo */}
@@ -464,8 +465,10 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* RIGHT SECTION: Actions & Links (Shrinks safely) */}
+          {/* RIGHT SECTION: Links & Actions (Shrinks safely) */}
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            
+            {/* Search */}
             <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
               {searchOpen && (
@@ -477,6 +480,7 @@ export default function Navbar() {
               )}
             </div>
 
+            {/* Notifications */}
             {isLoggedIn && (
               <div ref={notifRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
@@ -487,6 +491,7 @@ export default function Navbar() {
               </div>
             )}
 
+            {/* Points Badge */}
             {isLoggedIn && userStats.resolved > 0 && (
               <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)} style={{ flexShrink: 0 }}>
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
@@ -496,8 +501,8 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* ★ FIX: Added overflowX: 'auto' and minWidth: 0 to prevent layout breaking on large screens */}
-            <div className="nv-dk-links-container" style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, overflowX: 'auto', scrollbarWidth: 'none' }}>
+            {/* Main Links & Auth */}
+            <div className="nv-dk-links-container" style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
               {LINKS.map((link) => {
                 const active = isActive(link.to);
                 return (
@@ -508,6 +513,29 @@ export default function Navbar() {
                   </Link>
                 );
               })}
+
+              {/* ★ NEW: More Dropdown for Company/Legal Links */}
+              <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
+                <button onClick={() => setMoreOpen(p => !p)} className={`nv-nav-link ${moreOpen ? 'active' : ''}`} style={{ gap: 4 }}>
+                  <MoreHorizontal size={16} strokeWidth={2.5} /> More
+                </button>
+                {moreOpen && (
+                  <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: '260px', background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5)', backdropFilter: 'blur(20px)', zIndex: 1001, padding: '8px' }}>
+                    {infoSections.map((sec, si) => (
+                      <div key={sec.title} style={{ marginBottom: si < infoSections.length - 1 ? 8 : 0 }}>
+                        <div style={{ fontSize: '0.65rem', fontWeight: 800, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em', padding: '8px 12px 4px' }}>{sec.title}</div>
+                        {sec.links.map(([label, to]) => (
+                          <Link key={to} to={to} onClick={() => setMoreOpen(false)} className="nv-mob-link" style={{ fontSize: '0.85rem', padding: '8px 12px', borderRadius: 8, color: '#fff' }}>
+                            {label}
+                          </Link>
+                        ))}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Auth Buttons (Never hidden) */}
               {isLoggedIn ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, flexShrink: 0 }}>
                   {isAdmin && <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin"><Shield size={18} strokeWidth={2.5} /></Link>}
@@ -537,6 +565,7 @@ export default function Navbar() {
         </div>
       </nav>
 
+      {/* Mobile Drawer */}
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
       <div className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
         <div className="nv-mob-header" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(16,185,129,0.1)', position: 'sticky', top: 0, zIndex: 3, background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)' }}>

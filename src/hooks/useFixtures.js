@@ -20,17 +20,38 @@ export function useFixtures(dateStr, sport = 'football') {
   return useQuery({
     queryKey: ['fixtures', dateStr, sport],
     queryFn: async () => {
-      const res = await footballApi.getFixtures(dateStr, sport);
-      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
+      const [fixRes, liveRes, finRes] = await Promise.all([
+        footballApi.getFixtures(dateStr, sport),
+        footballApi.getLive(sport),
+        footballApi.getFinished(sport, dateStr)
+      ]);
+      
+      const fixtures = fixRes?.data || [];
+      const live = liveRes?.data || [];
+      const finished = finRes?.data || [];
+      
+      const map = new Map();
+      // 1. Base scheduled fixtures
+      fixtures.forEach(m => map.set(String(m.id), m));
+      // 2. Overwrite with finished matches (has final scores)
+      finished.forEach(m => map.set(String(m.id), m));
+      // 3. Overwrite with live matches (has live scores)
+      live.forEach(m => {
+        const existing = map.get(String(m.id));
+        if (existing) map.set(String(m.id), { ...existing, ...m });
+        else if (m.dateStr === dateStr) map.set(String(m.id), m);
+      });
+      
+      return Array.from(map.values()).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     placeholderData: keepPreviousData,
-    staleTime: 60 * 1000,
+    staleTime: 30 * 1000, // 30 seconds
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
     refetchInterval: (query) => {
       const date = query.queryKey[1];
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
-        return 60000; 
+        return 30000; // Poll every 30s for today/yesterday/tomorrow
       }
       return false; 
     }
