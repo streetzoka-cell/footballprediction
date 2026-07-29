@@ -3,21 +3,68 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
   Pause, Flag, Zap, ChevronRight, ChevronDown,
-  RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, Flame, Loader
+  RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, Flame, Loader, Camera
 } from 'lucide-react';
 
-// ★ IMPORT FROM THE UPDATED HOOKS (which now point to the new backend)
 import { useFixtures, useLiveMatches, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
-// ★ REMOVED normalizeMatch and status helpers - the new hooks handle this!
 import { buildMatchRoute, buildLeagueRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
+
+const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
+
+// Sound Engine
+const CMT = {
+  goal:["GOOOAL! Pure strike!","Back of the net!","Zoka magic!"],
+  ft:["Full Time!","Final Whistle!"],
+  ht:["Half Time!","HT Break."],
+  kickoff:["Kick Off!","We're underway!"],
+};
+const pick = (a) => a[Math.floor(Math.random()*a.length)];
+
+function useToasts() {
+  const [toasts, setToasts] = useState([]);
+  const idRef = useRef(0);
+  const add = useCallback(t => {
+    const id = ++idRef.current;
+    setToasts(p => [...p.slice(-2), { ...t, id }]);
+    setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), t.dur || 3500);
+    return id;
+  }, []);
+  return { toasts, add };
+}
+
+const ToastContainer = React.memo(({ toasts }) => {
+  if (!toasts.length) return null;
+  return (
+    <div className="zoka-toast-wrap">
+      {toasts.map(t => {
+        const isGoal = t.type === 'goal';
+        let bg = isGoal ? 'linear-gradient(135deg,rgba(239,68,68,.9),rgba(185,28,28,.85))' : 'linear-gradient(135deg,rgba(16,185,129,.9),rgba(5,150,105,.85))';
+        let icon = isGoal ? '⚽' : '🏁';
+        return (
+          <div key={t.id} className="zoka-toast" style={{ background: bg }}>
+            <div className="zoka-toast-inner">
+              <span className="zoka-toast-icon">{icon}</span>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="zoka-toast-title">{isGoal ? 'GOAL!' : t.st === 'ft' ? 'FULL TIME' : 'LIVE ACTION'}</div>
+                {t.msg && <div className="zoka-toast-msg">{t.msg}</div>}
+                {t.detail && <div className="zoka-toast-detail">{t.detail}</div>}
+              </div>
+              {t.score && <div className="zoka-toast-score">{t.score}</div>}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+});
 
 const TOP_TEAMS_LIST = [
   'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
@@ -49,10 +96,10 @@ export default function Fixtures() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
-  // These hooks now return data already mapped by the passthrough normalizeMatch
   const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const { data: rawLive = [] } = useLiveMatches();
   const queryClient = useQueryClient();
+  const { toasts, add: addToast } = useToasts();
   
   const { soundEnabled, favorites, pinnedLeagues, toggleSound, toggleFavorite, togglePinnedLeague } = usePreferencesStore();
   const isFav = useCallback(id => favorites.includes(String(id)), [favorites]);
@@ -72,34 +119,39 @@ export default function Fixtures() {
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
 
-  // ★ Simplified merge logic: no need to call normalizeMatch again!
   const allFixtures = useMemo(() => {
     const map = new Map();
-    
-    // Add all fixtures for the selected date
-    rawFixtures.forEach(m => {
-      if (m) map.set(String(m.id), m);
-    });
-    
-    // Merge live matches (live data overwrites scheduled data if IDs match)
+    rawFixtures.forEach(m => { if (m) map.set(String(m.id), m); });
     rawLive.forEach(m => {
       if (!m) return;
       const existing = map.get(String(m.id));
-      if (existing) {
-        // Live data takes precedence
-        map.set(String(m.id), { ...existing, ...m });
-      } else {
-        // If it's a live match not in the fixtures list, only add it if it's for the selected date
-        if (m.dateStr === selectedDate) {
-          map.set(String(m.id), m);
-        }
-      }
+      if (existing) map.set(String(m.id), { ...existing, ...m });
+      else if (m.dateStr === selectedDate) map.set(String(m.id), m);
     });
-    
     return Array.from(map.values());
   }, [rawFixtures, rawLive, selectedDate]);
 
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
+
+  // Goal/Status Notifications
+  const prevScores = useRef(new Map());
+  useEffect(() => {
+    liveMatches.forEach(m => {
+      const id = String(m.id);
+      const prev = prevScores.current.get(id);
+      if (prev) {
+        if (m.homeScore != null && prev.h != null && m.homeScore > prev.h) {
+          if (Sound.on) Sound.goal();
+          addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
+        }
+        if (m.awayScore != null && prev.a != null && m.awayScore > prev.a) {
+          if (Sound.on) Sound.goal();
+          addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
+        }
+      }
+      prevScores.current.set(id, { h: m.homeScore, a: m.awayScore });
+    });
+  }, [liveMatches, addToast]);
 
   useEffect(() => { Sound.on = soundEnabled; }, [soundEnabled]);
 
@@ -219,6 +271,10 @@ export default function Fixtures() {
     );
   }
 
+  const handleReactNow = useCallback((match) => {
+    navigate('/studio/reactor', { state: { fixtureId: match.id, homeTeam: match.homeName, awayTeam: match.awayName, homeLogo: match.homeLogo, awayLogo: match.awayLogo, score: { home: match.homeScore, away: match.awayScore }, minute: match.displayMinute, competition: match.leagueName } });
+  }, [navigate]);
+
   const renderMatchCard = (m, i) => {
     const isLive = m.isLive; 
     const isHT = m.isHT; 
@@ -236,39 +292,39 @@ export default function Fixtures() {
     const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
 
     return (
-      <Link to={matchLink} key={`${m.id}-${i}`} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-        <div className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}>
-          {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
-          <div className="zoka-card-top">
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              {m.category === 'FEATURED' && isSched && (
-                <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
-              )}
-              {isLive && !isHT && (
-                <span className="zoka-status live-s">
-                  <span className="zoka-dot" style={{ background: '#ef4444' }} /> 
-                  {m.displayMinute != null ? `${m.displayMinute}'` : 'LIVE'}
-                </span>
-              )}
-              {isHT && <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>}
-              {isStarted && !isLive && !isHT && <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>}
-              {isFt && <span className="zoka-status ft-s">FT</span>}
-              {isSched && <span className="zoka-status time-s">{m.kickoff}</span>}
-            </div>
-            <div className="zoka-card-actions" onClick={e => { e.preventDefault(); e.stopPropagation(); }}>
-              <button className={`zoka-icon-btn fav ${isFav(m.id) ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
-                <Star size={16} fill={isFav(m.id) ? '#fbbf24' : 'none'} color={isFav(m.id) ? '#fbbf24' : '#475569'} />
-              </button>
-            </div>
+      <div key={`${m.id}-${i}`} className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}>
+        {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
+        <div className="zoka-card-top">
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            {m.category === 'FEATURED' && isSched && (
+              <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
+            )}
+            {isLive && !isHT && (
+              <span className="zoka-status live-s">
+                <span className="zoka-dot" style={{ background: '#ef4444' }} /> 
+                {m.displayMinute != null ? `${m.displayMinute}'` : 'LIVE'}
+              </span>
+            )}
+            {isHT && <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>}
+            {isStarted && !isLive && !isHT && <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>}
+            {isFt && <span className="zoka-status ft-s">FT</span>}
+            {isSched && <span className="zoka-status time-s">{m.kickoff}</span>}
           </div>
+          <div className="zoka-card-actions">
+            <button className={`zoka-icon-btn fav ${isFav(m.id) ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
+              <Star size={16} fill={isFav(m.id) ? '#fbbf24' : 'none'} color={isFav(m.id) ? '#fbbf24' : '#475569'} />
+            </button>
+          </div>
+        </div>
+        <Link to={matchLink} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
           <div className="zoka-teams">
             <div className="zoka-team-col home">
               <div className="zoka-team-row">
-                {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={m.homeName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={m.homeName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                 <span className="zoka-team-name">{m.homeName}</span>
               </div>
             </div>
-             <div className="zoka-score-box">
+            <div className="zoka-score-box">
               {(isLive || isHT || isFt) ? (
                 <div className="zoka-scores">
                   <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
@@ -279,17 +335,22 @@ export default function Fixtures() {
             </div>
             <div className="zoka-team-col away">
               <div className="zoka-team-row">
-                {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={m.awayName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={m.awayName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                 <span className="zoka-team-name">{m.awayName}</span>
               </div>
             </div>
           </div>
           <div className="zoka-comp-row">
-            {m.leagueLogo && <img src={m.leagueLogo} alt={m.leagueName} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            {m.leagueLogo && <img src={m.leagueLogo} alt={m.leagueName} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} />}
             <span>{m.leagueName}</span>
           </div>
+        </Link>
+        <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'flex-end' }}>
+          <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
+            <Camera size={12} /> React
+          </button>
         </div>
-      </Link>
+      </div>
     );
   };
 
@@ -303,7 +364,7 @@ export default function Fixtures() {
     return (
       <div className="zoka-section" key={group.name}>
         <div className="zoka-league-hd">
-          {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" style={{objectFit:'contain', borderRadius: '3px'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" style={{objectFit:'contain', borderRadius: '3px'}} />}
           <span className="zoka-league-name">{group.name}</span>
           <span className="zoka-league-count">{group.matches.length}</span>
           <button className="zoka-icon-btn" style={{ opacity: isPinned ? 1 : 0.5, color: isPinned ? '#10b981' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isPinned ? '#10b981' : 'none'} /></button>
@@ -322,6 +383,7 @@ export default function Fixtures() {
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
       <SEO title="Football Fixtures, Live Scores & Tables" description="Get the latest football fixtures, live scores, league tables, and match predictions on ZOKA." keywords="football fixtures, live scores, ZOKA" robots="index,follow" />
+      <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
         <div className="zoka-hdr">
@@ -352,7 +414,7 @@ export default function Fixtures() {
         <div className="zoka-datenav">
           <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
           <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
-          <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
+ <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
           <div className="zoka-more-wrap" ref={moreRef}>
             <button className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}><Calendar size={16} /> More <ChevronDown size={16} /></button>
             {ui.moreDatesOpen && (
@@ -444,6 +506,28 @@ export default function Fixtures() {
                 )}
 
                 {(ui.leagueFilterOpen || compFilter !== 'ALL') && otherLeagues.map(group => renderLeagueSection(group))}
+
+                {/* SEO Links Restored */}
+                <div className="zoka-seo-links">
+                  <h3>Today's Match Links</h3>
+                  {displayFixtures.slice(0, 50).map(m => {
+                    const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}`;
+                    return (
+                      <Link key={m.id} to={`/match/${m.id}/${slug}`} className="zoka-seo-link" rel="bookmark">
+                        {m.homeName} vs {m.awayName}
+                      </Link>
+                    );
+                  })}
+                </div>
+
+                <div className="zoka-seo-links" style={{ marginTop: '20px' }}>
+                  <h3>Explore Leagues</h3>
+                  {availableLeagues.map(c => (
+                    <Link key={c.id || c.name} to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link">
+                      {c.name}
+                    </Link>
+                  ))}
+                </div>
               </>
             )}
           </>
@@ -465,7 +549,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {availableLeagues.slice(0, 8).map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                   {l.name}
                 </button>
               ))}
@@ -483,7 +567,7 @@ export default function Fixtures() {
                       <tr key={row.team?.id || row.rank}>
                         <td>{row.rank}</td>
                         <td style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" style={{objectFit:'contain'}} />}
                           {row.team?.name || 'TBD'}
                         </td>
                         <td>{row.all?.played}</td><td>{row.all?.win}</td><td>{row.all?.draw}</td><td>{row.all?.lose}</td>
@@ -506,7 +590,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {availableLeagues.slice(0, 8).map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                   {l.name}
                 </button>
               ))}
@@ -517,7 +601,7 @@ export default function Fixtures() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
                 {teamsData.map(t => (
                   <div key={t.id} className="zoka-team-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', textAlign: 'left' }}>
-                    {t.logo && <img src={t.logo} alt={t.name} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} onError={e => { e.target.style.display = 'none'; }} />}
+                    {t.logo && <img src={t.logo} alt={t.name} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} />}
                     <div className="name">{t.name}</div>
                   </div>
                 ))}

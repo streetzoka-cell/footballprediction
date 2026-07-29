@@ -29,11 +29,11 @@ class ApiFootballAdapter extends BaseProvider {
     }
   }
 
-  _setupInterceptors() {
+     _setupInterceptors() {
     this.api.interceptors.request.use((cfg) => {
       this._resetIfNewDay();
       if (this.remaining <= 0) {
-        const err = new Error('ApiFootball budget exhausted (0). Blocked: ' + cfg.url);
+        const err = new Error('ApiFootball daily budget exhausted (0). Blocked: ' + cfg.url);
         err.code = 'BUDGET_EXHAUSTED';
         return Promise.reject(err);
       }
@@ -42,21 +42,34 @@ class ApiFootballAdapter extends BaseProvider {
 
     this.api.interceptors.response.use(
       (res) => {
-        const limit = res.headers['x-ratelimit-remaining'];
-        if (limit != null && !isNaN(parseInt(limit, 10))) {
-          this.remaining = Math.min(this.remaining, parseInt(limit, 10));
+        // ★ FIX: API-Football returns daily remaining in this header
+        const dailyRemaining = res.headers['x-ratelimit-requests-remaining'];
+        if (dailyRemaining != null && !isNaN(parseInt(dailyRemaining, 10))) {
+          this.remaining = parseInt(dailyRemaining, 10);
+        } else {
+          // Fallback: decrement locally if header is missing
+          this.remaining = Math.max(0, this.remaining - 1);
         }
         return res;
       },
       (err) => {
         if (err.response?.status === 429) {
-          this.remaining = 0;
-          logger.warn('[ApiFootball] 429 hit — forcing budget to 0');
+          const dailyRemaining = err.response.headers['x-ratelimit-requests-remaining'];
+          if (dailyRemaining != null && parseInt(dailyRemaining, 10) === 0) {
+            // True daily limit exhausted
+            this.remaining = 0;
+            logger.warn('[ApiFootball] 429 hit: Daily quota exhausted (0/100).');
+          } else {
+            // Just a per-minute spike (e.g. 60/min limit hit). Do NOT kill the daily budget.
+            logger.warn('[ApiFootball] 429 hit (Per-minute rate limit). Backing off...');
+          }
         }
         return Promise.reject(err);
       }
     );
   }
+  
+
 
   isBudgetAvailable(req = 1) {
     this._resetIfNewDay();
@@ -88,9 +101,17 @@ class ApiFootballAdapter extends BaseProvider {
     return data.map(Normaliser.normalizeMatch);
   }
 
-  async getStandings(leagueId, season) {
+    async getStandings(leagueId, season) {
     const data = await this._fetch('/standings', { league: leagueId, season });
-    return data; 
+    // API-Football returns an array with one object that contains the 'league' key
+    return data[0]?.league || null;
+  }
+
+  // ★ ADDED: Fetch teams for a specific league
+  async getTeams(leagueId, season) {
+    const data = await this._fetch('/teams', { league: leagueId, season });
+    // API-Football returns an array of team objects
+    return data || [];
   }
 
   async health() {

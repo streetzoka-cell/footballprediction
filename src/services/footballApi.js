@@ -66,12 +66,7 @@ export const footballApi = {
     fetchJSON(`${STATIC_BASE}/results/${dateStr}.json`)
   ),
   
-  getStandings: (leagueId) => monitorApiCall('GET /data/standings.json', async () => {
-    const res = await fetchJSON(`${STATIC_BASE}/standings.json`);
-    const leagueData = (res?.data || []).find(l => l.id === leagueId);
-    return { data: leagueData || null };
-  }),
-  
+  getStandings: (leagueId) => monitorApiCall(`GET /standings?league=${leagueId}`, () => fetchJSON(`${API_BASE}/standings?league=${leagueId}`)),
   getTeams: (leagueId) => monitorApiCall(`GET /teams?league=${leagueId}`, () => fetchJSON(`${API_BASE}/teams?league=${leagueId}`)),
   getTeam: (id) => monitorApiCall(`GET /teams/${id}`, () => fetchJSON(`${API_BASE}/teams/${id}`)),
   getPlayer: (id) => monitorApiCall(`GET /players/${id}`, () => fetchJSON(`${API_BASE}/players/${id}`)),
