@@ -14,7 +14,6 @@ import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import { calcPoints } from '../utils/constants';
 
-// ★ Using centralized engines and builders
 import { slugify } from '../utils/format';
 import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
@@ -127,7 +126,6 @@ const LiveStripLoader = React.memo(() => (
 ));
 
 const LiveMini = React.memo(({ match, index }) => {
-  // ★ Ensure we are reading the flat normalized properties
   const min = match.displayMinute; 
   const isLive = match.isLive;
   const hasScore = match.homeScore != null && match.awayScore != null;
@@ -157,7 +155,6 @@ const LiveMini = React.memo(({ match, index }) => {
     </Link>
   );
 });
-
 
 const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
@@ -360,7 +357,6 @@ export default function Home() {
   const uid = currentUser ? currentUser.uid : null;
   const greeting = useMemo(() => getGreeting(), []);
 
-  // ★ Clean data fetching via hooks. No more manual normalizeMatch mapping in the UI!
   const { data: homeData = { live: [], featured: [], upcoming: [] }, isLoading: homeLoading } = useHomeMatches();
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
@@ -390,7 +386,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Note: You can abstract this into a useNewsPosts hook later
     import('../utils/firebase').then(({ db }) => {
       if (!db) return;
       import('firebase/firestore').then(({ collection, query, limit, getDocs, orderBy }) => {
@@ -402,17 +397,12 @@ export default function Home() {
     });
   }, []);
 
-   // ★ Added `now` to dependency arrays so live minutes tick up and statuses update to FT dynamically
   const liveMatches = useMemo(() => (homeData.live || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.live, now]);
   const featuredMatches = useMemo(() => (homeData.featured || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.featured, now]);
   const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => normalizeMatch(m, true, now)).filter(Boolean), [homeData.upcoming, now]);
 
-
-
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
-
-  
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   const zokaPicks = dailyLB?.zokaPicks || { matches: [] }; 

@@ -73,17 +73,19 @@ export default defineConfig({
     }
   },
   
-  build: {
+    build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'firebase-vendor': ['firebase/app', 'firebase/firestore', 'firebase/auth', 'firebase/remote-config'],
-          'ui-vendor': ['lucide-react', 'framer-motion'],
-          'query-vendor': ['@tanstack/react-query']
+        // ★ FIX: Rolldown (Vite v8) requires a function, not an object.
+        manualChunks(id) {
+          if (id.includes('node_modules')) {
+            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor';
+            if (id.includes('firebase')) return 'firebase-vendor';
+            if (id.includes('lucide-react') || id.includes('framer-motion')) return 'ui-vendor';
+            if (id.includes('@tanstack')) return 'query-vendor';
+          }
         }
       }
     }
-  }
-});
+  }});
