@@ -5,11 +5,12 @@ import { Skel, Empty } from './common';
 
 // Hacker-themed Terminal Modal
 const TerminalModal = ({ isOpen, onClose, logs }) => {
-  const endOfLogsRef = useRef(null);
+  const scrollContainerRef = useRef(null);
 
+  // ★ FIX: Manually scroll ONLY the terminal container, not the whole window
   useEffect(() => {
-    if (isOpen && endOfLogsRef.current) {
-      endOfLogsRef.current.scrollIntoView({ behavior: 'smooth' });
+    if (isOpen && scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
     }
   }, [logs, isOpen]);
 
@@ -27,13 +28,13 @@ const TerminalModal = ({ isOpen, onClose, logs }) => {
         </div>
 
         {/* Terminal Body */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '16px', color: '#00ff00', fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem', lineHeight: 1.5, textShadow: '0 0 5px rgba(0, 255, 0, 0.3)' }}>
+        <div ref={scrollContainerRef} style={{ flex: 1, overflowY: 'auto', padding: '16px', color: '#00ff00', fontFamily: 'ui-monospace, monospace', fontSize: '0.8rem', lineHeight: 1.5, textShadow: '0 0 5px rgba(0, 255, 0, 0.3)' }}>
           {logs.length === 0 ? (
             <div style={{ color: '#64748b' }}>Waiting for data stream...</div>
           ) : (
             logs.map((line, i) => <div key={i} style={{ marginBottom: '4px', opacity: 0.9 }}>{`> ${line}`}</div>)
           )}
-          <div ref={endOfLogsRef} style={{ height: '20px', display: 'flex', alignItems: 'center' }}>
+          <div style={{ height: '20px', display: 'flex', alignItems: 'center' }}>
             <span style={{ display: 'inline-block', width: '8px', height: '14px', background: '#00ff00', animation: 'blink 1s step-end infinite' }}></span>
           </div>
         </div>
