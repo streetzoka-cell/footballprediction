@@ -6,13 +6,13 @@ import {
   RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, Flame, Loader
 } from 'lucide-react';
 
+// ★ IMPORT FROM THE UPDATED HOOKS (which now point to the new backend)
 import { useFixtures, useLiveMatches, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
-import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
-import { normalizeMatch } from '../engine/matchEngine';
+// ★ REMOVED normalizeMatch and status helpers - the new hooks handle this!
 import { buildMatchRoute, buildLeagueRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
 import SEO from '../components/SEO';
@@ -49,6 +49,7 @@ export default function Fixtures() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
+  // These hooks now return data already mapped by the passthrough normalizeMatch
   const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const { data: rawLive = [] } = useLiveMatches();
   const queryClient = useQueryClient();
@@ -71,40 +72,32 @@ export default function Fixtures() {
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
 
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 30000); 
-    return () => clearInterval(t);
-  }, []);
-
+  // ★ Simplified merge logic: no need to call normalizeMatch again!
   const allFixtures = useMemo(() => {
     const map = new Map();
+    
+    // Add all fixtures for the selected date
     rawFixtures.forEach(m => {
-      const normM = normalizeMatch(m, true, now);
-      if (normM) map.set(String(normM.id), normM);
+      if (m) map.set(String(m.id), m);
     });
+    
+    // Merge live matches (live data overwrites scheduled data if IDs match)
     rawLive.forEach(m => {
-      const normM = normalizeMatch(m, true, now);
-      if (!normM) return;
-      const existing = map.get(String(normM.id));
+      if (!m) return;
+      const existing = map.get(String(m.id));
       if (existing) {
-        const trulyLive = normM.isLive || isLiveStatus(normM.status, SPORT.FOOTBALL);
-        map.set(String(normM.id), {
-          ...existing,
-          ...normM,
-          isLive: trulyLive,
-          homeScore: normM.homeScore != null ? normM.homeScore : existing.homeScore,
-          awayScore: normM.awayScore != null ? normM.awayScore : existing.awayScore,
-          minute: normM.minute != null ? normM.minute : existing.minute,
-          displayMinute: normM.displayMinute != null ? normM.displayMinute : existing.displayMinute,
-          status: normM.status || existing.status,
-        });
+        // Live data takes precedence
+        map.set(String(m.id), { ...existing, ...m });
       } else {
-        if (normM.dateStr === selectedDate) map.set(String(normM.id), normM);
+        // If it's a live match not in the fixtures list, only add it if it's for the selected date
+        if (m.dateStr === selectedDate) {
+          map.set(String(m.id), m);
+        }
       }
     });
+    
     return Array.from(map.values());
-  }, [rawFixtures, rawLive, selectedDate, now]);
+  }, [rawFixtures, rawLive, selectedDate]);
 
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
 
