@@ -15,6 +15,24 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   const leagueName = raw.leagueName || raw.league?.name || raw.competition?.name || 'Other';
   const leagueLogo = raw.leagueLogo || raw.league?.emblem || raw.competition?.emblem || null;
 
+  let isLive = display.isLive || false;
+  let isFinished = display.isFinished || false;
+  let status = raw.status;
+  let minute = display.minute;
+
+  // ★ ANTI-STUCK LOGIC: If a match is marked live but started over 3.5 hours ago, mark it as finished
+  if (isLive && raw.timestamp) {
+    const matchStartTime = raw.timestamp * 1000; // API timestamp is in seconds, convert to ms
+    const elapsed = now - matchStartTime;
+    const threeAndHalfHoursMs = 3.5 * 60 * 60 * 1000; 
+    
+    if (elapsed > threeAndHalfHoursMs) {
+      isLive = false;
+      isFinished = true;
+      status = 'FT';
+    }
+  }
+
   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
@@ -22,15 +40,15 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     dateStr: getLocalDateFromUtc(raw.date),
     timestamp: raw.timestamp,
     kickoff: time.kickoffLocal || 'TBD',
-    status: raw.status,
+    status: status,
     statusLong: raw.statusLong,
-    isLive: display.isLive || false,
-    isFinished: display.isFinished || false,
+    isLive: isLive,
+    isFinished: isFinished,
     isScheduled: display.isUpcoming || false,
     isHT: display.isHalfTime || false,
-    isStarted: display.isLive && !display.isHalfTime,
-    minute: display.minute,
-    displayMinute: display.minute,
+    isStarted: isLive && !display.isHalfTime,
+    minute: minute,
+    displayMinute: minute,
     
     // Flat properties (used by Fixtures.jsx)
     homeTeamId: raw.homeTeamId,
