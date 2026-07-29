@@ -32,6 +32,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // ★ FIX: Prevent PWA from intercepting sitemap and robots.txt
+        navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/],
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -61,7 +63,6 @@ export default defineConfig({
     })
   ],
   
-  // ★ FIX: Server proxy configuration
   server: {
     port: 5173,
     proxy: {
@@ -73,11 +74,10 @@ export default defineConfig({
     }
   },
   
-    build: {
+  build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {
       output: {
-        // ★ FIX: Rolldown (Vite v8) requires a function, not an object.
         manualChunks(id) {
           if (id.includes('node_modules')) {
             if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor';
@@ -88,4 +88,5 @@ export default defineConfig({
         }
       }
     }
-  }});
+  }
+});
