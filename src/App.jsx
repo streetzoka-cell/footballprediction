@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query"; // ★ NEW IMPORT
 
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
@@ -17,10 +18,9 @@ import ErrorBoundary from "./components/ErrorBoundary";
 
 import { initApp } from "./utils/init";
 import { initAnalytics } from "./utils/analytics";
-import { Download, X, RefreshCw, WifiOff, CheckCircle, Pin } from "lucide-react";
+import { Download, X, RefreshCw, WifiOff, CheckCircle } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
-// Pro Branded Loading Screen
 const PageLoader = () => (
   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: "24px" }}>
     <div style={{ width: 64, height: 64, borderRadius: 18, background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "nvLogoFloat 2s ease-in-out infinite" }}>
@@ -32,6 +32,7 @@ const PageLoader = () => (
 
 function AppShell() {
   const location = useLocation();
+  const queryClient = useQueryClient(); // ★ NEW: Get query client
   
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -65,6 +66,16 @@ function AppShell() {
     gtag('config', 'G-GZ2JTNKCCN');
     window.gtag = gtag;
     
+    // ★ NEW: Auto-refresh data when connection is restored
+    const handleOnline = () => {
+      console.log("Connection restored. Refetching live data...");
+      queryClient.invalidateQueries(['liveMatches']);
+      queryClient.invalidateQueries(['fixtures']);
+      queryClient.invalidateQueries(['homeMatches']);
+    };
+
+    window.addEventListener("online", handleOnline);
+
     let visibilityTimeout;
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
@@ -72,6 +83,8 @@ function AppShell() {
         visibilityTimeout = setTimeout(() => {
           initApp();
           window.dispatchEvent(new CustomEvent("app:refocused"));
+          // Also refetch on tab focus
+          queryClient.invalidateQueries(['liveMatches']);
         }, 1000);
       }
     };
@@ -81,10 +94,11 @@ function AppShell() {
 
     return () => {
       clearTimeout(visibilityTimeout);
+      window.removeEventListener("online", handleOnline);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", handleVisibilityChange);
     };
-  }, []);
+  }, [queryClient]);
 
   useEffect(() => {
     const staticLoader = document.getElementById('static-loader');
@@ -104,7 +118,6 @@ function AppShell() {
     }
   }, [location.pathname, location.search]);
 
-  // ★ NEW: PWA Install Prompt Logic
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -113,12 +126,11 @@ function AppShell() {
     };
     window.addEventListener("beforeinstallprompt", handler);
 
-    // ★ NEW: Show prompt every 10 minutes if not installed
     const interval = setInterval(() => {
       if (installPromptEvent) {
         setShowInstallBanner(true);
       }
-    }, 600000); // 10 minutes
+    }, 600000); 
 
     return () => {
       window.removeEventListener("beforeinstallprompt", handler);
@@ -137,18 +149,16 @@ function AppShell() {
   const handleCloseToast = () => {
     setNeedRefresh(false);
     setOfflineReady(false);
-    setShowInstallBanner(false); // ★ NEW: Close install banner too
+    setShowInstallBanner(false); 
   };
 
   const handleUpdateNow = () => {
     updateServiceWorker(true);
   };
 
-  // ★ NEW: Request Notification Permission on mount
   useEffect(() => {
     if (!('Notification' in window)) return;
     if (Notification.permission === 'default') {
-      // Ask after 5 seconds to not be intrusive
       setTimeout(() => Notification.requestPermission(), 5000);
     }
   }, []);
