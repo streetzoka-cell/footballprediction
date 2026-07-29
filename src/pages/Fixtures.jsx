@@ -1,3 +1,7 @@
+// ═════════════════════════════════════════════════════════════════════════════════
+// FILE: src/pages/Fixtures.jsx
+// ═════════════════════════════════════════════════════════════════════════════════
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -11,7 +15,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
-import { buildMatchRoute, buildLeagueRoute } from '../utils/routes';
+import { buildMatchRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
@@ -78,6 +82,19 @@ const TOP_TEAMS_LIST = [
 ];
 const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
 
+const MAJOR_LEAGUES = [
+  { id: '39', name: 'Premier League', emblem: 'https://media.api-sports.io/football/leagues/39.png' },
+  { id: '140', name: 'La Liga', emblem: 'https://media.api-sports.io/football/leagues/140.png' },
+  { id: '135', name: 'Serie A', emblem: 'https://media.api-sports.io/football/leagues/135.png' },
+  { id: '78', name: 'Bundesliga', emblem: 'https://media.api-sports.io/football/leagues/78.png' },
+  { id: '61', name: 'Ligue 1', emblem: 'https://media.api-sports.io/football/leagues/61.png' },
+  { id: '2', name: 'Champions League', emblem: 'https://media.api-sports.io/football/leagues/2.png' },
+  { id: '3', name: 'Europa League', emblem: 'https://media.api-sports.io/football/leagues/3.png' },
+  { id: '88', name: 'Eredivisie', emblem: 'https://media.api-sports.io/football/leagues/88.png' },
+  { id: '94', name: 'Primeira Liga', emblem: 'https://media.api-sports.io/football/leagues/94.png' },
+  { id: '71', name: 'Brasileirão', emblem: 'https://media.api-sports.io/football/leagues/71.png' },
+];
+
 const sortMatches = (a, b) => {
   if (a.isLive && !b.isLive) return -1;
   if (!a.isLive && b.isLive) return 1;
@@ -101,9 +118,32 @@ export default function Fixtures() {
   const queryClient = useQueryClient();
   const { toasts, add: addToast } = useToasts();
   
-  const { soundEnabled, favorites, pinnedLeagues, toggleSound, toggleFavorite, togglePinnedLeague } = usePreferencesStore();
+  // FIXED: Added default fallback arrays `= []` to prevent undefined.includes() errors
+  const { 
+    soundEnabled = false, 
+    favorites = [], 
+    pinnedMatches = [], 
+    toggleSound = () => {}, 
+    toggleFavorite = () => {}, 
+    togglePinMatch = () => {} 
+  } = usePreferencesStore();
+  
   const isFav = useCallback(id => favorites.includes(String(id)), [favorites]);
-  const isPinned = useCallback(name => pinnedLeagues.includes(name), [pinnedLeagues]);
+  const isPinned = useCallback(id => pinnedMatches.includes(String(id)), [pinnedMatches]);
+
+  // Fallback for pinnedLeagues if not in the global store
+  const [pinnedLeagues, setPinnedLeagues] = useState(() => {
+    try { return new Set(JSON.parse(localStorage.getItem("zoka_pinned_leagues") || '[]')); }
+    catch { return new Set(); }
+  });
+  const togglePinnedLeague = useCallback(leagueName => {
+    setPinnedLeagues(prev => {
+      const n = new Set(prev);
+      if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName);
+      try { localStorage.setItem("zoka_pinned_leagues", JSON.stringify([...n])); } catch {}
+      return n;
+    });
+  }, []);
 
   const [tab, setTab] = useState(searchParams.get('tab') || 'fixtures');
   const [compFilter, setCompFilter] = useState(searchParams.get('league') || 'ALL');
@@ -143,10 +183,16 @@ export default function Fixtures() {
         if (m.homeScore != null && prev.h != null && m.homeScore > prev.h) {
           if (Sound.on) Sound.goal();
           addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
+          if (Notification.permission === 'granted') {
+            new Notification('GOAL!', { body: `${m.homeName} scored! ${m.homeScore}–${m.awayScore}` });
+          }
         }
         if (m.awayScore != null && prev.a != null && m.awayScore > prev.a) {
           if (Sound.on) Sound.goal();
           addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
+          if (Notification.permission === 'granted') {
+            new Notification('GOAL!', { body: `${m.awayName} scored! ${m.homeScore}–${m.awayScore}` });
+          }
         }
       }
       prevScores.current.set(id, { h: m.homeScore, a: m.awayScore });
@@ -215,7 +261,7 @@ export default function Fixtures() {
     });
     map.forEach(g => g.matches.sort(sortMatches));
     return [...map.values()].sort((a, b) => {
-      const pA = pinnedLeagues.includes(a.name) ? 0 : 1; const pB = pinnedLeagues.includes(b.name) ? 0 : 1;
+      const pA = pinnedLeagues.has(a.name) ? 0 : 1; const pB = pinnedLeagues.has(b.name) ? 0 : 1;
       if (pA !== pB) return pA - pB;
       const lA = leaguePriorityMap[a.name] ?? 99; const lB = leaguePriorityMap[b.name] ?? 99;
       if (lA !== lB) return lA - lB;
@@ -229,16 +275,6 @@ export default function Fixtures() {
 
   const toggleLeagueExpand = useCallback((leagueName) => { setExpandedLeagues(prev => { const n = new Set(prev); if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName); return n; }); }, []);
 
-  const availableLeagues = useMemo(() => {
-    const map = new Map();
-    allFixtures.forEach(m => {
-      if (!map.has(m.leagueId)) {
-        map.set(m.leagueId, { id: m.leagueId, name: m.leagueName, emblem: m.leagueLogo });
-      }
-    });
-    return Array.from(map.values()).sort((a,b) => (a.name || '').localeCompare(b.name || ''));
-  }, [allFixtures]);
-
   const liveCount = useMemo(() => allFixtures.filter(m => m.isLive).length, [allFixtures]);
   const favMatches = useMemo(() => displayFixtures.filter(m => favorites.includes(String(m.id))), [displayFixtures, favorites]);
   const visibleLiveMatches = ui.showAllLiveMatches ? liveMatches : liveMatches.slice(0, 5);
@@ -249,27 +285,13 @@ export default function Fixtures() {
     queryClient.invalidateQueries(['liveMatches']);
   }, [queryClient, selectedDate]);
 
-  const currentLeagueEmblem = useMemo(() => { if (compFilter === 'ALL') return null; return displayFixtures.find(m => m.leagueName === compFilter)?.leagueLogo || null; }, [compFilter, displayFixtures]);
-
   useEffect(() => {
-    if ((tab === 'standings' || tab === 'teams') && !selectedLeagueId && availableLeagues.length > 0) {
-      const pl = availableLeagues.find(l => l.name === 'Premier League');
-      setSelectedLeagueId(pl ? pl.id : availableLeagues[0].id);
+    if ((tab === 'standings' || tab === 'teams') && !selectedLeagueId) {
+      setSelectedLeagueId('39');
     }
-  }, [tab, selectedLeagueId, availableLeagues]);
+  }, [tab, selectedLeagueId]);
 
   const standingsTable = standingsData?.standings?.[0] || [];
-
-  if (fixturesError && allFixtures.length === 0) {
-    return (
-      <div className="zoka-page">
-        <SEO title="Football Fixtures" />
-        <div className="zoka-wrap" style={{ paddingTop: '20px' }}>
-          <ErrorState error={fixturesError} onRetry={handleRefresh} />
-        </div>
-      </div>
-    );
-  }
 
   const handleReactNow = useCallback((match) => {
     navigate('/studio/reactor', { state: { fixtureId: match.id, homeTeam: match.homeName, awayTeam: match.awayName, homeLogo: match.homeLogo, awayLogo: match.awayLogo, score: { home: match.homeScore, away: match.awayScore }, minute: match.displayMinute, competition: match.leagueName } });
@@ -311,6 +333,11 @@ export default function Fixtures() {
             {isSched && <span className="zoka-status time-s">{m.kickoff}</span>}
           </div>
           <div className="zoka-card-actions">
+            {isLive && (
+              <button className={`zoka-icon-btn pin ${isPinned(m.id) ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
+                <Pin size={16} fill={isPinned(m.id) ? '#10b981' : 'none'} color={isPinned(m.id) ? '#10b981' : '#475569'} />
+              </button>
+            )}
             <button className={`zoka-icon-btn fav ${isFav(m.id) ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
               <Star size={16} fill={isFav(m.id) ? '#fbbf24' : 'none'} color={isFav(m.id) ? '#fbbf24' : '#475569'} />
             </button>
@@ -345,7 +372,7 @@ export default function Fixtures() {
             <span>{m.leagueName}</span>
           </div>
         </Link>
-        <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'flex-end' }}>
+        <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
             <Camera size={12} /> React
           </button>
@@ -355,8 +382,8 @@ export default function Fixtures() {
   };
 
   const renderLeagueSection = (group) => {
-    const isPinned = pinnedLeagues.includes(group.name);
-    const limit = group.isTop || isPinned ? 5 : 1;
+    const isLeaguePinned = pinnedLeagues.has(group.name);
+    const limit = group.isTop || isLeaguePinned ? 5 : 1;
     const isExpanded = expandedLeagues.has(group.name);
     const visibleMatches = isExpanded ? group.matches : group.matches.slice(0, limit);
     const hiddenCount = group.matches.length - limit;
@@ -367,7 +394,7 @@ export default function Fixtures() {
           {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" style={{objectFit:'contain', borderRadius: '3px'}} />}
           <span className="zoka-league-name">{group.name}</span>
           <span className="zoka-league-count">{group.matches.length}</span>
-          <button className="zoka-icon-btn" style={{ opacity: isPinned ? 1 : 0.5, color: isPinned ? '#10b981' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isPinned ? '#10b981' : 'none'} /></button>
+          <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? '#10b981' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isLeaguePinned ? '#10b981' : 'none'} /></button>
         </div>
         {visibleMatches.map((m, i) => renderMatchCard(m, i))}
         {hiddenCount > 0 && (
@@ -379,6 +406,17 @@ export default function Fixtures() {
       </div>
     );
   };
+
+  if (fixturesError && allFixtures.length === 0) {
+    return (
+      <div className="zoka-page">
+        <SEO title="Football Fixtures" />
+        <div className="zoka-wrap" style={{ paddingTop: '20px' }}>
+          <ErrorState error={fixturesError} onRetry={handleRefresh} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
@@ -414,7 +452,7 @@ export default function Fixtures() {
         <div className="zoka-datenav">
           <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
           <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
- <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
+          <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
           <div className="zoka-more-wrap" ref={moreRef}>
             <button className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}><Calendar size={16} /> More <ChevronDown size={16} /></button>
             {ui.moreDatesOpen && (
@@ -507,7 +545,6 @@ export default function Fixtures() {
 
                 {(ui.leagueFilterOpen || compFilter !== 'ALL') && otherLeagues.map(group => renderLeagueSection(group))}
 
-                {/* SEO Links Restored */}
                 <div className="zoka-seo-links">
                   <h3>Today's Match Links</h3>
                   {displayFixtures.slice(0, 50).map(m => {
@@ -522,7 +559,7 @@ export default function Fixtures() {
 
                 <div className="zoka-seo-links" style={{ marginTop: '20px' }}>
                   <h3>Explore Leagues</h3>
-                  {availableLeagues.map(c => (
+                  {MAJOR_LEAGUES.map(c => (
                     <Link key={c.id || c.name} to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link">
                       {c.name}
                     </Link>
@@ -547,7 +584,7 @@ export default function Fixtures() {
         {tab === 'standings' && (
           <>
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
-              {availableLeagues.slice(0, 8).map(l => (
+              {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
                   {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                   {l.name}
@@ -588,7 +625,7 @@ export default function Fixtures() {
         {tab === 'teams' && (
           <>
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
-              {availableLeagues.slice(0, 8).map(l => (
+              {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
                   {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
                   {l.name}

@@ -2,13 +2,15 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
-  Clock, Target, ChevronRight, ChevronDown
+  Clock, Target, ChevronRight, ChevronDown, Pin
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useLiveMatches } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/constants';
 import { todayStr } from '../utils/dates';
+
+import { usePreferencesStore } from '../store/usePreferencesStore';
 
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
@@ -141,6 +143,29 @@ const TickerItem = React.memo(({ m }) => {
   );
 });
 
+// ★ NEW: Floating Pinned Matches Widget
+const PinnedMatchesWidget = React.memo(({ pinnedMatches, allLive }) => {
+  const pinned = allLive.filter(m => pinnedMatches.includes(String(m.id)));
+  if (pinned.length === 0) return null;
+
+  return (
+    <div style={{ position: 'fixed', top: 110, right: 20, zIndex: 999, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 12, padding: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', maxWidth: '300px' }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#10b981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+        <Pin size={12} /> PINNED LIVE
+      </div>
+      {pinned.map(m => (
+        <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 0', borderBottom: '1px solid rgba(255,255,255,0.05)', textDecoration: 'none', color: '#fff' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: '2px' }}>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{m.homeName} {m.homeScore ?? 0}</span>
+            <span style={{ fontSize: '0.7rem', fontWeight: 600 }}>{m.awayName} {m.awayScore ?? 0}</span>
+          </div>
+          <span style={{ fontSize: '0.6rem', color: '#ef4444', fontWeight: 700 }}>{m.displayMinute ? `${m.displayMinute}'` : 'LIVE'}</span>
+        </Link>
+      ))}
+    </div>
+  );
+});
+
 const NotifItem = React.memo(({ n }) => {
   if (n.type === 'admin') {
     return (
@@ -212,6 +237,9 @@ export default function Navbar() {
   const liveMatches = useMemo(() => rawLive || [], [rawLive]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
+  
+  // ★ NEW: Get pinnedMatches from store
+  const { pinnedMatches = [] } = usePreferencesStore();
 
   useEffect(() => {
     if (!uid) { setIsAdmin(false); return; }
@@ -408,6 +436,8 @@ export default function Navbar() {
     <>
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
         <ProHeader matches={liveMatches} liveMatches={liveMatches} />
+        {/* ★ NEW: Floating Pinned Matches Widget */}
+        <PinnedMatchesWidget pinnedMatches={pinnedMatches} allLive={liveMatches} />
       </div>
 
       <div style={{ position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden', display: 'flex', alignItems: 'center', background: 'linear-gradient(180deg, #000000 0%, #05070a 100%)', borderBottom: '1px solid rgba(16,185,129,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
