@@ -10,13 +10,9 @@ import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '.
 import { isLiveStatus, isFinishedStatus, SPORT, calcPoints } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 
-// ★ FIX: Correct import path for matchEngine
-import { normalizeMatch } from '../engine/matchEngine';
-
 import { db } from '../utils/firebase';
 import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 
-// ★ Centralized imports
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
 
@@ -70,7 +66,6 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
   if (!featured) return null;
 
   const m = featured.match;
-  // ★ FIX: Read flat fields directly
   const homeLogo = m.homeLogo || m.homeTeam?.logo;
   const awayLogo = m.awayLogo || m.awayTeam?.logo;
   const homeName = m.homeName || m.homeTeam?.name || 'TBD';
@@ -120,7 +115,6 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
 
 const TickerItem = React.memo(({ m }) => {
   const status = m.isLive ? 'live' : m.isFinished ? 'ft' : 'upcoming';
-  // ★ FIX: Read flat fields directly
   const homeName = m.homeName || m.homeTeam?.name || 'TBD';
   const awayName = m.awayName || m.awayTeam?.name || 'TBD';
   const matchLink = buildMatchRoute(m.id, homeName, awayName);
@@ -214,8 +208,8 @@ export default function Navbar() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  // ★ FIX: Use correct normalizeMatch import
-  const liveMatches = useMemo(() => rawLive.map(m => normalizeMatch(m, true, Date.now())).filter(Boolean), [rawLive]);
+  // ★ FIX: rawLive is ALREADY normalized by the useLiveMatches hook! Do not normalize it again.
+  const liveMatches = useMemo(() => rawLive || [], [rawLive]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
 
