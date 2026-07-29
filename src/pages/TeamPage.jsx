@@ -2,7 +2,8 @@ import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar } from 'lucide-react';
 import SEO from '../components/SEO';
 import { formatTime } from '../utils/dates';
-import { useFixtures, useLiveMatches, footballApi } from '../hooks/useFixtures';
+import { useFixtures, useLiveMatches } from '../hooks/useFixtures';
+import { footballApi } from '../services/footballApi'; // ★ FIXED IMPORT
 import { useQuery } from '@tanstack/react-query';
 import { buildMatchRoute } from '../utils/routes';
 import { todayStr, getLocalDateStr } from '../utils/dates';
