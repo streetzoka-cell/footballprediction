@@ -1,6 +1,7 @@
 // src/hooks/useFixtures.js
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { footballApi } from '../services/footballApi';
+import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
 export function useHomeMatches() {
@@ -11,9 +12,7 @@ export function useHomeMatches() {
       return res; 
     },
     refetchInterval: 60000, 
-    staleTime: 30 * 1000, 
-    gcTime: 1000 * 60 * 60 * 24, 
-    retry: 1, 
+    staleTime: 30000,
   });
 }
 
@@ -22,7 +21,7 @@ export function useFixtures(dateStr, sport = 'football') {
     queryKey: ['fixtures', dateStr, sport],
     queryFn: async () => {
       const res = await footballApi.getFixtures(dateStr, sport);
-      return res?.data || [];
+      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     placeholderData: keepPreviousData,
     staleTime: 60 * 1000,
@@ -31,7 +30,7 @@ export function useFixtures(dateStr, sport = 'football') {
     refetchInterval: (query) => {
       const date = query.queryKey[1];
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
-        return 60000; // 60 seconds
+        return 60000; 
       }
       return false; 
     }
@@ -43,7 +42,7 @@ export function useLiveMatches(sport = 'football') {
     queryKey: ['liveMatches', sport],
     queryFn: async () => {
       const res = await footballApi.getLive(sport);
-      return res?.data || [];
+      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     refetchInterval: 30000, 
     staleTime: 15 * 1000, 
@@ -57,7 +56,7 @@ export function useFinishedMatches(dateStr, sport = 'football') {
     queryKey: ['results', dateStr, sport],
     queryFn: async () => {
       const res = await footballApi.getFinished(sport, dateStr);
-      return res?.data || [];
+      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,

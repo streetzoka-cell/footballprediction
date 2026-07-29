@@ -2,74 +2,89 @@
 import { handleApiError } from '../utils/errorHandler';
 import { monitorApiCall } from '../utils/performanceMonitor';
 
-function request(path, options = {}) {
-  const controller = new AbortController();
-  const timeout = options.timeout || 15000; // 15s for Vercel cold starts
+// ★ YOUR PERMANENT BACKEND URL ★
+const TUNNEL_URL = "https://api.zokascore.xyz";
+const STATIC_BASE = `${TUNNEL_URL}/api/v1/data`;
+const API_BASE = `${TUNNEL_URL}/api/v1`;
 
+async function fetchJSON(url, options = {}) {
+  const controller = new AbortController();
+  const timeout = options.timeout || 15000;
   const timer = setTimeout(() => controller.abort(), timeout);
 
-  return fetch(`/api${path}`, {
-    method: options.method || "GET",
-    headers: {
-      Accept: "application/json",
-      ...options.headers,
-    },
-    signal: controller.signal,
-    body: options.body || null,
-  })
-    .then((res) => {
-      clearTimeout(timer);
-      if (!res.ok) {
-        const error = new Error(`API ${res.status}: ${res.statusText}`);
-        error.status = res.status;
-        throw error;
-      }
-      return res.json();
-    })
-    .catch((err) => {
-      clearTimeout(timer);
-      const parsed = handleApiError(err);
-      err.type = parsed.type;
-      err.friendlyMessage = parsed.message;
-      throw err;
+  try {
+    const res = await fetch(url, {
+      method: options.method || "GET",
+      headers: { Accept: "application/json", ...options.headers },
+      signal: controller.signal,
+      body: options.body || null,
     });
+    
+    if (!res.ok) {
+      if (res.status === 404) return { data: [] }; // Graceful 404 for missing dates
+      const error = new Error(`API ${res.status}: ${res.statusText}`);
+      error.status = res.status;
+      throw error;
+    }
+    return await res.json();
+  } catch (err) {
+    const parsed = handleApiError(err);
+    err.type = parsed.type;
+    err.friendlyMessage = parsed.message;
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export const footballApi = {
-  // Home view (aggregated live, featured, upcoming)
-  getHomeData: () => monitorApiCall('GET /v1/matches?view=home', () => request(`/v1/matches?view=home`)),
+  getHomeData: async () => monitorApiCall('GET /data/home', async () => {
+    const today = new Date().toISOString().split('T')[0];
+    const [liveRes, fixturesRes] = await Promise.all([
+      fetchJSON(`${STATIC_BASE}/live.json`),
+      fetchJSON(`${STATIC_BASE}/fixtures/${today}.json`)
+    ]);
+    
+    const live = liveRes?.data || [];
+    const matches = fixturesRes?.data || [];
+    const liveIds = new Set(live.map(m => m.id));
+    const upcoming = matches.filter(m => !liveIds.has(m.id) && m.display?.isUpcoming);
+    const featured = upcoming.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10);
+    
+    return { live, featured, upcoming };
+  }),
   
-  // Fixtures by date
-  getFixtures: (dateStr, sport = 'football') => monitorApiCall(`GET /fixtures?date=${dateStr}`, () => request(`/fixtures?date=${dateStr}`)),
+  getFixtures: (dateStr, sport = 'football') => monitorApiCall(`GET /data/fixtures/${dateStr}.json`, () => 
+    fetchJSON(`${STATIC_BASE}/fixtures/${dateStr}.json`)
+  ),
   
-  // Live matches (aggregated)
-  getLive: (sport = 'football') => monitorApiCall('GET /fixtures/live', () => request(`/fixtures/live`)),
+  getLive: (sport = 'football') => monitorApiCall('GET /data/live.json', () => 
+    fetchJSON(`${STATIC_BASE}/live.json`)
+  ),
   
-  // Finished results by date
-  getFinished: (sport = 'football', dateStr) => monitorApiCall(`GET /results?date=${dateStr}`, () => request(`/results?date=${dateStr}`)),
+  getFinished: (sport = 'football', dateStr) => monitorApiCall(`GET /data/results/${dateStr}.json`, () => 
+    fetchJSON(`${STATIC_BASE}/results/${dateStr}.json`)
+  ),
   
-  // Standings
-  getStandings: (leagueId) => monitorApiCall(`GET /standings?league=${leagueId}`, () => request(`/standings?league=${leagueId}`)),
+  getStandings: (leagueId) => monitorApiCall('GET /data/standings.json', async () => {
+    const res = await fetchJSON(`${STATIC_BASE}/standings.json`);
+    const leagueData = (res?.data || []).find(l => l.id === leagueId);
+    return { data: leagueData || null };
+  }),
   
-  // Top Scorers
-  getTopScorers: (leagueId) => monitorApiCall(`GET /top-scorers?league=${leagueId}`, () => request(`/top-scorers?league=${leagueId}`)),
+  getTeams: (leagueId) => monitorApiCall(`GET /teams?league=${leagueId}`, () => fetchJSON(`${API_BASE}/teams?league=${leagueId}`)),
+  getTeam: (id) => monitorApiCall(`GET /teams/${id}`, () => fetchJSON(`${API_BASE}/teams/${id}`)),
+  getPlayer: (id) => monitorApiCall(`GET /players/${id}`, () => fetchJSON(`${API_BASE}/players/${id}`)),
   
-  // Match Details
-  getMatchDetails: (id) => monitorApiCall(`GET /fixtures/${id}`, () => request(`/fixtures/${id}`)),
-  getLineups: (id) => monitorApiCall(`GET /fixtures/${id}/lineups`, () => request(`/fixtures/${id}/lineups`)),
-  getStatistics: (id) => monitorApiCall(`GET /fixtures/${id}/statistics`, () => request(`/fixtures/${id}/statistics`)),
-  getPredictions: (id) => monitorApiCall(`GET /fixtures/${id}/predictions`, () => request(`/fixtures/${id}/predictions`)),
-  getOdds: (id) => monitorApiCall(`GET /fixtures/${id}/odds`, () => request(`/fixtures/${id}/odds`)),
-  getH2H: (team1Id, team2Id) => monitorApiCall(`GET /h2h?team1=${team1Id}&team2=${team2Id}`, () => request(`/h2h?team1=${team1Id}&team2=${team2Id}`)),
+  getMatchDetails: (id) => monitorApiCall(`GET /match/${id}`, () => fetchJSON(`${API_BASE}/match/${id}`)),
+  getLineups: (id) => monitorApiCall(`GET /match/${id}/lineups`, () => fetchJSON(`${API_BASE}/match/${id}/lineups`)),
+  getStatistics: (id) => monitorApiCall(`GET /match/${id}/statistics`, () => fetchJSON(`${API_BASE}/match/${id}/statistics`)),
+  getPredictions: (id) => monitorApiCall(`GET /match/${id}/predictions`, () => fetchJSON(`${API_BASE}/match/${id}/predictions`)),
+  getOdds: (id) => monitorApiCall(`GET /match/${id}/odds`, () => fetchJSON(`${API_BASE}/match/${id}/odds`)),
+  getH2H: (team1Id, team2Id) => monitorApiCall(`GET /match/h2h?team1=${team1Id}&team2=${team2Id}`, () => 
+    fetchJSON(`${API_BASE}/match/h2h?team1=${team1Id}&team2=${team2Id}`)
+  ),
   
-  // Teams & Players
-  getTeams: (leagueId) => monitorApiCall(`GET /teams?league=${leagueId}`, () => request(`/teams?league=${leagueId}`)),
-  getTeam: (id) => monitorApiCall(`GET /teams/${id}`, () => request(`/teams/${id}`)),
-  getPlayer: (id) => monitorApiCall(`GET /players/${id}`, () => request(`/players/${id}`)),
-  
-  // Videos
-  getVideos: () => monitorApiCall('GET /videos', () => request(`/videos`)),
-  
-  // Health
-  getHealth: () => request(`/health`),
+  getVideos: () => monitorApiCall('GET /data/videos.json', () => fetchJSON(`${STATIC_BASE}/videos.json`)),
+  getHealth: () => fetchJSON(`${API_BASE}/health`),
 };
