@@ -12,6 +12,9 @@ const env = {
   API_FOOTBALL_BASE_URL: process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io',
   API_FOOTBALL_DAILY_BUDGET: parseInt(process.env.API_FOOTBALL_DAILY_BUDGET || '100', 10),
   
+  // Football-Data.org (For Standings and Teams)
+  FOOTBALL_DATA_API_KEY: process.env.FOOTBALL_DATA_API_KEY,
+  
   // TheSportsDB
   SPORTSDB_API_KEY: process.env.SPORTSDB_API_KEY || '3',
   SPORTSDB_BASE_URL: process.env.SPORTSDB_BASE_URL || 'https://www.thesportsdb.com/api/v1/json',
