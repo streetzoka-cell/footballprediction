@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
-import { useFixtures, useLiveMatches } from '../../hooks/useFixtures'; // ★ Added useLiveMatches
+import { useFixtures, useLiveMatches } from '../../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { db } from '../../utils/firebase';
 import { todayStr, getLocalDateStr } from '../../utils/dates';
@@ -16,7 +16,6 @@ import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, r
 import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
 
 // ★ Centralized imports
-import { normalizeMatch } from "../../engine/matchEngine";
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import SEO from '../../components/SEO';
 
@@ -60,7 +59,7 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState(null);
   const [rebuilding, setRebuilding] = useState(null);
 
-  // ★ EXACTLY SAME AS FIXTURES PAGE
+  // Data is already normalized by the hook!
   const { data: rawFixtures = [], isLoading: fxLoading } = useFixtures(date);
   const { data: rawLive = [] } = useLiveMatches();
 
@@ -76,7 +75,8 @@ export default function AdminPage() {
         map.set(String(m.id), m);
       }
     });
-    return Array.from(map.values()).map(m => normalizeMatch(m, true));
+    // ★ FIX: Removed .map(m => normalizeMatch(m, true)) to prevent double normalization
+    return Array.from(map.values());
   }, [rawFixtures, rawLive, date]);
 
   const showToast = useCallback((message, type = 'ok') => setToast({ message, type }), []);
