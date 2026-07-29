@@ -1,9 +1,10 @@
-// backend-v1/src/server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
+const metricsTracker = require('./middleware/metricsTracker'); // ★ NEW IMPORT
+const { addLog } = require('./utils/logStore'); // ★ NEW IMPORT FOR TERMINAL
 
 // Routes
 const healthRoute = require('./routes/v1/health');
@@ -21,9 +22,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// Simple request logger
+// ★ ATTACH METRICS TRACKER BEFORE ROUTES (Counts requests & errors)
+app.use(metricsTracker);
+
+// Simple request logger & Terminal Log Feeder
 app.use((req, res, next) => {
-  logger.info(`[Gateway] ${req.method} ${req.originalUrl}`);
+  const logMsg = `[Gateway] ${req.method} ${req.originalUrl}`;
+  logger.info(logMsg);
+  addLog(logMsg); // ★ Pushes to the terminal stream
   next();
 });
 

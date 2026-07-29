@@ -29,33 +29,6 @@ export const extractDate = m => extractMatchDate(m);
 
 export const sortByImportance = (a, b) => (b.matchScore || 0) - (a.matchScore || 0);
 
-export function normalizeMatch(raw, isPrimary = true) {
-  if (!raw) return null;
-  const id = String(raw.id || raw.matchId);
-  const status = raw.status || '';
-  const homeTeam = raw.homeTeam || { name: raw.homeTeamName, shortName: raw.homeTeamName, crest: raw.homeTeamLogo || raw.homeLogo };
-  const awayTeam = raw.awayTeam || { name: raw.awayTeamName, shortName: raw.awayTeamName, crest: raw.awayTeamLogo || raw.awayLogo };
-  const league = raw.league || raw.competition || { name: raw.leagueName, emblem: raw.leagueLogo };
-  const live = isLiveStatus(status, SPORT.FOOTBALL) || !!raw.isLive;
-  const finished = isFinishedStatus(status, SPORT.FOOTBALL) || !!raw.isFinished;
-  const homeScore = raw.homeScore != null ? raw.homeScore : (raw.score?.fullTime?.home ?? raw.score?.halfTime?.home ?? null);
-  const awayScore = raw.awayScore != null ? raw.awayScore : (raw.score?.fullTime?.away ?? raw.score?.halfTime?.away ?? null);
-  let timestamp = 0;
-  const rawDate = raw.utcDate || raw.date;
-  if (rawDate) { try { timestamp = parseDateAsUTC(rawDate).getTime(); } catch (e) {} }
-  return {
-    id, status, isLive: live, isFinished: finished,
-    homeTeam: { name: homeTeam.name || 'TBD', shortName: homeTeam.shortName || homeTeam.name || 'TBD', crest: homeTeam.crest },
-    awayTeam: { name: awayTeam.name || 'TBD', shortName: awayTeam.shortName || awayTeam.name || 'TBD', crest: awayTeam.crest },
-    homeScore, awayScore,
-    league: { name: league.name || 'Other', emblem: league.emblem || league.logo },
-    competition: league,
-    utcDate: raw.utcDate || raw.date || raw.kickoff,
-    timestamp, minute: raw.minute || raw.elapsed || null,
-    matchScore: raw.matchScore || 0, category: raw.category || 'NORMAL',
-  };
-}
-
 export const ST_MAP = {
   SCHEDULED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
   TIMED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
