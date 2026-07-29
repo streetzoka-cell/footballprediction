@@ -2,7 +2,7 @@
 // FILE: src/pages/Fixtures.jsx
 // ═════════════════════════════════════════════════════════════════════════════════
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
@@ -10,7 +10,7 @@ import {
   RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, Flame, Loader, Camera
 } from 'lucide-react';
 
-import { useFixtures, useLiveMatches, useStandings, useTeams } from '../hooks/useFixtures';
+import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
@@ -44,7 +44,7 @@ function useToasts() {
   return { toasts, add };
 }
 
-const ToastContainer = React.memo(({ toasts }) => {
+const ToastContainer = memo(({ toasts }) => {
   if (!toasts.length) return null;
   return (
     <div className="zoka-toast-wrap">
@@ -108,17 +108,102 @@ const sortMatches = (a, b) => {
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
 
+// ★ OPTIMIZATION: Extracted MatchCard into a memoized component to fix the "hang" (performance issue)
+const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite, handleReactNow }) => {
+  const isLive = m.isLive; 
+  const isHT = m.isHT; 
+  const isFt = m.isFinished; 
+  const isStarted = m.isStarted;
+  const isSched = !isLive && !isHT && !isFt && !isStarted;
+  
+  let cls = 'zoka-card';
+  if (isLive) cls += ' live'; 
+  else if (isStarted) cls += ' started';
+  else if (isFt) cls += ' finished'; 
+  else if (isSched) cls += ' scheduled';
+  
+  const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? '#10b981' : 'transparent';
+  const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
+
+  return (
+    <div className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}>
+      {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
+      <div className="zoka-card-top">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {m.category === 'FEATURED' && isSched && (
+            <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
+          )}
+          {isLive && !isHT && (
+            <span className="zoka-status live-s">
+              <span className="zoka-dot" style={{ background: '#ef4444' }} /> 
+              {m.displayMinute != null ? `${m.displayMinute}'` : 'LIVE'}
+            </span>
+          )}
+          {isHT && <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>}
+          {isStarted && !isLive && !isHT && <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>}
+          {isFt && <span className="zoka-status ft-s">FT</span>}
+          {isSched && <span className="zoka-status time-s">{m.kickoff}</span>}
+        </div>
+        <div className="zoka-card-actions">
+          {isLive && (
+            <button className={`zoka-icon-btn pin ${isPinned ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
+              <Pin size={16} fill={isPinned ? '#10b981' : 'none'} color={isPinned ? '#10b981' : '#475569'} />
+            </button>
+          )}
+          <button className={`zoka-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
+            <Star size={16} fill={isFav ? '#fbbf24' : 'none'} color={isFav ? '#fbbf24' : '#475569'} />
+          </button>
+        </div>
+      </div>
+      <Link to={matchLink} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+        <div className="zoka-teams">
+          <div className="zoka-team-col home">
+            <div className="zoka-team-row">
+              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={m.homeName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              <span className="zoka-team-name">{m.homeName}</span>
+            </div>
+          </div>
+          <div className="zoka-score-box">
+            {(isLive || isHT || isFt) ? (
+              <div className="zoka-scores">
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
+                <span className="zoka-sep">–</span>
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.awayScore != null ? m.awayScore : '--'}</span>
+              </div>
+            ) : <span className="zoka-vs">{isStarted ? '--' : 'VS'}</span>}
+          </div>
+          <div className="zoka-team-col away">
+            <div className="zoka-team-row">
+              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={m.awayName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              <span className="zoka-team-name">{m.awayName}</span>
+            </div>
+          </div>
+        </div>
+        <div className="zoka-comp-row">
+          {m.leagueLogo && <img src={m.leagueLogo} alt={m.leagueName} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} />}
+          <span>{m.leagueName}</span>
+        </div>
+      </Link>
+      <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
+          <Camera size={12} /> React
+        </button>
+      </div>
+    </div>
+  );
+});
+
 export default function Fixtures() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
-  const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
-  const { data: rawLive = [] } = useLiveMatches();
+  
+  // ★ FIX: useFixtures now merges live and results internally!
+  const { data: allFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const queryClient = useQueryClient();
   const { toasts, add: addToast } = useToasts();
   
-  // FIXED: Added default fallback arrays `= []` to prevent undefined.includes() errors
   const { 
     soundEnabled = false, 
     favorites = [], 
@@ -131,7 +216,6 @@ export default function Fixtures() {
   const isFav = useCallback(id => favorites.includes(String(id)), [favorites]);
   const isPinned = useCallback(id => pinnedMatches.includes(String(id)), [pinnedMatches]);
 
-  // Fallback for pinnedLeagues if not in the global store
   const [pinnedLeagues, setPinnedLeagues] = useState(() => {
     try { return new Set(JSON.parse(localStorage.getItem("zoka_pinned_leagues") || '[]')); }
     catch { return new Set(); }
@@ -158,18 +242,6 @@ export default function Fixtures() {
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
-
-  const allFixtures = useMemo(() => {
-    const map = new Map();
-    rawFixtures.forEach(m => { if (m) map.set(String(m.id), m); });
-    rawLive.forEach(m => {
-      if (!m) return;
-      const existing = map.get(String(m.id));
-      if (existing) map.set(String(m.id), { ...existing, ...m });
-      else if (m.dateStr === selectedDate) map.set(String(m.id), m);
-    });
-    return Array.from(map.values());
-  }, [rawFixtures, rawLive, selectedDate]);
 
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
 
@@ -282,7 +354,6 @@ export default function Fixtures() {
 
   const handleRefresh = useCallback(async () => { 
     queryClient.invalidateQueries(['fixtures', selectedDate]);
-    queryClient.invalidateQueries(['liveMatches']);
   }, [queryClient, selectedDate]);
 
   useEffect(() => {
@@ -296,90 +367,6 @@ export default function Fixtures() {
   const handleReactNow = useCallback((match) => {
     navigate('/studio/reactor', { state: { fixtureId: match.id, homeTeam: match.homeName, awayTeam: match.awayName, homeLogo: match.homeLogo, awayLogo: match.awayLogo, score: { home: match.homeScore, away: match.awayScore }, minute: match.displayMinute, competition: match.leagueName } });
   }, [navigate]);
-
-  const renderMatchCard = (m, i) => {
-    const isLive = m.isLive; 
-    const isHT = m.isHT; 
-    const isFt = m.isFinished; 
-    const isStarted = m.isStarted;
-    const isSched = !isLive && !isHT && !isFt && !isStarted;
-    
-    let cls = 'zoka-card';
-    if (isLive) cls += ' live'; 
-    else if (isStarted) cls += ' started';
-    else if (isFt) cls += ' finished'; 
-    else if (isSched) cls += ' scheduled';
-    
-    const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? '#10b981' : 'transparent';
-    const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
-
-    return (
-      <div key={`${m.id}-${i}`} className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}>
-        {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
-        <div className="zoka-card-top">
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            {m.category === 'FEATURED' && isSched && (
-              <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
-            )}
-            {isLive && !isHT && (
-              <span className="zoka-status live-s">
-                <span className="zoka-dot" style={{ background: '#ef4444' }} /> 
-                {m.displayMinute != null ? `${m.displayMinute}'` : 'LIVE'}
-              </span>
-            )}
-            {isHT && <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>}
-            {isStarted && !isLive && !isHT && <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>}
-            {isFt && <span className="zoka-status ft-s">FT</span>}
-            {isSched && <span className="zoka-status time-s">{m.kickoff}</span>}
-          </div>
-          <div className="zoka-card-actions">
-            {isLive && (
-              <button className={`zoka-icon-btn pin ${isPinned(m.id) ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
-                <Pin size={16} fill={isPinned(m.id) ? '#10b981' : 'none'} color={isPinned(m.id) ? '#10b981' : '#475569'} />
-              </button>
-            )}
-            <button className={`zoka-icon-btn fav ${isFav(m.id) ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
-              <Star size={16} fill={isFav(m.id) ? '#fbbf24' : 'none'} color={isFav(m.id) ? '#fbbf24' : '#475569'} />
-            </button>
-          </div>
-        </div>
-        <Link to={matchLink} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
-          <div className="zoka-teams">
-            <div className="zoka-team-col home">
-              <div className="zoka-team-row">
-                {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={m.homeName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
-                <span className="zoka-team-name">{m.homeName}</span>
-              </div>
-            </div>
-            <div className="zoka-score-box">
-              {(isLive || isHT || isFt) ? (
-                <div className="zoka-scores">
-                  <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
-                  <span className="zoka-sep">–</span>
-                  <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.awayScore != null ? m.awayScore : '--'}</span>
-                </div>
-              ) : <span className="zoka-vs">{isStarted ? '--' : 'VS'}</span>}
-            </div>
-            <div className="zoka-team-col away">
-              <div className="zoka-team-row">
-                {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={m.awayName} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
-                <span className="zoka-team-name">{m.awayName}</span>
-              </div>
-            </div>
-          </div>
-          <div className="zoka-comp-row">
-            {m.leagueLogo && <img src={m.leagueLogo} alt={m.leagueName} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} />}
-            <span>{m.leagueName}</span>
-          </div>
-        </Link>
-        <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
-            <Camera size={12} /> React
-          </button>
-        </div>
-      </div>
-    );
-  };
 
   const renderLeagueSection = (group) => {
     const isLeaguePinned = pinnedLeagues.has(group.name);
@@ -396,7 +383,18 @@ export default function Fixtures() {
           <span className="zoka-league-count">{group.matches.length}</span>
           <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? '#10b981' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isLeaguePinned ? '#10b981' : 'none'} /></button>
         </div>
-        {visibleMatches.map((m, i) => renderMatchCard(m, i))}
+        {visibleMatches.map((m, i) => (
+          <MatchCard 
+            key={`${m.id}-${i}`} 
+            m={m} 
+            i={i} 
+            isFav={isFav(m.id)} 
+            isPinned={isPinned(m.id)} 
+            togglePinMatch={togglePinMatch} 
+            toggleFavorite={toggleFavorite} 
+            handleReactNow={handleReactNow} 
+          />
+        ))}
         {hiddenCount > 0 && (
           <button className="zoka-show-more" onClick={() => toggleLeagueExpand(group.name)}>
             {isExpanded ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -458,7 +456,7 @@ export default function Fixtures() {
             {ui.moreDatesOpen && (
               <div className="zoka-more-dropdown">
                 <div className="zoka-more-label">Past Dates</div>
-                {dates.past.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>))}
+                {dates.past.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>)) }
                 <div className="zoka-more-label" style={{ marginTop: '8px' }}>Future Dates</div>
                 {dates.future.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>))}
               </div>
@@ -496,7 +494,9 @@ export default function Fixtures() {
                   <Flame size={18} style={{ color: '#fbbf24' }} />
                   <span className="zoka-league-name">Top Matches</span>
                 </div>
-                {visibleTopMatches.map((m, i) => renderMatchCard(m, i))}
+                {visibleTopMatches.map((m, i) => (
+                  <MatchCard key={`top-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
+                ))}
                 {hiddenTopCount > 0 && (
                   <button className="zoka-show-more" onClick={() => toggleUI('showAllTopMatches')}>
                     {ui.showAllTopMatches ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -512,7 +512,9 @@ export default function Fixtures() {
                   <TrendingUp size={18} style={{ color: '#ef4444' }} />
                   <span className="zoka-league-name">Live Matches</span>
                 </div>
-                {visibleLiveMatches.map((m, i) => renderMatchCard(m, i))}
+                {visibleLiveMatches.map((m, i) => (
+                  <MatchCard key={`live-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
+                ))}
                 {hiddenLiveCount > 0 && (
                   <button className="zoka-show-more" onClick={() => toggleUI('showAllLiveMatches')}>
                     {ui.showAllLiveMatches ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
@@ -531,7 +533,9 @@ export default function Fixtures() {
                 {favMatches.length > 0 && (
                   <div className="zoka-section">
                     <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
-                    {favMatches.map((m, i) => renderMatchCard(m, i))}
+                    {favMatches.map((m, i) => (
+                      <MatchCard key={`fav-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
+                    ))}
                   </div>
                 )}
 
@@ -574,7 +578,9 @@ export default function Fixtures() {
           <div className="zoka-section">
             <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
             {favMatches.length > 0 ? (
-              favMatches.map((m, i) => renderMatchCard(m, i))
+              favMatches.map((m, i) => (
+                <MatchCard key={`favtab-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
+              ))
             ) : (
               <EmptyState icon={Star} title="No favourite matches for this date." hint="Tap the star icon on any match to add it here." />
             )}

@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera } from 'lucide-react';
 import SEO from '../components/SEO';
-import { useFixtures, useLiveMatches, useStandings } from '../hooks/useFixtures';
+import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { useState, useEffect, useRef, useMemo } from 'react';
@@ -9,16 +9,16 @@ import { useState, useEffect, useRef, useMemo } from 'react';
 export default function MatchDetails() {
   const { matchId } = useParams();
   
-  // Fetch all background data (0 extra API calls, uses React Query cache)
+  // ★ FIX: useFixtures now merges live and finished matches internally!
   const { data: todayFx = [] } = useFixtures(todayStr());
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
-  const { data: liveMatches = [] } = useLiveMatches();
 
   const match = useMemo(() => {
-    const all = [...todayFx, ...yestFx, ...tomFx, ...liveMatches];
+    // Check today, then tomorrow, then yesterday
+    const all = [...todayFx, ...tomFx, ...yestFx];
     return all.find(m => String(m.id) === String(matchId));
-  }, [todayFx, yestFx, tomFx, liveMatches, matchId]);
+  }, [todayFx, yestFx, tomFx, matchId]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
@@ -29,13 +29,15 @@ export default function MatchDetails() {
   const prevScore = useRef({ home: match?.homeScore, away: match?.awayScore });
 
   useEffect(() => {
-    if (match) {
+    if (match && match.homeScore != null && match.awayScore != null) {
       if (match.homeScore !== prevScore.current.home || match.awayScore !== prevScore.current.away) {
         setGoalFlash(true);
         const timer = setTimeout(() => setGoalFlash(false), 2000);
         prevScore.current = { home: match.homeScore, away: match.awayScore };
         return () => clearTimeout(timer);
       }
+    } else if (match) {
+      prevScore.current = { home: match.homeScore, away: match.awayScore };
     }
   }, [match]);
 
@@ -47,7 +49,7 @@ export default function MatchDetails() {
     );
   }
 
-  // ★ FIX: Use flat properties mapped by the passthrough matchEngine
+  // Destructure flat properties mapped by the passthrough matchEngine
   const { homeName, awayName, homeLogo, awayLogo, leagueName, leagueLogo, date, leagueId, category, kickoff, status, isLive, isFinished, isHT, isStarted, minute, displayMinute, homeScore, awayScore } = match;
   
   const matchLink = buildMatchRoute(match.id, homeName, awayName);
