@@ -10,7 +10,6 @@ import Breadcrumbs from "./components/Breadcrumbs";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 
-// ★ Updated imports: Using centralized SEO and seoBuilder
 import SEO from "./components/SEO";
 import { organizationSchema, websiteSchema } from "./utils/schema";
 
@@ -18,7 +17,7 @@ import ErrorBoundary from "./components/ErrorBoundary";
 
 import { initApp } from "./utils/init";
 import { initAnalytics } from "./utils/analytics";
-import { Download, X, RefreshCw, WifiOff, CheckCircle } from "lucide-react";
+import { Download, X, RefreshCw, WifiOff, CheckCircle, Pin } from "lucide-react";
 import { useRegisterSW } from "virtual:pwa-register/react";
 
 // Pro Branded Loading Screen
@@ -105,6 +104,7 @@ function AppShell() {
     }
   }, [location.pathname, location.search]);
 
+  // ★ NEW: PWA Install Prompt Logic
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
@@ -112,8 +112,19 @@ function AppShell() {
       setShowInstallBanner(true);
     };
     window.addEventListener("beforeinstallprompt", handler);
-    return () => window.removeEventListener("beforeinstallprompt", handler);
-  }, []);
+
+    // ★ NEW: Show prompt every 10 minutes if not installed
+    const interval = setInterval(() => {
+      if (installPromptEvent) {
+        setShowInstallBanner(true);
+      }
+    }, 600000); // 10 minutes
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handler);
+      clearInterval(interval);
+    };
+  }, [installPromptEvent]);
 
   const handleInstallClick = async () => {
     if (!installPromptEvent) return;
@@ -126,15 +137,24 @@ function AppShell() {
   const handleCloseToast = () => {
     setNeedRefresh(false);
     setOfflineReady(false);
+    setShowInstallBanner(false); // ★ NEW: Close install banner too
   };
 
   const handleUpdateNow = () => {
     updateServiceWorker(true);
   };
 
+  // ★ NEW: Request Notification Permission on mount
+  useEffect(() => {
+    if (!('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      // Ask after 5 seconds to not be intrusive
+      setTimeout(() => Notification.requestPermission(), 5000);
+    }
+  }, []);
+
   return (
     <>
-      {/* ★ Updated: Using centralized SEO component */}
       <SEO 
         title="ZOKASCORE | Live Football Scores, Predictions & AI Intelligence" 
         description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." 
@@ -154,7 +174,7 @@ function AppShell() {
             <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>Add to home screen for quick access</div>
           </div>
           <button onClick={handleInstallClick} style={installBtnStyle}>Install</button>
-          <button onClick={() => setShowInstallBanner(false)} style={closeBtnStyle}><X size={16} /></button>
+          <button onClick={handleCloseToast} style={closeBtnStyle}><X size={16} /></button>
         </div>
       )}
 
