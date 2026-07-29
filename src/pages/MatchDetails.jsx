@@ -1,30 +1,39 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera } from 'lucide-react';
+import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera, Clock } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
+import { applySmartMinute } from '../engine/matchEngine'; 
 import { useState, useEffect, useRef, useMemo } from 'react';
+
+function useNow(interval = 10000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return now;
+}
 
 export default function MatchDetails() {
   const { matchId } = useParams();
+  const now = useNow(10000);
   
-  // ★ FIX: useFixtures now merges live and finished matches internally!
   const { data: todayFx = [] } = useFixtures(todayStr());
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
 
   const match = useMemo(() => {
-    // Check today, then tomorrow, then yesterday
     const all = [...todayFx, ...tomFx, ...yestFx];
-    return all.find(m => String(m.id) === String(matchId));
-  }, [todayFx, yestFx, tomFx, matchId]);
+    const found = all.find(m => String(m.id) === String(matchId));
+    return found ? applySmartMinute(found, now) : null;
+  }, [todayFx, yestFx, tomFx, matchId, now]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
   const standingsTable = standingsData?.standings?.[0] || [];
 
-  // Goal Flash Animation
   const [goalFlash, setGoalFlash] = useState(false);
   const prevScore = useRef({ home: match?.homeScore, away: match?.awayScore });
 
@@ -41,6 +50,21 @@ export default function MatchDetails() {
     }
   }, [match]);
 
+  if (match?.isHidden) {
+    return (
+      <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', gap: '12px', padding: '24px' }}>
+        <Clock size={32} style={{ color: '#fbbf24' }} />
+        <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Match Temporarily Unavailable</h2>
+        <p style={{ color: '#94a3b8', textAlign: 'center', maxWidth: '400px' }}>
+          We are waiting for the final confirmation from the data provider for this match. It will reappear automatically once verified.
+        </p>
+        <Link to="/fixtures" style={{ marginTop: '20px', display: 'inline-flex', alignItems: 'center', gap: 6, color: '#10b981', textDecoration: 'none', fontSize: '.85rem', background: '#0a0d14', padding: '8px 14px', borderRadius: 8, border: '1px solid #151b26' }}>
+          <ArrowLeft size={14} /> Back to Fixtures
+        </Link>
+      </div>
+    );
+  }
+
   if (!match) {
     return (
       <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
@@ -49,11 +73,48 @@ export default function MatchDetails() {
     );
   }
 
-  // Destructure flat properties mapped by the passthrough matchEngine
   const { homeName, awayName, homeLogo, awayLogo, leagueName, leagueLogo, date, leagueId, category, kickoff, status, isLive, isFinished, isHT, isStarted, minute, displayMinute, homeScore, awayScore } = match;
   
   const matchLink = buildMatchRoute(match.id, homeName, awayName);
   const timelineProgress = isFinished ? 100 : isHT ? 50 : displayMinute ? Math.min((displayMinute / 90) * 100, 100) : 0;
+  
+  // ★ NEW: Check for special statuses
+  const matchStatus = (status || '').toUpperCase();
+  const isPostponed = matchStatus === 'PST' || matchStatus === 'POSTP';
+  const isCanceled = matchStatus === 'CANC' || matchStatus === 'ABD';
+  const isSuspended = matchStatus === 'SUSP' || matchStatus === 'INT';
+  const isSpecialStatus = isPostponed || isCanceled || isSuspended;
+
+  // ★ NEW: Determine status label and color
+  let statusLabel = kickoff;
+  let statusColor = 'var(--text-muted)';
+  let statusWeight = 600;
+  
+  if (isLive && !isHT) {
+    statusLabel = `LIVE ${displayMinute || minute || 0}'`;
+    statusColor = '#ef4444';
+    statusWeight = 700;
+  } else if (isHT) {
+    statusLabel = 'HALF TIME';
+    statusColor = '#fbbf24';
+    statusWeight = 700;
+  } else if (isFinished) {
+    statusLabel = 'FULL TIME';
+    statusColor = '#10b981';
+    statusWeight = 700;
+  } else if (isPostponed) {
+    statusLabel = 'POSTPONED';
+    statusColor = '#fbbf24';
+    statusWeight = 800;
+  } else if (isCanceled) {
+    statusLabel = 'CANCELED';
+    statusColor = '#ef4444';
+    statusWeight = 800;
+  } else if (isSuspended) {
+    statusLabel = 'SUSPENDED';
+    statusColor = '#fbbf24';
+    statusWeight = 800;
+  }
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: '#fff' }} className="zoka-page">
@@ -84,15 +145,13 @@ export default function MatchDetails() {
               <div style={{ fontSize: '2.5rem', fontWeight: 900, color: isLive ? '#ef4444' : isFinished ? '#10b981' : '#fff' }}>
                 {(isLive || isHT || isFinished) ? `${homeScore ?? '-'} - ${awayScore ?? '-'}` : 'VS'}
               </div>
-              {isLive && !isHT && (
-                <div style={{ fontSize: '0.8rem', color: '#ef4444', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center' }}>
-                  <span style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span> 
-                  LIVE {displayMinute || minute || 0}'
-                </div>
-              )}
-              {isHT && <div style={{ fontSize: '0.8rem', color: '#fbbf24', fontWeight: 700 }}>HALF TIME</div>}
-              {isFinished && <div style={{ fontSize: '0.8rem', color: '#10b981', fontWeight: 700 }}>FULL TIME</div>}
-              {!isLive && !isFinished && <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', fontWeight: 600 }}>{kickoff}</div>}
+              {/* ★ UPDATED: Use dynamic status label */}
+              <div style={{ fontSize: '0.8rem', color: statusColor, fontWeight: statusWeight, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center', textTransform: isSpecialStatus ? 'uppercase' : 'none' }}>
+                {isLive && !isHT && !isSpecialStatus && (
+                  <span style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span>
+                )}
+                {statusLabel}
+              </div>
             </div>
 
             <Link to={buildTeamRoute(match.awayTeamId, awayName)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textDecoration: 'none', color: '#fff' }}>
@@ -101,8 +160,8 @@ export default function MatchDetails() {
             </Link>
           </div>
 
-          {/* Live Timeline Progress Bar */}
-          {(isLive || isFinished) && (
+          {/* Live Timeline Progress Bar - ★ FIX: Only show if live or finished (not postponed) */}
+          {(isLive || isFinished) && !isSpecialStatus && (
             <div style={{ marginTop: 24, position: 'relative' }}>
               <div style={{ height: 4, background: '#151b26', borderRadius: 2, overflow: 'hidden' }}>
                 <div style={{ height: '100%', width: `${timelineProgress}%`, background: isLive ? '#ef4444' : '#10b981', transition: 'width 1s ease' }} />
@@ -121,12 +180,14 @@ export default function MatchDetails() {
           {date && <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar size={14} /> {new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {formatTime(date)}</span>}
         </div>
 
-        {/* React Now Button (Studio) */}
-        <div style={{ marginTop: 20, textAlign: 'center' }}>
-          <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName, homeLogo, awayLogo, score: { home: homeScore, away: awayScore }, minute: displayMinute || minute }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', padding: '10px 20px', borderRadius: 12, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>
-            <Camera size={16} /> React Now
-          </Link>
-        </div>
+        {/* React Now Button (Studio) - ★ FIX: Hide if postponed/canceled */}
+        {!isSpecialStatus && (
+          <div style={{ marginTop: 20, textAlign: 'center' }}>
+            <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName, homeLogo, awayLogo, score: { home: homeScore, away: awayScore }, minute: displayMinute || minute }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', padding: '10px 20px', borderRadius: 12, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>
+              <Camera size={16} /> React Now
+            </Link>
+          </div>
+        )}
 
         {/* Standings Mini */}
         {standingsTable.length > 0 && (

@@ -1,87 +1,137 @@
-import React, { useState, memo } from 'react';
+import React, { memo } from 'react';
 import { Link } from 'react-router-dom';
+import { Star, Pin, Camera, Clock } from 'lucide-react';
 import { buildMatchRoute } from '../utils/routes';
 
-const TeamBadge = memo(({ logo, name }) => {
-  const initials = (name || '?').split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 3);
+const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite, handleReactNow }) => {
+  if (!m) return null;
+  
+  const isLive = m.isLive; 
+  const isHT = m.isHT; 
+  const isFt = m.isFinished; 
+  const isStarted = m.isStarted;
+  const isSched = !isLive && !isHT && !isFt && !isStarted;
+  
+  let cls = 'zoka-card';
+  if (isLive) cls += ' live'; 
+  else if (isStarted) cls += ' started';
+  else if (isFt) cls += ' finished'; 
+  else if (isSched) cls += ' scheduled';
+  
+  const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? '#10b981' : 'transparent';
+  const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
+  const display = m.display || {};
+  const minute = m.displayMinute || display.minute;
+
+    // ★ Clean, professional status badge logic
+  let statusBadge = null;
+  const matchStatus = (m.status || display.status || '').toUpperCase();
+  
+  if (isFt) {
+    // Finished matches show FT, AET, or Pen. No live minutes shown.
+    if (matchStatus === 'PEN') {
+      statusBadge = <span className="zoka-status ft-s">Pen</span>;
+    } else if (matchStatus === 'AET' || minute >= 120) {
+      statusBadge = <span className="zoka-status ft-s">AET</span>;
+    } else {
+      statusBadge = <span className="zoka-status ft-s">FT</span>;
+    }
+  } else if (matchStatus === 'PST' || matchStatus === 'POSTP') {
+    // ★ FIX: Show Postponed badge
+    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>PST</span>;
+  } else if (matchStatus === 'CANC' || matchStatus === 'ABD') {
+    // ★ FIX: Show Canceled/Abandoned badge
+    statusBadge = <span className="zoka-status" style={{ color: '#ef4444', background: 'rgba(239,68,68,.12)' }}>CANC</span>;
+  } else if (matchStatus === 'SUSP' || matchStatus === 'INT') {
+    // ★ FIX: Show Suspended/Interrupted badge
+    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>SUSP</span>;
+  } else if (isHT) {
+    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>;
+  } else if (isLive) {
+    // Live matches show ET, PEN, or the current minute
+    if (matchStatus === 'ET') {
+      statusBadge = (
+        <span className="zoka-status live-s">
+          <span className="zoka-dot" style={{ background: '#ef4444' }} /> ET {minute != null ? `${minute}'` : ''}
+        </span>
+      );
+    } else if (matchStatus === 'P') {
+      statusBadge = (
+        <span className="zoka-status live-s">
+          <span className="zoka-dot" style={{ background: '#ef4444' }} /> PEN
+        </span>
+      );
+    } else {
+      statusBadge = (
+        <span className="zoka-status live-s">
+          <span className="zoka-dot" style={{ background: '#ef4444' }} /> 
+          {minute != null ? `${minute}'` : 'LIVE'}
+        </span>
+      );
+    }
+  } else if (isStarted) {
+    statusBadge = <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>;
+  } else if (isSched) {
+    statusBadge = <span className="zoka-status time-s">{m.kickoff}</span>;
+  }
+
   return (
-    <div className="mc-team-badge" style={{ background: '#1a1f2b' }}>
-      {logo ? <img src={logo} alt="" loading="lazy" /> : <span className="abbr">{initials}</span>}
+    <div className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16 }}>
+      {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
+      <div className="zoka-card-top">
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {m.category === 'FEATURED' && isSched && (
+            <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
+          )}
+          {statusBadge}
+        </div>
+        <div className="zoka-card-actions">
+          {isLive && (
+            <button className={`zoka-icon-btn pin ${isPinned ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
+              <Pin size={16} fill={isPinned ? '#10b981' : 'none'} color={isPinned ? '#10b981' : '#475569'} />
+            </button>
+          )}
+          <button className={`zoka-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
+            <Star size={16} fill={isFav ? '#fbbf24' : 'none'} color={isFav ? '#fbbf24' : '#475569'} />
+          </button>
+        </div>
+      </div>
+      <Link to={matchLink} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+        <div className="zoka-teams">
+          <div className="zoka-team-col home">
+            <div className="zoka-team-row">
+              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt="" width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              <span className="zoka-team-name">{m.homeName}</span>
+            </div>
+          </div>
+          <div className="zoka-score-box">
+            {(isLive || isHT || isFt) ? (
+              <div className="zoka-scores">
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
+                <span className="zoka-sep">–</span>
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''}`}>{m.awayScore != null ? m.awayScore : '--'}</span>
+              </div>
+            ) : <span className="zoka-vs">{isStarted ? '--' : 'VS'}</span>}
+          </div>
+          <div className="zoka-team-col away">
+            <div className="zoka-team-row">
+              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt="" width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              <span className="zoka-team-name">{m.awayName}</span>
+            </div>
+          </div>
+        </div>
+        <div className="zoka-comp-row">
+          {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" style={{objectFit:'contain'}} />}
+          <span>{m.leagueName}</span>
+        </div>
+      </Link>
+      <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
+          <Camera size={12} /> React
+        </button>
+      </div>
     </div>
   );
 });
 
-const MatchCardBase = ({ match, showProb = true, goalFlash = false, kickOff = false, onClick, index = 0 }) => {
-  const [hovered, setHovered] = useState(false);
-
-  if (!match) return null;
-
-  // ★ Read pre-calculated fields directly from the backend payload
-  const { id, homeName, awayName, homeLogo, awayLogo, leagueName, leagueLogo, leagueCountry, display, time, homeWinProb, drawProb, awayWinProb, homeOdds, drawOdds, awayOdds } = match;
-  
-  // Fallbacks for safety
-  const isLive = match.isLive || display?.isLive || false;
-  const isFinished = match.isFinished || display?.isFinished || false;
-  const isScheduled = match.isScheduled || display?.isUpcoming || false;
-  const isHT = match.isHT || display?.isHalfTime || false;
-  
-  const displayMinute = match.displayMinute || display?.minute || 0;
-  const timeStr = match.kickoff || time?.kickoffLocal || 'TBD';
-  const dateStr = match.dateStr || time?.weekday || '';
-  
-  const statusLabel = isFinished ? 'FT' : isScheduled ? '' : (display?.status || match.status || '');
-  const statusCls = isLive ? 'live' : isFinished ? 'finished' : 'upcoming';
-  const borderClass = kickOff ? 'mc-ko-glow' : isLive ? 'mc-live-border' : '';
-
-  const handleClick = (e) => { if (onClick) { e.preventDefault(); onClick(match); } };
-
-  return (
-    <Link 
-      to={buildMatchRoute(id, homeName, awayName)} 
-      className={`mc-card mc-interactive ${borderClass} ${goalFlash ? 'mc-goal-flash' : ''}`}
-      onClick={handleClick}
-      style={{ animationDelay: `${index * 40}ms`, textDecoration: 'none', color: 'inherit' }}
-    >
-      {isLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, transparent, #ef4444, transparent)', opacity: .5, zIndex: 1 }} />}
-
-      <div className="mc-header">
-        <div className="mc-league">
-          {leagueLogo && <img className="mc-league-logo" src={leagueLogo} alt="" />}
-          {!leagueLogo && <span className="mc-league-dot" style={{ background: '#10b981' }} />}
-          <span>{leagueName}</span>
-          {leagueCountry && <span style={{ opacity: .5 }}>· {leagueCountry}</span>}
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-          {statusLabel && (
-            <span className={`mc-status-badge ${statusCls}`}>
-              {isLive && <span className="mc-live-dot" />}
-              {statusLabel}
-            </span>
-          )}
-          {isLive && displayMinute != null && <span className="mc-minute">{displayMinute}&apos;</span>}
-          {!isLive && !isFinished && <span style={{ fontSize: '.68rem', color: '#64748B', fontWeight: 500 }}>{dateStr} · {timeStr}</span>}
-        </div>
-      </div>
-
-      <div className="mc-body">
-        <div className="mc-team">
-          <TeamBadge logo={homeLogo} name={homeName} />
-          <span className="mc-team-name">{homeName}</span>
-        </div>
-        
-        <div className="mc-score-area" style={{ minWidth: '70px', textAlign: 'center' }}>
-          <div style={{ fontWeight: 800, fontSize: '1rem', color: isLive ? '#ef4444' : '#f8fafc' }}>
-            {isLive || isFinished ? `${match.homeScore ?? '-'} - ${match.awayScore ?? '-'}` : 'VS'}
-          </div>
-        </div>
-
-        <div className="mc-team away">
-          <TeamBadge logo={awayLogo} name={awayName} />
-          <span className="mc-team-name">{awayName}</span>
-        </div>
-      </div>
-    </Link>
-  );
-};
-
-export default memo(MatchCardBase);
+export default MatchCard;

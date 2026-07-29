@@ -1,3 +1,4 @@
+// backend-v1/src/config/env.js
 require('dotenv').config();
 
 const env = {
@@ -7,12 +8,13 @@ const env = {
   
   DATA_PROVIDER: process.env.DATA_PROVIDER || 'api-football',
   
-  // API-Football
+  // API-Football (Supports 2 keys for 200 daily calls)
   API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY,
+  API_FOOTBALL_KEY_2: process.env.API_FOOTBALL_KEY_2, // ★ NEW
   API_FOOTBALL_BASE_URL: process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io',
-  API_FOOTBALL_DAILY_BUDGET: parseInt(process.env.API_FOOTBALL_DAILY_BUDGET || '100', 10),
+  API_FOOTBALL_DAILY_BUDGET: parseInt(process.env.API_FOOTBALL_DAILY_BUDGET || '100', 10), // Per key
   
-  // Football-Data.org (For Standings and Teams)
+  // Football-Data.org
   FOOTBALL_DATA_API_KEY: process.env.FOOTBALL_DATA_API_KEY,
   
   // TheSportsDB

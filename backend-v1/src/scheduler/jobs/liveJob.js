@@ -1,137 +1,61 @@
 // backend-v1/src/scheduler/jobs/liveJob.js
 const liveService = require('../../services/LiveMatchService');
 const fixtureService = require('../../services/FixtureService');
-const apiFootball = require('../../providers/ApiFootballAdapter');
-const { API, LIVE_POLLING } = require('../../config/constants');
+const QuotaManager = require('../../services/QuotaManager');
 const logger = require('../../utils/logger');
 
-let prevLiveCount = 0;
-let liveRequestsToday = 0;
+let prevLiveIds = new Set();
 
 async function execute() {
   try {
-    const remaining = apiFootball.getRemaining();
-    const isNearFinish = false; // Can be expanded later to check match minutes
-    
-    // 1. Check Hard Limits
-    if (remaining <= 0) {
-      logger.warn(`[LiveJob] Budget EXHAUSTED (0/${API.DAILY_BUDGET}). Pausing.`);
-      return LIVE_POLLING.IDLE_INTERVAL_MS;
+    // 1. Check Quota before making any API calls
+    if (!QuotaManager.canPollLive()) {
+      logger.warn('[LiveJob] Live polling blocked. Daily live budget exhausted.');
+      return 5 * 60 * 1000; // Check again in 5 mins
     }
 
-    if (remaining < LIVE_POLLING.MIN_BUDGET_TO_POLL) {
-      logger.warn(`[LiveJob] Budget CRITICAL (${remaining}/${API.DAILY_BUDGET}). Skipping poll.`);
-      return LIVE_POLLING.IDLE_INTERVAL_MS;
-    }
-
-    if (liveRequestsToday >= LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP) {
-      logger.warn(`[LiveJob] Daily Live Cap reached (${liveRequestsToday}/${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP}). Skipping.`);
-      return LIVE_POLLING.IDLE_INTERVAL_MS;
-    }
-
-    // 2. Execute Live Poll
     const result = await liveService.syncLiveMatches();
-    const currentLiveCount = result.count;
     
     if (!result.skipped) {
-      liveRequestsToday++;
+      QuotaManager.recordLiveCall();
     }
 
-    // 3. Determine Next Interval (Adaptive Tiers)
-    let desired;
-    let liveTier;
+    const currentLiveCount = result.count;
+    const currentLiveIds = new Set(result.liveMatches.map(m => String(m.id)));
 
+    // ★ NEW: Smart FT Detection
+    // If matches disappeared from the live list, they likely finished.
+    // Trigger an immediate FT sync to get their final scores without waiting 2 hours.
+    if (prevLiveIds.size > 0 && currentLiveIds.size < prevLiveIds.size) {
+        const finishedIds = [...prevLiveIds].filter(id => !currentLiveIds.has(id));
+        if (finishedIds.length > 0 && QuotaManager.canFetchFT()) {
+            logger.info(`[LiveJob] ${finishedIds.length} match(es) left the live list. Triggering immediate FT sync...`);
+            await fixtureService.syncFinishedFixtures();
+        }
+    }
+    prevLiveIds = currentLiveIds;
+
+    // 2. Determine Next Interval based on live match count
+    let intervalMs;
     if (currentLiveCount === 0) {
-      liveTier = "IDLE";
-      desired = LIVE_POLLING.IDLE_INTERVAL_MS;
+      intervalMs = 5 * 60 * 1000;   // 5 mins (check for kickoffs)
     } else if (currentLiveCount <= 5) {
-      liveTier = "LIVE_LOW";
-      desired = LIVE_POLLING.LOW_LIVE_INTERVAL_MS;
+      intervalMs = 15 * 60 * 1000;  // 1-5 matches: 15 mins
     } else if (currentLiveCount <= 15) {
-      liveTier = "LIVE_MED";
-      desired = LIVE_POLLING.MEDIUM_LIVE_INTERVAL_MS;
-    } else if (currentLiveCount <= 40) {
-      liveTier = "LIVE_HIGH";
-      desired = LIVE_POLLING.HIGH_LIVE_INTERVAL_MS;
+      intervalMs = 13 * 60 * 1000;  // 6-15 matches: 13 mins
+    } else if (currentLiveCount <= 30) {
+      intervalMs = 8 * 60 * 1000;   // 16-30 matches: 8 mins
     } else {
-      liveTier = "LIVE_MASS";
-      desired = LIVE_POLLING.MASSIVE_LIVE_INTERVAL_MS;
+      intervalMs = 5 * 60 * 1000;   // 31+ matches: 5 mins
     }
 
-    // 4. Smart Pacing Calculation (The Genius Math)
-    const now = new Date();
-    const endOfDay = new Date(now);
-    endOfDay.setUTCHours(24, 0, 0, 0);
-    const msUntilMidnight = Math.max(0, endOfDay - now);
-    const hoursUntilMidnight = msUntilMidnight / 3600000;
-
-    const spendableBudget = Math.max(0, remaining - LIVE_POLLING.RESERVE_FOR_DAILY_CRON);
-    const capRemaining = Math.max(0, LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP - liveRequestsToday);
-    const spendableCalls = Math.min(spendableBudget, capRemaining);
-
-    let expectedWindowHours;
-    if (hoursUntilMidnight < 1.5) {
-      expectedWindowHours = hoursUntilMidnight;
-    } else if (currentLiveCount > 0) {
-      expectedWindowHours = Math.min(hoursUntilMidnight, 4);
-    } else {
-      expectedWindowHours = 1;
-    }
-
-    const expectedWindowMs = Math.max(0.5, expectedWindowHours) * 3600000;
-
-    let pacingFloor = 0;
-    let isPacing = false;
-
-    if (spendableCalls <= 0) {
-      pacingFloor = LIVE_POLLING.IDLE_INTERVAL_MS;
-    } else {
-      const expectedPollsAtDesired = expectedWindowMs / desired;
-      if (spendableCalls < expectedPollsAtDesired) {
-        pacingFloor = expectedWindowMs / spendableCalls;
-        const maxAllowedFloor = 3600000 / LIVE_POLLING.MIN_POLLS_PER_LIVE_HOUR;
-        pacingFloor = Math.min(pacingFloor, maxAllowedFloor);
-        if (pacingFloor > desired) isPacing = true;
-      }
-    }
-
-    let interval;
-    if (spendableCalls <= 0 && currentLiveCount > 0) {
-      interval = LIVE_POLLING.IDLE_INTERVAL_MS;
-    } else {
-      interval = Math.max(desired, pacingFloor);
-    }
-    if (currentLiveCount === 0) interval = LIVE_POLLING.IDLE_INTERVAL_MS;
-    
-    interval = Math.min(interval, LIVE_POLLING.IDLE_INTERVAL_MS);
-
-    let mode = liveTier;
-    if (spendableCalls <= 0) mode = "BUDGET_LOCKED";
-    else if (isPacing) mode = `PACING+${liveTier}`;
-
-    // 5. FT Recovery Check
-    if (prevLiveCount > 0 && currentLiveCount === 0 && !result.skipped) {
-      logger.info(`[LiveJob] Live session ended. Triggering immediate FT confirmation in ${LIVE_POLLING.FT_CONFIRMATION_DELAY_MS / 1000}s...`);
-      await new Promise(resolve => setTimeout(resolve, LIVE_POLLING.FT_CONFIRMATION_DELAY_MS));
-      await fixtureService.syncTodayFixtures();
-      await fixtureService.syncYesterdayResults();
-      logger.info(`[LiveJob] Immediate FT confirmation completed.`);
-    }
-
-    prevLiveCount = currentLiveCount;
-
-    const logRemaining = remaining !== null ? remaining : API.DAILY_BUDGET;
-    logger.info(
-      `[LiveJob] [${mode}] Next poll in ${(interval / 60000).toFixed(1)}m ` +
-      `[Live: ${liveRequestsToday}/${LIVE_POLLING.FOOTBALL_DAILY_LIVE_CAP} cap, API: ${logRemaining}/${API.DAILY_BUDGET}, ` +
-      `LiveMatches: ${currentLiveCount}, Spendable: ${spendableCalls}, TimeLeft: ${hoursUntilMidnight.toFixed(1)}h]`
-    );
-
-    return interval;
+    const stats = QuotaManager.getStats();
+    logger.info(`[LiveJob] Next poll in ${intervalMs / 60000}m [Live: ${currentLiveCount} matches, LiveBudget: ${stats.liveRemaining} left, FTBudget: ${stats.ftRemaining} left]`);
+    return intervalMs;
 
   } catch (err) {
     logger.error(`[LiveJob] Error: ${err.message}`);
-    return LIVE_POLLING.ERROR_BACKOFF_MS;
+    return 5 * 60 * 1000; // 5 mins fallback on error
   }
 }
 

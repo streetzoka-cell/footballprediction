@@ -1,10 +1,10 @@
 // backend-v1/src/services/StandingsService.js
-const ProviderManager = require('../providers/ProviderManager');
-const standingsRepo = require('../repositories/StandingsRepository');
-const { publishJSON } = require('./StaticFilePublisher');
+const ApiFootballAdapter = require('../providers/ApiFootballAdapter');
+const FootballDataAdapter = require('../providers/FootballDataAdapter');
+const QuotaManager = require('./QuotaManager');
+const StaticFilePublisher = require('./StaticFilePublisher');
 const logger = require('../utils/logger');
 
-// ★ FIX: Use API-Football numeric IDs and correct season
 const LEAGUES_TO_SYNC = [
   { id: 39, name: 'Premier League', season: 2024 },
   { id: 140, name: 'La Liga', season: 2024 },
@@ -22,19 +22,37 @@ async function syncStandings() {
 
   for (const league of LEAGUES_TO_SYNC) {
     try {
-      // ProviderManager now returns the league object directly
-      const data = await ProviderManager.getStandings(league.id, league.season);
-      if (data) {
-        await standingsRepo.upsert(league.id, data);
-        allStandings.push(data);
+      let standings = null;
+
+      // 1. Try FootballData first (Free, no quota cost)
+      try {
+        standings = await FootballDataAdapter.getStandings(league.id, league.season);
+      } catch (fdErr) {
+        logger.warn(`[StandingsService] FootballData failed for ${league.name}: ${fdErr.message}`);
+      }
+
+      // 2. If FootballData fails, fallback to API-Football (Max 3 calls/day)
+      if (!standings && QuotaManager.canUseFallback()) {
+        logger.info(`[StandingsService] Falling back to API-Football for ${league.name}.`);
+        standings = await ApiFootballAdapter.getStandings(league.id, league.season);
+        if (standings) QuotaManager.recordFallbackCall();
+      } else if (!standings && !QuotaManager.canUseFallback()) {
+        logger.warn(`[StandingsService] Skipping ${league.name} - Fallback budget exhausted (3/3 used).`);
+      }
+
+      if (standings) {
+        allStandings.push(standings);
         ok++;
+      } else {
+        fail++;
       }
     } catch (err) {
+      logger.error(`[StandingsService] Error processing ${league.name}: ${err.message}`);
       fail++;
     }
   }
 
-  await publishJSON('standings.json', { data: allStandings, count: allStandings.length });
+  await StaticFilePublisher.publishJSON('standings.json', { data: allStandings, count: allStandings.length });
   logger.info(`[StandingsService] ✓ Standings: ${ok} ok, ${fail} fail`);
   return { ok, fail };
 }

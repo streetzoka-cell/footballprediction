@@ -38,6 +38,12 @@ export function useFixtures(dateStr, sport = 'football') {
       // 3. Overwrite with live matches (has live scores)
       live.forEach(m => {
         const existing = map.get(String(m.id));
+        
+        // ★ FIX: If existing is FT and incoming live is NOT FT, it means the live data is stale. Don't overwrite.
+        if (existing && existing.display?.isFinished && !m.display?.isFinished) {
+          return;
+        }
+        
         if (existing) map.set(String(m.id), { ...existing, ...m });
         else if (m.dateStr === dateStr) map.set(String(m.id), m);
       });

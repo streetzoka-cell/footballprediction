@@ -17,9 +17,20 @@ import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
+import { applySmartMinute } from '../engine/matchEngine'; // ★ NEW IMPORT
 
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const APP_LOGO = '/icons/icon-192.png';
+
+// ★ NEW: Ticking clock hook
+function useNow(interval = 10000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return now;
+}
 
 function timeAgo(ts) {
   if (!ts) return '';
@@ -214,6 +225,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const uid = currentUser?.uid;
   const isLoggedIn = !!uid;
+  const now = useNow(10000); // ★ NEW: Tick every 10s
 
   const { data: rawLive = [] } = useLiveMatches();
   const { data: activePreds = [] } = useActivePredictions(todayStr());
@@ -222,7 +234,7 @@ export default function Navbar() {
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [infoOpen, setInfoOpen] = useState(false);
-  const [moreOpen, setMoreOpen] = useState(false); // ★ NEW: Desktop More dropdown
+  const [moreOpen, setMoreOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -233,7 +245,8 @@ export default function Navbar() {
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'staff';
   const [adminNotifs, setAdminNotifs] = useState([]);
 
-  const liveMatches = useMemo(() => rawLive || [], [rawLive]);
+  // ★ FIX: Apply smart minute and filter hidden matches
+  const liveMatches = useMemo(() => rawLive.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawLive, now]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
   
@@ -257,7 +270,7 @@ export default function Navbar() {
   const searchRef = useRef(null);
   const notifRef = useRef(null);
   const mobNotifRef = useRef(null);
-  const moreRef = useRef(null); // ★ NEW: Ref for More dropdown
+  const moreRef = useRef(null);
   const rafRef = useRef(false);
 
   const isHome = location.pathname === '/';
@@ -364,7 +377,7 @@ export default function Navbar() {
       if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setMoreOpen(false); }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
-      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false); // ★ NEW
+      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
     };
     document.addEventListener('keydown', fn);
     document.addEventListener('mousedown', fn);
@@ -514,7 +527,7 @@ export default function Navbar() {
                 );
               })}
 
-              {/* ★ NEW: More Dropdown for Company/Legal Links */}
+              {/* More Dropdown for Company/Legal Links */}
               <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setMoreOpen(p => !p)} className={`nv-nav-link ${moreOpen ? 'active' : ''}`} style={{ gap: 4 }}>
                   <MoreHorizontal size={16} strokeWidth={2.5} /> More

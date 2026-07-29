@@ -33,13 +33,15 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  return {
+   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
     date: raw.date,
+    utcDate: raw.utcDate || raw.date, // ★ FIX: Preserve ISO string
     dateStr: getLocalDateFromUtc(raw.date),
     timestamp: raw.timestamp,
     kickoff: time.kickoffLocal || 'TBD',
+    kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date, // ★ FIX: Preserve ISO string
     status: status,
     statusLong: raw.statusLong,
     isLive: isLive,
@@ -50,7 +52,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     minute: minute,
     displayMinute: minute,
     lastUpdated: raw.dataQuality?.lastUpdated || null,
-    isHidden: false, // ★ NEW: Initialize isHidden
+    isHidden: false, // Initialize isHidden
     
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
@@ -80,17 +82,30 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ NEW: Smart Minute Calculator & Dropper
+// Smart Minute Calculator & Dropper
+// Smart Minute Calculator & Dropper
 export function applySmartMinute(m, now = Date.now()) {
   if (!m || m.isFinished) return m;
+
+  // ★ FIX: If the match is Postponed (PST), Suspended (SUSP), Interrupted (INT), or Canceled (CANC), 
+  // respect the backend status and DO NOT force it live based on kickoff time.
+  const statusUpper = (m.status || '').toUpperCase();
+  const isInactive = statusUpper === 'PST' || statusUpper === 'SUSP' || statusUpper === 'INT' || statusUpper === 'CANC' || statusUpper === 'ABD' || statusUpper === 'POSTP';
+  if (isInactive) {
+    return m; 
+  }
 
   const matchStartTime = m.timestamp ? m.timestamp * 1000 : null;
   if (!matchStartTime) return m;
 
-  const elapsedSinceKickoffMins = Math.max(0, Math.floor((now - matchStartTime) / 60000));
+  const elapsedMs = now - matchStartTime;
+  
+  // If the match hasn't started yet (kickoff is in the future), do not force it live.
+  if (elapsedMs < 0 && !m.isLive && !m.isHT) {
+    return m;
+  }
 
-  // If the match hasn't started yet according to kickoff time, don't force live status
-  if (elapsedSinceKickoffMins < 0 && !m.isLive && !m.isHT) return m;
+  const elapsedSinceKickoffMins = Math.floor(elapsedMs / 60000);
 
   let smartMinute = m.minute || 0;
   let status = m.status;
@@ -99,43 +114,32 @@ export function applySmartMinute(m, now = Date.now()) {
   let isFinished = m.isFinished;
   let isHidden = m.isHidden || false;
 
-  // If the backend already says it's Extra Time or Penalties, we trust it and don't force FT
   const isExtendedTime = status === 'ET' || status === 'P' || status === 'BREAK' || status === 'BT';
 
   if (!isExtendedTime) {
-    if (elapsedSinceKickoffMins >= 118) {
-      // 98 mins (90+8) + 20 mins grace period passed. Backend hasn't marked as FT. Drop it.
-      isHidden = true;
-      return { ...m, isHidden };
-    }
-
     if (elapsedSinceKickoffMins >= 98) {
-      // Force FT after 90+8
+      // Force FT after 98 minutes. 
       smartMinute = 90;
       status = 'FT';
       isLive = false;
       isHT = false;
       isFinished = true;
     } else if (elapsedSinceKickoffMins > 90) {
-      // Waiting for FT (added time)
       smartMinute = 90;
       status = '2H';
       isLive = true;
       isHT = false;
     } else if (elapsedSinceKickoffMins > 60) {
-      // 2nd Half (45 mins play + 15 mins HT = 60)
       smartMinute = 45 + (elapsedSinceKickoffMins - 60);
       status = '2H';
       isLive = true;
       isHT = false;
     } else if (elapsedSinceKickoffMins > 45) {
-      // Half Time (15 mins)
       smartMinute = 45;
       status = 'HT';
       isHT = true;
       isLive = false;
     } else if (elapsedSinceKickoffMins >= 0) {
-      // 1st Half
       smartMinute = elapsedSinceKickoffMins;
       status = '1H';
       isLive = true;
@@ -155,6 +159,7 @@ export function applySmartMinute(m, now = Date.now()) {
     isHidden: isHidden
   };
 }
+
 
 export const extractTournamentStage = (raw) => null;
 export const extractMatchDate = (m) => m.dateStr;

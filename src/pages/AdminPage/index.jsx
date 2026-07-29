@@ -159,14 +159,16 @@ export default function AdminPage() {
     });
   }, [db, pubPicks, date, queryClient]);
 
-  const handleFeaturedAdd = useCallback(async (m) => {
+    const handleFeaturedAdd = useCallback(async (m) => {
     if (!db) return;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
       id: predId, matchId: String(m.id), matchDate: date,
       homeTeam: m.homeTeam, awayTeam: m.awayTeam,
       homeLogo: m.homeTeam?.crest || null, awayLogo: m.awayTeam?.crest || null,
-      league: m.competition || m.league, kickoff: m.utcDate || m.kickoff,
+      league: m.competition || m.league, 
+      // ★ FIX: Use the explicit ISO string to prevent "Invalid Date" on the Predictions page
+      kickoff: m.utcDate || m.kickoffUtc || m.date,
       status: m.status || 'NS', homeScore: null, awayScore: null, priority: preds.length + 1,
     };
     const updatedPreds = [...preds, pred];
