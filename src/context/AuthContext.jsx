@@ -9,9 +9,11 @@ import {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
+  setPersistence,           // ★ NEW IMPORT
+  browserLocalPersistence   // ★ NEW IMPORT
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'; // ★ ADDED onSnapshot
 
 const AuthContext = createContext(null);
 
@@ -27,6 +29,11 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    // ★ FIX 1: Force Firebase to remember the user across browser restarts
+    setPersistence(auth, browserLocalPersistence).catch(err => {
+      console.error('[Auth] Error setting persistence:', err);
+    });
+
     getRedirectResult(auth)
       .then((result) => {
         if (result) console.log('[Auth] Redirect sign-in successful:', result.user.uid);
@@ -41,17 +48,23 @@ export function AuthProvider({ children }) {
     }
 
     let unsubscribed = false;
+    let unsubProfile = null; // ★ FIX 2: Variable to hold profile listener
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
       setCurrentUser(user);
 
+      // If we had a previous profile listener, unsubscribe it
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
+
       if (user) {
         try {
+          // Check if profile exists first
           const profileDoc = await getDoc(doc(db, 'users', user.uid));
-          if (profileDoc.exists()) {
-            setUserProfile(profileDoc.data());
-          } else {
+          if (!profileDoc.exists()) {
             const profile = {
               uid: user.uid,
               email: user.email,
@@ -62,20 +75,35 @@ export function AuthProvider({ children }) {
               updatedAt: serverTimestamp(),
             };
             await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
-            setUserProfile(profile);
           }
+
+          // ★ FIX 3: Use onSnapshot for INSTANT admin detection
+          unsubProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+            if (docSnap.exists()) {
+              setUserProfile(docSnap.data());
+            } else {
+              setUserProfile({ uid: user.uid, role: 'user' });
+            }
+            setAuthLoading(false);
+          }, (err) => {
+            console.error('[Auth] Profile listener error:', err.message);
+            setAuthLoading(false);
+          });
+
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
           setUserProfile(null);
+          setAuthLoading(false);
         }
       } else {
         setUserProfile(null);
+        setAuthLoading(false);
       }
-      setAuthLoading(false);
     });
 
     return () => {
       unsubscribed = true;
+      if (unsubProfile) unsubProfile(); // Clean up profile listener
       unsubscribe();
     };
   }, []);
@@ -147,8 +175,8 @@ export function AuthProvider({ children }) {
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
     
-    const refreshed = await getDoc(doc(db, 'users', currentUser.uid));
-    if (refreshed.exists()) setUserProfile(refreshed.data());
+    // The onSnapshot listener will automatically update the userProfile state
+    // so we don't need to manually fetch it here anymore.
   }, [currentUser]);
 
   const value = useMemo(() => ({
