@@ -1,0 +1,15 @@
+{
+    "keep": {
+        "days": true,
+        "amount": 14
+    },
+    "auditLog": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\.c55f1904ce64cc2f470ef83456a5e80749426d76-audit.json",
+    "files": [
+        {
+            "date": 1785418095323,
+            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-07-30.log",
+            "hash": "14b0c59c08a5bd8dadc77b1c4e83062e4713d256c4190433cf3f16737922854d"
+        }
+    ],
+    "hashType": "sha256"
+}
