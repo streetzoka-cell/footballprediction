@@ -9,11 +9,11 @@ import {
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
-  setPersistence,           // ★ NEW IMPORT
-  browserLocalPersistence   // ★ NEW IMPORT
+  setPersistence,
+  browserLocalPersistence
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'; // ★ ADDED onSnapshot
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -29,7 +29,6 @@ export function AuthProvider({ children }) {
       return;
     }
 
-    // ★ FIX 1: Force Firebase to remember the user across browser restarts
     setPersistence(auth, browserLocalPersistence).catch(err => {
       console.error('[Auth] Error setting persistence:', err);
     });
@@ -48,16 +47,21 @@ export function AuthProvider({ children }) {
     }
 
     let unsubscribed = false;
-    let unsubProfile = null; // ★ FIX 2: Variable to hold profile listener
+    let unsubProfile = null;
+    let unsubAdmin = null; // ★ NEW: Listener for admin_users collection
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
       setCurrentUser(user);
 
-      // If we had a previous profile listener, unsubscribe it
+      // Clean up previous listeners
       if (unsubProfile) {
         unsubProfile();
         unsubProfile = null;
+      }
+      if (unsubAdmin) {
+        unsubAdmin();
+        unsubAdmin = null;
       }
 
       if (user) {
@@ -77,17 +81,35 @@ export function AuthProvider({ children }) {
             await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
           }
 
-          // ★ FIX 3: Use onSnapshot for INSTANT admin detection
+          // ★ Listen to user profile for instant updates
           unsubProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+            if (unsubscribed) return;
             if (docSnap.exists()) {
-              setUserProfile(docSnap.data());
+              setUserProfile(prev => ({ ...prev, ...docSnap.data() }));
             } else {
-              setUserProfile({ uid: user.uid, role: 'user' });
+              setUserProfile(prev => ({ ...prev, uid: user.uid, role: 'user' }));
             }
             setAuthLoading(false);
           }, (err) => {
             console.error('[Auth] Profile listener error:', err.message);
             setAuthLoading(false);
+          });
+
+          // ★ NEW: Listen to admin_users collection for instant admin detection
+          unsubAdmin = onSnapshot(doc(db, 'admin_users', user.uid), (adminSnap) => {
+            if (unsubscribed) return;
+            setUserProfile(prev => {
+              const isAdminCollection = adminSnap.exists();
+              const isRoleAdmin = prev?.role === 'admin' || prev?.role === 'staff';
+              
+              return {
+                ...prev,
+                // If they are in admin_users OR have role='admin', treat as admin
+                role: (isAdminCollection || isRoleAdmin) ? 'admin' : (prev?.role || 'user')
+              };
+            });
+          }, (err) => {
+            console.error('[Auth] Admin listener error:', err.message);
           });
 
         } catch (err) {
@@ -103,7 +125,8 @@ export function AuthProvider({ children }) {
 
     return () => {
       unsubscribed = true;
-      if (unsubProfile) unsubProfile(); // Clean up profile listener
+      if (unsubProfile) unsubProfile();
+      if (unsubAdmin) unsubAdmin(); // Clean up admin listener
       unsubscribe();
     };
   }, []);
@@ -174,9 +197,6 @@ export function AuthProvider({ children }) {
     delete profileUpdates.uid;
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
-    
-    // The onSnapshot listener will automatically update the userProfile state
-    // so we don't need to manually fetch it here anymore.
   }, [currentUser]);
 
   const value = useMemo(() => ({

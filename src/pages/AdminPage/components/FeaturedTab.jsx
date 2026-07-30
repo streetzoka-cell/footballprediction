@@ -2,13 +2,22 @@ import React, { useState, useMemo, useCallback, memo } from 'react';
 import { Radio, Plus, Trash2, Loader2, CalendarDays, Pencil } from 'lucide-react';
 import { MAX_FEATURED, SHOW_INIT, extractDate, sortByImportance, hasMatchStarted, isLive, isFin, Skel, Empty, ShowMore, MatchRow } from './common';
 
+// ★ NEW: Helper to format ISO string to local HH:MM
+const formatKickoff = (kickoff) => {
+  if (!kickoff) return 'VS';
+  if (/^\d{2}:\d{2}$/.test(kickoff)) return kickoff; // Already formatted
+  try {
+    const d = new Date(kickoff);
+    if (isNaN(d.getTime())) return 'VS';
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  } catch { return 'VS'; }
+};
+
 const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
   const [lg, setLg] = useState('ALL');
   const [showAll, setShowAll] = useState(false);
   const [addingId, setAddingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
-  
-  // preds comes directly from React Query cache now, so it's always accurate.
   const isFull = preds.length >= MAX_FEATURED;
 
   const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
@@ -60,7 +69,14 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
               const sc = p.homeScore != null ? { h: p.homeScore, a: p.awayScore } : null;
               const live = isLive(p);
               const finished = isFin(p);
-              const st = finished ? { c: 'var(--accent)', b: 'rgba(16,185,129,.08)', l: 'FT' } : live ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: p.kickoff || 'VS' };
+              
+              // ★ FIX: Use formatKickoff helper to show actual time
+              const st = finished 
+                ? { c: 'var(--accent)', b: 'rgba(16,185,129,.08)', l: 'FT' } 
+                : live 
+                ? { c: '#ef4444', b: 'rgba(239,68,68,.1)', l: 'Live' } 
+                : { c: 'var(--text-muted)', b: 'rgba(255,255,255,.04)', l: formatKickoff(p.kickoff) };
+
               return (
                 <div key={mid} className="am card-in" style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--accent)' }}>
                   <div className="amh">

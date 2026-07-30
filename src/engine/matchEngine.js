@@ -1,5 +1,5 @@
 // src/engine/matchEngine.js
-import { getLocalDateFromUtc } from '../utils/dates';
+import { getLocalDateFromUtc, formatTime } from '../utils/dates'; // ★ FIX: Import formatTime
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -20,7 +20,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let status = raw.status;
   let minute = display.minute;
 
-  // ANTI-STUCK LOGIC: If a match is marked live but started over 3.5 hours ago, mark it as finished
+  // ANTI-STUCK LOGIC
   if (isLive && raw.timestamp) {
     const matchStartTime = raw.timestamp * 1000; 
     const elapsed = now - matchStartTime;
@@ -33,15 +33,21 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-   return {
+  // ★ FIX: Use API dateStr if available, otherwise parse UTC
+  const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
+  
+  // ★ FIX: Properly format kickoff time to HH:MM
+  const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
+
+  return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
     date: raw.date,
-    utcDate: raw.utcDate || raw.date, // ★ FIX: Preserve ISO string
-    dateStr: getLocalDateFromUtc(raw.date),
+    utcDate: raw.utcDate || raw.date, 
+    dateStr: matchDateStr, // ★ FIX: Use safe dateStr
     timestamp: raw.timestamp,
-    kickoff: time.kickoffLocal || 'TBD',
-    kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date, // ★ FIX: Preserve ISO string
+    kickoff: kickoffTime, // ★ FIX: Use formatted time
+    kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date, 
     status: status,
     statusLong: raw.statusLong,
     isLive: isLive,
@@ -52,7 +58,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     minute: minute,
     displayMinute: minute,
     lastUpdated: raw.dataQuality?.lastUpdated || null,
-    isHidden: false, // Initialize isHidden
+    isHidden: false, 
     
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
@@ -82,7 +88,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// Smart Minute Calculator & Dropper
+
 // Smart Minute Calculator & Dropper
 export function applySmartMinute(m, now = Date.now()) {
   if (!m || m.isFinished) return m;

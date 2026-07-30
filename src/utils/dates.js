@@ -1,7 +1,7 @@
 // ═══════════════════════════════════════════════════════════════
 // FILE: src/utils/dates.js
 // SINGLE SOURCE OF TRUTH for all date operations
-// ★ FIXED: Uses native device local time. No more hardcoded EAT!
+// ★ FIXED: Uses UTC to match backend perfectly. No more invalid dates!
 // ═══════════════════════════════════════════════════════════════
 
 // ★ NEW: Helper to safely parse dates as UTC if they lack timezone info
@@ -18,13 +18,13 @@ export function parseDateAsUTC(dateStr) {
   return new Date(dateStr + 'Z');
 }
 
-// Core date string generator (USER'S LOCAL TIMEZONE)
+// Core date string generator (STRICTLY UTC to match Backend)
 export function getLocalDateStr(offset = 0) {
   const d = new Date();
-  d.setDate(d.getDate() + offset);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, "0");
-  const day = String(d.getDate()).padStart(2, "0");
+  d.setUTCDate(d.getUTCDate() + offset);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
@@ -33,26 +33,27 @@ export const yesterdayStr = () => getLocalDateStr(-1);
 export const tomorrowStr = () => getLocalDateStr(1);
 export const getDateStr = getLocalDateStr;
 
-// Parse UTC timestamps to LOCAL date strings
+// Parse UTC timestamps to UTC date strings (so they match backend)
 export function getLocalDateFromUtc(utcDateStr) {
   if (!utcDateStr) return null;
   try {
     const d = parseDateAsUTC(utcDateStr);
     if (isNaN(d.getTime())) return null;
-    const y = d.getFullYear();
-    const m = String(d.getMonth() + 1).padStart(2, "0");
-    const day = String(d.getDate()).padStart(2, "0");
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+    const day = String(d.getUTCDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
   } catch {
     return null;
   }
 }
 
-// Format date string for display: "Tue, 15 Jan"
+// Format date string for display: "Tue, 15 Jan" (Uses local for display only)
 export function formatDateShort(dateStr) {
   if (!dateStr) return '';
   const parts = dateStr.split("-");
   if (parts.length !== 3) return dateStr;
+  // Parse as local date for display purposes
   const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
   if (isNaN(date.getTime())) return dateStr;
   return date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
@@ -68,6 +69,7 @@ export function formatTime(dateStr) {
     return '--:--';
   }
 }
+
 
 // Compare helpers
 export function isToday(dateStr) { return dateStr === getLocalDateStr(0); }
