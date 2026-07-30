@@ -4,6 +4,7 @@ import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
   Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal
 } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
 import { useLiveMatches } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
@@ -13,16 +14,15 @@ import { todayStr } from '../utils/dates';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 
 import { db } from '../utils/firebase';
-import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore'; // ★ Removed onSnapshot
 
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
-import { applySmartMinute } from '../engine/matchEngine'; // ★ NEW IMPORT
+import { applySmartMinute } from '../engine/matchEngine'; 
 
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const APP_LOGO = '/icons/icon-192.png';
 
-// ★ NEW: Ticking clock hook
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -225,7 +225,7 @@ export default function Navbar() {
   const navigate = useNavigate();
   const uid = currentUser?.uid;
   const isLoggedIn = !!uid;
-  const now = useNow(10000); // ★ NEW: Tick every 10s
+  const now = useNow(10000); 
 
   const { data: rawLive = [] } = useLiveMatches();
   const { data: activePreds = [] } = useActivePredictions(todayStr());
@@ -243,29 +243,31 @@ export default function Navbar() {
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
   const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'staff';
-  const [adminNotifs, setAdminNotifs] = useState([]);
 
-  // ★ FIX: Apply smart minute and filter hidden matches
+  // ★ Phase 5: Use React Query instead of onSnapshot for notifications to save quota
+  const { data: adminNotifs = [] } = useQuery({
+    queryKey: ['notifications', uid],
+    queryFn: async () => {
+      if (!db) return [];
+      const q = query(
+        collection(db, 'notifications'), 
+        where('targetUid', 'in', [null, uid || '__guest__']),
+        orderBy('createdAt', 'desc'),
+        limit(20)
+      );
+      const snap = await getDocs(q);
+      return snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    },
+    enabled: !!uid,
+    staleTime: 60 * 1000, 
+    refetchInterval: 60 * 1000, 
+  });
+
   const liveMatches = useMemo(() => rawLive.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawLive, now]);
   const allPreds = useMemo(() => Object.values(userPredsObj), [userPredsObj]);
   const dailyEntries = dailyLB?.entries || [];
   
   const { pinnedMatches = [] } = usePreferencesStore();
-
-  useEffect(() => {
-    if (!db) { setAdminNotifs([]); return; }
-    const q = query(collection(db, 'notifications'), where('targetUid', 'in', [null, uid || '__guest__']));
-    const unsub = onSnapshot(q, (snap) => {
-      const notifs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      notifs.sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0));
-      setAdminNotifs(prev => {
-        if (prev.length !== notifs.length) return notifs;
-        if (prev[0]?.id !== notifs[0]?.id || prev[0]?.body !== notifs[0]?.body) return notifs;
-        return prev;
-      });
-    }, () => {});
-    return () => unsub();
-  }, [db, uid]);
 
   const searchRef = useRef(null);
   const notifRef = useRef(null);
@@ -462,7 +464,6 @@ export default function Navbar() {
       <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
           
-          {/* LEFT SECTION: Home & Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             <div className="nv-dk" style={{ display: 'flex', alignItems: 'center' }}>
               <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home"><Home size={16} strokeWidth={2.5} /> Home</Link>
@@ -478,10 +479,8 @@ export default function Navbar() {
             </Link>
           </div>
 
-          {/* RIGHT SECTION: Links & Actions (Shrinks safely) */}
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
             
-            {/* Search */}
             <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
               <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
               {searchOpen && (
@@ -493,7 +492,6 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Notifications */}
             {isLoggedIn && (
               <div ref={notifRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
@@ -504,7 +502,6 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Points Badge */}
             {isLoggedIn && userStats.resolved > 0 && (
               <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)} style={{ flexShrink: 0 }}>
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
@@ -514,7 +511,6 @@ export default function Navbar() {
               </div>
             )}
 
-            {/* Main Links & Auth */}
             <div className="nv-dk-links-container" style={{ display: 'flex', alignItems: 'center', gap: 4, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
               {LINKS.map((link) => {
                 const active = isActive(link.to);
@@ -527,7 +523,6 @@ export default function Navbar() {
                 );
               })}
 
-              {/* More Dropdown for Company/Legal Links */}
               <div ref={moreRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setMoreOpen(p => !p)} className={`nv-nav-link ${moreOpen ? 'active' : ''}`} style={{ gap: 4 }}>
                   <MoreHorizontal size={16} strokeWidth={2.5} /> More
@@ -548,7 +543,6 @@ export default function Navbar() {
                 )}
               </div>
 
-              {/* Auth Buttons (Never hidden) */}
               {isLoggedIn ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8, flexShrink: 0 }}>
                   {isAdmin && <Link to={ADMIN_PATH} className={`nv-action-btn ${isActive(ADMIN_PATH) ? 'active' : ''}`} style={{ color: isActive(ADMIN_PATH) ? '#fbbf24' : '#64748b', borderColor: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.2)' : 'transparent', background: isActive(ADMIN_PATH) ? 'rgba(251,191,36,0.1)' : 'transparent' }} title="Admin"><Shield size={18} strokeWidth={2.5} /></Link>}
@@ -560,7 +554,6 @@ export default function Navbar() {
             </div>
           </div>
 
-          {/* Mobile menu button */}
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
             {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
@@ -578,7 +571,6 @@ export default function Navbar() {
         </div>
       </nav>
 
-      {/* Mobile Drawer */}
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
       <div className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
         <div className="nv-mob-header" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(16,185,129,0.1)', position: 'sticky', top: 0, zIndex: 3, background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)' }}>

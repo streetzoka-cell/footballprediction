@@ -1,7 +1,7 @@
 ﻿import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Brain, Flame, Target, TrendingUp, ChevronRight } from 'lucide-react';
-import { useEngineGlobalMatches } from '../zokascore_engine/hooks';
+import { useFixtures } from '../hooks/useFixtures'; // ★ FIX: Use standard hook
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import SEO from '../components/SEO';
 import MatchCard from '../components/MatchCard';
@@ -9,28 +9,26 @@ import EmptyState from '../components/EmptyState';
 
 export default function MasterGames() {
   const [selectedDate, setSelectedDate] = useState(todayStr());
-  const { data: allMatches = [], isLoading } = useEngineGlobalMatches();
   
-  const dateMatches = useMemo(() => {
-    return allMatches.filter(m => m.dateStr === selectedDate);
-  }, [allMatches, selectedDate]);
-
-  // Smart Filtering: Only include matches that are Featured OR have AI Probabilities OR High MatchScore
+  // ★ FIX: Fetch fixtures for the selected date using the standard hook
+  const { data: dateMatches = [], isLoading } = useFixtures(selectedDate);
+  
+  // Smart Filtering: Only include matches that are Featured OR have High MatchScore
   const smartMatches = useMemo(() => {
+    if (!dateMatches) return [];
     return dateMatches.filter(m => 
       m.category === 'FEATURED' || 
-      m.homeWinProb != null || 
-      m.matchScore > 50
-    ).sort((a, b) => (b.importance || 0) - (a.importance || 0));
+      (m.matchScore && m.matchScore > 50)
+    ).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
   }, [dateMatches]);
 
-  // Categorize for display
-  const highConf = smartMatches.filter(m => Math.max(m.homeWinProb || 0, m.awayWinProb || 0) >= 55);
+  // Categorize for display based on match importance score
+  const highConf = smartMatches.filter(m => (m.matchScore || 0) >= 80);
   const medConf = smartMatches.filter(m => {
-    const max = Math.max(m.homeWinProb || 0, m.awayWinProb || 0);
-    return max >= 40 && max < 55;
+    const score = m.matchScore || 0;
+    return score >= 60 && score < 80;
   });
-  const otherSmart = smartMatches.filter(m => Math.max(m.homeWinProb || 0, m.awayWinProb || 0) < 40);
+  const otherSmart = smartMatches.filter(m => (m.matchScore || 0) < 60);
 
   return (
     <div className="zoka-page">
@@ -58,19 +56,19 @@ export default function MasterGames() {
             {highConf.length > 0 && (
               <div className="zoka-section">
                 <div className="zoka-league-hd"><Flame size={18} style={{ color: '#ef4444' }} /><span className="zoka-league-name">High Confidence Value</span></div>
-                {highConf.map((m, i) => <MatchCard key={m.id} match={m} index={i} />)}
+                {highConf.map((m, i) => <MatchCard key={m.id} m={m} i={i} />)}
               </div>
             )}
             {medConf.length > 0 && (
               <div className="zoka-section">
                 <div className="zoka-league-hd"><Target size={18} style={{ color: '#fbbf24' }} /><span className="zoka-league-name">Medium Confidence</span></div>
-                {medConf.map((m, i) => <MatchCard key={m.id} match={m} index={i} />)}
+                {medConf.map((m, i) => <MatchCard key={m.id} m={m} i={i} />)}
               </div>
             )}
             {otherSmart.length > 0 && (
               <div className="zoka-section">
                 <div className="zoka-league-hd"><TrendingUp size={18} style={{ color: '#3b82f6' }} /><span className="zoka-league-name">Smart Featured Matches</span></div>
-                {otherSmart.map((m, i) => <MatchCard key={m.id} match={m} index={i} />)}
+                {otherSmart.map((m, i) => <MatchCard key={m.id} m={m} i={i} />)}
               </div>
             )}
           </>
