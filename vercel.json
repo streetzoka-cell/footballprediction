@@ -12,11 +12,11 @@
     }
   ],
   "rewrites": [
-    {
-      "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
-      "destination": "/index.html"
-    }
-  ],
+  {
+    "source": "/((?!zokascore-sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
+    "destination": "/index.html"
+  }
+],
   "headers": [
     {
       "source": "/(.*)",
@@ -75,7 +75,7 @@
       ]
     },
     {
-      "source": "/sitemap.xml",
+      "source": "/zokascore-sitemap.xml",
       "headers": [
         {
           "key": "Content-Type",

@@ -103,7 +103,7 @@ async function generateSitemap() {
 
     const sitemap = new SitemapStream({ hostname });
 
-    const write = createWriteStream("./public/sitemap.xml");
+    const write = createWriteStream("./public/zokascore-sitemap.xml");
 
     sitemap.pipe(write);
 
