@@ -14,6 +14,7 @@ const matchRoute = require('./routes/v1/match');
 const teamsRoute = require('./routes/v1/teams');
 const adminSchedulers = require('./routes/v1/admin/schedulers');
 const monitoringDashboard = require('./routes/v1/monitoring/dashboard');
+const sitemapRoute = require('./routes/v1/sitemap');
 
 const app = express();
 
@@ -42,6 +43,7 @@ app.use('/api/v1/teams', teamsRoute);
 app.use('/api/v1/admin/schedulers', adminSchedulers);
 app.use('/api/v1/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
+app.use('/zokascore-sitemap.xml', sitemapRoute);
 
 // ─── SERVE STATIC JSON FILES (0-Read Gateway Magic) ───
 // Serve files from public_data with strong caching headers

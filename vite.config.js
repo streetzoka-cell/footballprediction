@@ -1,19 +1,20 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
-import { VitePWA } from 'vite-plugin-pwa'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
+import { VitePWA } from 'vite-plugin-pwa';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [
     react(),
     VitePWA({
       registerType: 'autoUpdate',
+
       includeAssets: [
         'favicon.svg',
         'robots.txt',
         'icons/icon-192.png',
         'icons/icon-512.png'
       ],
+
       manifest: {
         name: 'ZOKASCORE',
         short_name: 'ZOKASCORE',
@@ -35,13 +36,16 @@ export default defineConfig({
           }
         ]
       },
+
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 
-        // Prevent the service worker from handling these files
+        // Never allow the service worker to intercept SEO files.
         navigateFallbackDenylist: [
+          /^\/robots\.txt$/,
           /^\/zokascore-sitemap\.xml$/,
-          /^\/robots\.txt$/
+          /^\/sitemap\.xml$/,
+          /^\/sitemap-index\.xml$/
         ],
 
         runtimeCaching: [
@@ -86,14 +90,33 @@ export default defineConfig({
 
   build: {
     chunkSizeWarningLimit: 1000,
+
     rollupOptions: {
       output: {
         manualChunks(id) {
           if (id.includes('node_modules')) {
-            if (id.includes('react') || id.includes('react-dom') || id.includes('react-router-dom')) return 'react-vendor';
-            if (id.includes('firebase')) return 'firebase-vendor';
-            if (id.includes('lucide-react') || id.includes('framer-motion')) return 'ui-vendor';
-            if (id.includes('@tanstack')) return 'query-vendor';
+            if (
+              id.includes('react') ||
+              id.includes('react-dom') ||
+              id.includes('react-router-dom')
+            ) {
+              return 'react-vendor';
+            }
+
+            if (id.includes('firebase')) {
+              return 'firebase-vendor';
+            }
+
+            if (
+              id.includes('lucide-react') ||
+              id.includes('framer-motion')
+            ) {
+              return 'ui-vendor';
+            }
+
+            if (id.includes('@tanstack')) {
+              return 'query-vendor';
+            }
           }
         }
       }
