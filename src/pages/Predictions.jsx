@@ -8,7 +8,6 @@ import {
   Plus, CircleX, CircleCheck, ThumbsUp, ThumbsDown,
   Pencil, Share2, Zap
 } from 'lucide-react';
-import { buildSEO } from '../utils/seoBuilder';
 import { useAuth } from '../context/AuthContext';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
 import { useFixtures } from '../hooks/useFixtures';
@@ -924,15 +923,11 @@ export default function Predictions() {
   return (
     <div className="v21-page">
 <SEO
-  {...buildSEO({
-    title: "Predict Matches & Win",
-    description:
-      "Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring.",
-    keywords:
-      "football predictions, betting tips, match predictions, soccer tips",
-    path: "/predictions",
-    robots: "index,follow"
-  })}
+  title="Predict Matches & Win"
+  description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
+  keywords="football predictions, betting tips, match predictions, soccer tips"
+  path="/predictions"
+  robots="index,follow"
 />
 
       {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
