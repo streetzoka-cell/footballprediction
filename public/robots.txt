@@ -5,4 +5,4 @@ Allow: /
 Disallow: /admin
 Disallow: /api/
 
-Sitemap: https://zokascore.xyz/main-sitemap.xml
+Sitemap: https://zokascore.xyz/sitemap.xml
