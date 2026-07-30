@@ -93,7 +93,6 @@ export function AuthProvider({ children }) {
                 return { 
                   ...prev, 
                   ...baseData, 
-                  // Preserve exact role string, but add boolean for UI checks
                   isAdmin: isSuperAdmin || isRoleAdmin 
                 };
               });
@@ -119,7 +118,10 @@ export function AuthProvider({ children }) {
               };
             });
           }, (err) => {
-            console.error('[Auth] Admin listener error:', err.message);
+            // ★ FIX: Silently ignore permission-denied for normal users
+            if (err.code !== 'permission-denied') {
+              console.error('[Auth] Admin listener error:', err.message);
+            }
           });
 
         } catch (err) {
