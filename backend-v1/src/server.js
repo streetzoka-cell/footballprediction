@@ -7,6 +7,7 @@ const metricsTracker = require('./middleware/metricsTracker'); // ★ NEW IMPORT
 const { addLog } = require('./utils/logStore'); // ★ NEW IMPORT FOR TERMINAL
 
 // Routes
+const leaderboardRoutes = require('./routes/v1/admin/leaderboards');
 const healthRoute = require('./routes/v1/health');
 const matchesRoute = require('./routes/v1/matches');
 const matchRoute = require('./routes/v1/match');
@@ -40,6 +41,7 @@ app.use('/api/v1/match', matchRoute);
 app.use('/api/v1/teams', teamsRoute);
 app.use('/api/v1/admin/schedulers', adminSchedulers);
 app.use('/api/v1/monitoring', monitoringDashboard);
+app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
 
 // ─── SERVE STATIC JSON FILES (0-Read Gateway Magic) ───
 // Serve files from public_data with strong caching headers

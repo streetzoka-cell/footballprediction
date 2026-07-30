@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, memo } from 'react';
-import { Radio, Plus, Trash2, Loader2, CalendarDays } from 'lucide-react';
+import { Radio, Plus, Trash2, Loader2, CalendarDays, Pencil } from 'lucide-react';
 import { MAX_FEATURED, SHOW_INIT, extractDate, sortByImportance, hasMatchStarted, isLive, isFin, Skel, Empty, ShowMore, MatchRow } from './common';
 
 const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, onRemove, fxLoading, toast }) {
@@ -7,27 +7,29 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
   const [showAll, setShowAll] = useState(false);
   const [addingId, setAddingId] = useState(null);
   const [removingId, setRemovingId] = useState(null);
+  
+  // preds comes directly from React Query cache now, so it's always accurate.
   const isFull = preds.length >= MAX_FEATURED;
 
   const pids = useMemo(() => new Set(preds.map(p => String(p.matchId))), [preds]);
 
   const avail = useMemo(() => {
     if (!fixtures?.length) return [];
-    let l = fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m)).sort(sortByImportance); 
+    let l = fixtures.filter(m => extractDate(m) === date && !hasMatchStarted(m) && !pids.has(String(m.id))).sort(sortByImportance); 
     if (lg !== 'ALL') l = l.filter(f => String(f.competition?.id || f.league?.id) === lg);
     return l;
-  }, [fixtures, date, lg]);
+  }, [fixtures, date, lg, pids]);
 
   const leagues = useMemo(() => {
     const map = new Map();
-    (fixtures?.filter(m => extractDate(m) === date && !hasMatchStarted(m)) || []).forEach(f => {
+    (fixtures?.filter(m => extractDate(m) === date && !hasMatchStarted(m) && !pids.has(String(m.id))) || []).forEach(f => {
       const c = f.competition || f.league; if (!c) return;
       const id = String(c.id || c.code || 'x');
       if (!map.has(id)) map.set(id, { id, name: c.name || 'Other', emblem: c.emblem || c.logo || null, n: 0 });
       map.get(id).n++;
     });
     return [...map.values()].sort((a, b) => b.n - a.n);
-  }, [fixtures, date]);
+  }, [fixtures, date, pids]);
 
   const vis = useMemo(() => showAll ? avail : avail.slice(0, SHOW_INIT), [avail, showAll]);
   const hidden = Math.max(0, avail.length - SHOW_INIT);
@@ -99,46 +101,60 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
         )}
       </div>
 
-      <div className="asec">
-        <h3 className="ast"><Plus size={15} /> Available Matches {isFull && <span style={{ color: 'var(--red)', fontWeight: 700, fontSize: '.75rem' }}>(FULL)</span>}</h3>
-        {leagues.length > 1 && (
-          <div className="alb" style={{ marginBottom: 10 }}>
-            <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All</button>
-            {leagues.map(l => (
-              <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
-                {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                {l.name} ({l.n})
-              </button>
-            ))}
+      {!isFull ? (
+        <div className="asec">
+          <h3 className="ast"><Plus size={15} /> Available Matches</h3>
+          {leagues.length > 1 && (
+            <div className="alb" style={{ marginBottom: 10 }}>
+              <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All</button>
+              {leagues.map(l => (
+                <button key={l.id} className={`alp${lg === l.id ? ' on' : ''}`} onClick={() => setLg(l.id)}>
+                  {l.emblem && <img src={l.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+                  {l.name} ({l.n})
+                </button>
+              ))}
+            </div>
+          )}
+          {fxLoading ? <Skel n={3} /> : vis.length > 0 ? (
+            <div>
+              {vis.map((m, i) => {
+                const mid = String(m.id);
+                const isAdding = addingId === mid;
+                const isFeatured = false; 
+                return (
+                  <MatchRow 
+                    key={mid} 
+                    m={m} 
+                    idx={i} 
+                    mode="featured"
+                    isFeatured={isFeatured}
+                    isAdding={isAdding}
+                    isFull={isFull}
+                    onAddClick={handleAddClick}
+                    onRemoveClick={handleRemoveClick}
+                    isRemoving={removingId === mid}
+                  />
+                );
+              })}
+              <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
+            </div>
+          ) : (
+            <Empty icon={CalendarDays} title="No available matches" hint="Live and finished matches cannot be featured" />
+          )}
+        </div>
+      ) : (
+        <div className="asec">
+          <div className="aem" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <Pencil size={24} style={{ color: 'var(--gold)' }} />
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, fontWeight: 600 }}>
+              Featured list is full ({MAX_FEATURED}/{MAX_FEATURED}).
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0 }}>
+              Remove some matches below to add new ones.
+            </p>
           </div>
-        )}
-        {fxLoading ? <Skel n={3} /> : vis.length > 0 ? (
-          <div>
-            {vis.map((m, i) => {
-              const mid = String(m.id);
-              const isAdding = addingId === mid;
-              const isFeatured = pids.has(mid);
-              return (
-                <MatchRow 
-                  key={mid} 
-                  m={m} 
-                  idx={i} 
-                  mode="featured"
-                  isFeatured={isFeatured}
-                  isAdding={isAdding}
-                  isFull={isFull}
-                  onAddClick={handleAddClick}
-                  onRemoveClick={handleRemoveClick}
-                  isRemoving={removingId === mid}
-                />
-              );
-            })}
-            <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
-          </div>
-        ) : (
-          <Empty icon={CalendarDays} title="No available matches" hint="Live and finished matches cannot be featured" />
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 });

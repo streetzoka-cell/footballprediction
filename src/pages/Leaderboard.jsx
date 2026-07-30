@@ -3,12 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
-  Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft
+  Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useDailyLeaderboard, useWeeklyLeaderboard, useMonthlyLeaderboard, useGoatLeaderboard } from '../hooks/useUserData';
-import { useLiveMatches } from '../hooks/useFixtures';
 import { PERIOD, PERIOD_LABEL } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from '../components/SEO';
@@ -63,6 +62,9 @@ const StatCard = memo(function StatCard({ icon, label, value, color, bg, delay }
 const PodiumUser = memo(function PodiumUser({ user, position, delay }) {
   const c = PODIUM_CFG[position];
   if (!c) return null;
+  
+  const name = user.displayName || 'Player';
+  
   return (
     <div className="lb-pod-u" style={{ order: c.order, animation: `lb-pop .4s ${SPRING} ${(delay || 0) + 150}ms both` }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, position: 'relative' }}>
@@ -72,10 +74,12 @@ const PodiumUser = memo(function PodiumUser({ user, position, delay }) {
           </div>
         )}
         <div className="lb-pod-avatar" style={{ width: c.avatar, height: c.avatar, background: `linear-gradient(135deg,${c.border}25,${c.border}08)`, border: `3px solid ${c.border}`, fontSize: c.font, color: c.text, boxShadow: c.shadow }}>
-          {(user.displayName || '??').slice(0, 2).toUpperCase()}
+          {name.slice(0, 2).toUpperCase()}
         </div>
-        <div className="lb-pod-name">{user.displayName}</div>
-        <div className="lb-pod-sub">{user.points} pts · {user.accuracy}%</div>
+        <div className="lb-pod-name">{name}</div>
+        <div className="lb-pod-sub">
+          {user.points || 0} pts · {user.accuracy || 0}% {user.streak > 0 && `· 🔥 ${user.streak}`}
+        </div>
       </div>
       <div className="lb-pod-bar" style={{ height: c.h, background: c.bg, animationDelay: `${(delay || 0) + 300}ms` }}>
         <div className="lb-pod-num" style={{ color: c.text }}>#{position + 1}</div>
@@ -112,22 +116,31 @@ const TabBar = memo(function TabBar({ tabs, active, onChange }) {
   );
 });
 
-const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay }) {
+// ★ Smart Leaderboard Row with Streak & Trend
+const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, prevRank }) {
   const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
   const exactColor = (user.exact || 0) >= 15 ? 'var(--accent)' : (user.exact || 0) >= 10 ? 'var(--gold)' : 'var(--text-primary)';
+  
+  const trend = prevRank ? prevRank - rank : 0; // Positive means moved up
+  const name = user.displayName || 'Anonymous';
 
   return (
     <tr className={`lb-row${isMe ? ' me' : ''}`} style={{ animationDelay: `${delay}ms` }}>
-      <td className="lb-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>#{rank}</td>
+      <td className="lb-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+        #{rank}
+        {trend > 0 && <span style={{ color: 'var(--accent)', fontSize: '0.6rem', display: 'flex', alignItems: 'center' }}><ArrowUp size={10} />{trend}</span>}
+        {trend < 0 && <span style={{ color: '#ef4444', fontSize: '0.6rem', display: 'flex', alignItems: 'center' }}><ArrowDown size={10} />{Math.abs(trend)}</span>}
+      </td>
       <td className="lb-td">
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{ width: 32, height: 32, borderRadius: 8, background: avColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 800, color: '#fff', flexShrink: 0, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
-            {(user.displayName || '??').slice(0, 2).toUpperCase()}
+            {name.slice(0, 2).toUpperCase()}
           </div>
           <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user.displayName || 'Anonymous'}
-              {isMe && <span style={{ marginLeft: 4, fontSize: '.56rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.07)', padding: '2px 6px', borderRadius: 4 }}>YOU</span>}
+            <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {name}
+              {isMe && <span style={{ fontSize: '.56rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.07)', padding: '2px 6px', borderRadius: 4 }}>YOU</span>}
+              {user.streak > 2 && <span style={{ fontSize: '.6rem', color: '#ef4444' }}>🔥 {user.streak}</span>}
             </div>
             <div style={{ fontSize: '.56rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{user.predictions || 0} predictions</div>
           </div>
@@ -149,13 +162,10 @@ export default function Leaderboard() {
   const nav = useNavigate();
   const searchRef = useRef(null);
 
-  // ★ Clean hook usage. No more inline getDoc calls for leaderboards.
   const { data: dailyLB = null, isLoading: loadingDaily } = useDailyLeaderboard(todayStr());
   const { data: weeklyLB = null, isLoading: loadingWeekly } = useWeeklyLeaderboard();
   const { data: monthlyLB = null, isLoading: loadingMonthly } = useMonthlyLeaderboard();
   const { data: goatLB = null, isLoading: loadingGoat } = useGoatLeaderboard();
-  
-  const { data: liveFixtures = [] } = useLiveMatches(); // Still fetched to keep cache warm app-wide
   
   const [tab, setTab] = useState(PERIOD.DAILY);
   const [search, setSearch] = useState('');
@@ -248,7 +258,9 @@ export default function Leaderboard() {
             </div>
             <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
               <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Your {PERIOD_LABEL[tab] || tab} Rank</div>
-              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', marginTop: 1 }}>{myEntry.points} pts · {myEntry.exact || 0} exact · {myEntry.accuracy || 0}%</div>
+              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', marginTop: 1 }}>
+                {myEntry.points} pts · {myEntry.exact || 0} exact · {myEntry.accuracy || 0}% {myEntry.streak > 0 && `· 🔥 ${myEntry.streak}`}
+              </div>
             </div>
             <div style={{ textAlign: 'right', flexShrink: 0, position: 'relative', zIndex: 1 }}>
               <div className="lb-my-pts">{myEntry.points}</div>
@@ -289,7 +301,7 @@ export default function Leaderboard() {
               <table className="lb-table">
                 <thead>
                   <tr>
-                    <th className="lb-th" style={{ width: 48 }}>Rank</th>
+                    <th className="lb-th" style={{ width: 60 }}>Rank</th>
                     <th className="lb-th">Player</th>
                     <th className="lb-th" style={{ minWidth: 95 }}>Accuracy</th>
                     <th className="lb-th r" style={{ width: 60 }}>Points</th>
@@ -320,7 +332,8 @@ export default function Leaderboard() {
                       const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
                       const isMe = uid === user.uid;
                       const delay = Math.min(i * 25, 250);
-                      return <LeaderboardRow key={user.uid} user={user} rank={rank} isMe={isMe} delay={delay} />;
+                      const prevRank = user.prevRank || 0;
+                      return <LeaderboardRow key={user.uid} user={user} rank={rank} isMe={isMe} delay={delay} prevRank={prevRank} />;
                     })
                   )}
                 </tbody>

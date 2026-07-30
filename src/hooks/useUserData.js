@@ -1,7 +1,6 @@
-// src/hooks/useUserData.js
 import { useQuery } from '@tanstack/react-query';
 import { db } from '../utils/firebase';
-import { collection, doc, getDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, where, setDoc, serverTimestamp } from 'firebase/firestore';
 import { PATHS } from '../utils/constants';
 import { getWeekStart, getMonthStart, todayStr } from '../utils/dates';
 
@@ -10,14 +9,29 @@ export function useActivePredictions(dateStr) {
     queryKey: ['activePredictions', dateStr],
     queryFn: async () => {
       if (!db || !dateStr) return [];
+      
+      // 1. Try fetching the fast snapshot document first
       const snap = await getDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr));
-      if (snap.exists()) return snap.data().predictions || [];
+      if (snap.exists() && snap.data().predictions?.length > 0) {
+        return snap.data().predictions;
+      }
+      
+      // 2. Fallback to the collection if snapshot is missing
       const q = query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr));
       const qs = await getDocs(q);
-      return qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      const preds = qs.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.priority || 0) - (a.priority || 0));
+      
+      // 3. Repair the missing snapshot in the background so it loads fast next time
+      if (preds.length > 0) {
+        const cleanPreds = JSON.parse(JSON.stringify(preds));
+        await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, dateStr), { predictions: cleanPreds, updatedAt: serverTimestamp() }, { merge: true });
+      }
+      
+      return preds;
     },
     enabled: !!dateStr,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: 30 * 60 * 1000, // 30 minutes garbage collection
   });
 }
 
@@ -39,7 +53,8 @@ export function useUserPredictions(uid, dateStr) {
       return map;
     },
     enabled: !!uid && !!dateStr,
-    staleTime: 60 * 1000,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 30 * 60 * 1000,
   });
 }
 
@@ -95,7 +110,6 @@ export function useUserPoints(uid) {
   });
 }
 
-// ★ NEW: Centralized Leaderboard Hooks
 export function useWeeklyLeaderboard() {
   return useQuery({
     queryKey: ['leaderboard', 'weekly'],

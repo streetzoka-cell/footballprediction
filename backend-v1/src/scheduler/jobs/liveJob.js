@@ -3,6 +3,7 @@ const liveService = require('../../services/LiveMatchService');
 const fixtureService = require('../../services/FixtureService');
 const QuotaManager = require('../../services/QuotaManager');
 const logger = require('../../utils/logger');
+const { resolveMatchAndBuildLeaderboard } = require('./resolvePredictionsJob'); // ★ NEW IMPORT
 
 let prevLiveIds = new Set();
 
@@ -23,14 +24,32 @@ async function execute() {
     const currentLiveCount = result.count;
     const currentLiveIds = new Set(result.liveMatches.map(m => String(m.id)));
 
-    // ★ NEW: Smart FT Detection
+    // ★ NEW: Smart FT Detection & Instant Resolution
     // If matches disappeared from the live list, they likely finished.
-    // Trigger an immediate FT sync to get their final scores without waiting 2 hours.
     if (prevLiveIds.size > 0 && currentLiveIds.size < prevLiveIds.size) {
         const finishedIds = [...prevLiveIds].filter(id => !currentLiveIds.has(id));
         if (finishedIds.length > 0 && QuotaManager.canFetchFT()) {
-            logger.info(`[LiveJob] ${finishedIds.length} match(es) left the live list. Triggering immediate FT sync...`);
-            await fixtureService.syncFinishedFixtures();
+            logger.info(`[LiveJob] ${finishedIds.length} match(es) left the live list. Triggering immediate FT sync & resolution...`);
+            
+            // syncFinishedFixtures now returns the array of finished matches!
+            const newlyFinishedMatches = await fixtureService.syncFinishedFixtures();
+            
+            if (Array.isArray(newlyFinishedMatches) && newlyFinishedMatches.length > 0) {
+              for (const match of newlyFinishedMatches) {
+                try {
+                  const homeScore = match.score?.fullTime?.home ?? match.goalsHomeTeam ?? match.homeScore;
+                  const awayScore = match.score?.fullTime?.away ?? match.goalsAwayTeam ?? match.awayScore;
+                  const matchDate = match.dateStr || (match.utcDate ? match.utcDate.split('T')[0] : null);
+
+                  if (homeScore != null && awayScore != null && matchDate) {
+                    logger.info(`[LiveJob] Instantly resolving predictions for match ${match.id}...`);
+                    await resolveMatchAndBuildLeaderboard(match.id, homeScore, awayScore, matchDate);
+                  }
+                } catch (err) {
+                  logger.error(`[LiveJob] Error resolving match ${match.id}: ${err.message}`);
+                }
+              }
+            }
         }
     }
     prevLiveIds = currentLiveIds;
