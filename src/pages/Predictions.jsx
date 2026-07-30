@@ -8,7 +8,7 @@ import {
   Plus, CircleX, CircleCheck, ThumbsUp, ThumbsDown,
   Pencil, Share2, Zap
 } from 'lucide-react';
-
+import { buildSEO } from '../utils/seoBuilder';
 import { useAuth } from '../context/AuthContext';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
 import { useFixtures } from '../hooks/useFixtures';
