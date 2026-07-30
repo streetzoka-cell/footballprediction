@@ -20,7 +20,7 @@
     {
       "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
       "destination": "/index.html"
-    }
+        }
   ],
 
   "headers": [
