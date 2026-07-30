@@ -48,6 +48,7 @@ export function AuthProvider({ children }) {
 
     let unsubscribed = false;
     let unsubProfile = null;
+    let unsubAdmin = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
@@ -57,13 +58,17 @@ export function AuthProvider({ children }) {
         unsubProfile();
         unsubProfile = null;
       }
+      if (unsubAdmin) {
+        unsubAdmin();
+        unsubAdmin = null;
+      }
 
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
-          const profileDoc = await getDoc(userDocRef);
+          const adminDocRef = doc(db, 'admin_users', user.uid);
 
-          // ONLY create if it doesn't exist. DO NOT overwrite.
+          const profileDoc = await getDoc(userDocRef);
           if (!profileDoc.exists()) {
             const profile = {
               uid: user.uid,
@@ -77,18 +82,44 @@ export function AuthProvider({ children }) {
             await setDoc(userDocRef, profile);
           }
 
-          // ★ Use onSnapshot for INSTANT profile & admin updates (Costs only 1 read)
           unsubProfile = onSnapshot(userDocRef, (docSnap) => {
             if (unsubscribed) return;
             if (docSnap.exists()) {
-              setUserProfile(prev => ({ ...prev, ...docSnap.data() }));
+              setUserProfile(prev => {
+                const baseData = docSnap.data();
+                const isRoleAdmin = baseData.role === 'admin' || baseData.role === 'staff';
+                const isSuperAdmin = prev?.isAdminCollection === true;
+                
+                return { 
+                  ...prev, 
+                  ...baseData, 
+                  // Preserve exact role string, but add boolean for UI checks
+                  isAdmin: isSuperAdmin || isRoleAdmin 
+                };
+              });
             } else {
-              setUserProfile(prev => ({ ...prev, uid: user.uid, role: 'user' }));
+              setUserProfile(prev => ({ ...prev, uid: user.uid, role: 'user', isAdmin: false }));
             }
             setAuthLoading(false);
           }, (err) => {
             console.error('[Auth] Profile listener error:', err.message);
             setAuthLoading(false);
+          });
+
+          unsubAdmin = onSnapshot(adminDocRef, (adminSnap) => {
+            if (unsubscribed) return;
+            setUserProfile(prev => {
+              const isSuperAdmin = adminSnap.exists();
+              const isRoleAdmin = prev?.role === 'admin' || prev?.role === 'staff';
+              
+              return {
+                ...prev,
+                isAdmin: isSuperAdmin || isRoleAdmin,
+                isAdminCollection: isSuperAdmin
+              };
+            });
+          }, (err) => {
+            console.error('[Auth] Admin listener error:', err.message);
           });
 
         } catch (err) {
@@ -105,6 +136,7 @@ export function AuthProvider({ children }) {
     return () => {
       unsubscribed = true;
       if (unsubProfile) unsubProfile();
+      if (unsubAdmin) unsubAdmin();
       unsubscribe();
     };
   }, []);
@@ -173,7 +205,7 @@ export function AuthProvider({ children }) {
 
     const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
-    delete profileUpdates.role; // Prevent user from changing their own role
+    delete profileUpdates.role; 
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
   }, [currentUser]);
