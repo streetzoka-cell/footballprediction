@@ -106,6 +106,36 @@ export const ACHIEVEMENTS = [
   { id: 'top_10', name: 'Top 10', icon: '⭐', color: '#a855f7', check: (p) => p.bestRank <= 10 && p.bestRank > 0 },
 ];
 
+export const LEAGUE_COLORS = Object.freeze({
+  39: '#3d195b', 140: '#ee8707', 135: '#024494', 78: '#d20515',
+  61: '#091c3e', 2: '#001838', 3: '#ff6b00', 848: '#2d6a4f',
+  1: '#1a3c6e', 4: '#003366', 5: '#004d99', 40: '#5c2d91',
+  44: '#2d4a22', 45: '#1a1a2e', 143: '#c60b1e', 137: '#024494',
+  81: '#d20515', 66: '#091c3e', 94: '#006600', 88: '#e63e21',
+  203: '#c8102e', 50: '#003087', 253: '#0047AB', 262: '#006341',
+  71: '#009C3B', 128: '#75AADB', 12: '#1D428A', 13: '#003399',
+  14: '#cc0000', 34: '#008c45', 32: '#000000', 36: '#002395',
+  49: '#00843d', 115: '#002868', 116: '#DD0000', 114: '#003DA5',
+  119: '#00205B', 132: '#CE1126', 766: '#7B2D8B', 891: '#FF6600',
+  33: '#00843D', 35: '#FEBE10', 37: '#003DA5', 38: '#00205B',
+  41: '#009B3A', 42: '#FFD700', 43: '#006233', 60: '#7B2D8B',
+  62: '#002868',
+});
+
+export const DEFAULT_LEAGUE_COLOR = '#1e293b';
+export const getLeagueColor = (id) => LEAGUE_COLORS[id] || DEFAULT_LEAGUE_COLOR;
+
+export const BASKETBALL_LEAGUE_PRIORITY = Object.freeze({
+  12: 100, 13: 95, 44: 85, 34: 82, 36: 80, 32: 78, 33: 76,
+  14: 72, 119: 70, 116: 68, 114: 66, 37: 64, 35: 62,
+  132: 58, 49: 56, 115: 54, 766: 52, 891: 50,
+  38: 45, 42: 43, 43: 41, 41: 40, 45: 38, 40: 36,
+  62: 30, 60: 28, 61: 26,
+});
+
+export const getBasketballLeaguePriority = (leagueId) =>
+  BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
+
 /* ═══════════════════════════════════════════════════
    FIRESTORE COLLECTION/DOCUMENT PATHS
    ═══════════════════════════════════════════════════ */

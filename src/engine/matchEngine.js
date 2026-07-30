@@ -1,5 +1,5 @@
 // src/engine/matchEngine.js
-import { getLocalDateFromUtc, formatTime } from '../utils/dates'; // ★ FIX: Import formatTime
+import { getLocalDateFromUtc, formatTime } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -33,10 +33,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  // ★ FIX: Use API dateStr if available, otherwise parse UTC
   const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
-  
-  // ★ FIX: Properly format kickoff time to HH:MM
   const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
 
   return {
@@ -44,9 +41,9 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     sport: raw.sport || 'football',
     date: raw.date,
     utcDate: raw.utcDate || raw.date, 
-    dateStr: matchDateStr, // ★ FIX: Use safe dateStr
+    dateStr: matchDateStr, 
     timestamp: raw.timestamp,
-    kickoff: kickoffTime, // ★ FIX: Use formatted time
+    kickoff: kickoffTime, 
     kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date, 
     status: status,
     statusLong: raw.statusLong,
@@ -88,17 +85,21 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-
-// Smart Minute Calculator & Dropper
+// ★ FIX: Bulletproof Smart Minute Calculator
 export function applySmartMinute(m, now = Date.now()) {
   if (!m || m.isFinished) return m;
 
-  // ★ FIX: If the match is Postponed (PST), Suspended (SUSP), Interrupted (INT), or Canceled (CANC), 
-  // respect the backend status and DO NOT force it live based on kickoff time.
   const statusUpper = (m.status || '').toUpperCase();
-  const isInactive = statusUpper === 'PST' || statusUpper === 'SUSP' || statusUpper === 'INT' || statusUpper === 'CANC' || statusUpper === 'ABD' || statusUpper === 'POSTP';
+  
+  // 1. NEVER force live if the API says it hasn't started or is delayed/postponed
+  const isInactive = statusUpper === 'PST' || statusUpper === 'SUSP' || statusUpper === 'INT' || statusUpper === 'CANC' || statusUpper === 'ABD' || statusUpper === 'POSTP' || statusUpper === 'TBD' || statusUpper === 'PENDING';
   if (isInactive) {
     return m; 
+  }
+
+  // 2. If the API explicitly says it is NS (Not Started), trust it! Don't force live based on time.
+  if (statusUpper === 'NS') {
+    return m;
   }
 
   const matchStartTime = m.timestamp ? m.timestamp * 1000 : null;
@@ -106,12 +107,10 @@ export function applySmartMinute(m, now = Date.now()) {
 
   const elapsedMs = now - matchStartTime;
   
-  // If the match hasn't started yet (kickoff is in the future), do not force it live.
-  if (elapsedMs < 0 && !m.isLive && !m.isHT) {
+  // If kickoff is in the future, don't force it live.
+  if (elapsedMs < 0) {
     return m;
   }
-
-  const elapsedSinceKickoffMins = Math.floor(elapsedMs / 60000);
 
   let smartMinute = m.minute || 0;
   let status = m.status;
@@ -120,11 +119,14 @@ export function applySmartMinute(m, now = Date.now()) {
   let isFinished = m.isFinished;
   let isHidden = m.isHidden || false;
 
+  // Only apply smart minute if it's already live, or if it's significantly past kickoff time
+  // AND the API hasn't given us a definitive status yet.
   const isExtendedTime = status === 'ET' || status === 'P' || status === 'BREAK' || status === 'BT';
 
-  if (!isExtendedTime) {
+  if (!isExtendedTime && !statusUpper) {
+    const elapsedSinceKickoffMins = Math.floor(elapsedMs / 60000);
+
     if (elapsedSinceKickoffMins >= 98) {
-      // Force FT after 98 minutes. 
       smartMinute = 90;
       status = 'FT';
       isLive = false;
@@ -165,7 +167,6 @@ export function applySmartMinute(m, now = Date.now()) {
     isHidden: isHidden
   };
 }
-
 
 export const extractTournamentStage = (raw) => null;
 export const extractMatchDate = (m) => m.dateStr;
