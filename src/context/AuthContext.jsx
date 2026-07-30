@@ -13,7 +13,7 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore'; // ★ Removed onSnapshot
+import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -47,17 +47,23 @@ export function AuthProvider({ children }) {
     }
 
     let unsubscribed = false;
+    let unsubProfile = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
       setCurrentUser(user);
+
+      if (unsubProfile) {
+        unsubProfile();
+        unsubProfile = null;
+      }
 
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
           const profileDoc = await getDoc(userDocRef);
 
-          // ★ FIX: ONLY create if it doesn't exist.
+          // ONLY create if it doesn't exist. DO NOT overwrite.
           if (!profileDoc.exists()) {
             const profile = {
               uid: user.uid,
@@ -69,35 +75,36 @@ export function AuthProvider({ children }) {
               updatedAt: serverTimestamp(),
             };
             await setDoc(userDocRef, profile);
-            if (!unsubscribed) setUserProfile(profile);
-          } else {
-            // ★ Phase 5: One-time read instead of onSnapshot to save Firebase quota
-            let profileData = profileDoc.data();
-            
-            // Check admin_users collection (one-time read)
-            const adminDoc = await getDoc(doc(db, 'admin_users', user.uid));
-            const isAdminCollection = adminDoc.exists();
-            const isRoleAdmin = profileData.role === 'admin' || profileData.role === 'staff';
-            
-            if (!unsubscribed) {
-              setUserProfile({
-                ...profileData,
-                role: (isAdminCollection || isRoleAdmin) ? 'admin' : (profileData.role || 'user')
-              });
-            }
           }
+
+          // ★ Use onSnapshot for INSTANT profile & admin updates (Costs only 1 read)
+          unsubProfile = onSnapshot(userDocRef, (docSnap) => {
+            if (unsubscribed) return;
+            if (docSnap.exists()) {
+              setUserProfile(prev => ({ ...prev, ...docSnap.data() }));
+            } else {
+              setUserProfile(prev => ({ ...prev, uid: user.uid, role: 'user' }));
+            }
+            setAuthLoading(false);
+          }, (err) => {
+            console.error('[Auth] Profile listener error:', err.message);
+            setAuthLoading(false);
+          });
+
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
+          setUserProfile(null);
+          setAuthLoading(false);
         }
       } else {
-        if (!unsubscribed) setUserProfile(null);
+        setUserProfile(null);
+        setAuthLoading(false);
       }
-      
-      if (!unsubscribed) setAuthLoading(false);
     });
 
     return () => {
       unsubscribed = true;
+      if (unsubProfile) unsubProfile();
       unsubscribe();
     };
   }, []);
@@ -169,9 +176,6 @@ export function AuthProvider({ children }) {
     delete profileUpdates.role; // Prevent user from changing their own role
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
-    
-    // Update local state instantly so UI doesn't need to refetch
-    setUserProfile(prev => ({ ...prev, ...updates }));
   }, [currentUser]);
 
   const value = useMemo(() => ({
