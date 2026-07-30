@@ -2,6 +2,7 @@
 export const Sound = {
   ctx: null,
   on: true,
+  type: 'whistle', // 'whistle', 'cheer', 'horn', 'silent'
   _lg: 0,
   _lw: 0,
 
@@ -18,9 +19,16 @@ export const Sound = {
   },
 
   goal() {
-    if (!this.on || !this._init()) return;
+    if (!this.on || this.type === 'silent' || !this._init()) return;
     if (Date.now() - this._lg < 2000) return;
     this._lg = Date.now();
+
+    if (this.type === 'whistle') this._playWhistle();
+    else if (this.type === 'cheer') this._playCheer();
+    else if (this.type === 'horn') this._playHorn();
+  },
+
+  _playWhistle() {
     const t = this.ctx.currentTime;
     const w = this.ctx.createOscillator();
     const g = this.ctx.createGain();
@@ -35,14 +43,48 @@ export const Sound = {
     w.stop(t + 0.2);
   },
 
+  _playHorn() {
+    const t = this.ctx.currentTime;
+    const w = this.ctx.createOscillator();
+    const g = this.ctx.createGain();
+    w.type = 'square';
+    w.frequency.setValueAtTime(120, t);
+    g.gain.setValueAtTime(0.08, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 0.5);
+    w.connect(g);
+    g.connect(this.ctx.destination);
+    w.start(t);
+    w.stop(t + 0.5);
+  },
+
+  _playCheer() {
+    const t = this.ctx.currentTime;
+    const bs = this.ctx.sampleRate * 1.0;
+    const buf = this.ctx.createBuffer(1, bs, this.ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < bs; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / bs) * 0.5;
+    const src = this.ctx.createBufferSource();
+    const flt = this.ctx.createBiquadFilter();
+    const g = this.ctx.createGain();
+    src.buffer = buf;
+    flt.type = 'highpass';
+    flt.frequency.value = 1000;
+    g.gain.setValueAtTime(0.06, t);
+    g.gain.exponentialRampToValueAtTime(0.001, t + 1.0);
+    src.connect(flt);
+    flt.connect(g);
+    g.connect(this.ctx.destination);
+    src.start(t);
+  },
+
+  // Keep existing whistle and kickoff functions...
   whistle(type = 'ft') {
-    if (!this.on || !this._init()) return;
+    if (!this.on || this.type === 'silent' || !this._init()) return;
     if (Date.now() - this._lw < 3000) return;
     this._lw = Date.now();
     const t = this.ctx.currentTime;
     const freq = type === 'ht' ? 2800 : 3200;
     const dur = type === 'ht' ? 0.6 : 0.9;
-
     const play = (start) => {
       const o = this.ctx.createOscillator();
       const g = this.ctx.createGain();
@@ -66,13 +108,12 @@ export const Sound = {
       lfo.start(start);
       lfo.stop(start + dur + 0.05);
     };
-
     play(t);
     if (type === 'ft') play(t + dur + 0.15);
   },
 
   kickoff() {
-    if (!this.on || !this._init()) return;
+    if (!this.on || this.type === 'silent' || !this._init()) return;
     const t = this.ctx.currentTime;
     const bs = this.ctx.sampleRate * 0.15;
     const buf = this.ctx.createBuffer(1, bs, this.ctx.sampleRate);

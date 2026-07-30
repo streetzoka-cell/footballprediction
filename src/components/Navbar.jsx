@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
-  Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal
+  Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal, Command, TrendingUp, Flame, Activity
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
@@ -20,7 +20,7 @@ import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
 
-const ADMIN_PATH = '/zks-admin-8f9x2-control-panel'; // Reverted to exact original string
+const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const APP_LOGO = '/icons/icon-192.png';
 
 function useNow(interval = 10000) {
@@ -65,7 +65,152 @@ const infoSections = [
   { title: "Legal", links: [["🔒 Privacy Policy", "/privacy"], ["📋 Terms of Service", "/terms"]] },
 ];
 
-const ProHeader = React.memo(({ matches, liveMatches }) => {
+// ★ NEW: Global Command Palette Component
+const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate }) => {
+  const [query, setQuery] = useState('');
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (open) {
+      setTimeout(() => inputRef.current?.focus(), 50);
+    } else {
+      setQuery('');
+    }
+  }, [open]);
+
+  const filteredLinks = useMemo(() => {
+    if (!query) return links;
+    return links.filter(l => l.label.toLowerCase().includes(query.toLowerCase()));
+  }, [query, links]);
+
+  const filteredMatches = useMemo(() => {
+    if (!query) return [];
+    return liveMatches.filter(m => 
+      m.homeName?.toLowerCase().includes(query.toLowerCase()) || 
+      m.awayName?.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 5);
+  }, [query, liveMatches]);
+
+  if (!open) return null;
+
+  const handleNav = (to) => {
+    navigate(to);
+    onClose();
+  };
+
+  return (
+    <div className="cmd-overlay" onClick={onClose}>
+      <div className="cmd-modal" onClick={e => e.stopPropagation()}>
+        <div className="cmd-input-wrap">
+          <Search size={18} className="cmd-search-icon" />
+          <input 
+            ref={inputRef}
+            value={query} 
+            onChange={e => setQuery(e.target.value)} 
+            placeholder="Search matches, teams, or navigate..." 
+            className="cmd-input"
+          />
+          <button className="cmd-esc-btn">ESC</button>
+        </div>
+        
+        <div className="cmd-results">
+          {filteredMatches.length > 0 && (
+            <div className="cmd-group">
+              <div className="cmd-group-title">MATCHES</div>
+              {filteredMatches.map(m => (
+                <button key={m.id} className="cmd-item" onClick={() => handleNav(buildMatchRoute(m.id, m.homeName, m.awayName))}>
+                  <Activity size={14} className="cmd-item-icon" />
+                  <span>{m.homeName} vs {m.awayName}</span>
+                  {m.isLive && <span className="cmd-live-tag">LIVE</span>}
+                </button>
+              ))}
+            </div>
+          )}
+          
+          <div className="cmd-group">
+            <div className="cmd-group-title">NAVIGATION</div>
+            {filteredLinks.map(l => (
+              <button key={l.to} className="cmd-item" onClick={() => handleNav(l.to)}>
+                <span className="cmd-item-emoji">{l.emoji}</span>
+                <span>{l.label}</span>
+              </button>
+            ))}
+          </div>
+          
+          {filteredLinks.length === 0 && filteredMatches.length === 0 && (
+            <div className="cmd-empty">No results found for "{query}"</div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+});
+
+// ★ NEW: Smart Search Dropdown Component
+const SmartSearchDropdown = React.memo(({ query, liveMatches, onClose, navigate }) => {
+  const q = query.toLowerCase().trim();
+  if (!q) return null;
+
+  const matches = liveMatches.filter(m => 
+    m.homeName?.toLowerCase().includes(q) || m.awayName?.toLowerCase().includes(q)
+  ).slice(0, 4);
+
+  if (matches.length === 0) return null;
+
+  return (
+    <div className="nv-smart-search-dropdown">
+      <div className="nv-ss-header">MATCHES</div>
+      {matches.map(m => (
+        <div 
+          key={m.id} 
+          className="nv-ss-item"
+          onClick={() => { navigate(buildMatchRoute(m.id, m.homeName, m.awayName)); onClose(); }}
+        >
+          <div className="nv-ss-teams">
+            <span>{m.homeName}</span>
+            <span className="nv-ss-vs">vs</span>
+            <span>{m.awayName}</span>
+          </div>
+          {m.isLive && <span className="nv-ss-live">LIVE {m.displayMinute}'</span>}
+        </div>
+      ))}
+    </div>
+  );
+});
+
+// ★ NEW: Live Match Hover Panel Component
+const LiveMatchPanel = React.memo(({ liveMatches, onClose }) => {
+  if (liveMatches.length === 0) return null;
+  return (
+    <div className="nv-live-panel" onMouseLeave={onClose}>
+      <div className="nv-lp-header">
+        <Flame size={14} style={{ color: '#ef4444' }} />
+        <span>LIVE NOW ({liveMatches.length})</span>
+      </div>
+      <div className="nv-lp-list">
+        {liveMatches.slice(0, 8).map(m => (
+          <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="nv-lp-item" onClick={onClose}>
+            <div className="nv-lp-team">
+              {m.homeLogo && <img src={m.homeLogo} alt="" />}
+              <span>{m.homeName}</span>
+            </div>
+            <div className="nv-lp-score">{m.homeScore ?? '-'} - {m.awayScore ?? '-'}</div>
+            <div className="nv-lp-team aw">
+              {m.awayLogo && <img src={m.awayLogo} alt="" />}
+              <span>{m.awayName}</span>
+            </div>
+            <span className="nv-lp-min">{m.displayMinute}'</span>
+          </Link>
+        ))}
+      </div>
+      <Link to="/fixtures" className="nv-lp-footer" onClick={onClose}>
+        View All Fixtures <ChevronRight size={14} />
+      </Link>
+    </div>
+  );
+});
+
+const ProHeader = React.memo(({ matches, liveMatches, onHover }) => {
   const featured = useMemo(() => {
     const liveWithScore = liveMatches.find(m => m.isLive && m.homeScore != null && m.awayScore != null);
     if (liveWithScore) return { match: liveWithScore, isLive: true };
@@ -88,41 +233,43 @@ const ProHeader = React.memo(({ matches, liveMatches }) => {
   const matchLink = m.id ? buildMatchRoute(m.id, homeName, awayName) : '/predictions';
 
   return (
-    <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }} title={`${homeName} vs ${awayName}`}>
-      <div className="nv-pro-tag">
-        {featured.isLive && <span className="nv-pro-live-dot" />}
-        <span>{m.leagueName || 'Featured Match'}</span>
-      </div>
-      <div className="nv-pro-teams">
-        <div className="nv-pro-team">
-          {homeLogo ? <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
-          <span>{homeName}</span>
+    <div className="nv-pro-wrap-inner" onMouseEnter={onHover}>
+      <Link to={matchLink} className="nv-pro-inner" style={{ cursor: 'pointer', textDecoration: 'none', display: 'block' }} title={`${homeName} vs ${awayName}`}>
+        <div className="nv-pro-tag">
+          {featured.isLive && <span className="nv-pro-live-dot" />}
+          <span>{m.leagueName || 'Featured Match'}</span>
         </div>
-        <div className="nv-pro-score-bar">
-          {featured.isLive && m.homeScore != null ? (
-            <>
-              <span className="nv-pro-score nv-pro-score-live">{m.homeScore}</span>
-              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1rem', fontWeight: 700 }}>:</span>
-              <span className="nv-pro-score nv-pro-score-live">{m.awayScore}</span>
-            </>
-          ) : m.kickoff ? (
-            <span className="nv-pro-time"><Clock size={12} /> {koTime}</span>
-          ) : (
-            <span className="nv-pro-vs">VS</span>
-          )}
+        <div className="nv-pro-teams">
+          <div className="nv-pro-team">
+            {homeLogo ? <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
+            <span>{homeName}</span>
+          </div>
+          <div className="nv-pro-score-bar">
+            {featured.isLive && m.homeScore != null ? (
+              <>
+                <span className="nv-pro-score nv-pro-score-live">{m.homeScore}</span>
+                <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: '1rem', fontWeight: 700 }}>:</span>
+                <span className="nv-pro-score nv-pro-score-live">{m.awayScore}</span>
+              </>
+            ) : m.kickoff ? (
+              <span className="nv-pro-time"><Clock size={12} /> {koTime}</span>
+            ) : (
+              <span className="nv-pro-vs">VS</span>
+            )}
+          </div>
+          <div className="nv-pro-team nv-pro-team-aw">
+            {awayLogo ? <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
+            <span>{awayName}</span>
+          </div>
         </div>
-        <div className="nv-pro-team nv-pro-team-aw">
-          {awayLogo ? <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" className="nv-pro-team-logo" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} /> : null}
-          <span>{awayName}</span>
-        </div>
-      </div>
-      {featured.isLive && m.displayMinute != null && (
-        <div className="nv-pro-minute">
-          <span className="nv-pro-live-dot" style={{ width: 6, height: 6 }} />
-          <span>{m.displayMinute}'</span>
-        </div>
-      )}
-    </Link>
+        {featured.isLive && m.displayMinute != null && (
+          <div className="nv-pro-minute">
+            <span className="nv-pro-live-dot" style={{ width: 6, height: 6 }} />
+            <span>{m.displayMinute}'</span>
+          </div>
+        )}
+      </Link>
+    </div>
   );
 });
 
@@ -241,6 +388,8 @@ export default function Navbar() {
   const [notifOpen, setNotifOpen] = useState(false);
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [livePanelOpen, setLivePanelOpen] = useState(false);
   
   const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
@@ -365,7 +514,7 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', fn);
   }, []);
 
-  useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setInfoOpen(false); setMoreOpen(false); }, [location.pathname]);
+  useEffect(() => { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setInfoOpen(false); setMoreOpen(false); setCmdOpen(false); }, [location.pathname]);
 
   useEffect(() => {
     if (mobileOpen) { document.body.style.overflow = 'hidden'; document.body.style.position = 'fixed'; document.body.style.width = '100%'; } 
@@ -373,16 +522,23 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ''; document.body.style.position = ''; document.body.style.width = ''; };
   }, [mobileOpen]);
 
+  // ★ NEW: Global Keyboard Shortcuts (Ctrl+K, Esc)
   useEffect(() => {
-    const fn = (e) => {
-      if (e.key === 'Escape') { setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setMoreOpen(false); }
+    const handler = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+        e.preventDefault();
+        setCmdOpen(p => !p);
+      }
+      if (e.key === 'Escape') { 
+        setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setMoreOpen(false); setCmdOpen(false); setLivePanelOpen(false);
+      }
       if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
       if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
       if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
     };
-    document.addEventListener('keydown', fn);
-    document.addEventListener('mousedown', fn);
-    return () => { document.removeEventListener('keydown', fn); document.removeEventListener('mousedown', fn); };
+    document.addEventListener('keydown', handler);
+    document.addEventListener('mousedown', handler);
+    return () => { document.removeEventListener('keydown', handler); document.removeEventListener('mousedown', handler); };
   }, []);
 
   useEffect(() => {
@@ -415,10 +571,10 @@ export default function Navbar() {
   const hasLive = useMemo(() => tickerMatches.some(m => m.isLive), [tickerMatches]);
 
   const renderNotifDropdown = useCallback(() => (
-    <div style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 'min(360px, 90vw)', background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(255,255,255,0.08)', borderRadius: 16, overflow: 'hidden', boxShadow: '0 20px 60px rgba(0,0,0,0.6)', animation: 'nvFadeUp 0.3s cubic-bezier(0.22,1,0.36,1) both', backdropFilter: 'blur(20px)' }}>
-      <div style={{ padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'linear-gradient(135deg, rgba(16,185,129,0.05) 0%, rgba(168,85,247,0.03) 100%)' }}>
-        <span style={{ fontSize: '0.9rem', fontWeight: 800, color: '#fff', display: 'flex', alignItems: 'center', gap: 8, textTransform: 'uppercase', letterSpacing: '0.05em' }}><Bell size={16} style={{ color: '#10b981' }} /> Notifications</span>
-        {predNotifs.length > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#10b981', background: 'rgba(16,185,129,0.1)', padding: '4px 12px', borderRadius: 20, border: '1px solid rgba(16,185,129,0.2)' }}>{predNotifs.length} New</span>}
+    <div className="nv-notif-dropdown">
+      <div className="nv-notif-header">
+        <span><Bell size={16} /> Notifications</span>
+        {predNotifs.length > 0 && <span className="nv-notif-count">{predNotifs.length} New</span>}
       </div>
       {predNotifs.length === 0 ? (
         <div style={{ padding: '40px 24px', textAlign: 'center' }}>
@@ -436,8 +592,11 @@ export default function Navbar() {
 
   return (
     <>
+      <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} links={LINKS} liveMatches={liveMatches} navigate={navigate} />
+
       <div className={`nv-pro-wrap ${isHome ? 'nv-pro-visible' : 'nv-pro-hidden'}`}>
-        <ProHeader matches={liveMatches} liveMatches={liveMatches} />
+        <ProHeader matches={liveMatches} liveMatches={liveMatches} onHover={() => setLivePanelOpen(true)} />
+        {livePanelOpen && <LiveMatchPanel liveMatches={liveMatches} onClose={() => setLivePanelOpen(false)} />}
         <PinnedMatchesWidget pinnedMatches={pinnedMatches} allLive={liveMatches} />
       </div>
 
@@ -480,15 +639,23 @@ export default function Navbar() {
 
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
             
+            {/* ★ NEW: Smart Search Input */}
+                      {/* ★ NEW: Smart Search Input */}
             <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
-              <button onClick={() => { setSearchOpen(p => !p); if (searchOpen) setSearchQuery(''); }} className={`nv-action-btn ${searchOpen ? 'active' : ''}`} aria-label="Search"><Search size={18} strokeWidth={2.5} /></button>
-              {searchOpen && (
-                <form onSubmit={handleSearch} style={{ position: 'absolute', top: 'calc(100% + 12px)', right: 0, width: 300, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.15)', borderRadius: 12, overflow: 'hidden', boxShadow: '0 20px 50px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05)', animation: 'nvFadeUp 0.2s ease both', display: 'flex', alignItems: 'center', gap: 10, padding: '0 12px', height: 46, backdropFilter: 'blur(20px)' }}>
-                  <Search size={16} style={{ color: '#10b981', flexShrink: 0 }} />
-                  <input autoFocus value={searchQuery} onChange={e => setSearchQuery(e.target.value)} placeholder="Search matches, teams..." style={{ flex: 1, background: 'none', border: 'none', outline: 'none', color: '#fff', fontSize: '0.9rem', fontWeight: 600, fontFamily: 'inherit', minWidth: 0 }} />
-                  {searchQuery && <button type="button" onClick={() => setSearchQuery('')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: 6, width: 24, height: 24, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', cursor: 'pointer', fontSize: '0.8rem' }}>✕</button>}
-                </form>
-              )}
+              <form onSubmit={handleSearch} className="nv-smart-search-wrap">
+                <Search size={16} className="nv-ss-icon" />
+                <input 
+                  value={searchQuery} 
+                  onChange={e => setSearchQuery(e.target.value)} 
+                  onFocus={() => setSearchOpen(true)} 
+                  placeholder="Search teams, leagues, matches..." // ★ UPDATED
+                  className="nv-smart-search-input"
+                />
+                <button type="button" className="nv-ss-cmd-btn" onClick={() => setCmdOpen(true)} title="Command Palette (Ctrl+K)">
+                  <Command size={12} /> K
+                </button>
+              </form>
+              {searchOpen && <SmartSearchDropdown query={searchQuery} liveMatches={liveMatches} onClose={() => setSearchOpen(false)} navigate={navigate} />}
             </div>
 
             {isLoggedIn && (
@@ -501,12 +668,18 @@ export default function Navbar() {
               </div>
             )}
 
+            {/* ★ NEW: Points Badge with Progress Bar */}
             {isLoggedIn && userStats.resolved > 0 && (
               <div className="nv-points-badge" onMouseEnter={() => setPointsHover(true)} onMouseLeave={() => setPointsHover(false)} style={{ flexShrink: 0 }}>
                 <span style={{ fontSize: '1rem', animation: 'nvStreakFire 2s ease-in-out infinite' }}>⚡</span>
                 <span style={{ fontWeight: 900, fontSize: '0.9rem', color: '#fbbf24', fontFamily: 'ui-monospace, monospace', animation: pointsHover ? 'nvPointsCount 0.4s ease both' : 'none' }}>{userStats.points.toLocaleString()}</span>
                 <span style={{ fontSize: '0.55rem', fontWeight: 800, color: '#fbbf24', background: 'rgba(251,191,36,0.1)', padding: '3px 8px', borderRadius: 4, opacity: 0.8, letterSpacing: '0.05em' }}>PTS</span>
                 {streak > 0 && <span style={{ fontSize: '0.65rem', fontWeight: 800, color: '#f97316', display: 'flex', alignItems: 'center', gap: 3, marginLeft: 4, opacity: pointsHover ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>🔥{streak}</span>}
+                
+                {/* Progress Bar */}
+                <div className="nv-points-progress">
+                  <div className="nv-points-progress-fill" style={{ width: `${userStats.total > 0 ? (userStats.predicted / userStats.total) * 100 : 0}%` }}></div>
+                </div>
               </div>
             )}
 
@@ -555,6 +728,7 @@ export default function Navbar() {
 
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
+            <button onClick={() => setCmdOpen(true)} className="nv-action-btn" aria-label="Search"><Command size={18} strokeWidth={2.5} /></button>
             {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
             {isLoggedIn && (
               <div ref={mobNotifRef} style={{ position: 'relative' }}>

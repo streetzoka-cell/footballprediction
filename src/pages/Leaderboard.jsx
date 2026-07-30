@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, AlertCircle, ShieldAlert, Users,
-  Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown
+  Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -23,9 +23,9 @@ const AVATAR_COLORS = [
 ];
 
 const PODIUM_CFG = [
-  { h: 130, border: 'var(--gold)', bg: 'linear-gradient(180deg,rgba(245,197,66,.12) 0%,rgba(245,197,66,.02) 100%)', text: 'var(--gold)', avatar: 72, font: '1.25rem', shadow: '0 0 24px rgba(245,197,66,.15)', order: 2 },
-  { h: 95, border: '#94a3b8', bg: 'linear-gradient(180deg,rgba(148,163,184,.07) 0%,rgba(148,163,184,.01) 100%)', text: '#94a3b8', avatar: 58, font: '1rem', shadow: '0 0 16px rgba(148,163,184,.08)', order: 1 },
-  { h: 75, border: '#b45309', bg: 'linear-gradient(180deg,rgba(180,83,9,.07) 0%,rgba(180,83,9,.01) 100%)', text: '#d97706', avatar: 50, font: '.85rem', shadow: '0 0 12px rgba(180,83,9,.08)', order: 3 },
+  { h: 130, border: 'var(--gold)', bg: 'linear-gradient(180deg,rgba(245,197,66,.15) 0%,rgba(245,197,66,.02) 100%)', text: 'var(--gold)', avatar: 72, font: '1.25rem', shadow: '0 0 24px rgba(245,197,66,.2)', order: 2, medal: '🥇' },
+  { h: 95, border: '#94a3b8', bg: 'linear-gradient(180deg,rgba(148,163,184,.1) 0%,rgba(148,163,184,.01) 100%)', text: '#94a3b8', avatar: 58, font: '1rem', shadow: '0 0 16px rgba(148,163,184,.1)', order: 1, medal: '🥈' },
+  { h: 75, border: '#b45309', bg: 'linear-gradient(180deg,rgba(180,83,9,.1) 0%,rgba(180,83,9,.01) 100%)', text: '#d97706', avatar: 50, font: '.85rem', shadow: '0 0 12px rgba(180,83,9,.1)', order: 3, medal: '🥉' },
 ];
 
 const TABS = [
@@ -35,14 +35,30 @@ const TABS = [
   { key: PERIOD.GOAT, label: 'G.O.A.T', Icon: Crown, isGoat: true },
 ];
 
-const AccBar = memo(function AccBar({ value, delay }) {
-  const fill = value >= 70 ? 'var(--accent)' : value >= 45 ? 'var(--gold)' : '#ef4444';
+// ★ Real Achievement Badges Logic
+const getBadges = (user) => {
+  const badges = [];
+  if ((user.exact || 0) >= 5) badges.push({ text: '🎯 Sniper', cls: 'sniper' });
+  if ((user.streak || 0) >= 3) badges.push({ text: `🔥 ${user.streak}`, cls: 'streak' });
+  if ((user.points || 0) >= 500) badges.push({ text: '⭐ Veteran', cls: 'vet' });
+  return badges;
+};
+
+const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, color = '#10b981' }) {
+  const r = (size - stroke) / 2;
+  const circ = 2 * Math.PI * r;
+  const pct = Math.min(100, Math.max(0, value)) / 100;
   return (
-    <div className="lb-acc">
-      <div className="lb-acc-bar">
-        <div className="lb-acc-fill" style={{ width: `${Math.min(100, Math.max(0, value))}%`, background: `linear-gradient(90deg,${fill},${fill}88)`, animationDelay: `${delay || 0}ms` }} />
-      </div>
-      <span className="lb-acc-val" style={{ color: fill }}>{value}%</span>
+    <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
+      <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#151b26" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
+          strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
+          strokeLinecap="round" style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)' }} />
+      </svg>
+      <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: '#fff' }}>
+        {value}%
+      </span>
     </div>
   );
 });
@@ -62,20 +78,20 @@ const StatCard = memo(function StatCard({ icon, label, value, color, bg, delay }
 const PodiumUser = memo(function PodiumUser({ user, position, delay }) {
   const c = PODIUM_CFG[position];
   if (!c) return null;
-  
   const name = user.displayName || 'Player';
   
   return (
     <div className="lb-pod-u" style={{ order: c.order, animation: `lb-pop .4s ${SPRING} ${(delay || 0) + 150}ms both` }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, position: 'relative' }}>
         {position === 0 && (
-          <div style={{ color: 'var(--gold)', marginBottom: -2, filter: 'drop-shadow(0 0 5px rgba(245,197,66,.3))', animation: 'lb-crown 3s ease-in-out infinite' }}>
-            <Crown size={20} />
+          <div style={{ color: 'var(--gold)', marginBottom: -2, filter: 'drop-shadow(0 0 5px rgba(245,197,66,.4))', animation: 'lb-crown 3s ease-in-out infinite' }}>
+            <Crown size={24} />
           </div>
         )}
         <div className="lb-pod-avatar" style={{ width: c.avatar, height: c.avatar, background: `linear-gradient(135deg,${c.border}25,${c.border}08)`, border: `3px solid ${c.border}`, fontSize: c.font, color: c.text, boxShadow: c.shadow }}>
           {name.slice(0, 2).toUpperCase()}
         </div>
+        <div className="lb-pod-medal" style={{ fontSize: '1.2rem', marginTop: -8 }}>{c.medal}</div>
         <div className="lb-pod-name">{name}</div>
         <div className="lb-pod-sub">
           {user.points || 0} pts · {user.accuracy || 0}% {user.streak > 0 && `· 🔥 ${user.streak}`}
@@ -116,41 +132,51 @@ const TabBar = memo(function TabBar({ tabs, active, onChange }) {
   );
 });
 
-// ★ Smart Leaderboard Row with Streak & Trend
+// ★ Smart Row with Rank Change Animations & Badges
 const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, prevRank }) {
   const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
-  const exactColor = (user.exact || 0) >= 15 ? 'var(--accent)' : (user.exact || 0) >= 10 ? 'var(--gold)' : 'var(--text-primary)';
-  
   const trend = prevRank ? prevRank - rank : 0; // Positive means moved up
   const name = user.displayName || 'Anonymous';
+  const badges = getBadges(user);
+
+  let rowCls = 'lb-row';
+  if (isMe) rowCls += ' me';
+  if (trend > 0) rowCls += ' moved-up';
+  if (trend < 0) rowCls += ' moved-down';
 
   return (
-    <tr className={`lb-row${isMe ? ' me' : ''}`} style={{ animationDelay: `${delay}ms` }}>
-      <td className="lb-td" style={{ fontWeight: 800, fontFamily: 'var(--font-display)', color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+    <div className={rowCls} style={{ animationDelay: `${delay}ms` }}>
+      <div className="lb-row-rank" style={{ color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>
         #{rank}
-        {trend > 0 && <span style={{ color: 'var(--accent)', fontSize: '0.6rem', display: 'flex', alignItems: 'center' }}><ArrowUp size={10} />{trend}</span>}
-        {trend < 0 && <span style={{ color: '#ef4444', fontSize: '0.6rem', display: 'flex', alignItems: 'center' }}><ArrowDown size={10} />{Math.abs(trend)}</span>}
-      </td>
-      <td className="lb-td">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ width: 32, height: 32, borderRadius: 8, background: avColor, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '.68rem', fontWeight: 800, color: '#fff', flexShrink: 0, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
-            {name.slice(0, 2).toUpperCase()}
+        {trend > 0 && <span className="trend-up"><ArrowUp size={10} />{trend}</span>}
+        {trend < 0 && <span className="trend-down"><ArrowDown size={10} />{Math.abs(trend)}</span>}
+      </div>
+      
+      <div className="lb-row-user">
+        <div className="lb-row-avatar" style={{ background: avColor, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
+          {name.slice(0, 2).toUpperCase()}
+        </div>
+        <div className="lb-row-info">
+          <div className="lb-row-name">
+            {name} 
+            {isMe && <span className="lb-you-badge">YOU</span>}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {name}
-              {isMe && <span style={{ fontSize: '.56rem', fontWeight: 800, color: 'var(--accent)', background: 'rgba(0,230,118,.07)', padding: '2px 6px', borderRadius: 4 }}>YOU</span>}
-              {user.streak > 2 && <span style={{ fontSize: '.6rem', color: '#ef4444' }}>🔥 {user.streak}</span>}
-            </div>
-            <div style={{ fontSize: '.56rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 1 }}>{user.predictions || 0} predictions</div>
+          <div className="lb-row-badges">
+            {badges.map((b, i) => <span key={i} className={`lb-badge ${b.cls}`}>{b.text}</span>)}
+            <span className="lb-row-preds">{user.predictions || 0} preds</span>
           </div>
         </div>
-      </td>
-      <td className="lb-td"><AccBar value={user.accuracy || 0} delay={delay + 60} /></td>
-      <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 900, color: '#a855f7', fontSize: '.88rem' }}>{user.points || 0}</td>
-      <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 700, color: 'var(--text-muted)', fontSize: '.78rem' }}>{user.predictions || 0}</td>
-      <td className="lb-td r" style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: exactColor, fontSize: '.78rem' }}>{user.exact || 0}</td>
-    </tr>
+      </div>
+
+      <div className="lb-row-acc">
+        <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? '#10b981' : (user.accuracy || 0) >= 40 ? '#fbbf24' : '#ef4444'} />
+      </div>
+
+      <div className="lb-row-pts">
+        <span className="val">{user.points || 0}</span>
+        <span className="lbl">Points</span>
+      </div>
+    </div>
   );
 });
 
@@ -191,10 +217,18 @@ export default function Leaderboard() {
     return loadingDaily;
   }, [tab, loadingWeekly, loadingMonthly, loadingGoat, loadingDaily]);
 
+  // ★ Personal Dashboard Data
   const myEntry = useMemo(() => {
     if (!uid) return null;
     return entries.find(u => u.uid === uid) || null;
   }, [entries, uid]);
+
+  const rivalEntry = useMemo(() => {
+    if (!myEntry || myEntry.rank === 1) return null;
+    return entries.find(u => u.rank === myEntry.rank - 1) || null;
+  }, [entries, myEntry]);
+
+  const pointsBehind = rivalEntry ? (rivalEntry.points - myEntry.points) : 0;
 
   const filtered = useMemo(() => {
     if (!deferredSearch.trim()) return entries;
@@ -229,15 +263,12 @@ export default function Leaderboard() {
   return (
     <div className="lb-page">
       <SEO
-  title="Prediction Leaderboard & Player Rankings"
-  description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
-  keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
-  robots="index,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Leaderboard", path: "/leaderboard" }
-  ]}
-/>
+        title="Prediction Leaderboard & Player Rankings"
+        description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
+        keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
+        robots="index,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Leaderboard", path: "/leaderboard" }]}
+      />
 
       <div className="lb-hdr">
         <div className="lb-wrap">
@@ -255,21 +286,45 @@ export default function Leaderboard() {
           <p>{tabDesc}</p>
         </div>
 
+        {/* ★ PREMIUM PERSONAL DASHBOARD */}
         {myEntry && !loading && (
-          <div className={`lb-my${myEntry.rank <= 3 ? ' top' : ''}`}>
-            <div className="lb-my-icon" style={{ background: myEntry.rank <= 3 ? 'rgba(245,197,66,.08)' : 'rgba(168,85,247,.06)', border: myEntry.rank <= 3 ? '1.5px solid rgba(245,197,66,.18)' : '1.5px solid rgba(168,85,247,.12)', color: myEntry.rank <= 3 ? 'var(--gold)' : '#a855f7' }}>
-              {myEntry.rank <= 3 ? <Crown size={20} /> : <span style={{ fontSize: '1rem', fontWeight: 900, fontFamily: 'var(--font-display)' }}>#{myEntry.rank}</span>}
-            </div>
-            <div style={{ flex: 1, minWidth: 0, position: 'relative', zIndex: 1 }}>
-              <div style={{ fontSize: '.8rem', fontWeight: 700, color: 'var(--text-primary)' }}>Your {PERIOD_LABEL[tab] || tab} Rank</div>
-              <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', marginTop: 1 }}>
-                {myEntry.points} pts · {myEntry.exact || 0} exact · {myEntry.accuracy || 0}% {myEntry.streak > 0 && `· 🔥 ${myEntry.streak}`}
+          <div className="lb-personal-card">
+            <div className="lb-pc-main">
+              <div className="lb-pc-rank">
+                <span className="lbl">Your Rank</span>
+                <span className="val">#{myEntry.rank}</span>
+              </div>
+              <div className="lb-pc-stats">
+                <div className="lb-pc-stat">
+                  <span className="val">{myEntry.points || 0}</span>
+                  <span className="lbl">Points</span>
+                </div>
+                <div className="lb-pc-stat">
+                  <span className="val">{myEntry.exact || 0}</span>
+                  <span className="lbl">Exact</span>
+                </div>
+                <div className="lb-pc-stat">
+                  <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="#10b981" />
+                </div>
               </div>
             </div>
-            <div style={{ textAlign: 'right', flexShrink: 0, position: 'relative', zIndex: 1 }}>
-              <div className="lb-my-pts">{myEntry.points}</div>
-              <div style={{ fontSize: '.54rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 600, letterSpacing: '.04em' }}>Points</div>
-            </div>
+            
+            {rivalEntry && (
+              <div className="lb-pc-rival">
+                <Swords size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+                <span className="text">
+                  <strong>{pointsBehind} pts</strong> behind <strong>{rivalEntry.displayName}</strong> (#{rivalEntry.rank})
+                </span>
+                <span className="cta">Catch up →</span>
+              </div>
+            )}
+            
+            {myEntry.rank === 1 && (
+              <div className="lb-pc-rival champion">
+                <Crown size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                <span className="text">You are the Champion! 👑</span>
+              </div>
+            )}
           </div>
         )}
 
@@ -300,49 +355,24 @@ export default function Leaderboard() {
           </div>
           {search.trim() && <div className="lb-search-count">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>}
 
-          <div className="lb-table-wrap">
-            <div className="lb-table-scroll">
-              <table className="lb-table">
-                <thead>
-                  <tr>
-                    <th className="lb-th" style={{ width: 60 }}>Rank</th>
-                    <th className="lb-th">Player</th>
-                    <th className="lb-th" style={{ minWidth: 95 }}>Accuracy</th>
-                    <th className="lb-th r" style={{ width: 60 }}>Points</th>
-                    <th className="lb-th r" style={{ width: 56 }}>Preds</th>
-                    <th className="lb-th r" style={{ width: 48 }}>Exact</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {loading ? (
-                    Array.from({ length: 6 }).map((_, i) => (
-                      <tr key={i}><td colSpan={6} style={{ padding: 0, borderBottom: '1px solid var(--border)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px' }}>
-                          <div className="lb-skel" style={{ width: 24, height: 10, borderRadius: 3, animationDelay: `${i * 40}ms` }} />
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                            <div className="lb-skel" style={{ width: 30, height: 30, borderRadius: 7, animationDelay: `${i * 40 + 25}ms` }} />
-                            <div className="lb-skel" style={{ width: 80, height: 10, borderRadius: 3, animationDelay: `${i * 40 + 50}ms` }} />
-                          </div>
-                          <div className="lb-skel" style={{ width: 60, height: 8, borderRadius: 3, animationDelay: `${i * 40 + 75}ms` }} />
-                        </div>
-                      </td></tr>
-                    ))
-                  ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
-                    <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</td></tr>
-                  ) : visibleRest.length === 0 && search.trim() ? (
-                    <tr><td colSpan={6} className="lb-empty" style={{ borderRadius: 0 }}>No players found matching "{deferredSearch}"</td></tr>
-                  ) : (
-                    visibleRest.map((user, i) => {
-                      const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
-                      const isMe = uid === user.uid;
-                      const delay = Math.min(i * 25, 250);
-                      const prevRank = user.prevRank || 0;
-                      return <LeaderboardRow key={user.uid} user={user} rank={rank} isMe={isMe} delay={delay} prevRank={prevRank} />;
-                    })
-                  )}
-                </tbody>
-              </table>
-            </div>
+          <div className="lb-list">
+            {loading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="lb-skel" style={{ width: '100%', height: 60, borderRadius: 12, animationDelay: `${i * 40}ms` }} />
+              ))
+            ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
+              <div className="lb-empty">{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</div>
+            ) : visibleRest.length === 0 && search.trim() ? (
+              <div className="lb-empty">No players found matching "{deferredSearch}"</div>
+            ) : (
+              visibleRest.map((user, i) => {
+                const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
+                const isMe = uid === user.uid;
+                const delay = Math.min(i * 25, 250);
+                const prevRank = user.prevRank || 0;
+                return <LeaderboardRow key={user.uid} user={user} rank={rank} isMe={isMe} delay={delay} prevRank={prevRank} />;
+              })
+            )}
           </div>
 
           {hasMore && !loading && (

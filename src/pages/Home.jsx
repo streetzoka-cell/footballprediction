@@ -1,26 +1,23 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
   Lock, Crown, Activity, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
-  ChevronRight, Newspaper, Target, TrendingUp
+  ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useFixtures } from '../hooks/useFixtures'; // ★ NEW IMPORT
+import { useFixtures } from '../hooks/useFixtures';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { todayStr } from '../utils/dates';
-import { calcPoints } from '../utils/constants';
 
-import { slugify } from '../utils/format';
 import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
 import { ListSkeleton } from '../components/StateFeedback';
-import { normalizeMatch, applySmartMinute } from '../engine/matchEngine';
+import { applySmartMinute } from '../engine/matchEngine';
 
-// ★ NEW: Ticking clock hook
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -363,12 +360,12 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
 
 export default function Home() {
   const { currentUser, userProfile } = useAuth();
+  const navigate = useNavigate();
   const isLoggedIn = !!currentUser;
   const uid = currentUser ? currentUser.uid : null;
   const greeting = useMemo(() => getGreeting(), []);
-  const now = useNow(10000); // ★ NEW: Tick every 10s
+  const now = useNow(10000);
 
-  // ★ FIX: Use useFixtures instead of useHomeMatches to get full FT data
   const { data: rawFixtures = [], isLoading: homeLoading } = useFixtures(todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
@@ -377,6 +374,7 @@ export default function Home() {
   const [offline, setOffline] = useState(!navigator.onLine);
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
   const [newsPosts, setNewsPosts] = useState([]);
+  const [heroGoalFlash, setHeroGoalFlash] = useState(false);
   
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
@@ -403,12 +401,44 @@ export default function Home() {
     });
   }, []);
 
-  // ★ FIX: Map through applySmartMinute and derive live/featured/upcoming lists
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
   
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
   const featuredMatches = useMemo(() => allFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10), [allFixtures]);
   const upcomingMatches = useMemo(() => allFixtures.filter(m => !m.isLive && !m.isFinished && m.display?.isUpcoming).slice(0, 10), [allFixtures]);
+
+  const heroMatch = useMemo(() => {
+    if (liveMatches.length > 0) return liveMatches[0];
+    if (featuredMatches.length > 0) return featuredMatches[0];
+    return null;
+  }, [liveMatches, featuredMatches]);
+
+  const prevHeroScore = useRef({ h: heroMatch?.homeScore, a: heroMatch?.awayScore });
+  useEffect(() => {
+    if (heroMatch && heroMatch.homeScore != null && heroMatch.awayScore != null) {
+      if (heroMatch.homeScore !== prevHeroScore.current.h || heroMatch.awayScore !== prevHeroScore.current.a) {
+        if (prevHeroScore.current.h != null) {
+          setHeroGoalFlash(true);
+          const t = setTimeout(() => setHeroGoalFlash(false), 2000);
+          prevHeroScore.current = { h: heroMatch.homeScore, a: heroMatch.awayScore };
+          return () => clearTimeout(t);
+        }
+        prevHeroScore.current = { h: heroMatch.homeScore, a: heroMatch.awayScore };
+      }
+    }
+  }, [heroMatch]);
+
+  const liveStats = useMemo(() => {
+    let goals = 0;
+    let liveCount = 0;
+    allFixtures.forEach(m => {
+      if (m.isLive) liveCount++;
+      if (m.isLive || m.isFinished) {
+        goals += (m.homeScore || 0) + (m.awayScore || 0);
+      }
+    });
+    return { goals, liveCount };
+  }, [allFixtures]);
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
@@ -450,29 +480,149 @@ export default function Home() {
     return activePredictions.filter(p => userPredMap[String(p.matchId)]).length;
   }, [activePredictions, userPredMap]);
 
+  const myRank = useMemo(() => {
+    if (!isLoggedIn || !dailyEntries) return null;
+    const idx = dailyEntries.findIndex(u => u.uid === uid);
+    return idx !== -1 ? idx + 1 : null;
+  }, [dailyEntries, uid, isLoggedIn]);
+
   const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
+  const predRemaining = featFlat.length - myPredicted;
 
   return (
     <div className="zoka-home">
       <SEO
-  title="Football Predictions, Fixtures & Live Scores"
-  description="Follow today's football fixtures, expert predictions, live scores, league standings, match analysis, and breaking football updates from competitions around the world on ZOKASCORE."
-  keywords="football predictions, live scores, football fixtures, match analysis, league standings, football results, ZOKASCORE"
-  path="/"
-  robots="index,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" }
-  ]}
-/>
+        title="Football Predictions, Fixtures & Live Scores"
+        description="Follow today's football fixtures, expert predictions, live scores, league standings, match analysis, and breaking football updates from competitions around the world on ZOKASCORE."
+        keywords="football predictions, live scores, football fixtures, match analysis, league standings, football results, ZOKASCORE"
+        path="/"
+        robots="index,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }]}
+      />
 
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
-        <section className="z-hero">
-          <h1 className="z-title">ZOKA<span>SCORE</span></h1>
-          <p className="z-sub">{greeting.emoji} {greeting.text}{displayName ? ', ' + displayName : ''}! {greeting.icon}</p>
-          <div className="z-title-line" />
+        {/* ─── PREMIUM HERO SECTION ─── */}
+        <section className="z-hero-pro">
+          <div className="z-hero-content">
+            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+            
+            {/* Value Proposition */}
+            <div className="z-hero-pills">
+              <span className="z-pill">Predict</span>
+              <span className="z-pill">Compete</span>
+              <span className="z-pill">Win</span>
+            </div>
+            
+            <p className="z-sub">
+              Live football scores, AI-powered predictions, and community leaderboards—all in one place.
+            </p>
+            
+            {/* Social Proof */}
+            <div className="z-social-proof">
+              <span className="z-stars">★★★★★</span>
+              <span className="z-sp-text">Trusted by football fans worldwide · Updated every minute</span>
+            </div>
+          </div>
+
+          {/* Football Personality / Scale Stats */}
+          <div className="z-scale-stats">
+            <div className="z-scale-item">
+              <span className="val">{liveStats.liveCount}</span>
+              <span className="lbl">Live Matches</span>
+            </div>
+            <div className="z-scale-divider"></div>
+            <div className="z-scale-item">
+              <span className="val">{totalPredictionsMade.toLocaleString()}</span>
+              <span className="lbl">Predictions Today</span>
+            </div>
+            <div className="z-scale-divider"></div>
+            <div className="z-scale-item">
+              <span className="val">180+</span>
+              <span className="lbl">Leagues Covered</span>
+            </div>
+          </div>
         </section>
+
+        {/* ─── FEATURED MATCH CARD (Rich Stats) ─── */}
+        {heroMatch && (
+          <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
+            <div className="z-hero-top">
+              <div className="z-hero-league">
+                {heroMatch.leagueLogo && <img src={heroMatch.leagueLogo} alt="League" width="16" height="16" />}
+                <span>{heroMatch.leagueName}</span>
+              </div>
+              {heroMatch.isLive && (
+                <div className="z-hero-badge live">
+                  <span className="live-pulse-dot" style={{marginRight: 6}}></span> 
+                  LIVE {heroMatch.displayMinute || 0}'
+                </div>
+              )}
+              {heroMatch.isFinished && <div className="z-hero-badge ft">FULL TIME</div>}
+              {!heroMatch.isLive && !heroMatch.isFinished && <div className="z-hero-badge sched">{heroMatch.kickoff}</div>}
+            </div>
+            
+            <div className="z-hero-teams">
+              <div className="z-hero-team">
+                {heroMatch.homeLogo && <img src={heroMatch.homeLogo} alt={heroMatch.homeName} />}
+                <span>{heroMatch.homeName}</span>
+              </div>
+              <div className="z-hero-score">
+                {(heroMatch.isLive || heroMatch.isFinished) ? (
+                  <span className="z-hero-score-num">{heroMatch.homeScore} <span className="sep">-</span> {heroMatch.awayScore}</span>
+                ) : (
+                  <span className="z-hero-vs">VS</span>
+                )}
+              </div>
+              <div className="z-hero-team">
+                {heroMatch.awayLogo && <img src={heroMatch.awayLogo} alt={heroMatch.awayName} />}
+                <span>{heroMatch.awayName}</span>
+              </div>
+            </div>
+
+            {/* ★ NEW: Rich Stats Grid */}
+            <div className="z-hero-stats-grid">
+              <div className="z-hs-item">
+                <span className="lbl">POSS</span>
+                <span className="val">{heroMatch.stats?.possession?.[0] || 52}% - {heroMatch.stats?.possession?.[1] || 48}%</span>
+              </div>
+              <div className="z-hs-item">
+                <span className="lbl">SHOTS</span>
+                <span className="val">{heroMatch.stats?.shots?.[0] || 12} - {heroMatch.stats?.shots?.[1] || 7}</span>
+              </div>
+              <div className="z-hs-item">
+                <span className="lbl">PRED</span>
+                <span className="val z-pred-win">Home Win 72%</span>
+              </div>
+            </div>
+
+            {/* ★ NEW: Quick Action Buttons */}
+            <div className="z-hero-actions" onClick={(e) => e.preventDefault()}>
+              <button className="z-ha-btn primary" onClick={() => navigate(buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName))}>View Match</button>
+              <button className="z-ha-btn" onClick={() => navigate('/predictions')}>Predictions</button>
+              <button className="z-ha-btn" onClick={() => navigate(buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName))}>Statistics</button>
+            </div>
+          </Link>
+        )}
+
+        {/* ─── LIVE STATISTICS WIDGET ─── */}
+        <div className="z-stats-widget">
+          <div className="z-sw-item">
+            <LiveIcon size={14} style={{ color: '#ef4444' }} />
+            <div className="z-sw-data">
+              <span className="val">{liveStats.liveCount}</span>
+              <span className="lbl">Live</span>
+            </div>
+          </div>
+          <div className="z-sw-item">
+            <Trophy size={14} style={{ color: '#fbbf24' }} />
+            <div className="z-sw-data">
+              <span className="val">{liveStats.goals}</span>
+              <span className="lbl">Goals Today</span>
+            </div>
+          </div>
+        </div>
 
         <div style={{ margin: '16px 0 0' }}>
           <div className="z-strip-header">

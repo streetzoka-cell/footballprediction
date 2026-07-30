@@ -13,6 +13,7 @@ export function useHomeMatches() {
     },
     refetchInterval: 60000, 
     staleTime: 30000,
+    refetchOnWindowFocus: true, // ★ FIX: Refetch when tab is focused
   });
 }
 
@@ -31,19 +32,14 @@ export function useFixtures(dateStr, sport = 'football') {
       const finished = finRes?.data || [];
       
       const map = new Map();
-      // 1. Base scheduled fixtures
       fixtures.forEach(m => map.set(String(m.id), m));
-      // 2. Overwrite with finished matches (has final scores)
       finished.forEach(m => map.set(String(m.id), m));
-      // 3. Overwrite with live matches (has live scores)
+      
       live.forEach(m => {
         const existing = map.get(String(m.id));
-        
-        // ★ FIX: If existing is FT and incoming live is NOT FT, it means the live data is stale. Don't overwrite.
         if (existing && existing.display?.isFinished && !m.display?.isFinished) {
           return;
         }
-        
         if (existing) map.set(String(m.id), { ...existing, ...m });
         else if (m.dateStr === dateStr) map.set(String(m.id), m);
       });
@@ -51,13 +47,14 @@ export function useFixtures(dateStr, sport = 'football') {
       return Array.from(map.values()).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     placeholderData: keepPreviousData,
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 30 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
+    refetchOnWindowFocus: true, // ★ FIX: Instant refresh when switching tabs
     refetchInterval: (query) => {
       const date = query.queryKey[1];
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
-        return 30000; // Poll every 30s for today/yesterday/tomorrow
+        return 30000; // Poll every 30s
       }
       return false; 
     }
@@ -72,9 +69,11 @@ export function useLiveMatches(sport = 'football') {
       return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     refetchInterval: 30000, 
+    refetchIntervalInBackground: true, // ★ FIX: Keep polling even in background
     staleTime: 15 * 1000, 
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
+    refetchOnWindowFocus: true, // ★ FIX: Instant refresh on focus
   });
 }
 
@@ -88,6 +87,7 @@ export function useFinishedMatches(dateStr, sport = 'football') {
     staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
+    refetchOnWindowFocus: true, // ★ FIX
   });
 }
 

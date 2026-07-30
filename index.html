@@ -4,40 +4,60 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-  <!-- ★ FIX: Content Security Policy allowing blob: for images and media -->
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com wss://*.firebaseio.com https://*.firebaseio.com https://www.google-analytics.com https://www.google.com https://api.zokascore.xyz; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
-
-  <meta name="color-scheme" content="dark" />
+    <!-- ★ Enterprise Security & Policy Headers -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com wss://*.firebaseio.com https://*.firebaseio.com https://www.google-analytics.com https://www.google.com https://api.zokascore.xyz; frame-src 'self' https://*.firebaseapp.com;">
+  <meta http-equiv="Permissions-Policy" content="camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()">
+  <meta name="color-scheme" content="dark light" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   
-  <meta name="theme-color" content="#07141f">
+  <!-- ★ Dynamic Theme Color -->
+  <meta name="theme-color" content="#07141f" media="(prefers-color-scheme: dark)">
+  <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)">
+  <meta name="application-name" content="ZOKASCORE">
+  <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
 
-  <!-- Sitemap Reference -->
-  <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
-  
-  <!-- Icons -->
+  <!-- ★ PWA & Manifest (VitePWA injects the manifest link automatically) -->
+  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+  <link rel="shortcut icon" href="/favicon.ico" />
   <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-  <link rel="apple-touch-icon" href="/icons/icon-192.png" />
-
-  <!-- Mobile -->
+  <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#10b981" />
+  
+  <!-- ★ Apple PWA Meta -->
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  
+  <!-- ★ Search & Sitemap -->
+  <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="ZOKASCORE" />
+  <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
 
-  <!-- Performance -->
+  <!-- ★ Performance: DNS Prefetch & Preconnect -->
+  <link rel="dns-prefetch" href="//fonts.googleapis.com">
+  <link rel="dns-prefetch" href="//fonts.gstatic.com">
+  <link rel="dns-prefetch" href="//www.google-analytics.com">
+  <link rel="dns-prefetch" href="//api.zokascore.xyz">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://www.googletagmanager.com" />
   <link rel="preconnect" href="https://www.google-analytics.com" crossorigin />
+  <link rel="preconnect" href="https://api.zokascore.xyz" crossorigin />
+
+  <!-- ★ Performance: Preload Critical Assets -->
+  <link rel="preload" as="image" href="/icons/icon-192.png" />
+  <link rel="preload" href="/loader.css" as="style" />
+  <link rel="prefetch" href="/manifest.webmanifest" />
 
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-  <!-- ★ FIX: JSON-LD WebSite Schema kept here as single source of truth -->
+  <!-- Loader CSS -->
+  <link rel="stylesheet" href="/loader.css" />
+
+  <!-- ★ JSON-LD WebSite Schema (Single Source of Truth) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -47,33 +67,82 @@
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://zokascore.xyz/search?q={search_term_string}",
-      "query-input": "required name=search_term_string"
+      "query-input": "required name=search_search_term_string"
     }
   }
   </script>
-
-  <!-- Loader -->
-  <link rel="stylesheet" href="/loader.css" />
 </head>
 
 <body>
 
+  <!-- ★ Accessible NoScript Fallback -->
   <noscript>
-    <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif">
-      <h1>ZOKASCORE - Live Football Scores & Predictions</h1>
-      <p>ZOKASCORE requires JavaScript to display live football scores and predictions.</p>
+    <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif;color:#fff;background:#05070a;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;">
+      <img src="/icons/icon-192.png" alt="ZOKASCORE" width="80" height="80" style="border-radius:16px;" />
+      <h1 style="font-size:1.5rem;font-weight:800;margin:0;">ZOKASCORE</h1>
+      <p style="color:#94a3b8;max-width:400px;line-height:1.6;">ZOKASCORE requires JavaScript to display live football scores and predictions. Please enable JavaScript in your browser settings.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:20px;">
+        <a href="/fixtures" style="color:#10b981;text-decoration:none;font-weight:700;border:1px solid #10b981;padding:8px 16px;border-radius:8px;">Latest Fixtures</a>
+        <a href="/predictions" style="color:#10b981;text-decoration:none;font-weight:700;border:1px solid #10b981;padding:8px 16px;border-radius:8px;">Latest Predictions</a>
+        <a href="/help-center" style="color:#94a3b8;text-decoration:none;font-weight:700;border:1px solid #334155;padding:8px 16px;border-radius:8px;">Help Center</a>
+        <a href="/contact" style="color:#94a3b8;text-decoration:none;font-weight:700;border:1px solid #334155;padding:8px 16px;border-radius:8px;">Contact</a>
+      </div>
     </div>
   </noscript>
 
-  <div id="static-loader">
+  <!-- ★ Dynamic & Accessible Loader -->
+  <div id="static-loader" role="status" aria-live="polite">
     <div class="loader-ball">⚽</div>
     <div class="loader-text">ZOKASCORE</div>
     <div class="loader-bar">
       <div class="loader-bar-fill"></div>
     </div>
+    <div id="loader-status-text" class="loader-status-text">Initializing...</div>
   </div>
 
   <div id="root"></div>
+
+  <!-- ★ Enterprise Loader Script: Dynamic Text & Offline Detection -->
+  <script>
+    (function() {
+      const loaderText = document.getElementById('loader-status-text');
+      const loader = document.getElementById('static-loader');
+      
+      // Check if offline immediately
+      if (!navigator.onLine) {
+        if (loaderText) loaderText.textContent = 'You are offline. Reconnect to load ZOKASCORE.';
+        if (loader) loader.classList.add('offline');
+        return;
+      }
+
+      // Dynamic loading messages
+      const messages = [
+        'Loading Live Matches...',
+        'Synchronizing Fixtures...',
+        'Preparing Predictions...',
+        'Fetching Leaderboards...'
+      ];
+      let msgIndex = 0;
+
+      const interval = setInterval(() => {
+        if (msgIndex < messages.length) {
+          if (loaderText) loaderText.textContent = messages[msgIndex];
+          msgIndex++;
+        } else {
+          clearInterval(interval);
+        }
+      }, 1500);
+
+      // Fallback retry button after 10 seconds
+      setTimeout(() => {
+        if (document.getElementById('root').children.length === 0 && loader) {
+          if (loaderText) {
+            loaderText.innerHTML = 'Taking longer than usual. <br/> <a href="/" style="color:#10b981;text-decoration:underline;font-weight:700;">Retry Connection</a> or <a href="/status" style="color:#94a3b8;text-decoration:underline;font-weight:700;">View Status Page</a>';
+          }
+        }
+      }, 10000);
+    })();
+  </script>
 
   <script type="module" src="/src/main.jsx"></script>
 
