@@ -1,4 +1,16 @@
 {
+  "redirects": [
+    {
+      "source": "/prediction",
+      "destination": "/predictions",
+      "permanent": true
+    },
+    {
+      "source": "/prediction/:match*",
+      "destination": "/predictions/:match*",
+      "permanent": true
+    }
+  ],
   "rewrites": [
     {
       "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
