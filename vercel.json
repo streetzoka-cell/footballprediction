@@ -13,7 +13,7 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!main-sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
+      "source": "/((?!sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
       "destination": "/index.html"
     }
   ],
@@ -75,7 +75,7 @@
       ]
     },
     {
-      "source": "/main-sitemap.xml",
+      "source": "/sitemap.xml",
       "headers": [
         {
           "key": "Content-Type",

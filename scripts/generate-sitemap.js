@@ -103,7 +103,7 @@ async function generateSitemap() {
 
     const sitemap = new SitemapStream({ hostname });
 
-    const write = createWriteStream("./public/main-sitemap.xml");
+    const write = createWriteStream("./public/sitemap.xml");
 
     sitemap.pipe(write);
 
@@ -114,7 +114,7 @@ async function generateSitemap() {
     await streamToPromise(sitemap);
 
   console.log(
-  `✅ Generated public/main-sitemap.xml with ${validRoutes.length} URLs.`
+  `✅ Generated public/sitemap.xml with ${validRoutes.length} URLs.`
 );
 
   } catch (err) {
