@@ -20,12 +20,22 @@ export function initAnalytics() {
     onFCP(sendToGoogleAnalytics);
     onTTFB(sendToGoogleAnalytics);
 
-    // Global Error Catcher
+    // Global Error Catcher for synchronous errors
     window.addEventListener('error', (event) => {
       if (typeof window.gtag === 'function') {
         window.gtag('event', 'exception', {
           description: event.message,
           fatal: true,
+        });
+      }
+    });
+
+    // Global Error Catcher for unhandled Promise rejections
+    window.addEventListener('unhandledrejection', (event) => {
+      if (typeof window.gtag === 'function') {
+        window.gtag('event', 'exception', {
+          description: `Unhandled Rejection: ${event.reason?.message || event.reason}`,
+          fatal: false,
         });
       }
     });

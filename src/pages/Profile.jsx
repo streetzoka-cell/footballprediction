@@ -1,19 +1,16 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  LogOut, Target, Trophy, Flame, Calendar, Edit3, Shield, ChevronRight, 
-  Mail, Star, ArrowRight, Zap, Lock, TrendingUp, Award
+  LogOut, Target, Trophy, Flame, Calendar, Edit3, Shield, 
+  Mail, Star, ArrowRight, Zap, Lock
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUserPredictions, useActivePredictions, useUserPoints } from '../hooks/useUserData';
 import { useLiveMatches } from '../hooks/useFixtures';
-import { SPORT, isFinishedStatus, ACHIEVEMENTS } from '../utils/constants';
+import { ACHIEVEMENTS } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from '../components/SEO';
-
 import { calculateUserStats } from '../engine/predictionEngine';
-import { doc, onSnapshot } from 'firebase/firestore';
-import { db } from '../utils/firebase';
 
 const useInView = (threshold = 0.1) => {
   const ref = useRef(null);
@@ -187,26 +184,13 @@ export default function Profile() {
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  const [isAdmin, setIsAdmin] = useState(false);
+  // Removed redundant useEffect. Pulled directly from AuthContext.
+  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin';
 
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPoints = null } = useUserPoints();
   const { data: liveFixtures = [] } = useLiveMatches();
-
-  useEffect(() => {
-    if (!currentUser?.uid) {
-      setIsAdmin(false);
-      return;
-    }
-
-    const adminRef = doc(db, 'admin_users', currentUser.uid);
-    const unsub = onSnapshot(adminRef, (docSnap) => {
-      setIsAdmin(docSnap.exists());
-    });
-
-    return () => unsub();
-  }, [currentUser, db]);
 
   const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
 
@@ -225,8 +209,8 @@ export default function Profile() {
     predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
     correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
     correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
-    streak: liveStats.streak, // ★ NEW: Streak from live stats
-    beatZoka: false, // ★ Placeholder for Beat ZOKA logic
+    streak: liveStats.streak, 
+    beatZoka: false, 
     bestRank: dbPoints.bestRank || 0,
   };
 
@@ -350,7 +334,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* ★ NEW: Fun Season / Real Season Teaser */}
         <div className="pro-enter" style={{
           display: 'flex', gap: 14, marginBottom: 30, flexWrap: 'wrap'
         }}>

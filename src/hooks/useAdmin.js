@@ -1,7 +1,6 @@
-// src/hooks/useAdmin.js
 import { useQuery } from '@tanstack/react-query';
 import { db } from '../utils/firebase';
-import { collection, getDocs, query, where, orderBy, limit as limitQ } from 'firebase/firestore';
+import { collection, getDocs, query, where, orderBy, limit as limitQ, getCountFromServer } from 'firebase/firestore';
 import { useObservabilityStore } from '../store/useObservabilityStore';
 
 const BACKEND_URL = "https://api.zokascore.xyz";
@@ -86,9 +85,17 @@ export function useAdminAnalytics() {
     queryKey: ['adminAnalytics'],
     queryFn: async () => {
       if (!db) return { totalUsers: 0, totalPredictions: 0 };
-      const userSnap = await getDocs(collection(db, 'users'));
-      const predSnap = await getDocs(collection(db, 'predictions_history'));
-      return { totalUsers: userSnap.size, totalPredictions: predSnap.size };
+      
+      // OPTIMIZATION: Use getCountFromServer instead of downloading all documents
+      const [userSnap, predSnap] = await Promise.all([
+        getCountFromServer(collection(db, 'users')),
+        getCountFromServer(collection(db, 'predictions_history'))
+      ]);
+      
+      return { 
+        totalUsers: userSnap.data().count, 
+        totalPredictions: predSnap.data().count 
+      };
     },
     staleTime: 5 * 60 * 1000,
   });
