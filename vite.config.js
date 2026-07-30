@@ -40,12 +40,14 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 
-        // Never allow the service worker to intercept SEO files.
+        // Never allow the service worker to intercept SEO or API files.
         navigateFallbackDenylist: [
           /^\/robots\.txt$/,
           /^\/zokascore-sitemap\.xml$/,
           /^\/sitemap\.xml$/,
-          /^\/sitemap-index\.xml$/
+          /^\/sitemap-index\.xml$/,
+          /^\/api\/.*/, 
+          /^\/opensearch\.xml$/
         ],
 
         runtimeCaching: [
@@ -61,11 +63,34 @@ export default defineConfig({
             }
           },
           {
+            urlPattern: /^https:\/\/api\.zokascore\.xyz\/.*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheableResponse: { statuses: [] } 
+            }
+          },
+          {
+            urlPattern: /^\/api\/.*/i,
+            handler: 'NetworkOnly',
+            options: {
+              cacheableResponse: { statuses: [] }
+            }
+          },
+          {
             urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/i,
             handler: 'NetworkOnly',
             options: {
-              cacheableResponse: {
-                statuses: [] // Prevent Workbox from trying to cache streams
+              cacheableResponse: { statuses: [] }
+            }
+          },
+          {
+            urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2)$/i,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'assets-cache',
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 30
               }
             }
           }

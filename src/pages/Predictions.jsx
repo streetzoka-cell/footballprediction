@@ -6,7 +6,7 @@ import {
   Star, Save, Trophy, Lock, LogIn, ChevronDown, ChevronRight,
   ChevronUp, ChevronLeft, Minus, X, ArrowRight, ArrowLeft,
   Plus, CircleX, CircleCheck, ThumbsUp, ThumbsDown,
-  Pencil, Share2, Zap
+  Pencil, Share2, Zap, RefreshCw, Dice5
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
@@ -18,9 +18,12 @@ import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
+// ★ NEW: Global Toast Manager
+import { useToast } from '../core/ToastManager';
+
 // Centralized imports
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
-import { buildTeamRoute, buildLeagueRoute } from '../utils/routes';
+import { buildTeamRoute, buildLeagueRoute, buildMatchRoute } from '../utils/routes';
 import EmptyState from '../components/EmptyState';
 
 const FUTURE_DAYS = 3;
@@ -28,6 +31,19 @@ const LOCK_BEFORE_MINUTES = 60;
 const ZOKA_VISIBLE_COUNT = 5;
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
+
+// ★ ADDICTIVE FEATURE: Pro Jokes & Quotes
+const ZOKA_JOKES = [
+  "Why did the football coach go to the bank? To get his quarterback! 🏦",
+  "Why don't football stadiums ever get hot? Because there are too many fans! 🥶",
+  "Why did the football team go to the library? To check out some books... and score some points! 📚",
+  "I used to play football, but I was always offside with my coach. 🚩",
+  "Why do football players make great comedians? They always have good delivery! 🎭",
+  "Prediction is difficult, especially when it's about the future. But we'll try anyway! 🔮",
+  "What do you call a football player who loses all his matches? A los-er. Let's win instead! 🏆",
+  "Why was the football pitch always wet? Because the players kept dribbling! 💧"
+];
+const getJoke = () => ZOKA_JOKES[Math.floor(Math.random() * ZOKA_JOKES.length)];
 
 const dateOffset = (offset = 0) => getLocalDateStr(offset);
 
@@ -61,7 +77,6 @@ const QUICK_PICKS = [
   { h: 2, a: 0 }, { h: 0, a: 1 }, { h: 3, a: 1 }, { h: 1, a: 2 },
 ];
 
-// ★ FIX: Use pred.kickoffUtc to get the full ISO timestamp for accurate locking
 function isMatchLocked(pred, now) {
   if (isFinishedStatus(pred.status, SPORT.FOOTBALL)) return { locked: true, reason: 'finished' };
   if (isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive) return { locked: true, reason: 'live' };
@@ -94,7 +109,7 @@ function formatMinutesLeft(mins) {
 
 function parseKickoffTime(kickoff) {
   if (!kickoff) return '--:--';
-  if (typeof kickoff === 'string' && /^\d{2}:\d{2}$/.test(kickoff)) return kickoff; // Already formatted HH:MM
+  if (typeof kickoff === 'string' && /^\d{2}:\d{2}$/.test(kickoff)) return kickoff;
   try {
     const d = new Date(kickoff);
     if (isNaN(d.getTime())) return '--:--';
@@ -105,8 +120,6 @@ function parseKickoffTime(kickoff) {
 }
 
 const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
-const toastStyle = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' };
-
 
 const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   const [d, setD] = useState(0);
@@ -135,18 +148,6 @@ const ResultBadge = memo(function ResultBadge({ result, isCalculating }) {
   if (result.resultType === 'exact') return <span className="v21-bdg ex"><CheckCircle2 size={8} /> Hit +{result.points || 10}</span>;
   if (result.resultType === 'result') return <span className="v21-bdg rs"><TrendingUp size={8} /> Won +{result.points || 3}</span>;
   return <span className="v21-bdg ms"><CircleX size={8} /> Missed</span>;
-});
-
-const SaveToast = memo(function SaveToast({ show, score }) {
-  if (!show) return null;
-  return (
-    <div className="v21-toast">
-      <div style={toastStyle}>
-        <CircleCheck size={15} style={{ color: '#10b981' }} />
-        <span style={{ fontSize: '.82rem', fontWeight: 800, color: '#10b981' }}>{score}</span>
-      </div>
-    </div>
-  );
 });
 
 const LoginModal = memo(function LoginModal({ onClose, nav }) {
@@ -256,6 +257,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   const leagueId = pick.league?.id || pick.leagueKey;
   const homeId = pick.homeTeam?.id || pick.homeTeamId;
   const awayId = pick.awayTeam?.id || pick.awayTeamId;
+  const matchLink = buildMatchRoute(mid, homeName, awayName);
 
   let leftColor = 'rgba(245,197,66,.12)';
   if (res?.resultType === 'exact') leftColor = '#10b981';
@@ -267,44 +269,47 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
 
   return (
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftColor}`, animationDelay: `${index * 30}ms` }}>
-      <div className="v21-mh">
-        <div className="v21-ml">
-          {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
-        </div>
-        <span className="v21-st" style={{ color: isFin ? '#10b981' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
-          {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
-        </span>
-      </div>
-      <div className="v21-tm">
-        <div className="v21-te">
-          {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildTeamRoute(homeId, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
-        </div>
-        {isFin && pick.homeScore != null ? (
-          <div className="v21-sb ft">
-            <span className="v21-sn" style={{ color: '#10b981' }}>{pick.homeScore}</span>
-            <span className="v21-sp">–</span>
-            <span className="v21-sn" style={{ color: '#10b981' }}>{pick.awayScore}</span>
+      <Link to={matchLink} className="v21-card-link-area" style={{textDecoration:'none', color:'inherit'}}>
+        <div className="v21-mh">
+          <div className="v21-ml">
+            {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{leagueName}</span>
           </div>
-        ) : isLive && pick.homeScore != null ? (
-          <div className="v21-sb live">
-            <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.homeScore}</span>
-            <span className="v21-sp">–</span>
-            <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.awayScore}</span>
-          </div>
-        ) : (
-          <div className="v21-sb">
-            <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.home ?? '?'}</span>
-            <span className="v21-sp">–</span>
-            <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.away ?? '?'}</span>
-          </div>
-        )}
-        <div className="v21-te aw">
-          {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+          <span className="v21-st" style={{ color: isFin ? '#10b981' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
+            {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
+          </span>
         </div>
-      </div>
+        <div className="v21-tm">
+          <div className="v21-te">
+            {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{homeName}</span>
+          </div>
+          {isFin && pick.homeScore != null ? (
+            <div className="v21-sb ft">
+              <span className="v21-sn" style={{ color: '#10b981' }}>{pick.homeScore}</span>
+              <span className="v21-sp">–</span>
+              <span className="v21-sn" style={{ color: '#10b981' }}>{pick.awayScore}</span>
+            </div>
+          ) : isLive && pick.homeScore != null ? (
+            <div className="v21-sb live">
+              <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.homeScore}</span>
+              <span className="v21-sp">–</span>
+              <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.awayScore}</span>
+            </div>
+          ) : (
+            <div className="v21-sb">
+              <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.home ?? '?'}</span>
+              <span className="v21-sp">–</span>
+              <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.away ?? '?'}</span>
+            </div>
+          )}
+          <div className="v21-te aw">
+            {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{awayName}</span>
+          </div>
+        </div>
+      </Link>
+
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
           {isFin && res && res.resultType !== 'pending' && <ResultBadge result={res} />}
@@ -361,15 +366,14 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const leagueId = pred.league?.id || pred.leagueKey;
   const homeId = pred.homeTeam?.id || pred.homeTeamId;
   const awayId = pred.awayTeam?.id || pred.awayTeamId;
+  const matchLink = buildMatchRoute(mid, homeName, awayName);
 
-  // ZOKAPICK Benchmark Logic
   const zokaHome = zokaPick?.adminPick?.home;
   const zokaAway = zokaPick?.adminPick?.away;
   const beatZoka = isFin && hasPred && zokaHome != null ? 
     (calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore).points > 
      calcPoints(zokaHome, zokaAway, pred.homeScore, pred.awayScore).points) : false;
 
-  // Community Predictions Logic
   const totalVotes = (communityStats?.home || 0) + (communityStats?.draw || 0) + (communityStats?.away || 0);
   const homePct = totalVotes > 0 ? Math.round(((communityStats?.home || 0) / totalVotes) * 100) : 0;
   const drawPct = totalVotes > 0 ? Math.round(((communityStats?.draw || 0) / totalVotes) * 100) : 0;
@@ -401,79 +405,76 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
 
   return (
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftColor}`, animationDelay: `${index * 20}ms` }}>
-      <div className="v21-mh">
-        <div className="v21-ml">
-          {pred.league?.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+      <Link to={matchLink} className="v21-card-link-area" style={{textDecoration:'none', color:'inherit'}}>
+        <div className="v21-mh">
+          <div className="v21-ml">
+            {pred.league?.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{leagueName}</span>
+          </div>
+          <span className="v21-st" style={{ color: statusColor, background: statusBg }}>{statusLabel}</span>
         </div>
-        <span className="v21-st" style={{ color: statusColor, background: statusBg }}>{statusLabel}</span>
-      </div>
-      <div className="v21-tm">
-        <div className="v21-te">
-          {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildTeamRoute(homeId, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
-        </div>
-        {isEditing ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <ScoreStepper value={editH} onChange={onEditH} />
-            <span style={{ color: '#64748b', fontWeight: 700, fontSize: '.7rem', opacity: .3 }}>–</span>
-            <ScoreStepper value={editA} onChange={onEditA} />
+        <div className="v21-tm">
+          <div className="v21-te">
+            {homeLogo && <img src={homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{homeName}</span>
           </div>
-        ) : hasPred ? (
-          <div className={`v21-sb${isFin ? ' ft' : ''}`} style={!isFin ? { borderColor: 'rgba(96,165,250,.2)', background: 'rgba(96,165,250,.05)' } : {}}>
-            <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.homeScore}</span>
-            <span className="v21-sp">–</span>
-            <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.awayScore}</span>
-          </div>
-        ) : isFin && pred.homeScore != null ? (
-          <div className="v21-sb ft">
-            <span className="v21-sn" style={{ color: '#10b981' }}>{pred.homeScore}</span>
-            <span className="v21-sp">–</span>
-            <span className="v21-sn" style={{ color: '#10b981' }}>{pred.awayScore}</span>
-          </div>
-        ) : (
-          <div className="v21-sb"><span className="v21-vs">VS</span></div>
-        )}
-        <div className="v21-te aw">
-          {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
-        </div>
-      </div>
-
-      {/* Community & ZokaPick Benchmark Section */}
-      {!isEditing && (
-        <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
-          
-          {/* Community Stats */}
-          <div style={{ flex: 1.5 }}>
-            <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
-            <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#1e293b' }}>
-              <div style={{ width: `${homePct}%`, background: '#60a5fa' }} title={`${homePct}% Home`} />
-              <div style={{ width: `${drawPct}%`, background: '#94a3b8' }} title={`${drawPct}% Draw`} />
-              <div style={{ width: `${awayPct}%`, background: '#f5c542' }} title={`${awayPct}% Away`} />
+          {isEditing ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={e => e.preventDefault()}>
+              <ScoreStepper value={editH} onChange={onEditH} />
+              <span style={{ color: '#64748b', fontWeight: 700, fontSize: '.7rem', opacity: .3 }}>–</span>
+              <ScoreStepper value={editA} onChange={onEditA} />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginTop: 3 }}>
-              <span>{homePct}%</span><span>{drawPct}%</span><span>{awayPct}%</span>
+          ) : hasPred ? (
+            <div className={`v21-sb${isFin ? ' ft' : ''}`} style={!isFin ? { borderColor: 'rgba(96,165,250,.2)', background: 'rgba(96,165,250,.05)' } : {}}>
+              <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.homeScore}</span>
+              <span className="v21-sp">–</span>
+              <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.awayScore}</span>
             </div>
-          </div>
-
-          {/* ZOKAPICK */}
-          {zokaPick && (
-            <div style={{ flex: 1, borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: 10 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                <Star size={10} style={{ color: '#f5c542' }} />
-                <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>ZOKAPICK</span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? '#10b981' : '#fff' }}>
-                  {zokaHome} - {zokaAway}
-                </span>
-                {beatZoka && <span style={{ fontSize: '0.6rem', background: '#10b981', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
-              </div>
+          ) : isFin && pred.homeScore != null ? (
+            <div className="v21-sb ft">
+              <span className="v21-sn" style={{ color: '#10b981' }}>{pred.homeScore}</span>
+              <span className="v21-sp">–</span>
+              <span className="v21-sn" style={{ color: '#10b981' }}>{pred.awayScore}</span>
             </div>
+          ) : (
+            <div className="v21-sb"><span className="v21-vs">VS</span></div>
           )}
+          <div className="v21-te aw">
+            {awayLogo && <img src={awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+            <span>{awayName}</span>
+          </div>
         </div>
-      )}
+
+        {!isEditing && (
+          <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+            <div style={{ flex: 1.5 }}>
+              <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
+              <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#1e293b' }}>
+                <div style={{ width: `${homePct}%`, background: '#60a5fa' }} title={`${homePct}% Home`} />
+                <div style={{ width: `${drawPct}%`, background: '#94a3b8' }} title={`${drawPct}% Draw`} />
+                <div style={{ width: `${awayPct}%`, background: '#f5c542' }} title={`${awayPct}% Away`} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginTop: 3 }}>
+                <span>{homePct}%</span><span>{drawPct}%</span><span>{awayPct}%</span>
+              </div>
+            </div>
+            {zokaPick && (
+              <div style={{ flex: 1, borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                  <Star size={10} style={{ color: '#f5c542' }} />
+                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>ZOKAPICK</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? '#10b981' : '#fff' }}>
+                    {zokaHome} - {zokaAway}
+                  </span>
+                  {beatZoka && <span style={{ fontSize: '0.6rem', background: '#10b981', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Link>
 
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
         {isEditing && (
@@ -481,6 +482,10 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
             {QUICK_PICKS.map((qp, qi) => (
               <button key={qi} className={`v21-qp-btn${editH === String(qp.h) && editA === String(qp.a) ? ' sel' : ''}`} onClick={() => onQuickPick(qp.h, qp.a)}>{qp.h}–{qp.a}</button>
             ))}
+            {/* ★ ADDICTIVE FEATURE: Surprise Me Lucky Dip */}
+            <button className="v21-qp-btn surprise" onClick={() => onQuickPick(Math.floor(Math.random()*4), Math.floor(Math.random()*4))}>
+              <Dice5 size={12} /> Surprise Me
+            </button>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
@@ -516,7 +521,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
     </div>
   );
 });
-
 
 const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
@@ -589,8 +593,9 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
               res = { ...r, resultType: r.type };
             }
             const rType = res?.resultType;
+            const matchLink = buildMatchRoute(p.matchId, p.homeTeam?.name || 'Home', p.awayTeam?.name || 'Away');
             return (
-              <div key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)' }}>
+              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {typeof p.homeTeam === 'object' ? (p.homeTeam?.shortName || p.homeTeam?.name || 'Home') : (p.homeTeam || 'Home')} vs {typeof p.awayTeam === 'object' ? (p.awayTeam?.shortName || p.awayTeam?.name || 'Away') : (p.awayTeam || 'Away')}
@@ -600,7 +605,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#60a5fa', fontSize: '.78rem', background: 'rgba(96,165,250,.06)', padding: '2px 6px', borderRadius: 5 }}>{up.homeScore}-{up.awayScore}</span>
                   {rType && rType !== 'pending' && <span className={`v21-bdg ${rType === 'exact' ? 'ex' : rType === 'result' ? 'rs' : 'ms'}`}>+{res.points || 0}</span>}
                 </div>
-              </div>
+              </Link>
             );
           })}
           {stats.predicted === 0 && (
@@ -625,6 +630,7 @@ export default function Predictions() {
   const nav = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+  const toast = useToast(); // ★ NEW: Global Toast hook
   
   const uid = currentUser?.uid;
   const loggedIn = !!uid;
@@ -633,8 +639,7 @@ export default function Predictions() {
 
   const [selDate, setSelDate] = useState(todayStr());
   const [now, setNow] = useState(Date.now());
-  const [toast, setToast] = useState(null);
-  const [copyToast, setCopyToast] = useState(false);
+  const [copyToast, setCopyToast] = useState(false); // Kept for immediate clipboard UI feedback
   const [filter, setFilter] = useState('all');
   const [showLogin, setShowLogin] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -646,6 +651,9 @@ export default function Predictions() {
   const [votingId, setVotingId] = useState(null);
   const [currentUserVotes, setCurrentUserVotes] = useState({});
   
+  // ★ ADDICTIVE FEATURE: Joke State
+  const [joke, setJoke] = useState(getJoke());
+  
   const mountedRef = useRef(true);
 
   const { data: activePredictions = [], isLoading: loadingActive } = useActivePredictions(selDate);
@@ -655,7 +663,6 @@ export default function Predictions() {
   const { data: zokaVotesData = { stats: {} } } = useZokaVotes(selDate);
   const { data: userPoints = null } = useUserPoints(uid);
   
-  // FIX: Fetch all fixtures for the selected date (includes live and finished data)
   const { data: dateFixtures = [] } = useFixtures(selDate);
 
   const { data: officialResults = [] } = useQuery({
@@ -678,7 +685,6 @@ export default function Predictions() {
   const userStats = userPoints || {};
   const ctxLoading = loadingActive || loadingPreds;
 
-  // FIX: Build a map of all fixtures for the selected date safely
   const fixtureMap = useMemo(() => {
     const m = new Map();
     const safeDateFixtures = dateFixtures || [];
@@ -690,7 +696,6 @@ export default function Predictions() {
     try { setCurrentUserVotes(JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}')); } catch { setCurrentUserVotes({}); }
   }, [selDate]);
 
-  // FIX: Use centralized engine for merging live AND finished data
   const mergedFeatured = useMemo(() => mergeLiveIntoPredictions(featuredPreds, fixtureMap), [featuredPreds, fixtureMap]);
   const mergedZoka = useMemo(() => mergeLiveIntoPredictions(zokaPicks?.matches || [], fixtureMap), [zokaPicks, fixtureMap]);
 
@@ -709,8 +714,20 @@ export default function Predictions() {
     return m;
   }, [officialResults]);
 
-  // FIX: Use centralized engine for user stats calculation safely
   const myDayStats = useMemo(() => calculateUserStats(Object.values(ctxUserPreds), mergedFeatured, officialResults || []) || { pts: 0, ex: 0, rs: 0, pred: 0, pn: 0, allResolved: false, accuracy: 0 }, [ctxUserPreds, mergedFeatured, officialResults]);
+
+  // ★ ADDICTIVE FEATURE: Dynamic Motivational Message
+  const performanceMsg = useMemo(() => {
+    if (!loggedIn) return null;
+    if (myDayStats.allResolved) {
+      if (myDayStats.accuracy >= 70) return { text: "🎯 Prediction Master! You're a true football oracle.", color: '#10b981' };
+      if (myDayStats.accuracy >= 40) return { text: "👍 Good job! Keep studying the form tables.", color: '#60a5fa' };
+      return { text: "😅 Tough day at the office? Tomorrow is another matchday!", color: '#f59e0b' };
+    }
+    if (myDayStats.ex >= 3) return { text: "🔥 On Fire! Three exact hits, you're unstoppable!", color: '#ef4444' };
+    if (myDayStats.pred > 0) return { text: "⚽ Matches in play. May the odds be ever in your favor!", color: '#a855f7' };
+    return null;
+  }, [loggedIn, myDayStats]);
 
   const openLogin = useCallback(() => setShowLogin(true), []);
   
@@ -719,14 +736,11 @@ export default function Predictions() {
     
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
-    
-    // Dynamic Share URL for OG Image Generation
     const shareUrl = `${baseUrl}/u/${uid}/picks/${matchId}`;
 
     let homeName = typeof pred.homeTeam === 'object' ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home') : (pred.homeTeam || 'Home');
     let awayName = typeof pred.awayTeam === 'object' ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') : (pred.awayTeam || 'Away');
     
-    // Dynamic Brag Message
     let shareText = `Think you know football? I just predicted ${homeName} vs ${awayName} on ZOKASCORE. `;
     if (isZoka) {
       shareText = `ZOKA went with ${pred.adminPick?.home}-${pred.adminPick?.away}. Do you agree with the expert or me? Join the league: `;
@@ -736,23 +750,18 @@ export default function Predictions() {
 
     if (navigator.share) {
       try {
-        await navigator.share({ 
-          title: 'ZOKASCORE League', 
-          text: shareText, 
-          url: shareUrl 
-        });
-        setToast('Shared! Earn points when friends visit.');
+        await navigator.share({ title: 'ZOKASCORE League', text: shareText, url: shareUrl });
+        toast.success('Shared! Earn points when friends visit.');
       } catch (err) { /* cancelled */ }
     } else {
       try {
         await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
-        setCopyToast(true);
-        setTimeout(() => setCopyToast(false), 3000);
+        toast.success('Copied to clipboard!');
       } catch (e) {
-        setToast(`Copy failed. Please copy manually: ${shareUrl}`);
+        toast.error(`Copy failed. Please copy manually: ${shareUrl}`);
       }
     }
-  }, [uid, openLogin]);
+  }, [uid, openLogin, toast]);
   
   const handleBannerShare = useCallback(async () => {
     if (!uid) { openLogin(); return; }
@@ -776,13 +785,12 @@ export default function Predictions() {
     } else {
       try {
         await navigator.clipboard.writeText(shareText);
-        setCopyToast(true);
-        setTimeout(() => setCopyToast(false), 3000);
+        toast.success('Copied to clipboard!');
       } catch (e) {
-        setToast(`Copy failed. Please copy manually: ${shareText}`);
+        toast.error(`Copy failed. Please copy manually: ${shareText}`);
       }
     }
-  }, [uid, userStats, myDayStats, openLogin]);
+  }, [uid, userStats, myDayStats, openLogin, toast]);
 
   const startEdit = useCallback((pred) => {
     const mid = String(pred.matchId);
@@ -799,7 +807,7 @@ export default function Predictions() {
     if (!uid || !editingId) return;
     const h = parseInt(editH, 10);
     const a = parseInt(editA, 10);
-    if (isNaN(h) || isNaN(a)) { setToast('Enter valid scores'); return; }
+    if (isNaN(h) || isNaN(a)) { toast.error('Enter valid scores'); return; }
     setSaving(true);
     try {
       const matchId = String(pred.matchId || editingId);
@@ -808,14 +816,14 @@ export default function Predictions() {
       setEditingId(null);
       setEditH('');
       setEditA('');
-      setToast(`${h}-${a} saved`);
+      toast.success(`${h}-${a} saved`);
       queryClient.invalidateQueries(['userPredictions', uid, selDate]);
     } catch (e) {
       console.error('[Pred] Save err:', e);
-      setToast('Save failed');
+      toast.error('Save failed');
     }
     setSaving(false);
-  }, [uid, editingId, editH, editA, selDate, displayName, queryClient]);
+  }, [uid, editingId, editH, editA, selDate, displayName, queryClient, toast]);
 
   const handleVote = useCallback(async (matchId, vote) => {
     if (!uid) { openLogin(); return; }
@@ -922,15 +930,13 @@ export default function Predictions() {
 
   return (
     <div className="v21-page">
-<SEO
-  title="Predict Matches & Win"
-  description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
-  keywords="football predictions, betting tips, match predictions, soccer tips"
-  path="/predictions"
-  robots="index,follow"
-/>
-
-      {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
+      <SEO
+        title="Predict Matches & Win"
+        description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
+        keywords="football predictions, betting tips, match predictions, soccer tips"
+        path="/predictions"
+        robots="index,follow"
+      />
 
       <div className="v21-hdr">
         <button className="v21-hdr-btn" onClick={() => nav('/')}><ArrowLeft size={12} /> Home</button>
@@ -951,6 +957,20 @@ export default function Predictions() {
       </div>
 
       <div className="v21-wrap">
+        {/* ★ ADDICTIVE FEATURE: Dynamic Joke Box */}
+        <div className="v21-joke-box">
+          <Zap size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
+          <span style={{ fontSize: '.72rem', color: '#94a3b8', flex: 1 }}>{joke}</span>
+          <button onClick={() => setJoke(getJoke())} className="v21-joke-refresh"><RefreshCw size={12} /></button>
+        </div>
+
+        {/* ★ ADDICTIVE FEATURE: Dynamic Performance Banner */}
+        {performanceMsg && (
+          <div className="v21-perf-banner" style={{ borderColor: `${performanceMsg.color}33`, color: performanceMsg.color, background: `${performanceMsg.color}11` }}>
+            {performanceMsg.text}
+          </div>
+        )}
+
         {loggedIn && (
           <div style={{ marginBottom: 16, animation: `v21-fade-up .4s ${SMOOTH} both` }}>
             <div className="v21-stats">
@@ -1107,7 +1127,6 @@ export default function Predictions() {
         )}
       </div>
 
-      <SaveToast show={!!toast} score={toast} />
       {showLogin && <LoginModal onClose={() => setShowLogin(false)} nav={nav} />}
       {showResults && (
         <ResultsOverlay date={selDate} preds={mergedFeatured} userPredsObj={ctxUserPreds} results={officialResults} onClose={() => setShowResults(false)} nav={nav} />

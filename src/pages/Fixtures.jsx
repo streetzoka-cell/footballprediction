@@ -1,7 +1,3 @@
-// ═════════════════════════════════════════════════════════════════════════════════
-// FILE: src/pages/Fixtures.jsx
-// ═════════════════════════════════════════════════════════════════════════════════
-
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -18,7 +14,7 @@ import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr }
 import { buildMatchRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
 import { applySmartMinute } from '../engine/matchEngine'; 
-import MatchCard from '../components/MatchCard'; // ★ Import global MatchCard
+import MatchCard from '../components/MatchCard';
 
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
@@ -26,7 +22,6 @@ import EmptyState from '../components/EmptyState';
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 
-// Sound Engine
 const CMT = {
   goal: ["GOOOAL! Pure strike!", "Back of the net!", "Zoka magic!"],
   ft: ["Full Time!", "Final Whistle!"],
@@ -35,7 +30,6 @@ const CMT = {
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
 
-// Ticking clock hook to force re-renders every 10s for smart minutes
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -45,16 +39,43 @@ function useNow(interval = 10000) {
   return now;
 }
 
+// Smart Toast System with Grouping
 function useToasts() {
   const [toasts, setToasts] = useState([]);
+  const [pendingGoals, setPendingGoals] = useState([]);
   const idRef = useRef(0);
-  const add = useCallback(t => {
-    const id = ++idRef.current;
-    setToasts(p => [...p.slice(-2), { ...t, id }]);
-    setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), t.dur || 3500);
-    return id;
+  const flushTimer = useRef(null);
+
+  const flushGoals = useCallback(() => {
+    setPendingGoals(prevPending => {
+      if (prevPending.length === 0) return [];
+      const id = ++idRef.current;
+      
+      if (prevPending.length === 1) {
+        const g = prevPending[0];
+        setToasts(p => [...p.slice(-2), { 
+          id, type: 'goal', msg: pick(CMT.goal), 
+          homeName: g.homeName, awayName: g.awayName, score: g.score, 
+          homeLogo: g.homeLogo, awayLogo: g.awayLogo, matchId: g.matchId, dur: 3500 
+        }]);
+      } else {
+        setToasts(p => [...p.slice(-2), { 
+          id, type: 'multi-goal', count: prevPending.length, events: prevPending, dur: 4500 
+        }]);
+      }
+      
+      setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), 4500);
+      return [];
+    });
   }, []);
-  return { toasts, add };
+
+  const addGoal = useCallback((goalData) => {
+    setPendingGoals(prev => [...prev, goalData]);
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = setTimeout(flushGoals, 1200); // Group goals within 1.2s
+  }, [flushGoals]);
+
+  return { toasts, addGoal };
 }
 
 const ToastContainer = memo(({ toasts }) => {
@@ -62,19 +83,45 @@ const ToastContainer = memo(({ toasts }) => {
   return (
     <div className="zoka-toast-wrap">
       {toasts.map(t => {
+        if (t.type === 'multi-goal') {
+          return (
+            <div key={t.id} className="zoka-toast multi-goal">
+              <div className="zoka-toast-inner">
+                <span className="zoka-toast-icon">⚽</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div className="zoka-toast-title">{t.count} New Match Events!</div>
+                  {t.events.slice(0, 3).map((e, i) => (
+                    <div key={i} className="zoka-toast-event">
+                      {e.homeLogo && <img src={e.homeLogo} alt="" width="14" height="14" />}
+                      <span className="team-name">{e.homeName}</span> 
+                      <span className="event-score">{e.score}</span> 
+                      <span className="team-name">{e.awayName}</span>
+                      {e.awayLogo && <img src={e.awayLogo} alt="" width="14" height="14" />}
+                    </div>
+                  ))}
+                  <div className="zoka-toast-detail">Tap to view all</div>
+                </div>
+              </div>
+            </div>
+          );
+        }
+        
         const isGoal = t.type === 'goal';
         let bg = isGoal ? 'linear-gradient(135deg,rgba(239,68,68,.9),rgba(185,28,28,.85))' : 'linear-gradient(135deg,rgba(16,185,129,.9),rgba(5,150,105,.85))';
-        let icon = isGoal ? '⚽' : '🏁';
         return (
-          <div key={t.id} className="zoka-toast" style={{ background: bg }}>
+          <div key={t.id} className="zoka-toast" style={{ background: bg }} onClick={() => window.location.hash = `/match/${t.matchId}`}>
             <div className="zoka-toast-inner">
-              <span className="zoka-toast-icon">{icon}</span>
+              <span className="zoka-toast-icon">⚽</span>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="zoka-toast-title">{isGoal ? 'GOAL!' : t.st === 'ft' ? 'FULL TIME' : 'LIVE ACTION'}</div>
-                {t.msg && <div className="zoka-toast-msg">{t.msg}</div>}
-                {t.detail && <div className="zoka-toast-detail">{t.detail}</div>}
+                <div className="zoka-toast-title">{isGoal ? 'GOAL!' : 'LIVE ACTION'}</div>
+                <div className="zoka-toast-detail" style={{display:'flex', alignItems:'center', gap:'6px'}}>
+                  {t.homeLogo && <img src={t.homeLogo} alt="" width="14" height="14" />}
+                  {t.homeName} 
+                  <span className="zoka-toast-score" style={{color:'#fff'}}>{t.score}</span> 
+                  {t.awayName}
+                  {t.awayLogo && <img src={t.awayLogo} alt="" width="14" height="14" />}
+                </div>
               </div>
-              {t.score && <div className="zoka-toast-score">{t.score}</div>}
             </div>
           </div>
         );
@@ -124,13 +171,12 @@ const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).so
 export default function Fixtures() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const now = useNow(10000); // Tick every 10s
+  const now = useNow(10000);
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
-  
   const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const queryClient = useQueryClient();
-  const { toasts, add: addToast } = useToasts();
+  const { toasts, addGoal } = useToasts();
   
   const { 
     soundEnabled = false, 
@@ -141,6 +187,8 @@ export default function Fixtures() {
     togglePinMatch = () => {} 
   } = usePreferencesStore();
   
+  const [soundType, setSoundType] = useState(localStorage.getItem('zoka_sound_type') || 'whistle');
+
   const isFav = useCallback(id => favorites.includes(String(id)), [favorites]);
   const isPinned = useCallback(id => pinnedMatches.includes(String(id)), [pinnedMatches]);
 
@@ -172,38 +220,68 @@ export default function Fixtures() {
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
 
-  // Map through applySmartMinute to get counting minutes, and filter out hidden matches
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
-  
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
 
-  // Goal/Status Notifications
+  // Smart Goal Detection, Vibration & Rich Notifications
   const prevScores = useRef(new Map());
   useEffect(() => {
     liveMatches.forEach(m => {
       const id = String(m.id);
       const prev = prevScores.current.get(id);
+      let goalScored = false;
+      let scoringTeamLogo = null;
+
       if (prev) {
         if (m.homeScore != null && prev.h != null && m.homeScore > prev.h) {
-          if (Sound.on) Sound.goal();
-          addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.homeName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
-          if (Notification.permission === 'granted') {
-            new Notification('GOAL!', { body: `${m.homeName} scored! ${m.homeScore}–${m.awayScore}` });
-          }
+          goalScored = true;
+          scoringTeamLogo = m.homeLogo;
         }
         if (m.awayScore != null && prev.a != null && m.awayScore > prev.a) {
-          if (Sound.on) Sound.goal();
-          addToast({ type: 'goal', msg: pick(CMT.goal), detail: m.awayName, score: `${m.homeScore}–${m.awayScore}`, dur: 3500 });
-          if (Notification.permission === 'granted') {
-            new Notification('GOAL!', { body: `${m.awayName} scored! ${m.homeScore}–${m.awayScore}` });
-          }
+          goalScored = true;
+          scoringTeamLogo = m.awayLogo;
+        }
+      }
+      
+      if (goalScored) {
+        Sound.goal();
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Vibration
+        
+        addGoal({
+          matchId: m.id,
+          homeName: m.homeName,
+          awayName: m.awayName,
+          score: `${m.homeScore}–${m.awayScore}`,
+          homeLogo: m.homeLogo,
+          awayLogo: m.awayLogo,
+          league: m.leagueName
+        });
+
+        if (Notification.permission === 'granted') {
+          const body = `${m.homeName} ${m.homeScore}–${m.awayScore} ${m.awayName}\n${m.leagueName}`;
+          const notif = new Notification('⚽ GOAL!', {
+            body: body,
+            icon: scoringTeamLogo,
+            badge: m.leagueLogo,
+            tag: m.id,
+            data: { url: `/match/${m.id}` }
+          });
+          notif.onclick = (e) => {
+            e.preventDefault();
+            window.focus();
+            window.location.href = `/match/${m.id}`;
+          };
         }
       }
       prevScores.current.set(id, { h: m.homeScore, a: m.awayScore });
     });
-  }, [liveMatches, addToast]);
+  }, [liveMatches, addGoal]);
 
-  useEffect(() => { Sound.on = soundEnabled; }, [soundEnabled]);
+  useEffect(() => { 
+    Sound.on = soundEnabled; 
+    Sound.type = soundType;
+    localStorage.setItem('zoka_sound_type', soundType);
+  }, [soundEnabled, soundType]);
 
   useEffect(() => {
     const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false })); };
@@ -350,16 +428,13 @@ export default function Fixtures() {
 
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
-     <SEO
-  title="Football Fixtures, Live Scores & League Tables"
-  description="Explore today's football fixtures, live scores, results, league standings, kickoff times, and match insights from competitions around the world on ZOKASCORE."
-  keywords="football fixtures, live scores, football results, league tables, premier league fixtures, champions league fixtures, soccer fixtures, ZOKASCORE"
-  robots="index,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Fixtures", path: "/fixtures" }
-  ]}
-/>
+      <SEO
+        title="Football Fixtures, Live Scores & League Tables"
+        description="Explore today's football fixtures, live scores, results, league standings, kickoff times, and match insights from competitions around the world on ZOKASCORE."
+        keywords="football fixtures, live scores, football results, league tables, premier league fixtures, champions league fixtures, soccer fixtures, ZOKASCORE"
+        robots="index,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Fixtures", path: "/fixtures" }]}
+      />
       <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
@@ -371,7 +446,26 @@ export default function Fixtures() {
           <div className="zoka-hdr-actions">
             <button className="zoka-hdr-btn" onClick={() => setFontScale(p => Math.max(0.8, p - 0.1))} title="Decrease Font Size"><Minus size={16} /></button>
             <button className="zoka-hdr-btn" onClick={() => setFontScale(p => Math.min(1.4, p + 0.1))} title="Increase Font Size"><Plus size={16} /></button>
-            <button className={`zoka-hdr-btn ${soundEnabled ? 'active' : ''}`} onClick={toggleSound} title="Sound">{soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}</button>
+            
+            <div className="zoka-sound-wrap">
+              <button className={`zoka-hdr-btn ${soundEnabled ? 'active' : ''}`} onClick={toggleSound} title="Sound">
+                {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
+              </button>
+              {soundEnabled && (
+                <select 
+                  className="zoka-sound-select" 
+                  value={soundType} 
+                  onChange={(e) => setSoundType(e.target.value)}
+                  title="Notification Sound"
+                >
+                  <option value="whistle">Classic Whistle</option>
+                  <option value="cheer">Stadium Cheer</option>
+                  <option value="horn">Air Horn</option>
+                  <option value="silent">Silent</option>
+                </select>
+              )}
+            </div>
+
             <button className="zoka-hdr-btn" onClick={handleRefresh} title="Refresh"><RefreshCw size={18} className={fixturesLoading ? 'zoka-spin' : ''} /></button>
           </div>
         </div>
@@ -399,7 +493,7 @@ export default function Fixtures() {
                 <div className="zoka-more-label">Past Dates</div>
                 {dates.past.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>)) }
                 <div className="zoka-more-label" style={{ marginTop: '8px' }}>Future Dates</div>
-                {dates.future.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>))}
+                {dates.future.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>)) }
               </div>
             )}
           </div>
@@ -450,7 +544,7 @@ export default function Fixtures() {
             {liveMatches.length > 0 && !searchQ && (
               <div className="zoka-section">
                 <div className="zoka-league-hd">
-                  <TrendingUp size={18} style={{ color: '#ef4444' }} />
+                  <span className="live-pulse-dot" style={{ marginRight: 6 }}></span>
                   <span className="zoka-league-name">Live Matches</span>
                 </div>
                 {visibleLiveMatches.map((m, i) => (

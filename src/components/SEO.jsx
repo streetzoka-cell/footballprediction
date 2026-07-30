@@ -16,7 +16,11 @@ export default function SEO({
   modifiedTime,
   author = "Kimutai Gibson",
   structuredData,
-  breadcrumbs, // ★ NEW: Pass an array of { name, path } to auto-generate BreadcrumbList schema
+  breadcrumbs,
+  prevPath,
+  nextPath,
+  twitterLabel1,
+  twitterData1,
   children,
 }) {
   const location = useLocation();
@@ -27,7 +31,6 @@ export default function SEO({
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  // Prevent tracking params from creating duplicate canonicals
   const url = canonical || `${SITE.url}${location.pathname}`;
 
   // Combine all structured data
@@ -36,6 +39,7 @@ export default function SEO({
     if (Array.isArray(structuredData)) schemas.push(...structuredData);
     else schemas.push(structuredData);
   }
+  
   if (breadcrumbs && breadcrumbs.length > 0) {
     schemas.push({
       "@context": "https://schema.org",
@@ -61,10 +65,25 @@ export default function SEO({
       <meta name="robots" content={robots} />
       <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
+      {/* ★ NEW: Theme & PWA Meta */}
+      <meta name="theme-color" content={SITE.themeColor} />
+      <meta name="color-scheme" content="dark light" />
+      <meta name="mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-capable" content="yes" />
+      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
       <link rel="canonical" href={url} />
 
-      {/* Language */}
+      {/* ★ NEW: Prev / Next Pagination */}
+      {prevPath && <link rel="prev" href={`${SITE.url}${prevPath}`} />}
+      {nextPath && <link rel="next" href={`${SITE.url}${nextPath}`} />}
+
+      {/* Language Alternates */}
       <link rel="alternate" hrefLang="en-KE" href={url} />
+      <link rel="alternate" hrefLang="en" href={url} />
+      <link rel="alternate" hrefLang="sw" href={url} />
+      <link rel="alternate" hrefLang="fr" href={url} />
+      <link rel="alternate" hrefLang="es" href={url} />
       <link rel="alternate" hrefLang="x-default" href={url} />
 
       {/* Open Graph */}
@@ -79,6 +98,7 @@ export default function SEO({
       <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
+      <meta property="og:image:alt" content={pageTitle} />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -87,6 +107,11 @@ export default function SEO({
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
+      <meta name="twitter:image:alt" content={pageTitle} />
+      
+      {/* ★ NEW: Twitter Labels */}
+      {twitterLabel1 && <meta name="twitter:label1" content={twitterLabel1} />}
+      {twitterData1 && <meta name="twitter:data1" content={twitterData1} />}
 
       {/* Article Meta */}
       {publishedTime && <meta property="article:published_time" content={publishedTime} />}

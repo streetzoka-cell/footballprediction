@@ -1,5 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera, Clock, Trophy } from 'lucide-react';
+import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera, Clock, Trophy, ShieldCheck, Target } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
@@ -52,13 +52,11 @@ export default function MatchDetails() {
 
   if (match?.isHidden) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', flexDirection: 'column', justifyContent: 'center', alignItems: 'center', color: '#fff', gap: '12px', padding: '24px' }}>
+      <div className="md-error-screen">
         <Clock size={32} style={{ color: '#fbbf24' }} />
-        <h2 style={{ fontSize: '1.5rem', fontWeight: 800 }}>Match Temporarily Unavailable</h2>
-        <p style={{ color: '#94a3b8', textAlign: 'center', maxWidth: '400px' }}>
-          We are waiting for the final confirmation from the data provider for this match. It will reappear automatically once verified.
-        </p>
-        <Link to="/fixtures" style={{ marginTop: '20px', display: 'inline-flex', alignItems: 'center', gap: 6, color: '#10b981', textDecoration: 'none', fontSize: '.85rem', background: '#0a0d14', padding: '8px 14px', borderRadius: 8, border: '1px solid #151b26' }}>
+        <h2>Match Temporarily Unavailable</h2>
+        <p>We are waiting for the final confirmation from the data provider for this match. It will reappear automatically once verified.</p>
+        <Link to="/fixtures" className="md-back-btn">
           <ArrowLeft size={14} /> Back to Fixtures
         </Link>
       </div>
@@ -67,8 +65,8 @@ export default function MatchDetails() {
 
   if (!match) {
     return (
-      <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-        <Loader size={32} className="animate-spin" style={{ color: '#fff' }} />
+      <div className="md-loading-screen">
+        <Loader size={32} className="animate-spin" style={{ color: '#10b981' }} />
       </div>
     );
   }
@@ -78,46 +76,37 @@ export default function MatchDetails() {
   const matchLink = buildMatchRoute(match.id, homeName, awayName);
   const timelineProgress = isFinished ? 100 : isHT ? 50 : displayMinute ? Math.min((displayMinute / 90) * 100, 100) : 0;
   
-  // ★ NEW: Check for special statuses
   const matchStatus = (status || '').toUpperCase();
   const isPostponed = matchStatus === 'PST' || matchStatus === 'POSTP';
   const isCanceled = matchStatus === 'CANC' || matchStatus === 'ABD';
   const isSuspended = matchStatus === 'SUSP' || matchStatus === 'INT';
   const isSpecialStatus = isPostponed || isCanceled || isSuspended;
 
-  // ★ NEW: Determine status label and color
   let statusLabel = kickoff;
-  let statusColor = 'var(--text-muted)';
-  let statusWeight = 600;
+  let statusClass = 'scheduled';
   
   if (isLive && !isHT) {
     statusLabel = `LIVE ${displayMinute || minute || 0}'`;
-    statusColor = '#ef4444';
-    statusWeight = 700;
+    statusClass = 'live';
   } else if (isHT) {
     statusLabel = 'HALF TIME';
-    statusColor = '#fbbf24';
-    statusWeight = 700;
+    statusClass = 'ht';
   } else if (isFinished) {
     statusLabel = 'FULL TIME';
-    statusColor = '#10b981';
-    statusWeight = 700;
+    statusClass = 'ft';
   } else if (isPostponed) {
     statusLabel = 'POSTPONED';
-    statusColor = '#fbbf24';
-    statusWeight = 800;
+    statusClass = 'warning';
   } else if (isCanceled) {
     statusLabel = 'CANCELED';
-    statusColor = '#ef4444';
-    statusWeight = 800;
+    statusClass = 'danger';
   } else if (isSuspended) {
     statusLabel = 'SUSPENDED';
-    statusColor = '#fbbf24';
-    statusWeight = 800;
+    statusClass = 'warning';
   }
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: '#fff' }} className="zoka-page">
+    <div className="md-page">
       <SEO
         title={`${homeName} vs ${awayName} | Live Scores, Predictions & Stats`}
         description={`Follow ${homeName} vs ${awayName} live on ZOKASCORE. Get real-time scores, match statistics, predictions, and standings updates.`}
@@ -131,125 +120,109 @@ export default function MatchDetails() {
         ]}
       />
       
-      <div className="zoka-wrap" style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
-        <Link to="/fixtures" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.85rem', marginBottom: 20, background: 'var(--bg-card)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
+      <div className="md-container">
+        <Link to="/fixtures" className="md-back-btn">
           <ArrowLeft size={14} /> Back to Fixtures
         </Link>
 
-        {/* 1. ORIGINAL MATCH HEADER CARD */}
-        <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 24, textAlign: 'center', position: 'relative', overflow: 'hidden' }}>
-          {goalFlash && (
-            <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(135deg, rgba(16,185,129,0.2), rgba(255,255,255,0.1))', animation: 'flashBg 2s ease-out', pointerEvents: 'none' }} />
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 16, position: 'relative' }}>
-            {leagueLogo && <img src={leagueLogo} alt="" width="20" height="20" style={{objectFit:'contain'}} />}
-            <Link to={buildLeagueRoute(leagueId, leagueName)} style={{ color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.8rem', fontWeight: 700, textTransform: 'uppercase' }}>{leagueName}</Link>
-            {category === 'FEATURED' && <span style={{ fontSize: '0.6rem', fontWeight: 900, color: '#fbbf24', background: 'rgba(251,191,36,0.12)', padding: '3px 8px', borderRadius: 6 }}>★ TOP MATCH</span>}
+        {/* Premium Glassmorphism Header */}
+        <div className={`md-header-card ${goalFlash ? 'goal-flash' : ''}`}>
+          {goalFlash && <div className="md-confetti"><span>🎉</span><span>⚽</span><span>🎉</span></div>}
+          
+          <div className="md-league-row">
+            {leagueLogo && <img src={leagueLogo} alt="" width="20" height="20" />}
+            <Link to={buildLeagueRoute(leagueId, leagueName)} className="md-league-name">{leagueName}</Link>
+            {category === 'FEATURED' && <span className="md-top-badge">★ TOP MATCH</span>}
           </div>
           
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, position: 'relative' }}>
-            <Link to={buildTeamRoute(match.homeTeamId, homeName)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textDecoration: 'none', color: '#fff' }}>
-              {homeLogo && <img src={homeLogo} alt={homeName} width="48" height="48" style={{objectFit:'contain'}} />}
-              <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{homeName}</h1>
+          <div className="md-teams-row">
+            <Link to={buildTeamRoute(match.homeTeamId, homeName)} className="md-team-col">
+              {homeLogo && <img src={homeLogo} alt={homeName} className="md-team-logo" />}
+              <h1 className="md-team-name">{homeName}</h1>
             </Link>
             
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: '2.5rem', fontWeight: 900, color: isLive ? '#ef4444' : isFinished ? '#10b981' : '#fff' }}>
-                {(isLive || isHT || isFinished) ? `${homeScore ?? '-'} - ${awayScore ?? '-'}` : 'VS'}
+            <div className="md-score-box">
+              <div className={`md-score-text ${isLive ? 'live' : isFinished ? 'ft' : ''} ${goalFlash ? 'pop' : ''}`}>
+                {(isLive || isHT || isFinished) ? `${homeScore ?? '-'} : ${awayScore ?? '-'}` : 'VS'}
               </div>
-              {/* ★ UPDATED: Use dynamic status label */}
-              <div style={{ fontSize: '0.8rem', color: statusColor, fontWeight: statusWeight, display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'center', textTransform: isSpecialStatus ? 'uppercase' : 'none' }}>
-                {isLive && !isHT && !isSpecialStatus && (
-                  <span style={{ width: 6, height: 6, background: '#ef4444', borderRadius: '50%', animation: 'pulse 1.5s infinite' }}></span>
-                )}
+              <div className={`md-status-badge ${statusClass}`}>
+                {isLive && !isHT && !isSpecialStatus && <span className="live-pulse-dot" style={{marginRight: 6}}></span>}
                 {statusLabel}
               </div>
             </div>
 
-            <Link to={buildTeamRoute(match.awayTeamId, awayName)} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textDecoration: 'none', color: '#fff' }}>
-              {awayLogo && <img src={awayLogo} alt={awayName} width="48" height="48" style={{objectFit:'contain'}} />}
-              <h1 style={{ fontSize: '1.2rem', fontWeight: 800 }}>{awayName}</h1>
+            <Link to={buildTeamRoute(match.awayTeamId, awayName)} className="md-team-col">
+              {awayLogo && <img src={awayLogo} alt={awayName} className="md-team-logo" />}
+              <h1 className="md-team-name">{awayName}</h1>
             </Link>
           </div>
 
-          {/* Live Timeline Progress Bar - ★ FIX: Only show if live or finished (not postponed) */}
           {(isLive || isFinished) && !isSpecialStatus && (
-            <div style={{ marginTop: 24, position: 'relative' }}>
-              <div style={{ height: 4, background: '#151b26', borderRadius: 2, overflow: 'hidden' }}>
-                <div style={{ height: '100%', width: `${timelineProgress}%`, background: isLive ? '#ef4444' : '#10b981', transition: 'width 1s ease' }} />
+            <div className="md-timeline">
+              <div className="md-timeline-track">
+                <div className={`md-timeline-fill ${isLive ? 'live' : 'ft'}`} style={{ width: `${timelineProgress}%` }}>
+                  {isLive && <div className="md-timeline-dot"></div>}
+                </div>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4 }}>
-                <span style={{ fontSize: '0.6rem', color: '#64748b' }}>0'</span>
-                <span style={{ fontSize: '0.6rem', color: '#64748b' }}>45'</span>
-                <span style={{ fontSize: '0.6rem', color: '#64748b' }}>90'</span>
+              <div className="md-timeline-labels">
+                <span>0'</span>
+                <span>45'</span>
+                <span>90'</span>
               </div>
             </div>
           )}
         </div>
 
-        {/* 2. ORIGINAL MATCH INFO BAR */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 20, marginTop: 20, fontSize: '.8rem', color: 'var(--text-muted)' }}>
-          {date && <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}><Calendar size={14} /> {new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {formatTime(date)}</span>}
+        <div className="md-info-bar">
+          {date && <span><Calendar size={14} /> {new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {formatTime(date)}</span>}
         </div>
 
-        {/* 3. ORIGINAL REACT NOW BUTTON */}
         {!isSpecialStatus && (
-          <div style={{ marginTop: 20, textAlign: 'center' }}>
-            <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName, homeLogo, awayLogo, score: { home: homeScore, away: awayScore }, minute: displayMinute || minute }} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: 'linear-gradient(135deg, #6366f1, #8b5cf6)', color: '#fff', padding: '10px 20px', borderRadius: 12, textDecoration: 'none', fontWeight: 700, fontSize: '0.9rem' }}>
-              <Camera size={16} /> React Now
+          <div className="md-cta-wrap">
+            <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName, homeLogo, awayLogo, score: { home: homeScore, away: awayScore }, minute: displayMinute || minute }} className="md-react-btn">
+              <Camera size={16} /> React Now in Studio
             </Link>
           </div>
         )}
 
-        {/* 4. ORIGINAL STANDINGS MINI */}
         {standingsTable.length > 0 && (
-          <div className="md-info-card" style={{ marginTop: 20, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 20 }}>
-            <h2 className="md-info-title" style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-              <TrendingUp size={18} style={{ color: '#fbbf24' }} /> League Standings
-            </h2>
-            <div className="standings-mini">
+          <div className="md-card">
+            <h2 className="md-card-title"><TrendingUp size={18} /> League Standings</h2>
+            <div className="md-standings-list">
               {standingsTable.slice(0, 5).map((team, i) => (
-                <div key={team.team?.id || team.rank} className="standing-row" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid var(--border)' }}>
-                  <span style={{ color: 'var(--text-muted)', fontWeight: 700, width: 24 }}>{team.rank || i + 1}.</span>
-                  <Link to={buildTeamRoute(team.team?.id, team.team?.name)} style={{ flex: 1, marginLeft: 10, color: 'var(--text-primary)', textDecoration: 'none', fontWeight: 600, fontSize: '.9rem' }}>
+                <div key={team.team?.id || team.rank} className="md-standing-row">
+                  <span className="md-rank">{team.rank || i + 1}</span>
+                  <Link to={buildTeamRoute(team.team?.id, team.team?.name)} className="md-team-link">
+                    {team.team?.logo && <img src={team.team?.logo} alt="" width="18" height="18" />}
                     {team.team?.name || 'TBD'}
                   </Link>
-                  <span style={{ color: '#10b981', fontWeight: 800, fontSize: '.9rem' }}>{team.points} pts</span>
+                  <span className="md-pts">{team.points} <small>pts</small></span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* ========================================================= */}
-        {/* 5. NEW: ZOKASCORE INTELLIGENCE EXPLANATIONS (ADDED AFTER)  */}
-        {/* ========================================================= */}
-
-        {/* Information Card */}
-        <section style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 16, padding: 22, marginTop: 36 }}>
-          <h2 style={{ fontSize: '1.15rem', fontWeight: 800, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Trophy size={18} style={{ color: '#fbbf24' }} /> Why ZOKASCORE Intelligence?
-          </h2>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, marginBottom: 10 }}>
-            Not every football match deserves your attention.
-          </p>
-          <p style={{ color: 'var(--text-primary)', lineHeight: 1.7, marginBottom: 10 }}>
-            ZOKASCORE Intelligence highlights the most exciting fixtures based on match quality, current form, league importance, team momentum, and overall football interest.
-          </p>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.7 }}>
-            Our goal is simple—help you discover the games that matter most.
-          </p>
-        </section>
-
-        {/* Bottom Section */}
-        <footer style={{ marginTop: 24, padding: '26px 22px', borderRadius: 16, border: '1px solid var(--border)', background: 'linear-gradient(135deg, rgba(99,102,241,0.06), rgba(16,185,129,0.04))', textAlign: 'center' }}>
-          <h3 style={{ fontSize: '1.1rem', fontWeight: 800, marginBottom: 10 }}>
-            Football is better when you never miss the biggest moments.
-          </h3>
-          <p style={{ color: 'var(--text-muted)', lineHeight: 1.7, maxWidth: 640, margin: '0 auto', fontSize: '.95rem' }}>
-            ZOKASCORE Intelligence helps you discover the matches worth following every day—from title races and derby clashes to hidden gems across leagues around the world.
-          </p>
-        </footer>
+        {/* Premium Intelligence Section */}
+        <div className="md-intel-grid">
+          <div className="md-intel-card main">
+            <div className="md-intel-icon"><Zap size={24} /></div>
+            <h2>ZOKASCORE Intelligence</h2>
+            <p>Not every football match deserves your attention. We highlight the most exciting fixtures based on match quality, current form, league importance, team momentum, and overall football interest.</p>
+          </div>
+          
+          <div className="md-intel-card">
+            <div className="md-intel-icon small"><ShieldCheck size={18} /></div>
+            <h3>Quality Focus</h3>
+            <p>Helping you discover the games that matter most, filtering out the noise.</p>
+          </div>
+          
+          <div className="md-intel-card">
+            <div className="md-intel-icon small"><Target size={18} /></div>
+            <h3>Never Miss Out</h3>
+            <p>From title races to hidden gems across leagues around the world.</p>
+          </div>
+        </div>
 
       </div>
     </div>
