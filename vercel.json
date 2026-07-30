@@ -11,12 +11,18 @@
       "permanent": true
     }
   ],
+
   "rewrites": [
-  {
-    "source": "/((?!zokascore-sitemap\\.xml|robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
-    "destination": "/index.html"
-  }
-],
+    {
+      "source": "/zokascore-sitemap.xml",
+      "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml"
+    },
+    {
+      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
+      "destination": "/index.html"
+    }
+  ],
+
   "headers": [
     {
       "source": "/(.*)",
@@ -83,15 +89,7 @@
         },
         {
           "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate, max-age=0"
-        },
-        {
-          "key": "Pragma",
-          "value": "no-cache"
-        },
-        {
-          "key": "Expires",
-          "value": "0"
+          "value": "public, max-age=300, s-maxage=300"
         }
       ]
     },

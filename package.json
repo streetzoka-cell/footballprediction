@@ -50,12 +50,11 @@
   },
   "homepage": "https://zokascore.xyz",
   "scripts": {
-  "dev": "vite",
-  "build": "node ./scripts/validate-deployment.js && node ./scripts/generate-sitemap.js && vite build",
-  "lint": "eslint src",
-  "preview": "vite preview"
-},
-
+    "dev": "vite",
+    "build": "node ./scripts/validate-deployment.js && vite build",
+    "lint": "eslint src",
+    "preview": "vite preview"
+  },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
@@ -99,7 +98,6 @@
     "eslint-plugin-react-refresh": "^0.5.3",
     "globals": "^17.7.0",
     "rollup-plugin-visualizer": "^7.0.1",
-    "sitemap": "^9.0.1",
     "vite": "^8.1.1",
     "vite-imagetools": "^10.0.1",
     "vite-plugin-compression": "^0.5.1",
