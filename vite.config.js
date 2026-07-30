@@ -8,7 +8,12 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: [
+        'favicon.svg',
+        'robots.txt',
+        'icons/icon-192.png',
+        'icons/icon-512.png'
+      ],
       manifest: {
         name: 'ZOKASCORE',
         short_name: 'ZOKASCORE',
@@ -32,8 +37,13 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
-        // ★ FIX: Prevent PWA from intercepting sitemap and robots.txt
-        navigateFallbackDenylist: [/^\/sitemap\.xml$/, /^\/robots\.txt$/],
+
+        // Prevent the service worker from handling these files
+        navigateFallbackDenylist: [
+          /^\/zokascore-sitemap\.xml$/,
+          /^\/robots\.txt$/
+        ],
+
         runtimeCaching: [
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
@@ -62,7 +72,7 @@ export default defineConfig({
       }
     })
   ],
-  
+
   server: {
     port: 5173,
     proxy: {
@@ -73,7 +83,7 @@ export default defineConfig({
       }
     }
   },
-  
+
   build: {
     chunkSizeWarningLimit: 1000,
     rollupOptions: {

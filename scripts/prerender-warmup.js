@@ -10,7 +10,7 @@ if (PRERENDER_TOKEN) {
     },
     body: JSON.stringify({
       // Tell Prerender to recache everything in the sitemap
-      url: "https://zokascore.xyz/sitemap.xml" 
+      url:  "https://zokascore.xyz/zokascore-sitemap.xml"
     })
   })
   .then(() => console.log("✅ Prerender.io notified!"))
