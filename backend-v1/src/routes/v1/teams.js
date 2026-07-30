@@ -19,8 +19,8 @@ router.get('/', async (req, res, next) => {
     }
 
     logger.info(`[Gateway] Cache MISS for ${cacheKey}. Fetching from provider...`);
-    // Hardcode season 2024 for now, can be made dynamic later
-    const teams = await ProviderManager.getTeams(leagueId, 2024);
+    // Hardcode season 2026 for now, can be made dynamic later
+    const teams = await ProviderManager.getTeams(leagueId, 2026);
     
     if (!teams || teams.length === 0) {
       return res.status(404).json({ error: 'Teams not found for this league' });
