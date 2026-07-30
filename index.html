@@ -4,17 +4,17 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+  <!-- ★ FIX: Content Security Policy allowing blob: for images and media -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://www.googletagmanager.com https://www.google-analytics.com https://apis.google.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob:; connect-src 'self' https://*.googleapis.com wss://*.firebaseio.com https://*.firebaseio.com https://www.google-analytics.com https://www.google.com https://api.zokascore.xyz; frame-src 'self' https://*.firebaseapp.com; frame-ancestors 'none';">
+
   <meta name="color-scheme" content="dark" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   
   <meta name="theme-color" content="#07141f">
 
   <!-- Sitemap Reference -->
-  <link
-  rel="sitemap"
-  type="application/xml"
-  href="/zokascore-sitemap.xml"
-/>
+  <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
+  
   <!-- Icons -->
   <link rel="icon" href="/favicon.ico" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -37,7 +37,6 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
 
-
   <!-- ★ FIX: JSON-LD WebSite Schema kept here as single source of truth -->
   <script type="application/ld+json">
   {
@@ -54,7 +53,7 @@
   </script>
 
   <!-- Loader -->
-    <link rel="stylesheet" href="/loader.css" />
+  <link rel="stylesheet" href="/loader.css" />
 </head>
 
 <body>
