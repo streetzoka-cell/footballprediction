@@ -6,17 +6,17 @@ const logger = require('../utils/logger');
 
 // ★ FIX: Use API-Football numeric IDs. The FootballDataAdapter will translate them to string codes.
 const LEAGUES_TO_SYNC = [
-  { id: 39, name: 'Premier League', season: 2024 },
-  { id: 140, name: 'La Liga', season: 2024 },
-  { id: 135, name: 'Serie A', season: 2024 },
-  { id: 78, name: 'Bundesliga', season: 2024 },
-  { id: 61, name: 'Ligue 1', season: 2024 },
-  { id: 2, name: 'UEFA Champions League', season: 2024 },
-  { id: 3, name: 'UEFA Europa League', season: 2024 },
-  { id: 88, name: 'Eredivisie', season: 2024 },
-  { id: 94, name: 'Primeira Liga', season: 2024 },
-  { id: 71, name: 'Serie A (Brazil)', season: 2024 },
-  { id: 40, name: 'Championship', season: 2024 }
+  { id: 39, name: 'Premier League', season: 2026 },
+  { id: 140, name: 'La Liga', season: 2026 },
+  { id: 135, name: 'Serie A', season: 2026 },
+  { id: 78, name: 'Bundesliga', season: 2026 },
+  { id: 61, name: 'Ligue 1', season: 2026 },
+  { id: 2, name: 'UEFA Champions League', season: 2026 },
+  { id: 3, name: 'UEFA Europa League', season: 2026 },
+  { id: 88, name: 'Eredivisie', season: 2026 },
+  { id: 94, name: 'Primeira Liga', season: 2026 },
+  { id: 71, name: 'Serie A (Brazil)', season: 2026 },
+  { id: 40, name: 'Championship', season: 2026 }
 ];
 
 async function syncStandings() {
