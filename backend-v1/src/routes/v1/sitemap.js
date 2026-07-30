@@ -94,13 +94,16 @@ xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${urls.join("\n")}
 </urlset>`;
 
-    res.header("Content-Type", "application/xml");
-    res.header(
-      "Cache-Control",
-      "public, max-age=300, s-maxage=300"
-    );
+res.header("Content-Type", "application/xml");
 
-    res.send(xml);
+res.header(
+  "Cache-Control",
+  "public, s-maxage=300, max-age=300"
+);
+
+res.send(xml);
+
+
   } catch (err) {
     console.error(err);
     res.status(500).send("Sitemap generation failed.");
