@@ -33,26 +33,41 @@ const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const dateOffset = (offset = 0) => getLocalDateStr(offset);
 
 const dateLabel = (d) => {
+  if (!d) return '';
   const t = todayStr(), tm = getLocalDateStr(1), ys = getLocalDateStr(-1);
   if (d === t) return 'Today';
   if (d === tm) return 'Tomorrow';
   if (d === ys) return 'Yesterday';
-  const dt = new Date(d + 'T12:00:00');
-  return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  try {
+    const dt = new Date(d + 'T12:00:00');
+    if (isNaN(dt.getTime())) return d;
+    return dt.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  } catch { return d; }
 };
-const dateDayName = (d) => ['S','M','T','W','T','F','S'][new Date(d + 'T12:00:00').getDay()];
-const dateDayNum = (d) => d.slice(8);
-const dateMonth = (d) => ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.slice(5,7)) - 1];
+
+const dateDayName = (d) => {
+  if (!d) return '';
+  try {
+    const dt = new Date(d + 'T12:00:00');
+    if (isNaN(dt.getTime())) return '';
+    return ['S','M','T','W','T','F','S'][dt.getDay()];
+  } catch { return ''; }
+};
+
+const dateDayNum = (d) => d ? d.slice(8) : '';
+const dateMonth = (d) => d ? ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(d.slice(5,7)) - 1] : '';
 
 const QUICK_PICKS = [
   { h: 1, a: 0 }, { h: 2, a: 1 }, { h: 0, a: 0 }, { h: 1, a: 1 },
   { h: 2, a: 0 }, { h: 0, a: 1 }, { h: 3, a: 1 }, { h: 1, a: 2 },
 ];
 
+// ★ FIX: Use pred.kickoffUtc to get the full ISO timestamp for accurate locking
 function isMatchLocked(pred, now) {
   if (isFinishedStatus(pred.status, SPORT.FOOTBALL)) return { locked: true, reason: 'finished' };
   if (isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive) return { locked: true, reason: 'live' };
-  const kickoffStr = pred.kickoff || pred.date;
+  
+  const kickoffStr = pred.kickoffUtc || pred.utcDate || pred.date;
   if (kickoffStr) {
     if (/^\d{4}-\d{2}-\d{2}/.test(kickoffStr)) {
       const kickoffTime = new Date(kickoffStr);
@@ -80,7 +95,7 @@ function formatMinutesLeft(mins) {
 
 function parseKickoffTime(kickoff) {
   if (!kickoff) return '--:--';
-  if (/^\d{2}:\d{2}$/.test(kickoff)) return kickoff;
+  if (typeof kickoff === 'string' && /^\d{2}:\d{2}$/.test(kickoff)) return kickoff; // Already formatted HH:MM
   try {
     const d = new Date(kickoff);
     if (isNaN(d.getTime())) return '--:--';

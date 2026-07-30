@@ -48,7 +48,7 @@ export function AuthProvider({ children }) {
 
     let unsubscribed = false;
     let unsubProfile = null;
-    let unsubAdmin = null; // ★ NEW: Listener for admin_users collection
+    let unsubAdmin = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
@@ -66,8 +66,10 @@ export function AuthProvider({ children }) {
 
       if (user) {
         try {
-          // Check if profile exists first
-          const profileDoc = await getDoc(doc(db, 'users', user.uid));
+          const userDocRef = doc(db, 'users', user.uid);
+          const profileDoc = await getDoc(userDocRef);
+
+          // ★ FIX: ONLY create if it doesn't exist. DO NOT overwrite if it exists!
           if (!profileDoc.exists()) {
             const profile = {
               uid: user.uid,
@@ -78,11 +80,11 @@ export function AuthProvider({ children }) {
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             };
-            await setDoc(doc(db, 'users', user.uid), profile, { merge: true });
+            await setDoc(userDocRef, profile);
           }
 
-          // ★ Listen to user profile for instant updates
-          unsubProfile = onSnapshot(doc(db, 'users', user.uid), (docSnap) => {
+          // Listen to user profile for instant updates
+          unsubProfile = onSnapshot(userDocRef, (docSnap) => {
             if (unsubscribed) return;
             if (docSnap.exists()) {
               setUserProfile(prev => ({ ...prev, ...docSnap.data() }));
@@ -95,7 +97,7 @@ export function AuthProvider({ children }) {
             setAuthLoading(false);
           });
 
-          // ★ NEW: Listen to admin_users collection for instant admin detection
+          // Listen to admin_users collection for instant admin detection
           unsubAdmin = onSnapshot(doc(db, 'admin_users', user.uid), (adminSnap) => {
             if (unsubscribed) return;
             setUserProfile(prev => {
@@ -104,7 +106,6 @@ export function AuthProvider({ children }) {
               
               return {
                 ...prev,
-                // If they are in admin_users OR have role='admin', treat as admin
                 role: (isAdminCollection || isRoleAdmin) ? 'admin' : (prev?.role || 'user')
               };
             });
@@ -126,7 +127,7 @@ export function AuthProvider({ children }) {
     return () => {
       unsubscribed = true;
       if (unsubProfile) unsubProfile();
-      if (unsubAdmin) unsubAdmin(); // Clean up admin listener
+      if (unsubAdmin) unsubAdmin();
       unsubscribe();
     };
   }, []);
@@ -151,7 +152,7 @@ export function AuthProvider({ children }) {
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     };
-    await setDoc(doc(db, 'users', cred.user.uid), profile, { merge: true });
+    await setDoc(doc(db, 'users', cred.user.uid), profile);
     setUserProfile(profile);
     return cred.user;
   }, []);
@@ -195,6 +196,10 @@ export function AuthProvider({ children }) {
 
     const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
+
+    // ★ FIX: Use merge true here is fine because it's the user updating their OWN profile (like display name)
+    // But we strip 'role' from updates just to be 100% safe.
+    delete profileUpdates.role; 
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
   }, [currentUser]);
