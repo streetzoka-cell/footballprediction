@@ -26,13 +26,13 @@ const injectCSS = () => {
 .pa-hdr-title{display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:800;color:var(--text-primary)}
 
 .pa-hero{text-align:center;padding:36px 0 28px;animation:pa-fade-up .4s ease both}
-.pa-hero h1{margin:0 0 6px;font-size:1.6rem;font-weight:900;color:var(--text-primary)}
-.pa-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.5;max-width:540px;margin-left:auto;margin-right:auto}
+.pa-hero h1{margin:0 0 10px;font-size:1.8rem;font-weight:900;color:var(--text-primary);line-height:1.2}
+.pa-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:560px;margin-left:auto;margin-right:auto}
 
 .pa-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:32px}
-.pa-metric{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:16px 10px;text-align:center;animation:pa-pop .35s cubic-bezier(.34,1.56,.64,1) both}
-.pa-metric .n{font-size:1.4rem;font-weight:900;font-family:var(--font-display);line-height:1}
-.pa-metric .l{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:4px}
+.pa-metric{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:18px 10px;text-align:center;animation:pa-pop .35s cubic-bezier(.34,1.56,.64,1) both}
+.pa-metric .n{font-size:1.1rem;font-weight:900;font-family:var(--font-display);line-height:1;letter-spacing:0.02em}
+.pa-metric .l{font-size:.56rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.04em;margin-top:6px}
 
 .pa-section-title{font-size:.88rem;font-weight:900;color:var(--text-primary);margin-bottom:14px}
 
@@ -47,12 +47,12 @@ const injectCSS = () => {
 .pa-opp-cta:active{transform:scale(.97)}
 
 .pa-cta{text-align:center;padding:32px 20px;background:linear-gradient(135deg,rgba(245,197,66,.04),rgba(245,197,66,.01));border:1.5px solid rgba(245,197,66,.12);border-radius:16px;margin-top:24px;animation:pa-pop .4s cubic-bezier(.34,1.56,.64,1) both}
-.pa-cta h3{margin:0 0 6px;font-size:.95rem;font-weight:900;color:var(--text-primary)}
-.pa-cta p{margin:0 0 14px;font-size:.8rem;color:var(--text-muted);font-weight:600}
+.pa-cta h3{margin:0 0 8px;font-size:1rem;font-weight:900;color:var(--text-primary)}
+.pa-cta p{margin:0 0 16px;font-size:.8rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:480px;margin-left:auto;margin-right:auto}
 
 @media(max-width:480px){
   .pa-metrics{grid-template-columns:repeat(2,1fr)}
-  .pa-hero h1{font-size:1.4rem}
+  .pa-hero h1{font-size:1.5rem}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `;
@@ -60,35 +60,41 @@ const injectCSS = () => {
 };
 
 const METRICS = [
-  { n: '50K+', l: 'Monthly Users', color: 'var(--accent)', delay: 0 },
-  { n: '3M+', l: 'Page Views', color: '#a855f7', delay: 60 },
-  { n: '12m', l: 'Avg. Session', color: 'var(--gold)', delay: 120 },
+  { n: 'Global', l: 'Football Audience', color: 'var(--accent)', delay: 0 },
+  { n: 'Premium', l: 'Brand Visibility', color: '#a855f7', delay: 60 },
+  { n: '24/7', l: 'Platform Exposure', color: 'var(--gold)', delay: 120 },
 ];
 
 const OPPORTUNITIES = [
   {
     title: 'Sponsored Leaderboard',
     icon: <Trophy size={16} />,
-    desc: 'Brand your company on the daily, weekly, or G.O.A.T leaderboard. Seen by every user, every day.',
-    features: ['Logo placement', 'Custom branding', 'Dedicated leaderboard', 'Analytics dashboard'],
+    desc: 'Showcase your brand on ZOKASCORE leaderboards and gain continuous visibility among active football fans throughout the competition season.',
+    features: ['Logo placement', 'Custom branding', 'Dedicated leaderboard', 'Campaign insights'],
   },
   {
-    title: 'In-App Banner Ads',
+    title: 'Banner Ads',
     icon: <Eye size={16} />,
-    desc: 'Display banners across predictions, fixtures, and leaderboard pages with precise targeting.',
-    features: ['Targeted by league', 'Targeted by country', 'Frequency capping', 'Click tracking'],
+    desc: 'Reach football fans across fixtures, predictions, match pages, and live experiences with premium display placements.',
+    features: ['Audience targeting', 'Frequency capping', 'Brand placement', 'Performance reporting'],
   },
   {
-    title: 'Match Page Sponsorship',
+    title: 'Match Sponsorship',
     icon: <BarChart3 size={16} />,
-    desc: 'Sponsor specific match prediction pages. Perfect for matchday promotions and betting partners.',
-    features: ['League targeting', 'Match type filtering', 'Clickable logo', 'Impression tracking'],
+    desc: 'Associate your brand with high-profile football matches through dedicated sponsorship placements and branded experiences.',
+    features: ['League targeting', 'Match type filtering', 'Brand placement', 'Performance reporting'],
   },
   {
     title: 'Content Partnership',
     icon: <Users size={16} />,
-    desc: 'Co-create prediction content, expert analysis, or branded Zoka Picks with your brand.',
-    features: ['Branded content', 'Social cross-posting', 'Expert co-hosting', 'Dedicated section'],
+    desc: 'Collaborate with ZOKASCORE to create branded football content, match features, fan campaigns, and exclusive experiences.',
+    features: ['Branded content', 'Social cross-posting', 'Expert co-hosting', 'Campaign insights'],
+  },
+  {
+    title: 'Official Competition Partner',
+    icon: <Globe size={16} />,
+    desc: 'Become the official partner of prediction competitions, seasonal events, and special football campaigns.',
+    features: ['Exclusive branding', 'Season campaigns', 'Competition sponsorship', 'Premium visibility'],
   },
 ];
 
@@ -99,10 +105,15 @@ export default function Partners() {
   return (
     <div className="pa-page">
       <SEO
-        title="Partner With ZOKASCORE | Sports Advertising"
-        description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our sponsored leaderboards, in-app banner ads, and sports partnership deals."
-        keywords="sports partnerships, sponsor ZOKASCORE, football advertising, sports marketing, banner ads, sponsored leaderboards"
+        title="Partner with ZOKASCORE | Advertising, Sponsorships & Brand Collaborations"
+        description="Partner with ZOKASCORE through sponsorships, advertising, branded campaigns, featured placements, and football marketing opportunities. Connect your brand with passionate football fans."
+        keywords="partner with ZOKASCORE, football sponsorship, sports advertising, football marketing, brand partnerships, display advertising, sponsored content"
+        path="/partners"
         robots="index,follow"
+        breadcrumbs={[
+          { name: "Home", path: "/" },
+          { name: "Partners", path: "/partners" }
+        ]}
       />
 
       <div className="pa-hdr">
@@ -116,8 +127,16 @@ export default function Partners() {
 
       <div className="pa-wrap">
         <div className="pa-hero">
-          <h1>Reach Football Fans<br />Where They Predict</h1>
-          <p>ZokaPredict offers unique advertising opportunities to connect your brand with engaged football fans across Africa and beyond.</p>
+          <h1>
+            Partner With
+            <br />
+            <span style={{ color: "var(--gold)" }}>ZOKASCORE</span>
+          </h1>
+          <p>
+            Build meaningful partnerships with one of the fastest-growing football
+            platforms. Promote your brand through sponsorships, featured campaigns,
+            match experiences, and premium advertising placements.
+          </p>
         </div>
 
         <div className="pa-metrics">
@@ -129,7 +148,7 @@ export default function Partners() {
           ))}
         </div>
 
-        <div className="pa-section-title">Partnership Opportunities</div>
+        <div className="pa-section-title">Advertising & Partnership Solutions</div>
 
         {OPPORTUNITIES.map((opp, i) => (
           <div key={i} className="pa-opp" style={{ animationDelay: `${i * 60 + 200}ms` }}>
@@ -139,17 +158,17 @@ export default function Partners() {
               {opp.features.map(f => <span key={f} className="pa-opp-feat"><Zap size={8} /> {f}</span>)}
             </div>
             <a href={`mailto:streetzoka@gmail.com?subject=Partnership: ${opp.title}`} style={{ textDecoration: 'none' }}>
-              <button className="pa-opp-cta"><Mail size={13} /> Discuss This</button>
+              <button className="pa-opp-cta"><Mail size={13} /> Start Conversation</button>
             </a>
           </div>
         ))}
 
         <div className="pa-cta">
-          <h3>Let's Build Something Great</h3>
-          <p>Whether you're a brand, league, betting company, or media outlet — we'd love to explore how we can work together.</p>
+          <h3>Grow With ZOKASCORE</h3>
+          <p>Whether you're a global brand, local business, football organization, media company, or technology partner, we're ready to build impactful campaigns that connect with football fans.</p>
           <a href="mailto:streetzoka@gmail.com?subject=Partnership Inquiry" style={{ textDecoration: 'none' }}>
             <button className="pa-opp-cta" style={{ padding: '12px 24px', borderRadius: 12, fontSize: '.85rem' }}>
-              <Handshake size={15} /> Get Our Media Kit
+              <Handshake size={15} /> Become a Partner
             </button>
           </a>
         </div>

@@ -30,8 +30,17 @@ export default function FAQ() {
 
   return (
     <div className="info-page">
-      <SEO title="ZOKASCORE FAQ: Football Predictions Support" description="Find answers to frequently asked questions about ZOKASCORE. Learn how to make predictions, join leaderboards, and manage your account with our FAQ." keywords="FAQ, ZOKASCORE support, help, football predictions questions, account help" robots="index,follow" />
-      
+    <SEO
+  title="Frequently Asked Questions (FAQ)"
+  description="Browse answers to frequently asked questions about ZOKASCORE, including football predictions, fixtures, live scores, leaderboards, accounts, scoring, and platform features."
+  keywords="ZOKASCORE FAQ, football predictions FAQ, live scores help, fixtures help, leaderboard help, account support, football questions"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "FAQ", path: "/faq" }
+  ]}
+/>
+ 
       <div className="info-header">
         <div className="info-header-content">
           <h1 className="info-title">Frequently Asked Questions</h1>

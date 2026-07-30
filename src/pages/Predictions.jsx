@@ -108,14 +108,6 @@ function parseKickoffTime(kickoff) {
 const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
 const toastStyle = { display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', borderRadius: 12, background: 'rgba(16,185,129,.1)', border: '1.5px solid rgba(16,185,129,.25)', backdropFilter: 'blur(12px)' };
 
-const breadcrumbSchema = {
-  "@context": "https://schema.org",
-  "@type": "BreadcrumbList",
-  "itemListElement": [
-    { "@type": "ListItem", "position": 1, "name": "Home", "item": "https://zokascore.xyz/" },
-    { "@type": "ListItem", "position": 2, "name": "Predictions", "item": "https://zokascore.xyz/predictions" }
-  ]
-};
 
 const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   const [d, setD] = useState(0);
@@ -931,13 +923,17 @@ export default function Predictions() {
 
   return (
     <div className="v21-page">
-      <SEO
-        title="Predict Matches & Win | ZOKASCORE"
-        description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
-        keywords="football predictions, betting tips, match predictions, soccer tips"
-        robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Predictions", path: "/predictions" }]}
-      />
+<SEO
+  {...buildSEO({
+    title: "Predict Matches & Win",
+    description:
+      "Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring.",
+    keywords:
+      "football predictions, betting tips, match predictions, soccer tips",
+    path: "/predictions",
+    robots: "index,follow"
+  })}
+/>
 
       {copyToast && <div className="v21-toast-copy">Copied to clipboard!</div>}
 

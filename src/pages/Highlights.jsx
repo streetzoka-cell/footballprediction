@@ -351,13 +351,27 @@ export default function Highlights() {
   return (
     <div className={theme === 'dark' ? 'nh-dark' : 'nh-light'} style={{ minHeight: '100vh', background: 'var(--nh-bg)', color: 'var(--nh-text)', transition: 'background 0.3s' }}>
       
-      <SEO 
-        title={seoPost ? seoPost.title : "Football News Hub | ZOKASCORE"}
-        description={seoPost ? seoPost.body.substring(0, 150) : "Official football news, transfers, and injuries."}
-        image={getSeoImageUrl(seoPost)}
-        type="article"
-        structuredData={generateJsonLd(seoPost)}
-      />
+      <SEO
+  title={seoPost ? seoPost.title : "Football News, Transfers & Match Updates | ZOKASCORE"}
+  description={
+    seoPost
+      ? seoPost.body.substring(0, 150)
+      : "Follow the latest football news, transfer updates, match reports, injuries, club announcements, and breaking stories from leagues around the world on ZOKASCORE."
+  }
+  image={getSeoImageUrl(seoPost)}
+  type="article"
+  keywords={
+    seoPost
+      ? `${seoPost.title}, football news, transfer news, football updates, ZOKASCORE`
+      : "football news, transfer news, football updates, breaking football news, match reports, injuries, ZOKASCORE"
+  }
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Highlights", path: "/highlights" }
+  ]}
+  structuredData={generateJsonLd(seoPost)}
+/>
 
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'var(--nh-header-bg)', borderBottom: '2px solid var(--nh-border)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
         <div style={{ maxWidth: 700, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -1,6 +1,6 @@
 import { Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query"; // ★ NEW IMPORT
+import { useQueryClient } from "@tanstack/react-query";
 
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
@@ -24,7 +24,8 @@ import { useRegisterSW } from "virtual:pwa-register/react";
 const PageLoader = () => (
   <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", minHeight: "70vh", gap: "24px" }}>
     <div style={{ width: 64, height: 64, borderRadius: 18, background: "linear-gradient(135deg, #10b981 0%, #059669 100%)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 0 40px rgba(16,185,129,0.3)", animation: "nvLogoFloat 2s ease-in-out infinite" }}>
-      <img src="/icons/icon-192.png" width="48" height="48" alt="Logo" style={{ borderRadius: 14 }} />
+      {/* 8. Updated alt text for accessibility */}
+      <img src="/icons/icon-192.png" width="48" height="48" alt="ZOKASCORE Logo" style={{ borderRadius: 14 }} />
     </div>
     <div style={{ width: 32, height: 32, border: "3px solid rgba(255,255,255,0.1)", borderTopColor: "#10b981", borderRadius: "50%", animation: "spin 0.8s linear infinite" }} />
   </div>
@@ -32,7 +33,7 @@ const PageLoader = () => (
 
 function AppShell() {
   const location = useLocation();
-  const queryClient = useQueryClient(); // ★ NEW: Get query client
+  const queryClient = useQueryClient();
   
   const [installPromptEvent, setInstallPromptEvent] = useState(null);
   const [showInstallBanner, setShowInstallBanner] = useState(false);
@@ -55,23 +56,15 @@ function AppShell() {
     initApp();
     initAnalytics();
 
-    const script = document.createElement('script');
-    script.src = 'https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN';
-    script.async = true;
-    document.body.appendChild(script);
-
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){dataLayer.push(arguments);}
-    gtag('js', new Date());
-    gtag('config', 'G-GZ2JTNKCCN');
-    window.gtag = gtag;
+    // 3. Removed manual GA script injection to prevent double loading if already in index.html
+    // Assuming initAnalytics() or index.html handles GA setup.
     
-    // ★ NEW: Auto-refresh data when connection is restored
+    // 4. Updated Query invalidation to v5 object syntax
     const handleOnline = () => {
       console.log("Connection restored. Refetching live data...");
-      queryClient.invalidateQueries(['liveMatches']);
-      queryClient.invalidateQueries(['fixtures']);
-      queryClient.invalidateQueries(['homeMatches']);
+      queryClient.invalidateQueries({ queryKey: ["liveMatches"] });
+      queryClient.invalidateQueries({ queryKey: ["fixtures"] });
+      queryClient.invalidateQueries({ queryKey: ["homeMatches"] });
     };
 
     window.addEventListener("online", handleOnline);
@@ -83,8 +76,7 @@ function AppShell() {
         visibilityTimeout = setTimeout(() => {
           initApp();
           window.dispatchEvent(new CustomEvent("app:refocused"));
-          // Also refetch on tab focus
-          queryClient.invalidateQueries(['liveMatches']);
+          queryClient.invalidateQueries({ queryKey: ["liveMatches"] });
         }, 1000);
       }
     };
@@ -156,56 +148,59 @@ function AppShell() {
     updateServiceWorker(true);
   };
 
-  useEffect(() => {
-    if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') {
-      setTimeout(() => Notification.requestPermission(), 5000);
-    }
-  }, []);
+  // 2. Removed automatic notification permission request
+  // Notifications should only be requested after explicit user action
 
   return (
     <>
+      {/* 1. Improved Homepage SEO */}
       <SEO 
-        title="ZOKASCORE | Live Football Scores, Predictions & AI Intelligence" 
-        description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." 
-        keywords="football predictions, live scores, fixtures, ZOKASCORE, soccer, premier league, la liga, champions league"
-        path="/" 
+        title="Football Predictions, Live Scores & Fixtures | ZOKASCORE"
+        description="Follow football fixtures, live scores, predictions, league tables, match statistics, and football news from competitions around the world on ZOKASCORE."
+        keywords="football predictions, live scores, football fixtures, league tables, football statistics, premier league, champions league, la liga, ZOKASCORE"
+        path="/"
         robots="index,follow"
-        structuredData={[organizationSchema(), websiteSchema()]} 
+        breadcrumbs={[
+          { name: "Home", path: "/" }
+        ]}
+        structuredData={[organizationSchema(), websiteSchema()]}
       />
       
       <ScrollToTop />
 
+      {/* 6. Updated Install banner copy */}
       {showInstallBanner && (
         <div style={toastStyle}>
           <Download size={20} style={{ color: "#10b981", flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: ".8rem", fontWeight: 800, color: "#fff" }}>Install ZOKASCORE</div>
-            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>Add to home screen for quick access</div>
+            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>Install ZOKASCORE for a faster experience and offline access.</div>
           </div>
           <button onClick={handleInstallClick} style={installBtnStyle}>Install</button>
           <button onClick={handleCloseToast} style={closeBtnStyle}><X size={16} /></button>
         </div>
       )}
 
+      {/* 5. Updated toast copy */}
       {needRefresh && (
         <div style={toastStyle}>
           <RefreshCw size={20} style={{ color: "#fbbf24", flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: ".8rem", fontWeight: 800, color: "#fff" }}>Update Available</div>
-            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>A new version of Zoka is ready.</div>
+            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>A new version of ZOKASCORE is available.</div>
           </div>
           <button onClick={handleUpdateNow} style={updateBtnStyle}>Reload</button>
           <button onClick={handleCloseToast} style={closeBtnStyle}><X size={16} /></button>
         </div>
       )}
 
+      {/* 7. Updated Offline toast copy */}
       {offlineReady && (
         <div style={toastStyle}>
           <CheckCircle size={20} style={{ color: "#10b981", flexShrink: 0 }} />
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: ".8rem", fontWeight: 800, color: "#fff" }}>Ready for Offline</div>
-            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>App can be used without internet.</div>
+            <div style={{ fontSize: ".68rem", color: "#94a3b8" }}>ZOKASCORE is ready to work offline.</div>
           </div>
           <button onClick={handleCloseToast} style={closeBtnStyle}><X size={16} /></button>
         </div>

@@ -239,11 +239,15 @@ export default function Profile() {
   return (
     <div style={{ minHeight: '100dvh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
       <SEO
-        title="My Profile & Settings"
-        description="View and manage your ZOKASCORE profile. Update your account settings, track your prediction history, and review your overall leaderboard rankings here."
-        keywords="user profile, account settings, ZOKASCORE profile, prediction history, user dashboard"
-        robots="noindex,nofollow"
-      />
+  title="My Profile & Account"
+  description="Manage your ZOKASCORE account, update your profile, track your prediction history, monitor your performance, and view your leaderboard progress."
+  keywords="ZOKASCORE profile, user account, account settings, prediction history, leaderboard progress, football predictions"
+  robots="noindex,nofollow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Profile", path: "/profile" }
+  ]}
+/>
 
       <div style={{ maxWidth: 900, margin: '0 auto', padding: '28px 20px 100px' }}>
 

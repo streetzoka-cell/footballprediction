@@ -5,8 +5,17 @@ import PageLayout from "../components/PageLayout";
 export default function NotFound() {
   return (
     <>
-      <SEO title="404 - Page Not Found | ZOKASCORE" description="The page you are looking for doesn't exist or may have been moved. Check the URL or navigate back to the ZOKASCORE homepage to find what you need." keywords="404 page not found, broken link, missing page, ZOKASCORE error" path="/404" robots="noindex,nofollow" />
-      <PageLayout title="404" subtitle="Sorry, the page you were looking for could not be found.">
+     <SEO
+  title="404 - Page Not Found"
+  description="The page you're looking for doesn't exist, may have been moved, or the URL may be incorrect. Return to the ZOKASCORE homepage to continue exploring football fixtures, live scores, predictions, and standings."
+  keywords="404, page not found, missing page, broken link, ZOKASCORE"
+  robots="noindex,nofollow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "404" }
+  ]}
+/>
+     <PageLayout title="404" subtitle="Sorry, the page you were looking for could not be found.">
         <div className="info-404">
           <h1 className="info-404-num">404</h1>
           <h2 className="info-404-title">Oops! This page doesn't exist.</h2>

@@ -18,9 +18,10 @@ import { collection, query, where, getDocs, orderBy, limit } from 'firebase/fire
 
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
+import { ROUTES } from '../utils/routes'; // ★ Import ROUTES
 import { applySmartMinute } from '../engine/matchEngine'; 
 
-const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
+const ADMIN_PATH = ROUTES.ADMIN; // ★ Use centralized route
 const APP_LOGO = '/icons/icon-192.png';
 
 function useNow(interval = 10000) {
@@ -242,7 +243,6 @@ export default function Navbar() {
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
-  // ★ FIX: Include the new `isAdmin` boolean from AuthContext
   const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
   const { data: adminNotifs = [] } = useQuery({

@@ -54,10 +54,15 @@ export default function Changelog() {
   return (
     <>
       <SEO
-        title="Changelog"
-        description="Track new features, improvements and updates released for ZOKASCORE."
-        path="/changelog"
-      />
+  title="What's New, Updates & Release Notes"
+  description="Stay up to date with the latest ZOKASCORE features, improvements, bug fixes, performance enhancements, and platform updates."
+  keywords="ZOKASCORE changelog, release notes, updates, new features, bug fixes, platform improvements, version history"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Changelog", path: "/changelog" }
+  ]}
+/>
 
       <PageLayout
         title="Changelog"

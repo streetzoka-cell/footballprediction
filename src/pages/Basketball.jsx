@@ -485,11 +485,15 @@ export default function Basketball() {
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO
-        title="Basketball Predictions & Live Scores | ZOKASCORE"
-        description="Explore top basketball predictions, live scores, and game fixtures. Get expert analysis for NBA, EuroLeague, and more on ZOKASCORE's basketball hub."
-        keywords="basketball predictions, NBA tips, basketball scores, basketball fixtures, hoops predictions"
-        robots="index,follow"
-      />
+  title="Basketball Fixtures, Live Scores & Predictions"
+  description="Follow basketball fixtures, live scores, standings, match insights, and predictions from top competitions around the world on ZOKASCORE."
+  keywords="basketball, basketball fixtures, live basketball scores, basketball predictions, NBA, EuroLeague, standings, ZOKASCORE"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Basketball", path: "/basketball" }
+  ]}
+/>
 
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,14,23,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', animation: 'bb_slideDown .4s ease' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>

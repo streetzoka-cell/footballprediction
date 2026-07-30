@@ -454,11 +454,16 @@ export default function Home() {
 
   return (
     <div className="zoka-home">
-      <SEO 
-        title="Football Predictions, Fixtures and Live Scores" 
-        description="Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world." 
-        keywords="football predictions, live scores, fixtures, ZOKA" 
-      />
+      <SEO
+  title="Football Predictions, Fixtures & Live Scores"
+  description="Follow today's football fixtures, expert predictions, live scores, league standings, match analysis, and breaking football updates from competitions around the world on ZOKASCORE."
+  keywords="football predictions, live scores, football fixtures, match analysis, league standings, football results, ZOKASCORE"
+  path="/"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" }
+  ]}
+/>
 
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 

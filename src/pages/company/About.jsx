@@ -34,14 +34,14 @@ const injectCSS = () => {
 
 .co-hero{text-align:center;padding:40px 0 36px;animation:co-fade-up .5s ease both}
 .co-hero-icon{width:72px;height:72px;border-radius:20px;background:linear-gradient(135deg,rgba(0,230,118,.1),rgba(0,230,118,.03));border:1.5px solid rgba(0,230,118,.15);display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px;animation:co-float 4s ease-in-out infinite}
-.co-hero h1{margin:0 0 8px;font-size:1.8rem;font-weight:900;color:var(--text-primary);letter-spacing:-.02em}
+.co-hero h1{margin:0 0 10px;font-size:1.8rem;font-weight:900;color:var(--text-primary);letter-spacing:-.02em;line-height:1.2}
 .co-hero p{margin:0;font-size:.88rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:560px;margin-left:auto;margin-right:auto}
 
 .co-stats{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:36px}
 .co-stat{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:18px 16px;text-align:center;transition:transform .15s,box-shadow .15s;animation:co-pop .4s cubic-bezier(.34,1.56,.64,1) both;position:relative;overflow:hidden}
 .co-stat::before{content:'';position:absolute;top:0;left:-100%;width:50%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,.03),transparent);animation:co-shine 5s ease-in-out infinite}
 .co-stat:hover{transform:translateY(-2px);box-shadow:0 4px 16px rgba(0,0,0,.2)}
-.co-stat .n{font-size:1.6rem;font-weight:900;font-family:var(--font-display);line-height:1;animation:co-count .4s ease both}
+.co-stat .n{font-size:1.3rem;font-weight:900;font-family:var(--font-display);line-height:1;animation:co-count .4s ease both;letter-spacing:0.02em}
 .co-stat .l{font-size:.6rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-top:5px}
 
 .co-section{margin-bottom:32px;animation:co-fade-up .4s ease both}
@@ -81,7 +81,7 @@ const injectCSS = () => {
   .co-hero{padding:28px 0 24px}
   .co-values{grid-template-columns:1fr}
   .co-stats{grid-template-columns:repeat(2,1fr);gap:8px}
-  .co-stat .n{font-size:1.35rem}
+  .co-stat .n{font-size:1.1rem}
   .co-contact-links{flex-direction:column;align-items:center}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -89,26 +89,27 @@ const injectCSS = () => {
   document.head.appendChild(s);
 };
 
+// Updated stats to reflect value propositions rather than unverified numbers
 const STATS = [
-  { n: '50K+', l: 'Active Users', color: 'var(--accent)', bg: 'rgba(0,230,118,.06)', icon: <Users size={18} />, delay: 0 },
-  { n: '2M+', l: 'Predictions Made', color: '#a855f7', bg: 'rgba(168,85,247,.06)', icon: <Target size={18} />, delay: 60 },
+  { n: 'Global', l: 'Football Audience', color: 'var(--accent)', bg: 'rgba(0,230,118,.06)', icon: <Users size={18} />, delay: 0 },
+  { n: 'Real-Time', l: 'Match Tracking', color: '#a855f7', bg: 'rgba(168,85,247,.06)', icon: <Target size={18} />, delay: 60 },
   { n: '15+', l: 'Leagues Covered', color: 'var(--gold)', bg: 'rgba(245,197,66,.06)', icon: <Trophy size={18} />, delay: 120 },
-  { n: '89%', l: 'User Accuracy', color: '#60a5fa', bg: 'rgba(96,165,250,.06)', icon: <BarChart3 size={18} />, delay: 180 },
+  { n: '100%', l: 'Independent Platform', color: '#60a5fa', bg: 'rgba(96,165,250,.06)', icon: <BarChart3 size={18} />, delay: 180 },
 ];
 
 const VALUES = [
-  { icon: <Target size={18} />, color: 'var(--accent)', bg: 'rgba(0,230,118,.08)', title: 'Accuracy First', desc: 'We reward precise score predictions over lucky guesses. Exact scores earn 10x points.' },
+  { icon: <Target size={18} />, color: 'var(--accent)', bg: 'rgba(0,230,118,.08)', title: 'Accuracy First', desc: 'We reward precise score predictions over lucky guesses. Exact scores earn maximum points.' },
   { icon: <Shield size={18} />, color: '#60a5fa', bg: 'rgba(96,165,250,.08)', title: 'Fair Play', desc: 'Anti-cheat systems and transparent scoring ensure every player competes on equal ground.' },
   { icon: <Zap size={18} />, color: 'var(--gold)', bg: 'rgba(245,197,66,.08)', title: 'Real-Time', desc: 'Live scores, instant leaderboard updates, and real-time match tracking.' },
   { icon: <Heart size={18} />, color: '#ef4444', bg: 'rgba(239,68,68,.08)', title: 'Community', desc: 'Built by football fans, for football fans. Your feedback shapes every feature.' },
 ];
 
 const TIMELINE = [
-  { year: '2024 Q1', text: 'ZokaPredict founded with a mission to make football prediction social and competitive.', sub: 'First 100 users joined within 2 weeks' },
-  { year: '2024 Q2', text: 'Launched daily & weekly leaderboards with real-time scoring and G.O.A.T rankings.', sub: 'Integrated 10+ football leagues' },
-  { year: '2024 Q3', text: 'Introduced Zoka Picks — expert predictions with community voting and accuracy tracking.', sub: 'Reached 10,000 active users' },
-  { year: '2024 Q4', text: 'Added live streaming, highlights, and master games. Expanded to basketball predictions.', sub: '50,000+ users, 2M+ predictions' },
-  { year: '2025', text: 'Scaling across Africa and beyond. Mobile apps, premium features, and pro leagues coming soon.', sub: 'The journey continues...' },
+  { year: 'Inception', text: 'ZOKASCORE founded with a mission to make football predictions social, competitive, and rewarding.', sub: 'Platform architecture and initial vision established' },
+  { year: 'Growth', text: 'Launched daily & weekly leaderboards with real-time scoring and G.O.A.T rankings.', sub: 'Integrated major football leagues worldwide' },
+  { year: 'Expansion', text: 'Introduced expert predictions, community voting, and accuracy tracking features.', sub: 'Platform audience rapidly expanded' },
+  { year: 'Innovation', text: 'Added live experiences, highlights, and premium match features.', sub: 'Continuous improvement of the user experience' },
+  { year: 'Today', text: 'Scaling across Africa and beyond. Mobile apps, premium features, and pro leagues coming soon.', sub: 'The journey continues...' },
 ];
 
 export default function About() {
@@ -118,10 +119,15 @@ export default function About() {
   return (
     <div className="co-page">
       <SEO
-        title="About ZOKASCORE | Football Predictions Platform"
-        description="Learn more about ZOKASCORE, your trusted platform for football predictions, live scores, and community gaming. Discover our mission and what we offer."
-        keywords="about ZOKASCORE, football platform, prediction community, sports gaming, company info"
+        title="About ZOKASCORE | Football Predictions, Live Scores & Match Insights"
+        description="Learn about ZOKASCORE, the football platform built for match predictions, live scores, fixtures, standings, and interactive football competitions. Discover our mission and how we're making football more exciting for fans worldwide."
+        keywords="ZOKASCORE, about ZOKASCORE, football predictions, live scores, football fixtures, football standings, football platform, sports community"
+        path="/about"
         robots="index,follow"
+        breadcrumbs={[
+          { name: "Home", path: "/" },
+          { name: "About", path: "/about" }
+        ]}
       />
 
       <div className="co-hdr">
@@ -137,7 +143,7 @@ export default function About() {
         <div className="co-hero">
           <div className="co-hero-icon"><Target size={32} style={{ color: 'var(--accent)' }} /></div>
           <h1>Football Prediction,<br />Reimagined</h1>
-          <p>ZokaPredict is a real-time football prediction platform where fans compete on daily leaderboards, track accuracy, and prove they know the beautiful game better than anyone else.</p>
+          <p>ZOKASCORE is a premier football platform where fans compete on daily leaderboards, track match predictions, and experience live scores, fixtures, and standings in real-time.</p>
         </div>
 
         <div className="co-stats">
@@ -156,7 +162,7 @@ export default function About() {
             Our Mission
           </div>
           <div className="co-card">
-            <p>We believe every football fan deserves a platform that celebrates knowledge of the game — not just luck. ZokaPredict was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
+            <p>We believe every football fan deserves a platform that celebrates knowledge of the game — not just luck. ZOKASCORE was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
           </div>
         </div>
 
@@ -199,7 +205,7 @@ export default function About() {
             The Team
           </div>
           <div className="co-card">
-            <p>ZokaPredict is built and maintained by a small, passionate team of football enthusiasts and software engineers based in Kenya. We're bootstrapped, independent, and focused on building the best prediction experience in Africa — and beyond.</p>
+            <p>ZOKASCORE is independently built and maintained by a small, passionate team of football enthusiasts and software engineers. We are focused on delivering the ultimate football prediction and live score platform, driven by a genuine love for the beautiful game.</p>
           </div>
         </div>
 
