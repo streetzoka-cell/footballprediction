@@ -14,7 +14,7 @@ import { todayStr } from '../utils/dates';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 
 import { db } from '../utils/firebase';
-import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore'; // ★ Removed onSnapshot
+import { collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
 
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
@@ -242,9 +242,9 @@ export default function Navbar() {
   const [pointsHover, setPointsHover] = useState(false);
   const [seenNotifIds, setSeenNotifIds] = useState(new Set());
   
-  const isAdmin = userProfile?.role === 'admin' || userProfile?.role === 'staff';
+  // ★ FIX: Include the new `isAdmin` boolean from AuthContext
+  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
-  // ★ Phase 5: Use React Query instead of onSnapshot for notifications to save quota
   const { data: adminNotifs = [] } = useQuery({
     queryKey: ['notifications', uid],
     queryFn: async () => {
