@@ -61,14 +61,11 @@ export default defineConfig({
             }
           },
           {
-            urlPattern: /^https:\/\/firestore\.googleapis\.com\/.*/i,
-            handler: 'NetworkFirst',
+            urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/i,
+            handler: 'NetworkOnly',
             options: {
-              cacheName: 'firestore-cache',
-              networkTimeoutSeconds: 10,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24
+              cacheableResponse: {
+                statuses: [] // Prevent Workbox from trying to cache streams
               }
             }
           }
