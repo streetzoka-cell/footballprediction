@@ -14,6 +14,7 @@ import { eventBus, EVENT } from '../../utils/eventBus';
 import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers } from '../../services/predictions';
 import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { safeWrite } from '../../services/safeWrite';
 
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import { useActivePredictions, useZokaPicks } from '../../hooks/useUserData';
@@ -96,14 +97,16 @@ export default function AdminPage() {
 
   const handleZokaSaveDraft = useCallback(async (data) => {
     if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...cleanObj(data), updatedAt: serverTimestamp() }, { merge: true });
+    const payload = { ...cleanObj(data), updatedAt: new Date().toISOString() };
+    await safeWrite(PATHS.ZOKA_PICKS, date, payload, { merge: true });
     queryClient.invalidateQueries(['zokaPicks', date]);
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
   }, [date, queryClient]);
 
   const handleZokaPublish = useCallback(async (data) => {
     if (!db) return;
-    await setDoc(doc(db, PATHS.ZOKA_PICKS, date), { ...cleanObj(data), isDraft: false, publishedAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    const payload = { ...cleanObj(data), isDraft: false, publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
+    await safeWrite(PATHS.ZOKA_PICKS, date, payload, { merge: true });
     queryClient.invalidateQueries(['zokaPicks', date]);
     eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
   }, [date, queryClient]);
@@ -114,16 +117,19 @@ export default function AdminPage() {
       title: 'Unpublish All Zoka Picks?',
       msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
       onYes: async () => {
-        await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
-        queryClient.invalidateQueries(['zokaPicks', date]);
-        eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
+        try {
+          await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
+          queryClient.invalidateQueries(['zokaPicks', date]);
+          eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
+        } catch (e) {
+          showToast('Failed to unpick. Quota might be exceeded.', 'er');
+        }
         setConfirm(null);
       },
     });
-  }, [db, pubPicks, date, queryClient]);
+  }, [db, pubPicks, date, queryClient, showToast]);
 
   const handleFeaturedAdd = useCallback(async (m) => {
-    if (!db) return;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
       id: predId, matchId: String(m.id), matchDate: date,
@@ -140,18 +146,17 @@ export default function AdminPage() {
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
     
     try {
-      await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...cleanObj(pred), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-      await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
+      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { ...cleanObj(pred), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
+      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updatedPreds), updatedAt: new Date().toISOString() }, { merge: true });
     } catch (e) {
       showToast('Failed to save match', 'er');
       queryClient.setQueryData(['activePredictions', date], previousPreds);
     } finally {
       queryClient.invalidateQueries(['activePredictions', date]);
     }
-  }, [db, date, preds, queryClient, showToast]);
+  }, [date, preds, queryClient, showToast]);
 
   const handleFeaturedRemove = useCallback(async (p) => {
-    if (!db) return;
     const predId = p.id || `feat_${date}_${p.matchId}`;
     
     await queryClient.cancelQueries(['activePredictions', date]);
@@ -160,46 +165,61 @@ export default function AdminPage() {
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
     
     try {
-      await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
-      await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
+      // Try to delete the actual doc, but don't crash if quota is exceeded.
+      try { await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId)); } catch {}
+      
+      // Update the snapshot via safeWrite so the UI stays correct
+      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updatedPreds), updatedAt: new Date().toISOString() }, { merge: true });
     } catch (e) {
       showToast('Failed to remove match', 'er');
       queryClient.setQueryData(['activePredictions', date], previousPreds);
     } finally {
       queryClient.invalidateQueries(['activePredictions', date]);
     }
-  }, [db, date, queryClient, showToast]);
+  }, [date, queryClient, showToast]);
 
-  // ★ MANUAL RESOLVE ONLY (For admin emergencies if backend misses a match)
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
     
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: serverTimestamp() }, { merge: true });
-    
-    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
-    queryClient.setQueryData(['activePredictions', date], updated);
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
-    
-    await resolveMatchForAllUsers(matchId, h, a, date);
-    queryClient.invalidateQueries(['activePredictions', date]);
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
-    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-    if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
+    try {
+      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
+      
+      const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
+      queryClient.setQueryData(['activePredictions', date], updated);
+      
+      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
+      
+      await resolveMatchForAllUsers(matchId, h, a, date);
+      queryClient.invalidateQueries(['activePredictions', date]);
+      eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+      eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+      if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
+    } catch (e) {
+      showToast('Failed to resolve. Quota might be exceeded.', 'er');
+    }
   }, [preds, date, showToast, queryClient]);
 
   const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, isResolved: true, updatedAt: serverTimestamp() }, { merge: true });
-    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
-    queryClient.setQueryData(['activePredictions', date], updated);
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
-    await resolveMatchForAllUsers(matchId, h, a, date);
-    queryClient.invalidateQueries(['activePredictions', date]);
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
-    eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-  }, [preds, date, queryClient]);
+    
+    try {
+      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
+      
+      const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
+      queryClient.setQueryData(['activePredictions', date], updated);
+      
+      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
+      
+      await resolveMatchForAllUsers(matchId, h, a, date);
+      queryClient.invalidateQueries(['activePredictions', date]);
+      eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
+      eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+    } catch (e) {
+      showToast('Failed to override. Quota might be exceeded.', 'er');
+    }
+  }, [preds, date, queryClient, showToast]);
 
   const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
@@ -227,9 +247,6 @@ export default function AdminPage() {
     }
     setRebuilding(null);
   }, [date, showToast, queryClient]);
-
-  // ★ DELETED THE AUTO-RESOLVE USEEFFECT LOOP FOREVER! 
-  // The backend (liveJob.js & finishedFixturesJob.js) handles this perfectly now without burning Firebase quota.
 
   return (
     <div className="ap">

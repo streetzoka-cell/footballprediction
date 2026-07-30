@@ -1,5 +1,7 @@
 // src/services/predictions.js
 import { db } from '../utils/firebase';
+import { safeWrite } from './safeWrite';
+
 import { 
   collection, query, where, doc, setDoc, getDoc, getDocs, writeBatch, 
   serverTimestamp, increment, runTransaction 
@@ -10,7 +12,6 @@ import { PATHS, calcPoints } from '../utils/constants';
 import { buildDailySummaryData, buildPeriodSummaryData } from '../engine/leaderboardEngine';
 
 export async function savePrediction(uid, displayName, pred, h, a) {
-  if (!db) throw new Error('Firestore not initialized');
   const matchId = String(pred.matchId || pred.id);
   const dateStr = pred.matchDate || pred._dateStr || todayStr();
   const predId = `${uid}_${matchId}`;
@@ -19,15 +20,18 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   const awayTeamName = typeof pred.awayTeam === 'object' ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') : (pred.awayTeam || 'Away');
   const leagueName = typeof pred.league === 'object' ? (pred.league?.name || 'Other') : (pred.league || 'Other');
 
-  await setDoc(doc(db, PATHS.USER_PREDICTIONS, predId), {
+  const payload = {
     userId: uid, displayName: displayName || 'Anonymous', matchId, predId,
     homeScore: Number(h), awayScore: Number(a), matchDate: dateStr,
     homeTeam: homeTeamName, awayTeam: awayTeamName,
     homeLogo: pred.homeLogo || pred.homeTeam?.crest || pred.homeTeam?.logo || null,
     awayLogo: pred.awayLogo || pred.awayTeam?.crest || pred.awayTeam?.logo || null,
     league: leagueName, kickoff: pred.kickoff || null,
-    createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
-  }, { merge: true });
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), // Use ISO string for queue
+  };
+
+  // ★ Use safeWrite instead of setDoc
+  await safeWrite(PATHS.USER_PREDICTIONS, predId, payload, { merge: true });
 
   eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid, matchId, predId, dateStr, homeScore: Number(h), awayScore: Number(a) });
 }
