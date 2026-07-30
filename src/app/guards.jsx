@@ -28,19 +28,21 @@ export function GuestRoute({ children }) {
   return children;
 }
 
-// ★ REFACTORED: Removed the extra Firestore getDoc call. 
-// The AuthContext already securely fetches and monitors the user's role via onSnapshot.
+// ★ UPDATED: Now checks the exact same `isAdmin` boolean that the Navbar uses!
 export function AdminRoute({ children }) {
   const { currentUser, userProfile, authLoading } = useAuth();
   const location = useLocation();
 
+  // Wait for both Auth and UserProfile to load
   if (authLoading || (currentUser && !userProfile)) return <AppLoader />;
 
+  // If not logged in, send to login
   if (!currentUser) {
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (userProfile?.role !== 'admin' && userProfile?.role !== 'staff') {
+  // If logged in but NOT an admin, kick them to home page
+  if (!userProfile?.isAdmin) {
     return <Navigate to="/" replace />;
   }
 

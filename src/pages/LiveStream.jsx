@@ -222,17 +222,21 @@ export default function LiveStream() {
    return (
     <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)' }}>
 
-      <SEO
-        title="Live Football Streams & Matches | ZOKASCORE"
-        description="Find where to watch live football matches through official broadcasters and legal streaming platforms worldwide. Get accurate streaming info on ZOKASCORE."
-        keywords="live football streams, watch football online, live soccer, football streaming, live matches"
-        robots="index,follow"
-      />
+     <SEO
+  title="Live Football Matches, TV Guide & Streaming Information"
+  description="Follow live football matches, kickoff times, live scores, and official TV and streaming information for major leagues and competitions on ZOKASCORE."
+  keywords="live football matches, football TV guide, football streaming information, live soccer, live scores, football fixtures, watch football legally, ZOKASCORE"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Live Stream", path: "/livestream" }
+  ]}
+/>
 
       {/* ── HEADER ── */}
       <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(5,7,10,.85)', backdropFilter: 'blur(18px)', borderBottom: '1px solid var(--border)' }}>
         <div style={{ maxWidth: 940, margin: '0 auto', padding: '14px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
+           <div style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer' }} onClick={() => window.location.href = '/'}>
             <div style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--bg-deep)' }}>
               <Tv size={16} />
             </div>

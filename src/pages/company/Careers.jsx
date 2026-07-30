@@ -27,8 +27,8 @@ const injectCSS = () => {
 .cr-hdr-title{display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:800;color:var(--text-primary)}
 
 .cr-hero{text-align:center;padding:36px 0 28px;animation:cr-fade-up .4s ease both}
-.cr-hero h1{margin:0 0 6px;font-size:1.6rem;font-weight:900;color:var(--text-primary)}
-.cr-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.5}
+.cr-hero h1{margin:0 0 10px;font-size:1.8rem;font-weight:900;color:var(--text-primary);line-height:1.2}
+.cr-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:560px;margin-left:auto;margin-right:auto}
 
 .cr-perks{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:32px}
 .cr-perk{background:var(--bg-surface);border:1px solid var(--border);border-radius:14px;padding:16px;text-align:center;animation:cr-pop .35s cubic-bezier(.34,1.56,.64,1) both}
@@ -49,15 +49,15 @@ const injectCSS = () => {
 .cr-job-apply:active{transform:scale(.97)}
 
 .cr-cta{text-align:center;padding:32px 20px;background:linear-gradient(135deg,rgba(168,85,247,.04),rgba(0,230,118,.02));border:1.5px solid rgba(168,85,247,.1);border-radius:16px;margin-top:24px;animation:cr-pop .4s cubic-bezier(.34,1.56,.64,1) both}
-.cr-cta h3{margin:0 0 6px;font-size:.95rem;font-weight:900;color:var(--text-primary)}
-.cr-cta p{margin:0 0 14px;font-size:.8rem;color:var(--text-muted);font-weight:600}
+.cr-cta h3{margin:0 0 8px;font-size:1rem;font-weight:900;color:var(--text-primary)}
+.cr-cta p{margin:0 0 16px;font-size:.8rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:480px;margin-left:auto;margin-right:auto}
 .cr-cta-btn{display:inline-flex;align-items:center;gap:8px;padding:12px 24px;border-radius:12px;background:linear-gradient(135deg,#a855f7,#7c3aed);color:#fff;font-size:.85rem;font-weight:900;border:none;cursor:pointer;transition:all .15s;font-family:inherit;box-shadow:0 2px 14px rgba(168,85,247,.2)}
 .cr-cta-btn:hover{transform:translateY(-2px);box-shadow:0 4px 18px rgba(168,85,247,.25)}
 .cr-cta-btn:active{transform:scale(.97)}
 
 @media(max-width:480px){
   .cr-perks{grid-template-columns:1fr}
-  .cr-hero h1{font-size:1.4rem}
+  .cr-hero h1{font-size:1.5rem}
   .cr-job-meta{gap:8px}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
@@ -80,7 +80,7 @@ const JOBS = [
     deptText: '#60a5fa',
     location: 'Remote',
     type: 'Full-time',
-    desc: 'Build the prediction UI, leaderboard system, and real-time match experience. You\'ll work with React, Firebase, and modern CSS to create the smoothest football prediction app in Africa.',
+    desc: 'Build the prediction UI, leaderboard system, and real-time match experience. You\'ll work with React, Firebase, and modern CSS to create the smoothest football prediction platform.',
     tags: ['React', 'Firebase', 'CSS', 'TypeScript'],
   },
   {
@@ -98,7 +98,7 @@ const JOBS = [
     dept: 'Content',
     deptColor: 'rgba(245,197,66,.1)',
     deptText: 'var(--gold)',
-    location: 'Remote / Nairobi',
+    location: 'Remote',
     type: 'Part-time / Contract',
     desc: 'Create match previews, highlight reels, prediction analysis content, and social media posts. You live and breathe football and know how to make it engaging.',
     tags: ['Video', 'Writing', 'Social Media', 'Football'],
@@ -110,7 +110,7 @@ const JOBS = [
     deptText: 'var(--accent)',
     location: 'Remote',
     type: 'Full-time',
-    desc: 'Grow and manage the ZokaPredict community across social platforms, Discord, and in-app. You\'ll run engagement campaigns, moderate discussions, and be the voice of the brand.',
+    desc: 'Grow and manage the ZOKASCORE community across social platforms, Discord, and in-app. You\'ll run engagement campaigns, moderate discussions, and be the voice of the brand.',
     tags: ['Social Media', 'Community', 'Discord', 'Growth'],
   },
 ];
@@ -122,10 +122,15 @@ export default function Careers() {
   return (
     <div className="cr-page">
       <SEO
-        title="Careers at ZOKASCORE | Join Our Team"
-        description="Join the ZOKASCORE team and help build the future of football prediction. We are hiring passionate engineers, creators, and community managers. Apply today!"
-        keywords="careers, jobs, ZOKASCORE hiring, remote jobs, software engineering jobs, football jobs, community manager, Kenya tech jobs"
+        title="Careers at ZOKASCORE | Build the Future of Football"
+        description="Explore career opportunities at ZOKASCORE. Join a team building innovative football experiences through live scores, predictions, fixtures, statistics, and fan engagement."
+        keywords="ZOKASCORE careers, football technology jobs, sports tech careers, software engineering, product design, marketing careers, remote opportunities, football platform"
+        path="/careers"
         robots="index,follow"
+        breadcrumbs={[
+          { name: "Home", path: "/" },
+          { name: "Careers", path: "/careers" }
+        ]}
       />
 
       <div className="cr-hdr">
@@ -139,8 +144,8 @@ export default function Careers() {
 
       <div className="cr-wrap">
         <div className="cr-hero">
-          <h1>Build the Future of Football Prediction</h1>
-          <p>We're a small, fast-moving team looking for passionate people who love football and great software.</p>
+          <h1>Build the Future of Football with ZOKASCORE</h1>
+          <p>Join a team building innovative football experiences through live scores, predictions, and fan engagement. We're looking for passionate people who love football and great software.</p>
         </div>
 
         <div className="cr-perks">
@@ -179,7 +184,7 @@ export default function Careers() {
 
         <div className="cr-cta">
           <h3>Don't See Your Role?</h3>
-          <p>We're always looking for talented people. Send us your portfolio and tell us how you can contribute.</p>
+          <p>We're always looking for talented people. Send us your portfolio and tell us how you can contribute to ZOKASCORE.</p>
           <a href="mailto:streetzoka@gmail.com?subject=General Application" style={{ textDecoration: 'none' }}>
             <button className="cr-cta-btn"><Send size={14} /> Send Open Application</button>
           </a>

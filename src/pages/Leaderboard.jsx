@@ -229,11 +229,15 @@ export default function Leaderboard() {
   return (
     <div className="lb-page">
       <SEO
-        title="Football Prediction Leaderboard | ZOKASCORE"
-        description="Compete with football fans, climb the leaderboard, and view the best prediction rankings on ZOKASCORE."
-        keywords="football leaderboard, prediction rankings, ZOKASCORE"
-        robots="index,follow"
-      />
+  title="Prediction Leaderboard & Player Rankings"
+  description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
+  keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Leaderboard", path: "/leaderboard" }
+  ]}
+/>
 
       <div className="lb-hdr">
         <div className="lb-wrap">

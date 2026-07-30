@@ -4,8 +4,18 @@ import SEO from "../components/SEO";
 export default function HelpCenter() {
   return (
     <main className="info-help-text">
-      <SEO title="ZOKASCORE Help Center: Support & Guides" description="Need assistance? Visit the ZOKASCORE Help Center for guides on using our platform, troubleshooting issues, and getting the most out of your experience." keywords="help center, customer support, ZOKASCORE guides, troubleshooting, user guide" robots="index,follow" />
-      
+     <SEO
+  title="Help Center, Support & User Guides"
+  description="Find answers to common questions, troubleshooting guides, account support, and helpful resources to get the most out of ZOKASCORE's football predictions, fixtures, and live scores."
+  keywords="ZOKASCORE help, help center, customer support, football prediction help, troubleshooting, FAQ, user guides, account support"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Help Center", path: "/help-center" }
+  ]}
+/>
+
+
       <h1>Help Center</h1>
       <p>Welcome to the ZOKASCORE Help Center. Find answers to common questions and learn how to get the best experience from our platform.</p>
       

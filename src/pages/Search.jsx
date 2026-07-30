@@ -54,11 +54,18 @@ function MatchHit({ hit }) {
 export default function SearchPage() {
   return (
     <div className="md-page">
-      <SEO
-        title="Search Football Matches | ZOKASCORE"
-        description="Find any football match, team, or league instantly with typo-tolerant search."
-        robots="noindex,follow"
-      />
+     <SEO
+  title="Search Football Matches, Teams & Leagues"
+  description="Search football matches, teams, leagues, fixtures, live scores, standings, and predictions instantly across ZOKASCORE."
+  keywords="football search, search matches, search teams, search leagues, football fixtures, live scores, ZOKASCORE search"
+  robots="noindex,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Search", path: "/search" }
+  ]}
+/>
+
+
 
       <div className="md-container">
         <h1 className="md-team-name" style={{ marginBottom: '20px' }}>

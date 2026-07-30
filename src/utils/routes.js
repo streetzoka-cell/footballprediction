@@ -1,4 +1,3 @@
-// src/utils/routes.js
 import { slugify } from './format';
 
 export const ROUTES = Object.freeze({

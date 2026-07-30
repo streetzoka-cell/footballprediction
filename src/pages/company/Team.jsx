@@ -137,10 +137,15 @@ export default function Team() {
   return (
     <div style={styles.page}>
       <SEO
-        title="Meet the ZOKASCORE Developer | Solo Dev Team"
-        description="Learn about the solo developer behind ZOKASCORE. Designed, coded, and maintained by one passionate creator dedicated to delivering the ultimate football experience."
-        keywords="ZOKASCORE team, solo developer, about the developer, football prediction creator, Kimutai Gibson"
+        title="Meet the ZOKASCORE Developer"
+        description="Meet the developer behind ZOKASCORE. Discover the story, technology, and vision powering the football predictions, fixtures, live scores, and community platform."
+        keywords="ZOKASCORE developer, football prediction platform, sports technology, React, Firebase, Node.js"
+        path="/team"
         robots="index,follow"
+        breadcrumbs={[
+          { name: "Home", path: "/" },
+          { name: "Team", path: "/team" }
+        ]}
       />
       
       <div style={styles.hero}>
@@ -148,15 +153,18 @@ export default function Team() {
           
           <Link to="/" style={styles.backLink}>← Back</Link>
           
-          <div style={styles.badge}>Solo Dev</div>
+          <div style={styles.badge}>Independent Developer</div>
           
           <h1 style={styles.title}>
-            Built by one.<br/>
-            <span style={{ color: '#22c55e', WebkitTextFillColor: '#22c55e' }}>Zero shortcuts.</span>
+            Built with passion.
+            <br />
+            <span style={{ color: '#22c55e', WebkitTextFillColor: '#22c55e' }}>
+              Powered by ZOKASCORE.
+            </span>
           </h1>
           
           <p style={styles.subtitle}>
-            ZOKASCORE isn't built by an agency or a massive team. It's designed, coded, and maintained by one person fuelled by coffee and football stats.
+            ZOKASCORE is independently designed, developed, and continuously improved by a single developer with a mission to create one of the best football prediction and live score platforms.
           </p>
 
           <div style={styles.stats}>
@@ -166,23 +174,23 @@ export default function Team() {
             </div>
             <div style={styles.statBox}>
               <h2 style={styles.statNumber}>100%</h2>
-              <p style={styles.statLabel}>Handwritten</p>
+              <p style={styles.statLabel}>Built From Scratch</p>
             </div>
             <div style={styles.statBox}>
-              <h2 style={styles.statNumber}>24/7</h2>
-              <p style={styles.statLabel}>Grind Mode</p>
+              <h2 style={styles.statNumber}>∞</h2>
+              <p style={styles.statLabel}>Continuous Development</p>
             </div>
           </div>
 
           <div style={styles.techStack}>
-            {['React', 'Vite', 'Firebase', 'Tailwind', 'React Router', 'REST APIs', 'SEO', 'Netlify & Vercel'].map(tech => (
+            {['React', 'Vite', 'Node.js', 'Firebase', 'REST API', 'PWA', 'SEO', 'Vercel'].map(tech => (
               <span key={tech} style={styles.techPill}>{tech}</span>
             ))}
           </div>
 
           <div style={styles.ctaBox}>
             <p style={styles.ctaText}>
-              Think you can add value to ZOKASCORE?
+              Interested in collaborating, partnering, or sharing ideas to improve ZOKASCORE?
             </p>
             <Link 
               to="/contact" 
@@ -196,7 +204,7 @@ export default function Team() {
                 e.currentTarget.style.color = '#22c55e';
               }}
             >
-              Hit Me Up
+              Let's Connect
             </Link>
           </div>
 
@@ -204,7 +212,7 @@ export default function Team() {
       </div>
       
       <div style={styles.footer}>
-        <p style={styles.footerText}>Kimutai Gibson © {new Date().getFullYear()}</p>
+        <p style={styles.footerText}>© {new Date().getFullYear()} ZOKASCORE. Built independently with passion for football.</p>
       </div>
     </div>
   );

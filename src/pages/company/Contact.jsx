@@ -127,11 +127,16 @@ export default function Contact() {
   return (
     <div className="cc-page">
       <SEO
-        title="Contact ZOKASCORE Support Team"
-        description="Need assistance? Contact the ZOKASCORE team for support, bug reports, feature requests, or business partnerships. We're here to help you 24/7."
-        keywords="contact ZOKASCORE, customer support, feature request, bug report, business partnership, help center"
-        robots="index,follow"
-      />
+  title="Contact ZOKASCORE | Support, Partnerships & Feedback"
+  description="Get in touch with the ZOKASCORE team for support, business partnerships, advertising inquiries, bug reports, feature suggestions, or general feedback. We're ready to help you improve your football experience."
+  keywords="contact ZOKASCORE, football support, customer support, business partnerships, advertise with ZOKASCORE, bug report, feature request, football platform"
+  path="/contact"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Contact", path: "/contact" }
+  ]}
+/>
 
       <div className="cc-hdr">
         <div className="cc-wrap">

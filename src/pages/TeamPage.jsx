@@ -32,7 +32,20 @@ export default function TeamPage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: '#fff' }}>
-      <SEO title={`${teamName} | ZOKASCORE`} />
+     <SEO
+  title={`${teamName} Fixtures, Live Scores & Results`}
+  description={`Follow ${teamName}'s latest fixtures, live scores, results, standings, squad information, and match statistics on ZOKASCORE.`}
+  keywords={`${teamName}, ${teamName} fixtures, ${teamName} live scores, ${teamName} results, ${teamName} standings, football team, ZOKASCORE`}
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    {
+      name: teamName,
+      path: `/team/${teamId}/${teamName.toLowerCase().replace(/\s+/g, "-")}`,
+    },
+  ]}
+/>
+
       <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
         <Link to="/fixtures" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.85rem', marginBottom: 20, background: 'var(--bg-card)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
           <ArrowLeft size={14} /> Back to Fixtures

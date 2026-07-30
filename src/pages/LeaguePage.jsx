@@ -13,8 +13,19 @@ export default function LeaguePage() {
 
   return (
     <div style={{ minHeight: '100vh', background: 'var(--bg-deep)', color: 'var(--text-primary)' }}>
-      <SEO title={`${leagueName} Standings | ZOKASCORE`} />
-      <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
+     <SEO
+  title={`${leagueName} Standings, Fixtures & Live Scores`}
+  description={`View the latest ${leagueName} standings, league table, fixtures, live scores, match results, and season statistics on ZOKASCORE.`}
+  keywords={`${leagueName}, ${leagueName} standings, ${leagueName} table, ${leagueName} fixtures, ${leagueName} live scores, football standings, ZOKASCORE`}
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    {
+      name: leagueName,
+      path: `/league/${leagueId}/${leagueName.toLowerCase().replace(/\s+/g, "-")}`,
+    },
+  ]}
+/>      <div style={{ maxWidth: 800, margin: '0 auto', padding: '24px 16px 80px' }}>
         <Link to="/fixtures" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: 'var(--text-muted)', textDecoration: 'none', fontSize: '.85rem', marginBottom: 20, background: 'var(--bg-card)', padding: '8px 14px', borderRadius: 8, border: '1px solid var(--border)' }}>
           <ArrowLeft size={14} /> Back to Fixtures
         </Link>

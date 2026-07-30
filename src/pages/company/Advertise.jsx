@@ -23,8 +23,8 @@ const injectCSS = () => {
 .ad-hdr-title{display:flex;align-items:center;gap:6px;font-size:.88rem;font-weight:800;color:var(--text-primary)}
 
 .ad-hero{text-align:center;padding:36px 0 28px;animation:ad-fade-up .4s ease both}
-.ad-hero h1{margin:0 0 6px;font-size:1.6rem;font-weight:900;color:var(--text-primary)}
-.ad-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.5;max-width:540px;margin-left:auto;margin-right:auto}
+.ad-hero h1{margin:0 0 10px;font-size:1.8rem;font-weight:900;color:var(--text-primary);line-height:1.2}
+.ad-hero p{margin:0;font-size:.84rem;color:var(--text-muted);font-weight:600;line-height:1.6;max-width:560px;margin-left:auto;margin-right:auto}
 
 .ad-plans{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:28px}
 .ad-plan{background:var(--bg-card);border:1px solid var(--border);border-radius:16px;padding:22px;transition:all .15s;animation:ad-pop .35s cubic-bezier(.34,1.56,.64,1) both;position:relative;overflow:hidden}
@@ -56,7 +56,7 @@ const injectCSS = () => {
 @media(max-width:480px){
   .ad-plans{grid-template-columns:1fr}
   .ad-why-grid{grid-template-columns:1fr}
-  .ad-hero h1{font-size:1.4rem}
+  .ad-hero h1{font-size:1.5rem}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
   `;
@@ -65,23 +65,23 @@ const injectCSS = () => {
 
 const PLANS = [
   {
-    name: 'Starter',
+    name: 'Essential',
     price: 'KES 15K',
     period: '/month',
     featured: false,
     features: [
       'Up to 50K impressions/month',
       '1 banner placement',
-      'Basic click tracking',
+      'Performance reporting',
       'Email support',
     ],
-    cta: 'Get Started',
+    cta: 'Start Conversation',
     ctaBg: 'var(--bg-surface)',
     ctaColor: 'var(--text-primary)',
     ctaBorder: '1px solid var(--border)',
   },
   {
-    name: 'Growth',
+    name: 'Premium Campaign',
     price: 'KES 50K',
     period: '/month',
     featured: true,
@@ -92,11 +92,11 @@ const PLANS = [
       'Up to 200K impressions/month',
       '3 banner placements',
       'Sponsored leaderboard spot',
-      'Advanced analytics dashboard',
+      'Campaign insights',
       'Priority support',
       'A/B testing included',
     ],
-    cta: 'Start Growing',
+    cta: 'Request Proposal',
     ctaBg: 'linear-gradient(135deg,#10b981,#059669)',
     ctaColor: '#fff',
     ctaBorder: 'none',
@@ -111,10 +111,15 @@ export default function Advertise() {
   return (
     <div className="ad-page">
       <SEO
-        title="Advertise With ZOKASCORE | Sports Marketing"
-        description="Promote your brand to over 50,000 engaged football fans with ZOKASCORE. Explore our premium banner ads and sponsored leaderboard marketing opportunities."
-        keywords="advertise on ZOKASCORE, sports marketing, football ads, banner advertising, sponsored leaderboards"
+        title="Advertise with ZOKASCORE | Reach Football Fans Worldwide"
+        description="Grow your brand with ZOKASCORE through football sponsorships, display advertising, featured campaigns, and promotional opportunities. Reach an active audience following live scores, fixtures, predictions, and football news."
+        keywords="advertise with ZOKASCORE, football advertising, sports marketing, football sponsorship, display advertising, football promotions, sports brand marketing"
+        path="/advertise"
         robots="index,follow"
+        breadcrumbs={[
+          { name: "Home", path: "/" },
+          { name: "Advertise", path: "/advertise" }
+        ]}
       />
 
       <div className="ad-hdr">
@@ -128,8 +133,8 @@ export default function Advertise() {
 
       <div className="ad-wrap">
         <div className="ad-hero">
-          <h1>Put Your Brand<br />In Front of Football Fans</h1>
-          <p>Targeted, measurable advertising to one of Africa's most engaged football prediction communities.</p>
+          <h1>Connect Your Brand<br />with Football Fans</h1>
+          <p>Premium advertising and partnership solutions designed to connect your brand with passionate football fans worldwide.</p>
         </div>
 
         <div className="ad-plans">
@@ -156,10 +161,10 @@ export default function Advertise() {
           <h2><TrendingUp size={15} style={{ display: 'inline', verticalAlign: 'middle', marginRight: 4 }} /> Why Advertise With Us</h2>
           <div className="ad-why-grid">
             {[
-              { icon: <Target size={14} />, title: 'High Intent Audience', desc: 'Users are actively predicting — not passively scrolling. Higher engagement than social ads.' },
+              { icon: <Target size={14} />, title: 'Audience Targeting', desc: 'Users are actively engaged in predictions and live scores, offering higher intent than passive social media scrolling.' },
               { icon: <Users size={14} />, title: 'Football Obsessed', desc: 'Every user is here because they love football. Your brand reaches real fans, not casual browsers.' },
               { icon: <BarChart3 size={14} />, title: 'Full Transparency', desc: 'Real-time impression and click analytics. Know exactly where your budget goes.' },
-              { icon: <Star size={14} />, title: 'Premium Placement', desc: 'Ads appear natively within the prediction flow — not as disruptive pop-ups or spam.' },
+              { icon: <Star size={14} />, title: 'Premium Placement', desc: 'Ads appear natively within the platform flow — not as disruptive pop-ups or spam.' },
             ].map((w, i) => (
               <div key={i} className="ad-why-item" style={{ animationDelay: `${i * 60 + 300}ms` }}>
                 <h4>{w.icon} {w.title}</h4>
@@ -171,10 +176,10 @@ export default function Advertise() {
 
         <div className="ad-faq">
           {[
-            { q: 'What ad formats do you support?', a: 'We offer banner ads (static and animated), sponsored leaderboard placements, and branded content sections. All ads are mobile-optimized.' },
-            { q: 'Can I target specific leagues or countries?', a: 'Yes. We can target by football league (EPL, La Liga, etc.), user location, device type, and time of day.' },
-            { q: 'What are the payment methods?', a: 'M-Pesa (Paybill), bank transfer, or PayPal for international partners. We provide invoices for all campaigns.' },
-            { q: 'Is there a minimum spend?', a: 'Our Starter plan begins at KES 15,000/month. Custom enterprise deals are available for larger budgets.' },
+            { q: 'What advertising formats do you support?', a: 'We offer banner ads (static and animated), sponsored leaderboard placements, and branded content sections. All ads are fully mobile-optimized.' },
+            { q: 'Can I target specific leagues or countries?', a: 'Yes. We can target by football league (EPL, La Liga, etc.), user location, device type, and time of day to maximize campaign effectiveness.' },
+            { q: 'What are the payment methods?', a: 'M-Pesa (Paybill), bank transfer, or PayPal for international partners. We provide official invoices for all campaigns.' },
+            { q: 'Is there a minimum spend?', a: 'Our Essential plan begins at KES 15,000/month. Custom enterprise deals are available for larger budgets and specific campaign requirements.' },
           ].map((f, i) => (
             <div key={i} className="ad-faq-item" style={{ animationDelay: `${i * 50 + 400}ms` }}>
               <div className="ad-faq-q">{f.q}</div>

@@ -250,7 +250,17 @@ export default function AdminPage() {
 
   return (
     <div className="ap">
-      <SEO title="Admin Dashboard | ZOKASCORE" description="Access the ZOKASCORE admin control room to securely manage fixtures, review Zoka picks, resolve match results, and rebuild leaderboards efficiently." keywords="admin dashboard, ZOKASCORE admin, manage fixtures, resolve matches, rebuild leaderboards" path="/admin" robots="noindex,nofollow" />
+      <SEO
+  title="Admin Dashboard & Control Center"
+  description="Securely manage ZOKASCORE operations, including fixtures, match results, leaderboards, predictions, monitoring, and platform administration."
+  keywords="ZOKASCORE admin, admin dashboard, control center, fixture management, match results, leaderboard management, platform administration"
+  robots="noindex,nofollow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Admin", path: "/admin" }
+  ]}
+/>
+
       <div className="aw">
         <div className="ah">
           <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>

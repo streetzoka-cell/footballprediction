@@ -32,7 +32,17 @@ export default function MasterGames() {
 
   return (
     <div className="zoka-page">
-      <SEO title="Football AI Predictions, Smart Value Picks & Match Intelligence" />
+      <SEO
+  title="Football AI Predictions, Smart Value Picks & Match Intelligence"
+  description="Discover AI-powered football predictions, high-confidence value picks, featured matches, and advanced match intelligence on ZOKASCORE."
+  keywords="AI football predictions, smart football picks, value bets, football analytics, match intelligence, featured matches"
+  path="/mastergames"
+  robots="index,follow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Master Games", path: "/mastergames" }
+  ]}
+/>
       <div className="zoka-wrap">
         <div className="zoka-hdr">
           <div className="zoka-hdr-title">

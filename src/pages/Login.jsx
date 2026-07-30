@@ -284,8 +284,16 @@ export default function Login() {
 
   return (
     <div style={STYLES.pageWrap}>
-      <SEO title="Login to Your Account" description="Securely log in to your ZOKASCORE account to access premium football predictions, track your leaderboard progress, and manage your gaming profile here." keywords="login, ZOKASCORE account, user login, secure access, member login" path="/login" robots="noindex,nofollow" />
-
+     <SEO
+  title="Sign In to Your ZOKASCORE Account"
+  description="Sign in to your ZOKASCORE account to manage your profile, track your prediction progress, view leaderboard rankings, and access your personalized football experience."
+  keywords="ZOKASCORE login, sign in, football account, prediction account, user login"
+  robots="noindex,nofollow"
+  breadcrumbs={[
+    { name: "Home", path: "/" },
+    { name: "Login", path: "/login" }
+  ]}
+/>
       <PitchDecoration />
       <div style={STYLES.glowOne} />
       <div style={STYLES.glowTwo} />
