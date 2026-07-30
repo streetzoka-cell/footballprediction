@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useHomeMatches } from '../hooks/useFixtures';
+import { useFixtures } from '../hooks/useFixtures'; // ★ NEW IMPORT
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
 
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
@@ -18,7 +18,7 @@ import { slugify } from '../utils/format';
 import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
 import { ListSkeleton } from '../components/StateFeedback';
-import { normalizeMatch, applySmartMinute } from '../engine/matchEngine'; // ★ NEW IMPORT
+import { normalizeMatch, applySmartMinute } from '../engine/matchEngine';
 
 // ★ NEW: Ticking clock hook
 function useNow(interval = 10000) {
@@ -368,7 +368,8 @@ export default function Home() {
   const greeting = useMemo(() => getGreeting(), []);
   const now = useNow(10000); // ★ NEW: Tick every 10s
 
-  const { data: homeData = { live: [], featured: [], upcoming: [] }, isLoading: homeLoading } = useHomeMatches();
+  // ★ FIX: Use useFixtures instead of useHomeMatches to get full FT data
+  const { data: rawFixtures = [], isLoading: homeLoading } = useFixtures(todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
   const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
@@ -377,11 +378,6 @@ export default function Home() {
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
   const [newsPosts, setNewsPosts] = useState([]);
   
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 60000);
-    return () => clearInterval(t);
-  }, []);
-
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
   useEffect(() => {
@@ -407,10 +403,12 @@ export default function Home() {
     });
   }, []);
 
-  // ★ FIX: Apply smart minute and filter hidden matches
-  const liveMatches = useMemo(() => (homeData.live || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.live, now]);
-  const featuredMatches = useMemo(() => (homeData.featured || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.featured, now]);
-  const upcomingMatches = useMemo(() => (homeData.upcoming || []).map(m => applySmartMinute(normalizeMatch(m, true, now), now)).filter(m => !m.isHidden), [homeData.upcoming, now]);
+  // ★ FIX: Map through applySmartMinute and derive live/featured/upcoming lists
+  const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
+  
+  const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
+  const featuredMatches = useMemo(() => allFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10), [allFixtures]);
+  const upcomingMatches = useMemo(() => allFixtures.filter(m => !m.isLive && !m.isFinished && m.display?.isUpcoming).slice(0, 10), [allFixtures]);
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 

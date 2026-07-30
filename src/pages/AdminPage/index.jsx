@@ -13,10 +13,10 @@ import { todayStr, getLocalDateStr } from '../../utils/dates';
 import { eventBus, EVENT } from '../../utils/eventBus';
 import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, rebuildPeriodLeaderboard, rebuildAllLeaderboards } from '../../services/predictions';
-import { collection, query, where, onSnapshot, doc, setDoc, deleteDoc, serverTimestamp, getDocs } from 'firebase/firestore';
+import { collection, query, where, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
-// ★ Centralized imports
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
+import { useActivePredictions, useZokaPicks } from '../../hooks/useUserData';
 import SEO from '../../components/SEO';
 
 import DashboardTab from './components/DashboardTab';
@@ -24,7 +24,7 @@ import AnalyticsTab from './components/AnalyticsTab';
 import LogsTab from './components/LogsTab';
 import ZokaTab from './components/ZokaTab';
 import FeaturedTab from './components/FeaturedTab';
-import ResultsTab from './components/ResultsTab';
+import ResultsTab from './components/ResultsTab'; // ★ RESTORED
 import BroadcastTab from './components/BroadcastTab';
 import StaffTab from './components/StaffTab';
 import UsersTab from './components/UsersTab';
@@ -36,7 +36,7 @@ const TABS = [
   { key: 'logs', label: 'NOC & Logs', icon: ScrollText },
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
   { key: 'featured', label: 'Featured', icon: Radio },
-  { key: 'results', label: 'Results', icon: Trophy },
+  { key: 'results', label: 'Results', icon: Trophy }, // ★ RESTORED
   { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'users', label: 'Users', icon: Users },
@@ -52,14 +52,13 @@ export default function AdminPage() {
   const [tab, setTab] = useState('dashboard');
   const [date, setDate] = useState(todayStr());
   const [showMoreDates, setShowMoreDates] = useState(false);
-
-  const [preds, setPreds] = useState([]);
-  const [pubPicks, setPubPicks] = useState(null);
   const [toast, setToast] = useState(null);
   const [confirm, setConfirm] = useState(null);
   const [rebuilding, setRebuilding] = useState(null);
 
-  // Data is already normalized by the hook!
+  const { data: preds = [], isLoading: predsLoading } = useActivePredictions(date);
+  const { data: pubPicks = null } = useZokaPicks(date);
+  
   const { data: rawFixtures = [], isLoading: fxLoading } = useFixtures(date);
   const { data: rawLive = [] } = useLiveMatches();
 
@@ -70,12 +69,12 @@ export default function AdminPage() {
       if (!m) return;
       const existing = map.get(String(m.id));
       if (existing) {
+        if (existing.display?.isFinished && !m.display?.isFinished) return;
         map.set(String(m.id), { ...existing, ...m });
       } else if (extractDate(m) === date) {
         map.set(String(m.id), m);
       }
     });
-    // ★ FIX: Removed .map(m => normalizeMatch(m, true)) to prevent double normalization
     return Array.from(map.values());
   }, [rawFixtures, rawLive, date]);
 
@@ -94,41 +93,6 @@ export default function AdminPage() {
   const dayFixtures = useMemo(() => allFixtures?.filter(m => extractDate(m) === date) || [], [allFixtures, date]);
   const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
   const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
-
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(
-      doc(db, PATHS.PREDICTION_SNAPSHOTS, date),
-      (snap) => {
-        if (!mounted.current) return;
-        if (snap.exists()) {
-          const data = snap.data();
-          setPreds(Array.isArray(data.predictions) ? data.predictions : []);
-        } else {
-          getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', date)))
-            .then(qs => {
-              if (mounted.current) setPreds(qs.docs.map(d => d.data()).sort((a, b) => (b.priority || 0) - (a.priority || 0)));
-            })
-            .catch(() => {});
-        }
-      },
-      () => {}
-    );
-    return unsub;
-  }, [date, mounted]);
-
-  useEffect(() => {
-    if (!db) return;
-    const unsub = onSnapshot(
-      doc(db, PATHS.ZOKA_PICKS, date),
-      (snap) => {
-        if (!mounted.current) return;
-        setPubPicks(snap.exists() ? snap.data() : null);
-      },
-      () => {}
-    );
-    return unsub;
-  }, [date, mounted]);
 
   const handleZokaSaveDraft = useCallback(async (data) => {
     if (!db) return;
@@ -151,7 +115,6 @@ export default function AdminPage() {
       msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
       onYes: async () => {
         await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
-        setPubPicks(null);
         queryClient.invalidateQueries(['zokaPicks', date]);
         eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
         setConfirm(null);
@@ -159,7 +122,7 @@ export default function AdminPage() {
     });
   }, [db, pubPicks, date, queryClient]);
 
-    const handleFeaturedAdd = useCallback(async (m) => {
+  const handleFeaturedAdd = useCallback(async (m) => {
     if (!db) return;
     const predId = `feat_${date}_${m.id}`;
     const pred = {
@@ -167,36 +130,57 @@ export default function AdminPage() {
       homeTeam: m.homeTeam, awayTeam: m.awayTeam,
       homeLogo: m.homeTeam?.crest || null, awayLogo: m.awayTeam?.crest || null,
       league: m.competition || m.league, 
-      // ★ FIX: Use the explicit ISO string to prevent "Invalid Date" on the Predictions page
       kickoff: m.utcDate || m.kickoffUtc || m.date,
-      status: m.status || 'NS', homeScore: null, awayScore: null, priority: preds.length + 1,
+      status: m.status || 'NS', homeScore: null, awayScore: null, priority: (preds?.length || 0) + 1,
     };
-    const updatedPreds = [...preds, pred];
-    setPreds(updatedPreds);
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...cleanObj(pred), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
-    queryClient.invalidateQueries(['activePredictions', date]);
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  }, [db, date, preds, queryClient]);
+    
+    await queryClient.cancelQueries(['activePredictions', date]);
+    const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
+    const updatedPreds = [...previousPreds, pred];
+    queryClient.setQueryData(['activePredictions', date], updatedPreds);
+    
+    try {
+      await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { ...cleanObj(pred), createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+      await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+      showToast('Failed to save match', 'er');
+      queryClient.setQueryData(['activePredictions', date], previousPreds);
+    } finally {
+      queryClient.invalidateQueries(['activePredictions', date]);
+    }
+  }, [db, date, preds, queryClient, showToast]);
 
   const handleFeaturedRemove = useCallback(async (p) => {
     if (!db) return;
     const predId = p.id || `feat_${date}_${p.matchId}`;
-    const updatedPreds = preds.filter(pr => String(pr.matchId) !== String(p.matchId));
-    setPreds(updatedPreds);
-    await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
-    await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
-    queryClient.invalidateQueries(['activePredictions', date]);
-    eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updatedPreds });
-  }, [db, date, preds, queryClient]);
+    
+    await queryClient.cancelQueries(['activePredictions', date]);
+    const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
+    const updatedPreds = previousPreds.filter(pr => String(pr.matchId) !== String(p.matchId));
+    queryClient.setQueryData(['activePredictions', date], updatedPreds);
+    
+    try {
+      await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId));
+      await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updatedPreds), updatedAt: serverTimestamp() }, { merge: true });
+    } catch (e) {
+      showToast('Failed to remove match', 'er');
+      queryClient.setQueryData(['activePredictions', date], previousPreds);
+    } finally {
+      queryClient.invalidateQueries(['activePredictions', date]);
+    }
+  }, [db, date, queryClient, showToast]);
 
+  // ★ RESTORED & HARDENED: Manual Resolve logic
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
+    
     await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp() }, { merge: true });
+    
     const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true } : p);
-    setPreds(updated);
+    queryClient.setQueryData(['activePredictions', date], updated);
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
+    
     await resolveMatchForAllUsers(matchId, h, a, date);
     queryClient.invalidateQueries(['activePredictions', date]);
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
@@ -204,12 +188,13 @@ export default function AdminPage() {
     if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
   }, [preds, date, showToast, queryClient]);
 
+  // ★ RESTORED & HARDENED: Manual Override logic
   const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
     await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, updatedAt: serverTimestamp() }, { merge: true });
     const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
-    setPreds(updated);
+    queryClient.setQueryData(['activePredictions', date], updated);
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
     await resolveMatchForAllUsers(matchId, h, a, date);
     queryClient.invalidateQueries(['activePredictions', date]);
@@ -217,29 +202,49 @@ export default function AdminPage() {
     eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
   }, [preds, date, queryClient]);
 
-  const handleRebuild = useCallback(async (period) => {
+    const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
-      if (period === 'daily') await rebuildDailySummary(date);
-      else if (period === 'goat') await rebuildGoatLeaderboard();
-      else if (period === 'weekly') await rebuildPeriodLeaderboard('weekly');
-      else if (period === 'monthly') await rebuildPeriodLeaderboard('monthly');
-      else if (period === 'all') await rebuildAllLeaderboards();
-      showToast('Rebuild complete!', 'ok');
+      // ★ Call the backend API to rebuild instead of doing it in the browser
+      const endpoint = period === 'all' ? 'all' : period;
+      const res = await fetch(`https://api.zokascore.xyz/api/v1/admin/leaderboards/rebuild/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dateStr: date })
+      });
+      
+      if (res.ok) {
+        showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
+        // Invalidate React Query to fetch the fresh leaderboard
+        queryClient.invalidateQueries(['leaderboard']);
+        queryClient.invalidateQueries(['dailyLeaderboard']);
+        queryClient.invalidateQueries(['weeklyLeaderboard']);
+        queryClient.invalidateQueries(['monthlyLeaderboard']);
+        queryClient.invalidateQueries(['goatLeaderboard']);
+      } else {
+        throw new Error('Backend rebuild failed');
+      }
     } catch (e) { 
       console.error('[Admin] Rebuild err:', e); 
       showToast('Rebuild failed', 'er');
     }
     setRebuilding(null);
-  }, [date, showToast]);
+  }, [date, showToast, queryClient]);
 
+  
+  // ★ RESTORED: Auto-resolve loop, protected by useRef to prevent infinite renders
+  const resolvedIds = useRef(new Set());
   useEffect(() => {
-    if (!preds.length || !dayFixtures.length) return;
+    if (!dayFixtures.length || !preds.length) return;
     preds.forEach(p => {
       if (p.status === 'finished' || p.isFinished) return;
       const fx = dayFixtures.find(f => String(f.id) === String(p.matchId));
       if (fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null) {
-        handleResolve(p, fx.homeScore, fx.awayScore, true);
+        const mid = String(p.matchId);
+        if (!resolvedIds.current.has(mid)) {
+          resolvedIds.current.add(mid);
+          handleResolve(p, fx.homeScore, fx.awayScore, true);
+        }
       }
     });
   }, [dayFixtures, preds, handleResolve]);
@@ -288,7 +293,7 @@ export default function AdminPage() {
           <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />
         )}
         {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={fxLoading} toast={showToast} />
+          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={fxLoading || predsLoading} toast={showToast} />
         )}
         {tab === 'results' && (
           <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={showToast} />

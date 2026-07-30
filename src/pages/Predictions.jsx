@@ -11,18 +11,17 @@ import {
 
 import { useAuth } from '../context/AuthContext';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
-import { useLiveMatches } from '../hooks/useFixtures';
+import { useFixtures } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus, PATHS } from '../utils/constants';
-import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote, resolveMatchForAllUsers } from '../services/predictions';
+import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote } from '../services/predictions';
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
 
-// ★ Centralized imports
+// Centralized imports
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
-import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
-import { ListSkeleton, ErrorState } from '../components/StateFeedback';
+import { buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import EmptyState from '../components/EmptyState';
 
 const FUTURE_DAYS = 3;
@@ -55,14 +54,16 @@ function isMatchLocked(pred, now) {
   if (isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive) return { locked: true, reason: 'live' };
   const kickoffStr = pred.kickoff || pred.date;
   if (kickoffStr) {
-    const kickoffTime = new Date(kickoffStr);
-    if (!isNaN(kickoffTime.getTime())) {
-      const diffMs = kickoffTime.getTime() - (now || Date.now());
-      const diffMins = diffMs / 60000;
-      if (diffMins <= LOCK_BEFORE_MINUTES) {
-        return { locked: true, reason: diffMins <= 0 ? 'started' : 'closing', minutesLeft: Math.floor(diffMins) };
+    if (/^\d{4}-\d{2}-\d{2}/.test(kickoffStr)) {
+      const kickoffTime = new Date(kickoffStr);
+      if (!isNaN(kickoffTime.getTime())) {
+        const diffMs = kickoffTime.getTime() - (now || Date.now());
+        const diffMins = diffMs / 60000;
+        if (diffMins <= LOCK_BEFORE_MINUTES) {
+          return { locked: true, reason: diffMins <= 0 ? 'started' : 'closing', minutesLeft: Math.floor(diffMins) };
+        }
+        return { locked: false, minutesLeft: Math.floor(diffMins) };
       }
-      return { locked: false, minutesLeft: Math.floor(diffMins) };
     }
   }
   return { locked: false };
@@ -79,8 +80,14 @@ function formatMinutesLeft(mins) {
 
 function parseKickoffTime(kickoff) {
   if (!kickoff) return '--:--';
-  try { return new Date(kickoff).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }); }
-  catch { return '--:--'; }
+  if (/^\d{2}:\d{2}$/.test(kickoff)) return kickoff;
+  try {
+    const d = new Date(kickoff);
+    if (isNaN(d.getTime())) return '--:--';
+    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+  } catch {
+    return '--:--';
+  }
 }
 
 const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
@@ -318,7 +325,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   );
 });
 
-const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare }) {
+const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditing, editH, editA, onEdit, onSave, onCancel, onQuickPick, onEditH, onEditA, loggedIn, onLogin, saving, now, onShare, zokaPick = null, communityStats = {} }) {
   const mid = String(pred.matchId);
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || pred.isFinished;
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive;
@@ -348,6 +355,19 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const leagueId = pred.league?.id || pred.leagueKey;
   const homeId = pred.homeTeam?.id || pred.homeTeamId;
   const awayId = pred.awayTeam?.id || pred.awayTeamId;
+
+  // ZOKAPICK Benchmark Logic
+  const zokaHome = zokaPick?.adminPick?.home;
+  const zokaAway = zokaPick?.adminPick?.away;
+  const beatZoka = isFin && hasPred && zokaHome != null ? 
+    (calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore).points > 
+     calcPoints(zokaHome, zokaAway, pred.homeScore, pred.awayScore).points) : false;
+
+  // Community Predictions Logic
+  const totalVotes = (communityStats?.home || 0) + (communityStats?.draw || 0) + (communityStats?.away || 0);
+  const homePct = totalVotes > 0 ? Math.round(((communityStats?.home || 0) / totalVotes) * 100) : 0;
+  const drawPct = totalVotes > 0 ? Math.round(((communityStats?.draw || 0) / totalVotes) * 100) : 0;
+  const awayPct = totalVotes > 0 ? Math.round(((communityStats?.away || 0) / totalVotes) * 100) : 0;
 
   let leftColor = 'rgba(255,255,255,0.06)';
   if (isResolved && effectiveResult?.resultType === 'exact') leftColor = '#10b981';
@@ -413,6 +433,42 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           <Link to={buildTeamRoute(awayId, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
+
+      {/* Community & ZokaPick Benchmark Section */}
+      {!isEditing && (
+        <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+          
+          {/* Community Stats */}
+          <div style={{ flex: 1.5 }}>
+            <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
+            <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#1e293b' }}>
+              <div style={{ width: `${homePct}%`, background: '#60a5fa' }} title={`${homePct}% Home`} />
+              <div style={{ width: `${drawPct}%`, background: '#94a3b8' }} title={`${drawPct}% Draw`} />
+              <div style={{ width: `${awayPct}%`, background: '#f5c542' }} title={`${awayPct}% Away`} />
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginTop: 3 }}>
+              <span>{homePct}%</span><span>{drawPct}%</span><span>{awayPct}%</span>
+            </div>
+          </div>
+
+          {/* ZOKAPICK */}
+          {zokaPick && (
+            <div style={{ flex: 1, borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: 10 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                <Star size={10} style={{ color: '#f5c542' }} />
+                <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>ZOKAPICK</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? '#10b981' : '#fff' }}>
+                  {zokaHome} - {zokaAway}
+                </span>
+                {beatZoka && <span style={{ fontSize: '0.6rem', background: '#10b981', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
       <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
         {isEditing && (
           <div className="v21-qp" style={{ width: '100%' }}>
@@ -455,7 +511,8 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   );
 });
 
-const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj, results, onClose, nav }) {
+
+const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPredsObj, results, onClose, nav }) {
   const overlayBoxRef = useRef(null);
   useEffect(() => { if (overlayBoxRef.current) overlayBoxRef.current.scrollTop = 0; }, []);
 
@@ -476,7 +533,8 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
 
   const stats = useMemo(() => {
     let totalPts = 0, exact = 0, result = 0, miss = 0, pending = 0, predicted = 0;
-    preds.forEach(p => {
+    const safePreds = preds || [];
+    safePreds.forEach(p => {
       const up = upMap.get(String(p.matchId));
       if (!up) return;
       predicted++;
@@ -516,7 +574,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
               <div className="v21-progress-labels"><span>{stats.predicted} predicted</span><span>{stats.allResolved ? '✓ Complete' : `${stats.pending} pending`}</span></div>
             </div>
           )}
-          {preds.map((p, i) => {
+          {(preds || []).map((p, i) => {
             const up = upMap.get(String(p.matchId));
             if (!up) return null;
             let res = resMap.get(String(p.matchId));
@@ -529,7 +587,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds, userPredsObj,
               <div key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {typeof p.homeTeam === 'object' ? p.homeTeam?.shortName || p.homeTeam?.name : p.homeTeam} vs {typeof p.awayTeam === 'object' ? p.awayTeam?.shortName || p.awayTeam?.name : p.awayTeam}
+                    {typeof p.homeTeam === 'object' ? (p.homeTeam?.shortName || p.homeTeam?.name || 'Home') : (p.homeTeam || 'Home')} vs {typeof p.awayTeam === 'object' ? (p.awayTeam?.shortName || p.awayTeam?.name || 'Away') : (p.awayTeam || 'Away')}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
@@ -583,15 +641,16 @@ export default function Predictions() {
   const [currentUserVotes, setCurrentUserVotes] = useState({});
   
   const mountedRef = useRef(true);
-  const resolving = useRef(new Set());
 
   const { data: activePredictions = [], isLoading: loadingActive } = useActivePredictions(selDate);
-  const { data: userPredictions = {}, isLoading: loadingPreds } = useUserPredictions(uid, selDate);
+  const { data: userPredictions, isLoading: loadingPreds } = useUserPredictions(uid, selDate);
   const { data: dailyLB = null } = useDailyLeaderboard(selDate);
   const { data: zokaPicksData = null } = useZokaPicks(selDate);
   const { data: zokaVotesData = { stats: {} } } = useZokaVotes(selDate);
   const { data: userPoints = null } = useUserPoints(uid);
-  const { data: liveFixtures = [] } = useLiveMatches();
+  
+  // FIX: Fetch all fixtures for the selected date (includes live and finished data)
+  const { data: dateFixtures = [] } = useFixtures(selDate);
 
   const { data: officialResults = [] } = useQuery({
     queryKey: ['userResults', uid, selDate],
@@ -605,27 +664,33 @@ export default function Predictions() {
     staleTime: 60 * 1000,
   });
 
-  const featuredPreds = activePredictions;
+  const featuredPreds = activePredictions || [];
   const zokaPicks = zokaPicksData;
   const zokaVoteStats = zokaVotesData?.stats || {};
-  const ctxUserPreds = userPredictions;
+  const ctxUserPreds = userPredictions || {};
   const dailyEntries = dailyLB?.entries || [];
   const userStats = userPoints || {};
   const ctxLoading = loadingActive || loadingPreds;
 
-  const fixtureMap = useMemo(() => new Map(liveFixtures.map(f => [String(f.id), f])), [liveFixtures]);
+  // FIX: Build a map of all fixtures for the selected date safely
+  const fixtureMap = useMemo(() => {
+    const m = new Map();
+    const safeDateFixtures = dateFixtures || [];
+    safeDateFixtures.forEach(f => m.set(String(f.id), f));
+    return m;
+  }, [dateFixtures]);
 
   useEffect(() => {
     try { setCurrentUserVotes(JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`) || '{}')); } catch { setCurrentUserVotes({}); }
   }, [selDate]);
 
-  // ★ REFACTORED: Use centralized engine for merging live data
+  // FIX: Use centralized engine for merging live AND finished data
   const mergedFeatured = useMemo(() => mergeLiveIntoPredictions(featuredPreds, fixtureMap), [featuredPreds, fixtureMap]);
   const mergedZoka = useMemo(() => mergeLiveIntoPredictions(zokaPicks?.matches || [], fixtureMap), [zokaPicks, fixtureMap]);
 
   const userPredMap = useMemo(() => {
     const m = new Map();
-    Object.values(ctxUserPreds).forEach(p => {
+    Object.values(ctxUserPreds || {}).forEach(p => {
       if (p.predId) m.set(p.predId, p);
       if (p.matchId) m.set(String(p.matchId), p);
     });
@@ -634,55 +699,55 @@ export default function Predictions() {
 
   const resultMap = useMemo(() => {
     const m = new Map();
-    officialResults.forEach(r => m.set(String(r.matchId), r));
+    (officialResults || []).forEach(r => m.set(String(r.matchId), r));
     return m;
   }, [officialResults]);
 
-  // ★ REFACTORED: Use centralized engine for user stats calculation
-  const myDayStats = useMemo(() => calculateUserStats(Object.values(ctxUserPreds), mergedFeatured, officialResults), [ctxUserPreds, mergedFeatured, officialResults]);
+  // FIX: Use centralized engine for user stats calculation safely
+  const myDayStats = useMemo(() => calculateUserStats(Object.values(ctxUserPreds), mergedFeatured, officialResults || []) || { pts: 0, ex: 0, rs: 0, pred: 0, pn: 0, allResolved: false, accuracy: 0 }, [ctxUserPreds, mergedFeatured, officialResults]);
 
   const openLogin = useCallback(() => setShowLogin(true), []);
   
   const handleShare = useCallback(async (pred, isZoka = false) => {
     if (!uid) { openLogin(); return; }
+    
     const baseUrl = window.location.origin;
     const matchId = pred.matchId || pred.id;
-    const shareUrl = `${baseUrl}/predictions?match=${matchId}&ref=${encodeURIComponent(uid)}`;
+    
+    // Dynamic Share URL for OG Image Generation
+    const shareUrl = `${baseUrl}/u/${uid}/picks/${matchId}`;
 
-    let homeName = 'Home', awayName = 'Away', scoreText = '';
-    if (typeof pred.homeTeam === 'object') {
-      homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
-      awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
-    } else {
-      homeName = pred.homeTeam || 'Home';
-      awayName = pred.awayTeam || 'Away';
-    }
+    let homeName = typeof pred.homeTeam === 'object' ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home') : (pred.homeTeam || 'Home');
+    let awayName = typeof pred.awayTeam === 'object' ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') : (pred.awayTeam || 'Away');
+    
+    // Dynamic Brag Message
+    let shareText = `Think you know football? I just predicted ${homeName} vs ${awayName} on ZOKASCORE. `;
     if (isZoka) {
-      scoreText = `${pred.adminPick?.home ?? '?'}-${pred.adminPick?.away ?? '?'}`;
+      shareText = `ZOKA went with ${pred.adminPick?.home}-${pred.adminPick?.away}. Do you agree with the expert or me? Join the league: `;
     } else {
-      const up = userPredMap.get(pred.id) || userPredMap.get(String(pred.matchId));
-      if (up) scoreText = `${up.homeScore}-${up.awayScore}`;
+      shareText += `Try to beat my score today! Join the league: `;
     }
-
-    const shareText = `My prediction for ${homeName} vs ${awayName} is ${scoreText || 'a draw'}! Think you can do better? Join me on ZokaScore.`;
 
     if (navigator.share) {
       try {
-        await navigator.share({ title: 'ZokaScore Prediction', text: shareText, url: shareUrl });
+        await navigator.share({ 
+          title: 'ZOKASCORE League', 
+          text: shareText, 
+          url: shareUrl 
+        });
         setToast('Shared! Earn points when friends visit.');
-      } catch (err) { if (err.name !== 'AbortError') console.error('Share failed', err); }
+      } catch (err) { /* cancelled */ }
     } else {
-      const fullText = `${shareText}\n\n${shareUrl}`;
       try {
-        await navigator.clipboard.writeText(fullText);
+        await navigator.clipboard.writeText(`${shareText}\n\n${shareUrl}`);
         setCopyToast(true);
         setTimeout(() => setCopyToast(false), 3000);
       } catch (e) {
-        setToast(`Copy failed. Please copy manually: ${fullText}`);
+        setToast(`Copy failed. Please copy manually: ${shareUrl}`);
       }
     }
-  }, [uid, openLogin, userPredMap]);
-
+  }, [uid, openLogin]);
+  
   const handleBannerShare = useCallback(async () => {
     if (!uid) { openLogin(); return; }
 
@@ -808,40 +873,6 @@ export default function Predictions() {
     const id = setInterval(() => setNow(Date.now()), 30000);
     return () => clearInterval(id);
   }, []);
-
-  useEffect(() => {
-    if (!isAdmin || !liveFixtures.length) return;
-    const toResolve = mergedFeatured.filter(p => {
-      const mid = String(p.matchId);
-      const fx = fixtureMap.get(mid);
-      const fxHome = fx?.goalsHome ?? fx?.homeScore ?? fx?.score?.fullTime?.home;
-      const fxAway = fx?.goalsAway ?? fx?.awayScore ?? fx?.score?.fullTime?.away;
-      return fx && isFinishedStatus(fx.status, SPORT.FOOTBALL) && fxHome != null && fxAway != null && p.status !== 'finished';
-    });
-
-    toResolve.forEach(pred => {
-      const mid = String(pred.matchId);
-      if (!resolving.current.has(mid)) {
-        const fx = fixtureMap.get(mid);
-        const fxHome = fx.goalsHome ?? fx.homeScore ?? fx.score?.fullTime?.home;
-        const fxAway = fx.goalsAway ?? fx.awayScore ?? fx.score?.fullTime?.away;
-        
-        resolving.current.add(mid);
-        
-        const predId = pred.id || `feat_${selDate}_${mid}`;
-        setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { 
-          homeScore: fxHome, 
-          awayScore: fxAway, 
-          status: 'finished', 
-          updatedAt: serverTimestamp() 
-        }, { merge: true }).catch(console.error);
-        
-        resolveMatchForAllUsers(mid, fxHome, fxAway, pred.matchDate || selDate)
-          .catch(e => console.error("Resolve err:", e))
-          .finally(() => resolving.current.delete(mid));
-      }
-    });
-  }, [isAdmin, mergedFeatured, fixtureMap, selDate, liveFixtures]);
 
   const dateList = useMemo(() => {
     const arr = [];

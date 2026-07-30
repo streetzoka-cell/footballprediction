@@ -2,16 +2,15 @@ import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
   LogOut, Target, Trophy, Flame, Calendar, Edit3, Shield, ChevronRight, 
-  Mail, Star, ArrowRight, Zap, Lock, TrendingUp
+  Mail, Star, ArrowRight, Zap, Lock, TrendingUp, Award
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useUserPredictions, useActivePredictions, useUserPoints } from '../hooks/useUserData';
 import { useLiveMatches } from '../hooks/useFixtures';
-import { SPORT, isFinishedStatus } from '../utils/constants';
+import { SPORT, isFinishedStatus, ACHIEVEMENTS } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from '../components/SEO';
 
-// ★ Centralized imports
 import { calculateUserStats } from '../engine/predictionEngine';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { db } from '../utils/firebase';
@@ -40,16 +39,6 @@ const calculateAccuracy = (exact, result, total) => {
   if (!total || total < 1) return 0;
   return Math.min(100, Math.round(((exact + result) / total) * 100));
 };
-
-const BADGE_DEFS = [
-  { id: 'first-pred', name: 'First Step', icon: '👟', color: '#60a5fa', check: (p) => getPredictions(p) >= 1, hint: 'Make your first prediction' },
-  { id: 'pred-10', name: 'Getting Started', icon: '🎯', color: 'var(--accent)', check: (p) => getPredictions(p) >= 10, hint: 'Make 10 predictions' },
-  { id: 'pred-50', name: 'Dedicated', icon: '📊', color: '#8b5cf6', check: (p) => getPredictions(p) >= 50, hint: 'Reach 50 predictions' },
-  { id: 'exact-1', name: 'Bullseye', icon: '🎯', color: '#f97116', check: (p) => getExact(p) >= 1, hint: 'Get 1 exact score correct' },
-  { id: 'exact-10', name: 'Sharpshooter', icon: '🔥', color: '#ef4444', check: (p) => getExact(p) >= 10, hint: 'Get 10 exact scores correct' },
-  { id: 'acc-50', name: '50% Club', icon: '🧠', color: 'var(--gold)', check: (p) => calculateAccuracy(getExact(p), getResult(p), getPredictions(p)) >= 50, hint: 'Reach 50% accuracy (min 10 preds)' },
-  { id: 'top-100', name: 'Top 100', icon: '🏆', color: '#eab308', check: (p) => getPoints(p) > 0, hint: 'Score points on the leaderboard' },
-];
 
 const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 0, icon }) => {
   const [val, setVal] = useState(0);
@@ -162,9 +151,6 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
         }}>{badge.icon}</span>
         <div style={{ flex: 1, minWidth: 0 }}>
           <span style={{ fontSize: '.86rem', fontWeight: 700, color: earned ? 'var(--text-primary)' : 'var(--text-muted)', display: 'block' }}>{badge.name}</span>
-          {!earned && hovered && (
-            <span className="pro-slide-r" style={{ fontSize: '.68rem', color: 'var(--text-muted)', display: 'block', marginTop: 2 }}>{badge.hint}</span>
-          )}
         </div>
         {!earned && <Lock size={13} style={{ color: 'var(--text-muted)', opacity: .4, flexShrink: 0 }} />}
       </div>
@@ -222,7 +208,6 @@ export default function Profile() {
     return () => unsub();
   }, [currentUser, db]);
 
-  // ★ REFACTORED: Use centralized engine for live stats calculation
   const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
 
   if (authLoading) return <ProfileSkeleton />;
@@ -240,6 +225,9 @@ export default function Profile() {
     predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
     correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
     correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
+    streak: liveStats.streak, // ★ NEW: Streak from live stats
+    beatZoka: false, // ★ Placeholder for Beat ZOKA logic
+    bestRank: dbPoints.bestRank || 0,
   };
 
   const exact = getExact(profile);
@@ -256,11 +244,8 @@ export default function Profile() {
     [currentUser]
   );
 
-  const earnedBadges = useMemo(() => BADGE_DEFS.filter(b => b.check(profile)), [profile]);
-  const lockedBadges = useMemo(() => BADGE_DEFS.filter(b => !b.check(profile)), [profile]);
-  const missedCount = Math.max(0, total - exact - result);
-  const totalCorrect = exact + result;
-  const hasData = total > 0;
+  const earnedBadges = useMemo(() => ACHIEVEMENTS.filter(b => b.check(profile)), [profile]);
+  const lockedBadges = useMemo(() => ACHIEVEMENTS.filter(b => !b.check(profile)), [profile]);
 
   const handleLogout = useCallback(async () => {
     try { await signOut(); } catch {}
@@ -332,7 +317,7 @@ export default function Profile() {
                   </span>
                 )}
                 <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: '.8rem', color: earnedBadges.length > 0 ? 'var(--gold)' : 'var(--text-muted)' }}>
-                  <Star size={14} fill={earnedBadges.length > 0 ? 'var(--gold)' : 'none' } /> {earnedBadges.length}/{BADGE_DEFS.length}
+                  <Star size={14} fill={earnedBadges.length > 0 ? 'var(--gold)' : 'none' } /> {earnedBadges.length}/{ACHIEVEMENTS.length}
                 </span>
               </div>
             </div>
@@ -365,63 +350,43 @@ export default function Profile() {
           </div>
         </div>
 
+        {/* ★ NEW: Fun Season / Real Season Teaser */}
+        <div className="pro-enter" style={{
+          display: 'flex', gap: 14, marginBottom: 30, flexWrap: 'wrap'
+        }}>
+          <div style={{ flex: 1, minWidth: 280, padding: 20, background: 'linear-gradient(135deg, rgba(16,185,129,.06), transparent)', border: '1.5px solid rgba(16,185,129,.1)', borderRadius: 16 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>🎉 Fun Season</h3>
+              <span style={{ fontSize: '.6rem', padding: '3px 8px', background: 'var(--accent)', color: '#000', borderRadius: 4, fontWeight: 800 }}>ACTIVE</span>
+            </div>
+            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: 0 }}>
+              Compete daily, build your rank, and practice before real rewards begin.
+            </p>
+          </div>
+          <div style={{ flex: 1, minWidth: 280, padding: 20, background: 'rgba(255,255,255,.02)', border: '1.5px dashed var(--border)', borderRadius: 16, opacity: 0.7 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+              <h3 style={{ margin: 0, fontSize: '1rem', fontWeight: 800 }}>🏆 Real Season</h3>
+              <span style={{ fontSize: '.6rem', padding: '3px 8px', background: 'var(--bg-deep)', color: 'var(--text-muted)', borderRadius: 4, fontWeight: 800 }}>SOON</span>
+            </div>
+            <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: 0 }}>
+              Cash prizes, ZOKA Jerseys, and the Golden Crown await the G.O.A.T.
+            </p>
+          </div>
+        </div>
+
         <div className="pro-stats-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 30 }}>
           <AnimatedStat value={points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={17} />} />
           <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={17} />} />
           <AnimatedStat value={total} label="Predictions" color="#60a5fa" delay={160} icon={<Calendar size={17} />} />
-          <AnimatedStat value={exact} label="Exact Scores" color="#f97116" delay={240} icon={<Flame size={17} />} />
-        </div>
-
-        <div style={{
-          padding: '20px 22px', background: 'var(--bg-card)', border: '1px solid var(--border)',
-          borderRadius: 16, marginBottom: 30,
-        }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 14, fontSize: '.86rem' }}>
-            <span style={{ color: 'var(--text-secondary)', fontWeight: 700, display: 'flex', alignItems: 'center', gap: 7 }}>
-              <TrendingUp size={15} /> Score Breakdown
-            </span>
-            <span style={{ color: 'var(--text-muted)' }}>
-              {hasData ? `${totalCorrect} correct from ${total}` : 'No predictions yet'}
-            </span>
-          </div>
-
-          <div className="pro-breakdown-bar" style={{ display: 'flex', height: 12, borderRadius: 6, overflow: 'hidden', gap: 4, background: 'rgba(255,255,255,.03)' }}>
-            {hasData ? (
-              <>
-                {exact > 0 && (
-                  <div className="pro-bar" style={{ flex: exact, background: 'var(--accent)', borderRadius: 6, animationDelay: '0.3s' }} title={`Exact: ${exact}`} />
-                )}
-                {result > 0 && (
-                  <div className="pro-bar" style={{ flex: result, background: 'var(--gold)', borderRadius: 6, animationDelay: '0.45s' }} title={`Result: ${result}`} />
-                )}
-                {missedCount > 0 && (
-                  <div className="pro-bar" style={{ flex: missedCount, background: 'rgba(255,255,255,.06)', borderRadius: 6, animationDelay: '0.6s' }} />
-                )}
-              </>
-            ) : (
-              <div style={{ flex: 1, background: 'rgba(255,255,255,.03)', borderRadius: 6 }} />
-            )}
-          </div>
-
-          <div style={{ display: 'flex', gap: 22, marginTop: 12, fontSize: '.74rem', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--accent)' }} /> Exact (10pts)
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'var(--gold)' }} /> Result (3pts)
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-              <span style={{ width: 9, height: 9, borderRadius: 3, background: 'rgba(255,255,255,.06)' }} /> Missed
-            </span>
-          </div>
+          <AnimatedStat value={profile.streak || 0} label="Day Streak" color="#ef4444" delay={240} icon={<Flame size={17} />} />
         </div>
 
         <div style={{ marginBottom: 40 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
             <h3 style={{ display: 'flex', alignItems: 'center', gap: 9, fontSize: '1.15rem', fontWeight: 900, color: 'var(--text-primary)', margin: 0 }}>
-              <Shield size={22} style={{ color: 'var(--gold)' }} /> Badges
+              <Shield size={22} style={{ color: 'var(--gold)' }} /> Achievements
             </h3>
-            <span style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--text-muted)', padding: '4px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10 }}>{earnedBadges.length}/{BADGE_DEFS.length}</span>
+            <span style={{ fontSize: '.8rem', fontWeight: 600, color: 'var(--text-muted)', padding: '4px 12px', background: 'rgba(255,255,255,.04)', borderRadius: 10 }}>{earnedBadges.length}/{ACHIEVEMENTS.length}</span>
           </div>
 
           {earnedBadges.length > 0 && (
@@ -475,10 +440,10 @@ export default function Profile() {
             ) : (
               <>
                 <h2 className="pro-cta-title" style={{ margin: '0 0 12px', fontSize: '1.65rem', fontWeight: 900 }}>
-                  {hasData ? 'Keep the Streak Going' : 'Make Your First Pick'}
+                  {total > 0 ? 'Keep the Streak Going' : 'Make Your First Pick'}
                 </h2>
                 <p style={{ color: 'var(--text-muted)', fontSize: '.94rem', maxWidth: 440, margin: '0 auto 28px', lineHeight: 1.6 }}>
-                  {hasData
+                  {total > 0
                     ? "Predict today's matches and climb the global leaderboard."
                     : "Browse today's fixtures and make your first prediction to start earning badges."
                   }
@@ -491,9 +456,9 @@ export default function Profile() {
                     border: 'none', boxShadow: '0 6px 24px rgba(16,185,129,.25), inset 0 1px 0 rgba(255,255,255,.2)',
                     minHeight: 56,
                   }}>
-                    <Zap size={18} /> {hasData ? "Today's Picks" : 'Browse Fixtures'}
+                    <Zap size={18} /> {total > 0 ? "Today's Picks" : 'Browse Fixtures'}
                   </button>
-                  {hasData && (
+                  {total > 0 && (
                     <button onClick={() => navigate('/leaderboard')} className="zoka-btn" style={{
                       display: 'inline-flex', alignItems: 'center', gap: 10,
                       padding: '14px 30px', borderRadius: 14, background: 'transparent',

@@ -19,7 +19,21 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
   const [openDay, setOpenDay] = useState(null);
 
   const dayFx = useMemo(() => (fixtures?.filter(m => extractDate(m) === date) || []).sort(sortByImportance), [fixtures, date]);
-  const selectableFx = useMemo(() => dayFx.filter(m => !hasMatchStarted(m)), [dayFx]);
+  
+  const pubMatches = useMemo(() => Array.isArray(pubPicks) ? pubPicks : (pubPicks?.matches || []), [pubPicks]);
+  const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
+  
+  // ★ FIX: Check if the total published picks have reached the max limit
+  const isFull = pubMatches.length >= MAX_ZOKA;
+
+  const selectableFx = useMemo(() => {
+    let l = dayFx.filter(m => !hasMatchStarted(m));
+    // ★ FIX: If full, only show matches that are ALREADY published (so they can be edited)
+    if (isFull) {
+      l = l.filter(m => pubMap.has(String(m.id)));
+    }
+    return l;
+  }, [dayFx, isFull, pubMap]);
 
   const leagues = useMemo(() => {
     const map = new Map();
@@ -46,16 +60,16 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
   const scored = Object.values(sel).filter(s => s.h !== '' && s.a !== '').length;
   const ready = cnt > 0 && scored === cnt;
 
-  const pubMatches = useMemo(() => Array.isArray(pubPicks) ? pubPicks : (pubPicks?.matches || []), [pubPicks]);
-  const pubMap = useMemo(() => new Map(pubMatches.map(p => [String(p.matchId), p])), [pubMatches]);
-
+  // ★ FIX: Allow selecting published matches for editing even if the selection box is full
   const toggle = useCallback((m) => {
     if (hasMatchStarted(m)) { toast('Cannot select matches that have already started', 'in'); return; }
     const id = String(m.id);
+    const isPublished = pubMap.has(id);
+    
     setSel(prev => {
       if (prev[id]) {
         const n = { ...prev }; delete n[id]; return n;
-      } else if (Object.keys(prev).length < MAX_ZOKA) {
+      } else if (isPublished || Object.keys(prev).length < MAX_ZOKA) {
         const existing = pubMap.get(id);
         return { ...prev, [id]: existing ? { h: String(existing.adminPick?.home ?? ''), a: String(existing.adminPick?.away ?? '') } : { h: '', a: '' } };
       } else {
@@ -212,7 +226,22 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
         </div>
       )}
 
-      {leagues.length > 1 && (
+      {/* ★ FIX: Show "Full" message if max picks reached */}
+      {isFull && (
+        <div className="asec">
+          <div className="aem" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px' }}>
+            <Pencil size={24} style={{ color: 'var(--gold)' }} />
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', margin: 0, fontWeight: 600 }}>
+              Zoka Picks list is full ({MAX_ZOKA}/{MAX_ZOKA}).
+            </p>
+            <p style={{ color: 'var(--text-muted)', fontSize: '0.8rem', margin: 0, textAlign: 'center' }}>
+              You can only edit existing picks below. Remove some to add new ones.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {leagues.length > 1 && !isFull && (
         <div className="alb" style={{ marginTop: 10 }}>
           <button className={`alp${lg === 'ALL' ? ' on' : ''}`} onClick={() => setLg('ALL')}>All ({selectableFx.length})</button>
           {leagues.map(l => (
@@ -246,7 +275,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
           <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
-        <Empty icon={Star} title={dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available'} hint={dayFx.length === 0 ? 'Try a different day' : 'Matches that have started cannot be selected'} />
+        <Empty icon={Star} title={isFull ? 'No published matches to edit' : (dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available')} hint={isFull ? 'Unpublish some to add new ones' : (dayFx.length === 0 ? 'Try a different day' : 'Matches that have started cannot be selected')} />
       )}
 
       <div className="asec" style={{ marginTop: 18 }}>

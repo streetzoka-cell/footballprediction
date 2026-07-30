@@ -39,8 +39,8 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
       <div className="asec">
         <h3 className="ast"><RotateCcw size={15} /> Rebuild Leaderboards</h3>
         <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: '0 0 12px', fontWeight: 600, lineHeight: 1.4 }}>
-          Run after scoring matches to update all user rankings.
-          <br /><span style={{ fontSize: '.68rem', opacity: 0.7 }}>Other pages auto-update via events</span>
+          Manually trigger the backend to recalculate points and update ranks.
+          <br /><span style={{ fontSize: '.68rem', opacity: 0.7 }}>Leaderboards usually update automatically when matches finish.</span>
         </p>
         <div className="arg">
           {[['daily','Daily ('+dateLabel(date)+')',CalendarDays],['goat','GOAT',Crown],['weekly','Weekly',Timer],['monthly','Monthly',BarChart3]].map(([k,l,Ic]) => (

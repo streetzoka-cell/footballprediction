@@ -94,7 +94,10 @@ async function syncFinishedFixtures() {
   
   // Only publish to results file, do NOT overwrite the main fixtures file
   await writeFootballSnapshot(dateStr, { finished });
-  return finished.length;
+  
+  // ★ FIX: Return the ARRAY of finished matches instead of just the length
+  // This allows the scheduler to pass the match data to the prediction resolver
+  return finished; 
 }
 
 module.exports = { syncTodayFixtures, syncTomorrowFixtures, syncYesterdayResults, syncFinishedFixtures };
