@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Star, Radio, Trophy, Megaphone, UserCog, Users, Activity,
@@ -12,8 +12,8 @@ import { db } from '../../utils/firebase';
 import { todayStr, getLocalDateStr } from '../../utils/dates';
 import { eventBus, EVENT } from '../../utils/eventBus';
 import { PATHS } from '../../utils/constants';
-import { resolveMatchForAllUsers, rebuildDailySummary, rebuildGoatLeaderboard, rebuildPeriodLeaderboard, rebuildAllLeaderboards } from '../../services/predictions';
-import { collection, query, where, doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { resolveMatchForAllUsers } from '../../services/predictions';
+import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import { useActivePredictions, useZokaPicks } from '../../hooks/useUserData';
@@ -24,7 +24,7 @@ import AnalyticsTab from './components/AnalyticsTab';
 import LogsTab from './components/LogsTab';
 import ZokaTab from './components/ZokaTab';
 import FeaturedTab from './components/FeaturedTab';
-import ResultsTab from './components/ResultsTab'; // ★ RESTORED
+import ResultsTab from './components/ResultsTab'; 
 import BroadcastTab from './components/BroadcastTab';
 import StaffTab from './components/StaffTab';
 import UsersTab from './components/UsersTab';
@@ -36,7 +36,7 @@ const TABS = [
   { key: 'logs', label: 'NOC & Logs', icon: ScrollText },
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
   { key: 'featured', label: 'Featured', icon: Radio },
-  { key: 'results', label: 'Results', icon: Trophy }, // ★ RESTORED
+  { key: 'results', label: 'Results', icon: Trophy }, 
   { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'users', label: 'Users', icon: Users },
@@ -170,14 +170,14 @@ export default function AdminPage() {
     }
   }, [db, date, queryClient, showToast]);
 
-  // ★ RESTORED & HARDENED: Manual Resolve logic
+  // ★ MANUAL RESOLVE ONLY (For admin emergencies if backend misses a match)
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
     
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, status: 'finished', updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: serverTimestamp() }, { merge: true });
     
-    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true } : p);
+    const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
     queryClient.setQueryData(['activePredictions', date], updated);
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
     
@@ -188,11 +188,10 @@ export default function AdminPage() {
     if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
   }, [preds, date, showToast, queryClient]);
 
-  // ★ RESTORED & HARDENED: Manual Override logic
   const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
-    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, updatedAt: serverTimestamp() }, { merge: true });
+    await setDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId), { homeScore: h, awayScore: a, isResolved: true, updatedAt: serverTimestamp() }, { merge: true });
     const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
     queryClient.setQueryData(['activePredictions', date], updated);
     await setDoc(doc(db, PATHS.PREDICTION_SNAPSHOTS, date), { predictions: cleanObj(updated), updatedAt: serverTimestamp() }, { merge: true });
@@ -202,10 +201,9 @@ export default function AdminPage() {
     eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
   }, [preds, date, queryClient]);
 
-    const handleRebuild = useCallback(async (period) => {
+  const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
-      // ★ Call the backend API to rebuild instead of doing it in the browser
       const endpoint = period === 'all' ? 'all' : period;
       const res = await fetch(`https://api.zokascore.xyz/api/v1/admin/leaderboards/rebuild/${endpoint}`, {
         method: 'POST',
@@ -215,7 +213,6 @@ export default function AdminPage() {
       
       if (res.ok) {
         showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-        // Invalidate React Query to fetch the fresh leaderboard
         queryClient.invalidateQueries(['leaderboard']);
         queryClient.invalidateQueries(['dailyLeaderboard']);
         queryClient.invalidateQueries(['weeklyLeaderboard']);
@@ -231,23 +228,8 @@ export default function AdminPage() {
     setRebuilding(null);
   }, [date, showToast, queryClient]);
 
-  
-  // ★ RESTORED: Auto-resolve loop, protected by useRef to prevent infinite renders
-  const resolvedIds = useRef(new Set());
-  useEffect(() => {
-    if (!dayFixtures.length || !preds.length) return;
-    preds.forEach(p => {
-      if (p.status === 'finished' || p.isFinished) return;
-      const fx = dayFixtures.find(f => String(f.id) === String(p.matchId));
-      if (fx && fx.isFinished && fx.homeScore != null && fx.awayScore != null) {
-        const mid = String(p.matchId);
-        if (!resolvedIds.current.has(mid)) {
-          resolvedIds.current.add(mid);
-          handleResolve(p, fx.homeScore, fx.awayScore, true);
-        }
-      }
-    });
-  }, [dayFixtures, preds, handleResolve]);
+  // ★ DELETED THE AUTO-RESOLVE USEEFFECT LOOP FOREVER! 
+  // The backend (liveJob.js & finishedFixturesJob.js) handles this perfectly now without burning Firebase quota.
 
   return (
     <div className="ap">
