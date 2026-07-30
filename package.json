@@ -50,11 +50,11 @@
   },
   "homepage": "https://zokascore.xyz",
   "scripts": {
-    "dev": "vite",
-    "build": "node ./scripts/validate-deployment.js && vite build && node ./scripts/generate-sitemap.js",
-    "lint": "eslint src",
-    "preview": "vite preview"
-  },
+  "dev": "vite",
+  "build": "node ./scripts/validate-deployment.js && node ./scripts/generate-sitemap.js && vite build",
+  "lint": "eslint src",
+  "preview": "vite preview"
+},
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
