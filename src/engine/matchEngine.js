@@ -85,12 +85,10 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ FIX: Aggressive Smart Minute Calculator
-// Forces FT after 105 mins even if API missed the update.
+// ★ FIX: Bulletproof Smart Minute Calculator
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
   
-  // If already finished, just ensure minute is capped at 90
   if (m.isFinished) {
     return { ...m, displayMinute: 90, minute: 90, isLive: false, isHT: false };
   }
@@ -105,69 +103,75 @@ export function applySmartMinute(m, now = Date.now()) {
   if (!matchStartTime) return m;
 
   const elapsedMs = now - matchStartTime;
-  if (elapsedMs < 0) return m; // Future match
+  
+  // ★ FIX 2: If kickoff is in the future, force it to be Scheduled (NS)
+  // This fixes the bug where a delayed match (moved to 4 PM) still shows as "HT" or "1H" 
+  // because the API forgot to clear the old status.
+  if (elapsedMs < 0) {
+    return {
+      ...m,
+      isLive: false,
+      isHT: false,
+      isFinished: false,
+      isStarted: false,
+      status: 'NS',
+      minute: 0,
+      displayMinute: 0
+    };
+  }
 
   const elapsedMins = Math.floor(elapsedMs / 60000);
 
   let smartMinute = m.minute || 0;
   let status = statusUpper;
-  let isHT = m.isHT || false;
-  let isLive = m.isLive || false;
+  let isHT = false;
+  let isLive = true; // Default to true for active phases
   let isFinished = false;
 
-  // 2. If > 105 mins elapsed, force FT (Catches missed API updates!)
-  // This fixes the issue where past matches show as '--' because API status is stuck.
   if (elapsedMins >= 105) {
     smartMinute = 90;
     status = 'FT';
     isFinished = true;
     isLive = false;
     isHT = false;
-  } 
-  // 3. If 96-105 mins, 2nd Half Added Time
-  else if (elapsedMins > 90) {
+  } else if (elapsedMins > 90) {
     smartMinute = 90;
     status = '2H';
     isLive = true;
     isHT = false;
-  } 
-  // 4. If 61-90 mins, 2nd Half
-  else if (elapsedMins > 60) {
+  } else if (elapsedMins > 60) {
     smartMinute = 45 + (elapsedMins - 60);
     status = '2H';
     isLive = true;
     isHT = false;
-  } 
-  // 5. If 51-60 mins, Half Time
-  else if (elapsedMins > 50) {
+  } else if (elapsedMins > 50) {
     smartMinute = 45;
     status = 'HT';
+    // ★ FIX 1: HT matches ARE live. Keep them in the live list and count!
     isHT = true;
-    isLive = false;
-  } 
-  // 6. If 46-50 mins, 1st Half Added Time
-  else if (elapsedMins > 45) {
+    isLive = true; 
+  } else if (elapsedMins > 45) {
     smartMinute = 45;
     status = '1H';
     isLive = true;
     isHT = false;
-  } 
-  // 7. 0-45 mins, 1st Half
-  else {
+  } else {
     smartMinute = elapsedMins;
     status = '1H';
     isLive = true;
     isHT = false;
   }
 
-  // 8. Prevent jumping backwards: If API has a higher minute, trust it
+  // Prevent jumping backwards
   if (m.minute && m.minute > smartMinute && !isFinished) {
     smartMinute = m.minute;
   }
   
   // If API explicitly says HT, respect it over our time guess
   if (statusUpper === 'HT') {
-    isHT = true; isLive = false; smartMinute = 45;
+    isHT = true; 
+    isLive = true; // HT is live
+    smartMinute = 45;
   }
 
   return {
@@ -178,7 +182,7 @@ export function applySmartMinute(m, now = Date.now()) {
     isHT: isHT,
     isLive: isLive,
     isFinished: isFinished,
-    isStarted: isLive && !isHT
+    isStarted: isLive && !isHT // isStarted is false during HT, but isLive is true
   };
 }
 
