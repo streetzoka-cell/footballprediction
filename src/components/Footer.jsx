@@ -1,5 +1,6 @@
+import React, { useState, useEffect } from 'react'; // ★ Added React hooks
 import { Link } from "react-router-dom";
-import { ShieldCheck, Lock, Smartphone, Globe, Download, Activity, Server, Cpu } from 'lucide-react';
+import { ShieldCheck, Lock, Smartphone, Download, Activity, CheckCircle } from 'lucide-react'; // ★ Added CheckCircle
 import { useFixtures } from '../hooks/useFixtures';
 import { useDailyLeaderboard } from '../hooks/useUserData';
 import { todayStr } from '../utils/dates';
@@ -41,7 +42,6 @@ const sections = [
   },
 ];
 
-// SEO Link Data
 const topLeagues = [
   { label: "Premier League", to: "/league/39/premier-league" },
   { label: "La Liga", to: "/league/140/la-liga" },
@@ -72,17 +72,40 @@ const socialLinks = [
 ];
 
 export default function Footer() {
-  // ★ REAL DATA HOOKS
   const { data: rawFixtures = [] } = useFixtures(todayStr());
   const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
 
-  // Calculate real stats
   const liveCount = rawFixtures.filter(m => m.isLive).length;
   const todayFixturesCount = rawFixtures.length;
   
   const dailyStats = dailyLB?.stats || { preds: 0, players: 0 };
   const predictionsToday = dailyStats.preds || 0;
   const playersOnline = dailyStats.players || 0;
+
+  // ★ NEW: PWA Install Logic
+  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  const [isInstalled, setIsInstalled] = useState(false);
+
+  useEffect(() => {
+    const handler = (e) => {
+      e.preventDefault();
+      setInstallPromptEvent(e);
+    };
+    
+    if (window.matchMedia('(display-mode: standalone)').matches) {
+      setIsInstalled(true);
+    }
+
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!installPromptEvent) return;
+    installPromptEvent.prompt();
+    await installPromptEvent.userChoice;
+    setInstallPromptEvent(null);
+  };
 
   return (
     <footer className="zoka-footer">
@@ -143,9 +166,15 @@ export default function Footer() {
             <Smartphone size={24} className="ft-pwa-icon" />
             <h3>Install ZOKASCORE</h3>
             <p>Fast, Offline, Notifications.</p>
-            <button className="ft-install-btn">
-              <Download size={14} /> Install App
-            </button>
+            {isInstalled ? (
+              <button className="ft-install-btn" disabled style={{ opacity: 0.5, cursor: 'default' }}>
+                <CheckCircle size={14} /> Installed
+              </button>
+            ) : (
+              <button className="ft-install-btn" onClick={handleInstallClick} disabled={!installPromptEvent} style={{ opacity: installPromptEvent ? 1 : 0.5 }}>
+                <Download size={14} /> Install App
+              </button>
+            )}
           </div>
         </div>
 

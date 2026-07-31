@@ -44,7 +44,7 @@ const injectCSS = () => {
 .cr-job-desc{font-size:.8rem;color:var(--text-muted);font-weight:600;line-height:1.6;margin-bottom:12px}
 .cr-job-meta{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
 .cr-job-tag{display:inline-flex;align-items:center;gap:4px;font-size:.68rem;font-weight:700;color:var(--text-muted)}
-.cr-job-apply{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;font-size:.8rem;font-weight:800;border:none;cursor:pointer;transition:all .15s;font-family:inherit;box-shadow:0 2px 12px rgba(16,185,129,.18)}
+.cr-job-apply{display:inline-flex;align-items:center;gap:6px;padding:9px 18px;border-radius:10px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#fff;font-size:.8rem;font-weight:800;border:none;cursor:pointer;transition:all .15s;font-family:inherit;box-shadow:0 2px 12px rgba(16,185,129,.18)}
 .cr-job-apply:hover{transform:translateY(-1px);box-shadow:0 4px 16px rgba(16,185,129,.22)}
 .cr-job-apply:active{transform:scale(.97)}
 

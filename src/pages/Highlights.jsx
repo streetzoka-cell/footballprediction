@@ -43,7 +43,7 @@ const calcReadTime = (body) => Math.max(1, Math.ceil((body?.trim().split(/\s+/).
 
 const BADGES = {
   'Breaking': { color: '#ef4444', bg: 'rgba(239,68,68,.15)', label: '🔴 BREAKING' },
-  'Official': { color: '#10b981', bg: 'rgba(16,185,129,.15)', label: '🟢 OFFICIAL' },
+  'Official': { color: 'var(--accent)', bg: 'rgba(16,185,129,.15)', label: '🟢 OFFICIAL' },
   'Rumour': { color: '#fbbf24', bg: 'rgba(251,191,36,.15)', label: '🟡 RUMOUR' },
   'Match Report': { color: '#3b82f6', bg: 'rgba(59,130,246,.15)', label: '🔵 MATCH REPORT' },
   'Transfers': { color: '#f97316', bg: 'rgba(249,115,22,.15)', label: '🟠 TRANSFERS' },

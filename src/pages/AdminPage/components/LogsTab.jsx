@@ -63,7 +63,7 @@ const LogsTab = memo(function LogsTab() {
                   <div style={{ fontSize: '.6rem', color: 'var(--text-muted)' }}>{metrics.count} calls · {metrics.failures} failed</div>
                 </div>
                 <div style={{ textAlign: 'right' }}>
-                  <span className="abdg pn" style={{ background: metrics.avgLatency > 2000 ? 'rgba(239,68,68,.1)' : 'rgba(16,185,129,.1)', color: metrics.avgLatency > 2000 ? '#ef4444' : '#10b981' }}>
+                  <span className="abdg pn" style={{ background: metrics.avgLatency > 2000 ? 'rgba(239,68,68,.1)' : 'rgba(16,185,129,.1)', color: metrics.avgLatency > 2000 ? '#ef4444' : 'var(--accent)' }}>
                     {Math.round(metrics.avgLatency)}ms
                   </span>
                 </div>

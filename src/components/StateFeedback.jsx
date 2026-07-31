@@ -54,7 +54,7 @@ export const ErrorState = ({ error, onRetry }) => {
       {onRetry && (
         <button 
           className="zoka-btn" 
-          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 8, background: '#10b981', color: '#fff', fontWeight: 600, fontSize: '.82rem', border: 'none' }} 
+          style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 8, background: 'var(--accent)', color: '#fff', fontWeight: 600, fontSize: '.82rem', border: 'none' }} 
           onClick={onRetry}
         >
           <RefreshCw size={14} /> Retry

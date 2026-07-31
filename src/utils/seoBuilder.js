@@ -10,7 +10,7 @@ export const SITE = {
     "football predictions, live scores, fixtures, ZOKASCORE, soccer, premier league, la liga, champions league",
   locale: "en_GB",
   twitter: "@zokascore",
-  themeColor: "#05070a",
+  themeColor: "var(--bg-deep)",
   searchUrl: "https://zokascore.xyz/search?q={search_term_string}"
 };
 

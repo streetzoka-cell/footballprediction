@@ -22,7 +22,7 @@ export default function PrivacyPolicy() {
       <div
         className="info-header"
         style={{
-          background: "#0a0d14",
+          background: "var(--bg-card)",
           borderBottom: "1px solid #151b26",
           padding: "40px 20px",
         }}
@@ -43,7 +43,7 @@ export default function PrivacyPolicy() {
               margin: "0 0 8px",
             }}
           >
-            <Shield size={28} style={{ color: "#10b981" }} />
+            <Shield size={28} style={{ color: "var(--accent)" }} />
             Privacy Policy
           </h1>
 
@@ -202,7 +202,7 @@ export default function PrivacyPolicy() {
                 <Link
                   to="/help-center"
                   style={{
-                    color: "#10b981",
+                    color: "var(--accent)",
                     textDecoration: "none",
                   }}
                 >

@@ -112,7 +112,7 @@ export default function MasterGames() {
           <StatCard icon={<Zap size={18} />} label="Smart Matches" value={smartMatchesCount} accent="#6366f1" delay={0} />
           <StatCard icon={<Flame size={18} />} label="Top Picks" value={elitePicksCount} accent="#ef4444" delay={80} />
           <StatCard icon={<Star size={18} />} label="Featured Games" value={featuredCount} accent="#fbbf24" delay={160} />
-          <StatCard icon={<BarChart3 size={18} />} label="Match Rating" value={avgRating ? `${avgRating}%` : '—'} accent="#10b981" delay={240} />
+          <StatCard icon={<BarChart3 size={18} />} label="Match Rating" value={avgRating ? `${avgRating}%` : '—'} accent="var(--accent)" delay={240} />
         </section>
 
         {/* INFORMATION CARD */}
@@ -144,7 +144,7 @@ export default function MasterGames() {
         {/* MATCH SECTIONS */}
         {elitePicks.length > 0 && <MatchSection title="🔥 Elite Picks" matches={elitePicks} accent="#ef4444" />}
         {featuredMatches.length > 0 && <MatchSection title="⭐ Featured Matches" matches={featuredMatches} accent="#fbbf24" />}
-        {moreMatches.length > 0 && <MatchSection title="📈 More Matches to Watch" matches={moreMatches} accent="#10b981" />}
+        {moreMatches.length > 0 && <MatchSection title="📈 More Matches to Watch" matches={moreMatches} accent="var(--accent)" />}
 
         {/* BOTTOM CTA */}
         <footer className="mg-bottom-cta">

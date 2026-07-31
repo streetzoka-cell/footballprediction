@@ -243,11 +243,11 @@ export default function FaceARStudio() {
         .ar-tabs { display: flex; flex-direction: column; padding: 16px 12px; gap: 8px; border-bottom: 1px solid #1f2937; }
         .ar-tab-btn { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: none; border: none; color: #64748b; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; text-align: left; white-space: nowrap; }
         .ar-tab-btn:hover { background: #1f2937; color: #fff; }
-        .ar-tab-btn.active { background: rgba(16, 185, 129, 0.15); color: #10b981; }
+        .ar-tab-btn.active { background: rgba(var(--accent-rgb), 0.15); color: var(--accent); }
         .ar-tools-list { flex: 1; padding: 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
         .ar-tool-btn { padding: 12px; border-radius: 8px; background: #1f2937; border: 1px solid #334155; color: #cbd5e1; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; }
-        .ar-tool-btn:hover { border-color: #10b981; color: #fff; }
-        .ar-tool-btn.active { background: #10b981; color: #fff; border-color: #10b981; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3); }
+        .ar-tool-btn:hover { border-color: var(--accent); color: #fff; }
+        .ar-tool-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); box-shadow: 0 4px 12px var(--accent-glow-strong); }
         .ar-canvas-area { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; background: #000; position: relative; }
         .ar-video-wrapper { height: 100%; aspect-ratio: 9/16; max-width: 100%; background: #000; border-radius: 16px; overflow: hidden; position: relative; border: 2px solid #1f2937; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
         .ar-controls { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); padding: 12px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.1); z-index: 20; }
@@ -302,7 +302,7 @@ export default function FaceARStudio() {
               <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', background: 'rgba(0,0,0,0.8)' }}>
                 <Camera size={48} style={{ marginBottom: '12px' }} />
                 <p style={{ fontWeight: 700, fontSize: '14px' }}>Camera is off</p>
-                <button onClick={startCamera} style={{ marginTop: '16px', background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+                <button onClick={startCamera} style={{ marginTop: '16px', background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
                   Enable Face AR
                 </button>
               </div>
@@ -329,7 +329,7 @@ export default function FaceARStudio() {
             ) : (
               <>
                 <button onClick={() => { setRecordedUrl(null); }} className="ar-btn"><Camera size={20} /></button>
-                <button onClick={handleDownload} className="ar-btn" style={{ background: '#10b981', border: 'none', width: '56px', height: '56px' }}><Download size={20} /></button>
+                <button onClick={handleDownload} className="ar-btn" style={{ background: 'var(--accent)', border: 'none', width: '56px', height: '56px' }}><Download size={20} /></button>
               </>
             )}
           </div>

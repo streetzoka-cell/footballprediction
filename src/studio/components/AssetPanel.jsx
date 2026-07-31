@@ -4,9 +4,9 @@ import { X } from 'lucide-react';
 
 const STICKERS = ['⚽', '🔥', '🏆', '🟨', '🟥', '👟', '🥅', '💯', '🤯', '👏', '👑', '🚀', '📈', '⚡', '🛡️', '🎯'];
 const BACKGROUNDS = [
-  { name: 'Dark', fill: '#05070a' }, { name: 'Black', fill: '#000000' }, { name: 'White', fill: '#ffffff' },
+  { name: 'Dark', fill: 'var(--bg-deep)' }, { name: 'Black', fill: '#000000' }, { name: 'White', fill: '#ffffff' },
   { name: 'Pitch', fill: '#15803d' }, { name: 'Blue', fill: '#0ea5e9' }, { name: 'Gold', fill: '#f59e0b' },
-  { name: 'Gradient', fill: 'linear-gradient(135deg, #047857, #05070a)' }
+  { name: 'Gradient', fill: 'linear-gradient(135deg, #047857, var(--bg-deep))' }
 ];
 
 const SFX = [

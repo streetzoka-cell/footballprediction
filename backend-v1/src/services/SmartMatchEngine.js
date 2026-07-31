@@ -66,7 +66,7 @@ function processMatch(data) {
   } else if (rawStatus === 'CANC') {
     phase = 'CANCELLED'; displayStatus = 'CANC'; badges.push('CANCELLED'); statusColor = '#ef4444';
   } else if (FIN_STATUSES.includes(rawStatus)) {
-    phase = 'FINISHED'; isFinished = true; displayStatus = 'FT'; statusColor = '#10b981'; statusIcon = 'check'; badges.push('FT');
+    phase = 'FINISHED'; isFinished = true; displayStatus = 'FT'; statusColor = 'var(--accent)'; statusIcon = 'check'; badges.push('FT');
   } else if (LIVE_STATUSES.includes(rawStatus)) {
     isLive = true; statusColor = '#ef4444'; statusIcon = 'live'; badges.push('LIVE');
     
@@ -102,7 +102,7 @@ function processMatch(data) {
       if (elapsedMins >= 45 && elapsedMins < 60) { phase = 'HALF_TIME'; isHalfTime = true; displayStatus = 'HT'; displayMinute = 45; }
       else { displayMinute = calcMin; displayStatus = `${calcMin}'`; if (calcMin > 90) displayStatus = `90+${calcMin - 90}'`; }
     } else if (kickoffTime > 0 && now > kickoffTime && elapsedMins > 105) {
-      phase = 'FINISHED'; isFinished = true; displayStatus = 'FT'; statusColor = '#10b981'; badges.push('FT');
+      phase = 'FINISHED'; isFinished = true; displayStatus = 'FT'; statusColor = 'var(--accent)'; badges.push('FT');
     } else {
       phase = 'UPCOMING'; isUpcoming = true;
       displayStatus = new Date(kickoffTime).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });

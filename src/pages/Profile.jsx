@@ -74,7 +74,7 @@ const AccuracyRing = ({ value, size = 116 }) => {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (value / 100) * circ;
-  const color = value >= 70 ? '#10b981' : value >= 50 ? '#fbbf24' : '#f97116';
+  const color = value >= 70 ? 'var(--accent)' : value >= 50 ? '#fbbf24' : '#f97116';
 
   return (
     <div ref={ref} className="pro-ring" style={{ width: size, height: size, opacity: visible ? 1 : 0, animationDelay: '0.2s' }}>
@@ -206,12 +206,12 @@ export default function Profile() {
             <div className="pro-header-left">
               <div className="pro-avatar-wrap">
                 <div className="pro-avatar" style={{
-                  background: isDemo ? 'linear-gradient(135deg, #64748b, #334155)' : 'linear-gradient(135deg, #10b981, #34d399)',
-                  boxShadow: isDemo ? '0 0 0 3px #05070a, 0 0 0 6px rgba(255,255,255,.1)' : '0 0 0 3px #05070a, 0 0 0 6px rgba(16,185,129,.3)'
+                  background: isDemo ? 'linear-gradient(135deg, #64748b, #334155)' : 'linear-gradient(135deg, var(--accent), #34d399)',
+                  boxShadow: isDemo ? '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(255,255,255,.1)' : '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(16,185,129,.3)'
                 }}>
                   {initials}
                 </div>
-                <div className="pro-avatar-badge" style={{ background: isDemo ? '#64748b' : '#10b981' }}>
+                <div className="pro-avatar-badge" style={{ background: isDemo ? '#64748b' : 'var(--accent)' }}>
                   {isDemo ? '?' : '✓'}
                 </div>
               </div>
@@ -263,7 +263,7 @@ export default function Profile() {
 
         {/* Stats Grid */}
         <div className="pro-stats-grid">
-          <AnimatedStat value={points} label="Points" color="#10b981" delay={0} icon={<Trophy size={18} />} />
+          <AnimatedStat value={points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={18} />} />
           <AnimatedStat value={accuracyNum} label="Accuracy" color="#fbbf24" suffix="%" decimals={1} delay={80} icon={<Target size={18} />} />
           <AnimatedStat value={total} label="Predictions" color="#60a5fa" delay={160} icon={<Calendar size={18} />} />
           <AnimatedStat value={profile.streak || 0} label="Day Streak" color="#ef4444" delay={240} icon={<Flame size={18} />} />
