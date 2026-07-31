@@ -2,48 +2,87 @@
 const { getProvider } = require('./ProviderFactory');
 const logger = require('../utils/logger');
 
-const apiFootball = getProvider('api-football');
-const sportsDb = getProvider('sportsdb');
-const footballData = getProvider('football-data'); // ★ NEW
+const providers = {
+  isports: getProvider('isports'),
+  'api-football': getProvider('api-football'),
+  'football-data': getProvider('football-data'),
+  sportsdb: getProvider('sportsdb')
+};
 
-module.exports = {
-  // Live & Fixtures (API-Football)
-  getLiveFixtures: () => apiFootball.getLiveFixtures(),
-  getFixtures: (date) => apiFootball.getFixtures(date),
-  
-  // ★ CHANGED: Standings & Teams now use FootballData.org first!
-  getStandings: async (leagueId, season) => {
+// ★ CONFIGURABLE PRIORITY MAP
+const PRIORITY = {
+  getLiveFixtures: ['isports', 'api-football'],
+  getFixtures: ['isports', 'api-football', 'football-data'],
+  getLeague: ['isports', 'sportsdb'],
+  getStandings: ['football-data', 'api-football'],
+  getTeams: ['football-data', 'api-football'],
+  getTeam: ['football-data', 'api-football'],
+};
+
+async function tryChain(method, params = []) {
+  let lastErr;
+  let lastResult = null; // ★ Track the last result (even if empty)
+  const chain = PRIORITY[method] || [];
+
+  for (const providerName of chain) {
+    const provider = providers[providerName];
+    if (!provider || typeof provider[method] !== 'function') continue;
+
+    // ★ BUDGET CHECK: Skip provider if budget is exhausted
+    if (typeof provider.isBudgetAvailable === 'function' && !provider.isBudgetAvailable()) {
+      logger.info(`[ProviderManager] ${method}: ${providerName} skipped (budget exhausted). Trying next...`);
+      continue;
+    }
+
     try {
-      const data = await footballData.getStandings(leagueId, season);
-      if (data) return data;
-    } catch (e) { logger.warn('[ProviderManager] FootballData failed for standings, trying API-Football'); }
-    return apiFootball.getStandings(leagueId, season);
-  },
+      const result = await provider[method](...params);
+      
+      // ★ If we got actual data, return it immediately!
+      const hasData = result != null && (!Array.isArray(result) || result.length > 0);
+      if (hasData) {
+        return result;
+      }
+      
+      // It's an empty array or null. Save it just in case all providers return empty,
+      // but continue trying the next provider to see if it has data.
+      lastResult = Array.isArray(result) ? result : null;
+      logger.warn(`[ProviderManager] ${method}: ${providerName} returned empty → trying next`);
+      continue;
+
+    } catch (err) {
+      if (err.message === 'Not implemented') continue; // Silently skip
+      
+      logger.warn(`[ProviderManager] ${method}: ${providerName} failed (${err.message}) → trying next`);
+      lastErr = err;
+    }
+  }
   
-  getTeams: async (leagueId, season) => {
+  // ★ If we reach here, all providers either failed or returned empty.
+  // If we got at least an empty array from someone, return that instead of crashing.
+  if (lastResult !== null) {
+    logger.info(`[ProviderManager] ${method}: All providers returned empty. Returning empty array.`);
+    return lastResult;
+  }
+  
+  // If we got absolutely nothing (all providers threw hard errors), throw the last error.
+  throw lastErr || new Error(`${method}: All providers failed, returned empty, or were not implemented.`);
+}
+
+// ★ DYNAMIC METHOD EXPORTS
+module.exports = Object.keys(PRIORITY).reduce((acc, method) => {
+  acc[method] = (...args) => tryChain(method, args);
+  return acc;
+}, {});
+
+// Expose health check for all providers
+module.exports.getHealthStatus = async () => {
+  const results = {};
+  for (const [name, provider] of Object.entries(providers)) {
     try {
-      const data = await footballData.getTeams(leagueId, season);
-      if (data && data.length > 0) return data;
-    } catch (e) { logger.warn('[ProviderManager] FootballData failed for teams, trying API-Football'); }
-    return apiFootball.getTeams(leagueId, season);
-  },
-  
-  // Media & Static Data (TheSportsDB)
-  getTeam: (id) => sportsDb.getTeam(id),
-  getLeague: (id) => sportsDb.getLeague(id),
-  
-  getHealthStatus: async () => {
-    const [afHealth, fdHealth, sdbHealth] = await Promise.all([
-      apiFootball.health(),
-      footballData.health(),
-      sportsDb.health()
-    ]);
-    return {
-      'api-football': afHealth,
-      'football-data': fdHealth,
-      'sportsdb': sdbHealth
-    };
-  },
-  
-  getActiveProviderName: () => 'API-Football (Live) + FootballData (Standings/Teams) + SportsDB (Media)',
+      results[name] = await provider.health();
+    } catch (e) {
+      results[name] = { provider: name, healthy: false, error: e.message };
+    }
+  }
+  return results;
 };

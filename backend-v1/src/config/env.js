@@ -10,7 +10,7 @@ const env = {
   
   // API-Football (Supports 2 keys for 200 daily calls)
   API_FOOTBALL_KEY: process.env.API_FOOTBALL_KEY,
-  API_FOOTBALL_KEY_2: process.env.API_FOOTBALL_KEY_2, // ★ NEW
+  API_FOOTBALL_KEY_2: process.env.API_FOOTBALL_KEY_2, 
   API_FOOTBALL_BASE_URL: process.env.API_FOOTBALL_BASE_URL || 'https://v3.football.api-sports.io',
   API_FOOTBALL_DAILY_BUDGET: parseInt(process.env.API_FOOTBALL_DAILY_BUDGET || '100', 10), // Per key
   
@@ -20,6 +20,11 @@ const env = {
   // TheSportsDB
   SPORTSDB_API_KEY: process.env.SPORTSDB_API_KEY || '3',
   SPORTSDB_BASE_URL: process.env.SPORTSDB_BASE_URL || 'https://www.thesportsdb.com/api/v1/json',
+  
+  // iSports API (★ NEW)
+  ISPORTS_API_KEY: process.env.ISPORTS_API_KEY,
+  ISPORTS_PRIMARY_URL: process.env.ISPORTS_PRIMARY_URL || 'https://api.isportsapi.com',
+  ISPORTS_BACKUP_URL: process.env.ISPORTS_BACKUP_URL || 'https://api2.isportsapi.com',
   
   // Firebase
   FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
