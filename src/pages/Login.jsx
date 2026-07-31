@@ -19,7 +19,7 @@ const PasswordStrength = memo(function PasswordStrength({ password }) {
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
   const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#10b981'];
+  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', 'var(--accent)'];
   const activeColor = colors[Math.max(0, score - 1)];
 
   return (

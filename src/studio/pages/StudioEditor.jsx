@@ -184,7 +184,7 @@ export default function StudioEditor() {
   };
 
   if (!project) {
-    return <div style={{ padding: '24px', textAlign: 'center', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}><p>No project loaded.</p><button onClick={() => navigate('/studio')} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', marginTop: '12px' }}>Go to Studio Home</button></div>;
+    return <div style={{ padding: '24px', textAlign: 'center', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}><p>No project loaded.</p><button onClick={() => navigate('/studio')} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', marginTop: '12px' }}>Go to Studio Home</button></div>;
   }
 
   const selectedLayer = project.layers.find(l => l.id === selectedLayerId);
@@ -197,7 +197,7 @@ export default function StudioEditor() {
       <div style={{ padding: '12px 16px', background: '#111827', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1f2937', zIndex: 10, flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={() => navigate('/studio')} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>← Back</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: saveStatus === 'saving' ? '#f59e0b' : '#10b981' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: saveStatus === 'saving' ? '#f59e0b' : 'var(--accent)' }}>
             {saveStatus === 'saving' ? <Save size={12} /> : <Check size={12} />} {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
           </div>
         </div>
@@ -208,7 +208,7 @@ export default function StudioEditor() {
               {isExporting ? <Loader size={14} className="animate-spin" /> : <Video size={14} />} Export Video
             </button>
           )}
-          <button onClick={handleExportPNG} style={{ background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} disabled={isExporting}>
+          <button onClick={handleExportPNG} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} disabled={isExporting}>
             <Download size={14} /> PNG
           </button>
         </div>
@@ -249,7 +249,7 @@ export default function StudioEditor() {
               if (layer.type === 'circle') return <Circle key={layer.id} {...commonProps} x={layer.x} y={layer.y} radius={layer.radius} fill={layer.fill} opacity={layer.opacity ?? 1} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
               return null;
             })}
-            <Transformer ref={transformerRef} borderStroke="#10b981" anchorStroke="#10b981" anchorCornerRadius={6} anchorSize={8} rotateEnabled={true} enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']} />
+            <Transformer ref={transformerRef} borderStroke="var(--accent)" anchorStroke="var(--accent)" anchorCornerRadius={6} anchorSize={8} rotateEnabled={true} enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']} />
           </Layer>
         </Stage>
       </div>
@@ -259,7 +259,7 @@ export default function StudioEditor() {
           <button onClick={() => setPlaying(!isPlaying)} style={{ background: '#334155', border: 'none', color: '#fff', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}>
             {isPlaying ? <Pause size={16} /> : <Play size={16} fill="#fff" />}
           </button>
-          <input type="range" min="0" max={videoDuration || 0} step="0.1" value={currentTime} onChange={handleTimelineScrub} style={{ flex: 1, accentColor: '#10b981' }} />
+          <input type="range" min="0" max={videoDuration || 0} step="0.1" value={currentTime} onChange={handleTimelineScrub} style={{ flex: 1, accentColor: 'var(--accent)' }} />
           <span style={{ color: '#64748b', fontSize: '11px', fontWeight: 700, minWidth: '80px', textAlign: 'right' }}>{Math.floor(currentTime)}s / {Math.floor(videoDuration)}s</span>
         </div>
       )}
@@ -267,7 +267,7 @@ export default function StudioEditor() {
       <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', flexShrink: 0 }}>
         <Layers size={16} color="#64748b" />
         {project.layers.map(layer => (
-          <div key={layer.id} onClick={() => selectLayer(layer.id)} style={{ padding: '6px 12px', borderRadius: '6px', background: selectedLayerId === layer.id ? '#10b981' : '#1f2937', color: selectedLayerId === layer.id ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div key={layer.id} onClick={() => selectLayer(layer.id)} style={{ padding: '6px 12px', borderRadius: '6px', background: selectedLayerId === layer.id ? 'var(--accent)' : '#1f2937', color: selectedLayerId === layer.id ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
             {layer.type === 'text' && <Type size={10} />} {layer.type === 'rect' && <Square size={10} />} {layer.type === 'image' && '🖼️'} {layer.type === 'video' && '🎥'} {layer.type === 'audio' && '🎵'} {layer.type === 'circle' && '⭕'}
             {layer.type === 'text' ? layer.text.substring(0, 10) : layer.type}
           </div>
@@ -305,7 +305,7 @@ export default function StudioEditor() {
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
                   <Volume2 size={14} color="#64748b" />
-                  <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: '#10b981' }} />
+                  <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: 'var(--accent)' }} />
                 </div>
               </div>
             )}
@@ -313,7 +313,7 @@ export default function StudioEditor() {
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
                 <Volume2 size={14} color="#64748b" />
                 <span style={{ fontSize: '12px', color: '#fff' }}>{selectedLayer.name}</span>
-                <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: '#10b981' }} />
+                <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: 'var(--accent)' }} />
               </div>
             )}
           </div>
@@ -340,4 +340,4 @@ export default function StudioEditor() {
 const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', fontFamily: 'inherit', flex: 1, minWidth: '120px' };
 const selectStyle = { background: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', outline: 'none' };
 const colorInputStyle = { width: '40px', height: '40px', background: 'none', border: '1px solid #334155', borderRadius: '8px', cursor: 'pointer', padding: '2px' };
-const fabStyle = { width: '56px', height: '56px', borderRadius: '16px', background: '#10b981', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer' };
+const fabStyle = { width: '56px', height: '56px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer' };

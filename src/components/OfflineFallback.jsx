@@ -19,7 +19,7 @@ export default function OfflineFallback({ onRetry, hasCachedData = false, lastUp
         <div style={styles.iconWrapper}>
           <div style={styles.radarPulse}></div>
           <div style={styles.radarPulseDelay}></div>
-          {hasCachedData ? <Database size={36} color="#10b981" /> : <CloudOff size={36} color="#ef4444" />}
+          {hasCachedData ? <Database size={36} color="var(--accent)" /> : <CloudOff size={36} color="#ef4444" />}
         </div>
         
         <h1 style={styles.title}>
@@ -36,7 +36,7 @@ export default function OfflineFallback({ onRetry, hasCachedData = false, lastUp
         <div style={styles.statusBadge}>
           {hasCachedData ? (
             <>
-              <span style={{...styles.statusDot, background: '#10b981'}}></span>
+              <span style={{...styles.statusDot, background: 'var(--accent)'}}></span>
               Cached Data Available
             </>
           ) : (
@@ -67,7 +67,7 @@ const styles = {
     flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    background: 'radial-gradient(circle at 50% 50%, #0d1a25 0%, #05070a 80%)',
+    background: 'radial-gradient(circle at 50% 50%, #0d1a25 0%, var(--bg-deep) 80%)',
     padding: '20px',
     textAlign: 'center',
     fontFamily: 'Inter, system-ui, sans-serif',
@@ -157,13 +157,13 @@ const styles = {
     gap: '8px',
     padding: '14px 28px',
     borderRadius: '12px',
-    background: 'linear-gradient(135deg, #10b981, #059669)',
-    color: '#05070a',
+    background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))',
+    color: 'var(--bg-deep)',
     fontWeight: 800,
     fontSize: '0.9rem',
     border: 'none',
     cursor: 'pointer',
     transition: 'transform 0.2s, box-shadow 0.2s',
-    boxShadow: '0 4px 15px rgba(16, 185, 129, 0.3)',
+    boxShadow: '0 4px 15px var(--accent-glow-strong)',
   },
 };

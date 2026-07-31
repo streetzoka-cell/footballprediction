@@ -17,7 +17,7 @@ export default function Terms() {
   ]}
 />
 
-      <div className="info-header" style={{ background: '#0a0d14', borderBottom: '1px solid #151b26', padding: '40px 20px' }}>
+      <div className="info-header" style={{ background: 'var(--bg-card)', borderBottom: '1px solid #151b26', padding: '40px 20px' }}>
         <div style={{ maxWidth: 800, margin: '0 auto' }}>
           <Link to="/" className="info-back-link"><ArrowLeft size={16} /> Back to Home</Link>
           <h1 style={{ fontSize: '2.2rem', fontWeight: 900, color: '#f8fafc', margin: '0 0 8px' }}>📜 Terms of Service</h1>
@@ -85,7 +85,7 @@ export default function Terms() {
             <p className="info-section-text">If you have any questions about these Terms, please contact us:</p>
             <div className="info-contact-box">
               <p className="info-contact-text">📧 Email: legal@zokascore.com</p>
-              <p className="info-contact-text">💬 Help Center: <Link to="/help-center" style={{ color: '#10b981', textDecoration: 'none' }}>zokascore.com/help-center</Link></p>
+              <p className="info-contact-text">💬 Help Center: <Link to="/help-center" style={{ color: 'var(--accent)', textDecoration: 'none' }}>zokascore.com/help-center</Link></p>
             </div>
           </div>
         </div>

@@ -14,6 +14,7 @@ function sendToGoogleAnalytics({ name, delta, value, id }) {
 
 export function initAnalytics() {
   try {
+    // Initialize Web Vitals tracking
     onLCP(sendToGoogleAnalytics);
     onINP(sendToGoogleAnalytics);
     onCLS(sendToGoogleAnalytics);
@@ -39,9 +40,10 @@ export function initAnalytics() {
         });
       }
     });
-
-    console.log('[Analytics] Web Vitals and Error tracking initialized.');
   } catch (err) {
-    console.error('[Analytics] Initialization failed:', err);
+    // Only log initialization errors in development mode
+    if (import.meta.env.DEV) {
+      console.error('[Analytics] Initialization failed:', err);
+    }
   }
 }

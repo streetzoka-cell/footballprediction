@@ -16,10 +16,10 @@ const TerminalModal = ({ isOpen, onClose, logs }) => {
 
   return (
     <div style={{ position: 'fixed', inset: 0, background: 'rgba(0, 0, 0, 0.8)', backdropFilter: 'blur(8px)', zIndex: 9999, display: 'flex', alignItems: 'center', justifyContent: 'center' }} onClick={onClose}>
-      <div style={{ background: '#050505', border: '1px solid rgba(16, 185, 129, 0.3)', width: '90vw', maxWidth: '900px', height: '70vh', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 40px rgba(16, 185, 129, 0.15)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
+      <div style={{ background: '#050505', border: '1px solid var(--accent-glow-strong)', width: '90vw', maxWidth: '900px', height: '70vh', borderRadius: '12px', overflow: 'hidden', boxShadow: '0 0 40px rgba(var(--accent-rgb), 0.15)', display: 'flex', flexDirection: 'column' }} onClick={e => e.stopPropagation()}>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'rgba(16, 185, 129, 0.05)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#10b981', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: '0.85rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px', background: 'rgba(var(--accent-rgb), 0.05)', borderBottom: '1px solid rgba(255, 255, 255, 0.05)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--accent)', fontFamily: 'ui-monospace, monospace', fontWeight: 700, fontSize: '0.85rem' }}>
             <Terminal size={14} /> root@zoka-api:~/logs$           </div>
           <button onClick={onClose} style={{ background: 'none', border: 'none', color: '#64748b', cursor: 'pointer' }}><X size={18} /></button>
         </div>
@@ -108,14 +108,14 @@ const SystemHealthTab = memo(function SystemHealthTab() {
     <div className="ae">
       <style>{`
         @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
-        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); } 70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); } 100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); } }
+        @keyframes pulse-green { 0% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0.4); } 70% { box-shadow: 0 0 0 10px rgba(var(--accent-rgb), 0); } 100% { box-shadow: 0 0 0 0 rgba(var(--accent-rgb), 0); } }
       `}</style>
 
       <div className="asec">
         <h3 className="ast"><Cpu size={15} /> System Vitals</h3>
         <div className="asg">
           <div className="astat">
-            <span className="n" style={{ color: '#10b981', animation: 'pulse-green 2s infinite' }}>
+            <span className="n" style={{ color: 'var(--accent)', animation: 'pulse-green 2s infinite' }}>
               {health.status === 'healthy' ? '🟢' : '🔴'}
             </span>
             <span className="l">API Status</span>
@@ -162,7 +162,7 @@ const SystemHealthTab = memo(function SystemHealthTab() {
             style={{ 
               width: `${((quota.liveUsed + quota.ftUsed + quota.fallbackUsed) / 100) * 100}%`, 
               height: '100%', 
-              background: (quota.liveUsed + quota.ftUsed + quota.fallbackUsed) > 90 ? '#ef4444' : '#10b981',
+              background: (quota.liveUsed + quota.ftUsed + quota.fallbackUsed) > 90 ? '#ef4444' : 'var(--accent)',
               transition: 'width 0.5s ease'
             }} 
           />
@@ -183,9 +183,9 @@ const SystemHealthTab = memo(function SystemHealthTab() {
           style={{
             marginTop: '16px', width: '100%', padding: '16px', 
             background: 'linear-gradient(135deg, rgba(0,0,0,0.8), rgba(16,185,129,0.05))', 
-            border: '1px solid rgba(16, 185, 129, 0.3)', borderRadius: '10px', 
+            border: '1px solid var(--accent-glow-strong)', borderRadius: '10px', 
             cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '12px', 
-            color: '#10b981', fontFamily: 'ui-monospace, monospace', fontWeight: 700, textAlign: 'left'
+            color: 'var(--accent)', fontFamily: 'ui-monospace, monospace', fontWeight: 700, textAlign: 'left'
           }}
         >
           <Terminal size={20} />
@@ -195,7 +195,7 @@ const SystemHealthTab = memo(function SystemHealthTab() {
               {logs.length > 0 ? `${logs.length} lines buffered` : 'No active logs / endpoint missing'}
             </div>
           </div>
-          <Wifi size={16} className={logs.length > 0 ? 'zoka-spin' : ''} style={logs.length > 0 ? { color: '#10b981' } : { color: '#64748b' }} />
+          <Wifi size={16} className={logs.length > 0 ? 'zoka-spin' : ''} style={logs.length > 0 ? { color: 'var(--accent)' } : { color: '#64748b' }} />
         </button>
       </div>
 

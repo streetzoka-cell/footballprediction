@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
-  Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal, Command, TrendingUp, Flame, Activity
+  Clock, Target, ChevronRight, ChevronDown, Pin, MoreHorizontal, Command, Flame, Activity
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
@@ -19,6 +19,7 @@ import { collection, query, where, getDocs, orderBy, limit } from 'firebase/fire
 import { slugify } from '../utils/format';
 import { buildMatchRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
+import ThemeSwitcher from './ThemeSwitcher';
 
 const ADMIN_PATH = '/zks-admin-8f9x2-control-panel';
 const APP_LOGO = '/icons/icon-192.png';
@@ -42,7 +43,7 @@ function timeAgo(ts) {
 }
 
 const StatusDot = React.memo(({ status, size = 6 }) => {
-  if (status === 'live') return <span style={{ width: size, height: size, borderRadius: '50%', background: '#10b981', boxShadow: '0 0 8px rgba(16,185,129,0.8)', animation: 'nvLiveDot 1.2s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }} />;
+  if (status === 'live') return <span style={{ width: size, height: size, borderRadius: '50%', background: 'var(--accent)', boxShadow: '0 0 8px var(--accent-glow-strong)', animation: 'nvLiveDot 1.2s ease-in-out infinite', display: 'inline-block', flexShrink: 0 }} />;
   if (status === 'ft') return <span style={{ fontSize: '0.58rem', fontWeight: 900, color: 'rgba(255,255,255,0.35)' }}>FT</span>;
   return <Clock size={8} style={{ color: 'rgba(255,255,255,0.3)', flexShrink: 0 }} />;
 });
@@ -65,7 +66,7 @@ const infoSections = [
   { title: "Legal", links: [["🔒 Privacy Policy", "/privacy"], ["📋 Terms of Service", "/terms"]] },
 ];
 
-// ★ NEW: Global Command Palette Component
+// ★ Global Command Palette Component
 const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate }) => {
   const [query, setQuery] = useState('');
   const inputRef = useRef(null);
@@ -146,7 +147,7 @@ const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate
   );
 });
 
-// ★ NEW: Smart Search Dropdown Component
+// ★ Smart Search Dropdown Component
 const SmartSearchDropdown = React.memo(({ query, liveMatches, onClose, navigate }) => {
   const q = query.toLowerCase().trim();
   if (!q) return null;
@@ -178,7 +179,7 @@ const SmartSearchDropdown = React.memo(({ query, liveMatches, onClose, navigate 
   );
 });
 
-// ★ NEW: Live Match Hover Panel Component
+// ★ Live Match Hover Panel Component
 const LiveMatchPanel = React.memo(({ liveMatches, onClose }) => {
   if (liveMatches.length === 0) return null;
   return (
@@ -284,18 +285,18 @@ const TickerItem = React.memo(({ m }) => {
       <StatusDot status={status} size={7} />
       <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>{homeName}</span>
       <span style={{
-        background: m.isLive ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)',
+        background: m.isLive ? 'var(--accent-glow)' : 'rgba(255,255,255,0.05)',
         borderRadius: 6, padding: '3px 12px', fontWeight: 900, fontSize: '.8rem', letterSpacing: '0.05em',
         fontFamily: 'ui-monospace, monospace',
-        color: m.isLive ? '#10b981' : 'rgba(255,255,255,0.6)',
-        boxShadow: m.isLive ? '0 0 10px rgba(16,185,129,0.1)' : 'none',
+        color: m.isLive ? 'var(--accent)' : 'rgba(255,255,255,0.6)',
+        boxShadow: m.isLive ? '0 0 10px var(--accent-glow)' : 'none',
         border: '1px solid rgba(255,255,255,0.05)'
       }}>
         {m.homeScore ?? '?'} - {m.awayScore ?? '?'}
       </span>
       <span style={{ fontWeight: 800, fontSize: '.85rem', color: m.isLive ? '#fff' : 'rgba(255,255,255,0.85)', textTransform: 'uppercase' }}>{awayName}</span>
       {m.isLive && m.displayMinute != null && (
-        <span style={{ fontSize: '.7rem', fontWeight: 800, color: '#10b981', fontFamily: 'ui-monospace, monospace', minWidth: 28, textAlign: 'center' }}>{m.displayMinute}'</span>
+        <span style={{ fontSize: '.7rem', fontWeight: 800, color: 'var(--accent)', fontFamily: 'ui-monospace, monospace', minWidth: 28, textAlign: 'center' }}>{m.displayMinute}'</span>
       )}
     </Link>
   );
@@ -306,8 +307,8 @@ const PinnedMatchesWidget = React.memo(({ pinnedMatches, allLive }) => {
   if (pinned.length === 0) return null;
 
   return (
-    <div style={{ position: 'fixed', top: 110, right: 20, zIndex: 999, background: 'rgba(10,15,25,0.95)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: 12, padding: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', maxWidth: '300px' }}>
-      <div style={{ fontSize: '0.7rem', fontWeight: 800, color: '#10b981', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+    <div style={{ position: 'fixed', top: 110, right: 20, zIndex: 999, background: 'rgba(10,15,25,0.95)', border: '1px solid var(--accent-glow-strong)', borderRadius: 12, padding: '10px', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', backdropFilter: 'blur(12px)', maxWidth: '300px' }}>
+      <div style={{ fontSize: '0.7rem', fontWeight: 800, color: 'var(--accent)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
         <Pin size={12} /> PINNED LIVE
       </div>
       {pinned.map(m => (
@@ -341,11 +342,11 @@ const NotifItem = React.memo(({ n }) => {
 
   const isExact = n.type === 'exact';
   const isResult = n.type === 'result';
-  const bgColor = isExact ? 'rgba(16,185,129,0.05)' : isResult ? 'rgba(251,191,36,0.05)' : 'rgba(239,68,68,0.05)';
-  const borderColor = isExact ? 'rgba(16,185,129,0.3)' : isResult ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)';
+  const bgColor = isExact ? 'var(--accent-glow)' : isResult ? 'rgba(251,191,36,0.05)' : 'rgba(239,68,68,0.05)';
+  const borderColor = isExact ? 'var(--accent-glow-strong)' : isResult ? 'rgba(251,191,36,0.3)' : 'rgba(239,68,68,0.3)';
   const icon = isExact ? '🎯' : isResult ? '👍' : '😔';
   const label = isExact ? 'EXACT' : isResult ? 'CORRECT' : 'MISS';
-  const labelColor = isExact ? '#10b981' : isResult ? '#fbbf24' : '#ef4444';
+  const labelColor = isExact ? 'var(--accent)' : isResult ? '#fbbf24' : '#ef4444';
 
   return (
     <div key={n.id} style={{ padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 14, borderBottom: '1px solid rgba(255,255,255,0.04)', background: bgColor, borderLeft: `3px solid ${borderColor}`, animation: 'nvNotifSlide 0.3s ease both' }}>
@@ -522,23 +523,34 @@ export default function Navbar() {
     return () => { document.body.style.overflow = ''; document.body.style.position = ''; document.body.style.width = ''; };
   }, [mobileOpen]);
 
-  // ★ NEW: Global Keyboard Shortcuts (Ctrl+K, Esc)
+  // ★ FIXED: Unified Keyboard Shortcuts & Outside Click Logic
   useEffect(() => {
     const handler = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      // Keyboard Shortcuts
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
         e.preventDefault();
         setCmdOpen(p => !p);
       }
+      
+      // Escape Key
       if (e.key === 'Escape') { 
         setMobileOpen(false); setSearchOpen(false); setNotifOpen(false); setMoreOpen(false); setCmdOpen(false); setLivePanelOpen(false);
       }
-      if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
-      if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
-      if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+      
+      // Outside Clicks (Mousedown)
+      if (e.type === 'mousedown') {
+        if (searchRef.current && !searchRef.current.contains(e.target)) setSearchOpen(false);
+        if (notifRef.current && !notifRef.current.contains(e.target) && mobNotifRef.current && !mobNotifRef.current.contains(e.target)) setNotifOpen(false);
+        if (moreRef.current && !moreRef.current.contains(e.target)) setMoreOpen(false);
+      }
     };
+    
     document.addEventListener('keydown', handler);
     document.addEventListener('mousedown', handler);
-    return () => { document.removeEventListener('keydown', handler); document.removeEventListener('mousedown', handler); };
+    return () => { 
+      document.removeEventListener('keydown', handler); 
+      document.removeEventListener('mousedown', handler); 
+    };
   }, []);
 
   useEffect(() => {
@@ -600,7 +612,7 @@ export default function Navbar() {
         <PinnedMatchesWidget pinnedMatches={pinnedMatches} allLive={liveMatches} />
       </div>
 
-      <div style={{ position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden', display: 'flex', alignItems: 'center', background: 'linear-gradient(180deg, #000000 0%, #05070a 100%)', borderBottom: '1px solid rgba(16,185,129,0.1)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
+      <div style={{ position: 'sticky', top: 0, zIndex: 1001, height: 42, overflow: 'hidden', display: 'flex', alignItems: 'center', background: 'linear-gradient(180deg, #000000 0%, var(--bg-deep) 100%)', borderBottom: '1px solid var(--accent-glow)', boxShadow: '0 4px 12px rgba(0,0,0,0.3)' }}>
         <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', background: 'linear-gradient(90deg, rgba(0,0,0,0.8) 0%, transparent 10%, transparent 90%, rgba(0,0,0,0.8) 100%)' }} />
         {hasLive && (
           <div style={{ position: 'absolute', left: 12, zIndex: 2, display: 'flex', alignItems: 'center', gap: 6, background: 'linear-gradient(135deg, #dc2626, #ef4444)', borderRadius: 8, padding: '4px 14px', fontSize: '0.65rem', fontWeight: 900, color: 'white', letterSpacing: '0.15em', textTransform: 'uppercase', boxShadow: '0 0 20px rgba(239,68,68,0.6)', animation: 'nvPulseGreen 2s ease-in-out infinite' }}>
@@ -610,8 +622,8 @@ export default function Navbar() {
         {tickerContent ? (
           <div style={{ flex: 1, overflow: 'hidden', marginLeft: hasLive ? 90 : 16, marginRight: 16, maskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)', WebkitMaskImage: 'linear-gradient(90deg, transparent, black 5%, black 95%, transparent)' }}>
             <div style={{ display: 'inline-flex', alignItems: 'center', gap: 30, animation: 'nvMarquee 240s linear infinite', color: 'rgba(255,255,255,0.92)', willChange: 'transform', backfaceVisibility: 'hidden', WebkitFontSmoothing: 'antialiased' }}>
-              {tickerContent}<span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
-              {tickerContent}<span style={{ color: 'rgba(16,185,129,0.3)', fontSize: '0.6rem' }}>⚽</span>
+              {tickerContent}<span style={{ color: 'var(--accent-glow-strong)', fontSize: '0.6rem' }}>⚽</span>
+              {tickerContent}<span style={{ color: 'var(--accent-glow-strong)', fontSize: '0.6rem' }}>⚽</span>
             </div>
           </div>
         ) : (
@@ -619,7 +631,7 @@ export default function Navbar() {
         )}
       </div>
 
-      <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
+      <nav className="nv-main-nav" style={{ position: 'sticky', top: 42, zIndex: 1000, height: 68, background: scrolled ? 'rgba(5,7,10,0.85)' : 'rgba(5,7,10,0)', backdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', WebkitBackdropFilter: scrolled ? 'blur(24px) saturate(180%)' : 'none', borderBottom: `1px solid ${scrolled ? 'var(--accent-glow)' : 'rgba(255,255,255,0)'}`, boxShadow: scrolled ? '0 8px 32px rgba(0,0,0,0.3)' : 'none', transition: 'all 0.4s cubic-bezier(0.22,1,0.36,1)', willChange: 'background, backdrop-filter, box-shadow' }}>
         <div style={{ maxWidth: 'var(--max-width, 1140px)', margin: '0 auto', padding: '0 20px', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, width: '100%' }}>
           
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
@@ -627,11 +639,11 @@ export default function Navbar() {
               <Link to="/" className={`nv-nav-link ${isHome ? 'active' : ''}`} style={{ padding: '8px 16px', borderRadius: 8 }} aria-label="Home"><Home size={16} strokeWidth={2.5} /> Home</Link>
             </div>
             <Link to="/" style={{ display: 'flex', alignItems: 'center', gap: 12, textDecoration: 'none', cursor: 'pointer', transition: 'all 0.2s ease', position: 'relative' }} className="nv-logo-link">
-              <img src={APP_LOGO} alt="ZokaScore Logo" width="42" height="42" style={{ borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px rgba(16,185,129,0.3), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
+              <img src={APP_LOGO} alt="ZokaScore Logo" width="42" height="42" style={{ borderRadius: 12, objectFit: 'cover', boxShadow: '0 0 20px var(--accent-glow), 0 4px 12px rgba(0,0,0,0.3)', animation: 'nvLogoFloat 4s ease-in-out infinite' }} />
               <div className="nv-dk" style={{ display: 'flex', alignItems: 'baseline', gap: 0 }}>
                 <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.02em', color: '#ffffff', whiteSpace: 'nowrap' }}>ZOKA</span>
-                <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.03em', color: '#10b981', whiteSpace: 'nowrap', marginLeft: 2, animation: 'nvScoreGlow 3s ease-in-out infinite' }}>SCORE</span>
-                <span style={{ color: '#10b981', fontSize: '1.5rem', lineHeight: 1, animation: 'nvDotBlink 2.5s ease-in-out infinite', textShadow: '0 0 12px rgba(16,185,129,0.7)', marginLeft: 0, opacity: 0.5 }}>.</span>
+                <span style={{ fontWeight: 900, fontSize: '1.25rem', letterSpacing: '0.03em', color: 'var(--accent)', whiteSpace: 'nowrap', marginLeft: 2, animation: 'nvScoreGlow 3s ease-in-out infinite' }}>SCORE</span>
+                <span style={{ color: 'var(--accent)', fontSize: '1.5rem', lineHeight: 1, animation: 'nvDotBlink 2.5s ease-in-out infinite', textShadow: '0 0 12px var(--accent-glow-strong)', marginLeft: 0, opacity: 0.5 }}>.</span>
                 <span style={{ fontSize: '0.5rem', fontWeight: 800, color: '#64748b', letterSpacing: '0.15em', textTransform: 'uppercase', marginLeft: 4, opacity: 0.8 }}>xyz</span>
               </div>
             </Link>
@@ -639,8 +651,7 @@ export default function Navbar() {
 
           <div className="nv-dk" style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
             
-            {/* ★ NEW: Smart Search Input */}
-                      {/* ★ NEW: Smart Search Input */}
+            {/* ★ Smart Search Input */}
             <div ref={searchRef} style={{ position: 'relative', flexShrink: 0 }}>
               <form onSubmit={handleSearch} className="nv-smart-search-wrap">
                 <Search size={16} className="nv-ss-icon" />
@@ -648,7 +659,7 @@ export default function Navbar() {
                   value={searchQuery} 
                   onChange={e => setSearchQuery(e.target.value)} 
                   onFocus={() => setSearchOpen(true)} 
-                  placeholder="Search teams, leagues, matches..." // ★ UPDATED
+                  placeholder="Search teams, leagues, matches..." 
                   className="nv-smart-search-input"
                 />
                 <button type="button" className="nv-ss-cmd-btn" onClick={() => setCmdOpen(true)} title="Command Palette (Ctrl+K)">
@@ -658,11 +669,14 @@ export default function Navbar() {
               {searchOpen && <SmartSearchDropdown query={searchQuery} liveMatches={liveMatches} onClose={() => setSearchOpen(false)} navigate={navigate} />}
             </div>
 
+            {/* ★ NEW: Theme Switcher */}
+            <ThemeSwitcher />
+
             {isLoggedIn && (
               <div ref={notifRef} style={{ position: 'relative', flexShrink: 0 }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
                   <Bell size={18} strokeWidth={2.5} />
-                  {notifCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a', boxShadow: '0 0 12px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
+                  {notifCount > 0 && <span style={{ position: 'absolute', top: 2, right: 2, minWidth: 18, height: 18, borderRadius: 9, padding: '0 4px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-deep)', boxShadow: '0 0 12px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
                 </button>
                 {notifOpen && renderNotifDropdown()}
               </div>
@@ -690,7 +704,7 @@ export default function Navbar() {
                   <Link key={link.to} to={link.to} className={`nv-nav-link ${active ? 'active' : ''}`}>
                     <span style={{ fontSize: '0.8rem', opacity: active ? 1 : 0.7, transition: 'opacity 0.2s ease' }}>{link.emoji}</span>{link.label}
                     {link.isLive && <span style={{ display: 'flex', alignItems: 'center', gap: 4 }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} /><span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#ef4444', letterSpacing: '0.1em' }}>LIVE</span></span>}
-                    {link.badge && <span style={{ fontSize: '0.45rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '2px 6px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>}
+                    {link.badge && <span style={{ fontSize: '0.45rem', fontWeight: 900, color: 'var(--bg-deep)', background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))', padding: '2px 6px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px var(--accent-glow)' }}>{link.badge}</span>}
                   </Link>
                 );
               })}
@@ -729,12 +743,13 @@ export default function Navbar() {
           <div className="nv-tg" style={{ display: 'none', alignItems: 'center', gap: 8, justifyContent: 'flex-end', flexShrink: 0 }}>
             <Link to="/" className={`nv-action-btn ${isHome ? 'active' : ''}`} aria-label="Home"><Home size={18} strokeWidth={2.5} /></Link>
             <button onClick={() => setCmdOpen(true)} className="nv-action-btn" aria-label="Search"><Command size={18} strokeWidth={2.5} /></button>
+            <ThemeSwitcher />
             {isLoggedIn && isAdmin && <Link to={ADMIN_PATH} className="nv-action-btn" style={{ color: '#fbbf24', borderColor: 'rgba(251,191,36,0.2)', background: 'rgba(251,191,36,0.1)' }}><Shield size={18} strokeWidth={2.5} /></Link>}
             {isLoggedIn && (
               <div ref={mobNotifRef} style={{ position: 'relative' }}>
                 <button onClick={() => setNotifOpen(p => !p)} className={`nv-action-btn ${notifOpen ? 'active' : ''}`} style={{ color: notifCount > 0 ? '#ef4444' : '#64748b', borderColor: notifCount > 0 ? 'rgba(239,68,68,0.2)' : 'transparent', background: notifCount > 0 ? 'rgba(239,68,68,0.1)' : 'transparent', animation: notifCount > 0 && !notifOpen ? 'nvBellRing 3s ease-in-out infinite' : 'none' }} aria-label="Notifications">
                   <Bell size={18} strokeWidth={2.5} />
-                  {notifCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #05070a', boxShadow: '0 0 10px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
+                  {notifCount > 0 && <span style={{ position: 'absolute', top: 4, right: 4, minWidth: 16, height: 16, borderRadius: 8, padding: '0 3px', background: 'linear-gradient(135deg, #ef4444, #dc2626)', color: 'white', fontSize: '0.55rem', fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid var(--bg-deep)', boxShadow: '0 0 10px rgba(239,68,68,0.6)', animation: 'nvBadgePop 0.4s cubic-bezier(0.34,1.56,0.64,1) both' }}>{notifCount > 9 ? '9+' : notifCount}</span>}
                 </button>
                 {notifOpen && renderNotifDropdown()}
               </div>
@@ -746,19 +761,19 @@ export default function Navbar() {
 
       <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
       <div className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
-        <div className="nv-mob-header" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid rgba(16,185,129,0.1)', position: 'sticky', top: 0, zIndex: 3, background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)' }}>
+        <div className="nv-mob-header" style={{ padding: '18px 20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid var(--accent-glow)', position: 'sticky', top: 0, zIndex: 3, background: 'rgba(5,7,10,0.9)', backdropFilter: 'blur(10px)' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, position: 'relative', overflow: 'hidden' }}>
-            <img src={APP_LOGO} alt="ZokaScore" width="36" height="36" style={{ borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px rgba(16,185,129,0.3)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
-            <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fff', letterSpacing: '0.02em' }}>ZOKA<span style={{ color: '#10b981' }}>SCORE</span></span>
+            <img src={APP_LOGO} alt="ZokaScore" width="36" height="36" style={{ borderRadius: 10, objectFit: 'cover', boxShadow: '0 0 15px var(--accent-glow)', animation: 'nvLogoFloat 3s ease-in-out infinite' }} />
+            <span style={{ fontWeight: 900, fontSize: '1.1rem', color: '#fff', letterSpacing: '0.02em' }}>ZOKA<span style={{ color: 'var(--accent)' }}>SCORE</span></span>
           </div>
           <button onClick={() => setMobileOpen(false)} className="nv-action-btn" style={{ width: '36px', height: '36px' }}><X size={20} strokeWidth={2.5} /></button>
         </div>
 
         <div className="nv-mob-scroll">
           {isLoggedIn && userProfile && (
-            <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, rgba(16,185,129,0.05) 0%, transparent 100%)', animation: 'nvMobUserIn 0.45s ease 0.08s both' }}>
+            <div style={{ padding: '24px 20px', borderBottom: '1px solid rgba(255,255,255,0.05)', background: 'linear-gradient(180deg, var(--accent-glow) 0%, transparent 100%)', animation: 'nvMobUserIn 0.45s ease 0.08s both' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 18 }}>
-                <div style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, background: 'linear-gradient(135deg, #10b981 0%, #059669 40%, #047857 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 900, color: '#05070a', boxShadow: '0 4px 20px rgba(16,185,129,0.3), inset 0 1px 0 rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden' }}>
+                <div style={{ width: 52, height: 52, borderRadius: 14, flexShrink: 0, background: 'linear-gradient(135deg, var(--accent) 0%, var(--accent-dim) 40%, var(--accent-dim) 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.3rem', fontWeight: 900, color: 'var(--bg-deep)', boxShadow: '0 4px 20px var(--accent-glow-strong), inset 0 1px 0 rgba(255,255,255,0.2)', position: 'relative', overflow: 'hidden' }}>
                   {(userProfile.displayName || userProfile.username || 'U')[0].toUpperCase()}
                   <div style={{ position: 'absolute', top: 0, left: '-100%', width: '60%', height: '100%', background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent)', animation: 'nvShine 4s ease-in-out 1s infinite' }} />
                 </div>
@@ -770,7 +785,7 @@ export default function Navbar() {
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 10 }}>
                 {[
                   { label: 'Points', value: userStats.points, color: '#fbbf24', icon: '⚡' },
-                  { label: 'Exact', value: userStats.exact, color: '#10b981', icon: '🎯' },
+                  { label: 'Exact', value: userStats.exact, color: 'var(--accent)', icon: '🎯' },
                   { label: 'Rank', value: userRank ? `#${userRank}` : '—', color: '#a855f7', icon: '🏆' },
                   { label: 'Streak', value: streak > 0 ? `${streak}🔥` : '—', color: '#f97316', icon: '🔥' },
                 ].map((s, i) => (
@@ -792,7 +807,7 @@ export default function Navbar() {
                   <span style={{ fontSize: '1.1rem', width: 28, textAlign: 'center', flexShrink: 0 }}>{link.emoji}</span>
                   <span style={{ flex: 1 }}>{link.label}</span>
                   {link.isLive && <span style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: '0.6rem', fontWeight: 900, color: '#ef4444', textTransform: 'uppercase', letterSpacing: '0.1em' }}><span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'nvLiveDot 1.5s ease-in-out infinite', boxShadow: '0 0 8px rgba(239,68,68,0.8)' }} /> LIVE</span>}
-                  {link.badge && <span style={{ fontSize: '0.5rem', fontWeight: 900, color: '#05070a', background: 'linear-gradient(135deg, #10b981, #059669)', padding: '3px 8px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px rgba(16,185,129,0.3)' }}>{link.badge}</span>}
+                  {link.badge && <span style={{ fontSize: '0.5rem', fontWeight: 900, color: 'var(--bg-deep)', background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))', padding: '3px 8px', borderRadius: 4, letterSpacing: '0.08em', boxShadow: '0 2px 8px var(--accent-glow)' }}>{link.badge}</span>}
                   <ChevronRight size={16} style={{ opacity: 0.3 }} />
                 </button>
               );
@@ -812,9 +827,9 @@ export default function Navbar() {
               </>
             )}
 
-            <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, rgba(16,185,129,0.1), transparent)', margin: '18px 0' }} />
-            <button onClick={() => setInfoOpen(p => !p)} className="nv-mob-link" style={{ border: `1px solid ${infoOpen ? 'rgba(16,185,129,0.15)' : 'rgba(255,255,255,0.05)'}`, background: infoOpen ? 'rgba(16,185,129,0.05)' : 'transparent', color: infoOpen ? '#10b981' : '#64748b' }}>
-              <span style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: infoOpen ? 'rgba(16,185,129,0.1)' : 'rgba(255,255,255,0.05)', fontSize: '0.95rem' }}>ℹ️</span>
+            <div style={{ height: 1, background: 'linear-gradient(90deg, transparent, var(--accent-glow), transparent)', margin: '18px 0' }} />
+            <button onClick={() => setInfoOpen(p => !p)} className="nv-mob-link" style={{ border: `1px solid ${infoOpen ? 'var(--accent-glow)' : 'rgba(255,255,255,0.05)'}`, background: infoOpen ? 'var(--accent-glow)' : 'transparent', color: infoOpen ? 'var(--accent)' : '#64748b' }}>
+              <span style={{ width: 32, height: 32, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: infoOpen ? 'var(--accent-glow)' : 'rgba(255,255,255,0.05)', fontSize: '0.95rem' }}>ℹ️</span>
               <span style={{ flex: 1 }}>About, Help & Legal</span>
               <ChevronDown size={18} style={{ opacity: 0.5, transition: 'transform 0.35s cubic-bezier(0.22,1,0.36,1)', transform: infoOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>

@@ -19,9 +19,9 @@ export default function FootballDataPanel({ onClose }) {
     addLayer({ type: 'rect', x: 40, y: 1750, width: 450, height: 100, fill: 'rgba(5, 7, 10, 0.85)', cornerRadius: 12 });
     addLayer({ type: 'image', src: homeLogo, x: 60, y: 1770, width: 60, height: 60 });
     addLayer({ type: 'text', text: homeName, x: 140, y: 1780, fontSize: 28, fill: '#ffffff', fontStyle: 'bold' });
-    addLayer({ type: 'text', text: `${homeScore}`, x: 350, y: 1770, fontSize: 40, fill: '#10b981', fontStyle: 'bold' });
+    addLayer({ type: 'text', text: `${homeScore}`, x: 350, y: 1770, fontSize: 40, fill: 'var(--accent)', fontStyle: 'bold' });
     addLayer({ type: 'text', text: '-', x: 385, y: 1770, fontSize: 40, fill: '#ffffff' });
-    addLayer({ type: 'text', text: `${awayScore}`, x: 410, y: 1770, fontSize: 40, fill: '#10b981', fontStyle: 'bold' });
+    addLayer({ type: 'text', text: `${awayScore}`, x: 410, y: 1770, fontSize: 40, fill: 'var(--accent)', fontStyle: 'bold' });
     onClose();
   };
 

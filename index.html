@@ -23,14 +23,14 @@
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
-  <link rel="mask-icon" href="/safari-pinned-tab.svg" color="#10b981" />
+  <link rel="mask-icon" href="/safari-pinned-tab.svg" color="var(--accent)" />
   
   <!-- ★ Apple PWA Meta -->
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  
+
   <!-- ★ Search & Sitemap -->
   <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="ZOKASCORE" />
   <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
@@ -77,13 +77,13 @@
 
   <!-- ★ Accessible NoScript Fallback -->
   <noscript>
-    <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif;color:#fff;background:#05070a;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;">
+    <div style="padding:40px;text-align:center;font-family:system-ui,sans-serif;color:#fff;background:var(--bg-deep);min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;">
       <img src="/icons/icon-192.png" alt="ZOKASCORE" width="80" height="80" style="border-radius:16px;" />
       <h1 style="font-size:1.5rem;font-weight:800;margin:0;">ZOKASCORE</h1>
       <p style="color:#94a3b8;max-width:400px;line-height:1.6;">ZOKASCORE requires JavaScript to display live football scores and predictions. Please enable JavaScript in your browser settings.</p>
       <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-top:20px;">
-        <a href="/fixtures" style="color:#10b981;text-decoration:none;font-weight:700;border:1px solid #10b981;padding:8px 16px;border-radius:8px;">Latest Fixtures</a>
-        <a href="/predictions" style="color:#10b981;text-decoration:none;font-weight:700;border:1px solid #10b981;padding:8px 16px;border-radius:8px;">Latest Predictions</a>
+        <a href="/fixtures" style="color:var(--accent);text-decoration:none;font-weight:700;border:1px solid var(--accent);padding:8px 16px;border-radius:8px;">Latest Fixtures</a>
+        <a href="/predictions" style="color:var(--accent);text-decoration:none;font-weight:700;border:1px solid var(--accent);padding:8px 16px;border-radius:8px;">Latest Predictions</a>
         <a href="/help-center" style="color:#94a3b8;text-decoration:none;font-weight:700;border:1px solid #334155;padding:8px 16px;border-radius:8px;">Help Center</a>
         <a href="/contact" style="color:#94a3b8;text-decoration:none;font-weight:700;border:1px solid #334155;padding:8px 16px;border-radius:8px;">Contact</a>
       </div>
@@ -137,7 +137,7 @@
       setTimeout(() => {
         if (document.getElementById('root').children.length === 0 && loader) {
           if (loaderText) {
-            loaderText.innerHTML = 'Taking longer than usual. <br/> <a href="/" style="color:#10b981;text-decoration:underline;font-weight:700;">Retry Connection</a> or <a href="/status" style="color:#94a3b8;text-decoration:underline;font-weight:700;">View Status Page</a>';
+            loaderText.innerHTML = 'Taking longer than usual. <br/> <a href="/" style="color:var(--accent);text-decoration:underline;font-weight:700;">Retry Connection</a> or <a href="/status" style="color:#94a3b8;text-decoration:underline;font-weight:700;">View Status Page</a>';
           }
         }
       }, 10000);

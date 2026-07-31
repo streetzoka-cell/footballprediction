@@ -5,6 +5,7 @@ export const Sound = {
   type: 'whistle', // 'whistle', 'cheer', 'horn', 'silent'
   _lg: 0,
   _lw: 0,
+  _unlocked: false,
 
   _init() {
     if (!this.ctx) {
@@ -18,6 +19,21 @@ export const Sound = {
     return !!this.ctx;
   },
 
+  // ★ NEW: Unlock audio on first user interaction (Browser Autoplay Policy Fix)
+  unlock() {
+    if (this._unlocked) return;
+    const unlockFn = () => {
+      this._init();
+      this._unlocked = true;
+      document.removeEventListener('click', unlockFn);
+      document.removeEventListener('touchstart', unlockFn);
+      document.removeEventListener('keydown', unlockFn);
+    };
+    document.addEventListener('click', unlockFn);
+    document.addEventListener('touchstart', unlockFn);
+    document.addEventListener('keydown', unlockFn);
+  },
+
   goal() {
     if (!this.on || this.type === 'silent' || !this._init()) return;
     if (Date.now() - this._lg < 2000) return;
@@ -27,6 +43,7 @@ export const Sound = {
     else if (this.type === 'cheer') this._playCheer();
     else if (this.type === 'horn') this._playHorn();
   },
+  
 
   _playWhistle() {
     const t = this.ctx.currentTime;

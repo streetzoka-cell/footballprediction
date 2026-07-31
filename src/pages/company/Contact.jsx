@@ -47,7 +47,7 @@ const injectCSS = () => {
 .cc-input::placeholder{color:var(--text-muted);opacity:.35}
 .cc-textarea{min-height:120px;resize:vertical;font-family:inherit}
 .cc-select{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23666' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
-.cc-submit{width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,#10b981,#059669);color:#fff;border:none;font-size:.88rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;font-family:inherit;box-shadow:0 2px 14px rgba(16,185,129,.2)}
+.cc-submit{width:100%;padding:14px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#fff;border:none;font-size:.88rem;font-weight:900;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;font-family:inherit;box-shadow:0 2px 14px rgba(16,185,129,.2)}
 .cc-submit:hover{transform:translateY(-1px);box-shadow:0 4px 18px rgba(16,185,129,.25)}
 .cc-submit:active{transform:scale(.98)}
 .cc-submit:disabled{opacity:.4;pointer-events:none}

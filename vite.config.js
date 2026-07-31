@@ -19,8 +19,8 @@ export default defineConfig({
         name: 'ZOKASCORE',
         short_name: 'ZOKASCORE',
         description: 'Live Football Scores, Fixtures and Predictions',
-        theme_color: '#05070a',
-        background_color: '#05070a',
+        theme_color: 'var(--bg-deep)',
+        background_color: 'var(--bg-deep)',
         display: 'standalone',
         start_url: '/',
         icons: [

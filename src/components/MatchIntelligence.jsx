@@ -9,13 +9,13 @@ export default function MatchIntelligence({ data }) {
   return (
     <div className="zoka-card" style={{ padding: '20px', marginTop: '20px' }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
-        <Brain size={20} color="#10b981" />
+        <Brain size={20} color="var(--accent)" />
         <h3 style={{ margin: 0, fontSize: '1.1rem' }}>Match Intelligence</h3>
       </div>
 
       {/* AI Story */}
       {story && (
-        <div style={{ background: 'rgba(16, 185, 129, 0.05)', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid rgba(16, 185, 129, 0.2)' }}>
+        <div style={{ background: 'rgba(var(--accent-rgb), 0.05)', padding: '15px', borderRadius: '12px', marginBottom: '20px', border: '1px solid var(--accent-glow-strong)' }}>
           <p style={{ margin: 0, fontSize: '0.95rem', lineHeight: 1.5, color: '#e2e8f0' }}>{story}</p>
         </div>
       )}
@@ -27,12 +27,12 @@ export default function MatchIntelligence({ data }) {
             <span>Win Probability</span>
           </div>
           <div style={{ display: 'flex', height: '8px', borderRadius: '4px', overflow: 'hidden', background: '#1e293b' }}>
-            <div style={{ width: `${winProbability.home || 0}%`, background: '#10b981', transition: 'width 1s ease' }} />
+            <div style={{ width: `${winProbability.home || 0}%`, background: 'var(--accent)', transition: 'width 1s ease' }} />
             <div style={{ width: `${winProbability.draw || 0}%`, background: '#64748b', transition: 'width 1s ease' }} />
             <div style={{ width: `${winProbability.away || 0}%`, background: '#ef4444', transition: 'width 1s ease' }} />
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '6px', fontSize: '0.8rem', fontWeight: 700 }}>
-            <span style={{ color: '#10b981' }}>{winProbability.home || 0}%</span>
+            <span style={{ color: 'var(--accent)' }}>{winProbability.home || 0}%</span>
             <span style={{ color: '#64748b' }}>{winProbability.draw || 0}%</span>
             <span style={{ color: '#ef4444' }}>{winProbability.away || 0}%</span>
           </div>

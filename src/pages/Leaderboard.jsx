@@ -44,7 +44,7 @@ const getBadges = (user) => {
   return badges;
 };
 
-const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, color = '#10b981' }) {
+const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, color = 'var(--accent)' }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(100, Math.max(0, value)) / 100;
@@ -169,7 +169,7 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, p
       </div>
 
       <div className="lb-row-acc">
-        <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? '#10b981' : (user.accuracy || 0) >= 40 ? '#fbbf24' : '#ef4444'} />
+        <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? 'var(--accent)' : (user.accuracy || 0) >= 40 ? '#fbbf24' : '#ef4444'} />
       </div>
 
       <div className="lb-row-pts">
@@ -304,7 +304,7 @@ export default function Leaderboard() {
                   <span className="lbl">Exact</span>
                 </div>
                 <div className="lb-pc-stat">
-                  <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="#10b981" />
+                  <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="var(--accent)" />
                 </div>
               </div>
             </div>

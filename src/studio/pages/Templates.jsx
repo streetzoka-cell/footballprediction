@@ -10,7 +10,7 @@ const TEMPLATES = [
       canvasSize: { width: 1080, height: 1350 },
       layers: [
         { type: 'rect', x: 0, y: 1050, width: 1080, height: 300, fill: 'rgba(0,0,0,0.8)' },
-        { type: 'text', text: 'MATCHDAY RECAP', x: 40, y: 1090, fontSize: 50, fill: '#10b981', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
+        { type: 'text', text: 'MATCHDAY RECAP', x: 40, y: 1090, fontSize: 50, fill: 'var(--accent)', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'text', text: 'Tap to edit text', x: 40, y: 1160, fontSize: 40, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'rect', x: 40, y: 1220, width: 1000, height: 6, fill: '#334155', cornerRadius: 3 }
       ]
@@ -33,8 +33,8 @@ const TEMPLATES = [
     config: {
       canvasSize: { width: 1080, height: 1920 },
       layers: [
-        { type: 'rect', x: 140, y: 700, width: 800, height: 400, fill: 'rgba(16, 185, 129, 0.2)', cornerRadius: 20, stroke: '#10b981', strokeWidth: 2 },
-        { type: 'text', text: 'GOAL!', x: 440, y: 780, fontSize: 100, fill: '#10b981', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
+        { type: 'rect', x: 140, y: 700, width: 800, height: 400, fill: 'var(--accent-glow-strong)', cornerRadius: 20, stroke: 'var(--accent)', strokeWidth: 2 },
+        { type: 'text', text: 'GOAL!', x: 440, y: 780, fontSize: 100, fill: 'var(--accent)', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'text', text: '0 - 0', x: 470, y: 920, fontSize: 80, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' }
       ]
     }

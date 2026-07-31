@@ -8,7 +8,7 @@ export default function AppLoader() {
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      background: 'radial-gradient(circle at 50% 50%, #0d1a25 0%, #05070a 80%)',
+      background: 'radial-gradient(circle at 50% 50%, #0d1a25 0%, var(--bg-deep) 80%)',
       gap: '28px',
       overflow: 'hidden',
       position: 'relative',
@@ -48,13 +48,13 @@ export default function AppLoader() {
         width: 32,
         height: 32,
         border: '3px solid rgba(255,255,255,0.05)',
-        borderTopColor: '#10b981',
+        borderTopColor: 'var(--accent)',
         borderRadius: '50%',
         animation: 'proSpinner 0.8s linear infinite'
       }} />
 
       <div style={{
-        color: '#10b981',
+        color: 'var(--accent)',
         fontSize: '0.75rem',
         fontWeight: 800,
         letterSpacing: '0.2em',

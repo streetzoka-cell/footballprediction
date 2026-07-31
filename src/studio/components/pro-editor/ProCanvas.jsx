@@ -83,7 +83,7 @@ export default function ProCanvas() {
             onChange={(newAttrs) => updateLayer(layer.id, newAttrs)}
           />
         ))}
-        <Transformer ref={transformerRef} borderStroke="#10b981" anchorStroke="#10b981" />
+        <Transformer ref={transformerRef} borderStroke="var(--accent)" anchorStroke="var(--accent)" />
       </Layer>
     </Stage>
   );

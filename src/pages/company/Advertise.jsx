@@ -97,7 +97,7 @@ const PLANS = [
       'A/B testing included',
     ],
     cta: 'Request Proposal',
-    ctaBg: 'linear-gradient(135deg,#10b981,#059669)',
+    ctaBg: 'linear-gradient(135deg,var(--accent),var(--accent-dim))',
     ctaColor: '#fff',
     ctaBorder: 'none',
     ctaShadow: '0 2px 12px rgba(16,185,129,.2)',

@@ -277,10 +277,13 @@ export default function Fixtures() {
     });
   }, [liveMatches, addGoal]);
 
-  useEffect(() => { 
+   useEffect(() => { 
     Sound.on = soundEnabled; 
     Sound.type = soundType;
     localStorage.setItem('zoka_sound_type', soundType);
+    
+    // ★ NEW: Unlock audio context on page load to prepare for sounds
+    Sound.unlock(); 
   }, [soundEnabled, soundType]);
 
   useEffect(() => {
@@ -391,7 +394,7 @@ export default function Fixtures() {
           {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" style={{objectFit:'contain', borderRadius: '3px'}} />}
           <span className="zoka-league-name">{group.name}</span>
           <span className="zoka-league-count">{group.matches.length}</span>
-          <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? '#10b981' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isLeaguePinned ? '#10b981' : 'none'} /></button>
+          <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? 'var(--accent)' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isLeaguePinned ? 'var(--accent)' : 'none'} /></button>
         </div>
         {visibleMatches.map((m, i) => (
           <MatchCard 
@@ -440,7 +443,7 @@ export default function Fixtures() {
       <div className="zoka-wrap">
         <div className="zoka-hdr">
           <div className="zoka-hdr-title">
-            <h1><Activity size={18} style={{ color: '#10b981' }} /> Zoka <span>Live</span></h1>
+            <h1><Activity size={18} style={{ color: 'var(--accent)' }} /> Zoka <span>Live</span></h1>
             <div className="zoka-hdr-sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
           <div className="zoka-hdr-actions">
@@ -471,7 +474,7 @@ export default function Fixtures() {
         </div>
 
         {fixturesLoading && allFixtures.length === 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: '#10b981', padding: '8px 12px', borderRadius: '10px', fontSize: '0.75em', fontWeight: 700, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: 'var(--accent)', padding: '8px 12px', borderRadius: '10px', fontSize: '0.75em', fontWeight: 700, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
             <Loader size={14} className="zoka-spin" /> Syncing Main Fixtures...
           </div>
         )}
@@ -517,7 +520,7 @@ export default function Fixtures() {
           <>
             <div className="zoka-pill-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
               {[{ key: 'all', label: 'All Matches' }, { key: 'live', label: 'Live (Real-time)' }, { key: 'finished', label: 'Finished Results' }].map(tf => (
-                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: '8px', fontSize: '.8rem', fontWeight: 700, background: timeFilter === tf.key ? '#10b981' : 'var(--bg-card)', color: timeFilter === tf.key ? '#05070a' : 'var(--text-muted)', border: `1px solid ${timeFilter === tf.key ? '#10b981' : 'var(--border)'}` }}>
+                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: '8px', fontSize: '.8rem', fontWeight: 700, background: timeFilter === tf.key ? 'var(--accent)' : 'var(--bg-card)', color: timeFilter === tf.key ? 'var(--bg-deep)' : 'var(--text-muted)', border: `1px solid ${timeFilter === tf.key ? 'var(--accent)' : 'var(--border)'}` }}>
                   {tf.label}
                 </button>
               ))}

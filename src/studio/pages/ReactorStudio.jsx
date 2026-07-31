@@ -63,7 +63,7 @@ const idbGet = async (k) => new Promise(async (res, rej) => { const tx = (await 
 const idbClear = async () => new Promise(async (res, rej) => { const tx = (await openDB()).transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
 
 // --- HELPER: Draw ZOKA Logo Vector Fallback ---
-const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
+const drawZokaLogo = (ctx, x, y, size, color = 'var(--accent)') => {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(-size/2, -size/2); ctx.lineTo(size/2, -size/2); ctx.lineTo(size/2, -size/4);
@@ -99,13 +99,13 @@ const TEMPLATES = [
   { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, preview: {bg: '#1a1a1a', layout: 'tl'} },
   { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#ec4899'}, profile: {x:360,y:1150,r:35,ring:'#ec4899'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#ec4899'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
-  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#10b981'}, profile: {x:360,y:1150,r:35,ring:'#10b981'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#10b981'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
+  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'var(--accent)'}, profile: {x:360,y:1150,r:35,ring:'var(--accent)'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'var(--accent)'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'#9146ff'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'#9146ff'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#0e0e10', preview: {bg: '#0e0e10', layout: 'tl'} },
   { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: {x:0,y:0,w:360,h:1280}, profile: {x:180,y:640,r:50,ring:'accent'}, username: {x:180,y:720,size:32,center:true,badge:true,badgeColor:'accent'}, caption: {x:540,y:640,size:28,maxW:300,center:true}, bg:'#000', preview: {bg: '#111', layout: 'split'} },
   { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: {x:60,y:100,w:600,h:900,glow:'#3b82f6'}, profile: {x:360,y:1150,r:35,ring:'#3b82f6'}, username: {x:360,y:1220,size:28,center:true,badge:true,badgeColor:'#3b82f6'}, caption: {x:360,y:1050,size:28,maxW:600,center:true}, bg:'#0a0f1a', preview: {bg: '#0a0f1a', layout: 'center'} },
   { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#dc2626',text:'BREAKING NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#dc2626', layout: 'news'} },
   { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#1d9bf0',text:'MATCH UPDATE',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#1d9bf0', layout: 'news'} },
-  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'#10b981',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: '#10b981', layout: 'news'} },
+  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: {x:0,y:100,w:720,h:1080}, caption: {x:360,y:60,size:32,color:'#fff',maxW:680,center:true}, header: {h:100,bg:'var(--accent)',text:'TRANSFER NEWS',y:45,size:36}, ticker: {h:100,bg:'#111827',y:1230,size:28}, bg:'#000', preview: {bg: 'var(--accent)', layout: 'news'} },
   { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: {x:0,y:0,w:720,h:1280}, profile: {x:50,y:60,r:35,ring:'accent'}, username: {x:100,y:55,size:28,badge:true,badgeColor:'accent'}, caption: {x:20,y:120,size:24,maxW:680,align:'left'}, topGradient:350, bottomGradient:200, bg:'#000', preview: {bg: '#000', layout: 'tl'} },
   { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:80,w:640,h:900,border:'accent'}, profile: {x:360,y:1100,r:40,ring:'#f1f1f1'}, username: {x:360,y:1200,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:130,size:28,color:'#fff',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
   { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: {x:40,y:40,w:640,h:800,border:'accent'}, profile: {x:360,y:1000,r:40,ring:'#f1f1f1'}, username: {x:360,y:1100,size:36,color:'#000',center:true,badge:true,badgeColor:'accent'}, caption: {x:360,y:900,size:28,color:'#000',maxW:600,center:true}, bg:'#fff', preview: {bg: '#fff', layout: 'center'} },
@@ -120,7 +120,7 @@ const FONT_PACKS = {
 };
 
 const BRAND_PRESETS = [
-  { name: 'ZOKA', color: '#10b981' }, { name: 'Twitter', color: '#1d9bf0' }, 
+  { name: 'ZOKA', color: 'var(--accent)' }, { name: 'Twitter', color: '#1d9bf0' }, 
   { name: 'TikTok', color: '#ec4899' }, { name: 'Twitch', color: '#9146ff' }, 
   { name: 'Gold', color: '#f59e0b' }, { name: 'Orange', color: '#f97316' }
 ];
@@ -196,7 +196,7 @@ const initialState = {
   media: { sourceLoaded: false, brollLoaded: false, cameraOn: false, profileSrc: null, logoSrc: null, audioName: '' },
   editor: {
     templateId: 'pro_aura', displayName: 'Manu', username: 'manuel_palmer', povCaption: 'POV: You just witnessed greatness 🔥',
-    accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
+    accentColor: 'var(--accent)', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
     showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none', 
     homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
     isMuted: false, filter: 'none', fadeIn: false, 
@@ -841,7 +841,7 @@ export default function ReactorStudio() {
       <div className="rs-header">
         <div className="rs-header-left">
           <button onClick={() => navigate('/studio')} className="rs-top-btn"><ArrowLeft size={18} /></button>
-          <h1 className="rs-header-title"><Cpu size={18} color="#10b981" /> Reactor Pro</h1>
+          <h1 className="rs-header-title"><Cpu size={18} color="var(--accent)" /> Reactor Pro</h1>
         </div>
         <div className="rs-header-right">
           <button onClick={handleClearProject} className="rs-top-btn" title="Clear Project"><Eraser size={16} /> Clear</button>
@@ -917,7 +917,7 @@ export default function ReactorStudio() {
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '20px', marginBottom: '12px' }}>
             <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } })} className="rs-action-btn" title="Mute"><Volume2 size={18} /></button>
             <button onClick={togglePreview} disabled={ui.isExporting || ui.recordedUrl} className="rs-play-btn" title="Preview Active Clip">
-              {timeline.isPlaying ? <Pause size={28} fill="#0a0d14" /> : <Play size={28} fill="#0a0d14" />}
+              {timeline.isPlaying ? <Pause size={28} fill="var(--bg-card)" /> : <Play size={28} fill="var(--bg-card)" />}
             </button>
             {editor.mode === 'video' && (
               <button onClick={() => {
@@ -975,7 +975,7 @@ export default function ReactorStudio() {
           
           {ui.activePanel === 'templates' && (
             <div>
-              <h3 className="rs-panel-title"><LayoutGrid size={14} color="#10b981" /> Templates</h3>
+              <h3 className="rs-panel-title"><LayoutGrid size={14} color="var(--accent)" /> Templates</h3>
               <div className="rs-gallery-cats" style={{ marginBottom: '12px' }}>
                 {["All", "Favorites", "Pro", "TikTok", "Instagram", "YouTube", "Gaming", "Podcast", "Football", "Minimal"].map(cat => <button key={cat} onClick={() => dispatch({ type: 'SET_UI', payload: { activeCategory: cat } })} className={`rs-gallery-cat ${ui.activeCategory === cat ? 'active' : ''}`}>{cat}</button>)}
               </div>
@@ -1008,7 +1008,7 @@ export default function ReactorStudio() {
 
           {ui.activePanel === 'edit' && (
             <div>
-              <h3 className="rs-panel-title"><Layers size={14} color="#10b981" /> Edit & Layers</h3>
+              <h3 className="rs-panel-title"><Layers size={14} color="var(--accent)" /> Edit & Layers</h3>
               
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Gauge size={12} /> Playback Speed</h4>
@@ -1090,7 +1090,7 @@ export default function ReactorStudio() {
 
           {ui.activePanel === 'text' && (
             <div>
-              <h3 className="rs-panel-title"><Type size={14} color="#10b981" /> Text & Social</h3>
+              <h3 className="rs-panel-title"><Type size={14} color="var(--accent)" /> Text & Social</h3>
               
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><User size={12} /> Social Details</h4>
@@ -1142,7 +1142,7 @@ export default function ReactorStudio() {
 
           {ui.activePanel === 'effects' && (
             <div>
-              <h3 className="rs-panel-title"><Wand2 size={14} color="#10b981" /> Effects & Filters</h3>
+              <h3 className="rs-panel-title"><Wand2 size={14} color="var(--accent)" /> Effects & Filters</h3>
               
               {editor.mode === 'video' && (
                 <div className="rs-panel-box">
@@ -1171,7 +1171,7 @@ export default function ReactorStudio() {
                       <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
                         {[{id:'glitch_reveal',name:'Glitch Reveal'},{id:'neon_pulse',name:'Neon Pulse'},{id:'slide_zoom',name:'Slide Zoom'}].map(s => <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introStyle: s.id } })} className={`rs-btn-sm ${editor.introStyle === s.id ? 'active' : ''}`}>{s.name}</button>)}
                       </div>
-                      <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introWatermark: !editor.introWatermark } })} className="rs-btn-sm" style={{ width: '100%', color: editor.introWatermark ? '#10b981' : '#94a3b8' }}>
+                      <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { introWatermark: !editor.introWatermark } })} className="rs-btn-sm" style={{ width: '100%', color: editor.introWatermark ? 'var(--accent)' : '#94a3b8' }}>
                         <ImageIcon size={12} /> Watermark After Intro: {editor.introWatermark ? 'On' : 'Off'}
                       </button>
                     </>
@@ -1183,7 +1183,7 @@ export default function ReactorStudio() {
 
           {ui.activePanel === 'audio' && (
             <div>
-              <h3 className="rs-panel-title"><Music size={14} color="#10b981" /> Audio Controls</h3>
+              <h3 className="rs-panel-title"><Music size={14} color="var(--accent)" /> Audio Controls</h3>
               <div className="rs-panel-box">
                 <button onClick={() => fileInputRefs.current.audio?.click()} className="rs-btn-sm" style={{ width: '100%', marginBottom: '8px' }} disabled={ui.isExporting || ui.recordedUrl}>
                   <Music size={12} /> {media.audioName ? 'Change Audio' : 'Import Audio Track'}

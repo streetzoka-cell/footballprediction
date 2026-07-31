@@ -23,7 +23,7 @@ export default function PageLayout({
   label, 
   subtitle, 
   children, 
-  accentColor = '#10b981',
+  accentColor = 'var(--accent)',
   heroImage,
   size = 'default', // 'narrow', 'default', 'wide'
   lastUpdated,
@@ -103,7 +103,7 @@ export default function PageLayout({
           )}
 
           {/* Hero / Header */}
-          <header className={`pl-header ${heroImage ? 'has-hero' : ''}`} style={heroImage ? { backgroundImage: `linear-gradient(to bottom, rgba(5,7,10,0.3), #05070a), url(${heroImage})` } : {}}>
+          <header className={`pl-header ${heroImage ? 'has-hero' : ''}`} style={heroImage ? { backgroundImage: `linear-gradient(to bottom, rgba(5,7,10,0.3), var(--bg-deep)), url(${heroImage})` } : {}}>
             <div className="pl-header-inner">
               {label && (
                 <div className="pl-kicker" style={{ background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}30` }}>

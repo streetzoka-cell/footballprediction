@@ -117,11 +117,11 @@ export default class ErrorBoundary extends React.Component {
                 {/* Service Status Indicators */}
                 <div style={styles.statusGrid}>
                   <div style={styles.statusItem}>
-                    <span style={{...styles.statusDot, background: '#10b981'}}></span>
+                    <span style={{...styles.statusDot, background: 'var(--accent)'}}></span>
                     Football API
                   </div>
                   <div style={styles.statusItem}>
-                    <span style={{...styles.statusDot, background: '#10b981'}}></span>
+                    <span style={{...styles.statusDot, background: 'var(--accent)'}}></span>
                     Database
                   </div>
                   <div style={styles.statusItem}>
@@ -224,7 +224,7 @@ const styles = {
   },
   retryingText: {
     fontSize: '0.85rem',
-    color: '#10b981',
+    color: 'var(--accent)',
     fontWeight: 700,
     marginBottom: '12px'
   },
@@ -237,7 +237,7 @@ const styles = {
   },
   progressFill: {
     height: '100%',
-    background: 'linear-gradient(90deg, #10b981, #34d399)',
+    background: 'linear-gradient(90deg, var(--accent), #34d399)',
     borderRadius: '3px',
     animation: 'eb-load 1.5s ease-in-out infinite'
   },
@@ -283,9 +283,9 @@ const styles = {
     fontFamily: 'inherit'
   },
   primaryBtn: {
-    background: 'linear-gradient(135deg, #10b981, #059669)',
-    color: '#05070a',
-    boxShadow: '0 4px 12px rgba(16, 185, 129, 0.3)'
+    background: 'linear-gradient(135deg, var(--accent), var(--accent-dim))',
+    color: 'var(--bg-deep)',
+    boxShadow: '0 4px 12px var(--accent-glow-strong)'
   },
   secondaryBtn: {
     background: 'rgba(255, 255, 255, 0.05)',

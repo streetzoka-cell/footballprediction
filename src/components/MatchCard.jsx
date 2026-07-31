@@ -37,7 +37,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   // ★ Add goal-replay class to trigger border flash
   if (goalFlash) cls += ' goal-replay';
   
-  const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? '#10b981' : 'transparent';
+  const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? 'var(--accent)' : 'transparent';
   const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
   const display = m.display || {};
   const minute = m.displayMinute || display.minute;
@@ -115,7 +115,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
         <div className="zoka-card-actions">
           {isLive && (
             <button className={`zoka-icon-btn pin ${isPinned ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
-              <Pin size={16} fill={isPinned ? '#10b981' : 'none'} color={isPinned ? '#10b981' : '#475569'} />
+              <Pin size={16} fill={isPinned ? 'var(--accent)' : 'none'} color={isPinned ? 'var(--accent)' : '#475569'} />
             </button>
           )}
           <button className={`zoka-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">

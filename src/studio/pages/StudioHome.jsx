@@ -47,7 +47,7 @@ const res = await footballApi.getFixtures(today);
 
   const getProjectIcon = (proj) => {
     if (proj.layers?.some(l => l.type === 'video')) return <Video size={24} color="#3b82f6" />;
-    if (proj.type === 'Scoreboard') return <Film size={24} color="#10b981" />;
+    if (proj.type === 'Scoreboard') return <Film size={24} color="var(--accent)" />;
     return <Image size={24} color="#f59e0b" />;
   };
 
@@ -80,7 +80,7 @@ const res = await footballApi.getFixtures(today);
 
         <div style={{ marginBottom: '60px' }}>
           <div className="studio-section-header">
-            <Folder size={22} color="#10b981" />
+            <Folder size={22} color="var(--accent)" />
             <h2 className="studio-section-title">My Projects</h2>
           </div>
           

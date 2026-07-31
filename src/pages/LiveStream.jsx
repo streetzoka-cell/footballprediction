@@ -27,7 +27,7 @@ const streamingServices = [
   { id: 7, name: "Sky Sports", description: "Leading UK sports broadcaster with exclusive Premier League coverage, EFL matches, and comprehensive analysis.", competitions: "Premier League, EFL, Scottish Prem", category: "broadcaster", color: "#0072c6", url: "https://www.skysports.com", featured: false, tier: "PREMIUM", quality: ["HD", "4K"], countries: ['GB', 'ALL'] },
   { id: 8, name: "Paramount+", description: "Streaming service with Champions League, Europa League and Serie A rights in the United States.", competitions: "UCL, UEL, Serie A, NWSL", category: "broadcaster", color: "#0064ff", url: "https://www.paramountplus.com", featured: false, tier: "PREMIUM", quality: ["HD"], countries: ['US', 'ALL'] },
   { id: 9, name: "SuperSport", description: "Premier sports broadcaster in Sub-Saharan Africa, covering the English Premier League, LaLiga, and UCL.", competitions: "EPL, LaLiga, UCL, CAF", category: "broadcaster", color: "#009a44", url: "https://www.supersport.com", featured: true, tier: "PREMIUM", quality: ["HD", "4K"], countries: ['KE', 'NG', 'ALL'] },
-  { id: 10, name: "ONEFOOTBALL", description: "Free-to-air platform legally streaming live football matches from top European leagues globally.", competitions: "Premier League, Serie A, LaLiga", category: "free", color: "#10b981", url: "https://www.onefootball.com", featured: true, tier: "FREE", quality: ["HD"], countries: ['ALL'] },
+  { id: 10, name: "ONEFOOTBALL", description: "Free-to-air platform legally streaming live football matches from top European leagues globally.", competitions: "Premier League, Serie A, LaLiga", category: "free", color: "var(--accent)", url: "https://www.onefootball.com", featured: true, tier: "FREE", quality: ["HD"], countries: ['ALL'] },
 ];
 
 const categories = [
@@ -80,7 +80,7 @@ function LiveMatchHero() {
   const [notify, setNotify] = useState(false);
   return (
     <div className="ls-hero-card">
-      <div className="ls-hero-bg" style={{ background: `linear-gradient(135deg, ${LIVE_MATCH.league === 'Premier League' ? '#3d195b' : '#0f172a'}, #05070a)` }} />
+      <div className="ls-hero-bg" style={{ background: `linear-gradient(135deg, ${LIVE_MATCH.league === 'Premier League' ? '#3d195b' : '#0f172a'}, var(--bg-deep))` }} />
       
       <div className="ls-hero-top">
         <div className="ls-hero-league">
@@ -278,7 +278,7 @@ export default function LiveStream() {
 
         {/* Search */}
         <div className="ls-search-wrap">
-          <Search size={18} className="ls-search-icon" style={{ color: searchFocused ? '#10b981' : '#64748b' }} />
+          <Search size={18} className="ls-search-icon" style={{ color: searchFocused ? 'var(--accent)' : '#64748b' }} />
           <input
             type="text"
             placeholder="Search provider, league, or channel..."

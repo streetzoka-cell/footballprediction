@@ -95,18 +95,17 @@ export function applySmartMinute(m, now = Date.now()) {
 
   const statusUpper = (m.status || '').toUpperCase();
   
-  // 1. NEVER force live if postponed/canceled
-  const isInactive = statusUpper === 'PST' || statusUpper === 'SUSP' || statusUpper === 'INT' || statusUpper === 'CANC' || statusUpper === 'ABD' || statusUpper === 'POSTP' || statusUpper === 'TBD' || statusUpper === 'PENDING';
-  if (isInactive) return m;
+  // 1. NEVER force live if postponed/canceled/scheduled
+  if (['PST', 'SUSP', 'INT', 'CANC', 'ABD', 'POSTP', 'TBD', 'PENDING', 'NS'].includes(statusUpper)) {
+    return m;
+  }
 
   const matchStartTime = m.timestamp ? m.timestamp * 1000 : null;
   if (!matchStartTime) return m;
 
   const elapsedMs = now - matchStartTime;
   
-  // ★ FIX 2: If kickoff is in the future, force it to be Scheduled (NS)
-  // This fixes the bug where a delayed match (moved to 4 PM) still shows as "HT" or "1H" 
-  // because the API forgot to clear the old status.
+  // If kickoff is in the future, force Scheduled (NS)
   if (elapsedMs < 0) {
     return {
       ...m,
@@ -120,58 +119,63 @@ export function applySmartMinute(m, now = Date.now()) {
     };
   }
 
-  const elapsedMins = Math.floor(elapsedMs / 60000);
-
-  let smartMinute = m.minute || 0;
+  const apiMinute = m.minute || 0;
+  let smartMinute = 0;
   let status = statusUpper;
-  let isHT = false;
-  let isLive = true; // Default to true for active phases
-  let isFinished = false;
+  let isHT = m.isHT || false;
 
-  if (elapsedMins >= 105) {
-    smartMinute = 90;
-    status = 'FT';
-    isFinished = true;
-    isLive = false;
-    isHT = false;
-  } else if (elapsedMins > 90) {
-    smartMinute = 90;
-    status = '2H';
-    isLive = true;
-    isHT = false;
-  } else if (elapsedMins > 60) {
-    smartMinute = 45 + (elapsedMins - 60);
-    status = '2H';
-    isLive = true;
-    isHT = false;
-  } else if (elapsedMins > 50) {
-    smartMinute = 45;
-    status = 'HT';
-    // ★ FIX 1: HT matches ARE live. Keep them in the live list and count!
-    isHT = true;
-    isLive = true; 
-  } else if (elapsedMins > 45) {
-    smartMinute = 45;
-    status = '1H';
-    isLive = true;
-    isHT = false;
+  // ★ IF NO API REPLY YET..USE SMARTCOUNTS (pure time-based fallback)
+  if (apiMinute === 0) {
+    const elapsedMins = Math.floor(elapsedMs / 60000);
+
+    if (elapsedMins >= 105) {
+      smartMinute = 90; // Fallback cap if no data for 105 mins
+    } else if (elapsedMins > 90) {
+      smartMinute = 90;
+    } else if (elapsedMins > 60) {
+      smartMinute = 45 + (elapsedMins - 60);
+      status = '2H';
+    } else if (elapsedMins > 50) {
+      smartMinute = 45;
+      status = 'HT';
+      isHT = true;
+    } else if (elapsedMins > 45) {
+      smartMinute = 45;
+      status = '1H';
+    } else {
+      smartMinute = elapsedMins;
+      status = '1H';
+    }
   } else {
-    smartMinute = elapsedMins;
-    status = '1H';
-    isLive = true;
-    isHT = false;
+    // ★ PICK FROM LAST API CALL, AND UPDATE THEN COUNT!
+    // Start with the exact minute the API provided
+    smartMinute = apiMinute;
+    
+    // Add local time elapsed since the API's last update
+    if (m.lastUpdated) {
+      const lastUpdateTime = new Date(m.lastUpdated).getTime();
+      if (!isNaN(lastUpdateTime)) {
+        const extraMins = Math.floor((now - lastUpdateTime) / 60000);
+        smartMinute += extraMins;
+      }
+    }
   }
 
-  // Prevent jumping backwards
-  if (m.minute && m.minute > smartMinute && !isFinished) {
-    smartMinute = m.minute;
-  }
-  
-  // If API explicitly says HT, respect it over our time guess
+  // If API explicitly says HT, force minute 45
   if (statusUpper === 'HT') {
     isHT = true; 
-    isLive = true; // HT is live
     smartMinute = 45;
+    status = 'HT';
+  }
+
+  // Cap at 90 for normal time (unless Extra Time or Penalties)
+  if (smartMinute > 90 && statusUpper !== 'ET' && statusUpper !== 'P') {
+    smartMinute = 90;
+  }
+
+  // Prevent minute from going backwards
+  if (apiMinute > smartMinute) {
+    smartMinute = apiMinute;
   }
 
   return {
@@ -180,9 +184,9 @@ export function applySmartMinute(m, now = Date.now()) {
     displayMinute: smartMinute,
     status: status,
     isHT: isHT,
-    isLive: isLive,
-    isFinished: isFinished,
-    isStarted: isLive && !isHT // isStarted is false during HT, but isLive is true
+    isLive: true, // If we reached here, it's live
+    isFinished: false,
+    isStarted: !isHT
   };
 }
 

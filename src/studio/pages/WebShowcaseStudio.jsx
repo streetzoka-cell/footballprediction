@@ -437,7 +437,7 @@ export default function WebShowcaseStudio() {
         <div style={panelTitleStyle}><AppWindow size={14} /> Aspect Ratio</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {ASPECT_RATIOS.map(r => (
-            <button key={r.id} onClick={() => setAspectRatio(r.id)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #334155', background: aspectRatio === r.id ? '#10b981' : '#1f2937', color: aspectRatio === r.id ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', fontWeight: 700 }}>
+            <button key={r.id} onClick={() => setAspectRatio(r.id)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #334155', background: aspectRatio === r.id ? 'var(--accent)' : '#1f2937', color: aspectRatio === r.id ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', fontWeight: 700 }}>
               {r.name}
             </button>
           ))}
@@ -449,7 +449,7 @@ export default function WebShowcaseStudio() {
           <div style={panelTitleStyle}><Camera size={14} /> Webcam Shape</div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {CAMERA_FRAMES.map(f => (
-              <button key={f.id} onClick={() => setCameraFrame(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: cameraFrame === f.id ? '#10b981' : '#1f2937', color: cameraFrame === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>
+              <button key={f.id} onClick={() => setCameraFrame(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: cameraFrame === f.id ? 'var(--accent)' : '#1f2937', color: cameraFrame === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>
                 {f.name}
               </button>
             ))}
@@ -491,7 +491,7 @@ export default function WebShowcaseStudio() {
               <button onClick={discardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444', padding: isMobile ? '6px' : '8px 12px' }}>
                 <Trash2 size={16} /> {!isMobile && 'Discard'}
               </button>
-              <a href={recordedUrl} download={`web_showcase.${exportExt}`} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', textDecoration: 'none', padding: isMobile ? '6px' : '8px 12px' }}>
+              <a href={recordedUrl} download={`web_showcase.${exportExt}`} style={{ ...topBtnStyle, background: 'var(--accent)', borderColor: 'var(--accent)', textDecoration: 'none', padding: isMobile ? '6px' : '8px 12px' }}>
                 <Download size={16} /> {!isMobile && 'Download'}
               </a>
             </>
@@ -500,7 +500,7 @@ export default function WebShowcaseStudio() {
               <Square size={16} fill="#fff" /> Stop
             </button>
           ) : (
-            <button onClick={startRecording} disabled={!screenReady} style={{ ...topBtnStyle, background: '#10b981', borderColor: '#10b981', opacity: !screenReady ? 0.5 : 1, padding: isMobile ? '6px 10px' : '8px 12px' }}>
+            <button onClick={startRecording} disabled={!screenReady} style={{ ...topBtnStyle, background: 'var(--accent)', borderColor: 'var(--accent)', opacity: !screenReady ? 0.5 : 1, padding: isMobile ? '6px 10px' : '8px 12px' }}>
               <Circle size={16} fill="#fff" /> Rec
             </button>
           )}
@@ -510,11 +510,11 @@ export default function WebShowcaseStudio() {
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {!isMobile && (
           <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-            <button onClick={startScreenShare} style={{...sideBtnStyle, color: screenReady ? '#10b981' : '#64748b'}} title="Share Screen / Tab"><Monitor size={20} /></button>
-            <button onClick={toggleMic} style={{...sideBtnStyle, color: micOn ? '#10b981' : '#64748b'}} title="Toggle Microphone">
+            <button onClick={startScreenShare} style={{...sideBtnStyle, color: screenReady ? 'var(--accent)' : '#64748b'}} title="Share Screen / Tab"><Monitor size={20} /></button>
+            <button onClick={toggleMic} style={{...sideBtnStyle, color: micOn ? 'var(--accent)' : '#64748b'}} title="Toggle Microphone">
               {micOn ? <Mic size={20} /> : <MicOff size={20} />}
             </button>
-            <button onClick={toggleWebcam} style={{...sideBtnStyle, color: webcamOn ? '#10b981' : '#64748b'}} title="Toggle Webcam"><Camera size={20} /></button>
+            <button onClick={toggleWebcam} style={{...sideBtnStyle, color: webcamOn ? 'var(--accent)' : '#64748b'}} title="Toggle Webcam"><Camera size={20} /></button>
           </div>
         )}
 
@@ -547,11 +547,11 @@ export default function WebShowcaseStudio() {
               <div style={panelTitleStyle}><Volume2 size={14} /> Audio Sources</div>
               <div style={{ fontSize: '12px', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Monitor size={14} color={screenReady && screenStreamRef.current?.getAudioTracks().length ? '#10b981' : '#64748b'} /> 
+                  <Monitor size={14} color={screenReady && screenStreamRef.current?.getAudioTracks().length ? 'var(--accent)' : '#64748b'} /> 
                   Tab Audio: {screenReady && screenStreamRef.current?.getAudioTracks().length ? 'Active' : 'None'}
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Mic size={14} color={micOn ? '#10b981' : '#64748b'} /> 
+                  <Mic size={14} color={micOn ? 'var(--accent)' : '#64748b'} /> 
                   Microphone: {micOn ? 'Active' : 'Off'}
                 </div>
               </div>
@@ -563,11 +563,11 @@ export default function WebShowcaseStudio() {
       {/* Mobile Bottom Toolbar */}
       {isMobile && (
         <div style={{ height: '70px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 10px', flexShrink: 0 }}>
-          <button onClick={startScreenShare} style={{...mobileBtnStyle, color: screenReady ? '#10b981' : '#64748b'}} title="Share Screen"><Monitor size={20} /></button>
-          <button onClick={toggleMic} style={{...mobileBtnStyle, color: micOn ? '#10b981' : '#64748b'}} title="Microphone">
+          <button onClick={startScreenShare} style={{...mobileBtnStyle, color: screenReady ? 'var(--accent)' : '#64748b'}} title="Share Screen"><Monitor size={20} /></button>
+          <button onClick={toggleMic} style={{...mobileBtnStyle, color: micOn ? 'var(--accent)' : '#64748b'}} title="Microphone">
             {micOn ? <Mic size={20} /> : <MicOff size={20} />}
           </button>
-          <button onClick={toggleWebcam} style={{...mobileBtnStyle, color: webcamOn ? '#10b981' : '#64748b'}} title="Webcam"><Camera size={20} /></button>
+          <button onClick={toggleWebcam} style={{...mobileBtnStyle, color: webcamOn ? 'var(--accent)' : '#64748b'}} title="Webcam"><Camera size={20} /></button>
           <button onClick={() => setShowMobileSettings(true)} style={{...mobileBtnStyle, color: '#64748b'}} title="Settings"><Settings size={20} /></button>
         </div>
       )}

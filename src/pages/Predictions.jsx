@@ -154,7 +154,7 @@ const LoginModal = memo(function LoginModal({ onClose, nav }) {
   return (
     <div onClick={onClose} className="v21-overlay" style={{ zIndex: 9999 }}>
       <div onClick={e => e.stopPropagation()} style={modalStyle}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,.08)', border: '1.5px solid rgba(16,185,129,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: '#10b981' }}><LogIn size={22} /></div>
+        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,.08)', border: '1.5px solid rgba(16,185,129,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent)' }}><LogIn size={22} /></div>
         <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', marginBottom: 6 }}>Login Required</div>
         <div style={{ fontSize: '.8rem', color: '#94a3b8', marginBottom: 18, lineHeight: 1.5 }}>Sign in to make predictions and compete on the leaderboard.</div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -204,7 +204,7 @@ const DateStrip = memo(function DateStrip({ date, onChange, dates, hasDataMap })
             <span className="dn">{dateDayName(d)}</span>
             <span className="dd">{dateDayNum(d)}</span>
             <span className="dm">{dateMonth(d)}</span>
-            {hasData && !isActive && <span style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: '50%', background: '#10b981', opacity: .5 }} />}
+            {hasData && !isActive && <span style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', opacity: .5 }} />}
           </button>
         );
       })}
@@ -260,7 +260,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   const matchLink = buildMatchRoute(mid, homeName, awayName);
 
   let leftColor = 'rgba(245,197,66,.12)';
-  if (res?.resultType === 'exact') leftColor = '#10b981';
+  if (res?.resultType === 'exact') leftColor = 'var(--accent)';
   else if (res?.resultType === 'result') leftColor = '#f5c542';
   else if (res?.resultType === 'miss') leftColor = '#ef4444';
   else if (isFin) leftColor = 'rgba(16,185,129,.2)';
@@ -275,7 +275,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
             {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
             <span>{leagueName}</span>
           </div>
-          <span className="v21-st" style={{ color: isFin ? '#10b981' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
+          <span className="v21-st" style={{ color: isFin ? 'var(--accent)' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
             {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
           </span>
         </div>
@@ -286,9 +286,9 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
           </div>
           {isFin && pick.homeScore != null ? (
             <div className="v21-sb ft">
-              <span className="v21-sn" style={{ color: '#10b981' }}>{pick.homeScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pick.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: '#10b981' }}>{pick.awayScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pick.awayScore}</span>
             </div>
           ) : isLive && pick.homeScore != null ? (
             <div className="v21-sb live">
@@ -380,7 +380,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const awayPct = totalVotes > 0 ? Math.round(((communityStats?.away || 0) / totalVotes) * 100) : 0;
 
   let leftColor = 'rgba(255,255,255,0.06)';
-  if (isResolved && effectiveResult?.resultType === 'exact') leftColor = '#10b981';
+  if (isResolved && effectiveResult?.resultType === 'exact') leftColor = 'var(--accent)';
   else if (isResolved && effectiveResult?.resultType === 'result') leftColor = '#f5c542';
   else if (isResolved && effectiveResult?.resultType === 'miss') leftColor = '#ef4444';
   else if (isFin) leftColor = 'rgba(16,185,129,.2)';
@@ -398,9 +398,9 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   let statusLabel = kickoff;
   let statusColor = '#94a3b8';
   let statusBg = 'rgba(255,255,255,.04)';
-  if (isEditing) { statusLabel = 'EDITING'; statusColor = '#10b981'; statusBg = 'rgba(16,185,129,.08)'; }
+  if (isEditing) { statusLabel = 'EDITING'; statusColor = 'var(--accent)'; statusBg = 'rgba(16,185,129,.08)'; }
   else if (isLive) { statusLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,.1)'; }
-  else if (isFin) { statusLabel = 'FT'; statusColor = '#10b981'; statusBg = 'rgba(16,185,129,.08)'; }
+  else if (isFin) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(16,185,129,.08)'; }
   else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 60) { statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,.08)'; }
 
   return (
@@ -426,15 +426,15 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
             </div>
           ) : hasPred ? (
             <div className={`v21-sb${isFin ? ' ft' : ''}`} style={!isFin ? { borderColor: 'rgba(96,165,250,.2)', background: 'rgba(96,165,250,.05)' } : {}}>
-              <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.homeScore}</span>
+              <span className="v21-sn" style={{ color: isFin ? 'var(--accent)' : '#60a5fa' }}>{userPred.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: isFin ? '#10b981' : '#60a5fa' }}>{userPred.awayScore}</span>
+              <span className="v21-sn" style={{ color: isFin ? 'var(--accent)' : '#60a5fa' }}>{userPred.awayScore}</span>
             </div>
           ) : isFin && pred.homeScore != null ? (
             <div className="v21-sb ft">
-              <span className="v21-sn" style={{ color: '#10b981' }}>{pred.homeScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pred.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: '#10b981' }}>{pred.awayScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pred.awayScore}</span>
             </div>
           ) : (
             <div className="v21-sb"><span className="v21-vs">VS</span></div>
@@ -465,10 +465,10 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
                   <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>ZOKAPICK</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? '#10b981' : '#fff' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? 'var(--accent)' : '#fff' }}>
                     {zokaHome} - {zokaAway}
                   </span>
-                  {beatZoka && <span style={{ fontSize: '0.6rem', background: '#10b981', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
+                  {beatZoka && <span style={{ fontSize: '0.6rem', background: 'var(--accent)', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
                 </div>
               </div>
             )}
@@ -575,12 +575,12 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 5, marginBottom: 12 }}>
             <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}><AnimNum value={stats.totalPts} /></div><div className="l">Points</div></div>
-            <div className="v21-stat"><div className="n" style={{ color: '#10b981' }}><AnimNum value={stats.exact} /></div><div className="l">Exact</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}><AnimNum value={stats.exact} /></div><div className="l">Exact</div></div>
             <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={stats.result} /></div><div className="l">Result</div></div>
           </div>
           {stats.predicted > 0 && (
             <div className="v21-progress" style={{ marginBottom: 12 }}>
-              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((stats.predicted - stats.pending) / stats.predicted) * 100}%`, background: stats.allResolved ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} /></div>
+              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((stats.predicted - stats.pending) / stats.predicted) * 100}%`, background: stats.allResolved ? 'var(--accent)' : 'linear-gradient(90deg,var(--accent),#34d399)' }} /></div>
               <div className="v21-progress-labels"><span>{stats.predicted} predicted</span><span>{stats.allResolved ? '✓ Complete' : `${stats.pending} pending`}</span></div>
             </div>
           )}
@@ -595,7 +595,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
             const rType = res?.resultType;
             const matchLink = buildMatchRoute(p.matchId, p.homeTeam?.name || 'Home', p.awayTeam?.name || 'Away');
             return (
-              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid #10b981' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit' }}>
+              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--accent)' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {typeof p.homeTeam === 'object' ? (p.homeTeam?.shortName || p.homeTeam?.name || 'Home') : (p.homeTeam || 'Home')} vs {typeof p.awayTeam === 'object' ? (p.awayTeam?.shortName || p.awayTeam?.name || 'Away') : (p.awayTeam || 'Away')}
@@ -613,7 +613,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
           )}
           {stats.allResolved && (
             <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center' }}>
-              <Trophy size={22} style={{ color: '#10b981', marginBottom: 6 }} />
+              <Trophy size={22} style={{ color: 'var(--accent)', marginBottom: 6 }} />
               <div style={{ fontSize: '.88rem', fontWeight: 900, color: '#fff', marginBottom: 3 }}>All Results In!</div>
               <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: '#a855f7' }}>{stats.totalPts} pts</strong> · {stats.accuracy}% accuracy</div>
               <button className="v21-b v21-bp" onClick={() => { onClose(); nav('/leaderboard'); }}>View Leaderboard <ArrowRight size={13} /></button>
@@ -720,7 +720,7 @@ export default function Predictions() {
   const performanceMsg = useMemo(() => {
     if (!loggedIn) return null;
     if (myDayStats.allResolved) {
-      if (myDayStats.accuracy >= 70) return { text: "🎯 Prediction Master! You're a true football oracle.", color: '#10b981' };
+      if (myDayStats.accuracy >= 70) return { text: "🎯 Prediction Master! You're a true football oracle.", color: 'var(--accent)' };
       if (myDayStats.accuracy >= 40) return { text: "👍 Good job! Keep studying the form tables.", color: '#60a5fa' };
       return { text: "😅 Tough day at the office? Tomorrow is another matchday!", color: '#f59e0b' };
     }
@@ -943,7 +943,7 @@ export default function Predictions() {
         <div className="v21-hdr-title">
           <h1>
             <span style={{ color: '#fff' }}>MATCH</span>
-            <span style={{ color: '#10b981' }}>PREDICT</span>
+            <span style={{ color: 'var(--accent)' }}>PREDICT</span>
           </h1>
           <div className="sub">Predict · Compete · Win</div>
         </div>
@@ -975,13 +975,13 @@ export default function Predictions() {
           <div style={{ marginBottom: 16, animation: `v21-fade-up .4s ${SMOOTH} both` }}>
             <div className="v21-stats">
               <div className="v21-stat"><div className="n" style={{ color: '#fbbf24' }}><AnimNum value={myDayStats.pts} /></div><div className="l">Points</div></div>
-              <div className="v21-stat"><div className="n" style={{ color: '#10b981' }}><AnimNum value={myDayStats.ex} /></div><div className="l">Exact</div></div>
+              <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}><AnimNum value={myDayStats.ex} /></div><div className="l">Exact</div></div>
               <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={myDayStats.rs} /></div><div className="l">Results</div></div>
               <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}>{myRank ? `#${myRank.rank}` : '—'}</div><div className="l">Rank</div></div>
             </div>
             {myDayStats.pred > 0 && (
               <div className="v21-progress" style={{ marginBottom: 10 }}>
-                <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((myDayStats.pred - myDayStats.pn) / myDayStats.pred) * 100}%`, background: myDayStats.allResolved ? '#10b981' : 'linear-gradient(90deg,#10b981,#34d399)' }} /></div>
+                <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((myDayStats.pred - myDayStats.pn) / myDayStats.pred) * 100}%`, background: myDayStats.allResolved ? 'var(--accent)' : 'linear-gradient(90deg,var(--accent),#34d399)' }} /></div>
                 <div className="v21-progress-labels"><span>{myDayStats.pred} predicted · {myDayStats.accuracy}% accuracy</span><span>{myDayStats.allResolved ? '✓ Complete' : `${myDayStats.pn} pending`}</span></div>
               </div>
             )}
@@ -1111,7 +1111,7 @@ export default function Predictions() {
 
         {myDayStats.allResolved && myDayStats.pred > 0 && (
           <div className="v21-rank" style={{ marginTop: 16, textAlign: 'center' }}>
-            <Trophy size={24} style={{ color: '#10b981', marginBottom: 8 }} />
+            <Trophy size={24} style={{ color: 'var(--accent)', marginBottom: 8 }} />
             <div style={{ fontSize: '.9rem', fontWeight: 900, color: '#fff', marginBottom: 3 }}>All Results In!</div>
             <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>
               You scored <strong style={{ color: '#a855f7' }}>{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy
