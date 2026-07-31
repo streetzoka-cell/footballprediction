@@ -4,6 +4,15 @@ import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
+// ★ NEW: Helper to clean team names for cross-provider deduplication
+const cleanName = (str) => {
+  if (!str || typeof str !== 'string') return '';
+  return str.toLowerCase()
+    .replace(/fc|afc|cf|sc|club|team|reserves|ii/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .trim();
+};
+
 export function useHomeMatches() {
   return useQuery({
     queryKey: ['homeMatches'],
@@ -13,7 +22,7 @@ export function useHomeMatches() {
     },
     refetchInterval: 60000, 
     staleTime: 30000,
-    refetchOnWindowFocus: true, // ★ FIX: Refetch when tab is focused
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -32,16 +41,56 @@ export function useFixtures(dateStr, sport = 'football') {
       const finished = finRes?.data || [];
       
       const map = new Map();
-      fixtures.forEach(m => map.set(String(m.id), m));
-      finished.forEach(m => map.set(String(m.id), m));
       
+      // ★ NEW: Helper to find if a match already exists in the map by ID OR by cleaned team names
+      const findExisting = (match) => {
+        // 1. Try exact ID match first
+        const byId = map.get(String(match.id));
+        if (byId) return byId;
+
+        // 2. Try team name match (strips FC, SC, etc.)
+        const homeKey = cleanName(match.homeTeamName || match.homeTeam?.name);
+        const awayKey = cleanName(match.awayTeamName || match.awayTeam?.name);
+        
+        for (let [id, existing] of map.entries()) {
+          const existHome = cleanName(existing.homeTeamName || existing.homeTeam?.name);
+          const existAway = cleanName(existing.awayTeamName || existing.awayTeam?.name);
+          if (homeKey && awayKey && existHome === homeKey && existAway === awayKey) {
+            return existing;
+          }
+        }
+        return null;
+      };
+
+      // 1. Add all scheduled fixtures
+      fixtures.forEach(m => map.set(String(m.id), m));
+      
+      // 2. Merge finished matches
+      finished.forEach(m => {
+        const existing = findExisting(m);
+        if (existing) {
+          // Overwrite with finished data, but keep the original ID to maintain React keys
+          map.set(String(existing.id), { ...existing, ...m, id: existing.id });
+        } else {
+          map.set(String(m.id), m);
+        }
+      });
+      
+      // 3. Merge live matches
       live.forEach(m => {
-        const existing = map.get(String(m.id));
+        const existing = findExisting(m);
+        
+        // Don't overwrite a finished match with a live one (safety check)
         if (existing && existing.display?.isFinished && !m.display?.isFinished) {
           return;
         }
-        if (existing) map.set(String(m.id), { ...existing, ...m });
-        else if (m.dateStr === dateStr) map.set(String(m.id), m);
+        
+        if (existing) {
+          // Merge live data into the existing fixture, keeping original ID
+          map.set(String(existing.id), { ...existing, ...m, id: existing.id });
+        } else if (m.dateStr === dateStr) {
+          map.set(String(m.id), m);
+        }
       });
       
       return Array.from(map.values()).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
@@ -50,7 +99,7 @@ export function useFixtures(dateStr, sport = 'football') {
     staleTime: 30 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
-    refetchOnWindowFocus: true, // ★ FIX: Instant refresh when switching tabs
+    refetchOnWindowFocus: true,
     refetchInterval: (query) => {
       const date = query.queryKey[1];
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
@@ -69,11 +118,11 @@ export function useLiveMatches(sport = 'football') {
       return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
     },
     refetchInterval: 30000, 
-    refetchIntervalInBackground: true, // ★ FIX: Keep polling even in background
+    refetchIntervalInBackground: true, 
     staleTime: 15 * 1000, 
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
-    refetchOnWindowFocus: true, // ★ FIX: Instant refresh on focus
+    refetchOnWindowFocus: true,
   });
 }
 
@@ -87,7 +136,7 @@ export function useFinishedMatches(dateStr, sport = 'football') {
     staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
-    refetchOnWindowFocus: true, // ★ FIX
+    refetchOnWindowFocus: true,
   });
 }
 
