@@ -62,7 +62,7 @@ const AnimNum = React.memo(({ value, duration = 600, delay = 0, suffix = '' }) =
   return <span>{display.toLocaleString()}{suffix}</span>;
 });
 
-const AccuracyRing = React.memo(({ value, size = 44, stroke = 4, color = 'var(--accent)' }) => {
+const AccuracyRing = React.memo(({ value, size = 44, stroke = 4, color = '#10b981' }) => {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(100, Math.max(0, value)) / 100;
@@ -174,19 +174,19 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isHit = isResolved && userResult.resultType === 'result';
 
   let border = '#151b26';
-  if (isExact) border = 'var(--accent)';
+  if (isExact) border = '#10b981';
   else if (isHit) border = '#fbbf24';
   else if (isResolved && !isExact && !isHit) border = '#ef4444';
   else if (isLive || isHT) border = '#ef4444';
   else if (isFin) border = 'rgba(16,185,129,.2)';
-  else if (isPredicted) border = 'var(--accent)';
+  else if (isPredicted) border = '#10b981';
 
   let sLabel = pred.kickoff || 'VS';
   let sColor = '#64748b';
   let sBg = 'rgba(255,255,255,.03)';
   if (isLive) { sLabel = pred.minute != null ? pred.minute + "'" : 'LIVE'; sColor = '#ef4444'; sBg = 'rgba(239,68,68,.1)'; }
   else if (isHT) { sLabel = 'HT'; sColor = '#fbbf24'; sBg = 'rgba(251,191,36,.1)'; }
-  else if (isFin) { sLabel = 'FT'; sColor = 'var(--accent)'; sBg = 'rgba(16,185,129,.08)'; }
+  else if (isFin) { sLabel = 'FT'; sColor = '#10b981'; sBg = 'rgba(16,185,129,.08)'; }
 
   let cls = 'z-mc';
   if (isLive) cls += ' live';
@@ -319,7 +319,7 @@ const ZokaRow = React.memo(({ pick }) => {
           {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildLeagueRoute(pick.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
-        <span className="z-st" style={{ color: isFin ? 'var(--accent)' : '#64748b', background: isFin ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.03)' }}>{isFin ? 'FT' : ko}</span>
+        <span className="z-st" style={{ color: isFin ? '#10b981' : '#64748b', background: isFin ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.03)' }}>{isFin ? 'FT' : ko}</span>
       </div>
       <div className="z-tm">
         <div className="z-te">
@@ -347,7 +347,7 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
   const color = LB_COLORS[(rank - 1) % LB_COLORS.length];
   return (
     <div className={'z-lbrow' + (isMe ? ' me' : '')}>
-      <span className="z-lb-rank" style={{ color: rank <= 10 ? 'var(--accent)' : '#64748b' }}>#{rank}</span>
+      <span className="z-lb-rank" style={{ color: rank <= 10 ? '#10b981' : '#64748b' }}>#{rank}</span>
       <div className="z-lb-avatar" style={{ background: color }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
       <div className="z-lb-info">
         <div className="z-lb-name">{u.displayName}</div>
@@ -440,6 +440,15 @@ export default function Home() {
     return { goals, liveCount };
   }, [allFixtures]);
 
+  // ★ FIX: Calculate REAL unique leagues playing today
+  const uniqueLeaguesCount = useMemo(() => {
+    const ids = new Set();
+    allFixtures.forEach(m => {
+      if (m.leagueId) ids.add(String(m.leagueId));
+    });
+    return ids.size;
+  }, [allFixtures]);
+
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
   const dailyEntries = dailyLB?.entries || [];
@@ -522,11 +531,11 @@ export default function Home() {
             {/* Social Proof */}
             <div className="z-social-proof">
               <span className="z-stars">★★★★★</span>
-              <span className="z-sp-text">Trusted by football fans worldwide · Updated every minute</span>
+              <span className="z-sp-text">Live scores updated every minute</span>
             </div>
           </div>
 
-          {/* Football Personality / Scale Stats */}
+          {/* Football Personality / Scale Stats (100% Real Data) */}
           <div className="z-scale-stats">
             <div className="z-scale-item">
               <span className="val">{liveStats.liveCount}</span>
@@ -539,13 +548,14 @@ export default function Home() {
             </div>
             <div className="z-scale-divider"></div>
             <div className="z-scale-item">
-              <span className="val">180+</span>
-              <span className="lbl">Leagues Covered</span>
+              {/* ★ FIX: Real unique league count instead of hardcoded 180+ */}
+              <span className="val">{uniqueLeaguesCount}</span>
+              <span className="lbl">Leagues Today</span>
             </div>
           </div>
         </section>
 
-        {/* ─── FEATURED MATCH CARD (Rich Stats) ─── */}
+        {/* ─── FEATURED MATCH CARD (Rich Stats - NO FAKE DATA) ─── */}
         {heroMatch && (
           <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
             <div className="z-hero-top">
@@ -581,21 +591,37 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ★ NEW: Rich Stats Grid */}
-            <div className="z-hero-stats-grid">
-              <div className="z-hs-item">
-                <span className="lbl">POSS</span>
-                <span className="val">{heroMatch.stats?.possession?.[0] || 52}% - {heroMatch.stats?.possession?.[1] || 48}%</span>
+            {/* ★ FIX: Only show stats grid if REAL stats exist in the API data */}
+            {heroMatch.stats && (heroMatch.stats.possession || heroMatch.stats.shots || heroMatch.stats.corners) ? (
+              <div className="z-hero-stats-grid">
+                {heroMatch.stats.possession && (
+                  <div className="z-hs-item">
+                    <span className="lbl">POSS</span>
+                    <span className="val">{heroMatch.stats.possession.home || 0}% - {heroMatch.stats.possession.away || 0}%</span>
+                  </div>
+                )}
+                {heroMatch.stats.shots && (
+                  <div className="z-hs-item">
+                    <span className="lbl">SHOTS</span>
+                    <span className="val">{heroMatch.stats.shots.home || 0} - {heroMatch.stats.shots.away || 0}</span>
+                  </div>
+                )}
+                {heroMatch.stats.corners && (
+                  <div className="z-hs-item">
+                    <span className="lbl">CORNERS</span>
+                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span>
+                  </div>
+                )}
               </div>
-              <div className="z-hs-item">
-                <span className="lbl">SHOTS</span>
-                <span className="val">{heroMatch.stats?.shots?.[0] || 12} - {heroMatch.stats?.shots?.[1] || 7}</span>
+            ) : (
+              /* If no stats, show a clean info bar instead of fake numbers */
+              <div className="z-hero-info-bar" style={{ margin: '16px 0 0', padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.75rem', color: '#94a3b8', fontWeight: 600 }}>
+                  <span>{heroMatch.date ? new Date(heroMatch.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Scheduled'}</span>
+                  <span>{heroMatch.venue?.name || heroMatch.leagueName}</span>
+                </div>
               </div>
-              <div className="z-hs-item">
-                <span className="lbl">PRED</span>
-                <span className="val z-pred-win">Home Win 72%</span>
-              </div>
-            </div>
+            )}
 
             {/* ★ NEW: Quick Action Buttons */}
             <div className="z-hero-actions" onClick={(e) => e.preventDefault()}>
@@ -653,7 +679,7 @@ export default function Home() {
         {newsPosts.length > 0 && (
           <div className="z-news-marquee-wrap">
             <div className="z-strip-header">
-              <Newspaper size={14} style={{ color: 'var(--accent)' }} />
+              <Newspaper size={14} style={{ color: '#10b981' }} />
               <span className="z-strip-title">LATEST NEWS</span>
               <div className="z-sech-line" />
               <Link to="/highlights" className="z-strip-link">Hub <ChevronRight size={11} /></Link>
@@ -685,7 +711,7 @@ export default function Home() {
           <div className="z-chip">
             <div className="val"><AnimNum value={totalPredictionsMade} delay={280} /></div>
             <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: 'var(--accent)' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: '#10b981' }} /></div>
           </div>
           <div className="z-chip" style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', right: 8, top: 8 }}>
@@ -693,18 +719,18 @@ export default function Home() {
                 value={avgAccuracy}
                 size={36}
                 stroke={3}
-                color={avgAccuracy >= 50 ? 'var(--accent)' : avgAccuracy >= 25 ? '#fbbf24' : '#ef4444'}
+                color={avgAccuracy >= 50 ? '#10b981' : avgAccuracy >= 25 ? '#fbbf24' : '#ef4444'}
               />
             </div>
             <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={Math.round(avgAccuracy)} delay={360} suffix="%" /></div>
             <div className="lbl">Accuracy</div>
           </div>
           <div className="z-chip">
-            <div className="val" style={{ color: isLoggedIn ? 'var(--accent)' : '#64748b' }}>
+            <div className="val" style={{ color: isLoggedIn ? '#10b981' : '#64748b' }}>
               {isLoggedIn ? <AnimNum value={myPoints} delay={440} /> : '-'}
             </div>
             <div className="lbl">My Points</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: 'var(--accent)' }} /></div>}
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: '#10b981' }} /></div>}
           </div>
         </div>
 
@@ -729,9 +755,9 @@ export default function Home() {
 
         <div className="z-sec">
           <div className="z-sech">
-            <Target size={14} style={{ color: 'var(--accent)' }} />
+            <Target size={14} style={{ color: '#10b981' }} />
             <h2>Featured - Compete</h2>
-            <span className="z-sech-badge" style={{ background: 'rgba(16,185,129,.08)', color: 'var(--accent)', border: '1px solid rgba(16,185,129,.25)' }}>{featFlat.length}</span>
+            <span className="z-sech-badge" style={{ background: 'rgba(16,185,129,.08)', color: '#10b981', border: '1px solid rgba(16,185,129,.25)' }}>{featFlat.length}</span>
             {isLoggedIn && <span style={{ fontSize: '.62rem', fontWeight: 700, color: '#64748b' }}>{myPredicted}/{featFlat.length} predicted</span>}
             <div className="z-sech-line" />
           </div>
@@ -762,7 +788,7 @@ export default function Home() {
 
         <div className="z-sec">
           <div className="z-sech">
-            <Trophy size={14} style={{ color: 'var(--accent)' }} />
+            <Trophy size={14} style={{ color: '#10b981' }} />
             <h2>Daily Leaderboard</h2>
             <div className="z-sech-line" />
             <Link to="/leaderboard" className="z-strip-link">Full <ArrowUpRight size={11} /></Link>
@@ -790,14 +816,14 @@ export default function Home() {
 
         <div className="z-sec">
           <div className="z-sech">
-            <Zap size={14} style={{ color: 'var(--accent)' }} />
+            <Zap size={14} style={{ color: '#10b981' }} />
             <h2>Explore</h2>
             <div className="z-sech-line" />
           </div>
           <div className="z-explore">
             <Link to="/fixtures" className="z-ecard">
-              <div className="z-ecard-accent" style={{ background: 'var(--accent)' }} />
-              <Activity size={20} style={{ color: 'var(--accent)' }} />
+              <div className="z-ecard-accent" style={{ background: '#10b981' }} />
+              <Activity size={20} style={{ color: '#10b981' }} />
               <div className="z-ecard-title">Fixtures and Live</div>
               <div className="z-ecard-sub">Real-time scores, all leagues</div>
             </Link>
