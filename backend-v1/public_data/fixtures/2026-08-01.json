@@ -182,12 +182,12 @@
         "status": "NS",
         "score": {
           "home": 3,
-          "away": 2,
+          "away": 3,
           "display": "0-0"
         }
       },
       "homeScore": 3,
-      "awayScore": 2,
+      "awayScore": 3,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -379,12 +379,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 1,
       "isLive": true,
       "isFinished": false,
@@ -577,12 +577,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 1,
+          "home": 2,
           "away": 2,
           "display": "0-0"
         }
       },
-      "homeScore": 1,
+      "homeScore": 2,
       "awayScore": 2,
       "isLive": true,
       "isFinished": false,
@@ -644,12 +644,12 @@
         "status": "NS",
         "score": {
           "home": 1,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 1,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -1499,12 +1499,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -1654,7 +1654,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "FK Prepere",
         "shortName": "FK Prepere",
@@ -1703,14 +1703,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "106252038"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "217252030",
@@ -1719,7 +1720,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Jiskra Usti nad Orlici",
         "shortName": "Jiskra Usti nad Orlici",
@@ -1768,14 +1769,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "217252030"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "107105036",
@@ -1784,7 +1786,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "NMSK 1922 Bratislava",
         "shortName": "NMSK 1922 Bratislava",
@@ -1833,14 +1835,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "107105036"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "366803924",
@@ -1849,7 +1852,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "St George Saints",
         "shortName": "St George Saints",
@@ -1898,14 +1901,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "366803924"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "252603927",
@@ -1914,7 +1918,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Rydalmere Lions FC",
         "shortName": "Rydalmere Lions FC",
@@ -1963,14 +1967,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "252603927"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "292304031",
@@ -1979,7 +1984,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Persija Jakarta",
         "shortName": "Persija Jakarta",
@@ -2028,14 +2033,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "292304031"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "283405033",
@@ -2044,7 +2050,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "University Azzurri FC",
         "shortName": "University Azzurri FC",
@@ -2093,14 +2099,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "283405033"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "382806925",
@@ -2109,7 +2116,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Northern Tigers FC (W)",
         "shortName": "Northern Tigers FC (W)",
@@ -2158,14 +2165,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "382806925"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "468819923",
@@ -28285,12 +28293,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 1,
+          "home": 2,
           "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 1,
+      "homeScore": 2,
       "awayScore": 1,
       "isLive": true,
       "isFinished": false,
