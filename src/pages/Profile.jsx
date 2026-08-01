@@ -195,8 +195,7 @@ export default function Profile() {
         description="Manage your ZOKASCORE account, update your profile, track your prediction history, monitor your performance, and view your leaderboard progress."
         keywords="ZOKASCORE profile, user account, account settings, prediction history, leaderboard progress, football predictions"
         robots="noindex,nofollow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Profile", path: "/profile" }]}
-      />
+         />
 
       <div className="pro-wrap">
         

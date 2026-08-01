@@ -144,8 +144,7 @@ export default function Login() {
         description="Sign in to your ZOKASCORE account to manage your profile, track your prediction progress, view leaderboard rankings, and access your personalized football experience."
         keywords="ZOKASCORE login, sign in, football account, prediction account, user login"
         robots="noindex,nofollow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Login", path: "/login" }]}
-      />
+          />
       
       <div className="glass-card flex-col gap-20 p-24" style={{ width: '100%', maxWidth: '420px', zIndex: 1, opacity: modeTrans ? 0 : 1, transition: 'opacity 0.25s ease' }}>
         <div className="flex-col items-center gap-12">

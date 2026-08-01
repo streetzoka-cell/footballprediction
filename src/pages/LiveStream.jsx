@@ -199,8 +199,7 @@ export default function LiveStream() {
         description="Follow live football matches, kickoff times, live scores, and official TV and streaming information for major leagues and competitions on ZOKASCORE."
         keywords="live football matches, football TV guide, football streaming information, live soccer, live scores, football fixtures, watch football legally, ZOKASCORE"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Live Stream", path: "/livestream" }]}
-      />
+        />
 
       <div className="zoka-wrap">
         <div className="flex-col items-center gap-8 mb-24 mt-16">

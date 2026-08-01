@@ -26,8 +26,7 @@ export default function Advertise() {
         keywords="advertise with ZOKASCORE, football advertising, sports marketing, football sponsorship, display advertising, football promotions, sports brand marketing"
         path="/advertise"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Advertise", path: "/advertise" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">

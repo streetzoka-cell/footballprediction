@@ -10,8 +10,7 @@ export default function NotFound() {
         description="The page you're looking for doesn't exist, may have been moved, or the URL may be incorrect. Return to the ZOKASCORE homepage to continue exploring football fixtures, live scores, predictions, and standings."
         keywords="404, page not found, missing page, broken link, ZOKASCORE"
         robots="noindex,nofollow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "404" }]}
-      />
+         />
       <PageLayout title="404" subtitle="Sorry, the page you were looking for could not be found.">
         <div className="glass-card flex-col items-center gap-12 p-32 text-center">
           <h1 className="text-primary font-extrabold" style={{ fontSize: '8rem', lineHeight: 1, textShadow: '0 0 40px rgba(var(--primary-rgb), 0.3)' }}>404</h1>

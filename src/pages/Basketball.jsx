@@ -477,7 +477,7 @@ export default function Basketball() {
         description="Follow basketball fixtures, live scores, standings, match insights, and predictions from top competitions around the world on ZOKASCORE."
         keywords="basketball, basketball fixtures, live basketball scores, basketball predictions, NBA, EuroLeague, standings, ZOKASCORE"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Basketball", path: "/basketball" }]}
+        
       />
 
       <div className="glass sticky top-0 z-sticky" style={{ borderBottom: '1px solid var(--border)', animation: 'zk-slide-in .4s ease' }}>

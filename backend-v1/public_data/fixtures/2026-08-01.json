@@ -1,72 +1,6 @@
 {
   "data": [
     {
-      "id": "382344922",
-      "sport": "football",
-      "dateStr": "2026-08-01",
-      "date": "2026-08-01T06:45:00.000Z",
-      "utcDate": "2026-08-01T06:45:00.000Z",
-      "timestamp": 1785566700,
-      "status": "2H",
-      "homeTeam": {
-        "name": "Glenorchy Knights FC",
-        "shortName": "Glenorchy Knights FC",
-        "id": "31990",
-        "crest": null
-      },
-      "awayTeam": {
-        "name": "Devonport City",
-        "shortName": "Devonport City",
-        "id": "24992",
-        "crest": null
-      },
-      "league": {
-        "name": "TAS Premier League",
-        "id": "105410",
-        "emblem": null
-      },
-      "competition": {
-        "name": "TAS Premier League",
-        "id": "105410",
-        "emblem": null
-      },
-      "homeTeamName": "Glenorchy Knights FC",
-      "awayTeamName": "Devonport City",
-      "homeName": "Glenorchy Knights FC",
-      "awayName": "Devonport City",
-      "homeTeamId": "31990",
-      "awayTeamId": "24992",
-      "homeLogo": null,
-      "awayLogo": null,
-      "leagueName": "TAS Premier League",
-      "leagueId": "105410",
-      "leagueLogo": null,
-      "display": {
-        "isLive": false,
-        "isFinished": false,
-        "isUpcoming": true,
-        "isHalfTime": false,
-        "minute": 0,
-        "status": "NS",
-        "score": {
-          "home": 1,
-          "away": 2,
-          "display": "0-0"
-        }
-      },
-      "homeScore": 1,
-      "awayScore": 2,
-      "isLive": true,
-      "isFinished": false,
-      "ids": {
-        "isports": "382344922"
-      },
-      "source": "isports",
-      "matchScore": 100,
-      "category": "LIVE",
-      "minute": 0
-    },
-    {
       "id": "392751925",
       "sport": "football",
       "dateStr": "2026-08-01",
@@ -445,12 +379,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -643,13 +577,13 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 1,
-          "away": 1,
+          "home": 2,
+          "away": 2,
           "display": "0-0"
         }
       },
-      "homeScore": 1,
-      "awayScore": 1,
+      "homeScore": 2,
+      "awayScore": 2,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -997,7 +931,7 @@
       "date": "2026-08-01T07:30:00.000Z",
       "utcDate": "2026-08-01T07:30:00.000Z",
       "timestamp": 1785569400,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "White City Woodville",
         "shortName": "White City Woodville",
@@ -1063,7 +997,7 @@
       "date": "2026-08-01T07:45:00.000Z",
       "utcDate": "2026-08-01T07:45:00.000Z",
       "timestamp": 1785570300,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Monaro Panthers",
         "shortName": "Monaro Panthers",
@@ -1566,12 +1500,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -1589,7 +1523,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "FK Okula Nyrsko",
         "shortName": "FK Okula Nyrsko",
@@ -1638,14 +1572,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "285252035"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "106252038",
@@ -1762,12 +1697,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -27662,7 +27597,7 @@
       "date": "2026-08-01T08:00:00.000Z",
       "utcDate": "2026-08-01T08:00:00.000Z",
       "timestamp": 1785571200,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Yan An Ronghai",
         "shortName": "Yan An Ronghai",
@@ -27704,12 +27639,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -28054,7 +27989,7 @@
       "date": "2026-08-01T08:00:00.000Z",
       "utcDate": "2026-08-01T08:00:00.000Z",
       "timestamp": 1785571200,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Afumati",
         "shortName": "Afumati",
@@ -28449,7 +28384,7 @@
       "date": "2026-08-01T08:00:00.000Z",
       "utcDate": "2026-08-01T08:00:00.000Z",
       "timestamp": 1785571200,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Metaloglobus",
         "shortName": "Metaloglobus",
@@ -28557,12 +28492,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -28822,12 +28757,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -28887,12 +28822,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -29035,6 +28970,6 @@
       "category": "NORMAL"
     }
   ],
-  "count": 446,
+  "count": 445,
   "date": "2026-08-01"
 }

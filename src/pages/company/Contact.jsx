@@ -36,8 +36,7 @@ export default function Contact() {
         keywords="contact ZOKASCORE, football support, customer support, business partnerships, advertise with ZOKASCORE, bug report, feature request, football platform"
         path="/contact"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Contact", path: "/contact" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">

@@ -27,8 +27,7 @@ export default function Partners() {
         keywords="partner with ZOKASCORE, football sponsorship, sports advertising, football marketing, brand partnerships, display advertising, sponsored content"
         path="/partners"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Partners", path: "/partners" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">

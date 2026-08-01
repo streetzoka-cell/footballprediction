@@ -113,8 +113,7 @@ export default function MatchDetails() {
         description={`Follow ${homeName} vs ${awayName} live on ZOKASCORE. Get real-time scores, match statistics, predictions, and standings updates.`}
         path={matchLink}
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Fixtures", path: "/fixtures" }, { name: `${homeName} vs ${awayName}`, path: matchLink }]}
-      />
+         />
       
       <div className="md-container">
         <Link to="/fixtures" className="btn btn-ghost btn-sm mb-16">

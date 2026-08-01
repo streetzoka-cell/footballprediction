@@ -38,8 +38,7 @@ export default function About() {
         keywords="ZOKASCORE, about ZOKASCORE, football predictions, live scores, football fixtures, football standings, football platform, sports community"
         path="/about"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "About", path: "/about" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">

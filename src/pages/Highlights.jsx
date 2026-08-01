@@ -249,7 +249,7 @@ export default function Highlights() {
         description={seoPost ? seoPost.body.substring(0, 150) : "Follow the latest football news, transfer updates, match reports, injuries, club announcements, and breaking stories from leagues around the world on ZOKASCORE."}
         image={getSeoImageUrl(seoPost)} type="article"
         keywords={seoPost ? `${seoPost.title}, football news, transfer news, football updates, ZOKASCORE` : "football news, transfer news, football updates, breaking football news, match reports, injuries, ZOKASCORE"}
-        robots="index,follow" breadcrumbs={[{ name: "Home", path: "/" }, { name: "Highlights", path: "/highlights" }]}
+        robots="index,follow" 
         structuredData={generateJsonLd(seoPost)}
       />
 

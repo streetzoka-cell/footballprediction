@@ -5038,8 +5038,74 @@
       "matchScore": 100,
       "category": "LIVE",
       "minute": 0
+    },
+    {
+      "id": "382344922",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T06:45:00.000Z",
+      "utcDate": "2026-08-01T06:45:00.000Z",
+      "timestamp": 1785566700,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Glenorchy Knights FC",
+        "shortName": "Glenorchy Knights FC",
+        "id": "31990",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Devonport City",
+        "shortName": "Devonport City",
+        "id": "24992",
+        "crest": null
+      },
+      "league": {
+        "name": "TAS Premier League",
+        "id": "105410",
+        "emblem": null
+      },
+      "competition": {
+        "name": "TAS Premier League",
+        "id": "105410",
+        "emblem": null
+      },
+      "homeTeamName": "Glenorchy Knights FC",
+      "awayTeamName": "Devonport City",
+      "homeName": "Glenorchy Knights FC",
+      "awayName": "Devonport City",
+      "homeTeamId": "31990",
+      "awayTeamId": "24992",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "TAS Premier League",
+      "leagueId": "105410",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "382344922"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
     }
   ],
-  "count": 77,
+  "count": 78,
   "date": "2026-08-01"
 }

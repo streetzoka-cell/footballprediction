@@ -12,8 +12,7 @@ export default function Team() {
         keywords="ZOKASCORE developer, football prediction platform, sports technology, React, Firebase, Node.js"
         path="/team"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Team", path: "/team" }]}
-      />
+         />
       
       <div className="glass-card p-32 w-full max-w-700 flex-col items-center text-center gap-24">
         <Link to="/" className="btn btn-ghost btn-sm self-start"><ArrowLeft size={16} /> Back</Link>

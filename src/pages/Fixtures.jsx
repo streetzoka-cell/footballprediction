@@ -653,7 +653,12 @@ export default function Fixtures() {
   if (fixturesError && allFixtures.length === 0) {
     return (
       <div className="zoka-page">
-        <SEO title="Football Fixtures" />
+        <SEO 
+  title="Football Fixtures, Live Scores & League Tables" 
+  description="Explore today's football fixtures..." 
+  keywords="football fixtures, live scores..." 
+  robots="index,follow" 
+  />
         <div className="zoka-wrap" style={{ paddingTop: '20px' }}>
           <ErrorState error={fixturesError} onRetry={handleRefresh} />
         </div>
@@ -663,7 +668,13 @@ export default function Fixtures() {
 
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
-      <SEO title="Football Fixtures, Live Scores & League Tables" description="Explore today's football fixtures, live scores, results, league standings, kickoff times, and match insights from competitions around the world on ZOKASCORE." keywords="football fixtures, live scores, football results, league tables, premier league fixtures, champions league fixtures, soccer fixtures, ZOKASCORE" robots="index,follow" breadcrumbs={[{ name: "Home", path: "/" }, { name: "Fixtures", path: "/fixtures" }]} />
+      <SEO 
+  title="Football Fixtures, Live Scores & League Tables" 
+  description="Explore today's football fixtures..." 
+  keywords="football fixtures, live scores..." 
+  robots="index,follow" 
+  
+/>
       <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
