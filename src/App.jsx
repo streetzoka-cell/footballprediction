@@ -1,6 +1,5 @@
 import { Suspense, useEffect } from "react";
 import { useLocation } from "react-router-dom";
-import { Helmet } from "react-helmet-async"; // ★ Import Helmet directly
 
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
@@ -10,8 +9,6 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import StatusCenter from "./components/StatusCenter";
 
-// ★ REMOVED: import SEO from "./components/SEO";
-import { organizationSchema, websiteSchema } from "./utils/seoBuilder";
 import ErrorBoundary from "./components/ErrorBoundary";
 
 import { ToastProvider } from "./core/ToastManager";
@@ -55,24 +52,8 @@ function AppShell() {
 
   return (
     <>
-      {/* ★ GLOBAL SITE-WIDE SCHEMAS ONLY */}
-      {/* Injected once at the root level to absolutely prevent duplicates */}
-      <Helmet>
-        <html lang="en-KE" />
-        <meta name="theme-color" content="#05070a" />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(websiteSchema())
-          }}
-        />
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify(organizationSchema())
-          }}
-        />
-      </Helmet>
+      {/* ★ REMOVED: Global Helmet schemas and theme-color. 
+          They are now statically hardcoded in index.html to prevent duplicates. */}
 
       <ScrollToTop />
       <ConnectionManager />
