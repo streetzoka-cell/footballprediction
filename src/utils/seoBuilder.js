@@ -78,19 +78,22 @@ export function generateBreadcrumbs(path = "/") {
     // Dynamic route: /league/:id/:slug
     if (part === "league" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Leagues", path: "/fixtures" });
-      crumbs.push({ name: titleCase(parts[i + 2]), path: cumulative + `/${parts[i + 2]}` });
+      // ★ FIX: Include ID in the path
+      crumbs.push({ name: titleCase(parts[i + 2]), path: `/league/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
     // Dynamic route: /team/:id/:slug
     else if (part === "team" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Teams", path: "/fixtures" });
-      crumbs.push({ name: titleCase(parts[i + 2]), path: cumulative + `/${parts[i + 2]}` });
+      // ★ FIX: Include ID in the path
+      crumbs.push({ name: titleCase(parts[i + 2]), path: `/team/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
     // Dynamic route: /match/:id/:slug
     else if (part === "match" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Fixtures", path: "/fixtures" });
-      crumbs.push({ name: "Match Details", path: cumulative + `/${parts[i + 2]}` });
+      // ★ FIX: Include ID in the path
+      crumbs.push({ name: "Match Details", path: `/match/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
     // Dynamic route: /highlights/:slug
