@@ -45,8 +45,7 @@ export default function SearchPage() {
         description="Search football matches, teams, leagues, fixtures, live scores, standings, and predictions instantly across ZOKASCORE."
         keywords="football search, search matches, search teams, search leagues, football fixtures, live scores, ZOKASCORE search"
         robots="noindex,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Search", path: "/search" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <h1 className="text-primary font-extrabold mb-20">Search Matches</h1>

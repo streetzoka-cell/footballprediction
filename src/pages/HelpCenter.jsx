@@ -9,8 +9,7 @@ export default function HelpCenter() {
         description="Find answers to common questions, troubleshooting guides, account support, and helpful resources to get the most out of ZOKASCORE's football predictions, fixtures, and live scores."
         keywords="ZOKASCORE help, help center, customer support, football prediction help, troubleshooting, FAQ, user guides, account support"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Help Center", path: "/help-center" }]}
-      />
+        />
 
       <div className="zoka-wrap">
         <div className="glass-card p-24 flex-col gap-16">

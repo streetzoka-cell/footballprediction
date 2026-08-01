@@ -11,8 +11,7 @@ export default function Terms() {
         description="Read the ZOKASCORE Terms of Service to understand the rules, user responsibilities, prediction guidelines, contests, and conditions for using the platform."
         keywords="terms of service, terms and conditions, platform rules, prediction rules, user agreement, ZOKASCORE"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Terms", path: "/terms" }]}
-      />
+         />
 
       <div className="zoka-wrap">
         <Link to="/" className="btn btn-ghost btn-sm mb-20">

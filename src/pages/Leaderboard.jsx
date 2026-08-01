@@ -264,8 +264,7 @@ export default function Leaderboard() {
         description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
         keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Leaderboard", path: "/leaderboard" }]}
-      />
+          />
 
       <div className="lb-hdr" style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', padding: 'var(--sp-8) 0', backdropFilter: 'blur(16px) saturate(1.5)', WebkitBackdropFilter: 'blur(16px) saturate(1.5)', background: 'rgba(var(--bg-deep-rgb), 0.88)', borderBottom: '1px solid var(--border)' }}>
         <div className="lb-wrap" style={{ maxWidth: '860px', width: '100%', margin: '0 auto', padding: '0 var(--sp-16)' }}>

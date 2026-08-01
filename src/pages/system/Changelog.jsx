@@ -36,8 +36,7 @@ export default function Changelog() {
         description="Stay up to date with the latest ZOKASCORE features, improvements, bug fixes, performance enhancements, and platform updates."
         keywords="ZOKASCORE changelog, release notes, updates, new features, bug fixes, platform improvements, version history"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Changelog", path: "/changelog" }]}
-      />
+          />
 
       <PageLayout title="Changelog" subtitle="Follow the latest improvements and new features released on ZOKASCORE.">
         <Section title="Release History">

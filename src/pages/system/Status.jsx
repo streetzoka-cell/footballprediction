@@ -21,8 +21,7 @@ export default function Status() {
         description="Check the real-time status of ZOKASCORE services, including API availability, live scores, fixtures, predictions, scheduled jobs, and platform performance."
         keywords="ZOKASCORE status, system status, service health, API status, live scores status, football platform status, uptime, service monitoring"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "System Status", path: "/status" }]}
-      />
+          />
 
       <PageLayout title="System Status" subtitle={`Last updated: ${updated}`}>
         <Section title="Current Status">

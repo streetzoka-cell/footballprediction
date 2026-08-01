@@ -27,8 +27,7 @@ export default function Careers() {
         keywords="ZOKASCORE careers, football technology jobs, sports tech careers, software engineering, product design, marketing careers, remote opportunities, football platform"
         path="/careers"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Careers", path: "/careers" }]}
-      />
+        />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">

@@ -24,7 +24,7 @@ export default function FAQ() {
         description="Browse answers to frequently asked questions about ZOKASCORE, including football predictions, fixtures, live scores, leaderboards, accounts, scoring, and platform features."
         keywords="ZOKASCORE FAQ, football predictions FAQ, live scores help, fixtures help, leaderboard help, account support, football questions"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "FAQ", path: "/faq" }]}
+        
       />
 
       <div className="zoka-wrap">
