@@ -26,6 +26,8 @@ export function useHomeMatches() {
   });
 }
 
+// src/hooks/useFixtures.js
+
 export function useFixtures(dateStr, sport = 'football') {
   return useQuery({
     queryKey: ['fixtures', dateStr, sport],
@@ -42,13 +44,18 @@ export function useFixtures(dateStr, sport = 'football') {
       
       const map = new Map();
       
-      // Helper to find if a match already exists in the map by ID OR by cleaned team names
+      const cleanName = (str) => {
+        if (!str || typeof str !== 'string') return '';
+        return str.toLowerCase()
+          .replace(/fc|afc|cf|sc|club|team|reserves|ii/g, '')
+          .replace(/[^a-z0-9]/g, '')
+          .trim();
+      };
+
       const findExisting = (match) => {
-        // 1. Try exact ID match first
         const byId = map.get(String(match.id));
         if (byId) return byId;
 
-        // 2. Try team name match (strips FC, SC, etc.)
         const homeKey = cleanName(match.homeTeamName || match.homeTeam?.name);
         const awayKey = cleanName(match.awayTeamName || match.awayTeam?.name);
         
@@ -62,38 +69,61 @@ export function useFixtures(dateStr, sport = 'football') {
         return null;
       };
 
-      // 1. Add all scheduled fixtures
       fixtures.forEach(m => map.set(String(m.id), m));
       
-      // 2. Merge finished matches
       finished.forEach(m => {
         const existing = findExisting(m);
         if (existing) {
-          // Overwrite with finished data, but keep the original ID to maintain React keys
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else {
           map.set(String(m.id), m);
         }
       });
       
-      // 3. Merge live matches
       live.forEach(m => {
         const existing = findExisting(m);
         
-        // Don't overwrite a finished match with a live one (safety check)
         if (existing && existing.display?.isFinished && !m.display?.isFinished) {
           return;
         }
         
         if (existing) {
-          // Merge live data into the existing fixture, keeping original ID
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else if (m.dateStr === dateStr) {
           map.set(String(m.id), m);
         }
       });
       
-      return Array.from(map.values()).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
+      // ★ FILTER: Remove hidden matches and old stuck matches
+      const now = Date.now();
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      
+      return Array.from(map.values())
+        .map(m => normalizeMatch(m, true, now))
+        .filter(Boolean)
+        .filter(m => {
+          // Hide matches explicitly marked as hidden
+          if (m.isHidden) return false;
+          
+          // Hide matches from yesterday that are still stuck at 90'/LIVE
+          const matchDate = new Date(m.dateStr + 'T12:00:00');
+          const today = new Date(todayStr() + 'T12:00:00');
+          const isYesterday = matchDate < today;
+          
+          if (isYesterday && m.isLive && m.minute >= 90) {
+            return false; // Hide yesterday's stuck matches
+          }
+          
+          // Hide matches older than 24 hours that aren't finished
+          if (m.timestamp) {
+            const elapsed = now - (m.timestamp * 1000);
+            if (elapsed > twentyFourHoursMs && !m.isFinished && m.isLive) {
+              return false;
+            }
+          }
+          
+          return true;
+        });
     },
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
@@ -103,7 +133,7 @@ export function useFixtures(dateStr, sport = 'football') {
     refetchInterval: (query) => {
       const date = query.queryKey[1];
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
-        return 30000; // Poll every 30s
+        return 30000;
       }
       return false; 
     }

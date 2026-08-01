@@ -1,11 +1,10 @@
 // backend-v1/src/services/FixtureService.js
-const fs = require('fs').promises; // ★ CHANGED to fs.promises
-const fsSync = require('fs');      // Keep sync only for quick exists checks
+const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const { buildUnifiedFixtures } = require('./UnifiedFixtureService');
 const { writeFootballSnapshot, calculateMatchScore, categorizeMatch } = require('./SnapshotService');
 const { getDateOffset } = require('../config/constants');
-const QuotaManager = require('./QuotaManager');
 const logger = require('../utils/logger');
 
 const PUBLIC_DIR = path.join(process.cwd(), 'public_data');
@@ -14,10 +13,10 @@ async function syncFixturesForDate(dateStr) {
   const filePath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   
   if (fsSync.existsSync(filePath)) {
-    const stats = await fs.stat(filePath); // ★ ASYNC
+    const stats = await fs.stat(filePath);
     if (stats.size < 100) {
       logger.warn(`[FixtureService] Fixtures file for ${dateStr} is empty (${stats.size} bytes). Re-fetching...`);
-      await fs.unlink(filePath); // ★ ASYNC
+      await fs.unlink(filePath);
     } else {
       logger.info(`[FixtureService] Fixtures for ${dateStr} already exist locally. Skipping API fetch.`);
       return 0; 
@@ -70,27 +69,31 @@ async function syncYesterdayResults() {
   return finished.length;
 }
 
-// ★ NEW: forceFetch=true on startup to get real scores from APIs. forceFetch=false for cron to save quota.
-async function syncFinishedFixtures(forceFetch = false) {
-  const dateStr = getDateOffset(0);
+// ★ UPDATED: Accept an 'offset' parameter to check today (0), yesterday (-1), etc.
+async function syncFinishedFixtures(forceFetch = false, offset = 0) {
+  const dateStr = getDateOffset(offset);
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   const resultsPath = path.join(PUBLIC_DIR, 'results', `${dateStr}.json`);
   
   let matches = [];
   
-  if (forceFetch) {
-    logger.info(`[FixtureService] Startup Sync: Fetching fresh data from APIs to resolve finished matches...`);
-    matches = await buildUnifiedFixtures(dateStr);
-  } else {
-    logger.info(`[FixtureService] Cron Sync: Checking local fixtures for finished matches...`);
-    try {
-      const raw = await fs.readFile(fixturesPath, 'utf8'); // ★ ASYNC
-      const parsed = JSON.parse(raw);
-      matches = Array.isArray(parsed) ? parsed : (parsed.data || []);
-    } catch (e) {
-      logger.warn(`[FixtureService] No local fixtures file found for ${dateStr}.`);
+  logger.info(`[FixtureService] Loading local fixtures for ${dateStr} (offset: ${offset})...`);
+
+  try {
+    const raw = await fs.readFile(fixturesPath, 'utf8');
+    const parsed = JSON.parse(raw);
+    matches = Array.isArray(parsed) ? parsed : (parsed.data || []);
+  } catch (e) {
+    if (!forceFetch) {
+      logger.warn(`[FixtureService] No local fixtures found for ${dateStr}.`);
       return [];
     }
+
+    logger.warn(
+      `[FixtureService] Local fixtures missing for ${dateStr}. Performing one-time API fetch.`
+    );
+
+    matches = await buildUnifiedFixtures(dateStr);
   }
 
   const stillFixtures = [];
@@ -100,19 +103,21 @@ async function syncFinishedFixtures(forceFetch = false) {
 
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
-    const wasLive = match.isLive || match.status === '1H' || match.status === '2H' || match.status === 'HT' || match.status === 'LIVE';
     
-    let isExpired = false;
-    if (match.timestamp) {
-      const matchStartTime = match.timestamp * 1000;
-      if (wasLive && (nowMs - matchStartTime) > threeAndHalfHoursMs) isExpired = true;
-      else if ((nowMs - matchStartTime) > threeAndHalfHoursMs) isExpired = true; // 3.5 hours for NS matches too
-    }
+    const isExpired =
+      match.timestamp &&
+      (nowMs - match.timestamp * 1000) > threeAndHalfHoursMs;
 
     if (isFT || isExpired) {
-      match.status = 'FT';
-      match.homeScore = match.homeScore || 0;
-      match.awayScore = match.awayScore || 0;
+      // Never force missing scores to 0-0. Keep in fixtures if score is null.
+      if (match.homeScore == null || match.awayScore == null) {
+        logger.warn(
+          `[FixtureService] Match ${match.id} is FT but has no final score yet. Keeping it in fixtures.`
+        );
+        stillFixtures.push(match);
+        continue;
+      }
+
       if (match.display) {
         match.display.isFinished = true;
         match.display.isLive = false;
@@ -128,7 +133,7 @@ async function syncFinishedFixtures(forceFetch = false) {
   }
 
   if (newlyFinished.length === 0) {
-    logger.info(`[FixtureService] No newly finished matches found.`);
+    logger.info(`[FixtureService] No newly finished matches found for ${dateStr}.`);
     return [];
   }
 
@@ -145,7 +150,7 @@ async function syncFinishedFixtures(forceFetch = false) {
   let existingResults = [];
   try {
     if (fsSync.existsSync(resultsPath)) {
-      const rawRes = await fs.readFile(resultsPath, 'utf8'); // ★ ASYNC
+      const rawRes = await fs.readFile(resultsPath, 'utf8');
       const parsedRes = JSON.parse(rawRes);
       existingResults = Array.isArray(parsedRes) ? parsedRes : (parsedRes.data || []);
     }
@@ -154,7 +159,7 @@ async function syncFinishedFixtures(forceFetch = false) {
   const merged = [...existingResults, ...newlyFinished];
   const unique = Array.from(new Map(merged.map(m => [String(m.id || `${m.homeTeamName || m.homeTeam?.name}-${m.awayTeamName || m.awayTeam?.name}`), m])).values());
   
-  logger.info(`[FixtureService] Moved ${newlyFinished.length} finished matches to results. Total results: ${unique.length}`);
+  logger.info(`[FixtureService] Moved ${newlyFinished.length} finished matches to results for ${dateStr}. Total results: ${unique.length}`);
   
   // 3. Publish results.json safely
   await writeFootballSnapshot(dateStr, { finished: unique });
@@ -162,4 +167,18 @@ async function syncFinishedFixtures(forceFetch = false) {
   return newlyFinished; 
 }
 
-module.exports = { syncTodayFixtures, syncTomorrowFixtures, syncYesterdayResults, syncFinishedFixtures };
+// ★ NEW: Helper to check BOTH today and yesterday for finished matches
+async function syncRecentFinishedFixtures(forceFetch = false) {
+  logger.info(`[FixtureService] Syncing recent finished fixtures (Today & Yesterday)...`);
+  const todayCount = await syncFinishedFixtures(forceFetch, 0);
+  const yesterdayCount = await syncFinishedFixtures(forceFetch, -1);
+  return todayCount + yesterdayCount;
+}
+
+module.exports = { 
+  syncTodayFixtures, 
+  syncTomorrowFixtures, 
+  syncYesterdayResults, 
+  syncFinishedFixtures,
+  syncRecentFinishedFixtures // ★ Export the new helper for your cron/startup
+};

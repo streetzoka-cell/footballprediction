@@ -16,7 +16,6 @@ export default function ThemeSwitcher() {
     document.documentElement.setAttribute("data-theme", theme);
     localStorage.setItem("zk_theme", theme);
 
-    // Update meta theme-color for mobile browsers
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) {
       const colors = { dark: "#05070a", light: "#f8fafc", midnight: "#020617", neon: "#0a0a0f" };
@@ -25,22 +24,21 @@ export default function ThemeSwitcher() {
   }, [theme]);
 
   return (
-    <div style={{ position: "relative", flexShrink: 0, zIndex: 1000 }}>
-      {/* ✅ Changed to btn-icon-sm anim-bounce-glow to match Search/Notif buttons */}
+    <div style={{ position: "relative", flexShrink: 0, zIndex: 1001 }}>
       <button 
         className="btn-icon-sm anim-bounce-glow" 
         onClick={() => setOpen(!open)} 
         title="App Themes"
         aria-label="Toggle Theme"
+        type="button"
       >
         <Palette size={18} strokeWidth={2.5} />
       </button>
       
       {open && (
         <>
-          {/* ✅ Increased z-index to 9999 to ensure it covers everything */}
           <div 
-            style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: 'default' }} 
+            style={{ position: "fixed", inset: 0, zIndex: 9998, cursor: 'default' }} 
             onClick={() => setOpen(false)} 
           />
           <div className="theme-switcher-popover">
@@ -50,6 +48,7 @@ export default function ThemeSwitcher() {
               return (
                 <button
                   key={t.key}
+                  type="button"
                   className={`tsp-accent ${theme === t.key ? "on" : ""}`}
                   onClick={() => {
                     setTheme(t.key);

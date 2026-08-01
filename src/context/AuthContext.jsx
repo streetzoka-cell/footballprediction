@@ -68,6 +68,7 @@ export function AuthProvider({ children }) {
           const userDocRef = doc(db, 'users', user.uid);
           const adminDocRef = doc(db, 'admin_users', user.uid);
 
+          // 1. Fetch initial profile
           const profileDoc = await getDoc(userDocRef);
           if (!profileDoc.exists()) {
             const profile = {
@@ -82,22 +83,31 @@ export function AuthProvider({ children }) {
             await setDoc(userDocRef, profile);
           }
 
+          // 2. Listen to users collection (Role-based Admin)
           unsubProfile = onSnapshot(userDocRef, (docSnap) => {
             if (unsubscribed) return;
             if (docSnap.exists()) {
+              const baseData = docSnap.data();
+              // Normalize role to lowercase to prevent casing issues (e.g., 'Admin' vs 'admin')
+              const role = (baseData.role || 'user').toLowerCase();
+              const isRoleAdmin = role === 'admin' || role === 'staff';
+              
               setUserProfile(prev => {
-                const baseData = docSnap.data();
-                const isRoleAdmin = baseData.role === 'admin' || baseData.role === 'staff';
                 const isSuperAdmin = prev?.isAdminCollection === true;
-                
                 return { 
-                  ...prev, 
+                  uid: user.uid, // Ensure uid is always explicitly set
                   ...baseData, 
+                  role,
                   isAdmin: isSuperAdmin || isRoleAdmin 
                 };
               });
             } else {
-              setUserProfile(prev => ({ ...prev, uid: user.uid, role: 'user', isAdmin: false }));
+              setUserProfile(prev => ({ 
+                ...(prev || {}), 
+                uid: user.uid, 
+                role: 'user', 
+                isAdmin: false 
+              }));
             }
             setAuthLoading(false);
           }, (err) => {
@@ -105,20 +115,23 @@ export function AuthProvider({ children }) {
             setAuthLoading(false);
           });
 
+          // 3. Listen to admin_users collection (Super Admin)
           unsubAdmin = onSnapshot(adminDocRef, (adminSnap) => {
             if (unsubscribed) return;
             setUserProfile(prev => {
               const isSuperAdmin = adminSnap.exists();
-              const isRoleAdmin = prev?.role === 'admin' || prev?.role === 'staff';
+              const role = (prev?.role || 'user').toLowerCase();
+              const isRoleAdmin = role === 'admin' || role === 'staff';
               
               return {
                 ...prev,
+                uid: user.uid,
                 isAdmin: isSuperAdmin || isRoleAdmin,
                 isAdminCollection: isSuperAdmin
               };
             });
           }, (err) => {
-            // ★ FIX: Silently ignore permission-denied for normal users
+            // Silently ignore permission-denied for normal users (expected behavior)
             if (err.code !== 'permission-denied') {
               console.error('[Auth] Admin listener error:', err.message);
             }
@@ -126,7 +139,12 @@ export function AuthProvider({ children }) {
 
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
-          setUserProfile(null);
+          setUserProfile(prev => ({ 
+            ...(prev || {}), 
+            uid: user.uid, 
+            role: 'user', 
+            isAdmin: false 
+          }));
           setAuthLoading(false);
         }
       } else {
@@ -207,7 +225,7 @@ export function AuthProvider({ children }) {
 
     const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
-    delete profileUpdates.role; 
+    delete profileUpdates.role; // Prevent accidental role escalation from client
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
   }, [currentUser]);

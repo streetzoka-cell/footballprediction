@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react';
+// ✅ ADDED: Plus, Trash2, Star to the imports
+import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Plus, Trash2, Star } from 'lucide-react';
 import { getLocalDateStr, getLocalDateFromUtc } from '../../../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../../../utils/constants';
 
@@ -113,7 +114,6 @@ export const RBadge = memo(function RBadge({ pick }) {
 export const Toast = memo(function Toast({ message, type, onDone }) {
   useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
   const Ic = type === 'ok' ? CheckCircle2 : type === 'er' ? XCircle : AlertTriangle;
-  const cls = type === 'ok' ? 'badge-primary' : type === 'er' ? 'badge-danger' : 'badge-gold';
   return <div className={`fixed bottom-20 left-1/2 -translate-x-1/2 glass-card px-16 py-12 flex-center gap-8 z-max anim-toast-in`}><Ic size={15} className={type === 'ok' ? 'text-primary' : type === 'er' ? 'text-danger' : 'text-gold'} /> {message}</div>;
 });
 
