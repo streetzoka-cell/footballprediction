@@ -14,13 +14,10 @@ const UsersTab = memo(function UsersTab({ toast }) {
   const [isInitialLoad, setIsInitialLoad] = useState(true);
 
   const loadUsers = useCallback(async (more = false) => {
-    if (!db) return;
-    setLoading(true);
+    if (!db) return; setLoading(true);
     try {
       let q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limitQ(50));
-      if (more && lastKey) {
-        q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), startAfter(lastKey), limitQ(50));
-      }
+      if (more && lastKey) q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), startAfter(lastKey), limitQ(50));
       const snap = await getDocs(q);
       if (mounted.current) {
         const newUsers = snap.docs.map(d => ({ id: d.id, ...d.data() }));
@@ -33,63 +30,47 @@ const UsersTab = memo(function UsersTab({ toast }) {
     setLoading(false);
   }, [db, lastKey, toast, mounted]);
 
-  // REMOVED the useEffect that was causing the infinite loop
-
   const filtered = useMemo(() => {
     if (!search.trim()) return users;
     const q = search.toLowerCase();
-    return users.filter(u => 
-      (u.displayName || '').toLowerCase().includes(q) || 
-      (u.email || '').toLowerCase().includes(q) ||
-      (u.id || '').toLowerCase().includes(q)
-    );
+    return users.filter(u => (u.displayName || '').toLowerCase().includes(q) || (u.email || '').toLowerCase().includes(q) || (u.id || '').toLowerCase().includes(q));
   }, [users, search]);
 
   return (
-    <div className="ae">
-      <div className="asec">
-        <h3 className="ast"><Users size={15} /> Users</h3>
-        
-        {isInitialLoad ? (
-          <button 
-            className="asm" 
-            onClick={() => loadUsers(false)} 
-            disabled={loading} 
-            style={{ width: '100%', justifyContent: 'center', padding: '12px', marginTop: 8 }}
-          >
-            {loading ? <Loader2 size={15} className="asp" /> : <RefreshCw size={15} />} Load Users
-          </button>
-        ) : (
-          <>
-            <div style={{ position: 'relative', marginBottom: 12 }}>
-              <Search size={15} style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)', pointerEvents: 'none' }} />
-              <input className="aip" style={{ paddingLeft: 36 }} placeholder="Search by name, email, UID..." value={search} onChange={e => setSearch(e.target.value)} />
-            </div>
-            
-            {loading && users.length === 0 ? <Skel n={4} /> : filtered.length > 0 ? filtered.map((u, i) => (
-              <div key={u.id} className="aur">
-                <div style={{ width: 38, height: 38, borderRadius: 10, background: `hsl(${(i * 37) % 360}, 50%, 25%)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontWeight: 900, fontSize: '.78rem', flexShrink: 0 }}>
-                  {(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}
-                </div>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>{u.displayName || 'Anonymous'}</div>
-                  <div style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.email || u.id}</div>
-                </div>
-                <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                  <div style={{ fontSize: '.68rem', fontWeight: 700, color: u.role === 'admin' ? 'var(--gold)' : u.role === 'staff' ? 'var(--blue)' : 'var(--text-muted)' }}>{(u.role || 'user').toUpperCase()}</div>
-                  <div style={{ fontSize: '.6rem', color: 'var(--text-muted)', fontWeight: 600 }}>{u.createdAt ? fmtTimeAgo(u.createdAt) : ''}</div>
+    <div className="glass-card p-16 flex-col gap-12">
+      <h3 className="text-primary font-bold flex-center gap-8"><Users size={15} /> Users</h3>
+      {isInitialLoad ? (
+        <button className="btn btn-secondary w-full" onClick={() => loadUsers(false)} disabled={loading}>
+          {loading ? <Loader2 size={15} className="anim-spin" /> : <RefreshCw size={15} />} Load Users
+        </button>
+      ) : (
+        <>
+          <div className="relative">
+            <Search size={15} className="absolute left-12 top-1/2 -translate-y-1/2 text-muted" />
+            <input className="form-input pl-36" placeholder="Search by name, email, UID..." value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {loading && users.length === 0 ? <Skel n={4} /> : filtered.length > 0 ? filtered.map((u, i) => (
+            <div key={u.id} className="glass-card p-12 flex-between">
+              <div className="flex-center gap-12">
+                <div className="flex-center font-extrabold text-inverse" style={{ width: 38, height: 38, borderRadius: 10, background: `hsl(${(i * 37) % 360}, 50%, 25%)`, fontSize: '.78rem' }}>{(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}</div>
+                <div className="flex-col">
+                  <div className="text-primary font-bold text-sm">{u.displayName || 'Anonymous'}</div>
+                  <div className="text-muted text-xs">{u.email || u.id}</div>
                 </div>
               </div>
-            )) : !loading && <Empty icon={Users} title="No users found" />}
-            
-            {hasMore && (
-              <button className="asm" onClick={() => loadUsers(true)} disabled={loading} style={{ marginTop: 8, width: '100%', justifyContent: 'center' }}>
-                {loading ? <Loader2 size={13} className="asp" /> : <ChevronDown size={13} />} Load more
-              </button>
-            )}
-          </>
-        )}
-      </div>
+              <div className="text-right">
+                <div className={`text-xs font-bold ${u.role === 'admin' ? 'text-gold' : u.role === 'staff' ? 'text-accent' : 'text-muted'}`}>{(u.role || 'user').toUpperCase()}</div>
+                <div className="text-muted text-xs">{u.createdAt ? fmtTimeAgo(u.createdAt) : ''}</div>
+              </div>
+            </div>
+          )) : !loading && <Empty icon={Users} title="No users found" />}
+          {hasMore && (
+            <button className="btn btn-secondary w-full" onClick={() => loadUsers(true)} disabled={loading}>
+              {loading ? <Loader2 size={13} className="anim-spin" /> : <ChevronDown size={13} />} Load more
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 });

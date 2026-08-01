@@ -1,12 +1,10 @@
-// footballprediction/backend-v1/src/server.js
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
-const metricsTracker = require('./middleware/metricsTracker'); // ★ NEW IMPORT
-const { addLog } = require('./utils/logStore'); // ★ NEW IMPORT FOR TERMINAL
+const metricsTracker = require('./middleware/metricsTracker');
+const { addLog } = require('./utils/logStore');
 
 // Routes
 const leaderboardRoutes = require('./routes/v1/admin/leaderboards');
@@ -17,6 +15,7 @@ const teamsRoute = require('./routes/v1/teams');
 const adminSchedulers = require('./routes/v1/admin/schedulers');
 const monitoringDashboard = require('./routes/v1/monitoring/dashboard');
 const sitemapRoute = require('./routes/v1/sitemap');
+const predictionsRoute = require('./routes/v1/predictions'); // ★ NEW: Import predictions route
 
 const app = express();
 
@@ -26,14 +25,14 @@ app.use(cors({
 }));
 app.use(express.json());
 
-// ★ ATTACH METRICS TRACKER BEFORE ROUTES (Counts requests & errors)
+// ★ ATTACH METRICS TRACKER BEFORE ROUTES
 app.use(metricsTracker);
 
 // Simple request logger & Terminal Log Feeder
 app.use((req, res, next) => {
   const logMsg = `[Gateway] ${req.method} ${req.originalUrl}`;
   logger.info(logMsg);
-  addLog(logMsg); // ★ Pushes to the terminal stream
+  addLog(logMsg);
   next();
 });
 
@@ -45,14 +44,13 @@ app.use('/api/v1/teams', teamsRoute);
 app.use('/api/v1/admin/schedulers', adminSchedulers);
 app.use('/api/v1/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
+app.use('/api/v1/predictions', predictionsRoute); // ★ NEW: Register predictions route
 app.use('/zokascore-sitemap.xml', sitemapRoute);
 
 // ─── SERVE STATIC JSON FILES (0-Read Gateway Magic) ───
-// Serve files from public_data with strong caching headers
 app.use('/api/v1/data', express.static(path.join(process.cwd(), 'public_data'), {
   setHeaders: (res, path) => {
     if (path.endsWith('.json')) {
-      // Cache live.json for 15s, everything else for 15 mins
       if (path.includes('live.json')) {
         res.setHeader('Cache-Control', 'public, max-age=15');
       } else {

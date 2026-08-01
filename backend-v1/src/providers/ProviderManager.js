@@ -1,6 +1,8 @@
 // backend-v1/src/providers/ProviderManager.js
 const { getProvider } = require('./ProviderFactory');
 const logger = require('../utils/logger');
+const circuitBreaker = require('../utils/circuitBreaker'); // ★ YOUR EXISTING UTILITY
+const internetMonitor = require('../services/InternetMonitor');
 
 const providers = {
   isports: getProvider('isports'),
@@ -9,80 +11,77 @@ const providers = {
   sportsdb: getProvider('sportsdb')
 };
 
-// ★ CONFIGURABLE PRIORITY MAP
 const PRIORITY = {
   getLiveFixtures: ['isports', 'api-football'],
-  getFixtures: ['isports', 'api-football', 'football-data'],
+  getFixtures: ['isports', 'api-football'],
   getLeague: ['isports', 'sportsdb'],
   getStandings: ['football-data', 'api-football'],
   getTeams: ['football-data', 'api-football'],
-  getTeam: ['football-data', 'api-football'],
+  getTeam: ['api-football', 'sportsdb'],
 };
 
 async function tryChain(method, params = []) {
+  // 1. Pause if internet is offline
+  if (!internetMonitor.isOnline) {
+    throw new Error('Internet is offline. Skipping API calls.');
+  }
+
   let lastErr;
-  let lastResult = null; // ★ Track the last result (even if empty)
+  let lastResult = null; 
   const chain = PRIORITY[method] || [];
 
   for (const providerName of chain) {
     const provider = providers[providerName];
     if (!provider || typeof provider[method] !== 'function') continue;
 
-    // ★ BUDGET CHECK: Skip provider if budget is exhausted
-    if (typeof provider.isBudgetAvailable === 'function' && !provider.isBudgetAvailable()) {
-      logger.info(`[ProviderManager] ${method}: ${providerName} skipped (budget exhausted). Trying next...`);
+    // 2. Check your Circuit Breaker
+    if (await circuitBreaker.isDisabled(providerName)) {
+      logger.info(`[ProviderManager] ${method}: ${providerName} skipped (Circuit Open).`);
       continue;
     }
 
     try {
       const result = await provider[method](...params);
       
-      // ★ If we got actual data, return it immediately!
       const hasData = result != null && (!Array.isArray(result) || result.length > 0);
-      if (hasData) {
-        return result;
-      }
+      if (hasData) return result;
       
-      // It's an empty array or null. Save it just in case all providers return empty,
-      // but continue trying the next provider to see if it has data.
       lastResult = Array.isArray(result) ? result : null;
-      logger.warn(`[ProviderManager] ${method}: ${providerName} returned empty → trying next`);
       continue;
-
     } catch (err) {
-      if (err.message === 'Not implemented') continue; // Silently skip
+      if (err.message === 'Not implemented') continue;
       
+      // 3. Trip the breaker on failure
+      await circuitBreaker.trip(providerName, err.message);
       logger.warn(`[ProviderManager] ${method}: ${providerName} failed (${err.message}) → trying next`);
       lastErr = err;
     }
   }
   
-  // ★ If we reach here, all providers either failed or returned empty.
-  // If we got at least an empty array from someone, return that instead of crashing.
-  if (lastResult !== null) {
-    logger.info(`[ProviderManager] ${method}: All providers returned empty. Returning empty array.`);
-    return lastResult;
+  if (method.startsWith('get') && method !== 'getFixtures' && method !== 'getLiveFixtures' && method !== 'getTeams') {
+    return null;
   }
+  if (lastResult !== null) return lastResult;
   
-  // If we got absolutely nothing (all providers threw hard errors), throw the last error.
   throw lastErr || new Error(`${method}: All providers failed, returned empty, or were not implemented.`);
 }
 
-// ★ DYNAMIC METHOD EXPORTS
 module.exports = Object.keys(PRIORITY).reduce((acc, method) => {
   acc[method] = (...args) => tryChain(method, args);
   return acc;
 }, {});
 
-// Expose health check for all providers
 module.exports.getHealthStatus = async () => {
   const results = {};
   for (const [name, provider] of Object.entries(providers)) {
     try {
       results[name] = await provider.health();
+      results[name].circuitOpen = await circuitBreaker.isDisabled(name);
     } catch (e) {
       results[name] = { provider: name, healthy: false, error: e.message };
     }
   }
   return results;
 };
+
+module.exports.providers = providers;

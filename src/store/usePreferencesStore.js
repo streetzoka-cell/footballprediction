@@ -8,9 +8,8 @@ export const usePreferencesStore = create(
       soundEnabled: true,
       favorites: [],
       pinnedLeagues: [],
-      pinnedMatches: [], // ★ NEW: For pinning live matches to the screen
+      pinnedMatches: [],
       
-      // FIXED: Added missing closing parenthesis for set()
       toggleSound: () => set((state) => ({ soundEnabled: !state.soundEnabled })),
       
       toggleFavorite: (id) => set((state) => {
@@ -28,7 +27,6 @@ export const usePreferencesStore = create(
         return { pinnedLeagues };
       }),
 
-      // ★ NEW: Pin/Unpin match
       togglePinMatch: (id) => set((state) => {
         const idStr = String(id);
         const pinnedMatches = state.pinnedMatches.includes(idStr) 
@@ -37,8 +35,6 @@ export const usePreferencesStore = create(
         return { pinnedMatches };
       }),
     }),
-    {
-      name: 'zoka-preferences',
-    }
+    { name: 'zoka-preferences' }
   )
 );

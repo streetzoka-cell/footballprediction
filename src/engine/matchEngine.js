@@ -85,7 +85,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ FIX: Bulletproof Smart Minute Calculator
+// ★ Bulletproof Smart Minute Calculator
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
   
@@ -93,7 +93,8 @@ export function applySmartMinute(m, now = Date.now()) {
     return { ...m, displayMinute: 90, minute: 90, isLive: false, isHT: false };
   }
 
-  const statusUpper = (m.status || '').toUpperCase();
+  // ★ FIX: Safely convert status to string before calling toUpperCase
+  const statusUpper = String(m.status || "").toUpperCase();
   
   // 1. NEVER force live if postponed/canceled/scheduled
   if (['PST', 'SUSP', 'INT', 'CANC', 'ABD', 'POSTP', 'TBD', 'PENDING', 'NS'].includes(statusUpper)) {

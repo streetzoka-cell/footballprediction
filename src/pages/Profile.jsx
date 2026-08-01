@@ -74,12 +74,12 @@ const AccuracyRing = ({ value, size = 116 }) => {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const offset = circ - (value / 100) * circ;
-  const color = value >= 70 ? 'var(--accent)' : value >= 50 ? '#fbbf24' : '#f97116';
+  const color = value >= 70 ? 'var(--primary)' : value >= 50 ? 'var(--gold)' : 'var(--danger)';
 
   return (
     <div ref={ref} className="pro-ring" style={{ width: size, height: size, opacity: visible ? 1 : 0, animationDelay: '0.2s' }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="rgba(255,255,255,.06)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-elevated)" strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
           strokeDasharray={circ} strokeDashoffset={visible ? offset : circ} strokeLinecap="round"
           style={{ transition: 'stroke-dashoffset 1.2s cubic-bezier(.22,1,.36,1) .3s', filter: `drop-shadow(0 0 6px ${color}40)` }}
@@ -136,7 +136,8 @@ export default function Profile() {
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin';
+  // ★ FIX: Robust admin detection
+  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
@@ -206,12 +207,12 @@ export default function Profile() {
             <div className="pro-header-left">
               <div className="pro-avatar-wrap">
                 <div className="pro-avatar" style={{
-                  background: isDemo ? 'linear-gradient(135deg, #64748b, #334155)' : 'linear-gradient(135deg, var(--accent), #34d399)',
-                  boxShadow: isDemo ? '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(255,255,255,.1)' : '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(16,185,129,.3)'
+                  background: isDemo ? 'linear-gradient(135deg, #64748b, #334155)' : 'linear-gradient(135deg, var(--primary), var(--primary-dim))',
+                  boxShadow: isDemo ? '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(255,255,255,.1)' : '0 0 0 3px var(--bg-deep), 0 0 0 6px rgba(var(--primary-rgb),.3)'
                 }}>
                   {initials}
                 </div>
-                <div className="pro-avatar-badge" style={{ background: isDemo ? '#64748b' : 'var(--accent)' }}>
+                <div className="pro-avatar-badge" style={{ background: isDemo ? '#64748b' : 'var(--primary)' }}>
                   {isDemo ? '?' : '✓'}
                 </div>
               </div>
@@ -233,10 +234,10 @@ export default function Profile() {
               <AccuracyRing value={accuracyNum} size={110} />
               <div className="pro-header-actions">
                 {!isDemo && (
-                  <button className="pro-btn-secondary"><Edit3 size={15} /> Edit</button>
+                  <button className="btn btn-secondary btn-sm"><Edit3 size={15} /> Edit</button>
                 )}
                 {!isDemo && (
-                  <button onClick={handleLogout} className="pro-btn-danger"><LogOut size={15} /> Sign Out</button>
+                  <button onClick={handleLogout} className="btn btn-danger btn-sm"><LogOut size={15} /> Sign Out</button>
                 )}
               </div>
             </div>
@@ -263,16 +264,16 @@ export default function Profile() {
 
         {/* Stats Grid */}
         <div className="pro-stats-grid">
-          <AnimatedStat value={points} label="Points" color="var(--accent)" delay={0} icon={<Trophy size={18} />} />
-          <AnimatedStat value={accuracyNum} label="Accuracy" color="#fbbf24" suffix="%" decimals={1} delay={80} icon={<Target size={18} />} />
-          <AnimatedStat value={total} label="Predictions" color="#60a5fa" delay={160} icon={<Calendar size={18} />} />
-          <AnimatedStat value={profile.streak || 0} label="Day Streak" color="#ef4444" delay={240} icon={<Flame size={18} />} />
+          <AnimatedStat value={points} label="Points" color="var(--primary)" delay={0} icon={<Trophy size={18} />} />
+          <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={18} />} />
+          <AnimatedStat value={total} label="Predictions" color="var(--accent)" delay={160} icon={<Calendar size={18} />} />
+          <AnimatedStat value={profile.streak || 0} label="Day Streak" color="var(--danger)" delay={240} icon={<Flame size={18} />} />
         </div>
 
         {/* Achievements */}
         <div className="pro-section">
           <div className="pro-section-head">
-            <h3><Shield size={22} style={{ color: '#fbbf24' }} /> Achievements</h3>
+            <h3><Shield size={22} style={{ color: 'var(--gold)' }} /> Achievements</h3>
             <span className="pro-section-count">{earnedBadges.length}/{ACHIEVEMENTS.length}</span>
           </div>
 

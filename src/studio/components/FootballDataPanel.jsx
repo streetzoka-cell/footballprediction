@@ -1,6 +1,6 @@
 import React from 'react';
 import { useEditorStore } from '../store/editorStore';
-import { Shirt, Tv, User } from 'lucide-react';
+import { Shirt, Tv, User, X } from 'lucide-react';
 
 export default function FootballDataPanel({ onClose }) {
   const { project, addLayer } = useEditorStore();
@@ -19,9 +19,9 @@ export default function FootballDataPanel({ onClose }) {
     addLayer({ type: 'rect', x: 40, y: 1750, width: 450, height: 100, fill: 'rgba(5, 7, 10, 0.85)', cornerRadius: 12 });
     addLayer({ type: 'image', src: homeLogo, x: 60, y: 1770, width: 60, height: 60 });
     addLayer({ type: 'text', text: homeName, x: 140, y: 1780, fontSize: 28, fill: '#ffffff', fontStyle: 'bold' });
-    addLayer({ type: 'text', text: `${homeScore}`, x: 350, y: 1770, fontSize: 40, fill: 'var(--accent)', fontStyle: 'bold' });
+    addLayer({ type: 'text', text: `${homeScore}`, x: 350, y: 1770, fontSize: 40, fill: '#16c784', fontStyle: 'bold' });
     addLayer({ type: 'text', text: '-', x: 385, y: 1770, fontSize: 40, fill: '#ffffff' });
-    addLayer({ type: 'text', text: `${awayScore}`, x: 410, y: 1770, fontSize: 40, fill: 'var(--accent)', fontStyle: 'bold' });
+    addLayer({ type: 'text', text: `${awayScore}`, x: 410, y: 1770, fontSize: 40, fill: '#16c784', fontStyle: 'bold' });
     onClose();
   };
 
@@ -75,7 +75,7 @@ export default function FootballDataPanel({ onClose }) {
         <button onClick={addScorebug} className="studio-action-btn"><Tv size={24} /><span>Scorebug</span><span className="studio-action-sub">Broadcast overlay</span></button>
         <button onClick={addFormation} className="studio-action-btn"><Shirt size={24} /><span>4-3-3 Formation</span><span className="studio-action-sub">Home team lineup</span></button>
       </div>
-      <div style={{ marginTop: '24px' }}>
+      <div className="mt-24">
         <div className="studio-section-title">Player Card Builder</div>
         <div className="studio-grid-2">
           <button onClick={() => addPlayerCard(homeName, homeLogo, true)} className="studio-action-btn"><User size={24} /><span>{homeName} Card</span><span className="studio-action-sub">Emerald Template</span></button>

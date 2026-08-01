@@ -1,5 +1,3 @@
-// src/pages/system/Changelog.jsx
-
 import SEO from "../../components/SEO";
 import PageLayout from "../../components/PageLayout";
 import Section from "../../components/Section";
@@ -28,99 +26,31 @@ const releases = [
       "Profile enhancements",
     ],
   },
-  {
-    version: "1.2.0",
-    date: "May 2026",
-    features: [
-      "Live football fixtures",
-      "League standings",
-      "Match highlights",
-      "UI improvements",
-    ],
-  },
-  {
-    version: "1.0.0",
-    date: "Initial Release",
-    features: [
-      "ZOKASCORE officially launched",
-      "Live scores",
-      "Fixtures",
-      "User accounts",
-    ],
-  },
 ];
 
 export default function Changelog() {
   return (
     <>
       <SEO
-  title="What's New, Updates & Release Notes"
-  description="Stay up to date with the latest ZOKASCORE features, improvements, bug fixes, performance enhancements, and platform updates."
-  keywords="ZOKASCORE changelog, release notes, updates, new features, bug fixes, platform improvements, version history"
-  robots="index,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Changelog", path: "/changelog" }
-  ]}
-/>
+        title="What's New, Updates & Release Notes"
+        description="Stay up to date with the latest ZOKASCORE features, improvements, bug fixes, performance enhancements, and platform updates."
+        keywords="ZOKASCORE changelog, release notes, updates, new features, bug fixes, platform improvements, version history"
+        robots="index,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Changelog", path: "/changelog" }]}
+      />
 
-      <PageLayout
-        title="Changelog"
-        subtitle="Follow the latest improvements and new features released on ZOKASCORE."
-      >
+      <PageLayout title="Changelog" subtitle="Follow the latest improvements and new features released on ZOKASCORE.">
         <Section title="Release History">
-          <div
-            style={{
-              display: "grid",
-              gap: 24,
-            }}
-          >
+          <div className="flex-col gap-16">
             {releases.map((release) => (
-              <div
-                key={release.version}
-                style={{
-                  background: "#101b2d",
-                  border: "1px solid rgba(255,255,255,.08)",
-                  borderRadius: 12,
-                  padding: 24,
-                }}
-              >
-                <div
-                  style={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    flexWrap: "wrap",
-                    gap: 10,
-                    marginBottom: 16,
-                  }}
-                >
-                  <h2
-                    style={{
-                      margin: 0,
-                      fontSize: "1.4rem",
-                    }}
-                  >
-                    Version {release.version}
-                  </h2>
-
-                  <span
-                    style={{
-                      color: "#9fb3c8",
-                    }}
-                  >
-                    {release.date}
-                  </span>
+              <div key={release.version} className="glass-card p-24">
+                <div className="flex-between flex-wrap gap-10 mb-16">
+                  <h2 className="text-primary font-extrabold text-md">Version {release.version}</h2>
+                  <span className="text-muted text-sm">{release.date}</span>
                 </div>
-
-                <ul
-                  style={{
-                    margin: 0,
-                    paddingLeft: 22,
-                    lineHeight: 2,
-                  }}
-                >
+                <ul className="flex-col gap-8 text-secondary text-sm pl-16">
                   {release.features.map((feature) => (
-                    <li key={feature}>{feature}</li>
+                    <li key={feature} className="list-disc">{feature}</li>
                   ))}
                 </ul>
               </div>
@@ -129,10 +59,8 @@ export default function Changelog() {
         </Section>
 
         <Section title="Continuous Improvement">
-          <p>
-            ZOKASCORE is continuously evolving. We regularly improve
-            performance, expand sports coverage, introduce new features,
-            strengthen security, and enhance the overall user experience.
+          <p className="text-secondary text-sm">
+            ZOKASCORE is continuously evolving. We regularly improve performance, expand sports coverage, introduce new features, strengthen security, and enhance the overall user experience.
           </p>
         </Section>
       </PageLayout>

@@ -1,175 +1,14 @@
 // src/components/Breadcrumbs.jsx
-
 import { Link, useLocation } from "react-router-dom";
-
-const TITLES = {
-  fixtures: "Fixtures",
-  predictions: "Predictions",
-  mastergames: "Master Games",
-  basketball: "Basketball",
-  highlights: "Highlights",
-  livestream: "Live Stream",
-  leaderboard: "Leaderboard",
-  profile: "Profile",
-  login: "Login",
-  about: "About",
-  privacy: "Privacy Policy",
-  terms: "Terms of Service",
-  faq: "FAQ",
-  help: "Help Center",
-  "help-center": "Help Center",
-  careers: "Careers",
-  contact: "Contact",
-  partners: "Partners",
-  advertise: "Advertise",
-};
-
-const titleCase = (text = "") =>
-  decodeURIComponent(text)
-    .replace(/-/g, " ")
-    .replace(/\b\w/g, (c) => c.toUpperCase());
+import { ChevronRight, Home } from "lucide-react";
+import { generateBreadcrumbs } from "../utils/seoBuilder";
 
 export default function Breadcrumbs() {
   const { pathname } = useLocation();
 
   if (pathname === "/") return null;
 
-  const parts = pathname.split("/").filter(Boolean);
-
-  let crumbs = [{ name: "Home", path: "/" }];
-
-  switch (parts[0]) {
-    // --------------------------
-    // Fixtures
-    // --------------------------
-    case "fixtures":
-      crumbs.push({
-        name: "Fixtures",
-        path: "/fixtures",
-      });
-      break;
-
-    // --------------------------
-    // Predictions
-    // --------------------------
-    case "predictions":
-      crumbs.push({
-        name: "Predictions",
-        path: "/predictions",
-      });
-      break;
-
-    // --------------------------
-    // Leaderboard
-    // --------------------------
-    case "leaderboard":
-      crumbs.push({
-        name: "Leaderboard",
-        path: "/leaderboard",
-      });
-      break;
-
-    // --------------------------
-    // Basketball
-    // --------------------------
-    case "basketball":
-      crumbs.push({
-        name: "Basketball",
-        path: "/basketball",
-      });
-      break;
-
-    // --------------------------
-    // Highlights
-    // --------------------------
-    case "highlights":
-      crumbs.push({
-        name: "Highlights",
-        path: "/highlights",
-      });
-      break;
-
-    // --------------------------
-    // Live Stream
-    // --------------------------
-    case "livestream":
-      crumbs.push({
-        name: "Live Stream",
-        path: "/livestream",
-      });
-      break;
-
-    // --------------------------
-    // League
-    // /league/39/premier-league
-    // --------------------------
-    case "league": {
-      crumbs.push({
-        name: "Leagues",
-        path: "/fixtures",
-      });
-
-      const slug = parts.slice(2).join("-");
-
-      crumbs.push({
-        name: titleCase(slug),
-        path: pathname,
-      });
-
-      break;
-    }
-
-    // --------------------------
-    // Team
-    // /team/33/manchester-united
-    // --------------------------
-    case "team": {
-      crumbs.push({
-        name: "Teams",
-        path: "/fixtures",
-      });
-
-      const slug = parts.slice(2).join("-");
-
-      crumbs.push({
-        name: titleCase(slug),
-        path: pathname,
-      });
-
-      break;
-    }
-
-    // --------------------------
-    // Match
-    // /match/123/arsenal-vs-chelsea
-    // --------------------------
-    case "match": {
-      crumbs.push({
-        name: "Fixtures",
-        path: "/fixtures",
-      });
-
-      const slug = parts.slice(2).join("-");
-
-      crumbs.push({
-        name: titleCase(slug),
-        path: pathname,
-      });
-
-      break;
-    }
-
-    // --------------------------
-    // Everything else
-    // --------------------------
-    default:
-      parts.forEach((part, index) => {
-        crumbs.push({
-          name: TITLES[part] || titleCase(part),
-          path: "/" + parts.slice(0, index + 1).join("/"),
-        });
-      });
-  }
+  const crumbs = generateBreadcrumbs(pathname);
 
   return (
     <nav
@@ -178,17 +17,44 @@ export default function Breadcrumbs() {
     >
       {crumbs.map((crumb, index) => {
         const last = index === crumbs.length - 1;
+        const isFirst = index === 0;
 
         return (
-          <span key={crumb.path}>
+          <span
+            key={`${crumb.path}-${index}`}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "var(--sp-4)",
+            }}
+          >
             {index > 0 && (
-              <span className="breadcrumbs-sep">
-                /
-              </span>
+              <ChevronRight
+                size={12}
+                style={{
+                  color: "var(--text-muted)",
+                  opacity: 0.4,
+                  flexShrink: 0,
+                }}
+              />
+            )}
+
+            {isFirst && !last && (
+              <Home
+                size={12}
+                style={{
+                  color: "var(--accent)",
+                  flexShrink: 0,
+                  marginRight: "var(--sp-4)",
+                }}
+              />
             )}
 
             {last ? (
-              <span className="breadcrumbs-current">
+              <span
+                className="breadcrumbs-current"
+                aria-current="page"
+              >
                 {crumb.name}
               </span>
             ) : (
@@ -196,7 +62,7 @@ export default function Breadcrumbs() {
                 to={crumb.path}
                 className="breadcrumbs-link"
               >
-                {crumb.name}
+                {isFirst && !crumb.name ? "Home" : crumb.name}
               </Link>
             )}
           </span>

@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/pages/Highlights.jsx
-// ═══════════════════════════════════════════════════════════════
-
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -18,6 +14,7 @@ import {
 
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { PATHS } from '../utils/constants';
+import { safeWrite } from '../services/safeWrite';
 import SEO from "../components/SEO";
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
@@ -42,12 +39,12 @@ const formatTimestamp = (date) => {
 const calcReadTime = (body) => Math.max(1, Math.ceil((body?.trim().split(/\s+/).length || 1) / 200));
 
 const BADGES = {
-  'Breaking': { color: '#ef4444', bg: 'rgba(239,68,68,.15)', label: '🔴 BREAKING' },
-  'Official': { color: 'var(--accent)', bg: 'rgba(16,185,129,.15)', label: '🟢 OFFICIAL' },
-  'Rumour': { color: '#fbbf24', bg: 'rgba(251,191,36,.15)', label: '🟡 RUMOUR' },
-  'Match Report': { color: '#3b82f6', bg: 'rgba(59,130,246,.15)', label: '🔵 MATCH REPORT' },
-  'Transfers': { color: '#f97316', bg: 'rgba(249,115,22,.15)', label: '🟠 TRANSFERS' },
-  'Injuries': { color: '#a855f7', bg: 'rgba(168,85,247,.15)', label: '🟣 INJURIES' },
+  'Breaking': { color: 'var(--danger)', bg: 'rgba(var(--danger-rgb),.15)', label: '🔴 BREAKING' },
+  'Official': { color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.15)', label: '🟢 OFFICIAL' },
+  'Rumour': { color: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.15)', label: '🟡 RUMOUR' },
+  'Match Report': { color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)', label: '🔵 MATCH REPORT' },
+  'Transfers': { color: 'var(--warning)', bg: 'rgba(var(--warning-rgb),.15)', label: '🟠 TRANSFERS' },
+  'Injuries': { color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)', label: '🟣 INJURIES' },
 };
 
 const CATEGORIES = [
@@ -62,7 +59,6 @@ const REACTIONS = [
   { key: 'sad', icon: '😢', label: 'Sad' },
 ];
 
-// ★ Reading Progress Hook
 const useReadingProgress = () => {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
@@ -215,14 +211,19 @@ export default function Highlights() {
     const hasReacted = post[userReactedKey];
     const updateState = (p) => p.id === post.id ? { ...p, [userReactedKey]: !hasReacted, reactions: { ...currentReactions, [type]: (currentReactions[type] || 0) + (hasReacted ? -1 : 1) } } : p;
     if (activePost) setActivePost(updateState); else setPosts(prev => prev.map(updateState));
-    try { await updateDoc(doc(db, 'news_posts', post.id), { [`reactions.${type}`]: increment(hasReacted ? -1 : 1), [userReactedKey]: !hasReacted }); } catch (err) { console.error("Reaction error:", err); }
+    try { 
+      await safeWrite('news_posts', post.id, { [`reactions.${type}`]: increment(hasReacted ? -1 : 1), [userReactedKey]: !hasReacted }, { merge: true }); 
+    } catch (err) { console.error("Reaction error:", err); }
   };
 
   const handleComment = async (postId) => {
     const text = newComments[postId]?.trim(); if (!text || !user) return;
     const tempComment = { id: `temp_${Date.now()}`, body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: { toMillis: () => Date.now() } };
     setComments(prev => ({ ...prev, [postId]: [tempComment, ...(prev[postId] || [])] })); setNewComments(prev => ({ ...prev, [postId]: '' }));
-    try { await addDoc(collection(db, 'news_posts', postId, 'comments'), { body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: serverTimestamp() }); await updateDoc(doc(db, 'news_posts', postId), { commentsCount: increment(1) }); } 
+    try { 
+      await addDoc(collection(db, 'news_posts', postId, 'comments'), { body: text, authorId: user.uid, authorName: userProfile?.displayName || 'User', createdAt: serverTimestamp() }); 
+      await safeWrite('news_posts', postId, { commentsCount: increment(1) }, { merge: true }); 
+    } 
     catch (err) { console.error("Comment error:", err); setComments(prev => ({ ...prev, [postId]: prev[postId].filter(c => c.id !== tempComment.id) })); }
   };
 
@@ -240,8 +241,8 @@ export default function Highlights() {
   const seoPost = activePost || posts[0]; 
 
   return (
-    <div className="nh-page">
-      {activePost && <div className="nh-progress-bar" style={{ width: `${scrollProgress}%` }} />}
+    <div className="zoka-page">
+      {activePost && <div style={{ position: 'fixed', top: 0, left: 0, height: '4px', zIndex: 9999, width: `${scrollProgress}%`, background: 'var(--primary)', transition: 'width 0.1s' }} />}
       
       <SEO
         title={seoPost ? seoPost.title : "Football News, Transfers & Match Updates | ZOKASCORE"}
@@ -252,24 +253,24 @@ export default function Highlights() {
         structuredData={generateJsonLd(seoPost)}
       />
 
-      <div className="nh-header">
-        <div className="nh-header-inner">
-          <div className="nh-logo-btn" onClick={() => { navigate('/highlights'); setActiveFilter('All'); }}>
-            {activePost && <ArrowLeft size={18} />}
-            <div className="nh-logo-icon"><Newspaper size={18} /></div>
-            <span>News Hub</span>
+      <div className="glass" style={{ position: 'sticky', top: 0, zIndex: 100, borderBottom: '1px solid var(--border)' }}>
+        <div className="zoka-wrap flex-between" style={{ padding: '12px 0' }}>
+          <div className="flex-center gap-8" style={{ cursor: 'pointer' }} onClick={() => { navigate('/highlights'); setActiveFilter('All'); }}>
+            {activePost && <ArrowLeft size={18} className="text-primary" />}
+            <div className="glass-card flex-center text-primary" style={{ width: 32, height: 32, borderRadius: 8, background: 'rgba(var(--primary-rgb),.1)' }}><Newspaper size={18} /></div>
+            <span className="text-primary font-extrabold">News Hub</span>
           </div>
-          <div className="nh-header-actions">
-            <button onClick={toggleTheme} className="nh-icon-btn">{theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}</button>
-            {isAdmin && <button onClick={openCreate} className="nh-primary-btn"><Plus size={16} /> New Post</button>}
+          <div className="flex gap-8">
+            <button onClick={toggleTheme} className="btn-icon">{theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}</button>
+            {isAdmin && <button onClick={openCreate} className="btn btn-primary btn-sm"><Plus size={16} /> New Post</button>}
           </div>
         </div>
       </div>
 
-      <div className="nh-container">
+      <div className="zoka-wrap">
         {loading ? (
-          <div className="nh-feed">
-            {[1, 2, 3].map(i => <div key={i} className="nh-skel-card" />)}
+          <div className="flex-col gap-16">
+            {[1, 2, 3].map(i => <div key={i} className="glass-card skeleton" style={{ height: 300 }} />)}
           </div>
         ) : activePost ? (
           <SinglePostView 
@@ -284,31 +285,31 @@ export default function Highlights() {
           />
         ) : (
           <>
-            <div className="nh-scroll nh-cats">
+            <div className="flex gap-8 overflow-x-auto" style={{ padding: '12px 0', marginBottom: '16px' }}>
               {CATEGORIES.map(cat => (
-                <button key={cat.key} onClick={() => setActiveFilter(cat.key)} className={`nh-cat-btn ${activeFilter === cat.key ? 'on' : ''}`}>{cat.label}</button>
+                <button key={cat.key} onClick={() => setActiveFilter(cat.key)} className={`btn btn-sm ${activeFilter === cat.key ? 'btn-primary' : 'btn-secondary'}`}>{cat.label}</button>
               ))}
-              {savedPosts.length > 0 && <button onClick={() => setActiveFilter('Saved')} className={`nh-cat-btn ${activeFilter === 'Saved' ? 'on' : ''}`}>Saved ({savedPosts.length})</button>}
+              {savedPosts.length > 0 && <button onClick={() => setActiveFilter('Saved')} className={`btn btn-sm ${activeFilter === 'Saved' ? 'btn-primary' : 'btn-secondary'}`}>Saved ({savedPosts.length})</button>}
             </div>
 
             {authorFilter && (
-              <div className="nh-author-banner">
-                <span>Showing posts by specific author</span>
-                <button onClick={() => navigate('/highlights')}>Clear</button>
+              <div className="glass-card flex-between p-12 mb-16">
+                <span className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>Showing posts by specific author</span>
+                <button onClick={() => navigate('/highlights')} className="btn btn-ghost btn-sm">Clear</button>
               </div>
             )}
 
             {trendingPosts.length > 1 && activeFilter === 'All' && !authorFilter && (
-              <div className="nh-trending-wrap">
-                <div className="nh-trending-head"><Flame size={16} /> <span>Trending Now</span></div>
-                <div className="nh-scroll nh-trending-scroll">
+              <div style={{ marginBottom: '24px' }}>
+                <div className="flex-center gap-8 text-primary font-bold mb-12"><Flame size={16} className="text-danger" /> <span>Trending Now</span></div>
+                <div className="flex gap-12 overflow-x-auto pb-8">
                   {trendingPosts.map(p => (
-                    <div key={p.id} onClick={() => navigate(`/highlights/${slugify(p.title)}-${p.id}`)} className="nh-trending-card">
-                      {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <div className="nh-trending-ph"><Newspaper size={24} /></div>}
-                      <div className="nh-trending-badge"><Flame size={8} /> HOT</div>
-                      <div className="nh-trending-info">
-                        <div className="nh-trending-cat">{BADGES[p.category]?.label || p.category}</div>
-                        <div className="nh-trending-title">{p.title}</div>
+                    <div key={p.id} onClick={() => navigate(`/highlights/${slugify(p.title)}-${p.id}`)} className="glass-card" style={{ minWidth: '200px', maxWidth: '220px', height: '150px', overflow: 'hidden', position: 'relative', cursor: 'pointer' }}>
+                      {p.imageUrl ? <img src={p.imageUrl} alt="" style={{ width: '100%', height: '80px', objectFit: 'cover' }} /> : <div className="flex-center" style={{ width: '100%', height: '80px', background: 'var(--bg-elevated)', color: 'var(--primary)' }}><Newspaper size={24} /></div>}
+                      <div className="badge badge-danger" style={{ position: 'absolute', top: '8px', right: '8px' }}><Flame size={8} /> HOT</div>
+                      <div className="p-8 flex-col gap-4">
+                        <div className="text-danger font-bold" style={{ fontSize: 'var(--fs-xs)' }}>{BADGES[p.category]?.label || p.category}</div>
+                        <div className="text-primary font-bold line-clamp-2" style={{ fontSize: 'var(--fs-sm)' }}>{p.title}</div>
                       </div>
                     </div>
                   ))}
@@ -317,10 +318,13 @@ export default function Highlights() {
             )}
 
             {filteredPosts.length === 0 ? (
-              <div className="nh-empty-state"><Newspaper size={40} /><p>No news articles found.</p></div>
+              <div className="glass-card flex-col p-32" style={{ alignItems: 'center', gap: '12px', textAlign: 'center' }}>
+                <Newspaper size={40} className="text-muted" />
+                <p className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>No news articles found.</p>
+              </div>
             ) : (
               <>
-                <div className="nh-feed">
+                <div className="flex-col gap-16">
                   {filteredPosts.slice(0, visibleCount).map((post, i) => (
                     <PostCard 
                       key={post.id} post={post} index={i} isAdmin={isAdmin} user={user} savedPosts={savedPosts}
@@ -334,69 +338,83 @@ export default function Highlights() {
                     />
                   ))}
                 </div>
-                {filteredPosts.length > visibleCount && <button onClick={() => setVisibleCount(c => c + 15)} className="nh-load-more"><ChevronDown size={16} /> Load More Articles</button>}
+                {filteredPosts.length > visibleCount && <button onClick={() => setVisibleCount(c => c + 15)} className="btn btn-secondary w-full mt-16"><ChevronDown size={16} /> Load More Articles</button>}
               </>
             )}
           </>
         )}
       </div>
 
-      {showScrollTop && <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="nh-fab"><ArrowUp size={24} /></button>}
+      {showScrollTop && <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="btn-icon" style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 500 }}><ArrowUp size={24} /></button>}
 
       {lightboxImage && (
-        <div onClick={() => setLightboxImage(null)} className="nh-lightbox">
-          <img src={lightboxImage} alt="Expanded view" />
-          <button onClick={() => setLightboxImage(null)} className="nh-lightbox-close"><X size={24} /></button>
+        <div onClick={() => setLightboxImage(null)} className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 9999, padding: '20px', cursor: 'pointer' }}>
+          <img src={lightboxImage} alt="Expanded view" style={{ maxWidth: '100%', maxHeight: '100%', borderRadius: 'var(--r-8)' }} />
+          <button onClick={() => setLightboxImage(null)} className="btn-icon" style={{ position: 'absolute', top: '20px', right: '20px' }}><X size={24} /></button>
         </div>
       )}
 
       {isFormOpen && (
-        <div onClick={() => setIsFormOpen(false)} className="nh-modal-overlay">
-          <div onClick={e => e.stopPropagation()} className="nh-modal-box">
-            <div className="nh-modal-head">
-              <h2>{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
-              <button onClick={() => setIsFormOpen(false)} className="nh-icon-btn"><X size={18} /></button>
+        <div onClick={() => setIsFormOpen(false)} className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, padding: '20px' }}>
+          <div onClick={e => e.stopPropagation()} className="glass-card" style={{ maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto' }}>
+            <div className="flex-between p-16" style={{ borderBottom: '1px solid var(--border)' }}>
+              <h2 className="text-primary font-bold">{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
+              <button onClick={() => setIsFormOpen(false)} className="btn-icon"><X size={18} /></button>
             </div>
-            <form onSubmit={handleSave} className="nh-modal-form">
-              <div className="nh-form-group">
-                <label>Title</label>
-                <input value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} required placeholder="e.g. Mbappe ruled out for 3 weeks" />
+            <form onSubmit={handleSave} className="flex-col gap-16 p-16">
+              <div className="flex-col gap-8">
+                <label className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Title</label>
+                <input value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} required placeholder="e.g. Mbappe ruled out for 3 weeks" className="form-input" />
               </div>
-              <div className="nh-form-row">
-                <div className="nh-form-group"><label>Category</label><select value={formData.category} onChange={e => setFormData(d => ({ ...d, category: e.target.value }))}>{Object.keys(BADGES).map(c => <option key={c} value={c}>{c}</option>)}</select></div>
-                <div className="nh-form-group"><label>Match ID (Optional)</label><input value={formData.relatedMatchId} onChange={e => setFormData(d => ({ ...d, relatedMatchId: e.target.value }))} placeholder="e.g. feat_2023-10-01_123" /></div>
+              <div className="flex gap-12">
+                <div className="flex-col gap-8 flex-1">
+                  <label className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Category</label>
+                  <select value={formData.category} onChange={e => setFormData(d => ({ ...d, category: e.target.value }))} className="form-input">
+                    {Object.keys(BADGES).map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                </div>
+                <div className="flex-col gap-8 flex-1">
+                  <label className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Match ID (Optional)</label>
+                  <input value={formData.relatedMatchId} onChange={e => setFormData(d => ({ ...d, relatedMatchId: e.target.value }))} placeholder="e.g. feat_2023-10-01_123" className="form-input" />
+                </div>
               </div>
-              <div className="nh-form-group">
-                <label>Attachment (Optional)</label>
+              <div className="flex-col gap-8">
+                <label className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Attachment (Optional)</label>
                 {formData.imageUrl ? (
-                  <div className="nh-img-preview"><img src={formData.imageUrl} alt="Preview" /><button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="nh-img-clear"><X size={16} /></button></div>
+                  <div className="glass-card p-8" style={{ position: 'relative' }}>
+                    <img src={formData.imageUrl} alt="Preview" style={{ width: '100%', borderRadius: 'var(--r-8)' }} />
+                    <button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="btn-icon" style={{ position: 'absolute', top: '12px', right: '12px' }}><X size={16} /></button>
+                  </div>
                 ) : (
-                  <div className="nh-dropzone" onClick={() => fileInputRef.current?.click()}>
-                    {uploadingImage ? <Loader size={24} className="animate-spin" /> : <ImageIcon size={24} />}
-                    <span>Click to upload from device</span>
-                    <span className="nh-dropzone-sub">Auto-compresses for fast loading</span>
+                  <div className="glass-card flex-col p-20" style={{ alignItems: 'center', gap: '8px', cursor: 'pointer' }} onClick={() => fileInputRef.current?.click()}>
+                    {uploadingImage ? <Loader size={24} className="anim-spin text-primary" /> : <ImageIcon size={24} className="text-muted" />}
+                    <span className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>Click to upload from device</span>
+                    <span className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>Auto-compresses for fast loading</span>
                     <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} style={{ display: 'none' }} />
                   </div>
                 )}
               </div>
-              <div className="nh-form-group"><label>Body / Content</label><textarea value={formData.body} onChange={e => setFormData(d => ({ ...d, body: e.target.value }))} required rows={6} placeholder="Write the news details here..." /></div>
-              <button type="submit" disabled={saving} className="nh-submit-btn">{saving ? <Loader size={18} className="animate-spin" /> : <Plus size={18} />} {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}</button>
+              <div className="flex-col gap-8">
+                <label className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Body / Content</label>
+                <textarea value={formData.body} onChange={e => setFormData(d => ({ ...d, body: e.target.value }))} required rows={6} placeholder="Write the news details here..." className="form-input" style={{ minHeight: '120px', resize: 'vertical' }} />
+              </div>
+              <button type="submit" disabled={saving} className="btn btn-primary w-full">{saving ? <Loader size={18} className="anim-spin" /> : <Plus size={18} />} {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}</button>
             </form>
           </div>
         </div>
       )}
 
       {shareData && (
-        <div onClick={() => setShareData(null)} className="nh-modal-overlay">
-          <div onClick={e => e.stopPropagation()} className="nh-share-box">
-            <h3>Share Article</h3>
-            <div className="nh-share-grid">
-              <a href={`https://wa.me/?text=${encodeURIComponent(shareData.title + " " + shareData.url)}`} target="_blank" rel="noreferrer" className="nh-share-btn wa">WhatsApp</a>
-              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareData.title)}&url=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="nh-share-btn tw">Twitter</a>
-              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="nh-share-btn fb">Facebook</a>
-              <a href={`https://t.me/share/url?url=${encodeURIComponent(shareData.url)}&text=${encodeURIComponent(shareData.title)}`} target="_blank" rel="noreferrer" className="nh-share-btn tg">Telegram</a>
+        <div onClick={() => setShareData(null)} className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 9999, padding: '20px' }}>
+          <div onClick={e => e.stopPropagation()} className="glass-card" style={{ maxWidth: '400px', width: '100%', padding: '24px', textAlign: 'center' }}>
+            <h3 className="text-primary font-bold mb-16">Share Article</h3>
+            <div className="grid gap-12 mb-16" style={{ gridTemplateColumns: '1fr 1fr' }}>
+              <a href={`https://wa.me/?text=${encodeURIComponent(shareData.title + " " + shareData.url)}`} target="_blank" rel="noreferrer" className="btn btn-secondary">WhatsApp</a>
+              <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(shareData.title)}&url=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="btn btn-secondary">Twitter</a>
+              <a href={`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareData.url)}`} target="_blank" rel="noreferrer" className="btn btn-secondary">Facebook</a>
+              <a href={`https://t.me/share/url?url=${encodeURIComponent(shareData.url)}&text=${encodeURIComponent(shareData.title)}`} target="_blank" rel="noreferrer" className="btn btn-secondary">Telegram</a>
             </div>
-            <button onClick={() => { navigator.clipboard.writeText(shareData.url); alert('Link copied!'); }} className="nh-copy-btn"><LinkIcon size={16} /> Copy Link</button>
+            <button onClick={() => { navigator.clipboard.writeText(shareData.url); alert('Link copied!'); }} className="btn btn-primary w-full"><LinkIcon size={16} /> Copy Link</button>
           </div>
         </div>
       )}
@@ -404,79 +422,78 @@ export default function Highlights() {
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   POST CARD COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
 function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero, comments, newComments, setNewComments, handleComment, fetchComments }) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [showComments, setShowComments] = useState(false); 
   const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: '#64748b', bg: 'rgba(255,255,255,0.05)', label: post.category };
+  const badge = BADGES[post.category] || { color: 'var(--text-muted)', bg: 'var(--bg-elevated)', label: post.category };
 
   const toggleComments = () => { if (!showComments) fetchComments(post.id); setShowComments(p => !p); };
 
   return (
-    <div className={`nh-card ${isHero ? 'nh-hero-card' : ''}`} style={{ animationDelay: `${index * 50}ms` }}>
+    <div className="glass-card flex-col anim-fade-up" style={{ animationDelay: `${index * 50}ms` }}>
       {post.imageUrl && (
-        <div onClick={() => onExpand(post)} className="nh-card-img-wrap">
-          <img src={post.imageUrl} alt={post.title} loading="lazy" />
-          <div className={`nh-card-overlay ${isHero ? 'hero' : ''}`} />
+        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer', position: 'relative', overflow: 'hidden', borderTopLeftRadius: 'var(--r-16)', borderTopRightRadius: 'var(--r-16)' }}>
+          <img src={post.imageUrl} alt={post.title} loading="lazy" style={{ width: '100%', height: '12rem', objectFit: 'cover' }} />
+          <div style={{ position: 'absolute', inset: 0, background: 'linear-gradient(to top, rgba(0,0,0,0.8), transparent)' }} />
           {isHero ? (
-            <div className="nh-hero-content">
-              <span className="nh-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-              <h2 className="nh-hero-title">{post.title}</h2>
+            <div className="flex-col gap-8" style={{ position: 'absolute', bottom: 0, left: 0, padding: '16px' }}>
+              <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+              <h2 className="text-primary font-extrabold" style={{ fontSize: 'var(--fs-lg)' }}>{post.title}</h2>
             </div>
           ) : (
-            <div className="nh-card-badge-top"><span className="nh-badge" style={{ background: 'rgba(0,0,0,0.6)', color: badge.color }}>{badge.label}</span></div>
+            <div style={{ position: 'absolute', top: '12px', left: '12px' }}>
+              <span className="badge" style={{ background: 'rgba(0,0,0,0.6)', color: badge.color }}>{badge.label}</span>
+            </div>
           )}
         </div>
       )}
 
-      <div className="nh-card-body">
-        <div onClick={() => onExpand(post)} className="nh-card-clickable">
+      <div className="flex-col gap-12 p-16">
+        <div onClick={() => onExpand(post)} style={{ cursor: 'pointer' }} className="flex-col gap-8">
           {(!isHero || !post.imageUrl) && (
-            <div className="nh-author-row">
-              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="nh-author-avatar">{(post.authorName || 'A')[0]}</div>
-              <div className="nh-author-info">
-                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="nh-author-name">{post.authorName || 'Admin'}</div>
-                <div className="nh-time">{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
+            <div className="flex-center gap-8">
+              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="flex-center font-bold" style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', color: 'var(--text-inverse)' }}>{(post.authorName || 'A')[0]}</div>
+              <div className="flex-col gap-2">
+                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="text-primary font-bold" style={{ fontSize: 'var(--fs-sm)' }}>{post.authorName || 'Admin'}</div>
+                <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
               </div>
-              {!post.imageUrl && <span className="nh-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>}
+              {!post.imageUrl && <span className="badge" style={{ background: badge.bg, color: badge.color, marginLeft: 'auto' }}>{badge.label}</span>}
             </div>
           )}
 
           {isHero && post.imageUrl && (
-            <div className="nh-hero-meta">
-              <span onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="nh-hero-author">By {post.authorName || 'Admin'}</span>
-              <span className="nh-time">{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</span>
+            <div className="flex-center gap-8 text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
+              <span onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="text-primary font-bold">By {post.authorName || 'Admin'}</span>
+              <span>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</span>
             </div>
           )}
 
-          {!isHero && <h3 className="nh-card-title">{post.title}</h3>}
+          {!isHero && <h3 className="text-primary font-bold" style={{ fontSize: 'var(--fs-md)' }}>{post.title}</h3>}
           
-          <p className={`nh-card-text ${isExpanded ? 'open' : ''}`}>{post.body}</p>
-          {!isExpanded && post.body.length > 100 && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
-          {isExpanded && <span className="nh-read-more" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
+          <p className={`text-secondary ${isExpanded ? '' : 'line-clamp-3'}`} style={{ fontSize: 'var(--fs-sm)' }}>{post.body}</p>
+          {!isExpanded && post.body.length > 100 && <span className="text-primary font-bold" style={{ fontSize: 'var(--fs-xs)', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
+          {isExpanded && <span className="text-primary font-bold" style={{ fontSize: 'var(--fs-xs)', cursor: 'pointer' }} onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
         </div>
 
-        <div className="nh-card-stats">
-          <span><Eye size={12} /> {post.views || 0}</span>
-          <span><MessageCircle size={12} /> {post.commentsCount || 0}</span>
-          {(post.views > 1000) && <span className="nh-trending-tag"><Flame size={12} /> Trending</span>}
+        <div className="flex-center gap-12 text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
+          <span className="flex-center gap-4"><Eye size={12} /> {post.views || 0}</span>
+          <span className="flex-center gap-4"><MessageCircle size={12} /> {post.commentsCount || 0}</span>
+          {(post.views > 1000) && <span className="badge badge-danger"><Flame size={12} /> Trending</span>}
         </div>
 
-        <div className="nh-card-actions">
-          <div className="nh-scroll nh-reactions">
+        <div className="flex-between" style={{ borderTop: '1px solid var(--border)', paddingTop: '12px' }}>
+          <div className="flex gap-4 overflow-x-auto">
             {REACTIONS.map(r => {
               const count = post.reactions?.[r.key] || 0;
               const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-              return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`nh-reaction-btn ${hasReacted ? 'on' : ''}`}><span>{r.icon}</span> {count > 0 && count}</button>;
+              return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`btn btn-sm ${hasReacted ? 'btn-primary' : 'btn-ghost'}`}><span>{r.icon}</span> {count > 0 && count}</button>;
             })}
           </div>
-          <div className="nh-action-btns">
-            <button onClick={toggleComments} className={`nh-icon-btn transparent ${showComments ? 'accent' : ''}`}><MessageCircle size={18} /></button>
-            {!isHero && <button onClick={() => onToggleSave(post.id)} className={`nh-icon-btn transparent ${isSaved ? 'gold' : ''}`}><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} /></button>}
-            {!isHero && <button onClick={() => onShare(post)} className="nh-icon-btn transparent"><Share2 size={18} /></button>}
+          <div className="flex gap-4">
+            <button onClick={toggleComments} className={`btn-icon-sm ${showComments ? 'text-primary' : ''}`}><MessageCircle size={18} /></button>
+            {!isHero && <button onClick={() => onToggleSave(post.id)} className={`btn-icon-sm ${isSaved ? 'text-gold' : ''}`}><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} /></button>}
+            {!isHero && <button onClick={() => onShare(post)} className="btn-icon-sm"><Share2 size={18} /></button>}
           </div>
         </div>
       </div>
@@ -486,80 +503,76 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   SINGLE POST VIEW 
-   ═══════════════════════════════════════════════════════════════ */
 function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onImageClick, newComments, setNewComments, handleComment }) {
   const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: '#64748b', bg: 'rgba(255,255,255,0.05)', label: post.category };
+  const badge = BADGES[post.category] || { color: 'var(--text-muted)', bg: 'var(--bg-elevated)', label: post.category };
   const paragraphs = post.body.split('\n').filter(p => p.trim() !== '');
 
   return (
-    <div className="nh-single-card">
-      <div className="nh-single-head">
-        <div className="nh-author-row">
-          <div onClick={onAuthorClick} className="nh-author-avatar lg">{(post.authorName || 'A')[0]}</div>
-          <div className="nh-author-info">
-            <div onClick={onAuthorClick} className="nh-author-name">{post.authorName || 'Admin'}</div>
-            <div className="nh-time">{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
-          </div>
-          <span className="nh-badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+    <div className="glass-card flex-col gap-16 p-24">
+      <div className="flex-center gap-12">
+        <div onClick={onAuthorClick} className="flex-center font-bold" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', color: 'var(--text-inverse)' }}>{(post.authorName || 'A')[0]}</div>
+        <div className="flex-col gap-2 flex-1">
+          <div onClick={onAuthorClick} className="text-primary font-bold">{post.authorName || 'Admin'}</div>
+          <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
         </div>
+        <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
       </div>
 
-      <div className="nh-single-body">
-        <h1 className="nh-single-title">{post.title}</h1>
+      <h1 className="text-primary font-extrabold mt-12" style={{ fontSize: 'var(--fs-xl)' }}>{post.title}</h1>
+      
+      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} style={{ width: '100%', borderRadius: 'var(--r-12)', cursor: 'pointer', margin: '12px 0' }} loading="lazy" />}
+
+      <div className="flex-col gap-12 text-secondary" style={{ fontSize: 'var(--fs-sm)', lineHeight: 1.7 }}>
         {paragraphs.map((para, i) => (
-          <p key={i} className={`nh-single-para ${i === 0 ? 'drop-cap' : ''}`}>{para}</p>
+          <p key={i} style={i === 0 ? { fontSize: 'var(--fs-lg)', fontWeight: 800, color: 'var(--primary)' } : {}}>{para}</p>
         ))}
       </div>
 
       {relatedMatch && (
-        <div className="nh-related-match">
-          <div className="nh-rm-label">RELATED MATCH</div>
-          <div className="nh-rm-teams">
+        <div className="glass-card p-12 mt-12 flex-col gap-8">
+          <div className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>RELATED MATCH</div>
+          <div className="flex-center gap-12 text-primary font-bold">
             <span>{relatedMatch.homeTeam?.name || 'Home'}</span>
-            <span className="nh-rm-score">{relatedMatch.homeScore ?? '-'} - {relatedMatch.awayScore ?? '-'}</span>
+            <span className="text-muted">{relatedMatch.homeScore ?? '-'} - {relatedMatch.awayScore ?? '-'}</span>
             <span>{relatedMatch.awayTeam?.name || 'Away'}</span>
           </div>
         </div>
       )}
 
-      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} className="nh-single-img" loading="lazy" />}
-
-      <div className="nh-single-sticky-actions">
-        <div className="nh-scroll nh-reactions">
+      <div className="flex-between glass-card p-12 mt-16" style={{ position: 'sticky', bottom: 0, zIndex: 100 }}>
+        <div className="flex gap-4 overflow-x-auto">
           {REACTIONS.map(r => {
             const count = post.reactions?.[r.key] || 0;
             const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-            return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`nh-reaction-btn lg ${hasReacted ? 'on' : ''}`}><span>{r.icon}</span> {count > 0 && count}</button>;
+            return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`btn btn-sm ${hasReacted ? 'btn-primary' : 'btn-ghost'}`}><span>{r.icon}</span> {count > 0 && count}</button>;
           })}
         </div>
-        <div className="nh-action-btns">
-          <button onClick={() => onToggleSave(post.id)} className={`nh-icon-btn ${isSaved ? 'gold' : ''}`}><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} /></button>
-          <button onClick={() => onShare(post)} className="nh-icon-btn"><Share2 size={18} /></button>
+        <div className="flex gap-4">
+          <button onClick={() => onToggleSave(post.id)} className={`btn-icon ${isSaved ? 'text-gold' : ''}`}><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} /></button>
+          <button onClick={() => onShare(post)} className="btn-icon"><Share2 size={18} /></button>
         </div>
       </div>
 
       {isAdmin && (
-        <div className="nh-admin-actions">
-          <button onClick={() => onEdit(post)} className="nh-admin-btn"><Pencil size={14} /> Edit</button>
-          <button onClick={() => onDelete(post.id)} className="nh-admin-btn danger"><Trash2 size={14} /> Delete</button>
+        <div className="flex gap-8 mt-12">
+          <button onClick={() => onEdit(post)} className="btn btn-secondary btn-sm flex-1"><Pencil size={14} /> Edit</button>
+          <button onClick={() => onDelete(post.id)} className="btn btn-danger btn-sm flex-1"><Trash2 size={14} /> Delete</button>
         </div>
       )}
 
       <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
 
       {relatedPosts.length > 0 && (
-        <div className="nh-related-wrap">
-          <h3 className="nh-related-title">You might also like</h3>
-          <div className="nh-related-list">
+        <div className="mt-24">
+          <h3 className="text-primary font-bold mb-12">You might also like</h3>
+          <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
             {relatedPosts.map(p => (
-              <div key={p.id} onClick={() => onRelatedClick(p)} className="nh-related-card">
-                {p.imageUrl && <img src={p.imageUrl} alt="" />}
-                <div className="nh-related-info">
-                  <div className="nh-related-cat">{BADGES[p.category]?.label || p.category}</div>
-                  <div className="nh-related-card-title">{p.title}</div>
+              <div key={p.id} onClick={() => onRelatedClick(p)} className="glass-card" style={{ cursor: 'pointer', overflow: 'hidden' }}>
+                {p.imageUrl && <img src={p.imageUrl} alt="" style={{ width: '100%', height: '6rem', objectFit: 'cover' }} />}
+                <div className="p-8 flex-col gap-4">
+                  <div className="text-danger font-bold" style={{ fontSize: 'var(--fs-xs)' }}>{BADGES[p.category]?.label || p.category}</div>
+                  <div className="text-primary font-bold line-clamp-2" style={{ fontSize: 'var(--fs-sm)' }}>{p.title}</div>
                 </div>
               </div>
             ))}
@@ -570,29 +583,26 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   COMMENT SECTION COMPONENT
-   ═══════════════════════════════════════════════════════════════ */
 function CommentSection({ postId, comments, newComments, setNewComments, handleComment }) {
   return (
-    <div className="nh-comments-section">
-      <div className="nh-comment-input-wrap">
+    <div className="mt-16 flex-col gap-12">
+      <div className="flex gap-8">
         <input 
           value={newComments[postId] || ''}
           onChange={e => setNewComments(prev => ({ ...prev, [postId]: e.target.value }))}
           placeholder="Write a comment..."
-          className="nh-comment-input"
+          className="form-input flex-1"
         />
-        <button onClick={() => handleComment(postId)} className="nh-comment-send"><Send size={16} /></button>
+        <button onClick={() => handleComment(postId)} className="btn btn-primary"><Send size={16} /></button>
       </div>
-      <div className="nh-comments-list">
-        {(comments || []).length === 0 && <p className="nh-comments-empty">No comments yet.</p>}
+      <div className="flex-col gap-8">
+        {(comments || []).length === 0 && <p className="text-muted" style={{ fontSize: 'var(--fs-sm)', textAlign: 'center', paddingTop: '12px', paddingBottom: '12px' }}>No comments yet.</p>}
         {(comments || []).map(c => (
-          <div key={c.id} className="nh-comment-item">
-            <div className="nh-comment-avatar">{c.authorName?.[0] || 'G'}</div>
-            <div className="nh-comment-bubble">
-              <div className="nh-comment-author">{c.authorName || 'Guest'}</div>
-              <p className="nh-comment-text">{c.body}</p>
+          <div key={c.id} className="flex gap-8">
+            <div className="flex-center font-bold" style={{ width: 28, height: 28, borderRadius: '50%', fontSize: 10, background: 'var(--accent)', color: 'var(--text-inverse)' }}>{c.authorName?.[0] || 'G'}</div>
+            <div className="glass-card p-12 flex-col gap-4 flex-1">
+              <div className="text-primary font-bold" style={{ fontSize: 'var(--fs-xs)' }}>{c.authorName || 'Guest'}</div>
+              <p className="text-secondary" style={{ fontSize: 'var(--fs-sm)' }}>{c.body}</p>
             </div>
           </div>
         ))}

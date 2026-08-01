@@ -1,12 +1,12 @@
-// C:\Users\COISA COMPUTERS\OneDrive\Desktop\Apk\footballprediction\backend-v1\src\scheduler\index.js
-
+// backend-v1/src/scheduler/index.js
 const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
 const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
 const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
-const { processQueue } = require('../services/QueueService'); // ★ NEW IMPORT
+const { processQueue } = require('../services/QueueService');
+const internetMonitor = require('../services/InternetMonitor'); // ★ NEW
 const logger = require('../utils/logger');
 
 const CRON = {
@@ -21,16 +21,20 @@ function startScheduler() {
 
   schedulerEngine.schedule('TodayFixtures', CRON.TODAY_FIXTURES, todayFixturesJob.execute);
   schedulerEngine.schedule('UpcomingFixtures', CRON.TOMORROW_FIXTURES, upcomingFixturesJob.execute);
-  schedulerEngine.schedule('FinishedFixtures', CRON.FINISHED_FIXTURES, finishedFixturesJob.execute);
+  schedulerEngine.schedule('FinishedFixtures', CRON.FINISHED_FIXTURES, () => finishedFixturesJob.execute(false));
   schedulerEngine.schedule('Standings', CRON.STANDINGS, standingsJob.execute);
 
   schedulerEngine.startLivePolling(async () => {
+    // ★ Pause live polling if offline
+    if (!internetMonitor.isOnline) {
+      logger.info('[Scheduler] Live polling skipped (Internet Offline).');
+      return 60000; // Check again in 60s
+    }
     return liveJob.execute();
   });
 
-  // ★ NEW: Process Firebase Queue every 5 minutes
   setInterval(() => {
-    processQueue().catch(e => logger.error('[Scheduler] Queue processing failed', e));
+    if (internetMonitor.isOnline) processQueue().catch(e => logger.error('[Scheduler] Queue processing failed', e));
   }, 5 * 60 * 1000);
 
   setTimeout(async () => {
@@ -38,15 +42,28 @@ function startScheduler() {
     try {
       await todayFixturesJob.execute();
       await upcomingFixturesJob.execute();
-      await finishedFixturesJob.execute();
+      await finishedFixturesJob.execute(true); 
       await standingsJob.execute();
       await liveJob.execute();
-      await processQueue(); // Process queue on startup too
+      await processQueue();
     } catch (err) {
-      logger.error('[Scheduler] Initial sync failed');
+      logger.error(`[Scheduler] Initial sync failed: ${err.message}`);
     }
   }, 5000);
 
+  // ★ AUTO CATCH-UP: The second internet returns, run all jobs immediately!
+  internetMonitor.on('restored', async () => {
+    logger.info('[Scheduler] 🚀 Catch-up sync triggered...');
+    try {
+      await todayFixturesJob.execute();
+      await finishedFixturesJob.execute(true);
+      await liveJob.execute();
+    } catch (err) {
+      logger.error(`[Scheduler] Catch-up sync failed: ${err.message}`);
+    }
+  });
+
+  internetMonitor.start(); // Start monitoring
   logger.info('[Scheduler] All cron jobs registered and live polling started.');
 }
 

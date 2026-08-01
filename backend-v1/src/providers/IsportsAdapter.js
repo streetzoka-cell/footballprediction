@@ -1,5 +1,5 @@
 // backend-v1/src/providers/IsportsAdapter.js
-const axios = require('axios');
+const { fetchWithRetry } = require('../utils/RetryEngine');
 const logger = require('../utils/logger');
 const env = require('../config/env');
 const BaseProvider = require('./BaseProvider');
@@ -7,7 +7,7 @@ const BaseProvider = require('./BaseProvider');
 const PRIMARY_BASE = env.ISPORTS_PRIMARY_URL;
 const BACKUP_BASE  = env.ISPORTS_BACKUP_URL;
 const API_KEY = env.ISPORTS_API_KEY;
-const TIMEOUT = 5000; // ★ CHANGED to 5000ms to prevent Cloudflare http2 stream closed errors
+const TIMEOUT = 8000; // ★ CHANGED to 8000ms. Safe for Cloudflare, enough for iSports.
 
 const DAILY_LIMIT = 190; 
 let callsToday = 0;
@@ -40,11 +40,13 @@ async function requestWithFailover(path, params = {}) {
     const url = `${base}${path}`;
     try {
       const t0 = Date.now();
-      const { data, status } = await axios.get(url, {
+      const { data, status } = await fetchWithRetry({
+        url,
         params: query,
         timeout: TIMEOUT,
         validateStatus: () => true,
-      });
+      }, 3); 
+      
       const latency = Date.now() - t0;
       avgLatency = Math.round((avgLatency + latency) / 2);
 

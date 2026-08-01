@@ -2,20 +2,17 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from '
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
-  ChevronRight, ChevronDown,
-  RefreshCw, Calendar, Activity, Plus, Minus, Pin, TrendingUp, Flame, Loader, Camera
+  ChevronRight, ChevronDown, ChevronUp, RefreshCw, Calendar, Activity, 
+  Plus, Minus, Pin, Flame, Loader, Brain, TrendingUp, BarChart2, Check
 } from 'lucide-react';
 
 import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
-
-import { buildMatchRoute } from '../utils/routes';
 import { Sound } from '../utils/soundEngine';
 import { applySmartMinute } from '../engine/matchEngine'; 
 import MatchCard from '../components/MatchCard';
-
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
@@ -39,7 +36,6 @@ function useNow(interval = 10000) {
   return now;
 }
 
-// Smart Toast System with Grouping
 function useToasts() {
   const [toasts, setToasts] = useState([]);
   const [pendingGoals, setPendingGoals] = useState([]);
@@ -50,20 +46,12 @@ function useToasts() {
     setPendingGoals(prevPending => {
       if (prevPending.length === 0) return [];
       const id = ++idRef.current;
-      
       if (prevPending.length === 1) {
         const g = prevPending[0];
-        setToasts(p => [...p.slice(-2), { 
-          id, type: 'goal', msg: pick(CMT.goal), 
-          homeName: g.homeName, awayName: g.awayName, score: g.score, 
-          homeLogo: g.homeLogo, awayLogo: g.awayLogo, matchId: g.matchId, dur: 3500 
-        }]);
+        setToasts(p => [...p.slice(-2), { id, type: 'goal', msg: pick(CMT.goal), homeName: g.homeName, awayName: g.awayName, score: g.score, homeLogo: g.homeLogo, awayLogo: g.awayLogo, matchId: g.matchId, dur: 3500 }]);
       } else {
-        setToasts(p => [...p.slice(-2), { 
-          id, type: 'multi-goal', count: prevPending.length, events: prevPending, dur: 4500 
-        }]);
+        setToasts(p => [...p.slice(-2), { id, type: 'multi-goal', count: prevPending.length, events: prevPending, dur: 4500 }]);
       }
-      
       setTimeout(() => setToasts(p => p.filter(x => x.id !== id)), 4500);
       return [];
     });
@@ -72,53 +60,77 @@ function useToasts() {
   const addGoal = useCallback((goalData) => {
     setPendingGoals(prev => [...prev, goalData]);
     if (flushTimer.current) clearTimeout(flushTimer.current);
-    flushTimer.current = setTimeout(flushGoals, 1200); // Group goals within 1.2s
+    flushTimer.current = setTimeout(flushGoals, 1200);
   }, [flushGoals]);
 
   return { toasts, addGoal };
 }
 
+// ✅ THEME-INDEPENDENT TOAST CONTAINER
 const ToastContainer = memo(({ toasts }) => {
   if (!toasts.length) return null;
   return (
-    <div className="zoka-toast-wrap">
+    <div className="zoka-toast-wrap" style={{
+      position: 'fixed',
+      top: '80px',
+      right: '20px',
+      zIndex: 9999,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: '12px',
+      maxWidth: '400px',
+      pointerEvents: 'none'
+    }}>
       {toasts.map(t => {
         if (t.type === 'multi-goal') {
           return (
-            <div key={t.id} className="zoka-toast multi-goal">
-              <div className="zoka-toast-inner">
-                <span className="zoka-toast-icon">⚽</span>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div className="zoka-toast-title">{t.count} New Match Events!</div>
+            <div key={t.id} className="zoka-toast multi-goal" style={{
+              background: '#1e293b',
+              border: '2px solid #3b82f6',
+              borderRadius: '12px',
+              padding: '16px',
+              boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
+              pointerEvents: 'auto',
+              animation: 'slideInRight 0.3s ease-out'
+            }}>
+              <div className="flex-center gap-12">
+                <span style={{ fontSize: '32px' }}>⚽</span>
+                <div className="flex-1">
+                  <div style={{ fontWeight: 'bold', color: '#3b82f6', fontSize: '14px' }}>{t.count} New Match Events!</div>
                   {t.events.slice(0, 3).map((e, i) => (
-                    <div key={i} className="zoka-toast-event">
+                    <div key={i} className="flex-center gap-8" style={{ fontSize: '12px', color: '#94a3b8' }}>
                       {e.homeLogo && <img src={e.homeLogo} alt="" width="14" height="14" />}
-                      <span className="team-name">{e.homeName}</span> 
-                      <span className="event-score">{e.score}</span> 
-                      <span className="team-name">{e.awayName}</span>
+                      <span style={{ fontWeight: 'bold', color: '#e2e8f0' }}>{e.homeName}</span> 
+                      <span style={{ fontWeight: 'bold', color: '#3b82f6' }}>{e.score}</span> 
+                      <span style={{ fontWeight: 'bold', color: '#e2e8f0' }}>{e.awayName}</span>
                       {e.awayLogo && <img src={e.awayLogo} alt="" width="14" height="14" />}
                     </div>
                   ))}
-                  <div className="zoka-toast-detail">Tap to view all</div>
                 </div>
               </div>
             </div>
           );
         }
-        
-        const isGoal = t.type === 'goal';
-        let bg = isGoal ? 'linear-gradient(135deg,rgba(239,68,68,.9),rgba(185,28,28,.85))' : 'linear-gradient(135deg,rgba(16,185,129,.9),rgba(5,150,105,.85))';
         return (
-          <div key={t.id} className="zoka-toast" style={{ background: bg }} onClick={() => window.location.hash = `/match/${t.matchId}`}>
-            <div className="zoka-toast-inner">
-              <span className="zoka-toast-icon">⚽</span>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div className="zoka-toast-title">{isGoal ? 'GOAL!' : 'LIVE ACTION'}</div>
-                <div className="zoka-toast-detail" style={{display:'flex', alignItems:'center', gap:'6px'}}>
+          <div key={t.id} className="zoka-toast goal-toast" onClick={() => window.location.hash = `/match/${t.matchId}`} style={{
+            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+            borderRadius: '12px',
+            padding: '16px',
+            boxShadow: '0 10px 40px rgba(5, 150, 105, 0.4)',
+            cursor: 'pointer',
+            pointerEvents: 'auto',
+            animation: 'slideInRight 0.3s ease-out',
+            border: '2px solid #34d399'
+          }}>
+            <div className="flex-center gap-12">
+              <span style={{ fontSize: '32px' }}>⚽</span>
+              <div className="flex-1">
+                <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '16px' }}>GOAL!</div>
+                <div className="flex-center gap-8" style={{ color: '#fff', fontSize: '13px' }}>
                   {t.homeLogo && <img src={t.homeLogo} alt="" width="14" height="14" />}
-                  {t.homeName} 
-                  <span className="zoka-toast-score" style={{color:'#fff'}}>{t.score}</span> 
-                  {t.awayName}
+                  <span style={{ fontWeight: '600' }}>{t.homeName}</span> 
+                  <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{t.score}</span> 
+                  <span style={{ fontWeight: '600' }}>{t.awayName}</span>
                   {t.awayLogo && <img src={t.awayLogo} alt="" width="14" height="14" />}
                 </div>
               </div>
@@ -130,16 +142,263 @@ const ToastContainer = memo(({ toasts }) => {
   );
 });
 
-const TOP_TEAMS_LIST = [
-  'manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham',
-  'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia',
-  'bayern munich', 'borussia dortmund', 'rb leipzig', 'bayer leverkusen',
-  'paris saint germain', 'psg', 'marseille', 'lyon',
-  'juventus', 'inter', 'ac milan', 'napoli', 'roma', 'lazio', 'atalanta',
-  'benfica', 'porto', 'sporting cp', 'ajax', 'psv eindhoven', 'feyenoord',
-  'celtic', 'rangers', 'flamengo', 'palmeiras', 'corinthios', 'sao paulo',
-  'boca juniors', 'river plate'
-];
+const LiveTicker = memo(({ matches }) => {
+  if (!matches || matches.length === 0) return null;
+  return (
+    <div className="zoka-live-ticker">
+      {matches.map(m => (
+        <Link key={m.id} to={`/match/${m.id}`} className="zoka-ticker-item">
+          <div className="zoka-ticker-live" />
+          <span className="text-muted" style={{fontSize: '10px', fontWeight: 700, minWidth: '28px'}}>{m.displayMinute}'</span>
+          <span className="font-bold" style={{maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{m.homeName}</span>
+          <span className="text-primary font-extrabold" style={{minWidth: '45px', textAlign: 'center'}}>{m.homeScore ?? 0} - {m.awayScore ?? 0}</span>
+          <span className="font-bold" style={{maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{m.awayName}</span>
+        </Link>
+      ))}
+    </div>
+  );
+});
+
+// --- Match of the Day Card with REAL Intelligence & Voting ---
+const MatchOfTheDayCard = memo(({ match }) => {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [userVote, setUserVote] = useState(() => localStorage.getItem(`zoka_vote_${match?.id}`));
+  const [isVoting, setIsVoting] = useState(false);
+  const [voteData, setVoteData] = useState(null);
+  const [isLoadingVotes, setIsLoadingVotes] = useState(true);
+
+  useEffect(() => {
+    if (isExpanded && match?.id) {
+      fetchRealVotes(match.id);
+    }
+  }, [isExpanded, match?.id]);
+
+  const fetchRealVotes = async (matchId) => {
+    try {
+      setIsLoadingVotes(true);
+      const BACKEND_URL = "https://api.zokascore.xyz";
+      const res = await fetch(`${BACKEND_URL}/api/v1/predictions/${matchId}`);
+      const data = await res.json();
+      
+      if (data.success) {
+        setVoteData(data);
+      }
+    } catch (err) {
+      console.error("Failed to fetch votes:", err);
+    } finally {
+      setIsLoadingVotes(false);
+    }
+  };
+
+  if (!match) return null;
+
+  const handleVote = async (choice) => {
+    if (userVote || isVoting) return;
+    setIsVoting(true);
+    
+    setUserVote(choice);
+    localStorage.setItem(`zoka_vote_${match.id}`, choice);
+
+    try {
+      const BACKEND_URL = "https://api.zokascore.xyz"; 
+      const res = await fetch(`${BACKEND_URL}/api/v1/predictions/vote`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          matchId: String(match.id),
+          choice: choice
+        })
+      });
+      
+      if (!res.ok) throw new Error(`Failed to submit vote`);
+      
+      await fetchRealVotes(match.id);
+      
+      if (navigator.vibrate) navigator.vibrate(15);
+    } catch (err) {
+      console.error("Failed to save vote:", err);
+      setUserVote(null);
+      localStorage.removeItem(`zoka_vote_${match.id}`);
+    } finally {
+      setIsVoting(false);
+    }
+  };
+
+  const renderForm = (formStr) => {
+    if (!formStr) return '-';
+    return formStr.split('').map((res, i) => (
+      <span key={i} className={`zoka-form-pill form-${res.toLowerCase()}`}>{res}</span>
+    ));
+  };
+
+  const percentages = voteData?.percentages || { home: 0, draw: 0, away: 0 };
+  const totalVotes = voteData?.totalVotes || 0;
+
+  return (
+    <div className={`zoka-motd-card ${isExpanded ? 'expanded' : ''}`}>
+      <button 
+        className="zoka-motd-header"
+        onClick={() => setIsExpanded(!isExpanded)}
+      >
+        <div className="flex-center gap-8">
+          <div className="p-8 rounded-8" style={{ background: 'rgba(var(--gold-rgb), 0.1)', color: 'var(--gold)' }}>
+            <Brain size={18} />
+          </div>
+          <span className="font-bold text-md" style={{ color: 'var(--text-primary)' }}>Match of the Day</span>
+          {match.leagueName && (
+            <span className="text-xs font-semibold px-8 py-4 rounded-4" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>
+              {match.leagueName}
+            </span>
+          )}
+        </div>
+        {isExpanded ? <ChevronUp size={18} className="text-muted" /> : <ChevronDown size={18} className="text-muted" />}
+      </button>
+
+      {isExpanded && (
+        <div className="zoka-intel-animate flex-col gap-20 pt-16">
+          <div className="flex-center justify-between gap-12 py-12">
+            <div className="flex-col items-center gap-8 flex-1 min-w-0">
+              {match.homeLogo ? (
+                <img 
+                  src={match.homeLogo} 
+                  alt={match.homeName} 
+                  className="object-contain drop-shadow-md" 
+                  style={{ width: 56, height: 56 }}
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/56?text=H';
+                  }}
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-elevated flex-center text-muted text-xs font-bold">
+                  {match.homeName?.charAt(0) || 'H'}
+                </div>
+              )}
+              <span className="font-bold text-sm text-center leading-tight" style={{ color: 'var(--text-primary)' }}>{match.homeName}</span>
+            </div>
+            
+            <div className="flex-col items-center gap-4 flex-shrink-0 px-12">
+              <div className="text-2xl font-black font-display tracking-tight" style={{ color: 'var(--text-primary)' }}>
+                {match.homeScore ?? '-'} : {match.awayScore ?? '-'}
+              </div>
+              <div className="zoka-status time-s" style={{ fontSize: '11px', padding: '4px 10px' }}>
+                {match.isLive ? <><span className="zoka-ticker-live" style={{ marginRight: 6 }} />{match.displayMinute}'</> : match.displayMinute}
+              </div>
+            </div>
+
+            <div className="flex-col items-center gap-8 flex-1 min-w-0">
+              {match.awayLogo ? (
+                <img 
+                  src={match.awayLogo} 
+                  alt={match.awayName} 
+                  className="object-contain drop-shadow-md" 
+                  style={{ width: 56, height: 56 }}
+                  onError={(e) => {
+                    e.target.src = 'https://via.placeholder.com/56?text=A';
+                  }}
+                />
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-elevated flex-center text-muted text-xs font-bold">
+                  {match.awayName?.charAt(0) || 'A'}
+                </div>
+              )}
+              <span className="font-bold text-sm text-center leading-tight" style={{ color: 'var(--text-primary)' }}>{match.awayName}</span>
+            </div>
+          </div>
+
+          <div className="flex-col gap-8">
+            <div className="text-muted text-xs font-bold uppercase flex-center gap-6">
+              <TrendingUp size={14} /> Community Prediction ({totalVotes} votes)
+            </div>
+            
+            {isLoadingVotes ? (
+              <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <div className="w-full animate-pulse" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              </div>
+            ) : (
+              <>
+                <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                  <div style={{ width: `${percentages.home}%`, background: 'var(--primary)', transition: 'width 1s ease' }} />
+                  <div style={{ width: `${percentages.draw}%`, background: 'var(--text-muted)', transition: 'width 1s ease' }} />
+                  <div style={{ width: `${percentages.away}%`, background: 'var(--danger)', transition: 'width 1s ease' }} />
+                </div>
+                <div className="flex justify-between text-xs font-bold mt-4">
+                  <span style={{ color: 'var(--primary)' }}>{percentages.home}% Home ({voteData?.votes.home || 0})</span>
+                  <span className="text-muted">{percentages.draw}% Draw ({voteData?.votes.draw || 0})</span>
+                  <span style={{ color: 'var(--danger)' }}>{percentages.away}% Away ({voteData?.votes.away || 0})</span>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="flex-col gap-12 pt-12" style={{ borderTop: '1px solid var(--border)' }}>
+            <div className="text-center text-xs font-bold uppercase text-muted">Cast Your Prediction</div>
+            <div className="flex gap-8">
+              {['home', 'draw', 'away'].map(choice => {
+                const isSelected = userVote === choice;
+                return (
+                  <button
+                    key={choice}
+                    disabled={!!userVote || isVoting}
+                    onClick={() => handleVote(choice)}
+                    className={`zoka-vote-btn ${isSelected ? 'selected' : ''}`}
+                  >
+                    <span className="capitalize">{choice}</span>
+                    {isSelected && <Check size={16} />}
+                  </button>
+                );
+              })}
+            </div>
+            {userVote && (
+              <div className="text-center text-xs text-primary font-semibold animate-fade-in">
+                Vote recorded successfully!
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+const TabBar = memo(({ tabs, activeTab, onTabChange }) => {
+  const [indicatorStyle, setIndicatorStyle] = useState({});
+  const tabsRef = useRef(null);
+
+  useEffect(() => {
+    const updateIndicator = () => {
+      if (tabsRef.current) {
+        const activeBtn = tabsRef.current.querySelector(`[data-tab="${activeTab}"]`);
+        if (activeBtn) {
+          setIndicatorStyle({
+            width: activeBtn.offsetWidth,
+            transform: `translateX(${activeBtn.offsetLeft}px)`
+          });
+        }
+      }
+    };
+    updateIndicator();
+    window.addEventListener('resize', updateIndicator);
+    return () => window.removeEventListener('resize', updateIndicator);
+  }, [activeTab]);
+
+  return (
+    <div className="zoka-tabs" ref={tabsRef}>
+      {tabs.map(t => (
+        <button 
+          key={t} 
+          data-tab={t}
+          className={`zoka-tab ${activeTab === t ? 'active' : ''}`} 
+          onClick={() => onTabChange(t)}
+        >
+          {t.charAt(0).toUpperCase() + t.slice(1)}
+        </button>
+      ))}
+      <div className="zoka-tab-indicator" style={indicatorStyle} />
+    </div>
+  );
+});
+
+const TOP_TEAMS_LIST = ['manchester united', 'manchester city', 'liverpool', 'chelsea', 'arsenal', 'tottenham hotspur', 'tottenham', 'real madrid', 'barcelona', 'atletico madrid', 'athletic bilbao', 'sevilla', 'valencia', 'bayern munich', 'borussia dortmund', 'rb leipzig', 'bayer leverkusen', 'paris saint germain', 'psg', 'marseille', 'lyon', 'juventus', 'inter', 'ac milan', 'napoli', 'roma', 'lazio', 'atalanta', 'benfica', 'porto', 'sporting cp', 'ajax', 'psv eindhoven', 'feyenoord', 'celtic', 'rangers', 'flamengo', 'palmeiras', 'corinthios', 'sao paulo', 'boca juniors', 'river plate'];
 const TOP_TEAMS_SET = new Set(TOP_TEAMS_LIST);
 
 const MAJOR_LEAGUES = [
@@ -178,15 +437,7 @@ export default function Fixtures() {
   const queryClient = useQueryClient();
   const { toasts, addGoal } = useToasts();
   
-  const { 
-    soundEnabled = false, 
-    favorites = [], 
-    pinnedMatches = [], 
-    toggleSound = () => {}, 
-    toggleFavorite = () => {}, 
-    togglePinMatch = () => {} 
-  } = usePreferencesStore();
-  
+  const { soundEnabled = false, favorites = [], pinnedMatches = [], toggleSound = () => {}, toggleFavorite = () => {}, togglePinMatch = () => {} } = usePreferencesStore();
   const [soundType, setSoundType] = useState(localStorage.getItem('zoka_sound_type') || 'whistle');
 
   const isFav = useCallback(id => favorites.includes(String(id)), [favorites]);
@@ -219,11 +470,20 @@ export default function Fixtures() {
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
   const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
+  const dateDropdownRef = useRef(null);
 
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
 
-  // Smart Goal Detection, Vibration & Rich Notifications
+  const featuredMatch = useMemo(() => {
+    if (allFixtures.length === 0) return null;
+    const liveMajor = liveMatches.find(m => MAJOR_LEAGUES.some(l => l.name === m.leagueName));
+    if (liveMajor) return liveMajor;
+    if (liveMatches.length > 0) return liveMatches[0];
+    const todayMajor = allFixtures.find(m => MAJOR_LEAGUES.some(l => l.name === m.leagueName));
+    return todayMajor || allFixtures[0];
+  }, [liveMatches, allFixtures]);
+
   const prevScores = useRef(new Map());
   useEffect(() => {
     liveMatches.forEach(m => {
@@ -233,61 +493,42 @@ export default function Fixtures() {
       let scoringTeamLogo = null;
 
       if (prev) {
-        if (m.homeScore != null && prev.h != null && m.homeScore > prev.h) {
-          goalScored = true;
-          scoringTeamLogo = m.homeLogo;
-        }
-        if (m.awayScore != null && prev.a != null && m.awayScore > prev.a) {
-          goalScored = true;
-          scoringTeamLogo = m.awayLogo;
-        }
+        if (m.homeScore != null && prev.h != null && m.homeScore > prev.h) { goalScored = true; scoringTeamLogo = m.homeLogo; }
+        if (m.awayScore != null && prev.a != null && m.awayScore > prev.a) { goalScored = true; scoringTeamLogo = m.awayLogo; }
       }
       
       if (goalScored) {
         Sound.goal();
-        if (navigator.vibrate) navigator.vibrate([100, 50, 100]); // Vibration
-        
-        addGoal({
-          matchId: m.id,
-          homeName: m.homeName,
-          awayName: m.awayName,
-          score: `${m.homeScore}–${m.awayScore}`,
-          homeLogo: m.homeLogo,
-          awayLogo: m.awayLogo,
-          league: m.leagueName
-        });
+        if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+        addGoal({ matchId: m.id, homeName: m.homeName, awayName: m.awayName, score: `${m.homeScore}–${m.awayScore}`, homeLogo: m.homeLogo, awayLogo: m.awayLogo, league: m.leagueName });
 
         if (Notification.permission === 'granted') {
           const body = `${m.homeName} ${m.homeScore}–${m.awayScore} ${m.awayName}\n${m.leagueName}`;
-          const notif = new Notification('⚽ GOAL!', {
-            body: body,
-            icon: scoringTeamLogo,
-            badge: m.leagueLogo,
-            tag: m.id,
-            data: { url: `/match/${m.id}` }
-          });
-          notif.onclick = (e) => {
-            e.preventDefault();
-            window.focus();
-            window.location.href = `/match/${m.id}`;
-          };
+          const notif = new Notification('⚽ GOAL!', { body, icon: scoringTeamLogo, badge: m.leagueLogo, tag: m.id, data: { url: `/match/${m.id}` } });
+          notif.onclick = (e) => { e.preventDefault(); window.focus(); window.location.href = `/match/${m.id}`; };
         }
       }
       prevScores.current.set(id, { h: m.homeScore, a: m.awayScore });
     });
   }, [liveMatches, addGoal]);
 
-   useEffect(() => { 
+  useEffect(() => { 
     Sound.on = soundEnabled; 
     Sound.type = soundType;
     localStorage.setItem('zoka_sound_type', soundType);
-    
-    // ★ NEW: Unlock audio context on page load to prepare for sounds
     Sound.unlock(); 
   }, [soundEnabled, soundType]);
 
+  // ✅ Close dropdowns when clicking outside
   useEffect(() => {
-    const handler = (e) => { if (moreRef.current && !moreRef.current.contains(e.target)) setUI(prev => ({ ...prev, moreDatesOpen: false })); };
+    const handler = (e) => { 
+      if (dateDropdownRef.current && !dateDropdownRef.current.contains(e.target)) {
+        setUI(prev => ({ ...prev, moreDatesOpen: false }));
+      }
+      if (moreRef.current && !moreRef.current.contains(e.target)) {
+        setUI(prev => ({ ...prev, leagueFilterOpen: false }));
+      }
+    };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
@@ -370,9 +611,7 @@ export default function Fixtures() {
   }, [queryClient, selectedDate]);
 
   useEffect(() => {
-    if ((tab === 'standings' || tab === 'teams') && !selectedLeagueId) {
-      setSelectedLeagueId('39');
-    }
+    if ((tab === 'standings' || tab === 'teams') && !selectedLeagueId) setSelectedLeagueId('39');
   }, [tab, selectedLeagueId]);
 
   const standingsTable = standingsData?.standings?.[0] || [];
@@ -391,22 +630,15 @@ export default function Fixtures() {
     return (
       <div className="zoka-section" key={group.name}>
         <div className="zoka-league-hd">
-          {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" style={{objectFit:'contain', borderRadius: '3px'}} />}
+          {group.logo && <img src={group.logo} alt={group.name} width="16" height="16" loading="lazy" />}
           <span className="zoka-league-name">{group.name}</span>
           <span className="zoka-league-count">{group.matches.length}</span>
-          <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? 'var(--accent)' : '#475569' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League"><Pin size={12} fill={isLeaguePinned ? 'var(--accent)' : 'none'} /></button>
+          <button className="zoka-icon-btn" style={{ opacity: isLeaguePinned ? 1 : 0.5, color: isLeaguePinned ? 'var(--primary)' : 'var(--text-muted)' }} onClick={() => togglePinnedLeague(group.name)} title="Pin League">
+            <Pin size={12} fill={isLeaguePinned ? 'var(--primary)' : 'none'} />
+          </button>
         </div>
         {visibleMatches.map((m, i) => (
-          <MatchCard 
-            key={`${m.id}-${i}`} 
-            m={m} 
-            i={i} 
-            isFav={isFav(m.id)} 
-            isPinned={isPinned(m.id)} 
-            togglePinMatch={togglePinMatch} 
-            toggleFavorite={toggleFavorite} 
-            handleReactNow={handleReactNow} 
-          />
+          <MatchCard key={`${m.id}-${i}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
         ))}
         {hiddenCount > 0 && (
           <button className="zoka-show-more" onClick={() => toggleLeagueExpand(group.name)}>
@@ -431,19 +663,13 @@ export default function Fixtures() {
 
   return (
     <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
-      <SEO
-        title="Football Fixtures, Live Scores & League Tables"
-        description="Explore today's football fixtures, live scores, results, league standings, kickoff times, and match insights from competitions around the world on ZOKASCORE."
-        keywords="football fixtures, live scores, football results, league tables, premier league fixtures, champions league fixtures, soccer fixtures, ZOKASCORE"
-        robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Fixtures", path: "/fixtures" }]}
-      />
+      <SEO title="Football Fixtures, Live Scores & League Tables" description="Explore today's football fixtures, live scores, results, league standings, kickoff times, and match insights from competitions around the world on ZOKASCORE." keywords="football fixtures, live scores, football results, league tables, premier league fixtures, champions league fixtures, soccer fixtures, ZOKASCORE" robots="index,follow" breadcrumbs={[{ name: "Home", path: "/" }, { name: "Fixtures", path: "/fixtures" }]} />
       <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
         <div className="zoka-hdr">
           <div className="zoka-hdr-title">
-            <h1><Activity size={18} style={{ color: 'var(--accent)' }} /> Zoka <span>Live</span></h1>
+            <h1 className="flex-center gap-8"><Activity size={18} style={{ color: 'var(--primary)' }} /> Zoka <span style={{ color: 'var(--primary)' }}>Live</span></h1>
             <div className="zoka-hdr-sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
           <div className="zoka-hdr-actions">
@@ -458,60 +684,226 @@ export default function Fixtures() {
                 <select 
                   className="zoka-sound-select" 
                   value={soundType} 
-                  onChange={(e) => setSoundType(e.target.value)}
+                  onChange={(e) => setSoundType(e.target.value)} 
                   title="Notification Sound"
+                  style={{
+                    background: '#1e293b',
+                    color: '#fff',
+                    border: '1px solid #334155',
+                    borderRadius: '8px',
+                    padding: '6px 10px',
+                    fontSize: '12px',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    minWidth: '130px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
+                  }}
                 >
-                  <option value="whistle">Classic Whistle</option>
-                  <option value="cheer">Stadium Cheer</option>
-                  <option value="horn">Air Horn</option>
-                  <option value="silent">Silent</option>
+                  <option value="whistle" style={{ background: '#1e293b', color: '#fff' }}>Classic Whistle</option>
+                  <option value="cheer" style={{ background: '#1e293b', color: '#fff' }}>Stadium Cheer</option>
+                  <option value="horn" style={{ background: '#1e293b', color: '#fff' }}>Air Horn</option>
+                  <option value="silent" style={{ background: '#1e293b', color: '#fff' }}>Silent</option>
                 </select>
               )}
             </div>
 
-            <button className="zoka-hdr-btn" onClick={handleRefresh} title="Refresh"><RefreshCw size={18} className={fixturesLoading ? 'zoka-spin' : ''} /></button>
+            <button className="zoka-hdr-btn" onClick={handleRefresh} title="Refresh"><RefreshCw size={18} className={fixturesLoading ? 'anim-spin' : ''} /></button>
           </div>
         </div>
 
+        <LiveTicker matches={liveMatches} />
+
         {fixturesLoading && allFixtures.length === 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, background: 'rgba(16,185,129,0.08)', border: '1px solid rgba(16,185,129,0.2)', color: 'var(--accent)', padding: '8px 12px', borderRadius: '10px', fontSize: '0.75em', fontWeight: 700, marginBottom: '16px', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-            <Loader size={14} className="zoka-spin" /> Syncing Main Fixtures...
+          <div className="glass-card flex-center gap-8 mb-16" style={{ background: 'rgba(var(--primary-rgb), 0.08)', border: '1px solid rgba(var(--primary-rgb), 0.2)', color: 'var(--primary)', padding: '8px 12px', borderRadius: '10px', fontSize: '0.75em', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+            <Loader size={14} className="anim-spin" /> Syncing Main Fixtures...
           </div>
         )}
         
         <div className="zoka-stats">
-          <div className="zoka-schip"><div className="val live-c">{liveCount}</div><div className="lbl">Live</div></div>
-          <div className="zoka-schip"><div className="val total-c">{displayFixtures.length}</div><div className="lbl">Matches</div></div>
-          <div className="zoka-schip"><div className="val fav-c">{favorites.length}</div><div className="lbl">Favourites</div></div>
+          <div className="zoka-schip"><div className="val" style={{ color: 'var(--danger)' }}>{liveCount}</div><div className="lbl">Live</div></div>
+          <div className="zoka-schip"><div className="val">{displayFixtures.length}</div><div className="lbl">Matches</div></div>
+          <div className="zoka-schip"><div className="val">{favorites.length}</div><div className="lbl">Favourites</div></div>
         </div>
 
-        <div className="zoka-datenav">
+        {/* ✅ DATE DROPDOWN - TOGGLES IN/OUT SMOOTHLY */}
+        <div className="zoka-datenav" style={{ 
+          position: 'relative', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: '8px',
+          zIndex: 100
+        }}>
           <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
           <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
           <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
-          <div className="zoka-more-wrap" ref={moreRef}>
-            <button className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => toggleUI('moreDatesOpen')}><Calendar size={16} /> More <ChevronDown size={16} /></button>
-            {ui.moreDatesOpen && (
-              <div className="zoka-more-dropdown">
-                <div className="zoka-more-label">Past Dates</div>
-                {dates.past.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>)) }
-                <div className="zoka-more-label" style={{ marginTop: '8px' }}>Future Dates</div>
-                {dates.future.map(d => (<button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>)) }
+          
+          <div className="zoka-more-wrap" ref={dateDropdownRef} style={{ position: 'relative' }}>
+            <button 
+              className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} 
+              onClick={() => setUI(prev => ({ ...prev, moreDatesOpen: !prev.moreDatesOpen }))}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '8px 12px',
+                borderRadius: 'var(--r-8)',
+                background: ui.moreDatesOpen ? 'rgba(var(--primary-rgb), 0.2)' : 'var(--bg-card)',
+                border: `1px solid ${ui.moreDatesOpen ? 'var(--primary)' : 'var(--border)'}`,
+                color: ui.moreDatesOpen ? 'var(--primary)' : 'var(--text-primary)',
+                fontSize: 'var(--fs-sm)',
+                fontWeight: '600',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease',
+                whiteSpace: 'nowrap'
+              }}
+            >
+              <Calendar size={16} /> 
+              <span>More</span>
+              <ChevronDown size={16} style={{ 
+                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
+                transform: ui.moreDatesOpen ? 'rotate(180deg)' : 'rotate(0deg)' 
+              }} />
+            </button>
+            
+            {/* Dropdown that toggles in/out with animation */}
+            <div 
+              style={{
+                position: 'absolute',
+                top: 'calc(100% + 10px)',
+                right: '0',
+                width: '220px',
+                maxHeight: ui.moreDatesOpen ? '450px' : '0',
+                opacity: ui.moreDatesOpen ? '1' : '0',
+                visibility: ui.moreDatesOpen ? 'visible' : 'hidden',
+                overflow: 'hidden',
+                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                zIndex: 1000
+              }}
+            >
+              <div 
+                style={{
+                  background: 'var(--bg-glass-strong)',
+                  backdropFilter: 'blur(20px)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 'var(--r-16)',
+                  padding: '12px',
+                  boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
+                  maxHeight: '450px',
+                  overflowY: 'auto'
+                }}
+              >
+                <div style={{ 
+                  fontSize: '11px', 
+                  fontWeight: '700', 
+                  color: 'var(--text-muted)', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.06em',
+                  padding: '8px',
+                  marginBottom: '8px'
+                }}>
+                  Past Dates
+                </div>
+                {dates.past.map(d => (
+                  <button 
+                    key={d.str} 
+                    onClick={() => { 
+                      setSelectedDate(d.str); 
+                      setUI(prev => ({ ...prev, moreDatesOpen: false })); 
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: selectedDate === d.str ? 'rgba(var(--primary-rgb), 0.15)' : 'transparent',
+                      border: 'none',
+                      color: selectedDate === d.str ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      marginBottom: '4px',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedDate !== d.str) {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedDate !== d.str) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                      }
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
+                
+                <div style={{ 
+                  fontSize: '11px', 
+                  fontWeight: '700', 
+                  color: 'var(--text-muted)', 
+                  textTransform: 'uppercase', 
+                  letterSpacing: '0.06em',
+                  padding: '8px',
+                  marginTop: '12px',
+                  marginBottom: '8px'
+                }}>
+                  Future Dates
+                </div>
+                {dates.future.map(d => (
+                  <button 
+                    key={d.str} 
+                    onClick={() => { 
+                      setSelectedDate(d.str); 
+                      setUI(prev => ({ ...prev, moreDatesOpen: false })); 
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: selectedDate === d.str ? 'rgba(var(--primary-rgb), 0.15)' : 'transparent',
+                      border: 'none',
+                      color: selectedDate === d.str ? 'var(--primary)' : 'var(--text-secondary)',
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                      marginBottom: '4px',
+                      transition: 'all 0.15s ease'
+                    }}
+                    onMouseEnter={(e) => {
+                      if (selectedDate !== d.str) {
+                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                        e.currentTarget.style.color = 'var(--text-primary)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (selectedDate !== d.str) {
+                        e.currentTarget.style.background = 'transparent';
+                        e.currentTarget.style.color = 'var(--text-secondary)';
+                      }
+                    }}
+                  >
+                    {d.label}
+                  </button>
+                ))}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
-        <div className="zoka-tabs">
-          {['fixtures', 'favourites', 'standings', 'teams'].map(t => (
-            <button key={t} className={`zoka-tab ${tab === t ? 'active' : ''}`} onClick={() => setTab(t)}>
-              {t.charAt(0).toUpperCase() + t.slice(1)}
-            </button>
-          ))}
-        </div>
+        <TabBar 
+          tabs={['fixtures', 'favourites', 'standings', 'teams']} 
+          activeTab={tab} 
+          onTabChange={setTab} 
+        />
 
         <div className="zoka-search-static">
-          <Search size={18} style={{ color: '#475569', flexShrink: 0 }} />
+          <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
           <input type="text" placeholder="Search teams or leagues..." value={searchQ} onChange={(e) => setSearchQ(e.target.value)} />
           {searchQ && <button className="zoka-search-clear" onClick={() => setSearchQ('')}><X size={18} /></button>}
         </div>
@@ -520,16 +912,22 @@ export default function Fixtures() {
           <>
             <div className="zoka-pill-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
               {[{ key: 'all', label: 'All Matches' }, { key: 'live', label: 'Live (Real-time)' }, { key: 'finished', label: 'Finished Results' }].map(tf => (
-                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)} style={{ flexShrink: 0, padding: '8px 16px', borderRadius: '8px', fontSize: '.8rem', fontWeight: 700, background: timeFilter === tf.key ? 'var(--accent)' : 'var(--bg-card)', color: timeFilter === tf.key ? 'var(--bg-deep)' : 'var(--text-muted)', border: `1px solid ${timeFilter === tf.key ? 'var(--accent)' : 'var(--border)'}` }}>
+                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)}>
                   {tf.label}
                 </button>
               ))}
             </div>
 
+            {fixturesLoading ? (
+              <div className="zoka-skel-featured" />
+            ) : (
+              <MatchOfTheDayCard match={featuredMatch} />
+            )}
+
             {topMatches.length > 0 && !searchQ && (
               <div className="zoka-section">
                 <div className="zoka-league-hd">
-                  <Flame size={18} style={{ color: '#fbbf24' }} />
+                  <Flame size={18} style={{ color: 'var(--gold)' }} />
                   <span className="zoka-league-name">Top Matches</span>
                 </div>
                 {visibleTopMatches.map((m, i) => (
@@ -565,12 +963,19 @@ export default function Fixtures() {
             {fixturesLoading && isPrimaryDate ? (
               <ListSkeleton count={5} />
             ) : displayFixtures.length === 0 ? (
-              <EmptyState icon={Calendar} title="No fixtures scheduled for this date." hint="Try another date or clear your search." action={searchQ ? <button className="zoka-empty-action" onClick={() => setSearchQ('')}>Clear Search</button> : null} />
+              <div className="zoka-empty-anim" style={{padding: '40px 0'}}>
+                <EmptyState 
+                  icon={Calendar} 
+                  title="No fixtures scheduled for this date." 
+                  hint="Try another date or clear your search." 
+                  action={searchQ ? <button className="zoka-pill" onClick={() => setSearchQ('')} style={{marginTop: 8}}>Clear Search</button> : null} 
+                />
+              </div>
             ) : (
               <>
                 {favMatches.length > 0 && (
                   <div className="zoka-section">
-                    <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
+                    <div className="zoka-league-hd"><Star size={18} style={{ color: 'var(--gold)' }} /><span className="zoka-league-name">Favourites</span></div>
                     {favMatches.map((m, i) => (
                       <MatchCard key={`fav-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
                     ))}
@@ -614,13 +1019,15 @@ export default function Fixtures() {
 
         {tab === 'favourites' && (
           <div className="zoka-section">
-            <div className="zoka-league-hd"><Star size={18} className="zoka-fav-icon" /><span className="zoka-league-name">Favourites</span></div>
+            <div className="zoka-league-hd"><Star size={18} style={{ color: 'var(--gold)' }} /><span className="zoka-league-name">Favourites</span></div>
             {favMatches.length > 0 ? (
               favMatches.map((m, i) => (
                 <MatchCard key={`favtab-${m.id}`} m={m} i={i} isFav={isFav(m.id)} isPinned={isPinned(m.id)} togglePinMatch={togglePinMatch} toggleFavorite={toggleFavorite} handleReactNow={handleReactNow} />
               ))
             ) : (
-              <EmptyState icon={Star} title="No favourite matches for this date." hint="Tap the star icon on any match to add it here." />
+              <div className="zoka-empty-anim" style={{padding: '40px 0'}}>
+                <EmptyState icon={Star} title="No favourite matches for this date." hint="Tap the star icon on any match to add it here." />
+              </div>
             )}
           </div>
         )}
@@ -630,7 +1037,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}
                   {l.name}
                 </button>
               ))}
@@ -647,8 +1054,8 @@ export default function Fixtures() {
                     {standingsTable.map(row => (
                       <tr key={row.team?.id || row.rank}>
                         <td>{row.rank}</td>
-                        <td style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" style={{objectFit:'contain'}} />}
+                        <td className="flex-center gap-8">
+                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" />}
                           {row.team?.name || 'TBD'}
                         </td>
                         <td>{row.all?.played}</td><td>{row.all?.win}</td><td>{row.all?.draw}</td><td>{row.all?.lose}</td>
@@ -671,7 +1078,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}
                   {l.name}
                 </button>
               ))}
@@ -679,11 +1086,11 @@ export default function Fixtures() {
             {teamsLoading ? (
               <ListSkeleton count={8} />
             ) : teamsData.length > 0 ? (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: '10px' }}>
+              <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
                 {teamsData.map(t => (
-                  <div key={t.id} className="zoka-team-card" style={{ display: 'flex', flexDirection: 'row', alignItems: 'center', gap: '10px', textAlign: 'left' }}>
+                  <div key={t.id} className="zoka-team-card flex-center gap-8">
                     {t.logo && <img src={t.logo} alt={t.name} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} />}
-                    <div className="name">{t.name}</div>
+                    <div className="text-primary font-bold text-sm">{t.name}</div>
                   </div>
                 ))}
               </div>

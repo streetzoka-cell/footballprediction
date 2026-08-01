@@ -6,7 +6,6 @@ import { buildMatchRoute } from '../utils/routes';
 const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite, handleReactNow }) => {
   if (!m) return null;
   
-  // ★ Animation State for Score Flash & Goal Replay
   const prevScoreRef = useRef({ home: m.homeScore, away: m.awayScore });
   const [scoreFlash, setScoreFlash] = useState(false);
   const [goalFlash, setGoalFlash] = useState(false);
@@ -15,7 +14,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
     if (m.isLive && (prevScoreRef.current.home !== m.homeScore || prevScoreRef.current.away !== m.awayScore)) {
       setScoreFlash(true);
       setGoalFlash(true);
-      const t1 = setTimeout(() => setScoreFlash(false), 1000);
+      const t1 = setTimeout(() => setScoreFlash(false), 500);
       const t2 = setTimeout(() => setGoalFlash(false), 2000);
       prevScoreRef.current = { home: m.homeScore, away: m.awayScore };
       return () => { clearTimeout(t1); clearTimeout(t2); };
@@ -33,93 +32,65 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   else if (isStarted) cls += ' started';
   else if (isFt) cls += ' finished'; 
   else if (isSched) cls += ' scheduled';
+  if (goalFlash) cls += ' goal-flash';
   
-  // ★ Add goal-replay class to trigger border flash
-  if (goalFlash) cls += ' goal-replay';
-  
-  const barColor = isLive ? '#ef4444' : isStarted ? '#fbbf24' : isFt ? 'var(--accent)' : 'transparent';
   const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
   const display = m.display || {};
   const minute = m.displayMinute || display.minute;
 
-  // ★ Clean, professional status badge logic
   let statusBadge = null;
   const matchStatus = (m.status || display.status || '').toUpperCase();
   
   if (isFt) {
-    if (matchStatus === 'PEN') {
-      statusBadge = <span className="zoka-status ft-s">Pen</span>;
-    } else if (matchStatus === 'AET' || minute >= 120) {
-      statusBadge = <span className="zoka-status ft-s">AET</span>;
-    } else {
-      statusBadge = <span className="zoka-status ft-s">FT</span>;
-    }
+    if (matchStatus === 'PEN') statusBadge = <span className="status-badge status-ft">PEN</span>;
+    else if (matchStatus === 'AET' || minute >= 120) statusBadge = <span className="status-badge status-ft">AET</span>;
+    else statusBadge = <span className="status-badge status-ft">FT</span>;
   } else if (matchStatus === 'PST' || matchStatus === 'POSTP') {
-    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>PST</span>;
+    statusBadge = <span className="status-badge" style={{ color: 'var(--gold)', background: 'rgba(var(--gold-rgb), 0.1)' }}>PST</span>;
   } else if (matchStatus === 'CANC' || matchStatus === 'ABD') {
-    statusBadge = <span className="zoka-status" style={{ color: '#ef4444', background: 'rgba(239,68,68,.12)' }}>CANC</span>;
-  } else if (matchStatus === 'SUSP' || matchStatus === 'INT') {
-    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>SUSP</span>;
+    statusBadge = <span className="status-badge" style={{ color: 'var(--danger)', background: 'rgba(var(--danger-rgb), 0.1)' }}>CANC</span>;
   } else if (isHT) {
-    statusBadge = <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)' }}>HT</span>;
+    statusBadge = <span className="status-badge status-ht">HT</span>;
   } else if (isLive) {
-    // ★ Added Live Heartbeat dot to live matches
     if (matchStatus === 'ET') {
-      statusBadge = (
-        <span className="zoka-status live-s">
-          <span className="live-pulse-dot" style={{ background: '#ef4444', marginRight: 4 }}></span> ET {minute != null ? `${minute}'` : ''}
-        </span>
-      );
+      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> ET {minute != null ? `${minute}'` : ''}</span>;
     } else if (matchStatus === 'P') {
-      statusBadge = (
-        <span className="zoka-status live-s">
-          <span className="live-pulse-dot" style={{ background: '#ef4444', marginRight: 4 }}></span> PEN
-        </span>
-      );
+      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> PEN</span>;
     } else {
-      statusBadge = (
-        <span className="zoka-status live-s">
-          <span className="live-pulse-dot" style={{ background: '#ef4444', marginRight: 4 }}></span> 
-          {minute != null ? `${minute}'` : 'LIVE'}
-        </span>
-      );
+      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> {minute != null ? `${minute}'` : 'LIVE'}</span>;
     }
   } else if (isStarted) {
-    statusBadge = <span className="zoka-status started-s"><Clock size={10} /> STARTED</span>;
+    statusBadge = <span className="status-badge status-upcoming"><Clock size={10} /> STARTED</span>;
   } else if (isSched) {
-    statusBadge = <span className="zoka-status time-s">{m.kickoff}</span>;
+    statusBadge = <span className="status-badge status-upcoming">{m.kickoff}</span>;
   }
 
-  // ★ Compact Stats Logic
   const hasStats = m.stats && (m.stats.possession || m.stats.shots || m.stats.corners);
 
   return (
-    <div className={cls} style={{ animationDelay: i * 15 + 'ms', paddingLeft: (isLive || isStarted || isFt) ? 18 : 16, position: 'relative' }}>
+    <div className={cls} style={{ animationDelay: i * 15 + 'ms' }}>
       
-      {/* ★ Goal Replay Confetti Burst */}
       {goalFlash && (
-        <div className="confetti-burst">
-          <span>🎉</span><span>⚽</span><span>🎉</span>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, pointerEvents: 'none', display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 2 }}>
+          <span style={{ fontSize: '2rem', animation: 'zk-confetti 1.5s ease-out forwards' }}>🎉</span>
         </div>
       )}
 
-      {(isLive || isStarted || isFt) && <div className="zoka-left-bar" style={{ background: barColor }} />}
-      
       <div className="zoka-card-top">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div className="flex-center gap-4">
           {m.category === 'FEATURED' && isSched && (
-            <span className="zoka-status" style={{ color: '#fbbf24', background: 'rgba(251,191,36,.12)', border: '1px solid rgba(251,191,36,.2)' }}>★ TOP</span>
+            <span className="badge badge-gold">★ TOP</span>
           )}
           {statusBadge}
         </div>
         <div className="zoka-card-actions">
           {isLive && (
-            <button className={`zoka-icon-btn pin ${isPinned ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
-              <Pin size={16} fill={isPinned ? 'var(--accent)' : 'none'} color={isPinned ? 'var(--accent)' : '#475569'} />
+            <button className={`btn-icon-sm ${isPinned ? 'active' : ''}`} onClick={() => togglePinMatch(m.id)} title="Pin to Screen" aria-label="Pin to Screen">
+              <Pin size={14} fill={isPinned ? 'var(--primary)' : 'none'} color={isPinned ? 'var(--primary)' : 'var(--text-muted)'} />
             </button>
           )}
-          <button className={`zoka-icon-btn fav ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
-            <Star size={16} fill={isFav ? '#fbbf24' : 'none'} color={isFav ? '#fbbf24' : '#475569'} />
+          <button className={`btn-icon-sm ${isFav ? 'active' : ''}`} onClick={() => toggleFavorite(m.id)} title="Favourite" aria-label="Toggle favourite">
+            <Star size={14} fill={isFav ? 'var(--gold)' : 'none'} color={isFav ? 'var(--gold)' : 'var(--text-muted)'} />
           </button>
         </div>
       </div>
@@ -128,54 +99,48 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
         <div className="zoka-teams">
           <div className="zoka-team-col home">
             <div className="zoka-team-row">
-              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt="" width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt="" width="24" height="24" loading="lazy" />}
               <span className="zoka-team-name">{m.homeName}</span>
             </div>
           </div>
           <div className="zoka-score-box">
             {(isLive || isHT || isFt) ? (
               <div className="zoka-scores">
-                {/* ★ Added scoreFlash class to animate score changes */}
-                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${scoreFlash ? 'flash' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${scoreFlash ? 'anim-score-pop' : ''}`}>{m.homeScore != null ? m.homeScore : '--'}</span>
                 <span className="zoka-sep">–</span>
-                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${scoreFlash ? 'flash' : ''}`}>{m.awayScore != null ? m.awayScore : '--'}</span>
+                <span className={`zoka-score-num ${isLive ? 'live-score' : ''} ${isFt ? 'ft-score' : ''} ${scoreFlash ? 'anim-score-pop' : ''}`}>{m.awayScore != null ? m.awayScore : '--'}</span>
               </div>
             ) : <span className="zoka-vs">{isStarted ? '--' : 'VS'}</span>}
           </div>
           <div className="zoka-team-col away">
             <div className="zoka-team-row">
-              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt="" width="24" height="24" loading="lazy" style={{objectFit:'contain'}} />}
+              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt="" width="24" height="24" loading="lazy" />}
               <span className="zoka-team-name">{m.awayName}</span>
             </div>
           </div>
         </div>
         <div className="zoka-comp-row">
-          {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" style={{objectFit:'contain'}} />}
+          {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" />}
           <span>{m.leagueName}</span>
         </div>
       </Link>
 
-      {/* ★ Compact Stats Row */}
       {hasStats && (
-        <div className="zoka-mc-stats">
+        <div className="p-12 flex-col gap-8" style={{ borderTop: '1px solid var(--border)', marginTop: 'var(--sp-8)' }}>
           {m.stats.possession && (
-            <div className="zoka-stat-item">
+            <div className="flex-between text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
               <span>{m.stats.possession.home}%</span>
-              <div className="bar"><div style={{ width: `${m.stats.possession.home}%` }}></div></div>
+              <div style={{ flex: 1, height: '4px', margin: '0 8px', background: 'var(--bg-elevated)', borderRadius: '2px', overflow: 'hidden' }}>
+                <div style={{ width: `${m.stats.possession.home}%`, height: '100%', background: 'var(--primary)' }}></div>
+              </div>
               <span>{m.stats.possession.away}%</span>
-            </div>
-          )}
-          {m.stats.shots && (
-            <div className="zoka-stat-item">
-              <span>Shots {m.stats.shots.home}</span>
-              <span>{m.stats.shots.away}</span>
             </div>
           )}
         </div>
       )}
 
-      <div style={{ padding: '8px 16px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <button onClick={() => handleReactNow(m)} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, background: 'rgba(99,102,241,0.1)', color: '#818cf8', border: '1px solid rgba(99,102,241,0.2)', padding: '4px 10px', borderRadius: 6, fontSize: '0.75rem', fontWeight: 600, cursor: 'pointer' }}>
+      <div className="p-12 flex-between">
+        <button onClick={() => handleReactNow(m)} className="btn btn-ghost btn-sm">
           <Camera size={12} /> React
         </button>
       </div>

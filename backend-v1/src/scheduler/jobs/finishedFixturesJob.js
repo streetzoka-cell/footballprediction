@@ -2,29 +2,27 @@
 const fixtureService = require('../../services/FixtureService');
 const { resolveMatch, rebuildDailyLeaderboard } = require('./resolvePredictionsJob');
 
-async function execute() {
+async function execute(forceFetch = false) {
   // 1. Get all finished matches for today
-  const finishedMatches = await fixtureService.syncFinishedFixtures();
+  const finishedMatches = await fixtureService.syncFinishedFixtures(forceFetch);
   const count = Array.isArray(finishedMatches) ? finishedMatches.length : 0;
 
   if (count > 0) {
     console.log(`[FinishedFixturesJob] Found ${count} finished matches. Processing...`);
     
-    const datesToRebuild = new Set(); // Track which dates need a leaderboard rebuild
+    const datesToRebuild = new Set();
 
-    // 2. Resolve each match silently (without rebuilding the leaderboard yet)
     for (const match of finishedMatches) {
       try {
         const score = match.score?.fullTime || match.score || {};
-        const homeScore = score.home;
-        const awayScore = score.away;
+        const homeScore = match.homeScore;
+        const awayScore = match.awayScore;
         const matchDate = match.dateStr || (match.date && match.date.split('T')[0]);
 
         if (homeScore != null && awayScore != null && matchDate) {
-          // ★ We call resolveMatch, NOT resolveAndBuildLeaderboard
           const wasResolved = await resolveMatch(match.id, homeScore, awayScore, matchDate);
           if (wasResolved && matchDate) {
-            datesToRebuild.add(matchDate); // Mark this date for rebuild
+            datesToRebuild.add(matchDate);
           }
         }
       } catch (err) {
@@ -32,7 +30,6 @@ async function execute() {
       }
     }
 
-    // 3. Rebuild the leaderboard ONLY ONCE for each affected date
     for (const dateStr of datesToRebuild) {
       console.log(`[FinishedFixturesJob] Rebuilding leaderboard for ${dateStr}...`);
       await rebuildDailyLeaderboard(dateStr);
