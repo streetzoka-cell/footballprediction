@@ -20,9 +20,9 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let minute = display.minute;
   let isHidden = false;
 
-  // ★ NEW SMART THRESHOLDS
-  const FT_THRESHOLD_MS = 120 * 60 * 1000;        // 2h00m — force FT
-  const STUCK_LIVE_MS = 100 * 60 * 1000;          // 1h40m — if still at 90', force FT
+  // ★ ADJUSTED THRESHOLDS (115m = 90m play + 15m HT + 10m stoppage)
+  const FT_THRESHOLD_MS = 125 * 60 * 1000;        // 2h05m — hard cap force FT
+  const STUCK_LIVE_MS = 115 * 60 * 1000;          // 1h55m — if at 90' for 10 mins, force FT
   const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24h — hide completely
 
   if (raw.timestamp) {
@@ -36,14 +36,14 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       isFinished = false;
       status = 'HIDDEN';
     }
-    // ★ KEY FIX: If minute already at 90' and elapsed > 100 min (90+8+halftime+buffer) → FT NOW
+    // ★ KEY FIX: If minute already at 90' and elapsed > 115 min → FT NOW
     else if (isLive && (minute >= 90 || status === '90' || status === '2H') && elapsed > STUCK_LIVE_MS) {
       isLive = false;
       isFinished = true;
       status = 'FT';
       minute = 90;
     }
-    // Hard cap: any match older than 2 hours → FT
+    // Hard cap: any match older than 2h05m → FT
     else if (elapsed > FT_THRESHOLD_MS && isLive) {
       isLive = false;
       isFinished = true;
@@ -104,7 +104,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ Bulletproof Smart Minute Calculator
+// ★ Bulletproof Smart Minute Calculator (HALFTIME BUG FIXED)
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
   
@@ -168,8 +168,18 @@ export function applySmartMinute(m, now = Date.now()) {
     if (m.lastUpdated) {
       const lastUpdateTime = new Date(m.lastUpdated).getTime();
       if (!isNaN(lastUpdateTime)) {
-        const extraMins = Math.floor((now - lastUpdateTime) / 60000);
-        smartMinute += extraMins;
+        let extraMins = Math.floor((now - lastUpdateTime) / 60000);
+        
+        // ★ FIX: Subtract 15 mins for halftime if we crossed it since last API update
+        const totalElapsedMins = Math.floor(elapsedMs / 60000);
+        const lastUpdateElapsedMins = Math.floor((lastUpdateTime - matchStartTime) / 60000);
+        
+        // If the last update was before halftime (<=60 mins) and we are now past halftime (>60 mins)
+        if (lastUpdateElapsedMins <= 60 && totalElapsedMins > 60) {
+          extraMins -= 15; 
+        }
+        
+        smartMinute += Math.max(0, extraMins);
       }
     }
   }

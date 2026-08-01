@@ -3,7 +3,6 @@ import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
-// ★ Helper to clean team names for cross-provider deduplication
 const cleanName = (str) => {
   if (!str || typeof str !== 'string') return '';
   return str.toLowerCase()
@@ -83,10 +82,10 @@ export function useFixtures(dateStr, sport = 'football') {
         }
       });
       
-      // ★ FILTER: Remove hidden matches and old stuck matches
       const now = Date.now();
-      const FT_THRESHOLD_MS = 120 * 60 * 1000;
-      const STUCK_AT_90_MS = 100 * 60 * 1000;
+      // ★ ADJUSTED THRESHOLDS
+      const FT_THRESHOLD_MS = 125 * 60 * 1000;
+      const STUCK_AT_90_MS = 115 * 60 * 1000;
       const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
       
       return Array.from(map.values())
@@ -105,11 +104,9 @@ export function useFixtures(dateStr, sport = 'football') {
           
           if (m.timestamp) {
             const elapsed = now - (m.timestamp * 1000);
-            // Hide if stuck at 90' for >100 min
             if (elapsed > STUCK_AT_90_MS && m.isLive && m.minute >= 90) {
               return false;
             }
-            // Hide old unfinished live matches
             if (elapsed > HIDE_OLD_MS && !m.isFinished && m.isLive) {
               return false;
             }
