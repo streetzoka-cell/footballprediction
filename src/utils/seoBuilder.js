@@ -177,7 +177,13 @@ export function buildSEO({
   const finalKw = keywords || SITE.keywords;
   const crumbs = generateBreadcrumbs(path);
 
-  let schemas = [websiteSchema(), organizationSchema(), breadcrumbSchema(crumbs)];
+  // ★ FIX: Removed websiteSchema() and organizationSchema() from here.
+  // AppShell will now be the single source of truth for global schemas.
+  let schemas = [];
+  
+  // Include breadcrumbs (SEO.jsx can still disable this via includeBreadcrumbs={false})
+  const bcSchema = breadcrumbSchema(crumbs);
+  if (bcSchema) schemas.push(bcSchema);
 
   if (structuredData) {
     if (Array.isArray(structuredData)) schemas.push(...structuredData);
@@ -201,6 +207,7 @@ export function buildSEO({
     nextPath,
   };
 }
+
 
 // ─── Specialized SEO Generators ────────────────────────
 

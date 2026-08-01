@@ -17,6 +17,7 @@ export default function SEO({
   author = "Kimutai Gibson",
   structuredData,
   breadcrumbs: propBreadcrumbs,
+  includeBreadcrumbs = true, // ★ NEW: Default to true, disable for AppShell/Root
   prevPath,
   nextPath,
   children,
@@ -39,9 +40,11 @@ export default function SEO({
     else schemas.push(structuredData);
   }
 
-  // Always include breadcrumb schema
-  const bcSchema = breadcrumbSchema(crumbs);
-  if (bcSchema) schemas.push(bcSchema);
+  // ★ FIX: Only include breadcrumb schema if explicitly allowed
+  if (includeBreadcrumbs) {
+    const bcSchema = breadcrumbSchema(crumbs);
+    if (bcSchema) schemas.push(bcSchema);
+  }
 
   return (
     <Helmet prioritizeSeoTags>
