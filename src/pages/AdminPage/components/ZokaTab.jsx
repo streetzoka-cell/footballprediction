@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
-import { Star, Save, Send, Pencil, History, ChevronUp, ChevronDown, CheckCircle2, TrendingUp, XCircle, Loader2 } from 'lucide-react';
+import { Star, Save, Send, Pencil, History, ChevronUp, ChevronDown, CheckCircle2, TrendingUp, XCircle, Loader2, Target } from 'lucide-react';
 import { db } from '../../../utils/firebase';
 import { doc, getDoc, serverTimestamp } from 'firebase/firestore';
 import { PATHS } from '../../../utils/constants';
@@ -161,63 +161,100 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
 
   return (
     <div className="flex-col gap-16">
+      {/* Selection Header */}
       {cnt > 0 && (
-        <div className="glass-card p-16 flex-between flex-wrap gap-8" style={{ background: 'rgba(var(--gold-rgb),.03)', borderColor: 'rgba(var(--gold-rgb),.15)' }}>
-          <div className="flex-col">
-            <span className="text-muted text-sm font-bold">{cnt}/{MAX_ZOKA} selected {scored === cnt && cnt > 0 && <span className="text-primary ml-4">✓ All scored</span>}</span>
-            {Object.keys(sel).some(mid => pubMap.has(mid)) && <div className="text-muted text-xs flex-center gap-4 mt-2"><Pencil size={9} /> Editing {Object.keys(sel).filter(mid => pubMap.has(mid)).length} existing</div>}
+        <div className="glass-card p-16 flex-between flex-wrap gap-8 anim-fade-up" style={{ background: 'rgba(var(--gold-rgb), 0.04)', borderColor: 'rgba(var(--gold-rgb), 0.2)', boxShadow: '0 4px 20px rgba(var(--gold-rgb), 0.05)' }}>
+          <div className="flex-col gap-4">
+            <div className="flex-center gap-8">
+              <span className="text-primary font-bold text-md">{cnt} / {MAX_ZOKA} Selected</span>
+              {scored === cnt && cnt > 0 && (
+                <span className="badge badge-primary flex-center gap-4">
+                  <CheckCircle2 size={12} /> All Scored
+                </span>
+              )}
+            </div>
+            {Object.keys(sel).some(mid => pubMap.has(mid)) && (
+              <div className="text-muted text-xs flex-center gap-4">
+                <Pencil size={12} /> Editing {Object.keys(sel).filter(mid => pubMap.has(mid)).length} existing published pick(s)
+              </div>
+            )}
           </div>
           <div className="flex gap-8">
-            <button className="btn btn-secondary btn-sm" onClick={handleSave} disabled={saving || cnt === 0 || scored === 0}>{saving ? <Loader2 size={12} className="anim-spin" /> : <Save size={12} />} Save</button>
-            <button className="btn btn-primary btn-sm" onClick={handlePublish} disabled={publishing || !ready} title={!ready ? 'Enter scores for all picks to publish' : ''}>{publishing ? <Loader2 size={12} className="anim-spin" /> : <Send size={12} />} Publish</button>
+            <button className="btn btn-secondary btn-sm flex-center gap-6" onClick={handleSave} disabled={saving || cnt === 0 || scored === 0}>
+              {saving ? <Loader2 size={12} className="anim-spin" /> : <Save size={12} />} Save Draft
+            </button>
+            <button className="btn btn-primary btn-sm flex-center gap-6" onClick={handlePublish} disabled={publishing || !ready} title={!ready ? 'Enter scores for all picks to publish' : ''}>
+              {publishing ? <Loader2 size={12} className="anim-spin" /> : <Send size={12} />} Publish
+            </button>
           </div>
         </div>
       )}
 
+      {/* Published Summary */}
       {pubMatches.length > 0 && cnt === 0 && (
-        <div className="glass-card p-16 flex-between flex-wrap gap-8">
-          <span className="text-muted text-sm font-bold">{pubMatches.length} published · Tap a match to edit</span>
-          <div className="flex-center gap-4">
-            <span className="badge badge-primary"><CheckCircle2 size={9} /> {pubRes.e}</span>
-            <span className="badge badge-gold"><TrendingUp size={9} /> {pubRes.r}</span>
-            <span className="badge badge-danger"><XCircle size={9} /> {pubRes.mi}</span>
-            {pubRes.p > 0 && <span className="badge badge-muted">{pubRes.p}</span>}
+        <div className="glass-card p-16 flex-between flex-wrap gap-8 anim-fade-up">
+          <span className="text-muted text-sm font-bold flex-center gap-6">
+            <Star size={14} className="text-gold" /> {pubMatches.length} Published Pick(s) · Tap a match below to edit
+          </span>
+          <div className="flex-center gap-6">
+            <span className="badge badge-primary flex-center gap-4"><CheckCircle2 size={10} /> {pubRes.e} Exact</span>
+            <span className="badge badge-gold flex-center gap-4"><TrendingUp size={10} /> {pubRes.r} Result</span>
+            <span className="badge badge-danger flex-center gap-4"><XCircle size={10} /> {pubRes.mi} Miss</span>
+            {pubRes.p > 0 && <span className="badge badge-muted">{pubRes.p} Pending</span>}
           </div>
-          <button className="btn btn-danger btn-sm" onClick={onUnpublish}><XCircle size={11} /> Unpublish All</button>
+          <button className="btn btn-danger btn-sm flex-center gap-6" onClick={onUnpublish}>
+            <XCircle size={12} /> Unpublish All
+          </button>
         </div>
       )}
 
-      {isFull && (
-        <div className="glass-card p-16 flex-col items-center gap-8 text-center">
-          <Pencil size={24} className="text-gold" />
-          <p className="text-muted text-sm">Zoka Picks list is full ({MAX_ZOKA}/{MAX_ZOKA}).</p>
-          <p className="text-muted text-xs">You can only edit existing picks below. Remove some to add new ones.</p>
+      {/* Full State */}
+      {isFull && cnt === 0 && (
+        <div className="glass-card p-24 flex-col items-center gap-8 text-center anim-fade-up" style={{ borderColor: 'rgba(var(--gold-rgb), 0.2)' }}>
+          <div className="p-16 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.1)' }}>
+            <Target size={32} className="text-gold" />
+          </div>
+          <p className="text-primary font-bold text-md">Zoka Picks Limit Reached</p>
+          <p className="text-muted text-sm max-w-400">You have reached the maximum of {MAX_ZOKA} picks for this date. Unpublish or remove some existing picks to add new ones.</p>
         </div>
       )}
 
+      {/* League Filters */}
       {leagues.length > 1 && !isFull && (
-        <div className="flex gap-8 overflow-x-auto pb-8">
-          <button className={`btn btn-sm ${lg === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLg('ALL')}>All ({selectableFx.length})</button>
+        <div className="flex gap-8 overflow-x-auto pb-8 scrollbar-hide">
+          <button className={`btn btn-sm px-16 ${lg === 'ALL' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLg('ALL')}>
+            All Leagues ({selectableFx.length})
+          </button>
           {leagues.map(l => (
-            <button key={l.id} className={`btn btn-sm ${lg === l.id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLg(l.id)}>
-              {l.emblem && <img src={l.emblem} alt="" width="14" height="14" />} {l.name} ({l.n})
+            <button key={l.id} className={`btn btn-sm px-16 flex-center gap-6 ${lg === l.id ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setLg(l.id)}>
+              {l.emblem && <img src={l.emblem} alt="" width="14" height="14" className="rounded-sm" />} 
+              {l.name} <span className="text-muted text-xs">({l.n})</span>
             </button>
           ))}
         </div>
       )}
 
+      {/* Match List */}
       {fxLoading ? <Skel n={4} /> : vis.length > 0 ? (
-        <div className={flash ? 'anim-goal-flash' : ''}>
+        <div className={`flex-col gap-8 ${flash ? 'anim-goal-flash' : ''}`}>
           {vis.map((m, i) => {
             const mid = String(m.id);
             const isPublished = pubMap.has(mid);
             return (
-              <div key={mid}>
-                <MatchRow m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle} scoreInput={sel[mid]} onScoreInput={updScore} pubPick={isPublished ? pubMap.get(mid) : null} extraBadge={isPublished && !sel[mid] ? (<span className="badge badge-gold"><Star size={9} /> Published</span>) : null} />
+              <div key={mid} className="relative group">
+                <MatchRow 
+                  m={m} idx={i} mode="zoka" sel={sel[mid]} onToggleSel={toggle} 
+                  scoreInput={sel[mid]} onScoreInput={updScore} 
+                  pubPick={isPublished ? pubMap.get(mid) : null} 
+                  extraBadge={isPublished && !sel[mid] ? (<span className="badge badge-gold flex-center gap-4"><Star size={9} /> Published</span>) : null} 
+                />
                 {isPublished && !sel[mid] && (
-                  <div className="text-muted text-xs flex-center gap-4 cursor-pointer -mt-4 mb-8 ml-16" onClick={() => toggle(m)}>
-                    <Pencil size={9} /> Tap to edit published pick: {pubMap.get(mid).adminPick?.home}-{pubMap.get(mid).adminPick?.away}
-                  </div>
+                  <button 
+                    className="absolute -bottom-4 left-16 btn btn-ghost btn-xs flex-center gap-4 text-muted hover:text-primary bg-card border border-border shadow-sm opacity-0 group-hover:opacity-100 transition-all duration-200"
+                    onClick={() => toggle(m)}
+                  >
+                    <Pencil size={10} /> Edit Pick: {pubMap.get(mid).adminPick?.home} - {pubMap.get(mid).adminPick?.away}
+                  </button>
                 )}
               </div>
             );
@@ -225,50 +262,70 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
           <ShowMore count={hidden} show={showAll} onToggle={() => setShowAll(p => !p)} />
         </div>
       ) : (
-        <Empty icon={Star} title={isFull ? 'No published matches to edit' : (dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available')} hint={isFull ? 'Unpublish some to add new ones' : (dayFx.length === 0 ? 'Try a different day' : 'Matches that have started cannot be selected')} />
+        <Empty icon={Star} title={isFull ? 'No published matches to edit' : (dayFx.length === 0 ? 'No fixtures for this date' : 'No upcoming matches available')} hint={isFull ? 'Unpublish some to add new ones' : (dayFx.length === 0 ? 'Try a different date' : 'Matches that have already started cannot be selected')} />
       )}
 
-      <div className="glass-card p-16 flex-col gap-12 mt-16">
-        <div className="flex-between cursor-pointer" onClick={() => { setShowHist(p => !p); if (!showHist) loadHist(); }}>
-          <h3 className="text-primary font-bold flex-center gap-8"><History size={15} /> Zoka Picks History</h3>
+      {/* History Accordion */}
+      <div className="glass-card p-16 flex-col gap-12 mt-8">
+        <button className="flex-between w-full text-left group" onClick={() => { setShowHist(p => !p); if (!showHist) loadHist(); }}>
+          <h3 className="text-primary font-bold flex-center gap-8 text-md group-hover:text-gold transition-colors">
+            <History size={16} /> Zoka Picks History
+          </h3>
           {showHist ? <ChevronUp size={16} className="text-muted" /> : <ChevronDown size={16} className="text-muted" />}
-        </div>
+        </button>
+        
         {showHist && (
-          <div className="mt-8 flex-col gap-8">
+          <div className="mt-8 flex-col gap-8 anim-fade-up">
             {histLoad ? <Skel n={2} /> : hist.length > 0 ? hist.map(day => {
               const isOpen = openDay === day.date;
               const res = day.total - day.p;
               const acc = res > 0 ? Math.round(((day.e + day.r) / res) * 100) : 0;
               return (
-                <div key={day.date} className="glass-card p-12 cursor-pointer" onClick={() => setOpenDay(isOpen ? null : day.date)}>
+                <div key={day.date} className="glass-card p-12 cursor-pointer hover:border-primary/20 transition-colors" onClick={() => setOpenDay(isOpen ? null : day.date)}>
                   <div className="flex-between">
                     <div>
                       <div className="text-primary font-bold text-sm">{dateLabel(day.date)}</div>
-                      <div className="text-muted text-xs mt-2">{day.total} picks · {acc}% accuracy</div>
+                      <div className="text-muted text-xs mt-2 flex-center gap-6">
+                        <span>{day.total} picks</span>
+                        <span className="w-1 h-1 rounded-full bg-muted" />
+                        <span className={acc >= 70 ? 'text-primary font-bold' : 'text-muted'}>{acc}% Accuracy</span>
+                      </div>
                     </div>
                     <div className="flex gap-4">
-                      <span className="badge badge-primary">{day.e}E</span>
-                      <span className="badge badge-gold">{day.r}R</span>
-                      <span className="badge badge-danger">{day.mi}M</span>
+                      <span className="badge badge-primary text-xs">{day.e} Exact</span>
+                      <span className="badge badge-gold text-xs">{day.r} Result</span>
+                      <span className="badge badge-danger text-xs">{day.mi} Miss</span>
                     </div>
                   </div>
-                  {isOpen && day.matches.map((pk, i) => (
-                    <div key={i} className="flex-between py-8 mt-8 border-t border-border text-sm gap-8">
-                      <div className="flex-1 min-w-0">
-                        <span className="text-primary font-bold">{pk.homeTeam?.shortName || pk.homeTeam?.name || '?'}</span>
-                        <span className="text-muted mx-4">vs</span>
-                        <span className="text-primary font-bold">{pk.awayTeam?.shortName || pk.awayTeam?.name || '?'}</span>
-                      </div>
-                      <div className="flex-center gap-8">
-                        <span className="font-extrabold text-gold">{pk.adminPick?.home}-{pk.adminPick?.away}</span>
-                        {pk.status === 'finished' && pk.homeScore != null && <><span className="text-muted">→</span><span className="font-extrabold text-primary">{pk.homeScore}-{pk.awayScore}</span></>}
-                        <RBadge pick={pk} />
-                      </div>
+                  
+                  {isOpen && (
+                    <div className="mt-12 pt-12 border-t border-border flex-col gap-4 anim-fade-up">
+                      {day.matches.map((pk, i) => (
+                        <div key={i} className="flex-between py-8 px-8 rounded-lg hover:bg-elevated transition-colors text-sm gap-8">
+                          <div className="flex-1 min-w-0 flex-center gap-8">
+                            {pk.homeLogo && <img src={pk.homeLogo} alt="" width="16" height="16" />}
+                            <span className="text-primary font-bold truncate">{pk.homeTeam?.shortName || pk.homeTeam?.name || '?'}</span>
+                            <span className="text-muted text-xs">vs</span>
+                            <span className="text-primary font-bold truncate">{pk.awayTeam?.shortName || pk.awayTeam?.name || '?'}</span>
+                            {pk.awayLogo && <img src={pk.awayLogo} alt="" width="16" height="16" />}
+                          </div>
+                          <div className="flex-center gap-8 flex-shrink-0">
+                            <span className="font-extrabold text-gold text-xs">{pk.adminPick?.home} - {pk.adminPick?.away}</span>
+                            {pk.status === 'finished' && pk.homeScore != null && (
+                              <>
+                                <span className="text-muted">→</span>
+                                <span className="font-extrabold text-primary text-xs">{pk.homeScore} - {pk.awayScore}</span>
+                              </>
+                            )}
+                            <RBadge pick={pk} />
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
                 </div>
               );
-            }) : <p className="text-muted text-sm text-center p-16">No previous Zoka Picks found</p>}
+            }) : <p className="text-muted text-sm text-center p-16">No previous Zoka Picks found for the last 7 days.</p>}
           </div>
         )}
       </div>

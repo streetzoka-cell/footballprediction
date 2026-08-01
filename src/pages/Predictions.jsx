@@ -217,9 +217,9 @@ const ScoreStepper = memo(function ScoreStepper({ value, onChange }) {
   const num = value === '' || value == null ? null : parseInt(value, 10);
   const display = num != null && !isNaN(num) ? num : '';
   return (
-    <div className="v21-si-wrap">
+    <div className="v21-si-wrap" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
       <button className="v21-step" onClick={() => onChange(String(Math.max(0, (num || 0) - 1)))}><Minus size={12} /></button>
-      <input className="v21-si" value={display} onChange={e => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} placeholder="?" maxLength={2} />
+      <input className="v21-si" value={display} onChange={e => onChange(e.target.value.replace(/[^0-9]/g, '').slice(0, 2))} placeholder="?" maxLength={2} style={{ width: '32px', textAlign: 'center', background: 'var(--bg-deep)', border: '1px solid var(--border)', borderRadius: 'var(--r-8)', color: 'var(--text-primary)', fontWeight: 800, fontSize: 'var(--fs-md)' }} />
       <button className="v21-step" onClick={() => onChange(String(Math.min(99, (num || 0) + 1)))}><Plus size={12} /></button>
     </div>
   );
@@ -249,9 +249,6 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   const awayName = typeof pick.awayTeam === 'object' ? (pick.awayTeam?.shortName || pick.awayTeam?.name || 'Away') : (pick.awayTeam || 'Away');
   
   const leagueName = pick.league?.name || 'Zoka Pick';
-  const leagueId = pick.league?.id || pick.leagueKey;
-  const homeId = pick.homeTeam?.id || pick.homeTeamId;
-  const awayId = pick.awayTeam?.id || pick.awayTeamId;
   const matchLink = buildMatchRoute(mid, homeName, awayName);
 
   let leftColor = 'rgba(var(--gold-rgb),.12)';
@@ -305,7 +302,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
         </div>
       </Link>
 
-      <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between' }}>
+      <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap', justifyContent: 'space-between', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, minWidth: 120 }}>
           {isFin && res && res.resultType !== 'pending' && <ResultBadge result={res} />}
           {isFin && (!res || res.resultType === 'pending') && <span className="v21-bdg pn"><Clock size={8} /> Calc...</span>}
@@ -314,7 +311,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
               <button className={`v21-vote${myV === 'agree' ? ' agree-on' : ''}`} onClick={() => onVote(mid, 'agree')} disabled={isVoting}>
                 <ThumbsUp size={11} /> {vs.agree || 0}
               </button>
-              <div className="v21-vote-bar">
+              <div className="v21-vote-bar" style={{ width: '60px', height: '4px', background: 'var(--bg-elevated)', borderRadius: '2px', overflow: 'hidden' }}>
                 <div className="v21-vote-fill" style={{ width: `${vs.total > 0 ? Math.round((vs.agree / vs.total) * 100) : 0}%` }} />
               </div>
               <button className={`v21-vote${myV === 'disagree' ? ' disagree-on' : ''}`} onClick={() => onVote(mid, 'disagree')} disabled={isVoting}>
@@ -337,6 +334,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive;
   const hasPred = !!userPred;
 
+  // Instant result calculation
   const localResult = useMemo(() => {
     if (isFin && hasPred && pred.homeScore != null) {
       const r = calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore);
@@ -358,9 +356,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const kickoff = parseKickoffTime(pred.kickoff || pred.date);
   
   const leagueName = pred.league?.name || 'Match';
-  const leagueId = pred.league?.id || pred.leagueKey;
-  const homeId = pred.homeTeam?.id || pred.homeTeamId;
-  const awayId = pred.awayTeam?.id || pred.awayTeamId;
   const matchLink = buildMatchRoute(mid, homeName, awayName);
 
   const zokaHome = zokaPick?.adminPick?.home;
@@ -414,7 +409,7 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
             <span>{homeName}</span>
           </div>
           {isEditing ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={e => e.preventDefault()}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '4px' }} onClick={e => e.preventDefault()}>
               <ScoreStepper value={editH} onChange={onEditH} />
               <span style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '.7rem', opacity: .3 }}>–</span>
               <ScoreStepper value={editA} onChange={onEditA} />
@@ -440,30 +435,34 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           </div>
         </div>
 
-        {!isEditing && (
-          <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-8)' }}>
+        {!isEditing && totalVotes > 0 && (
+          <div className="v21-benchmark-row" style={{ display: 'flex', gap: '10px', marginTop: '12px', padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-8)' }}>
             <div style={{ flex: 1.5 }}>
-              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
-              <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--bg-deep)' }}>
-                <div style={{ width: `${homePct}%`, background: 'var(--accent)' }} title={`${homePct}% Home`} />
-                <div style={{ width: `${drawPct}%`, background: 'var(--text-muted)' }} title={`${drawPct}% Draw`} />
-                <div style={{ width: `${awayPct}%`, background: 'var(--gold)' }} title={`${awayPct}% Away`} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '4px' }}>
+                <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Community ({totalVotes} players)</span>
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: 3 }}>
-                <span>{homePct}%</span><span>{drawPct}%</span><span>{awayPct}%</span>
+              <div style={{ display: 'flex', height: '6px', borderRadius: '3px', overflow: 'hidden', background: 'var(--bg-deep)' }}>
+                <div style={{ width: `${homePct}%`, background: 'var(--primary)', transition: 'width 0.5s ease' }} title={`${homePct}% Home`} />
+                <div style={{ width: `${drawPct}%`, background: 'var(--text-muted)', transition: 'width 0.5s ease' }} title={`${drawPct}% Draw`} />
+                <div style={{ width: `${awayPct}%`, background: 'var(--danger)', transition: 'width 0.5s ease' }} title={`${awayPct}% Away`} />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.65rem', color: 'var(--text-muted)', marginTop: '4px', fontWeight: 600 }}>
+                <span style={{ color: 'var(--primary)' }}>{homePct}% Home</span>
+                <span>{drawPct}% Draw</span>
+                <span style={{ color: 'var(--danger)' }}>{awayPct}% Away</span>
               </div>
             </div>
             {zokaPick && (
-              <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 10 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+              <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: '10px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '4px', marginBottom: '4px' }}>
                   <Star size={10} style={{ color: 'var(--gold)' }} />
-                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700 }}>ZOKAPICK</span>
+                  <span style={{ fontSize: '0.65rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em' }}>ZokaPick</span>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? 'var(--primary)' : 'var(--text-primary)' }}>
                     {zokaHome} - {zokaAway}
                   </span>
-                  {beatZoka && <span style={{ fontSize: '0.6rem', background: 'var(--primary)', color: 'var(--text-inverse)', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
+                  {beatZoka && <span style={{ fontSize: '0.6rem', background: 'var(--primary)', color: 'var(--text-inverse)', padding: '1px 4px', borderRadius: '4px', fontWeight: 800 }}>BEAT!</span>}
                 </div>
               </div>
             )}
@@ -471,18 +470,18 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
         )}
       </Link>
 
-      <div className="v21-ma" style={{ gap: 6, flexWrap: 'wrap' }}>
+      <div className="v21-ma" style={{ gap: '6px', flexWrap: 'wrap', marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
         {isEditing && (
-          <div className="v21-qp" style={{ width: '100%' }}>
+          <div className="v21-qp" style={{ width: '100%', display: 'flex', gap: '4px', flexWrap: 'wrap', marginBottom: '8px' }}>
             {QUICK_PICKS.map((qp, qi) => (
               <button key={qi} className={`v21-qp-btn${editH === String(qp.h) && editA === String(qp.a) ? ' sel' : ''}`} onClick={() => onQuickPick(qp.h, qp.a)}>{qp.h}–{qp.a}</button>
             ))}
             <button className="v21-qp-btn surprise" onClick={() => onQuickPick(Math.floor(Math.random()*4), Math.floor(Math.random()*4))}>
-              <Dice5 size={12} /> Surprise Me
+              <Dice5 size={12} /> Surprise
             </button>
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap', width: '100%', justifyContent: 'flex-end' }}>
           {isEditing ? (
             <>
               <button className="v21-b v21-bp v21-bsm" onClick={() => onSave(pred)} disabled={saving || !editH || !editA}><Save size={10} /> Save</button>
@@ -589,7 +588,7 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
             const rType = res?.resultType;
             const matchLink = buildMatchRoute(p.matchId, p.homeTeam?.name || 'Home', p.awayTeam?.name || 'Away');
             return (
-              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--primary)' : rType === 'result' ? '3px solid var(--gold)' : rType === 'miss' ? '3px solid var(--danger)' : '3px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
+              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--primary)' : rType === 'result' ? '3px solid var(--gold)' : rType === 'miss' ? '3px solid var(--danger)' : '3px solid var(--border)', textDecoration: 'none', color: 'inherit', display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', padding: 'var(--sp-12)', borderRadius: 'var(--r-8)', background: 'var(--bg-card)', marginBottom: 'var(--sp-8)' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: '.72rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {typeof p.homeTeam === 'object' ? (p.homeTeam?.shortName || p.homeTeam?.name || 'Home') : (p.homeTeam || 'Home')} vs {typeof p.awayTeam === 'object' ? (p.awayTeam?.shortName || p.awayTeam?.name || 'Away') : (p.awayTeam || 'Away')}
@@ -606,8 +605,8 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
             <EmptyState icon={Target} title="No predictions for this day" />
           )}
           {stats.allResolved && (
-            <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center' }}>
-              <Trophy size={22} style={{ color: 'var(--primary)', marginBottom: 6 }} />
+            <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', padding: 'var(--sp-12)' }}>
+              <Trophy size={22} style={{ color: 'var(--primary)', marginBottom: 6, margin: '0 auto 6px' }} />
               <div style={{ fontSize: '.88rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 3 }}>All Results In!</div>
               <div style={{ fontSize: '.76rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: 'var(--accent)' }}>{stats.totalPts} pts</strong> · {stats.accuracy}% accuracy</div>
               <button className="v21-b v21-bp" onClick={() => { onClose(); nav('/leaderboard'); }}>View Leaderboard <ArrowRight size={13} /></button>
@@ -920,6 +919,19 @@ export default function Predictions() {
     return dailyEntries.find(u => u.uid === uid) || null;
   }, [dailyEntries, uid]);
 
+  // Calculate community stats for each match instantly
+  const getCommunityStats = useCallback((matchId) => {
+    let home = 0, draw = 0, away = 0;
+    Object.values(ctxUserPreds).forEach(p => {
+      if (String(p.matchId) === String(matchId)) {
+        if (p.homeScore > p.awayScore) home++;
+        else if (p.homeScore === p.awayScore) draw++;
+        else away++;
+      }
+    });
+    return { home, draw, away, total: home + draw + away };
+  }, [ctxUserPreds]);
+
   return (
     <div className="v21-page">
       <SEO
@@ -976,14 +988,14 @@ export default function Predictions() {
               </div>
             )}
             {myRank && (
-              <div className="v21-rank" style={{ marginTop: 10 }}>
-                <div className="v21-rank-inner">
+              <div className="v21-rank" style={{ marginTop: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', padding: 'var(--sp-12)' }}>
+                <div className="v21-rank-inner" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', flexWrap: 'wrap' }}>
                   <Trophy size={18} style={{ color: 'var(--gold)' }} />
                   <div>
                     <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)' }}>Rank #{myRank.rank}</div>
                     <div style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600 }}>{myRank.points} pts · {myRank.accuracy}% accuracy</div>
                   </div>
-                  <button className="v21-rank-btn" onClick={() => nav('/leaderboard')}>Board <ChevronRight size={10} /></button>
+                  <button className="v21-rank-btn" onClick={() => nav('/leaderboard')} style={{ marginLeft: 'auto', background: 'var(--bg-elevated)', border: 'none', color: 'var(--primary)', padding: '6px 12px', borderRadius: 'var(--r-8)', fontSize: '9px', fontWeight: 700, cursor: 'pointer' }}>Board <ChevronRight size={10} /></button>
                 </div>
               </div>
             )}
@@ -991,46 +1003,46 @@ export default function Predictions() {
         )}
 
         {loggedIn && myDayStats.pred > 0 && (
-          <div className="v21-banner">
-            <div className="v21-banner-text">
+          <div className="v21-banner" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', padding: 'var(--sp-16)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', marginBottom: 'var(--sp-16)', flexWrap: 'wrap' }}>
+            <div className="v21-banner-text" style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-sm)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', flexWrap: 'wrap' }}>
               <Trophy size={18} style={{ color: 'var(--gold)', flexShrink: 0 }} />
               You've predicted {myDayStats.pred} matches today! Challenge your friends to beat your score.
             </div>
-            <button className="v21-banner-btn" onClick={handleBannerShare}>
+            <button className="v21-banner-btn" onClick={handleBannerShare} style={{ background: 'var(--primary)', color: 'var(--text-inverse)', border: 'none', padding: 'var(--sp-8) var(--sp-16)', borderRadius: 'var(--r-8)', fontWeight: 700, fontSize: 'var(--fs-xs)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}>
               <Share2 size={18} /> Share & Challenge Friends
             </button>
           </div>
         )}
 
         {!loggedIn && (
-          <div className="v21-banner login-banner">
-            <div className="v21-banner-text">
+          <div className="v21-banner login-banner" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', padding: 'var(--sp-16)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', marginBottom: 'var(--sp-16)', flexWrap: 'wrap' }}>
+            <div className="v21-banner-text" style={{ flex: 1, minWidth: 0, fontSize: 'var(--fs-sm)', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', flexWrap: 'wrap' }}>
               <Lock size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
               Sign in to lock in your predictions and climb the global leaderboard.
             </div>
-            <Link to="/login" className="v21-banner-btn blue">
+            <Link to="/login" className="v21-banner-btn blue" style={{ background: 'var(--accent)', color: 'var(--text-inverse)', border: 'none', padding: 'var(--sp-8) var(--sp-16)', borderRadius: 'var(--r-8)', fontWeight: 700, fontSize: 'var(--fs-xs)', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap', textDecoration: 'none' }}>
               <Zap size={18} /> Sign In to Predict
             </Link>
           </div>
         )}
 
-        <div className="v21-filter">
+        <div className="v21-filter" style={{ display: 'flex', gap: 'var(--sp-8)', marginBottom: 'var(--sp-16)', overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
           {[
             { key: 'all', label: 'All', count: filterCounts.all },
             { key: 'predicted', label: 'Predicted', count: filterCounts.predicted },
             { key: 'unpredicted', label: 'Open', count: filterCounts.unpredicted },
             { key: 'finished', label: 'Finished', count: filterCounts.finished },
           ].map(f => (
-            <button key={f.key} className={`v21-fbtn${filter === f.key ? ' on' : ''}`} onClick={() => setFilter(f.key)}>
+            <button key={f.key} className={`v21-fbtn${filter === f.key ? ' on' : ''}`} onClick={() => setFilter(f.key)} style={{ padding: 'var(--sp-8) var(--sp-12)', borderRadius: 'var(--r-8)', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0 }}>
               {f.label} ({f.count})
             </button>
           ))}
         </div>
 
         {mergedZoka.length > 0 && (
-          <div className="v21-zoka">
-            <div className="v21-zoka-hd">
-              <div className="v21-zoka-icon"><Star size={14} style={{ color: 'var(--gold)' }} /></div>
+          <div className="v21-zoka" style={{ marginBottom: 'var(--sp-24)' }}>
+            <div className="v21-zoka-hd" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', marginBottom: 'var(--sp-12)' }}>
+              <div className="v21-zoka-icon" style={{ width: '32px', height: '32px', borderRadius: 'var(--r-8)', background: 'rgba(var(--gold-rgb), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Star size={14} style={{ color: 'var(--gold)' }} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: '.85rem', fontWeight: 900, color: 'var(--text-primary)' }}>Zoka Picks</div>
                 <div style={{ fontSize: '.6rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: 1 }}>
@@ -1042,12 +1054,12 @@ export default function Predictions() {
               <ZokaPickCard key={pick.matchId || i} pick={pick} index={i} voteStats={zokaVoteStats} userVote={currentUserVotes} onVote={handleVote} votingId={votingId} onShare={handleShare} />
             ))}
             {hiddenZokaCount > 0 && !zokaExpanded && (
-              <button className="v21-zoka-more" onClick={() => setZokaExpanded(true)}>
+              <button className="v21-zoka-more" onClick={() => setZokaExpanded(true)} style={{ width: '100%', padding: 'var(--sp-8)', background: 'var(--bg-card)', border: '1px dashed var(--border)', borderRadius: 'var(--r-8)', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: 'var(--sp-8)' }}>
                 <ChevronDown size={14} /> Show {hiddenZokaCount} More
               </button>
             )}
             {zokaExpanded && hiddenZokaCount > 0 && (
-              <button className="v21-zoka-more" onClick={() => setZokaExpanded(false)}>
+              <button className="v21-zoka-more" onClick={() => setZokaExpanded(false)} style={{ width: '100%', padding: 'var(--sp-8)', background: 'var(--bg-card)', border: '1px dashed var(--border)', borderRadius: 'var(--r-8)', color: 'var(--text-muted)', fontSize: '10px', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px', marginTop: 'var(--sp-8)' }}>
                 <ChevronUp size={14} /> Show Less
               </button>
             )}
@@ -1055,10 +1067,10 @@ export default function Predictions() {
         )}
 
         <div style={{ animation: `zk-fade-up .3s ${SMOOTH} both` }}>
-          <div className="v21-sec">
-            <div className="v21-sec-icon"><Target size={13} /></div>
-            <span>Featured — Compete</span>
-            <span className="v21-sec-badge">{filteredPreds.length}</span>
+          <div className="v21-sec" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', marginBottom: 'var(--sp-12)' }}>
+            <div className="v21-sec-icon" style={{ width: '24px', height: '24px', borderRadius: 'var(--r-8)', background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Target size={13} /></div>
+            <span style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-primary)' }}>Featured — Compete</span>
+            <span className="v21-sec-badge" style={{ fontSize: '9px', fontWeight: 700, color: 'var(--text-muted)', background: 'var(--bg-card)', padding: '2px 6px', borderRadius: '4px' }}>{filteredPreds.length}</span>
           </div>
 
           {ctxLoading ? (
@@ -1087,6 +1099,8 @@ export default function Predictions() {
                   saving={saving}
                   now={now}
                   onShare={handleShare}
+                  zokaPick={mergedZoka.find(z => String(z.matchId) === predId)}
+                  communityStats={getCommunityStats(predId)}
                 />
               );
             })
@@ -1100,18 +1114,18 @@ export default function Predictions() {
         </div>
 
         {myDayStats.allResolved && myDayStats.pred > 0 && (
-          <div className="v21-rank" style={{ marginTop: 16, textAlign: 'center' }}>
-            <Trophy size={24} style={{ color: 'var(--primary)', marginBottom: 8 }} />
+          <div className="v21-rank" style={{ marginTop: 16, textAlign: 'center', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', padding: 'var(--sp-16)' }}>
+            <Trophy size={24} style={{ color: 'var(--primary)', marginBottom: 8, margin: '0 auto 8px' }} />
             <div style={{ fontSize: '.9rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 3 }}>All Results In!</div>
             <div style={{ fontSize: '.76rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 12 }}>
               You scored <strong style={{ color: 'var(--accent)' }}>{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy
             </div>
-            <button className="v21-b v21-bp" onClick={() => nav('/leaderboard')}>View Leaderboard <ArrowRight size={13} /></button>
+            <button className="v21-b v21-bp" onClick={() => nav('/leaderboard')} style={{ background: 'var(--primary)', color: 'var(--text-inverse)', border: 'none', padding: 'var(--sp-8) var(--sp-16)', borderRadius: 'var(--r-8)', fontWeight: 700, fontSize: 'var(--fs-sm)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>View Leaderboard <ArrowRight size={13} /></button>
           </div>
         )}
 
         {loggedIn && myDayStats.pred > 0 && (
-          <button className="v21-banner-btn secondary" style={{ marginTop: '20px' }} onClick={handleBannerShare}>
+          <button className="v21-banner-btn secondary" style={{ marginTop: '20px', width: '100%', padding: 'var(--sp-12)', background: 'var(--bg-elevated)', color: 'var(--text-primary)', border: '1px solid var(--border)', borderRadius: 'var(--r-8)', fontWeight: 700, fontSize: 'var(--fs-sm)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-8)' }} onClick={handleBannerShare}>
             <Share2 size={18} /> Share My Score Again
           </button>
         )}

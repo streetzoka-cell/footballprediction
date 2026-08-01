@@ -1,6 +1,8 @@
 // src/engine/matchEngine.js
 import { getLocalDateFromUtc, formatTime } from '../utils/dates';
 
+// src/engine/matchEngine.js
+
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
   
@@ -19,17 +21,28 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let isFinished = display.isFinished || false;
   let status = raw.status;
   let minute = display.minute;
+  let isHidden = false; // ★ NEW: Track if match should be hidden
 
-  // ANTI-STUCK LOGIC
-  if (isLive && raw.timestamp) {
+  // ★ ENHANCED ANTI-STUCK LOGIC
+  if (raw.timestamp) {
     const matchStartTime = raw.timestamp * 1000; 
     const elapsed = now - matchStartTime;
     const threeAndHalfHoursMs = 3.5 * 60 * 60 * 1000; 
+    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
     
-    if (elapsed > threeAndHalfHoursMs) {
+    // If match is older than 24 hours and still shows as live/90', HIDE IT
+    if (elapsed > twentyFourHoursMs && (isLive || status === '90' || status === '2H')) {
+      isHidden = true;
+      isLive = false;
+      isFinished = false;
+      status = 'HIDDEN';
+    }
+    // If match is older than 3.5 hours and still live, force finish
+    else if (elapsed > threeAndHalfHoursMs && isLive) {
       isLive = false;
       isFinished = true;
       status = 'FT';
+      minute = 90;
     }
   }
 
@@ -55,7 +68,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     minute: minute,
     displayMinute: minute,
     lastUpdated: raw.dataQuality?.lastUpdated || null,
-    isHidden: false, 
+    isHidden: isHidden, // ★ NEW: Flag for frontend to hide
     
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
