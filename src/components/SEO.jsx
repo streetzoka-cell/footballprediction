@@ -17,7 +17,7 @@ export default function SEO({
   author = "Kimutai Gibson",
   structuredData,
   breadcrumbs: propBreadcrumbs,
-  includeBreadcrumbs = true, // ★ NEW: Default to true, disable for AppShell/Root
+  includeBreadcrumbs = true, 
   prevPath,
   nextPath,
   children,
@@ -40,8 +40,9 @@ export default function SEO({
     else schemas.push(structuredData);
   }
 
-  // ★ FIX: Only include breadcrumb schema if explicitly allowed
-  if (includeBreadcrumbs) {
+  // ★ FIX: Only include breadcrumb schema if not already added by buildSEO
+  const hasBreadcrumbs = schemas.some(s => s["@type"] === "BreadcrumbList");
+  if (includeBreadcrumbs && !hasBreadcrumbs) {
     const bcSchema = breadcrumbSchema(crumbs);
     if (bcSchema) schemas.push(bcSchema);
   }

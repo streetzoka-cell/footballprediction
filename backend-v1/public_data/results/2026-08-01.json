@@ -6028,8 +6028,74 @@
       "matchScore": 100,
       "category": "LIVE",
       "minute": 0
+    },
+    {
+      "id": "256421929",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T07:30:00.000Z",
+      "utcDate": "2026-08-01T07:30:00.000Z",
+      "timestamp": 1785569400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "White City Woodville",
+        "shortName": "White City Woodville",
+        "id": "14485",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Croydon Kings",
+        "shortName": "Croydon Kings",
+        "id": "14489",
+        "crest": null
+      },
+      "league": {
+        "name": "FFSA Premier League",
+        "id": "192012",
+        "emblem": null
+      },
+      "competition": {
+        "name": "FFSA Premier League",
+        "id": "192012",
+        "emblem": null
+      },
+      "homeTeamName": "White City Woodville",
+      "awayTeamName": "Croydon Kings",
+      "homeName": "White City Woodville",
+      "awayName": "Croydon Kings",
+      "homeTeamId": "14485",
+      "awayTeamId": "14489",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "FFSA Premier League",
+      "leagueId": "192012",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 4,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 4,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "256421929"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
     }
   ],
-  "count": 92,
+  "count": 93,
   "date": "2026-08-01"
 }

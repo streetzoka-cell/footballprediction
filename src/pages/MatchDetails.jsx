@@ -92,20 +92,8 @@ export default function MatchDetails() {
   // ★ NEW: Rich SEO Schema generation
   const seo = useMemo(() => (
     seoGenerators.matchPage({
-      homeName,
-      awayName,
-      leagueName,
-      date,
-      venue,
-      isLive,
-      isFinished,
-      homeScore,
-      awayScore,
-      path: matchLink,
-      homeLogo,
-      awayLogo,
-      leagueLogo,
-      referee,
+      homeName, awayName, leagueName, date, venue, isLive, isFinished, 
+      homeScore, awayScore, path: matchLink, homeLogo, awayLogo, leagueLogo, referee,
     })
   ), [
     homeName, awayName, leagueName, date, venue, isLive, isFinished, 
