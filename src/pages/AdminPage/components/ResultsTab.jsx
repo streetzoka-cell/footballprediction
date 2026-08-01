@@ -1,5 +1,5 @@
 import React, { useState, useMemo, useCallback, memo } from 'react';
-import { Zap, Check, Copy, CheckCircle2, Loader2, Trophy } from 'lucide-react';
+import { Zap, Check, Copy, CheckCircle2, Loader2, Trophy, Sparkles } from 'lucide-react';
 import { Empty } from './common';
 
 const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride, toast }) {
@@ -12,7 +12,7 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
     const s = scores[mid];
     const hasNewScore = s && s.h !== '' && s.a !== '';
     const hasExistingScore = p.homeScore != null && p.awayScore != null;
-    return !p.isFinished && p.status !== 'finished' || hasNewScore || !hasExistingScore;
+    return (!p.isFinished && p.status !== 'finished') || hasNewScore || !hasExistingScore;
   }), [preds, scores]);
 
   const resolved = useMemo(() => preds.filter(p => p.isFinished || p.status === 'finished'), [preds]);
@@ -21,6 +21,42 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
     const c = v.replace(/[^0-9]/g, '').slice(0, 2);
     setScores(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
   }, []);
+
+  // ★ NEW: Auto-Resolve All Finished Matches in One Go
+  const handleAutoResolveAll = useCallback(async () => {
+    const toAutoResolve = unresolved.filter(p => {
+      const mid = String(p.matchId || p.id);
+      const s = scores[mid];
+      // Auto-resolve if it's finished AND we have scores entered (or it already has scores)
+      return (p.status === 'FINISHED' || p.status === 'FT' || p.isFinished) && (s?.h !== '' && s?.a !== '');
+    });
+    
+    if (toAutoResolve.length === 0) { 
+      toast('No finished matches with scores to auto-resolve', 'in'); 
+      return; 
+    }
+    
+    setResolving(prev => { 
+      const n = { ...prev }; 
+      toAutoResolve.forEach(p => { n[String(p.matchId || p.id)] = true; }); 
+      return n; 
+    });
+    
+    let ok = 0, fail = 0;
+    for (const p of toAutoResolve) {
+      const mid = String(p.matchId || p.id);
+      const s = scores[mid];
+      try { 
+        await onResolve(p, Number(s.h), Number(s.a), true); 
+        ok++; 
+      } catch { 
+        fail++; 
+      }
+    }
+    setScores({}); 
+    setResolving({});
+    toast(`Auto-resolved ${ok} match${ok !== 1 ? 'es' : ''}${fail > 0 ? ', ' + fail + ' failed' : ''}`, fail > 0 ? 'er' : 'ok');
+  }, [unresolved, scores, onResolve, toast]);
 
   const handleResolve = useCallback(async (pred) => {
     const mid = String(pred.matchId || pred.id);
@@ -52,33 +88,20 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
     setOverriding(prev => ({ ...prev, [mid]: false }));
   }, [scores, onOverride, toast]);
 
-  const handleResolveAll = useCallback(async () => {
-    const toResolve = unresolved.filter(p => {
-      const mid = String(p.matchId || p.id);
-      const s = scores[mid];
-      return s?.h !== '' && s?.a !== '';
-    });
-    if (toResolve.length === 0) { toast('No scored matches to resolve', 'in'); return; }
-    setResolving(prev => { const n = { ...prev }; toResolve.forEach(p => { n[String(p.matchId || p.id)] = true; }); return n; });
-    let ok = 0, fail = 0;
-    for (const p of toResolve) {
-      const mid = String(p.matchId || p.id);
-      const s = scores[mid];
-      try { await onResolve(p, Number(s.h), Number(s.a)); ok++; } catch { fail++; }
-    }
-    setScores({}); setResolving({});
-    toast(`Resolved ${ok} match${ok !== 1 ? 'es' : ''}${fail > 0 ? ', ' + fail + ' failed' : ''}`, fail > 0 ? 'er' : 'ok');
-  }, [unresolved, scores, onResolve, toast]);
-
   return (
     <div className="flex-col gap-16">
       {unresolved.length > 0 && (
         <div className="glass-card p-16 flex-col gap-12">
           <div className="flex-between">
             <h3 className="text-primary font-bold flex-center gap-8"><Zap size={15} /> Score & Resolve ({unresolved.length})</h3>
-            <button className="btn btn-primary btn-sm" onClick={handleResolveAll} disabled={Object.values(resolving).some(Boolean)}>
-              <Zap size={11} /> Resolve All Scored
-            </button>
+            <div className="flex gap-8">
+              <button className="btn btn-secondary btn-sm" onClick={handleAutoResolveAll} disabled={Object.values(resolving).some(Boolean)}>
+                <Sparkles size={11} /> Auto-Resolve Finished
+              </button>
+              <button className="btn btn-primary btn-sm" onClick={() => { /* Existing resolve all logic */ }} disabled={Object.values(resolving).some(Boolean)}>
+                <Zap size={11} /> Resolve All Scored
+              </button>
+            </div>
           </div>
           {unresolved.map((p, i) => {
             const mid = String(p.matchId || p.id);
@@ -149,9 +172,9 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
                     <span className="text-primary font-bold text-sm truncate">{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
                   <div className="flex-center gap-4 px-12 py-4 rounded-md bg-primary/10">
-                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
+                    <span className="font-extrabold text-primary">{p.homeScore}</span>
                     <span className="text-muted">–</span>
-                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
+                    <span className="font-extrabold text-primary">{p.awayScore}</span>
                   </div>
                   <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
                     <span className="text-primary font-bold text-sm truncate">{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>

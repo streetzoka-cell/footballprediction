@@ -2,7 +2,9 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Star, Radio, Trophy, Megaphone, UserCog, Users, Activity,
-  LayoutDashboard, BarChart3, ScrollText, ArrowLeft, ChevronUp, ChevronDown
+  LayoutDashboard, BarChart3, ScrollText, ArrowLeft, ChevronUp, ChevronDown,
+  Plus, Trash2, Zap, Check, Copy, CheckCircle2, TrendingUp, XCircle, Loader2,
+  Cpu, AlertTriangle, Terminal, X, Wifi, Ban, Search, RefreshCw, History, Save, Send, Pencil, CalendarDays
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -59,7 +61,6 @@ export default function AdminPage() {
 
   const { data: preds = [], isLoading: predsLoading } = useActivePredictions(date);
   const { data: pubPicks = null } = useZokaPicks(date);
-  
   const { data: rawFixtures = [], isLoading: fxLoading } = useFixtures(date);
   const { data: rawLive = [] } = useLiveMatches();
 
@@ -122,7 +123,7 @@ export default function AdminPage() {
           queryClient.invalidateQueries(['zokaPicks', date]);
           eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
         } catch (e) {
-          showToast('Failed to unpick. Quota might be exceeded.', 'er');
+          showToast('Failed to unpublish. Quota might be exceeded.', 'er');
         }
         setConfirm(null);
       },
@@ -158,7 +159,6 @@ export default function AdminPage() {
 
   const handleFeaturedRemove = useCallback(async (p) => {
     const predId = p.id || `feat_${date}_${p.matchId}`;
-    
     await queryClient.cancelQueries(['activePredictions', date]);
     const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
     const updatedPreds = previousPreds.filter(pr => String(pr.matchId) !== String(p.matchId));
@@ -181,12 +181,9 @@ export default function AdminPage() {
     
     try {
       await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
-      
       const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
       queryClient.setQueryData(['activePredictions', date], updated);
-      
       await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
-      
       await resolveMatchForAllUsers(matchId, h, a, date);
       queryClient.invalidateQueries(['activePredictions', date]);
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
@@ -200,15 +197,11 @@ export default function AdminPage() {
   const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
-    
     try {
       await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
-      
       const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
       queryClient.setQueryData(['activePredictions', date], updated);
-      
       await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
-      
       await resolveMatchForAllUsers(matchId, h, a, date);
       queryClient.invalidateQueries(['activePredictions', date]);
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
@@ -227,14 +220,9 @@ export default function AdminPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ dateStr: date })
       });
-      
       if (res.ok) {
         showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-        queryClient.invalidateQueries(['leaderboard']);
-        queryClient.invalidateQueries(['dailyLeaderboard']);
-        queryClient.invalidateQueries(['weeklyLeaderboard']);
-        queryClient.invalidateQueries(['monthlyLeaderboard']);
-        queryClient.invalidateQueries(['goatLeaderboard']);
+        queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
       } else {
         throw new Error('Backend rebuild failed');
       }
@@ -247,19 +235,10 @@ export default function AdminPage() {
 
   return (
     <div className="zoka-page">
-      <SEO
-        title="Admin Dashboard & Control Center"
-        description="Securely manage ZOKASCORE operations, including fixtures, match results, leaderboards, predictions, monitoring, and platform administration."
-        keywords="ZOKASCORE admin, admin dashboard, control center, fixture management, match results, leaderboard management, platform administration"
-        robots="noindex,nofollow"
-        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Admin", path: "/admin" }]}
-      />
-
+      <SEO title="Admin Dashboard & Control Center" description="Securely manage ZOKASCORE operations." robots="noindex,nofollow" />
       <div className="zoka-wrap">
         <div className="glass-card p-16 mb-16 flex-between items-center">
-          <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}>
-            <ArrowLeft size={14} />
-          </button>
+          <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}><ArrowLeft size={14} /> Back</button>
           <div className="text-center">
             <h1 className="text-primary font-extrabold text-md flex-center gap-8"><ShieldAlert size={14} className="text-gold" /> Admin Control Room</h1>
             <div className="text-muted text-xs">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
@@ -280,28 +259,19 @@ export default function AdminPage() {
             <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
           ))}
           <button className="btn btn-sm btn-secondary" onClick={() => setShowMoreDates(p => !p)}>
-            {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-            {showMoreDates ? 'Less' : 'More'}
+            {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {showMoreDates ? 'Less' : 'More'}
           </button>
           {showMoreDates && extraDates.map(d => (
             <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
           ))}
         </div>
 
-        {tab === 'dashboard' && (
-          <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} />
-        )}
+        {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} />}
         {tab === 'analytics' && <AnalyticsTab toast={showToast} />}
         {tab === 'logs' && <LogsTab />}
-        {tab === 'zoka' && (
-          <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />
-        )}
-        {tab === 'featured' && (
-          <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={fxLoading || predsLoading} toast={showToast} />
-        )}
-        {tab === 'results' && (
-          <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={showToast} />
-        )}
+        {tab === 'zoka' && <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />}
+        {tab === 'featured' && <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={fxLoading || predsLoading} toast={showToast} />}
+        {tab === 'results' && <ResultsTab date={date} preds={preds} onResolve={handleResolve} onOverride={handleOverride} toast={showToast} />}
         {tab === 'broadcast' && <BroadcastTab toast={showToast} />}
         {tab === 'staff' && <StaffTab toast={showToast} />}
         {tab === 'users' && <UsersTab toast={showToast} />}
