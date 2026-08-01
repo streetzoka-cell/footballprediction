@@ -1,4 +1,5 @@
 import { useParams, Link } from 'react-router-dom';
+import { useMemo } from 'react'; // ★ NEW IMPORT
 import { ArrowLeft, Calendar } from 'lucide-react';
 import SEO from '../components/SEO';
 import { formatTime } from '../utils/dates';
@@ -7,6 +8,7 @@ import { footballApi } from '../services/footballApi';
 import { useQuery } from '@tanstack/react-query';
 import { buildMatchRoute } from '../utils/routes';
 import { todayStr, getLocalDateStr } from '../utils/dates';
+import { seoGenerators } from '../utils/seoBuilder'; // ★ NEW IMPORT
 
 export default function TeamPage() {
   const { teamId, slug } = useParams();
@@ -28,18 +30,22 @@ export default function TeamPage() {
 
   const teamName = teamData?.name || (slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Team');
 
+  // ★ NEW: Centralized SEO generation
+  const teamPath = `/team/${teamId}/${slug || teamName.toLowerCase().replace(/\s+/g, "-")}`;
+  const seo = useMemo(() => (
+    seoGenerators.teamPage({
+      teamName,
+      path: teamPath,
+      teamLogo: teamData?.logo,
+      country: teamData?.country,
+      venue: teamData?.venue,
+    })
+  ), [teamName, teamPath, teamData]);
+
   return (
     <div className="zoka-page">
-      <SEO
-        title={`${teamName} Fixtures, Live Scores & Results`}
-        description={`Follow ${teamName}'s latest fixtures, live scores, results, standings, squad information, and match statistics on ZOKASCORE.`}
-        keywords={`${teamName}, ${teamName} fixtures, ${teamName} live scores, ${teamName} results, ${teamName} standings, football team, ZOKASCORE`}
-        robots="index,follow"
-        breadcrumbs={[
-          { name: "Home", path: "/" },
-          { name: teamName, path: `/team/${teamId}/${teamName.toLowerCase().replace(/\s+/g, "-")}` },
-        ]}
-      />
+      {/* ★ REPLACED WITH RICH SEO */}
+      <SEO {...seo} />
 
       <div className="zoka-wrap">
         <Link to="/fixtures" className="btn btn-ghost btn-sm mb-20">

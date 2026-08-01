@@ -1,11 +1,16 @@
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, Tv, BarChart3, MapPin } from 'lucide-react';
+import { 
+  ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
+  Tv, BarChart3, MapPin, Shield, Users 
+} from 'lucide-react';
+
 import SEO from '../components/SEO';
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { seoGenerators } from '../utils/seoBuilder'; // ★ NEW IMPORT
 
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
@@ -20,7 +25,6 @@ const LEAGUE_BROADCASTERS = {
   '39': [{ name: 'Peacock', color: '#000000', url: 'https://www.peacocktv.com' }, { name: 'Sky Sports', color: '#0072c6', url: 'https://www.skysports.com' }],
   '140': [{ name: 'ESPN+', color: '#d00d1e', url: 'https://www.espn.com' }, { name: 'beIN SPORTS', color: '#fa9000', url: 'https://www.beinsports.com' }],
 };
-
 const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://www.plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
 
 export default function MatchDetails() {
@@ -81,18 +85,37 @@ export default function MatchDetails() {
     );
   }
 
-  const { homeName, awayName, homeLogo, awayLogo, leagueName, leagueLogo, date, leagueId, category, kickoff, status, isLive, isFinished, isHT, minute, displayMinute, homeScore, awayScore, venue, stats } = match;
+  const { homeName, awayName, homeLogo, awayLogo, leagueName, leagueLogo, date, leagueId, category, kickoff, status, isLive, isFinished, isHT, minute, displayMinute, homeScore, awayScore, venue, stats, referee } = match;
   
   const matchLink = buildMatchRoute(match.id, homeName, awayName);
+
+  // ★ NEW: Rich SEO Schema generation
+  const seo = useMemo(() => (
+    seoGenerators.matchPage({
+      homeName,
+      awayName,
+      leagueName,
+      date,
+      venue,
+      isLive,
+      isFinished,
+      homeScore,
+      awayScore,
+      path: matchLink,
+      homeLogo,
+      awayLogo,
+      leagueLogo,
+      referee,
+    })
+  ), [
+    homeName, awayName, leagueName, date, venue, isLive, isFinished, 
+    homeScore, awayScore, matchLink, homeLogo, awayLogo, leagueLogo, referee
+  ]);
+  
   const timelineProgress = isFinished ? 100 : isHT ? 50 : displayMinute ? Math.min((displayMinute / 90) * 100, 100) : 0;
   
   const broadcasters = LEAGUE_BROADCASTERS[String(leagueId)] || FALLBACK_BROADCASTERS;
   const hasRealStats = stats && (stats.possession || stats.shots || stats.corners);
-
-  // Mock Form & Probability for Pro UI
-  const homeForm = ['W', 'W', 'D', 'L', 'W'];
-  const awayForm = ['L', 'D', 'W', 'W', 'D'];
-  const homeProb = 45, drawProb = 30, awayProb = 25;
 
   const matchStatus = String(status || '').toUpperCase();
   const isPostponed = matchStatus === 'PST' || matchStatus === 'POSTP';
@@ -108,12 +131,7 @@ export default function MatchDetails() {
 
   return (
     <div className="md-page">
-      <SEO
-        title={`${homeName} vs ${awayName} | Live Scores, Predictions & Stats`}
-        description={`Follow ${homeName} vs ${awayName} live on ZOKASCORE. Get real-time scores, match statistics, predictions, and standings updates.`}
-        path={matchLink}
-        robots="index,follow"
-         />
+      <SEO {...seo} /> {/* ★ REPLACED WITH RICH SEO */}
       
       <div className="md-container">
         <Link to="/fixtures" className="btn btn-ghost btn-sm mb-16">
@@ -168,47 +186,97 @@ export default function MatchDetails() {
           )}
         </div>
 
-        {/* Pro Grid: Form & Probability */}
+        {/* ✅ REAL DATA ONLY: Match Context (Replaced Fake Form/Probability) */}
         <div className="md-pro-grid">
           <div className="glass-card p-20 flex-col gap-12">
-            <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4"><TrendingUp size={12} /> Recent Form</h3>
-            <div className="flex-center gap-12">
-              <div className="flex gap-4">{homeForm.map((f, i) => <div key={i} className={`form-pill form-${f.toLowerCase()}`}>{f}</div>)}</div>
-              <span className="text-muted text-xs">vs</span>
-              <div className="flex gap-4">{awayForm.map((f, i) => <div key={i} className={`form-pill form-${f.toLowerCase()}`}>{f}</div>)}</div>
+            <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4"><MapPin size={12} /> Match Context</h3>
+            <div className="flex-col gap-8">
+              {date && (
+                <div className="flex-between text-sm">
+                  <span className="text-muted flex-center gap-6"><Calendar size={14} /> Date</span>
+                  <span className="text-primary font-bold">{new Date(date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })} · {formatTime(date)}</span>
+                </div>
+              )}
+              {venue?.name && (
+                <div className="flex-between text-sm">
+                  <span className="text-muted flex-center gap-6"><MapPin size={14} /> Venue</span>
+                  <span className="text-primary font-bold">{venue.name}</span>
+                </div>
+              )}
+              {referee && (
+                <div className="flex-between text-sm">
+                  <span className="text-muted flex-center gap-6"><Shield size={14} /> Referee</span>
+                  <span className="text-primary font-bold">{referee}</span>
+                </div>
+              )}
+              {!date && !venue?.name && !referee && (
+                <div className="text-muted text-sm text-center py-8">Match details will be updated shortly.</div>
+              )}
             </div>
           </div>
-          <div className="glass-card p-20 flex-col gap-8">
-            <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4"><Zap size={12} /> Win Probability</h3>
-            <div className="flex h-8 rounded-md overflow-hidden bg-elevated">
-              <div style={{ width: `${homeProb}%`, background: 'var(--primary)' }} className="flex-center text-xs font-bold text-inverse">{homeProb}%</div>
-              <div style={{ width: `${drawProb}%`, background: 'var(--text-muted)' }} className="flex-center text-xs font-bold text-inverse">{drawProb}%</div>
-              <div style={{ width: `${awayProb}%`, background: 'var(--danger)' }} className="flex-center text-xs font-bold text-inverse">{awayProb}%</div>
-            </div>
+          
+          <div className="glass-card p-20 flex-col gap-12">
+            <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4"><Users size={12} /> League Standing</h3>
+            {standingsTable.length > 0 ? (
+              <div className="flex-col gap-6">
+                {standingsTable.slice(0, 3).map((team, i) => (
+                  <Link key={team.team?.id || team.rank} to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-between items-center p-8 hover:bg-card-hover rounded-md transition-colors" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <span className="text-muted font-bold w-6 text-center">{team.rank || i + 1}</span>
+                    <div className="flex-center gap-8 flex-1 min-w-0">
+                      {team.team?.logo && <img src={team.team?.logo} alt="" width="18" height="18" />}
+                      <span className="text-primary font-bold text-sm truncate">{team.team?.name || 'TBD'}</span>
+                    </div>
+                    <span className="text-primary font-extrabold text-sm">{team.points} <small className="text-muted font-normal">pts</small></span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted text-sm text-center py-8">Standings data loading...</div>
+            )}
           </div>
         </div>
 
-        {/* Stats / Info */}
+        {/* Real Stats (Only shown if API provides them) */}
         {hasRealStats ? (
           <div className="glass-card p-24 mb-24">
             <h2 className="text-primary font-bold flex-center gap-8 mb-16"><BarChart3 size={18} /> Match Statistics</h2>
             <div className="flex-col gap-16">
               {stats.possession && (
                 <div className="flex-col gap-4">
-                  <div className="flex-between text-primary font-bold text-sm"><span>{stats.possession.home}%</span><span className="text-muted text-xs">Possession</span><span>{stats.possession.away}%</span></div>
+                  <div className="flex-between text-primary font-bold text-sm">
+                    <span>{stats.possession.home}%</span>
+                    <span className="text-muted text-xs">Possession</span>
+                    <span>{stats.possession.away}%</span>
+                  </div>
                   <div className="flex h-6 rounded-md overflow-hidden bg-elevated">
-                    <div style={{ width: `${stats.possession.home}%`, background: 'var(--primary)' }}></div>
-                    <div style={{ width: `${stats.possession.away}%`, background: 'var(--danger)' }}></div>
+                    <div style={{ width: `${stats.possession.home}%`, background: 'var(--primary)', transition: 'width 1s ease' }}></div>
+                    <div style={{ width: `${stats.possession.away}%`, background: 'var(--danger)', transition: 'width 1s ease' }}></div>
                   </div>
                 </div>
               )}
-              {stats.shots && <div className="flex-between text-primary font-bold text-sm"><span>{stats.shots.home}</span><span className="text-muted text-xs">Shots</span><span>{stats.shots.away}</span></div>}
+              {stats.shots && (
+                <div className="flex-between text-primary font-bold text-sm">
+                  <span>{stats.shots.home}</span>
+                  <span className="text-muted text-xs">Total Shots</span>
+                  <span>{stats.shots.away}</span>
+                </div>
+              )}
+              {stats.corners && (
+                <div className="flex-between text-primary font-bold text-sm">
+                  <span>{stats.corners.home}</span>
+                  <span className="text-muted text-xs">Corners</span>
+                  <span>{stats.corners.away}</span>
+                </div>
+              )}
             </div>
           </div>
         ) : (
-          <div className="glass-card p-16 mb-24 flex-center gap-16 flex-wrap text-muted font-bold text-sm">
-            {date && <span className="flex-center gap-4"><Calendar size={14} /> {new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {formatTime(date)}</span>}
-            {venue?.name && <span className="flex-center gap-4"><MapPin size={14} /> {venue.name}</span>}
+          <div className="glass-card p-24 mb-24 flex-col items-center text-center gap-8">
+            <BarChart3 size={32} className="text-muted" style={{ opacity: 0.3 }} />
+            <h3 className="text-primary font-bold">Advanced Statistics</h3>
+            <p className="text-muted text-sm max-w-400">
+              {(isLive || isFinished) ? 'Detailed match statistics are being processed and will appear here shortly.' : 'Live statistics will be available once the match begins.'}
+            </p>
           </div>
         )}
 
@@ -219,35 +287,16 @@ export default function MatchDetails() {
               <h3 className="text-primary font-bold flex-center gap-8"><Tv size={16} /> Where to Watch</h3>
               <div className="flex gap-8 flex-wrap">
                 {broadcasters.map(p => (
-                  <a key={p.name} href={p.url} target="_blank" rel="noreferrer" className="badge" style={{ borderColor: `${p.color}40`, background: `${p.color}10`, color: p.color, padding: '8px 12px' }}>
-                    {p.name}
+                  <a key={p.name} href={p.url} target="_blank" rel="noreferrer" className="badge flex-center gap-4" style={{ borderColor: `${p.color}40`, background: `${p.color}10`, color: p.color, padding: '8px 12px', textDecoration: 'none' }}>
+                    {p.name} <ArrowLeft size={12} style={{ transform: 'rotate(180deg)' }} />
                   </a>
                 ))}
               </div>
             </div>
             <div className="glass-card p-20 flex-col gap-12 justify-center">
-              <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName }} className="btn btn-primary w-full">
+              <Link to="/studio/reactor" state={{ fixtureId: match.id, homeTeam: homeName, awayTeam: awayName }} className="btn btn-primary w-full flex-center gap-8">
                 <Camera size={16} /> React in Studio
               </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Standings */}
-        {standingsTable.length > 0 && (
-          <div className="glass-card p-24">
-            <h2 className="text-primary font-bold flex-center gap-8 mb-16"><Trophy size={18} /> League Standings</h2>
-            <div className="flex-col gap-4">
-              {standingsTable.slice(0, 5).map((team, i) => (
-                <div key={team.team?.id || team.rank} className="flex-between p-8 hover:bg-card-hover rounded-md">
-                  <span className="text-muted font-bold w-8">{team.rank || i + 1}</span>
-                  <Link to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-center gap-8 text-primary font-bold flex-1">
-                    {team.team?.logo && <img src={team.team?.logo} alt="" width="18" height="18" />}
-                    {team.team?.name || 'TBD'}
-                  </Link>
-                  <span className="text-primary font-extrabold">{team.points} <small className="text-muted">pts</small></span>
-                </div>
-              ))}
             </div>
           </div>
         )}
