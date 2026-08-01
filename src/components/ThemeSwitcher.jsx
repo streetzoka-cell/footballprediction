@@ -1,4 +1,3 @@
-// src/components/ThemeSwitcher.jsx
 import { useState, useEffect } from "react";
 import { Palette, Check, Moon, Sun, Sparkles, Monitor } from "lucide-react";
 
@@ -26,13 +25,24 @@ export default function ThemeSwitcher() {
   }, [theme]);
 
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
-      <button className="nv-action-btn" onClick={() => setOpen(!open)} title="App Themes">
+    <div style={{ position: "relative", flexShrink: 0, zIndex: 1000 }}>
+      {/* ✅ Changed to btn-icon-sm anim-bounce-glow to match Search/Notif buttons */}
+      <button 
+        className="btn-icon-sm anim-bounce-glow" 
+        onClick={() => setOpen(!open)} 
+        title="App Themes"
+        aria-label="Toggle Theme"
+      >
         <Palette size={18} strokeWidth={2.5} />
       </button>
+      
       {open && (
         <>
-          <div style={{ position: "fixed", inset: 0, zIndex: 99 }} onClick={() => setOpen(false)} />
+          {/* ✅ Increased z-index to 9999 to ensure it covers everything */}
+          <div 
+            style={{ position: "fixed", inset: 0, zIndex: 9999, cursor: 'default' }} 
+            onClick={() => setOpen(false)} 
+          />
           <div className="theme-switcher-popover">
             <div className="tsp-header">App Themes</div>
             {THEMES.map((t) => {
