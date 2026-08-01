@@ -7084,8 +7084,1194 @@
       "matchScore": 0,
       "category": "NORMAL",
       "minute": 0
+    },
+    {
+      "id": "284252034",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "ABC Branik",
+        "shortName": "ABC Branik",
+        "id": "25250",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Meteor Praha",
+        "shortName": "Meteor Praha",
+        "id": "4569",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "ABC Branik",
+      "awayTeamName": "Meteor Praha",
+      "homeName": "ABC Branik",
+      "awayName": "Meteor Praha",
+      "homeTeamId": "25250",
+      "awayTeamId": "4569",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "284252034"
+      },
+      "source": "isports",
+      "matchScore": 50,
+      "category": "FEATURED",
+      "minute": 0
+    },
+    {
+      "id": "295252036",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "SK Petrin Plzen",
+        "shortName": "SK Petrin Plzen",
+        "id": "33114",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Komarov",
+        "shortName": "Komarov",
+        "id": "33693",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "SK Petrin Plzen",
+      "awayTeamName": "Komarov",
+      "homeName": "SK Petrin Plzen",
+      "awayName": "Komarov",
+      "homeTeamId": "33114",
+      "awayTeamId": "33693",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "295252036"
+      },
+      "source": "isports",
+      "matchScore": 50,
+      "category": "FEATURED",
+      "minute": 0
+    },
+    {
+      "id": "266252034",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "FC Slavia HK",
+        "shortName": "FC Slavia HK",
+        "id": "30144",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Trutnov",
+        "shortName": "Trutnov",
+        "id": "14822",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "FC Slavia HK",
+      "awayTeamName": "Trutnov",
+      "homeName": "FC Slavia HK",
+      "awayName": "Trutnov",
+      "homeTeamId": "30144",
+      "awayTeamId": "14822",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "266252034"
+      },
+      "source": "isports",
+      "matchScore": 50,
+      "category": "FEATURED",
+      "minute": 0
+    },
+    {
+      "id": "388854036",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Sutherland Sharks U20",
+        "shortName": "Sutherland Sharks U20",
+        "id": "24852",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Wollongong Wolves U20",
+        "shortName": "Wollongong Wolves U20",
+        "id": "24858",
+        "crest": null
+      },
+      "league": {
+        "name": "Northern NSW U20 League",
+        "id": "284710",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Northern NSW U20 League",
+        "id": "284710",
+        "emblem": null
+      },
+      "homeTeamName": "Sutherland Sharks U20",
+      "awayTeamName": "Wollongong Wolves U20",
+      "homeName": "Sutherland Sharks U20",
+      "awayName": "Wollongong Wolves U20",
+      "homeTeamId": "24852",
+      "awayTeamId": "24858",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Northern NSW U20 League",
+      "leagueId": "284710",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 6,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 6,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "388854036"
+      },
+      "source": "isports",
+      "matchScore": 50,
+      "category": "FEATURED",
+      "minute": 0
+    },
+    {
+      "id": "376854033",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T06:45:00.000Z",
+      "utcDate": "2026-08-01T06:45:00.000Z",
+      "timestamp": 1785566700,
+      "status": "NS",
+      "homeTeam": {
+        "name": "Riverside Olympics B",
+        "shortName": "Riverside Olympics B",
+        "id": "50397",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Launceston City B",
+        "shortName": "Launceston City B",
+        "id": "32298",
+        "crest": null
+      },
+      "league": {
+        "name": "TAS Premier Championship",
+        "id": "109515",
+        "emblem": null
+      },
+      "competition": {
+        "name": "TAS Premier Championship",
+        "id": "109515",
+        "emblem": null
+      },
+      "homeTeamName": "Riverside Olympics B",
+      "awayTeamName": "Launceston City B",
+      "homeName": "Riverside Olympics B",
+      "awayName": "Launceston City B",
+      "homeTeamId": "50397",
+      "awayTeamId": "32298",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "TAS Premier Championship",
+      "leagueId": "109515",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "376854033"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "255252032",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Klasterec",
+        "shortName": "Klasterec",
+        "id": "79387",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Tachov",
+        "shortName": "Tachov",
+        "id": "19815",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "Klasterec",
+      "awayTeamName": "Tachov",
+      "homeName": "Klasterec",
+      "awayName": "Tachov",
+      "homeTeamId": "79387",
+      "awayTeamId": "19815",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 4,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 4,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "255252032"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "285252035",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "FK Okula Nyrsko",
+        "shortName": "FK Okula Nyrsko",
+        "id": "33115",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Krimice",
+        "shortName": "Krimice",
+        "id": "74658",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "FK Okula Nyrsko",
+      "awayTeamName": "Krimice",
+      "homeName": "FK Okula Nyrsko",
+      "awayName": "Krimice",
+      "homeTeamId": "33115",
+      "awayTeamId": "74658",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 6,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 6,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "285252035"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "106252038",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "FK Prepere",
+        "shortName": "FK Prepere",
+        "id": "39341",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Velke Hamry",
+        "shortName": "Velke Hamry",
+        "id": "33061",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "FK Prepere",
+      "awayTeamName": "Velke Hamry",
+      "homeName": "FK Prepere",
+      "awayName": "Velke Hamry",
+      "homeTeamId": "39341",
+      "awayTeamId": "33061",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 3,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 3,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "106252038"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "283405033",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "University Azzurri FC",
+        "shortName": "University Azzurri FC",
+        "id": "48667",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Hellenic AC",
+        "shortName": "Hellenic AC",
+        "id": "32765",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia Darwin Premier League",
+        "id": "131127",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia Darwin Premier League",
+        "id": "131127",
+        "emblem": null
+      },
+      "homeTeamName": "University Azzurri FC",
+      "awayTeamName": "Hellenic AC",
+      "homeName": "University Azzurri FC",
+      "awayName": "Hellenic AC",
+      "homeTeamId": "48667",
+      "awayTeamId": "32765",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia Darwin Premier League",
+      "leagueId": "131127",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "283405033"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "217252030",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Jiskra Usti nad Orlici",
+        "shortName": "Jiskra Usti nad Orlici",
+        "id": "8742",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "TJ Svitavy",
+        "shortName": "TJ Svitavy",
+        "id": "20046",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "Jiskra Usti nad Orlici",
+      "awayTeamName": "TJ Svitavy",
+      "homeName": "Jiskra Usti nad Orlici",
+      "awayName": "TJ Svitavy",
+      "homeTeamId": "8742",
+      "awayTeamId": "20046",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "217252030"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "366803924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "St George Saints",
+        "shortName": "St George Saints",
+        "id": "19487",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "SD Raiders FC",
+        "shortName": "SD Raiders FC",
+        "id": "32556",
+        "crest": null
+      },
+      "league": {
+        "name": "NSW Premier League",
+        "id": "16163",
+        "emblem": null
+      },
+      "competition": {
+        "name": "NSW Premier League",
+        "id": "16163",
+        "emblem": null
+      },
+      "homeTeamName": "St George Saints",
+      "awayTeamName": "SD Raiders FC",
+      "homeName": "St George Saints",
+      "awayName": "SD Raiders FC",
+      "homeTeamId": "19487",
+      "awayTeamId": "32556",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "NSW Premier League",
+      "leagueId": "16163",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "366803924"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "252603927",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Rydalmere Lions FC",
+        "shortName": "Rydalmere Lions FC",
+        "id": "32943",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Newcastle Jets FC (Youth)",
+        "shortName": "Newcastle Jets FC (Youth)",
+        "id": "8972",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia New South Wales Super League",
+        "id": "155213",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia New South Wales Super League",
+        "id": "155213",
+        "emblem": null
+      },
+      "homeTeamName": "Rydalmere Lions FC",
+      "awayTeamName": "Newcastle Jets FC (Youth)",
+      "homeName": "Rydalmere Lions FC",
+      "awayName": "Newcastle Jets FC (Youth)",
+      "homeTeamId": "32943",
+      "awayTeamId": "8972",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia New South Wales Super League",
+      "leagueId": "155213",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "252603927"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "292304031",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Persija Jakarta",
+        "shortName": "Persija Jakarta",
+        "id": "16129",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "PSMS Medan",
+        "shortName": "PSMS Medan",
+        "id": "9881",
+        "crest": null
+      },
+      "league": {
+        "name": "Indonesia President Cup",
+        "id": "140026",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Indonesia President Cup",
+        "id": "140026",
+        "emblem": null
+      },
+      "homeTeamName": "Persija Jakarta",
+      "awayTeamName": "PSMS Medan",
+      "homeName": "Persija Jakarta",
+      "awayName": "PSMS Medan",
+      "homeTeamId": "16129",
+      "awayTeamId": "9881",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Indonesia President Cup",
+      "leagueId": "140026",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 4,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 4,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "292304031"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "382806925",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Northern Tigers FC (W)",
+        "shortName": "Northern Tigers FC (W)",
+        "id": "32627",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Hills United (W)",
+        "shortName": "Hills United (W)",
+        "id": "78143",
+        "crest": null
+      },
+      "league": {
+        "name": "NSW Premier W-League",
+        "id": "135222",
+        "emblem": null
+      },
+      "competition": {
+        "name": "NSW Premier W-League",
+        "id": "135222",
+        "emblem": null
+      },
+      "homeTeamName": "Northern Tigers FC (W)",
+      "awayTeamName": "Hills United (W)",
+      "homeName": "Northern Tigers FC (W)",
+      "awayName": "Hills United (W)",
+      "homeTeamId": "32627",
+      "awayTeamId": "78143",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "NSW Premier W-League",
+      "leagueId": "135222",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "382806925"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "257005928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T07:00:00.000Z",
+      "utcDate": "2026-08-01T07:00:00.000Z",
+      "timestamp": 1785567600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Quinns FC",
+        "shortName": "Quinns FC",
+        "id": "19054",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Inglewood United",
+        "shortName": "Inglewood United",
+        "id": "5892",
+        "crest": null
+      },
+      "league": {
+        "name": "National Primera Division Western Australia",
+        "id": "174618",
+        "emblem": null
+      },
+      "competition": {
+        "name": "National Primera Division Western Australia",
+        "id": "174618",
+        "emblem": null
+      },
+      "homeTeamName": "Quinns FC",
+      "awayTeamName": "Inglewood United",
+      "homeName": "Quinns FC",
+      "awayName": "Inglewood United",
+      "homeTeamId": "19054",
+      "awayTeamId": "5892",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "National Primera Division Western Australia",
+      "leagueId": "174618",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "257005928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "360994031",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T07:00:00.000Z",
+      "utcDate": "2026-08-01T07:00:00.000Z",
+      "timestamp": 1785567600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Malvern City",
+        "shortName": "Malvern City",
+        "id": "14629",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Goulburn Valley Suns",
+        "shortName": "Goulburn Valley Suns",
+        "id": "22761",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia Victoria State League",
+        "id": "165517",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia Victoria State League",
+        "id": "165517",
+        "emblem": null
+      },
+      "homeTeamName": "Malvern City",
+      "awayTeamName": "Goulburn Valley Suns",
+      "homeName": "Malvern City",
+      "awayName": "Goulburn Valley Suns",
+      "homeTeamId": "14629",
+      "awayTeamId": "22761",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia Victoria State League",
+      "leagueId": "165517",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "360994031"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "107105036",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "NMSK 1922 Bratislava",
+        "shortName": "NMSK 1922 Bratislava",
+        "id": "42201",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Dunajska Luzna",
+        "shortName": "Dunajska Luzna",
+        "id": "17387",
+        "crest": null
+      },
+      "league": {
+        "name": "Slovakia Cup",
+        "id": "13418",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Slovakia Cup",
+        "id": "13418",
+        "emblem": null
+      },
+      "homeTeamName": "NMSK 1922 Bratislava",
+      "awayTeamName": "Dunajska Luzna",
+      "homeName": "NMSK 1922 Bratislava",
+      "awayName": "Dunajska Luzna",
+      "homeTeamId": "42201",
+      "awayTeamId": "17387",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Slovakia Cup",
+      "leagueId": "13418",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "107105036"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "344694030",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Gnistan Ogeli",
+        "shortName": "Gnistan Ogeli",
+        "id": "22676",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "TiPS U21",
+        "shortName": "TiPS U21",
+        "id": "78427",
+        "crest": null
+      },
+      "league": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "homeTeamName": "Gnistan Ogeli",
+      "awayTeamName": "TiPS U21",
+      "homeName": "Gnistan Ogeli",
+      "awayName": "TiPS U21",
+      "homeTeamId": "22676",
+      "awayTeamId": "78427",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Finland Kolmonen",
+      "leagueId": "279411",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "344694030"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
     }
   ],
-  "count": 108,
+  "count": 126,
   "date": "2026-08-01"
 }

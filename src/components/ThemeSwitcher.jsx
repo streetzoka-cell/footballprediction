@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Palette, Check, Moon, Sun, Sparkles, Monitor } from "lucide-react";
 
 const THEMES = [
@@ -11,6 +11,7 @@ const THEMES = [
 export default function ThemeSwitcher() {
   const [open, setOpen] = useState(false);
   const [theme, setTheme] = useState(() => localStorage.getItem("zk_theme") || "dark");
+  const wrapperRef = useRef(null);
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
@@ -23,11 +24,30 @@ export default function ThemeSwitcher() {
     }
   }, [theme]);
 
+  // Reliable click-outside handler (no invisible overlay needed)
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    
+    if (open) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [open]);
+
   return (
-    <div style={{ position: "relative", flexShrink: 0, zIndex: 1001 }}>
+    <div ref={wrapperRef} style={{ position: "relative", flexShrink: 0, zIndex: 1002 }}>
       <button 
         className="btn-icon-sm anim-bounce-glow" 
-        onClick={() => setOpen(!open)} 
+        onClick={(e) => {
+          e.stopPropagation();
+          setOpen(!open);
+        }} 
         title="App Themes"
         aria-label="Toggle Theme"
         type="button"
@@ -36,34 +56,29 @@ export default function ThemeSwitcher() {
       </button>
       
       {open && (
-        <>
-          <div 
-            style={{ position: "fixed", inset: 0, zIndex: 9998, cursor: 'default' }} 
-            onClick={() => setOpen(false)} 
-          />
-          <div className="theme-switcher-popover">
-            <div className="tsp-header">App Themes</div>
-            {THEMES.map((t) => {
-              const Icon = t.icon;
-              return (
-                <button
-                  key={t.key}
-                  type="button"
-                  className={`tsp-accent ${theme === t.key ? "on" : ""}`}
-                  onClick={() => {
-                    setTheme(t.key);
-                    setOpen(false);
-                  }}
-                >
-                  <span className="tsp-swatch" style={{ background: t.color, boxShadow: `0 0 10px ${t.color}` }} />
-                  <Icon size={14} />
-                  <span className="tsp-label">{t.label}</span>
-                  {theme === t.key && <Check size={14} className="tsp-check" />}
-                </button>
-              );
-            })}
-          </div>
-        </>
+        <div className="theme-switcher-popover" style={{ zIndex: 1003 }}>
+          <div className="tsp-header">App Themes</div>
+          {THEMES.map((t) => {
+            const Icon = t.icon;
+            return (
+              <button
+                key={t.key}
+                type="button"
+                className={`tsp-accent ${theme === t.key ? "on" : ""}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setTheme(t.key);
+                  setOpen(false);
+                }}
+              >
+                <span className="tsp-swatch" style={{ background: t.color, boxShadow: `0 0 10px ${t.color}` }} />
+                <Icon size={14} />
+                <span className="tsp-label">{t.label}</span>
+                {theme === t.key && <Check size={14} className="tsp-check" />}
+              </button>
+            );
+          })}
+        </div>
       )}
     </div>
   );
