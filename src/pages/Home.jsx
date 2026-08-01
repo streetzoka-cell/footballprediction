@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
-  Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
+  Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle2,
   Lock, Crown, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
   ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon, Sparkles, Gamepad2
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useFixtures } from '../hooks/useFixtures';
-import { useActivePredictions, useUserPredictions, useDailyLeaderboard } from '../hooks/useUserData';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks } from '../hooks/useUserData';
 
 import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { todayStr } from '../utils/dates';
@@ -200,21 +200,15 @@ const LiveMini = React.memo(({ match, index }) => {
   );
 });
 
-const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
+const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
   const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
   const isHT = pred.status === 'ht' || pred.status === 'HT';
   const hasScore = pred.homeScore != null && pred.awayScore != null;
   const isPredicted = !!userPred;
-  const isResolved = !!userResult && userResult.resultType && userResult.resultType !== 'pending';
-  const isExact = isResolved && userResult.resultType === 'exact';
-  const isHit = isResolved && userResult.resultType === 'result';
 
   let border = 'var(--border)';
-  if (isExact) border = 'var(--primary)';
-  else if (isHit) border = 'var(--gold)';
-  else if (isResolved && !isExact && !isHit) border = 'var(--danger)';
-  else if (isLive || isHT) border = 'var(--danger)';
+  if (isLive || isHT) border = 'var(--danger)';
   else if (isFin) border = 'rgba(var(--primary-rgb),.2)';
   else if (isPredicted) border = 'var(--primary)';
 
@@ -228,26 +222,15 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   let cls = 'z-mc';
   if (isLive) cls += ' live';
   if (isFin) cls += ' ft';
-  if (isFin && !isResolved && !isPredicted) cls += ' dim';
+  if (isFin && !isPredicted) cls += ' dim';
 
   const mid = pred.id || pred.matchId;
 
   let actionContent = null;
-  if (isResolved) {
-    let badgeCls = 'badge badge-danger';
-    let badgeText = 'Miss';
-    if (isExact) { badgeCls = 'badge badge-primary'; badgeText = 'Exact +10'; }
-    else if (isHit) { badgeCls = 'badge badge-gold'; badgeText = 'Result +3'; }
-    actionContent = (
-      <div className="flex-col items-end gap-4">
-        <span className={badgeCls}>{badgeText}</span>
-        {isPredicted && <span style={{ fontSize: '.65rem', fontWeight: 600, color: 'var(--text-muted)' }}>You: {userPred.homeScore}-{userPred.awayScore}</span>}
-      </div>
-    );
-  } else if (isPredicted) {
+  if (isPredicted) {
     actionContent = (
       <Link to="/predictions" className="btn btn-outline btn-sm locked-pred">
-        <CheckCircle size={12} /> Locked
+        <CheckCircle2 size={12} /> Locked
       </Link>
     );
   } else if (isLoggedIn) {
@@ -406,6 +389,7 @@ export default function Home() {
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
   const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
+  const { data: zokaPicksData = null } = useZokaPicks(todayStr());
 
   const [offline, setOffline] = useState(!navigator.onLine);
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
@@ -486,19 +470,25 @@ export default function Home() {
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
+  // ★ ACCURATE DATA DERIVATION
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
-  const zokaPicks = dailyLB?.zokaPicks || { matches: [] }; 
-  const userStats = dailyLB?.userStats || { points: 0, exact: 0, result: 0, predicted: 0 };
-  const ctxLoading = homeLoading;
+  const zokaFlat = zokaPicksData?.matches || [];
+  
+  const myEntry = useMemo(() => {
+    if (!isLoggedIn || !dailyEntries) return null;
+    return dailyEntries.find(u => u.uid === uid) || null;
+  }, [dailyEntries, uid, isLoggedIn]);
 
-  const totalPredictors = (dailyStats && dailyStats.players) || (dailyEntries && dailyEntries.length) || 0;
+  const myPoints = myEntry?.points || 0;
+  const myRank = myEntry?.rank || null;
+  const userStreak = myEntry?.streak || userProfile?.streak || 0;
+  
+  const totalPredictors = dailyStats.players || 0;
   const totalPredictionsMade = dailyStats.preds || 0;
   const avgAccuracy = dailyStats.avg ? parseFloat(dailyStats.avg) : 0;
-  const myPoints = userStats.points || 0;
-  const userStreak = userProfile?.streak || 0;
+  const ctxLoading = homeLoading;
 
-  const zokaFlat = zokaPicks?.matches || [];
   const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
   const zokaHidden = Math.max(0, zokaFlat.length - 4);
 
@@ -506,8 +496,8 @@ export default function Home() {
   const featVis = ui.showFeat ? featFlat : featFlat.slice(0, 5);
   const featHidden = Math.max(0, featFlat.length - 5);
 
-  const lbVis = ui.showLB ? (dailyEntries || []) : (dailyEntries || []).slice(0, 5);
-  const lbHidden = Math.max(0, (dailyEntries || []).length - 5);
+  const lbVis = ui.showLB ? dailyEntries : dailyEntries.slice(0, 5);
+  const lbHidden = Math.max(0, dailyEntries.length - 5);
 
   const userPredMap = useMemo(() => {
     const m = {};
@@ -525,14 +515,7 @@ export default function Home() {
     return activePredictions.filter(p => userPredMap[String(p.matchId)]).length;
   }, [activePredictions, userPredMap]);
 
-  const myRank = useMemo(() => {
-    if (!isLoggedIn || !dailyEntries) return null;
-    const idx = dailyEntries.findIndex(u => u.uid === uid);
-    return idx !== -1 ? idx + 1 : null;
-  }, [dailyEntries, uid, isLoggedIn]);
-
   const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
-  const predRemaining = featFlat.length - myPredicted;
 
   const heroGradient = heroMatch?.isLive 
     ? 'radial-gradient(circle at 50% -20%, rgba(var(--danger-rgb), 0.15) 0%, transparent 60%)'
@@ -638,7 +621,7 @@ export default function Home() {
                 {heroMatch.stats.corners && (
                   <div className="z-hs-item">
                     <span className="lbl">CORNERS</span>
-                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}%</span>
+                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span>
                   </div>
                 )}
               </div>
@@ -801,7 +784,6 @@ export default function Home() {
                 key={p.id || String(p.matchId) || i}
                 pred={p}
                 userPred={userPredMap[String(p.matchId)]}
-                userResult={null}
                 isLoggedIn={isLoggedIn}
               />
             ))

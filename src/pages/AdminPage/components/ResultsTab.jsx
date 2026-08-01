@@ -22,12 +22,10 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
     setScores(prev => ({ ...prev, [mid]: { ...(prev[mid] || {}), [f]: c } }));
   }, []);
 
-  // ★ NEW: Auto-Resolve All Finished Matches in One Go
   const handleAutoResolveAll = useCallback(async () => {
     const toAutoResolve = unresolved.filter(p => {
       const mid = String(p.matchId || p.id);
       const s = scores[mid];
-      // Auto-resolve if it's finished AND we have scores entered (or it already has scores)
       return (p.status === 'FINISHED' || p.status === 'FT' || p.isFinished) && (s?.h !== '' && s?.a !== '');
     });
     
@@ -97,9 +95,6 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
             <div className="flex gap-8">
               <button className="btn btn-secondary btn-sm" onClick={handleAutoResolveAll} disabled={Object.values(resolving).some(Boolean)}>
                 <Sparkles size={11} /> Auto-Resolve Finished
-              </button>
-              <button className="btn btn-primary btn-sm" onClick={() => { /* Existing resolve all logic */ }} disabled={Object.values(resolving).some(Boolean)}>
-                <Zap size={11} /> Resolve All Scored
               </button>
             </div>
           </div>

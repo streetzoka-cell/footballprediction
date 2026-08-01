@@ -1,4 +1,3 @@
-// src/engine/leaderboardEngine.js
 import { calcPoints, RESULT_TYPE } from '../utils/constants';
 import { db } from '../utils/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -18,11 +17,22 @@ export function computeStats(entries) {
 
 /**
  * Sorts and ranks a list of user statistics objects.
+ * Professional Ranking Rules:
+ * 1. Highest Points
+ * 2. Highest Exact Scores (tie-breaker)
+ * 3. Highest Result Scores (tie-breaker)
+ * 4. Fewest Misses (final tie-breaker)
  */
 export function rankEntries(list) {
   if (!list || list.length === 0) return [];
+  
   return list
-    .sort((a, b) => (b.points || 0) - (a.points || 0) || (b.exact || 0) - (a.exact || 0) || (b.result || 0) - (a.result || 0))
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.exact !== a.exact) return b.exact - a.exact;
+      if (b.result !== a.result) return b.result - a.result;
+      return a.miss - b.miss; 
+    })
     .map((u, i) => ({
       ...u,
       rank: i + 1,
@@ -37,93 +47,86 @@ export async function buildDailySummaryData(resultsSnap, predsSnap, activeSnap) 
   const scoreMap = {};
   activeSnap.docs.forEach((d) => {
     const p = d.data();
-    if (p.status === 'finished' && p.homeScore != null) {
+    if ((p.status === 'finished' || p.isFinished) && p.homeScore != null) {
       scoreMap[String(p.matchId)] = { h: p.homeScore, a: p.awayScore };
     }
   });
 
   const userStats = {};
-  const missingNames = []; // ★ NEW: Track uids with missing names
-  
-  // Process resolved results
+  const missingNames = [];
+  const resolvedIds = new Set(resultsSnap.docs.map((d) => String(d.data().matchId)));
+
+  // 1. Process already resolved results from backend
   for (const d of resultsSnap.docs) {
     const r = d.data();
-    if (!userStats[r.userId]) {
-      userStats[r.userId] = { 
-        uid: r.userId, 
-        displayName: r.displayName || 'Player', 
-        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
-        streak: 0 // Initialize streak
-      };
+    const uid = r.userId;
+    if (!userStats[uid]) {
+      userStats[uid] = { uid, displayName: r.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0, streak: 0 };
     }
+    if (!r.displayName && !missingNames.includes(uid)) missingNames.push(uid);
     
-    // ★ FIX: If name is missing, mark for batch fetch
-    if (!r.displayName && !missingNames.includes(r.userId)) {
-      missingNames.push(r.userId);
-    }
-    
-    const u = userStats[r.userId];
+    const u = userStats[uid];
     u.predictions++;
     u.resolved++;
     u.points += r.points || 0;
     
-    if (r.resultType === RESULT_TYPE.EXACT) {
+    if (r.resultType === RESULT_TYPE.EXACT) u.exact++;
+    else if (r.resultType === RESULT_TYPE.RESULT) u.result++;
+    else u.miss++;
+  }
+
+  // 2. Process pending predictions that have now finished (live scores updated)
+  const pendingFinishedPreds = [];
+  for (const d of predsSnap.docs) {
+    const p = d.data();
+    const mid = String(p.matchId);
+    
+    if (resolvedIds.has(mid)) {
+      if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || userStats[p.userId].displayName;
+      continue;
+    }
+    
+    const actual = scoreMap[mid];
+    if (!actual) continue; // Match not finished yet
+    
+    pendingFinishedPreds.push({ ...p, actualH: actual.h, actualA: actual.a });
+  }
+
+  // ★ CRITICAL FIX: Sort chronologically to ensure streaks are calculated accurately
+  pendingFinishedPreds.sort((a, b) => {
+    const dateA = a.matchDate || '';
+    const dateB = b.matchDate || '';
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    return (a.kickoff || '').localeCompare(b.kickoff || '');
+  });
+
+  for (const p of pendingFinishedPreds) {
+    const uid = p.userId;
+    if (!userStats[uid]) {
+      userStats[uid] = { uid, displayName: p.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0, streak: 0 };
+    }
+    if (!p.displayName && !missingNames.includes(uid)) missingNames.push(uid);
+    
+    const u = userStats[uid];
+    u.predictions++;
+    u.resolved++;
+    
+    const r = calcPoints(p.homeScore, p.awayScore, p.actualH, p.actualA);
+    u.points += r.points || 0;
+    
+    if (r.type === RESULT_TYPE.EXACT) {
       u.exact++;
-      u.streak = (u.streak || 0) + 1; // Increment streak
-    } else if (r.resultType === RESULT_TYPE.RESULT) {
+      u.streak++;
+    } else if (r.type === RESULT_TYPE.RESULT) {
       u.result++;
-      u.streak = (u.streak || 0) + 1; // Increment streak
+      u.streak++;
     } else {
       u.miss++;
-      u.streak = 0; // Reset streak
+      u.streak = 0; // Reset streak on miss
     }
   }
 
-  // Process pending predictions against live scores
-  const resolvedIds = new Set(resultsSnap.docs.map((d) => String(d.data().matchId)));
-  predsSnap.docs.forEach((d) => {
-    const p = d.data();
-    if (p.matchDate && p.matchDate !== todayStr()) return; 
-    const mid = String(p.matchId);
-    if (resolvedIds.has(mid)) {
-      if (userStats[p.userId]) userStats[p.userId].displayName = p.displayName || userStats[p.userId].displayName;
-      return;
-    }
-    
-    if (!userStats[p.userId]) {
-      userStats[p.userId] = { 
-        uid: p.userId, 
-        displayName: p.displayName || 'Player', 
-        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
-        streak: 0
-      };
-    }
-    
-    if (!p.displayName && !missingNames.includes(p.userId)) {
-      missingNames.push(p.userId);
-    }
-    
-    const u = userStats[p.userId];
-    u.predictions++;
-    const actual = scoreMap[mid];
-    if (!actual) return;
-    
-    u.resolved++;
-    const r = calcPoints(p.homeScore, p.awayScore, actual.h, actual.a);
-    u.points += r.points;
-    if (r.type === RESULT_TYPE.EXACT) {
-      u.exact++;
-      u.streak = (u.streak || 0) + 1;
-    } else if (r.type === RESULT_TYPE.RESULT) {
-      u.result++;
-      u.streak = (u.streak || 0) + 1;
-    } else {
-      u.miss++;
-      u.streak = 0;
-    }
-  });
-
-  // ★ FIX: Batch fetch missing display names from users collection
+  // 3. Batch fetch missing display names from users collection
   for (const uid of missingNames) {
     try {
       const userDoc = await getDoc(doc(db, 'users', uid));
@@ -145,40 +148,46 @@ export async function buildDailySummaryData(resultsSnap, predsSnap, activeSnap) 
 export async function buildPeriodSummaryData(snap, period, startDate) {
   const userMap = {};
   const missingNames = [];
+  const allPreds = [];
 
   for (const d of snap.docs) {
     const r = d.data();
-    if (!userMap[r.userId]) {
-      userMap[r.userId] = { 
-        uid: r.userId, 
-        displayName: r.displayName || 'Player', 
-        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0,
-        streak: 0
-      };
+    allPreds.push(r);
+    const uid = r.userId;
+    if (!userMap[uid]) {
+      userMap[uid] = { uid, displayName: r.displayName || 'Player', points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0, streak: 0 };
     }
-    
-    if (!r.displayName && !missingNames.includes(r.userId)) {
-      missingNames.push(r.userId);
-    }
-    
-    const u = userMap[r.userId];
+    if (!r.displayName && !missingNames.includes(uid)) missingNames.push(uid);
+  }
+
+  // ★ CRITICAL FIX: Sort chronologically for accurate period streak calculation
+  allPreds.sort((a, b) => {
+    const dateA = a.matchDate || '';
+    const dateB = b.matchDate || '';
+    if (dateA !== dateB) return dateA.localeCompare(dateB);
+    return (a.kickoff || '').localeCompare(b.kickoff || '');
+  });
+
+  for (const r of allPreds) {
+    const uid = r.userId;
+    const u = userMap[uid];
     u.predictions++;
     u.resolved++;
     u.points += r.points || 0;
     
     if (r.resultType === RESULT_TYPE.EXACT) {
       u.exact++;
-      u.streak = (u.streak || 0) + 1;
+      u.streak++;
     } else if (r.resultType === RESULT_TYPE.RESULT) {
       u.result++;
-      u.streak = (u.streak || 0) + 1;
+      u.streak++;
     } else {
       u.miss++;
       u.streak = 0;
     }
   }
 
-  // ★ FIX: Batch fetch missing names for period leaderboards
+  // Batch fetch missing names
   for (const uid of missingNames) {
     try {
       const userDoc = await getDoc(doc(db, 'users', uid));
@@ -192,10 +201,4 @@ export async function buildPeriodSummaryData(snap, period, startDate) {
 
   const entries = rankEntries(Object.values(userMap).filter((u) => u.predictions > 0));
   return { entries, top3: entries.slice(0, 3), rest: entries.slice(3), stats: computeStats(entries), period, startDate };
-}
-
-// Helper to get today's string if not imported
-function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
