@@ -68,7 +68,6 @@ async function syncYesterdayResults() {
   return finished.length;
 }
 
-// ★ UPDATED: Accept an 'offset' parameter to check today (0), yesterday (-1), etc.
 async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const dateStr = getDateOffset(offset);
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
@@ -99,10 +98,9 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const newlyFinished = [];
   const nowMs = Date.now();
 
-  // ★ REDUCED: 120 min covers 90 play + 15 halftime + 8 stoppage + buffer
-  const FT_FORCE_MS = 120 * 60 * 1000;
-  // ★ NEW: If minute ≥ 90 for 10+ min, it's stuck → force FT
-  const STUCK_AT_90_MS = 100 * 60 * 1000;
+  // ★ ADJUSTED: 125m hard cap, 115m for stuck at 90'
+  const FT_FORCE_MS = 125 * 60 * 1000;
+  const STUCK_AT_90_MS = 115 * 60 * 1000;
 
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
@@ -111,14 +109,10 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
     const elapsedMs = match.timestamp ? (nowMs - match.timestamp * 1000) : 0;
     
-    // ★ NEW: Force FT if elapsed > 100 min AND minute already at 90'
     const stuckAtNinety = atNinety && elapsedMs > STUCK_AT_90_MS;
-    
-    // Hard cap: 2 hours total → FT
     const isExpired = elapsedMs > FT_FORCE_MS;
 
     if (isFT || isExpired || stuckAtNinety) {
-      // Never force missing scores to 0-0. Keep in fixtures if score is null.
       if (match.homeScore == null || match.awayScore == null) {
         logger.warn(
           `[FixtureService] Match ${match.id} is FT but has no final score yet. Keeping it in fixtures.`
@@ -148,7 +142,6 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
     return [];
   }
 
-  // 1. Update fixtures.json (remove the finished ones)
   const scoredStill = stillFixtures.map(doc => {
     doc.matchScore = calculateMatchScore(doc);
     doc.category = categorizeMatch(doc.matchScore);
@@ -157,7 +150,6 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
   await writeFootballSnapshot(dateStr, { matches: scoredStill });
 
-  // 2. Merge with existing results.json
   let existingResults = [];
   try {
     if (fsSync.existsSync(resultsPath)) {
@@ -172,13 +164,11 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   
   logger.info(`[FixtureService] Moved ${newlyFinished.length} finished matches to results for ${dateStr}. Total results: ${unique.length}`);
   
-  // 3. Publish results.json safely
   await writeFootballSnapshot(dateStr, { finished: unique });
   
   return newlyFinished; 
 }
 
-// ★ NEW: Helper to check BOTH today and yesterday for finished matches
 async function syncRecentFinishedFixtures(forceFetch = false) {
   logger.info(`[FixtureService] Syncing recent finished fixtures (Today & Yesterday)...`);
   const todayCount = await syncFinishedFixtures(forceFetch, 0);
