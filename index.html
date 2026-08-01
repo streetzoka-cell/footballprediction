@@ -9,7 +9,7 @@
   <meta name="application-name" content="ZOKASCORE" />
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
   <meta name="mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
@@ -30,17 +30,29 @@
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="/loader.css" />
 
+  <!-- ★ STATIC GLOBAL SCHEMAS (Zero Duplicates) -->
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
     "@type": "WebSite",
     "url": "https://zokascore.xyz",
     "name": "ZOKASCORE",
+    "description": "Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.",
     "potentialAction": {
       "@type": "SearchAction",
       "target": "https://zokascore.xyz/search?q={search_term_string}",
       "query-input": "required name=search_term_string"
     }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ZOKASCORE",
+    "url": "https://zokascore.xyz",
+    "logo": "https://zokascore.xyz/og-image.png",
+    "sameAs": ["https://twitter.com/zokascore", "https://facebook.com/zokascore"]
   }
   </script>
 

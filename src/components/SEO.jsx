@@ -33,14 +33,12 @@ export default function SEO({
   const url = canonical || `${SITE.url}${location.pathname}`;
   const crumbs = propBreadcrumbs || generateBreadcrumbs(location.pathname);
 
-  // Combine all structured data
   const schemas = [];
   if (structuredData) {
     if (Array.isArray(structuredData)) schemas.push(...structuredData);
     else schemas.push(structuredData);
   }
 
-  // ★ FIX: Only include breadcrumb schema if not already added by buildSEO
   const hasBreadcrumbs = schemas.some(s => s["@type"] === "BreadcrumbList");
   if (includeBreadcrumbs && !hasBreadcrumbs) {
     const bcSchema = breadcrumbSchema(crumbs);
@@ -59,9 +57,7 @@ export default function SEO({
       <meta name="robots" content={robots} />
       <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
-      {/* Theme & PWA */}
-      <meta name="theme-color" content={SITE.themeColor} />
-      <meta name="color-scheme" content="dark light" />
+      {/* ★ REMOVED: <meta name="theme-color" /> to prevent duplicate with index.html */}
 
       <link rel="canonical" href={url} />
 
