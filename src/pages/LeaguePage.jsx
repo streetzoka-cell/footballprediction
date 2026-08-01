@@ -19,7 +19,7 @@ export default function LeaguePage() {
     seoGenerators.leaguePage({
       leagueName,
       path: leaguePath,
-      leagueLogo: standingsData?.league?.logo, // Extract logo if available from standings data
+      leagueLogo: standingsData?.league?.logo, 
     })
   ), [leagueName, leaguePath, standingsData]);
 

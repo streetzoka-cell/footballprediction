@@ -1,72 +1,6 @@
 {
   "data": [
     {
-      "id": "256421929",
-      "sport": "football",
-      "dateStr": "2026-08-01",
-      "date": "2026-08-01T07:30:00.000Z",
-      "utcDate": "2026-08-01T07:30:00.000Z",
-      "timestamp": 1785569400,
-      "status": "2H",
-      "homeTeam": {
-        "name": "White City Woodville",
-        "shortName": "White City Woodville",
-        "id": "14485",
-        "crest": null
-      },
-      "awayTeam": {
-        "name": "Croydon Kings",
-        "shortName": "Croydon Kings",
-        "id": "14489",
-        "crest": null
-      },
-      "league": {
-        "name": "FFSA Premier League",
-        "id": "192012",
-        "emblem": null
-      },
-      "competition": {
-        "name": "FFSA Premier League",
-        "id": "192012",
-        "emblem": null
-      },
-      "homeTeamName": "White City Woodville",
-      "awayTeamName": "Croydon Kings",
-      "homeName": "White City Woodville",
-      "awayName": "Croydon Kings",
-      "homeTeamId": "14485",
-      "awayTeamId": "14489",
-      "homeLogo": null,
-      "awayLogo": null,
-      "leagueName": "FFSA Premier League",
-      "leagueId": "192012",
-      "leagueLogo": null,
-      "display": {
-        "isLive": false,
-        "isFinished": false,
-        "isUpcoming": true,
-        "isHalfTime": false,
-        "minute": 0,
-        "status": "NS",
-        "score": {
-          "home": 3,
-          "away": 3,
-          "display": "0-0"
-        }
-      },
-      "homeScore": 3,
-      "awayScore": 3,
-      "isLive": true,
-      "isFinished": false,
-      "ids": {
-        "isports": "256421929"
-      },
-      "source": "isports",
-      "matchScore": 100,
-      "category": "LIVE",
-      "minute": 0
-    },
-    {
       "id": "382244921",
       "sport": "football",
       "dateStr": "2026-08-01",
@@ -116,12 +50,12 @@
         "status": "NS",
         "score": {
           "home": 1,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 1,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -139,7 +73,7 @@
       "date": "2026-08-01T08:15:00.000Z",
       "utcDate": "2026-08-01T08:15:00.000Z",
       "timestamp": 1785572100,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "ABC Branik",
         "shortName": "ABC Branik",
@@ -205,7 +139,7 @@
       "date": "2026-08-01T08:15:00.000Z",
       "utcDate": "2026-08-01T08:15:00.000Z",
       "timestamp": 1785572100,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "SK Petrin Plzen",
         "shortName": "SK Petrin Plzen",
@@ -271,7 +205,7 @@
       "date": "2026-08-01T08:15:00.000Z",
       "utcDate": "2026-08-01T08:15:00.000Z",
       "timestamp": 1785572100,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "FC Slavia HK",
         "shortName": "FC Slavia HK",
@@ -467,7 +401,7 @@
       "date": "2026-08-01T08:15:00.000Z",
       "utcDate": "2026-08-01T08:15:00.000Z",
       "timestamp": 1785572100,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "Sutherland Sharks U20",
         "shortName": "Sutherland Sharks U20",
@@ -533,7 +467,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "HT",
+      "status": "2H",
       "homeTeam": {
         "name": "Klasterec",
         "shortName": "Klasterec",
@@ -599,7 +533,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "FK Okula Nyrsko",
         "shortName": "FK Okula Nyrsko",
@@ -642,12 +576,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 3,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 3,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -665,7 +599,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "FK Prepere",
         "shortName": "FK Prepere",
@@ -731,7 +665,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Jiskra Usti nad Orlici",
         "shortName": "Jiskra Usti nad Orlici",
@@ -797,7 +731,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "NMSK 1922 Bratislava",
         "shortName": "NMSK 1922 Bratislava",
@@ -840,12 +774,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -863,7 +797,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "St George Saints",
         "shortName": "St George Saints",
@@ -929,7 +863,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Rydalmere Lions FC",
         "shortName": "Rydalmere Lions FC",
@@ -995,7 +929,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Persija Jakarta",
         "shortName": "Persija Jakarta",
@@ -1061,7 +995,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "University Azzurri FC",
         "shortName": "University Azzurri FC",
@@ -1127,7 +1061,7 @@
       "date": "2026-08-01T08:30:00.000Z",
       "utcDate": "2026-08-01T08:30:00.000Z",
       "timestamp": 1785573000,
-      "status": "1H",
+      "status": "HT",
       "homeTeam": {
         "name": "Northern Tigers FC (W)",
         "shortName": "Northern Tigers FC (W)",
@@ -1301,12 +1235,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -1499,12 +1433,12 @@
         "status": "NS",
         "score": {
           "home": 1,
-          "away": 1,
+          "away": 2,
           "display": "0-0"
         }
       },
       "homeScore": 1,
-      "awayScore": 1,
+      "awayScore": 2,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -1761,12 +1695,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 2,
           "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 2,
       "awayScore": 1,
       "isLive": true,
       "isFinished": false,
@@ -1959,12 +1893,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 1,
+          "home": 2,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 1,
+      "homeScore": 2,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -2026,12 +1960,12 @@
         "status": "NS",
         "score": {
           "home": 0,
-          "away": 0,
+          "away": 1,
           "display": "0-0"
         }
       },
       "homeScore": 0,
-      "awayScore": 0,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -2376,7 +2310,7 @@
       "date": "2026-08-01T09:30:00.000Z",
       "utcDate": "2026-08-01T09:30:00.000Z",
       "timestamp": 1785576600,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Calcutta Customs",
         "shortName": "Calcutta Customs",
@@ -2425,14 +2359,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "113405036"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "143405039",
@@ -2441,7 +2376,7 @@
       "date": "2026-08-01T09:30:00.000Z",
       "utcDate": "2026-08-01T09:30:00.000Z",
       "timestamp": 1785576600,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Kalighat FC",
         "shortName": "Kalighat FC",
@@ -2490,14 +2425,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "143405039"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "330916920",
@@ -2506,7 +2442,7 @@
       "date": "2026-08-01T09:30:00.000Z",
       "utcDate": "2026-08-01T09:30:00.000Z",
       "timestamp": 1785576600,
-      "status": "NS",
+      "status": "1H",
       "homeTeam": {
         "name": "Perth SC (W)",
         "shortName": "Perth SC (W)",
@@ -2555,14 +2491,15 @@
       },
       "homeScore": 0,
       "awayScore": 0,
-      "isLive": false,
+      "isLive": true,
       "isFinished": false,
       "ids": {
         "isports": "330916920"
       },
       "source": "isports",
       "matchScore": 50,
-      "category": "FEATURED"
+      "category": "FEATURED",
+      "minute": 0
     },
     {
       "id": "484966924",
@@ -26598,13 +26535,13 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
-          "away": 0,
+          "home": 1,
+          "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
-      "awayScore": 0,
+      "homeScore": 1,
+      "awayScore": 1,
       "isLive": true,
       "isFinished": false,
       "ids": {
@@ -26796,12 +26733,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -27122,12 +27059,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 1,
       "isLive": true,
       "isFinished": false,
@@ -27385,12 +27322,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 1,
+          "home": 2,
           "away": 0,
           "display": "0-0"
         }
       },
-      "homeScore": 1,
+      "homeScore": 2,
       "awayScore": 0,
       "isLive": true,
       "isFinished": false,
@@ -27847,12 +27784,12 @@
         "minute": 0,
         "status": "NS",
         "score": {
-          "home": 0,
+          "home": 1,
           "away": 1,
           "display": "0-0"
         }
       },
-      "homeScore": 0,
+      "homeScore": 1,
       "awayScore": 1,
       "isLive": true,
       "isFinished": false,
@@ -28061,6 +27998,6 @@
       "category": "NORMAL"
     }
   ],
-  "count": 431,
+  "count": 430,
   "date": "2026-08-01"
 }

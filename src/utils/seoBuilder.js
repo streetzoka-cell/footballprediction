@@ -177,11 +177,9 @@ export function buildSEO({
   const finalKw = keywords || SITE.keywords;
   const crumbs = generateBreadcrumbs(path);
 
-  // ★ FIX: Removed websiteSchema() and organizationSchema() from here.
-  // AppShell will now be the single source of truth for global schemas.
+  // Original behavior: add breadcrumbs internally
   let schemas = [];
   
-  // Include breadcrumbs (SEO.jsx can still disable this via includeBreadcrumbs={false})
   const bcSchema = breadcrumbSchema(crumbs);
   if (bcSchema) schemas.push(bcSchema);
 
@@ -208,29 +206,12 @@ export function buildSEO({
   };
 }
 
-
 // ─── Specialized SEO Generators ────────────────────────
 
 export const seoGenerators = {
   matchPage({
-    homeName,
-    awayName,
-    leagueName,
-    date,
-    venue,
-    isLive,
-    isFinished,
-    homeScore,
-    awayScore,
-    path,
-    homeLogo,
-    awayLogo,
-    leagueLogo,
-    season,
-    round,
-    referee,
-    attendance,
-    broadcast,
+    homeName, awayName, leagueName, date, venue, isLive, isFinished, 
+    homeScore, awayScore, path, homeLogo, awayLogo, leagueLogo, referee,
   }) {
     return buildSEO({
       title: `${homeName} vs ${awayName} Prediction, Live Score & H2H`,
@@ -249,40 +230,21 @@ export const seoGenerators = {
           : isFinished
           ? "https://schema.org/EventCompleted"
           : "https://schema.org/EventScheduled",
-        
-        // ★ ENRICHED: Added competitor array and images
         competitor: [
-          {
-            "@type": "SportsTeam",
-            name: homeName,
-            logo: homeLogo,
-          },
-          {
-            "@type": "SportsTeam",
-            name: awayName,
-            logo: awayLogo,
-          }
+          { "@type": "SportsTeam", name: homeName, logo: homeLogo },
+          { "@type": "SportsTeam", name: awayName, logo: awayLogo }
         ],
-        image: [
-          homeLogo,
-          awayLogo,
-          leagueLogo,
-        ].filter(Boolean),
-        
-        // ★ ENRICHED: Location address
+        image: [homeLogo, awayLogo, leagueLogo].filter(Boolean),
         location: { 
           "@type": "Place", 
           name: venue?.name || leagueName,
           address: venue?.city 
         },
-        
-        // ★ Changed from 'about' to 'superEvent' for better Schema.org compliance
         superEvent: { 
           "@type": "SportsLeague", 
           name: leagueName, 
           logo: leagueLogo 
         },
-        
         ...(isFinished && {
           result: { "@type": "SportsResult", homeTeamScore: homeScore, awayTeamScore: awayScore },
         }),
