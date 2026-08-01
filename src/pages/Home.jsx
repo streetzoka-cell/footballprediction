@@ -529,7 +529,7 @@ export default function Home() {
         keywords="football predictions, live scores, football fixtures, match analysis, league standings, football results, ZOKASCORE"
         path="/"
         robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }]}
+        includeBreadcrumbs={false}
       />
 
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
