@@ -1,7 +1,4 @@
-// src/engine/matchEngine.js
 import { getLocalDateFromUtc, formatTime } from '../utils/dates';
-
-// src/engine/matchEngine.js
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -21,24 +18,33 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let isFinished = display.isFinished || false;
   let status = raw.status;
   let minute = display.minute;
-  let isHidden = false; // ★ NEW: Track if match should be hidden
+  let isHidden = false;
 
-  // ★ ENHANCED ANTI-STUCK LOGIC
+  // ★ NEW SMART THRESHOLDS
+  const FT_THRESHOLD_MS = 120 * 60 * 1000;        // 2h00m — force FT
+  const STUCK_LIVE_MS = 100 * 60 * 1000;          // 1h40m — if still at 90', force FT
+  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24h — hide completely
+
   if (raw.timestamp) {
-    const matchStartTime = raw.timestamp * 1000; 
+    const matchStartTime = raw.timestamp * 1000;
     const elapsed = now - matchStartTime;
-    const threeAndHalfHoursMs = 3.5 * 60 * 60 * 1000; 
-    const twentyFourHoursMs = 24 * 60 * 60 * 1000;
-    
-    // If match is older than 24 hours and still shows as live/90', HIDE IT
-    if (elapsed > twentyFourHoursMs && (isLive || status === '90' || status === '2H')) {
+
+    // Hide very old stuck matches
+    if (elapsed > HIDE_THRESHOLD_MS && (isLive || status === '90' || status === '2H')) {
       isHidden = true;
       isLive = false;
       isFinished = false;
       status = 'HIDDEN';
     }
-    // If match is older than 3.5 hours and still live, force finish
-    else if (elapsed > threeAndHalfHoursMs && isLive) {
+    // ★ KEY FIX: If minute already at 90' and elapsed > 100 min (90+8+halftime+buffer) → FT NOW
+    else if (isLive && (minute >= 90 || status === '90' || status === '2H') && elapsed > STUCK_LIVE_MS) {
+      isLive = false;
+      isFinished = true;
+      status = 'FT';
+      minute = 90;
+    }
+    // Hard cap: any match older than 2 hours → FT
+    else if (elapsed > FT_THRESHOLD_MS && isLive) {
       isLive = false;
       isFinished = true;
       status = 'FT';
@@ -68,7 +74,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     minute: minute,
     displayMinute: minute,
     lastUpdated: raw.dataQuality?.lastUpdated || null,
-    isHidden: isHidden, // ★ NEW: Flag for frontend to hide
+    isHidden: isHidden,
     
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
@@ -106,10 +112,8 @@ export function applySmartMinute(m, now = Date.now()) {
     return { ...m, displayMinute: 90, minute: 90, isLive: false, isHT: false };
   }
 
-  // ★ FIX: Safely convert status to string before calling toUpperCase
   const statusUpper = String(m.status || "").toUpperCase();
   
-  // 1. NEVER force live if postponed/canceled/scheduled
   if (['PST', 'SUSP', 'INT', 'CANC', 'ABD', 'POSTP', 'TBD', 'PENDING', 'NS'].includes(statusUpper)) {
     return m;
   }
@@ -119,7 +123,6 @@ export function applySmartMinute(m, now = Date.now()) {
 
   const elapsedMs = now - matchStartTime;
   
-  // If kickoff is in the future, force Scheduled (NS)
   if (elapsedMs < 0) {
     return {
       ...m,
@@ -138,12 +141,11 @@ export function applySmartMinute(m, now = Date.now()) {
   let status = statusUpper;
   let isHT = m.isHT || false;
 
-  // ★ IF NO API REPLY YET..USE SMARTCOUNTS (pure time-based fallback)
   if (apiMinute === 0) {
     const elapsedMins = Math.floor(elapsedMs / 60000);
 
     if (elapsedMins >= 105) {
-      smartMinute = 90; // Fallback cap if no data for 105 mins
+      smartMinute = 90;
     } else if (elapsedMins > 90) {
       smartMinute = 90;
     } else if (elapsedMins > 60) {
@@ -161,11 +163,8 @@ export function applySmartMinute(m, now = Date.now()) {
       status = '1H';
     }
   } else {
-    // ★ PICK FROM LAST API CALL, AND UPDATE THEN COUNT!
-    // Start with the exact minute the API provided
     smartMinute = apiMinute;
     
-    // Add local time elapsed since the API's last update
     if (m.lastUpdated) {
       const lastUpdateTime = new Date(m.lastUpdated).getTime();
       if (!isNaN(lastUpdateTime)) {
@@ -175,19 +174,16 @@ export function applySmartMinute(m, now = Date.now()) {
     }
   }
 
-  // If API explicitly says HT, force minute 45
   if (statusUpper === 'HT') {
     isHT = true; 
     smartMinute = 45;
     status = 'HT';
   }
 
-  // Cap at 90 for normal time (unless Extra Time or Penalties)
   if (smartMinute > 90 && statusUpper !== 'ET' && statusUpper !== 'P') {
     smartMinute = 90;
   }
 
-  // Prevent minute from going backwards
   if (apiMinute > smartMinute) {
     smartMinute = apiMinute;
   }
@@ -198,7 +194,7 @@ export function applySmartMinute(m, now = Date.now()) {
     displayMinute: smartMinute,
     status: status,
     isHT: isHT,
-    isLive: true, // If we reached here, it's live
+    isLive: true,
     isFinished: false,
     isStarted: !isHT
   };

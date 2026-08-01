@@ -8270,8 +8270,4023 @@
       "matchScore": 100,
       "category": "LIVE",
       "minute": 0
+    },
+    {
+      "id": "378694037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Balatonlelle SE",
+        "shortName": "Balatonlelle SE",
+        "id": "15874",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Bodajk FC Siofok",
+        "shortName": "Bodajk FC Siofok",
+        "id": "5950",
+        "crest": null
+      },
+      "league": {
+        "name": "Hungary - Cup",
+        "id": "15511",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Hungary - Cup",
+        "id": "15511",
+        "emblem": null
+      },
+      "homeTeamName": "Balatonlelle SE",
+      "awayTeamName": "Bodajk FC Siofok",
+      "homeName": "Balatonlelle SE",
+      "awayName": "Bodajk FC Siofok",
+      "homeTeamId": "15874",
+      "awayTeamId": "5950",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Hungary - Cup",
+      "leagueId": "15511",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "378694037"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "353902920",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Dandenong Thunder",
+        "shortName": "Dandenong Thunder",
+        "id": "9831",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Dandenong City SC",
+        "shortName": "Dandenong City SC",
+        "id": "19330",
+        "crest": null
+      },
+      "league": {
+        "name": "VIC Premier League",
+        "id": "16343",
+        "emblem": null
+      },
+      "competition": {
+        "name": "VIC Premier League",
+        "id": "16343",
+        "emblem": null
+      },
+      "homeTeamName": "Dandenong Thunder",
+      "awayTeamName": "Dandenong City SC",
+      "homeName": "Dandenong Thunder",
+      "awayName": "Dandenong City SC",
+      "homeTeamId": "9831",
+      "awayTeamId": "19330",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "VIC Premier League",
+      "leagueId": "16343",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "353902920"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "122244037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Bratslav Vinnytsia",
+        "shortName": "Bratslav Vinnytsia",
+        "id": "79657",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Podillya Khmelnytskyi",
+        "shortName": "Podillya Khmelnytskyi",
+        "id": "19016",
+        "crest": null
+      },
+      "league": {
+        "name": "Ukraine Division 3",
+        "id": "285610",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Ukraine Division 3",
+        "id": "285610",
+        "emblem": null
+      },
+      "homeTeamName": "Bratslav Vinnytsia",
+      "awayTeamName": "Podillya Khmelnytskyi",
+      "homeName": "Bratslav Vinnytsia",
+      "awayName": "Podillya Khmelnytskyi",
+      "homeTeamId": "79657",
+      "awayTeamId": "19016",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Ukraine Division 3",
+      "leagueId": "285610",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "122244037"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "372894033",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Myawady FC U20",
+        "shortName": "Myawady FC U20",
+        "id": "42447",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Galaxy FC U20",
+        "shortName": "Galaxy FC U20",
+        "id": "79275",
+        "crest": null
+      },
+      "league": {
+        "name": "Myanmar U20 League",
+        "id": "120024",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Myanmar U20 League",
+        "id": "120024",
+        "emblem": null
+      },
+      "homeTeamName": "Myawady FC U20",
+      "awayTeamName": "Galaxy FC U20",
+      "homeName": "Myawady FC U20",
+      "awayName": "Galaxy FC U20",
+      "homeTeamId": "42447",
+      "awayTeamId": "79275",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Myanmar U20 League",
+      "leagueId": "120024",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "372894033"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "392894035",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Ispe FC U20",
+        "shortName": "Ispe FC U20",
+        "id": "42448",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Shan Utd U20",
+        "shortName": "Shan Utd U20",
+        "id": "70661",
+        "crest": null
+      },
+      "league": {
+        "name": "Myanmar U20 League",
+        "id": "120024",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Myanmar U20 League",
+        "id": "120024",
+        "emblem": null
+      },
+      "homeTeamName": "Ispe FC U20",
+      "awayTeamName": "Shan Utd U20",
+      "homeName": "Ispe FC U20",
+      "awayName": "Shan Utd U20",
+      "homeTeamId": "42448",
+      "awayTeamId": "70661",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Myanmar U20 League",
+      "leagueId": "120024",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "392894035"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "251205924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "SWQ Thunder",
+        "shortName": "SWQ Thunder",
+        "id": "22563",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Samford Ranges",
+        "shortName": "Samford Ranges",
+        "id": "13276",
+        "crest": null
+      },
+      "league": {
+        "name": "Queensland Premier League 2",
+        "id": "143322",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Queensland Premier League 2",
+        "id": "143322",
+        "emblem": null
+      },
+      "homeTeamName": "SWQ Thunder",
+      "awayTeamName": "Samford Ranges",
+      "homeName": "SWQ Thunder",
+      "awayName": "Samford Ranges",
+      "homeTeamId": "22563",
+      "awayTeamId": "13276",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Queensland Premier League 2",
+      "leagueId": "143322",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 5,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 5,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "251205924"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "337494030",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Hills United U20",
+        "shortName": "Hills United U20",
+        "id": "32082",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Bankstown City Lions U20",
+        "shortName": "Bankstown City Lions U20",
+        "id": "32385",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "homeTeamName": "Hills United U20",
+      "awayTeamName": "Bankstown City Lions U20",
+      "homeName": "Hills United U20",
+      "awayName": "Bankstown City Lions U20",
+      "homeTeamId": "32082",
+      "awayTeamId": "32385",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia New South Wales U20 Super League",
+      "leagueId": "155628",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "337494030"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "325966929",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Shennongjia Team",
+        "shortName": "Shennongjia Team",
+        "id": "78358",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Jingmen Team",
+        "shortName": "Jingmen Team",
+        "id": "78360",
+        "crest": null
+      },
+      "league": {
+        "name": "Hubei City Football League",
+        "id": "172829",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Hubei City Football League",
+        "id": "172829",
+        "emblem": null
+      },
+      "homeTeamName": "Shennongjia Team",
+      "awayTeamName": "Jingmen Team",
+      "homeName": "Shennongjia Team",
+      "awayName": "Jingmen Team",
+      "homeTeamId": "78358",
+      "awayTeamId": "78360",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Hubei City Football League",
+      "leagueId": "172829",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "325966929"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "114405037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Bayannur Team",
+        "shortName": "Bayannur Team",
+        "id": "75656",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Chifeng Team",
+        "shortName": "Chifeng Team",
+        "id": "75583",
+        "crest": null
+      },
+      "league": {
+        "name": "Inner Mongolia Super League",
+        "id": "142725",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Inner Mongolia Super League",
+        "id": "142725",
+        "emblem": null
+      },
+      "homeTeamName": "Bayannur Team",
+      "awayTeamName": "Chifeng Team",
+      "homeName": "Bayannur Team",
+      "awayName": "Chifeng Team",
+      "homeTeamId": "75656",
+      "awayTeamId": "75583",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Inner Mongolia Super League",
+      "leagueId": "142725",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "114405037"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "217494038",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Hurstville FC U20",
+        "shortName": "Hurstville FC U20",
+        "id": "47456",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Northern Tigers U20",
+        "shortName": "Northern Tigers U20",
+        "id": "32602",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "homeTeamName": "Hurstville FC U20",
+      "awayTeamName": "Northern Tigers U20",
+      "homeName": "Hurstville FC U20",
+      "awayName": "Northern Tigers U20",
+      "homeTeamId": "47456",
+      "awayTeamId": "32602",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia New South Wales U20 Super League",
+      "leagueId": "155628",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 3,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 3,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "217494038"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "227494039",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Canterbury Bankstown U20",
+        "shortName": "Canterbury Bankstown U20",
+        "id": "38616",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Dulwich Hill U20",
+        "shortName": "Dulwich Hill U20",
+        "id": "47458",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia New South Wales U20 Super League",
+        "id": "155628",
+        "emblem": null
+      },
+      "homeTeamName": "Canterbury Bankstown U20",
+      "awayTeamName": "Dulwich Hill U20",
+      "homeName": "Canterbury Bankstown U20",
+      "awayName": "Dulwich Hill U20",
+      "homeTeamId": "38616",
+      "awayTeamId": "47458",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia New South Wales U20 Super League",
+      "leagueId": "155628",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "227494039"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "379564034",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Kubikenborgs IF",
+        "shortName": "Kubikenborgs IF",
+        "id": "4259",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Skelleftea FF",
+        "shortName": "Skelleftea FF",
+        "id": "2160",
+        "crest": null
+      },
+      "league": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "homeTeamName": "Kubikenborgs IF",
+      "awayTeamName": "Skelleftea FF",
+      "homeName": "Kubikenborgs IF",
+      "awayName": "Skelleftea FF",
+      "homeTeamId": "4259",
+      "awayTeamId": "2160",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Sweden Div 3 Mellersta",
+      "leagueId": "163414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "379564034"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "319694032",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T07:30:00.000Z",
+      "utcDate": "2026-08-01T07:30:00.000Z",
+      "timestamp": 1785569400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Brotherhood FC",
+        "shortName": "Brotherhood FC",
+        "id": "71755",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Sikkim Aakraman FC",
+        "shortName": "Sikkim Aakraman FC",
+        "id": "41236",
+        "crest": null
+      },
+      "league": {
+        "name": "India Sikkim S-League",
+        "id": "119415",
+        "emblem": null
+      },
+      "competition": {
+        "name": "India Sikkim S-League",
+        "id": "119415",
+        "emblem": null
+      },
+      "homeTeamName": "Brotherhood FC",
+      "awayTeamName": "Sikkim Aakraman FC",
+      "homeName": "Brotherhood FC",
+      "awayName": "Sikkim Aakraman FC",
+      "homeTeamId": "71755",
+      "awayTeamId": "41236",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "India Sikkim S-League",
+      "leagueId": "119415",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "319694032"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "124405038",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Xilingol League Team",
+        "shortName": "Xilingol League Team",
+        "id": "76145",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Ordos Team",
+        "shortName": "Ordos Team",
+        "id": "76143",
+        "crest": null
+      },
+      "league": {
+        "name": "Inner Mongolia Super League",
+        "id": "142725",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Inner Mongolia Super League",
+        "id": "142725",
+        "emblem": null
+      },
+      "homeTeamName": "Xilingol League Team",
+      "awayTeamName": "Ordos Team",
+      "homeName": "Xilingol League Team",
+      "awayName": "Ordos Team",
+      "homeTeamId": "76145",
+      "awayTeamId": "76143",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Inner Mongolia Super League",
+      "leagueId": "142725",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "124405038"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "330916920",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:30:00.000Z",
+      "utcDate": "2026-08-01T09:30:00.000Z",
+      "timestamp": 1785576600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Perth SC (W)",
+        "shortName": "Perth SC (W)",
+        "id": "48874",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Balcatta (W)",
+        "shortName": "Balcatta (W)",
+        "id": "9858",
+        "crest": null
+      },
+      "league": {
+        "name": "WAUS WD1",
+        "id": "100415",
+        "emblem": null
+      },
+      "competition": {
+        "name": "WAUS WD1",
+        "id": "100415",
+        "emblem": null
+      },
+      "homeTeamName": "Perth SC (W)",
+      "awayTeamName": "Balcatta (W)",
+      "homeName": "Perth SC (W)",
+      "awayName": "Balcatta (W)",
+      "homeTeamId": "48874",
+      "awayTeamId": "9858",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "WAUS WD1",
+      "leagueId": "100415",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "330916920"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "272603929",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Western City Rangers FC",
+        "shortName": "Western City Rangers FC",
+        "id": "25425",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Hake Ya Dong in Sydney City",
+        "shortName": "Hake Ya Dong in Sydney City",
+        "id": "25715",
+        "crest": null
+      },
+      "league": {
+        "name": "Australia New South Wales Super League",
+        "id": "155213",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Australia New South Wales Super League",
+        "id": "155213",
+        "emblem": null
+      },
+      "homeTeamName": "Western City Rangers FC",
+      "awayTeamName": "Hake Ya Dong in Sydney City",
+      "homeName": "Western City Rangers FC",
+      "awayName": "Hake Ya Dong in Sydney City",
+      "homeTeamId": "25425",
+      "awayTeamId": "25715",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Australia New South Wales Super League",
+      "leagueId": "155213",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "272603929"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "100653037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "FC Chernigiv",
+        "shortName": "FC Chernigiv",
+        "id": "38010",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Kulykiv",
+        "shortName": "Kulykiv",
+        "id": "71178",
+        "crest": null
+      },
+      "league": {
+        "name": "Ukraine Division 2",
+        "id": "12787",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Ukraine Division 2",
+        "id": "12787",
+        "emblem": null
+      },
+      "homeTeamName": "FC Chernigiv",
+      "awayTeamName": "Kulykiv",
+      "homeName": "FC Chernigiv",
+      "awayName": "Kulykiv",
+      "homeTeamId": "38010",
+      "awayTeamId": "71178",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Ukraine Division 2",
+      "leagueId": "12787",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "100653037"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL",
+      "minute": 0
+    },
+    {
+      "id": "316555923",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Moggill FC",
+        "shortName": "Moggill FC",
+        "id": "19609",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Ipswich knights SC",
+        "shortName": "Ipswich knights SC",
+        "id": "13131",
+        "crest": null
+      },
+      "league": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "homeTeamName": "Moggill FC",
+      "awayTeamName": "Ipswich knights SC",
+      "homeName": "Moggill FC",
+      "awayName": "Ipswich knights SC",
+      "homeTeamId": "19609",
+      "awayTeamId": "13131",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Queensland Premier League 3",
+      "leagueId": "128314",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "316555923"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "326555924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "North Pine United",
+        "shortName": "North Pine United",
+        "id": "9958",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Springfield United",
+        "shortName": "Springfield United",
+        "id": "37431",
+        "crest": null
+      },
+      "league": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "homeTeamName": "North Pine United",
+      "awayTeamName": "Springfield United",
+      "homeName": "North Pine United",
+      "awayName": "Springfield United",
+      "homeTeamId": "9958",
+      "awayTeamId": "37431",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Queensland Premier League 3",
+      "leagueId": "128314",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "326555924"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "274364037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "ACS Dumbravita",
+        "shortName": "ACS Dumbravita",
+        "id": "40392",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "CSM Satu Mare",
+        "shortName": "CSM Satu Mare",
+        "id": "50371",
+        "crest": null
+      },
+      "league": {
+        "name": "Romania - Liga 2 Seria",
+        "id": "132410",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Romania - Liga 2 Seria",
+        "id": "132410",
+        "emblem": null
+      },
+      "homeTeamName": "ACS Dumbravita",
+      "awayTeamName": "CSM Satu Mare",
+      "homeName": "ACS Dumbravita",
+      "awayName": "CSM Satu Mare",
+      "homeTeamId": "40392",
+      "awayTeamId": "50371",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Romania - Liga 2 Seria",
+      "leagueId": "132410",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "274364037"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "448819921",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Hechi Tingli Competition",
+        "shortName": "Hechi Tingli Competition",
+        "id": "78945",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Guangxi Yanjing University",
+        "shortName": "Guangxi Yanjing University",
+        "id": "78938",
+        "crest": null
+      },
+      "league": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "homeTeamName": "Hechi Tingli Competition",
+      "awayTeamName": "Guangxi Yanjing University",
+      "homeName": "Hechi Tingli Competition",
+      "awayName": "Guangxi Yanjing University",
+      "homeTeamId": "78945",
+      "awayTeamId": "78938",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Guangxi Football Super League",
+      "leagueId": "154829",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "448819921"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "458819922",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:00:00.000Z",
+      "utcDate": "2026-08-01T08:00:00.000Z",
+      "timestamp": 1785571200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Liuzhou Longcheng",
+        "shortName": "Liuzhou Longcheng",
+        "id": "78941",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Hezhou Youth",
+        "shortName": "Hezhou Youth",
+        "id": "78943",
+        "crest": null
+      },
+      "league": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "homeTeamName": "Liuzhou Longcheng",
+      "awayTeamName": "Hezhou Youth",
+      "homeName": "Liuzhou Longcheng",
+      "awayName": "Hezhou Youth",
+      "homeTeamId": "78941",
+      "awayTeamId": "78943",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Guangxi Football Super League",
+      "leagueId": "154829",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "458819922"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "347835928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:30:00.000Z",
+      "utcDate": "2026-08-01T09:30:00.000Z",
+      "timestamp": 1785576600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Adelaide Cobras FC",
+        "shortName": "Adelaide Cobras FC",
+        "id": "13827",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Adelaide Olympic",
+        "shortName": "Adelaide Olympic",
+        "id": "21542",
+        "crest": null
+      },
+      "league": {
+        "name": "South Australian Premier League",
+        "id": "127010",
+        "emblem": null
+      },
+      "competition": {
+        "name": "South Australian Premier League",
+        "id": "127010",
+        "emblem": null
+      },
+      "homeTeamName": "Adelaide Cobras FC",
+      "awayTeamName": "Adelaide Olympic",
+      "homeName": "Adelaide Cobras FC",
+      "awayName": "Adelaide Olympic",
+      "homeTeamId": "13827",
+      "awayTeamId": "21542",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "South Australian Premier League",
+      "leagueId": "127010",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "347835928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "113405036",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:30:00.000Z",
+      "utcDate": "2026-08-01T09:30:00.000Z",
+      "timestamp": 1785576600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Calcutta Customs",
+        "shortName": "Calcutta Customs",
+        "id": "34335",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Mohun Bagan SG II",
+        "shortName": "Mohun Bagan SG II",
+        "id": "67898",
+        "crest": null
+      },
+      "league": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "homeTeamName": "Calcutta Customs",
+      "awayTeamName": "Mohun Bagan SG II",
+      "homeName": "Calcutta Customs",
+      "awayName": "Mohun Bagan SG II",
+      "homeTeamId": "34335",
+      "awayTeamId": "67898",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Calcutta Football League",
+      "leagueId": "109414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "113405036"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "143405039",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:30:00.000Z",
+      "utcDate": "2026-08-01T09:30:00.000Z",
+      "timestamp": 1785576600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Kalighat FC",
+        "shortName": "Kalighat FC",
+        "id": "20546",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "United Kolkata SC",
+        "shortName": "United Kolkata SC",
+        "id": "28945",
+        "crest": null
+      },
+      "league": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "homeTeamName": "Kalighat FC",
+      "awayTeamName": "United Kolkata SC",
+      "homeName": "Kalighat FC",
+      "awayName": "United Kolkata SC",
+      "homeTeamId": "20546",
+      "awayTeamId": "28945",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Calcutta Football League",
+      "leagueId": "109414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "143405039"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "229284038",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:30:00.000Z",
+      "utcDate": "2026-08-01T09:30:00.000Z",
+      "timestamp": 1785576600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "George Telegraph FC",
+        "shortName": "George Telegraph FC",
+        "id": "26089",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Bhawanipore",
+        "shortName": "Bhawanipore",
+        "id": "22524",
+        "crest": null
+      },
+      "league": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Calcutta Football League",
+        "id": "109414",
+        "emblem": null
+      },
+      "homeTeamName": "George Telegraph FC",
+      "awayTeamName": "Bhawanipore",
+      "homeName": "George Telegraph FC",
+      "awayName": "Bhawanipore",
+      "homeTeamId": "26089",
+      "awayTeamId": "22524",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Calcutta Football League",
+      "leagueId": "109414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "229284038"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "366421920",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:45:00.000Z",
+      "utcDate": "2026-08-01T09:45:00.000Z",
+      "timestamp": 1785577500,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Metrostars SC",
+        "shortName": "Metrostars SC",
+        "id": "13830",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Adelaide United FC (Youth)",
+        "shortName": "Adelaide United FC (Youth)",
+        "id": "8971",
+        "crest": null
+      },
+      "league": {
+        "name": "FFSA Premier League",
+        "id": "192012",
+        "emblem": null
+      },
+      "competition": {
+        "name": "FFSA Premier League",
+        "id": "192012",
+        "emblem": null
+      },
+      "homeTeamName": "Metrostars SC",
+      "awayTeamName": "Adelaide United FC (Youth)",
+      "homeName": "Metrostars SC",
+      "awayName": "Adelaide United FC (Youth)",
+      "homeTeamId": "13830",
+      "awayTeamId": "8971",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "FFSA Premier League",
+      "leagueId": "192012",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "366421920"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "227252031",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Vejprnice",
+        "shortName": "Vejprnice",
+        "id": "6352",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "SK Senci Doubravka",
+        "shortName": "SK Senci Doubravka",
+        "id": "13375",
+        "crest": null
+      },
+      "league": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Czech Republic Cup",
+        "id": "16118",
+        "emblem": null
+      },
+      "homeTeamName": "Vejprnice",
+      "awayTeamName": "SK Senci Doubravka",
+      "homeName": "Vejprnice",
+      "awayName": "SK Senci Doubravka",
+      "homeTeamId": "6352",
+      "awayTeamId": "13375",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Czech Republic Cup",
+      "leagueId": "16118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "227252031"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "336555925",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:15:00.000Z",
+      "utcDate": "2026-08-01T08:15:00.000Z",
+      "timestamp": 1785572100,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Newmarket SFC",
+        "shortName": "Newmarket SFC",
+        "id": "16724",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Redcliffe PCYC",
+        "shortName": "Redcliffe PCYC",
+        "id": "24411",
+        "crest": null
+      },
+      "league": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Queensland Premier League 3",
+        "id": "128314",
+        "emblem": null
+      },
+      "homeTeamName": "Newmarket SFC",
+      "awayTeamName": "Redcliffe PCYC",
+      "homeName": "Newmarket SFC",
+      "awayName": "Redcliffe PCYC",
+      "homeTeamId": "16724",
+      "awayTeamId": "24411",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Queensland Premier League 3",
+      "leagueId": "128314",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "336555925"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "181101034",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Kryvbas",
+        "shortName": "Kryvbas",
+        "id": "1065",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "FC Karpaty Lviv",
+        "shortName": "FC Karpaty Lviv",
+        "id": "3257",
+        "crest": null
+      },
+      "league": {
+        "name": "Ukrainian Premier League",
+        "id": "19111",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Ukrainian Premier League",
+        "id": "19111",
+        "emblem": null
+      },
+      "homeTeamName": "Kryvbas",
+      "awayTeamName": "FC Karpaty Lviv",
+      "homeName": "Kryvbas",
+      "awayName": "FC Karpaty Lviv",
+      "homeTeamId": "1065",
+      "awayTeamId": "3257",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Ukrainian Premier League",
+      "leagueId": "19111",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "181101034"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "393466929",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Avangard",
+        "shortName": "Avangard",
+        "id": "2464",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Strogino Moscow",
+        "shortName": "Strogino Moscow",
+        "id": "21605",
+        "crest": null
+      },
+      "league": {
+        "name": "Russian Second League Division B",
+        "id": "106624",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Russian Second League Division B",
+        "id": "106624",
+        "emblem": null
+      },
+      "homeTeamName": "Avangard",
+      "awayTeamName": "Strogino Moscow",
+      "homeName": "Avangard",
+      "awayName": "Strogino Moscow",
+      "homeTeamId": "2464",
+      "awayTeamId": "21605",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Russian Second League Division B",
+      "leagueId": "106624",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "393466929"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "389594038",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "ToTe",
+        "shortName": "ToTe",
+        "id": "26392",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "PPS",
+        "shortName": "PPS",
+        "id": "78577",
+        "crest": null
+      },
+      "league": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "homeTeamName": "ToTe",
+      "awayTeamName": "PPS",
+      "homeName": "ToTe",
+      "awayName": "PPS",
+      "homeTeamId": "26392",
+      "awayTeamId": "78577",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Finland Kolmonen",
+      "leagueId": "279411",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 3,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 3,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "389594038"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "200694032",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Sibbo-Vargarna",
+        "shortName": "Sibbo-Vargarna",
+        "id": "22694",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "ToTe/Tapio",
+        "shortName": "ToTe/Tapio",
+        "id": "78873",
+        "crest": null
+      },
+      "league": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Finland Kolmonen",
+        "id": "279411",
+        "emblem": null
+      },
+      "homeTeamName": "Sibbo-Vargarna",
+      "awayTeamName": "ToTe/Tapio",
+      "homeName": "Sibbo-Vargarna",
+      "awayName": "ToTe/Tapio",
+      "homeTeamId": "22694",
+      "awayTeamId": "78873",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Finland Kolmonen",
+      "leagueId": "279411",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 4,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 4,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "200694032"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "230954034",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Grom Nowy Staw",
+        "shortName": "Grom Nowy Staw",
+        "id": "33356",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Unia Swarzedz",
+        "shortName": "Unia Swarzedz",
+        "id": "14795",
+        "crest": null
+      },
+      "league": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "homeTeamName": "Grom Nowy Staw",
+      "awayTeamName": "Unia Swarzedz",
+      "homeName": "Grom Nowy Staw",
+      "awayName": "Unia Swarzedz",
+      "homeTeamId": "33356",
+      "awayTeamId": "14795",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Poland III Liga",
+      "leagueId": "143513",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "230954034"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "309019920",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Laos",
+        "shortName": "Laos",
+        "id": "880",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Philippines",
+        "shortName": "Philippines",
+        "id": "1562",
+        "crest": null
+      },
+      "league": {
+        "name": "ASEAN Championship",
+        "id": "142118",
+        "emblem": null
+      },
+      "competition": {
+        "name": "ASEAN Championship",
+        "id": "142118",
+        "emblem": null
+      },
+      "homeTeamName": "Laos",
+      "awayTeamName": "Philippines",
+      "homeName": "Laos",
+      "awayName": "Philippines",
+      "homeTeamId": "880",
+      "awayTeamId": "1562",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "ASEAN Championship",
+      "leagueId": "142118",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 4,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 4,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "309019920"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "215306926",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Gyeongju FC (W)",
+        "shortName": "Gyeongju FC (W)",
+        "id": "32496",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Boeun Sangmu (W)",
+        "shortName": "Boeun Sangmu (W)",
+        "id": "10644",
+        "crest": null
+      },
+      "league": {
+        "name": "WK League",
+        "id": "17287",
+        "emblem": null
+      },
+      "competition": {
+        "name": "WK League",
+        "id": "17287",
+        "emblem": null
+      },
+      "homeTeamName": "Gyeongju FC (W)",
+      "awayTeamName": "Boeun Sangmu (W)",
+      "homeName": "Gyeongju FC (W)",
+      "awayName": "Boeun Sangmu (W)",
+      "homeTeamId": "32496",
+      "awayTeamId": "10644",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "WK League",
+      "leagueId": "17287",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 3,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 3,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "215306926"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "225306927",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Seoul Amazones (W)",
+        "shortName": "Seoul Amazones (W)",
+        "id": "10589",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Changnyeong (W)",
+        "shortName": "Changnyeong (W)",
+        "id": "37682",
+        "crest": null
+      },
+      "league": {
+        "name": "WK League",
+        "id": "17287",
+        "emblem": null
+      },
+      "competition": {
+        "name": "WK League",
+        "id": "17287",
+        "emblem": null
+      },
+      "homeTeamName": "Seoul Amazones (W)",
+      "awayTeamName": "Changnyeong (W)",
+      "homeName": "Seoul Amazones (W)",
+      "awayName": "Changnyeong (W)",
+      "homeTeamId": "10589",
+      "awayTeamId": "37682",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "WK League",
+      "leagueId": "17287",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "225306927"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "335762924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "FC Nacka Iliria",
+        "shortName": "FC Nacka Iliria",
+        "id": "48438",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Lindo FF",
+        "shortName": "Lindo FF",
+        "id": "7626",
+        "crest": null
+      },
+      "league": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "homeTeamName": "FC Nacka Iliria",
+      "awayTeamName": "Lindo FF",
+      "homeName": "FC Nacka Iliria",
+      "awayName": "Lindo FF",
+      "homeTeamId": "48438",
+      "awayTeamId": "7626",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Sweden Div 3 Mellersta",
+      "leagueId": "163414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "335762924"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "284113030",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Garr and Ava",
+        "shortName": "Garr and Ava",
+        "id": "32677",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "FK Neptunas Klaipeda",
+        "shortName": "FK Neptunas Klaipeda",
+        "id": "48661",
+        "crest": null
+      },
+      "league": {
+        "name": "Lithuania - 2.Division",
+        "id": "27984",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Lithuania - 2.Division",
+        "id": "27984",
+        "emblem": null
+      },
+      "homeTeamName": "Garr and Ava",
+      "awayTeamName": "FK Neptunas Klaipeda",
+      "homeName": "Garr and Ava",
+      "awayName": "FK Neptunas Klaipeda",
+      "homeTeamId": "32677",
+      "awayTeamId": "48661",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Lithuania - 2.Division",
+      "leagueId": "27984",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "284113030"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "117105037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Montaneros CF",
+        "shortName": "Montaneros CF",
+        "id": "11264",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Bergantinos CF",
+        "shortName": "Bergantinos CF",
+        "id": "20923",
+        "crest": null
+      },
+      "league": {
+        "name": "Spanish Federacion Cup",
+        "id": "162110",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Spanish Federacion Cup",
+        "id": "162110",
+        "emblem": null
+      },
+      "homeTeamName": "Montaneros CF",
+      "awayTeamName": "Bergantinos CF",
+      "homeName": "Montaneros CF",
+      "awayName": "Bergantinos CF",
+      "homeTeamId": "11264",
+      "awayTeamId": "20923",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Spanish Federacion Cup",
+      "leagueId": "162110",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "117105037"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "210954032",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Chemik Bydgoszcz",
+        "shortName": "Chemik Bydgoszcz",
+        "id": "32866",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "ZKS Kluczevia",
+        "shortName": "ZKS Kluczevia",
+        "id": "57990",
+        "crest": null
+      },
+      "league": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "homeTeamName": "Chemik Bydgoszcz",
+      "awayTeamName": "ZKS Kluczevia",
+      "homeName": "Chemik Bydgoszcz",
+      "awayName": "ZKS Kluczevia",
+      "homeTeamId": "32866",
+      "awayTeamId": "57990",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Poland III Liga",
+      "leagueId": "143513",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "210954032"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "211954033",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Zaglebie Lubin B",
+        "shortName": "Zaglebie Lubin B",
+        "id": "23233",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "BKS Sparta Katowice",
+        "shortName": "BKS Sparta Katowice",
+        "id": "28338",
+        "crest": null
+      },
+      "league": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "homeTeamName": "Zaglebie Lubin B",
+      "awayTeamName": "BKS Sparta Katowice",
+      "homeName": "Zaglebie Lubin B",
+      "awayName": "BKS Sparta Katowice",
+      "homeTeamId": "23233",
+      "awayTeamId": "28338",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Poland III Liga",
+      "leagueId": "143513",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "211954033"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "468819923",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T08:30:00.000Z",
+      "utcDate": "2026-08-01T08:30:00.000Z",
+      "timestamp": 1785573000,
+      "status": "NS",
+      "homeTeam": {
+        "name": "Laibin Yude",
+        "shortName": "Laibin Yude",
+        "id": "78946",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Beihai Hepu Goldwind Technology",
+        "shortName": "Beihai Hepu Goldwind Technology",
+        "id": "78940",
+        "crest": null
+      },
+      "league": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "homeTeamName": "Laibin Yude",
+      "awayTeamName": "Beihai Hepu Goldwind Technology",
+      "homeName": "Laibin Yude",
+      "awayName": "Beihai Hepu Goldwind Technology",
+      "homeTeamId": "78946",
+      "awayTeamId": "78940",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Guangxi Football Super League",
+      "leagueId": "154829",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "468819923"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "379515928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Yanbian Longding",
+        "shortName": "Yanbian Longding",
+        "id": "53772",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Nanjing City",
+        "shortName": "Nanjing City",
+        "id": "45078",
+        "crest": null
+      },
+      "league": {
+        "name": "Chinese Football Association Jia League",
+        "id": "1167",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Chinese Football Association Jia League",
+        "id": "1167",
+        "emblem": null
+      },
+      "homeTeamName": "Yanbian Longding",
+      "awayTeamName": "Nanjing City",
+      "homeName": "Yanbian Longding",
+      "awayName": "Nanjing City",
+      "homeTeamId": "53772",
+      "awayTeamId": "45078",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Chinese Football Association Jia League",
+      "leagueId": "1167",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 1,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 1,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "379515928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "120653039",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Metalist Kharkiv",
+        "shortName": "Metalist Kharkiv",
+        "id": "1361",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Probiy Horodenka",
+        "shortName": "Probiy Horodenka",
+        "id": "71179",
+        "crest": null
+      },
+      "league": {
+        "name": "Ukraine Division 2",
+        "id": "12787",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Ukraine Division 2",
+        "id": "12787",
+        "emblem": null
+      },
+      "homeTeamName": "Metalist Kharkiv",
+      "awayTeamName": "Probiy Horodenka",
+      "homeName": "Metalist Kharkiv",
+      "awayName": "Probiy Horodenka",
+      "homeTeamId": "1361",
+      "awayTeamId": "71179",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Ukraine Division 2",
+      "leagueId": "12787",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 3,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 3,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "120653039"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "251954037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:00:00.000Z",
+      "utcDate": "2026-08-01T10:00:00.000Z",
+      "timestamp": 1785578400,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Wisla Krakow II",
+        "shortName": "Wisla Krakow II",
+        "id": "29083",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Star Starachowice",
+        "shortName": "Star Starachowice",
+        "id": "66545",
+        "crest": null
+      },
+      "league": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Poland III Liga",
+        "id": "143513",
+        "emblem": null
+      },
+      "homeTeamName": "Wisla Krakow II",
+      "awayTeamName": "Star Starachowice",
+      "homeName": "Wisla Krakow II",
+      "awayName": "Star Starachowice",
+      "homeTeamId": "29083",
+      "awayTeamId": "66545",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Poland III Liga",
+      "leagueId": "143513",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 4,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 4,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "251954037"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "220372925",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T11:00:00.000Z",
+      "utcDate": "2026-08-01T11:00:00.000Z",
+      "timestamp": 1785582000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Vanersborgs IF",
+        "shortName": "Vanersborgs IF",
+        "id": "27397",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Motala AIF FK",
+        "shortName": "Motala AIF FK",
+        "id": "4238",
+        "crest": null
+      },
+      "league": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Sweden Div 3 Mellersta",
+        "id": "163414",
+        "emblem": null
+      },
+      "homeTeamName": "Vanersborgs IF",
+      "awayTeamName": "Motala AIF FK",
+      "homeName": "Vanersborgs IF",
+      "awayName": "Motala AIF FK",
+      "homeTeamId": "27397",
+      "awayTeamId": "4238",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Sweden Div 3 Mellersta",
+      "leagueId": "163414",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "220372925"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "388316927",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Qingdao Red Lions",
+        "shortName": "Qingdao Red Lions",
+        "id": "40603",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Lanzhou Longyuan Athletics",
+        "shortName": "Lanzhou Longyuan Athletics",
+        "id": "66237",
+        "crest": null
+      },
+      "league": {
+        "name": "Chinese Football Association Yi League",
+        "id": "26860",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Chinese Football Association Yi League",
+        "id": "26860",
+        "emblem": null
+      },
+      "homeTeamName": "Qingdao Red Lions",
+      "awayTeamName": "Lanzhou Longyuan Athletics",
+      "homeName": "Qingdao Red Lions",
+      "awayName": "Lanzhou Longyuan Athletics",
+      "homeTeamId": "40603",
+      "awayTeamId": "66237",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Chinese Football Association Yi League",
+      "leagueId": "26860",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "388316927"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "457692920",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Gangwon FC",
+        "shortName": "Gangwon FC",
+        "id": "9945",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Bucheon FC 1995",
+        "shortName": "Bucheon FC 1995",
+        "id": "7800",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "homeTeamName": "Gangwon FC",
+      "awayTeamName": "Bucheon FC 1995",
+      "homeName": "Gangwon FC",
+      "awayName": "Bucheon FC 1995",
+      "homeTeamId": "9945",
+      "awayTeamId": "7800",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 1",
+      "leagueId": "1516",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "457692920"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "398452929",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Hwaseong FC",
+        "shortName": "Hwaseong FC",
+        "id": "21244",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Daegu FC",
+        "shortName": "Daegu FC",
+        "id": "491",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "homeTeamName": "Hwaseong FC",
+      "awayTeamName": "Daegu FC",
+      "homeName": "Hwaseong FC",
+      "awayName": "Daegu FC",
+      "homeTeamId": "21244",
+      "awayTeamId": "491",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 2",
+      "leagueId": "129214",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 5,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 5,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "398452929"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "497476924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Frigg",
+        "shortName": "Frigg",
+        "id": "2268",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Ullern FC",
+        "shortName": "Ullern FC",
+        "id": "7955",
+        "crest": null
+      },
+      "league": {
+        "name": "Norway Division 3",
+        "id": "170412",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Norway Division 3",
+        "id": "170412",
+        "emblem": null
+      },
+      "homeTeamName": "Frigg",
+      "awayTeamName": "Ullern FC",
+      "homeName": "Frigg",
+      "awayName": "Ullern FC",
+      "homeTeamId": "2268",
+      "awayTeamId": "7955",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Norway Division 3",
+      "leagueId": "170412",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "497476924"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "326757928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T11:30:00.000Z",
+      "utcDate": "2026-08-01T11:30:00.000Z",
+      "timestamp": 1785583800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Zhuhai Team",
+        "shortName": "Zhuhai Team",
+        "id": "78529",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Jiangmen Team",
+        "shortName": "Jiangmen Team",
+        "id": "78531",
+        "crest": null
+      },
+      "league": {
+        "name": "Guangdong Provincial City Football Super League",
+        "id": "153828",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Guangdong Provincial City Football Super League",
+        "id": "153828",
+        "emblem": null
+      },
+      "homeTeamName": "Zhuhai Team",
+      "awayTeamName": "Jiangmen Team",
+      "homeName": "Zhuhai Team",
+      "awayName": "Jiangmen Team",
+      "homeTeamId": "78529",
+      "awayTeamId": "78531",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Guangdong Provincial City Football Super League",
+      "leagueId": "153828",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "326757928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "467692921",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Jeonbuk Hyundai Motors",
+        "shortName": "Jeonbuk Hyundai Motors",
+        "id": "484",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "FC Seoul",
+        "shortName": "FC Seoul",
+        "id": "741",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "homeTeamName": "Jeonbuk Hyundai Motors",
+      "awayTeamName": "FC Seoul",
+      "homeName": "Jeonbuk Hyundai Motors",
+      "awayName": "FC Seoul",
+      "homeTeamId": "484",
+      "awayTeamId": "741",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 1",
+      "leagueId": "1516",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "467692921"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "477692922",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Pohang Steelers",
+        "shortName": "Pohang Steelers",
+        "id": "481",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Gimcheon Sangmu FC",
+        "shortName": "Gimcheon Sangmu FC",
+        "id": "494",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 1",
+        "id": "1516",
+        "emblem": null
+      },
+      "homeTeamName": "Pohang Steelers",
+      "awayTeamName": "Gimcheon Sangmu FC",
+      "homeName": "Pohang Steelers",
+      "awayName": "Gimcheon Sangmu FC",
+      "homeTeamId": "481",
+      "awayTeamId": "494",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 1",
+      "leagueId": "1516",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "477692922"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "368452926",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Chungnam Asan",
+        "shortName": "Chungnam Asan",
+        "id": "47543",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Seongnam FC",
+        "shortName": "Seongnam FC",
+        "id": "477",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "homeTeamName": "Chungnam Asan",
+      "awayTeamName": "Seongnam FC",
+      "homeName": "Chungnam Asan",
+      "awayName": "Seongnam FC",
+      "homeTeamId": "47543",
+      "awayTeamId": "477",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 2",
+      "leagueId": "129214",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "368452926"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "378452927",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Cheonan City",
+        "shortName": "Cheonan City",
+        "id": "7840",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Yong-in FC",
+        "shortName": "Yong-in FC",
+        "id": "7798",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "homeTeamName": "Cheonan City",
+      "awayTeamName": "Yong-in FC",
+      "homeName": "Cheonan City",
+      "awayName": "Yong-in FC",
+      "homeTeamId": "7840",
+      "awayTeamId": "7798",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 2",
+      "leagueId": "129214",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 1,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 1,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "378452927"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "388452928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T10:30:00.000Z",
+      "utcDate": "2026-08-01T10:30:00.000Z",
+      "timestamp": 1785580200,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Chungbuk Cheongju",
+        "shortName": "Chungbuk Cheongju",
+        "id": "10072",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Suwon Samsung Bluewings",
+        "shortName": "Suwon Samsung Bluewings",
+        "id": "499",
+        "crest": null
+      },
+      "league": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "competition": {
+        "name": "K League 2",
+        "id": "129214",
+        "emblem": null
+      },
+      "homeTeamName": "Chungbuk Cheongju",
+      "awayTeamName": "Suwon Samsung Bluewings",
+      "homeName": "Chungbuk Cheongju",
+      "awayName": "Suwon Samsung Bluewings",
+      "homeTeamId": "10072",
+      "awayTeamId": "499",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "K League 2",
+      "leagueId": "129214",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "388452928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "398854037",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Sydney Olympic U20",
+        "shortName": "Sydney Olympic U20",
+        "id": "34168",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "APIA Leichhardt Tigers U20",
+        "shortName": "APIA Leichhardt Tigers U20",
+        "id": "13281",
+        "crest": null
+      },
+      "league": {
+        "name": "Northern NSW U20 League",
+        "id": "284710",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Northern NSW U20 League",
+        "id": "284710",
+        "emblem": null
+      },
+      "homeTeamName": "Sydney Olympic U20",
+      "awayTeamName": "APIA Leichhardt Tigers U20",
+      "homeName": "Sydney Olympic U20",
+      "awayName": "APIA Leichhardt Tigers U20",
+      "homeTeamId": "34168",
+      "awayTeamId": "13281",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Northern NSW U20 League",
+      "leagueId": "284710",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "398854037"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "478819924",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T09:00:00.000Z",
+      "utcDate": "2026-08-01T09:00:00.000Z",
+      "timestamp": 1785574800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Guangxi Yong City Football Club",
+        "shortName": "Guangxi Yong City Football Club",
+        "id": "66353",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Guigang Xunyu",
+        "shortName": "Guigang Xunyu",
+        "id": "78937",
+        "crest": null
+      },
+      "league": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Guangxi Football Super League",
+        "id": "154829",
+        "emblem": null
+      },
+      "homeTeamName": "Guangxi Yong City Football Club",
+      "awayTeamName": "Guigang Xunyu",
+      "homeName": "Guangxi Yong City Football Club",
+      "awayName": "Guigang Xunyu",
+      "homeTeamId": "66353",
+      "awayTeamId": "78937",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Guangxi Football Super League",
+      "leagueId": "154829",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "478819924"
+      },
+      "source": "isports",
+      "matchScore": 0,
+      "category": "NORMAL"
+    },
+    {
+      "id": "223534928",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T11:00:00.000Z",
+      "utcDate": "2026-08-01T11:00:00.000Z",
+      "timestamp": 1785582000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "SJK Akatemia B",
+        "shortName": "SJK Akatemia B",
+        "id": "69643",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "GBK Kokkola",
+        "shortName": "GBK Kokkola",
+        "id": "2580",
+        "crest": null
+      },
+      "league": {
+        "name": "Finland - Kakkonen Lohko",
+        "id": "171413",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Finland - Kakkonen Lohko",
+        "id": "171413",
+        "emblem": null
+      },
+      "homeTeamName": "SJK Akatemia B",
+      "awayTeamName": "GBK Kokkola",
+      "homeName": "SJK Akatemia B",
+      "awayName": "GBK Kokkola",
+      "homeTeamId": "69643",
+      "awayTeamId": "2580",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Finland - Kakkonen Lohko",
+      "leagueId": "171413",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 3,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 3,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "223534928"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "384894036",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T11:00:00.000Z",
+      "utcDate": "2026-08-01T11:00:00.000Z",
+      "timestamp": 1785582000,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Suduva Marijampole II",
+        "shortName": "Suduva Marijampole II",
+        "id": "48964",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Silute",
+        "shortName": "Silute",
+        "id": "2477",
+        "crest": null
+      },
+      "league": {
+        "name": "Lithuania II Lyga",
+        "id": "152120",
+        "emblem": null
+      },
+      "competition": {
+        "name": "Lithuania II Lyga",
+        "id": "152120",
+        "emblem": null
+      },
+      "homeTeamName": "Suduva Marijampole II",
+      "awayTeamName": "Silute",
+      "homeName": "Suduva Marijampole II",
+      "awayName": "Silute",
+      "homeTeamId": "48964",
+      "awayTeamId": "2477",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "Lithuania II Lyga",
+      "leagueId": "152120",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 6,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 6,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "384894036"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
     }
   ],
-  "count": 126,
+  "count": 187,
   "date": "2026-08-01"
 }
