@@ -1,4 +1,3 @@
-// src/hooks/useFixtures.js
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
@@ -26,8 +25,6 @@ export function useHomeMatches() {
   });
 }
 
-// src/hooks/useFixtures.js
-
 export function useFixtures(dateStr, sport = 'football') {
   return useQuery({
     queryKey: ['fixtures', dateStr, sport],
@@ -44,14 +41,6 @@ export function useFixtures(dateStr, sport = 'football') {
       
       const map = new Map();
       
-      const cleanName = (str) => {
-        if (!str || typeof str !== 'string') return '';
-        return str.toLowerCase()
-          .replace(/fc|afc|cf|sc|club|team|reserves|ii/g, '')
-          .replace(/[^a-z0-9]/g, '')
-          .trim();
-      };
-
       const findExisting = (match) => {
         const byId = map.get(String(match.id));
         if (byId) return byId;
@@ -96,28 +85,32 @@ export function useFixtures(dateStr, sport = 'football') {
       
       // ★ FILTER: Remove hidden matches and old stuck matches
       const now = Date.now();
-      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      const FT_THRESHOLD_MS = 120 * 60 * 1000;
+      const STUCK_AT_90_MS = 100 * 60 * 1000;
+      const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
       
       return Array.from(map.values())
         .map(m => normalizeMatch(m, true, now))
         .filter(Boolean)
         .filter(m => {
-          // Hide matches explicitly marked as hidden
           if (m.isHidden) return false;
           
-          // Hide matches from yesterday that are still stuck at 90'/LIVE
           const matchDate = new Date(m.dateStr + 'T12:00:00');
           const today = new Date(todayStr() + 'T12:00:00');
           const isYesterday = matchDate < today;
           
           if (isYesterday && m.isLive && m.minute >= 90) {
-            return false; // Hide yesterday's stuck matches
+            return false;
           }
           
-          // Hide matches older than 24 hours that aren't finished
           if (m.timestamp) {
             const elapsed = now - (m.timestamp * 1000);
-            if (elapsed > twentyFourHoursMs && !m.isFinished && m.isLive) {
+            // Hide if stuck at 90' for >100 min
+            if (elapsed > STUCK_AT_90_MS && m.isLive && m.minute >= 90) {
+              return false;
+            }
+            // Hide old unfinished live matches
+            if (elapsed > HIDE_OLD_MS && !m.isFinished && m.isLive) {
               return false;
             }
           }

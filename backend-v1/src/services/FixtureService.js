@@ -1,4 +1,3 @@
-// backend-v1/src/services/FixtureService.js
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -99,16 +98,26 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const stillFixtures = [];
   const newlyFinished = [];
   const nowMs = Date.now();
-  const threeAndHalfHoursMs = 3.5 * 60 * 60 * 1000;
+
+  // ★ REDUCED: 120 min covers 90 play + 15 halftime + 8 stoppage + buffer
+  const FT_FORCE_MS = 120 * 60 * 1000;
+  // ★ NEW: If minute ≥ 90 for 10+ min, it's stuck → force FT
+  const STUCK_AT_90_MS = 100 * 60 * 1000;
 
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
-    
-    const isExpired =
-      match.timestamp &&
-      (nowMs - match.timestamp * 1000) > threeAndHalfHoursMs;
+    const minute = match.display?.minute || match.minute || 0;
+    const atNinety = minute >= 90 || match.status === '90' || match.status === '2H';
 
-    if (isFT || isExpired) {
+    const elapsedMs = match.timestamp ? (nowMs - match.timestamp * 1000) : 0;
+    
+    // ★ NEW: Force FT if elapsed > 100 min AND minute already at 90'
+    const stuckAtNinety = atNinety && elapsedMs > STUCK_AT_90_MS;
+    
+    // Hard cap: 2 hours total → FT
+    const isExpired = elapsedMs > FT_FORCE_MS;
+
+    if (isFT || isExpired || stuckAtNinety) {
       // Never force missing scores to 0-0. Keep in fixtures if score is null.
       if (match.homeScore == null || match.awayScore == null) {
         logger.warn(
@@ -121,11 +130,13 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
       if (match.display) {
         match.display.isFinished = true;
         match.display.isLive = false;
+        match.display.minute = 90;
         if (match.display.score) {
           match.display.score.home = match.homeScore;
           match.display.score.away = match.awayScore;
         }
       }
+      match.status = 'FT';
       newlyFinished.push(match);
     } else {
       stillFixtures.push(match);
@@ -180,5 +191,5 @@ module.exports = {
   syncTomorrowFixtures, 
   syncYesterdayResults, 
   syncFinishedFixtures,
-  syncRecentFinishedFixtures // ★ Export the new helper for your cron/startup
+  syncRecentFinishedFixtures 
 };
