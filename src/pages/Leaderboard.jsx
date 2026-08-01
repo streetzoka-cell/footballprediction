@@ -2,20 +2,18 @@ import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredVa
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
-  X, Crown, Flame, AlertCircle, ShieldAlert, Users,
-  Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords
+  X, Crown, Flame, Users, Calendar, Award, ChevronDown, 
+  RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
 import { useDailyLeaderboard, useWeeklyLeaderboard, useMonthlyLeaderboard, useGoatLeaderboard } from '../hooks/useUserData';
-import { PERIOD, PERIOD_LABEL } from '../utils/constants';
+import { PERIOD } from '../utils/constants';
 import { todayStr } from '../utils/dates';
 import SEO from '../components/SEO';
-import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
 
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
-const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 const AVATAR_COLORS = [
   'var(--danger)', 'var(--gold)', 'var(--bronze)', 'var(--primary)', 'var(--accent)',
@@ -64,11 +62,11 @@ const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, 
 
 const StatCard = memo(function StatCard({ icon, label, value, color, bg, delay }) {
   return (
-    <div className="lb-stat" style={{ animationDelay: `${delay || 0}ms`, display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', padding: 'var(--sp-12)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', minWidth: 0 }}>
-      <div className="lb-stat-icon" style={{ width: '32px', height: '32px', borderRadius: 'var(--r-8)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, background: bg, color }}>{icon}</div>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div className="lb-stat-val" style={{ fontSize: 'var(--fs-md)', fontWeight: 800, color: 'var(--text-primary)', animationDelay: `${(delay || 0) + 60}ms` }}>{value}</div>
-        <div className="lb-stat-lbl" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>{label}</div>
+    <div className="lb-stat" style={{ animationDelay: `${delay || 0}ms` }}>
+      <div className="lb-stat-icon" style={{ background: bg, color }}>{icon}</div>
+      <div>
+        <div className="lb-stat-val" style={{ animationDelay: `${(delay || 0) + 60}ms` }}>{value}</div>
+        <div className="lb-stat-lbl">{label}</div>
       </div>
     </div>
   );
@@ -80,24 +78,24 @@ const PodiumUser = memo(function PodiumUser({ user, position, delay }) {
   const name = user.displayName || 'Player';
   
   return (
-    <div className="lb-pod-u" style={{ order: c.order, animation: `zk-pop .4s ${SPRING} ${(delay || 0) + 150}ms both`, display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: '6px', position: 'relative' }}>
+    <div className="lb-pod-u" style={{ order: c.order, animation: `zk-pop .4s ${SPRING} ${(delay || 0) + 150}ms both` }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, position: 'relative' }}>
         {position === 0 && (
-          <div style={{ color: 'var(--gold)', marginBottom: '-2px', filter: 'drop-shadow(0 0 5px rgba(var(--gold-rgb),.4))', animation: 'zk-bounce 3s ease-in-out infinite' }}>
+          <div style={{ color: 'var(--gold)', marginBottom: -2, filter: 'drop-shadow(0 0 5px rgba(var(--gold-rgb),.4))', animation: 'zk-bounce 3s ease-in-out infinite' }}>
             <Crown size={24} />
           </div>
         )}
-        <div className="lb-pod-avatar" style={{ width: c.avatar, height: c.avatar, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, background: `linear-gradient(135deg,${c.border}25,${c.border}08)`, border: `3px solid ${c.border}`, fontSize: c.font, color: c.text, boxShadow: c.shadow }}>
+        <div className="lb-pod-avatar" style={{ width: c.avatar, height: c.avatar, background: `linear-gradient(135deg,${c.border}25,${c.border}08)`, border: `3px solid ${c.border}`, fontSize: c.font, color: c.text, boxShadow: c.shadow }}>
           {name.slice(0, 2).toUpperCase()}
         </div>
-        <div className="lb-pod-medal" style={{ fontSize: '1.2rem', marginTop: '-8px' }}>{c.medal}</div>
-        <div className="lb-pod-name" style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-primary)', marginTop: 'var(--sp-4)', maxWidth: '90px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', textAlign: 'center' }}>{name}</div>
-        <div className="lb-pod-sub" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', textAlign: 'center' }}>
+        <div className="lb-pod-medal" style={{ fontSize: '1.2rem', marginTop: -8 }}>{c.medal}</div>
+        <div className="lb-pod-name">{name}</div>
+        <div className="lb-pod-sub">
           {user.points || 0} pts · {user.accuracy || 0}% {user.streak > 0 && `· 🔥 ${user.streak}`}
         </div>
       </div>
-      <div className="lb-pod-bar" style={{ width: '80px', borderRadius: 'var(--r-12) var(--r-12) 0 0', display: 'flex', alignItems: 'center', justifyContent: 'center', marginTop: 'var(--sp-8)', animation: `zk-bar-fill 0.5s var(--ease-out) ${(delay || 0) + 300}ms both`, transformOrigin: 'bottom', height: c.h, background: c.bg }}>
-        <div className="lb-pod-num" style={{ fontSize: 'var(--fs-lg)', fontWeight: 900, color: c.text }}>#{position + 1}</div>
+      <div className="lb-pod-bar" style={{ height: c.h, background: c.bg, animationDelay: `${(delay || 0) + 300}ms` }}>
+        <div className="lb-pod-num" style={{ color: c.text }}>#{position + 1}</div>
       </div>
     </div>
   );
@@ -119,14 +117,14 @@ const TabBar = memo(function TabBar({ tabs, active, onChange }) {
   }, [active]);
 
   return (
-    <div className="lb-tabs" ref={barRef} style={{ position: 'relative', display: 'flex', gap: '2px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', padding: '3px', marginBottom: 'var(--sp-24)', overflowX: 'auto', WebkitOverflowScrolling: 'touch', scrollbarWidth: 'none' }}>
+    <div className="lb-tabs" ref={barRef}>
       {tabs.map(t => (
-        <button key={t.key} data-tab={t.key} className={`lb-tab${active === t.key ? ' on' : ''}${t.isGoat ? ' goat' : ''}`} onClick={() => startTransition(() => onChange(t.key))} style={{ flex: 1, position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-4)', padding: 'var(--sp-8) var(--sp-8)', border: 'none', borderRadius: 'var(--r-8)', background: 'transparent', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', fontWeight: 700, cursor: 'pointer', transition: 'color var(--duration-fast), background var(--duration-fast)', whiteSpace: 'nowrap', fontFamily: 'inherit' }}>
+        <button key={t.key} data-tab={t.key} className={`lb-tab${active === t.key ? ' on' : ''}${t.isGoat ? ' goat' : ''}`} onClick={() => startTransition(() => onChange(t.key))}>
           <t.Icon size={12} />
           <span className="lbl">{t.label}</span>
         </button>
       ))}
-      <div className="lb-tab-ind" style={{ position: 'absolute', bottom: '3px', height: 'calc(100% - 6px)', borderRadius: 'var(--r-8)', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)', zIndex: 0, pointerEvents: 'none', left: ind.left, width: ind.width, background: isGoat ? 'rgba(0,0,0,.15)' : 'var(--gold)', boxShadow: isGoat ? 'none' : '0 0 8px rgba(var(--gold-rgb),.3)' }} />
+      <div className="lb-tab-ind" style={{ left: ind.left, width: ind.width, background: isGoat ? 'rgba(0,0,0,.15)' : 'var(--gold)', boxShadow: isGoat ? 'none' : '0 0 8px rgba(var(--gold-rgb),.3)' }} />
     </div>
   );
 });
@@ -143,36 +141,36 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, p
   if (trend < 0) rowCls += ' moved-down';
 
   return (
-    <div className={rowCls} style={{ animationDelay: `${delay}ms`, display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', padding: 'var(--sp-12)', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', transition: 'background var(--duration-fast)' }}>
-      <div className="lb-row-rank" style={{ color: rank <= 10 ? 'var(--primary)' : 'var(--text-primary)', width: '40px', fontWeight: 800, display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
+    <div className={rowCls} style={{ animationDelay: `${delay}ms` }}>
+      <div className="lb-row-rank" style={{ color: rank <= 10 ? 'var(--primary)' : 'var(--text-primary)' }}>
         #{rank}
-        {trend > 0 && <span className="trend-up" style={{ color: 'var(--primary)', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><ArrowUp size={10} />{trend}</span>}
-        {trend < 0 && <span className="trend-down" style={{ color: 'var(--danger)', fontSize: '0.6rem', display: 'flex', alignItems: 'center', gap: '2px' }}><ArrowDown size={10} />{Math.abs(trend)}</span>}
+        {trend > 0 && <span className="trend-up"><ArrowUp size={10} />{trend}</span>}
+        {trend < 0 && <span className="trend-down"><ArrowDown size={10} />{Math.abs(trend)}</span>}
       </div>
       
-      <div className="lb-row-user" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', flex: 1, minWidth: 0 }}>
-        <div className="lb-row-avatar" style={{ width: '36px', height: '36px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, color: '#fff', fontSize: 'var(--fs-xs)', flexShrink: 0, background: avColor, boxShadow: isMe ? '0 0 0 2px var(--primary)' : 'none' }}>
+      <div className="lb-row-user">
+        <div className="lb-row-avatar" style={{ background: avColor, boxShadow: isMe ? '0 0 0 2px var(--primary)' : 'none' }}>
           {name.slice(0, 2).toUpperCase()}
         </div>
-        <div className="lb-row-info" style={{ flex: 1, minWidth: 0 }}>
-          <div className="lb-row-name" style={{ fontSize: 'var(--fs-sm)', fontWeight: 700, color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        <div className="lb-row-info">
+          <div className="lb-row-name">
             {name} 
-            {isMe && <span className="lb-you-badge" style={{ fontSize: '9px', background: 'var(--primary)', color: 'var(--text-inverse)', padding: '1px 4px', borderRadius: '4px', flexShrink: 0 }}>YOU</span>}
+            {isMe && <span className="lb-you-badge">YOU</span>}
           </div>
-          <div className="lb-row-badges" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', marginTop: '2px', flexWrap: 'wrap' }}>
-            {badges.map((b, i) => <span key={i} className={`lb-badge ${b.cls}`} style={{ fontSize: '9px', padding: '1px 4px', borderRadius: '4px', fontWeight: 700 }}>{b.text}</span>)}
-            <span className="lb-row-preds" style={{ fontSize: '10px', color: 'var(--text-muted)' }}>{user.predictions || 0} preds</span>
+          <div className="lb-row-badges">
+            {badges.map((b, i) => <span key={i} className={`lb-badge ${b.cls}`}>{b.text}</span>)}
+            <span className="lb-row-preds">{user.predictions || 0} preds</span>
           </div>
         </div>
       </div>
 
-      <div className="lb-row-acc" style={{ width: '36px', flexShrink: 0 }}>
+      <div className="lb-row-acc">
         <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? 'var(--primary)' : (user.accuracy || 0) >= 40 ? 'var(--gold)' : 'var(--danger)'} />
       </div>
 
-      <div className="lb-row-pts" style={{ textAlign: 'right', flexShrink: 0 }}>
-        <span className="val" style={{ fontSize: 'var(--fs-md)', fontWeight: 800, color: 'var(--primary)' }}>{user.points || 0}</span>
-        <span className="lbl" style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Points</span>
+      <div className="lb-row-pts">
+        <span className="val">{user.points || 0}</span>
+        <span className="lbl">Points</span>
       </div>
     </div>
   );
@@ -264,62 +262,61 @@ export default function Leaderboard() {
         description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
         keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
         robots="index,follow"
-          />
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Leaderboard", path: "/leaderboard" }]}
+      />
 
-      <div className="lb-hdr" style={{ position: 'sticky', top: 0, zIndex: 'var(--z-sticky)', padding: 'var(--sp-8) 0', backdropFilter: 'blur(16px) saturate(1.5)', WebkitBackdropFilter: 'blur(16px) saturate(1.5)', background: 'rgba(var(--bg-deep-rgb), 0.88)', borderBottom: '1px solid var(--border)' }}>
-        <div className="lb-wrap" style={{ maxWidth: '860px', width: '100%', margin: '0 auto', padding: '0 var(--sp-16)' }}>
-          <div className="lb-hdr-inner" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-            <button className="lb-hdr-btn" onClick={() => nav('/predictions')} style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', background: 'transparent', border: 'none', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', fontWeight: 600, cursor: 'pointer' }}><ArrowLeft size={12} /> Predictions</button>
-            <div className="lb-hdr-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', fontSize: 'var(--fs-base)', fontWeight: 800, color: 'var(--gold)' }}><Trophy size={14} /> Leaderboard{!loading && entries.length > 0 && <span className="lb-live" style={{ width: '8px', height: '8px', borderRadius: '50%', background: 'var(--primary)', animation: 'zk-pulse 2s infinite' }} />}</div>
+      <div className="lb-hdr">
+        <div className="lb-wrap">
+          <div className="lb-hdr-inner">
+            <button className="lb-hdr-btn" onClick={() => nav('/predictions')}><ArrowLeft size={12} /> Predictions</button>
+            <div className="lb-hdr-title"><Trophy size={14} /> Leaderboard{!loading && entries.length > 0 && <span className="lb-live" />}</div>
           </div>
         </div>
       </div>
 
-      <div className="lb-wrap" style={{ maxWidth: '860px', width: '100%', margin: '0 auto', padding: '0 var(--sp-16)' }}>
-        <div className="lb-title" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', marginBottom: 'var(--sp-20)' }}>
-          <div className="lb-title-icon" style={{ width: '48px', height: '48px', borderRadius: 'var(--r-12)', background: 'rgba(var(--gold-rgb), 0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Trophy size={24} style={{ color: 'var(--gold)' }} /></div>
-          <div>
-            <h1 style={{ fontSize: 'var(--fs-xl)', fontWeight: 800, color: 'var(--text-primary)', margin: 0 }}>Leaderboard</h1>
-            <p style={{ fontSize: 'var(--fs-sm)', color: 'var(--text-muted)', margin: '4px 0 0' }}>{tabDesc}</p>
-          </div>
+      <div className="lb-wrap">
+        <div className="lb-title">
+          <div className="lb-title-icon"><Trophy size={24} style={{ color: 'var(--gold)' }} /></div>
+          <h1>Leaderboard</h1>
+          <p>{tabDesc}</p>
         </div>
 
         {myEntry && !loading && (
-          <div className="lb-personal-card" style={{ background: 'linear-gradient(135deg, rgba(168,85,247,0.04), rgba(var(--primary-rgb), 0.02))', border: '1.5px solid rgba(168,85,247,0.1)', borderRadius: 'var(--r-16)', padding: 'var(--sp-12) var(--sp-16)', display: 'flex', alignItems: 'center', gap: 'var(--sp-12)', marginBottom: 'var(--sp-20)', position: 'relative', overflow: 'hidden', animation: `zk-pop 0.4s ${SPRING} both` }}>
-            <div className="lb-pc-main" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--sp-12)', flexWrap: 'wrap', width: '100%' }}>
-              <div className="lb-pc-rank" style={{ display: 'flex', flexDirection: 'column' }}>
-                <span className="lbl" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Your Rank</span>
-                <span className="val" style={{ fontSize: 'var(--fs-2xl)', fontWeight: 800, color: 'var(--primary)' }}>#{myEntry.rank}</span>
+          <div className="lb-personal-card">
+            <div className="lb-pc-main">
+              <div className="lb-pc-rank">
+                <span className="lbl">Your Rank</span>
+                <span className="val">#{myEntry.rank}</span>
               </div>
-              <div className="lb-pc-stats" style={{ display: 'flex', gap: 'var(--sp-16)', flexWrap: 'wrap' }}>
-                <div className="lb-pc-stat" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span className="val" style={{ fontSize: 'var(--fs-md)', fontWeight: 800, color: 'var(--text-primary)' }}>{myEntry.points || 0}</span>
-                  <span className="lbl" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>Points</span>
+              <div className="lb-pc-stats">
+                <div className="lb-pc-stat">
+                  <span className="val">{myEntry.points || 0}</span>
+                  <span className="lbl">Points</span>
                 </div>
-                <div className="lb-pc-stat" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                  <span className="val" style={{ fontSize: 'var(--fs-md)', fontWeight: 800, color: 'var(--text-primary)' }}>{myEntry.exact || 0}</span>
-                  <span className="lbl" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)' }}>Exact</span>
+                <div className="lb-pc-stat">
+                  <span className="val">{myEntry.exact || 0}</span>
+                  <span className="lbl">Exact</span>
                 </div>
-                <div className="lb-pc-stat" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div className="lb-pc-stat">
                   <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="var(--primary)" />
                 </div>
               </div>
             </div>
             
             {rivalEntry && (
-              <div className="lb-pc-rival" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', marginTop: 'var(--sp-12)', paddingTop: 'var(--sp-12)', borderTop: '1px solid var(--border)', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+              <div className="lb-pc-rival">
                 <Swords size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
-                <span className="text" style={{ flex: 1, minWidth: 0 }}>
+                <span className="text">
                   <strong>{pointsBehind} pts</strong> behind <strong>{rivalEntry.displayName}</strong> (#{rivalEntry.rank})
                 </span>
-                <span className="cta" style={{ color: 'var(--primary)', fontWeight: 700 }}>Catch up →</span>
+                <span className="cta">Catch up →</span>
               </div>
             )}
             
             {myEntry.rank === 1 && (
-              <div className="lb-pc-rival champion" style={{ display: 'flex', alignItems: 'center', gap: 'var(--sp-8)', marginTop: 'var(--sp-12)', paddingTop: 'var(--sp-12)', borderTop: '1px solid var(--border)', fontSize: 'var(--fs-sm)', color: 'var(--text-muted)', flexWrap: 'wrap' }}>
+              <div className="lb-pc-rival champion">
                 <Crown size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
-                <span className="text" style={{ flex: 1, minWidth: 0 }}>You are the Champion! 👑</span>
+                <span className="text">You are the Champion! 👑</span>
               </div>
             )}
           </div>
@@ -328,7 +325,7 @@ export default function Leaderboard() {
         <>
           <TabBar tabs={TABS} active={tab} onChange={handleTabChange} />
 
-          <div className="lb-stats" style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 'var(--sp-8)', marginBottom: 'var(--sp-20)' }}>
+          <div className="lb-stats">
             <StatCard icon={<Flame size={16} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(var(--gold-rgb),.05)" delay={0} />
             <StatCard icon={<Users size={16} />} label="Players" value={stats.players || 0} color="var(--accent)" bg="rgba(var(--accent-rgb),.05)" delay={50} />
             <StatCard icon={<Target size={16} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--primary)" bg="rgba(var(--primary-rgb),.04)" delay={100} />
@@ -340,27 +337,27 @@ export default function Leaderboard() {
                {[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
              </div>
           ) : filteredTop3.length >= 1 ? (
-            <div className="lb-podium" style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-end', gap: 'var(--sp-12)', marginBottom: 'var(--sp-24)', flexWrap: 'wrap' }}>{filteredTop3.slice(0, 3).map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
+            <div className="lb-podium">{filteredTop3.slice(0, 3).map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
           ) : (
             <EmptyState icon={Trophy} title="No predictions yet — be the first!" />
           )}
 
-          <div className="lb-search-wrap" style={{ position: 'relative', marginBottom: 'var(--sp-12)' }}>
+          <div className="lb-search-wrap">
             <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--primary)' : 'var(--text-muted)', transition: 'color .15s', pointerEvents: 'none', zIndex: 1 }} />
-            <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" style={{ width: '100%', padding: 'var(--sp-12) var(--sp-16)', paddingLeft: '40px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--r-12)', color: 'var(--text-primary)', fontSize: 'var(--fs-sm)' }} />
-            {search && <button className="lb-search-clear" onClick={handleClear} style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', background: 'transparent', border: 'none', color: 'var(--text-muted)', cursor: 'pointer' }}><X size={11} /></button>}
+            <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" />
+            {search && <button className="lb-search-clear" onClick={handleClear}><X size={11} /></button>}
           </div>
-          {search.trim() && <div className="lb-search-count" style={{ fontSize: 'var(--fs-xs)', color: 'var(--text-muted)', marginBottom: 'var(--sp-8)' }}>{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>}
+          {search.trim() && <div className="lb-search-count">{filtered.length} result{filtered.length !== 1 ? 's' : ''}</div>}
 
-          <div className="lb-list" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--sp-8)' }}>
+          <div className="lb-list">
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="skeleton" style={{ width: '100%', height: 60, borderRadius: 12, animationDelay: `${i * 40}ms` }} />
               ))
             ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
-              <div className="lb-empty" style={{ textAlign: 'center', padding: 'var(--sp-32)', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</div>
+              <div className="lb-empty">{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</div>
             ) : visibleRest.length === 0 && search.trim() ? (
-              <div className="lb-empty" style={{ textAlign: 'center', padding: 'var(--sp-32)', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)' }}>No players found matching "{deferredSearch}"</div>
+              <div className="lb-empty">No players found matching "{deferredSearch}"</div>
             ) : (
               visibleRest.map((user, i) => {
                 const rank = user.rank || (entries.findIndex(e => e.uid === user.uid) + 1);
@@ -373,20 +370,20 @@ export default function Leaderboard() {
           </div>
 
           {hasMore && !loading && (
-            <button className="lb-more" onClick={() => setShowCount(p => Math.min(p + 15, 200))} style={{ width: '100%', padding: 'var(--sp-12)', borderRadius: 'var(--r-12)', background: 'var(--bg-card)', border: '1.5px dashed var(--border)', color: 'var(--text-muted)', fontSize: 'var(--fs-sm)', fontWeight: 700, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 'var(--sp-8)', transition: 'var(--transition-fast)', fontFamily: 'inherit', marginTop: 'var(--sp-12)' }}>
+            <button className="lb-more" onClick={() => setShowCount(p => Math.min(p + 15, 200))}>
               <ChevronDown size={12} /> Show more ({filteredRest.length - visibleRest.length} remaining)
             </button>
           )}
 
           {entries.length === 0 && !loading && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
-              <button className="lb-refresh" onClick={handleRefresh} style={{ padding: 'var(--sp-8) var(--sp-16)', borderRadius: 'var(--r-8)', background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontSize: 'var(--fs-sm)', cursor: 'pointer' }}><RotateCcw size={12} /> Refresh</button>
+              <button className="lb-refresh" onClick={handleRefresh}><RotateCcw size={12} /> Refresh</button>
             </div>
           )}
 
           {entries.length > 0 && (
             <div style={{ textAlign: 'center', marginTop: 20, padding: '16px 0' }}>
-              <button className="lb-cta" onClick={() => nav('/predictions')} style={{ padding: 'var(--sp-12) var(--sp-24)', borderRadius: 'var(--r-12)', background: 'linear-gradient(135deg, var(--primary), var(--primary-dim))', color: 'var(--text-inverse)', fontWeight: 700, border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 'var(--sp-8)' }}><Target size={14} /> Make Predictions <ChevronRight size={13} /></button>
+              <button className="lb-cta" onClick={() => nav('/predictions')}><Target size={14} /> Make Predictions <ChevronRight size={13} /></button>
             </div>
           )}
         </>

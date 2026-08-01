@@ -1,8 +1,10 @@
 import { useParams, Link } from 'react-router-dom';
+import { useMemo } from 'react';
 import { ArrowLeft, Trophy } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useStandings } from '../hooks/useFixtures';
 import { buildTeamRoute } from '../utils/routes';
+import { seoGenerators } from '../utils/seoBuilder'; // ★ NEW IMPORT
 
 export default function LeaguePage() {
   const { leagueId, slug } = useParams();
@@ -11,18 +13,21 @@ export default function LeaguePage() {
   const leagueName = slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'League';
   const standingsTable = standingsData?.standings?.[0] || [];
 
+  // ★ NEW: Centralized SEO generation
+  const leaguePath = `/league/${leagueId}/${slug || leagueName.toLowerCase().replace(/\s+/g, "-")}`;
+  const seo = useMemo(() => (
+    seoGenerators.leaguePage({
+      leagueName,
+      path: leaguePath,
+      leagueLogo: standingsData?.league?.logo, // Extract logo if available from standings data
+    })
+  ), [leagueName, leaguePath, standingsData]);
+
   return (
     <div className="zoka-page">
-      <SEO
-        title={`${leagueName} Standings, Fixtures & Live Scores`}
-        description={`View the latest ${leagueName} standings, league table, fixtures, live scores, match results, and season statistics on ZOKASCORE.`}
-        keywords={`${leagueName}, ${leagueName} standings, ${leagueName} table, ${leagueName} fixtures, ${leagueName} live scores, football standings, ZOKASCORE`}
-        robots="index,follow"
-        breadcrumbs={[
-          { name: "Home", path: "/" },
-          { name: leagueName, path: `/league/${leagueId}/${leagueName.toLowerCase().replace(/\s+/g, "-")}` },
-        ]}
-      />
+      {/* ★ REPLACED WITH RICH SEO */}
+      <SEO {...seo} />
+      
       <div className="zoka-wrap">
         <Link to="/fixtures" className="btn btn-ghost btn-sm mb-20">
           <ArrowLeft size={14} /> Back to Fixtures

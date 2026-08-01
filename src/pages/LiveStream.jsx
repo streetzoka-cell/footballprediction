@@ -1,10 +1,16 @@
 import { useState, useMemo, useCallback, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import {
   ExternalLink, Tv, Search, Globe, Info,
   Play, Star, Shield, Radio, MonitorSmartphone, Wifi,
-  ChevronRight, Zap, Eye, X, Bell, Clock, Signal, Crown
+  ChevronRight, Zap, Eye, X, Bell, Clock, Signal, Crown, ArrowRight
 } from 'lucide-react';
+
 import SEO from "../components/SEO";
+import { useFixtures } from '../hooks/useFixtures';
+import { todayStr } from '../utils/dates';
+import { buildMatchRoute } from '../utils/routes';
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 
 const COUNTRIES = [
   { code: 'ALL', name: 'Global', flag: '🌍' },
@@ -34,21 +40,6 @@ const categories = [
   { key: 'free', label: 'Free / Legal', Icon: Eye },
 ];
 
-const LIVE_MATCH = {
-  homeName: "Manchester United", homeLogo: "https://media.api-sports.io/football/teams/33.png",
-  awayName: "Arsenal", awayLogo: "https://media.api-sports.io/football/teams/42.png",
-  minute: 78, scoreHome: 1, scoreAway: 0,
-  league: "Premier League", leagueLogo: "https://media.api-sports.io/football/leagues/39.png",
-  stats: { possession: [55, 45], shots: [12, 8] },
-  providers: [{ name: "Sky Sports", color: "#0072c6" }, { name: "Peacock", color: "#000000" }, { name: "SuperSport", color: "#009a44" }]
-};
-
-const UPCOMING_MATCHES = [
-  { id: 1, time: Date.now() + 1000 * 60 * 60 * 2, homeName: "Chelsea", awayName: "Liverpool", league: "Premier League" },
-  { id: 2, time: Date.now() + 1000 * 60 * 60 * 4, homeName: "Real Madrid", awayName: "Barcelona", league: "LaLiga" },
-  { id: 3, time: Date.now() + 1000 * 60 * 60 * 24, homeName: "Bayern", awayName: "Dortmund", league: "Bundesliga" },
-];
-
 function useCountdown(targetDate) {
   const calc = () => {
     const diff = targetDate - Date.now();
@@ -68,90 +59,112 @@ function useCountdown(targetDate) {
   return time;
 }
 
-function LiveMatchHero() {
+function LiveMatchHero({ match }) {
+  if (!match) return null;
+
+  const isLive = isLiveStatus(match.status, SPORT.FOOTBALL) || match.isLive;
+  const isFinished = isFinishedStatus(match.status, SPORT.FOOTBALL) || match.isFinished;
+  
   return (
-    <div className="glass-card flex-col gap-16 p-20 mb-24">
+    <div className="glass-card flex-col gap-16 p-20 mb-24 anim-fade-up" style={{ background: isLive ? 'rgba(var(--danger-rgb), 0.03)' : 'var(--bg-card)' }}>
       <div className="flex-between">
         <div className="flex-center gap-8 text-muted text-xs font-bold">
-          {LIVE_MATCH.leagueLogo && <img src={LIVE_MATCH.leagueLogo} alt="" width="16" height="16" />}
-          <span>{LIVE_MATCH.league}</span>
+          {match.leagueLogo && <img src={match.leagueLogo} alt="" width="16" height="16" />}
+          <span>{match.leagueName || 'Featured Match'}</span>
         </div>
-        <div className="badge badge-danger">
-          <span className="zk-live-pulse-dot mr-2" /> LIVE {LIVE_MATCH.minute}'
-        </div>
+        {isLive ? (
+          <div className="badge badge-danger">
+            <span className="zk-live-pulse-dot" style={{ marginRight: '6px' }} /> LIVE {match.displayMinute || match.minute || 0}'
+          </div>
+        ) : isFinished ? (
+          <div className="badge badge-primary">FULL TIME</div>
+        ) : (
+          <div className="badge badge-muted">{match.kickoff || 'Upcoming'}</div>
+        )}
       </div>
 
       <div className="flex-between gap-12">
         <div className="flex-col items-center gap-8" style={{ width: '40%' }}>
-          <img src={LIVE_MATCH.homeLogo} alt={LIVE_MATCH.homeName} width="48" height="48" />
-          <span className="text-primary font-bold text-sm">{LIVE_MATCH.homeName}</span>
+          {match.homeLogo && <img src={match.homeLogo} alt={match.homeName} width="48" height="48" />}
+          <span className="text-primary font-bold text-sm text-center">{match.homeName}</span>
         </div>
         <div className="text-primary font-extrabold" style={{ fontSize: 'var(--fs-2xl)' }}>
-          {LIVE_MATCH.scoreHome} - {LIVE_MATCH.scoreAway}
+          {(isLive || isFinished) ? `${match.homeScore ?? 0} - ${match.awayScore ?? 0}` : 'VS'}
         </div>
         <div className="flex-col items-center gap-8" style={{ width: '40%' }}>
-          <img src={LIVE_MATCH.awayLogo} alt={LIVE_MATCH.awayName} width="48" height="48" />
-          <span className="text-primary font-bold text-sm">{LIVE_MATCH.awayName}</span>
+          {match.awayLogo && <img src={match.awayLogo} alt={match.awayName} width="48" height="48" />}
+          <span className="text-primary font-bold text-sm text-center">{match.awayName}</span>
         </div>
       </div>
 
-      <div className="flex-col gap-8 mt-8">
-        <div className="flex-between text-muted text-xs font-bold">
-          <span>{LIVE_MATCH.stats.possession[0]}%</span>
-          <span>POSSESSION</span>
-          <span>{LIVE_MATCH.stats.possession[1]}%</span>
+      {match.stats && (match.stats.possession || match.stats.shots) ? (
+        <div className="flex-col gap-8 mt-8">
+          {match.stats.possession && (
+            <>
+              <div className="flex-between text-muted text-xs font-bold">
+                <span>{match.stats.possession.home}%</span>
+                <span>POSSESSION</span>
+                <span>{match.stats.possession.away}%</span>
+              </div>
+              <div className="flex h-6 rounded-md overflow-hidden bg-elevated">
+                <div style={{ width: `${match.stats.possession.home}%`, background: 'var(--accent)', transition: 'width 1s ease' }}></div>
+                <div style={{ width: `${match.stats.possession.away}%`, background: 'var(--gold)', transition: 'width 1s ease' }}></div>
+              </div>
+            </>
+          )}
         </div>
-        <div className="flex h-6 rounded-md overflow-hidden bg-elevated">
-          <div style={{ width: `${LIVE_MATCH.stats.possession[0]}%`, background: 'var(--accent)' }}></div>
-          <div style={{ width: `${LIVE_MATCH.stats.possession[1]}%`, background: 'var(--gold)' }}></div>
+      ) : (
+        <div className="flex-col gap-8 mt-8 text-center">
+           <span className="text-muted text-xs font-bold">Match statistics will be available shortly</span>
         </div>
-      </div>
+      )}
 
       <div className="flex-col gap-8 mt-8">
-        <span className="text-muted text-xs font-bold">Available On:</span>
+        <span className="text-muted text-xs font-bold">Available On (Check Local Listings):</span>
         <div className="flex gap-8 flex-wrap">
-          {LIVE_MATCH.providers.map(p => (
-            <div key={p.name} className="badge" style={{ background: `${p.color}20`, border: `1px solid ${p.color}40`, color: 'var(--text-primary)' }}>
-              {p.name}
+           <div className="badge" style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
+              Official Broadcasters
             </div>
-          ))}
         </div>
       </div>
 
-      <button className="btn btn-primary w-full mt-8">
-        <Play size={14} fill="#fff" /> Open Watch Guide
-      </button>
+      <Link to={buildMatchRoute(match.id, match.homeName, match.awayName)} className="btn btn-primary w-full mt-8 flex-center gap-8" style={{ textDecoration: 'none' }}>
+        <Play size={14} fill="#fff" /> View Match Center & Stats
+      </Link>
     </div>
   );
 }
 
 function UpcomingMatchCard({ match }) {
-  const time = useCountdown(match.time);
+  const kickoffDate = match.date || match.kickoff;
+  const targetTime = kickoffDate ? new Date(kickoffDate).getTime() : Date.now() + 3600000;
+  const time = useCountdown(targetTime);
+  
   return (
-    <div className="glass-card flex-col gap-8 p-12">
+    <Link to={buildMatchRoute(match.id, match.homeName, match.awayName)} className="glass-card flex-col gap-8 p-12 anim-fade-up" style={{ textDecoration: 'none', color: 'inherit' }}>
       <div className="flex-center gap-4 text-muted text-xs font-bold">
         <Clock size={12} />
-        {time.done ? 'Started' : `Starts in ${time.h}:${time.m}:${time.s}`}
+        {time.done ? 'Started' : `Starts in ${time.h}h ${time.m}m`}
       </div>
       <div className="flex-center gap-8 text-primary font-bold text-sm">
-        <span>{match.homeName}</span>
+        <span className="truncate">{match.homeName}</span>
         <span className="text-muted text-xs">VS</span>
-        <span>{match.awayName}</span>
+        <span className="truncate">{match.awayName}</span>
       </div>
       <div className="flex-between">
-        <span className="text-muted text-xs">{match.league}</span>
-        <button className="btn btn-ghost btn-sm">
-          <Bell size={12} /> Notify Me
+        <span className="text-muted text-xs truncate">{match.leagueName}</span>
+        <button className="btn btn-ghost btn-sm" onClick={(e) => { e.preventDefault(); /* Add notify logic */ }}>
+          <Bell size={12} /> Notify
         </button>
       </div>
-    </div>
+    </Link>
   );
 }
 
 function ServiceCard({ s, i }) {
   const isLight = s.lightText;
   return (
-    <a href={s.url} target="_blank" rel="noopener noreferrer" className="glass-card flex-col gap-12 p-16 anim-fade-up" style={{ animationDelay: `${i * 50}ms`, textDecoration: 'none' }}>
+    <a href={s.url} target="_blank" rel="noopener noreferrer" className="glass-card flex-col gap-12 p-16 anim-fade-up" style={{ animationDelay: `${i * 50}ms`, textDecoration: 'none', color: 'inherit' }}>
       <div className="flex-between">
         <div className="flex-center gap-8 font-bold text-primary">
           <div className="flex-center" style={{ width: '32px', height: '32px', borderRadius: 'var(--r-8)', background: `linear-gradient(135deg, ${s.color}, ${s.color}40)`, color: isLight ? '#111' : '#fff', fontSize: '10px' }}>
@@ -180,6 +193,20 @@ export default function LiveStream() {
   const [selectedCountry, setSelectedCountry] = useState('ALL');
   const [searchFocused, setSearchFocused] = useState(false);
 
+  // ✅ REAL DATA: Fetch today's fixtures
+  const { data: fixtures = [], isLoading } = useFixtures(todayStr());
+
+  const liveMatches = useMemo(() => fixtures.filter(m => isLiveStatus(m.status, SPORT.FOOTBALL) || m.isLive), [fixtures]);
+  const upcomingMatches = useMemo(() => {
+    return fixtures
+      .filter(m => !isLiveStatus(m.status, SPORT.FOOTBALL) && !isFinishedStatus(m.status, SPORT.FOOTBALL) && !m.isLive && !m.isFinished)
+      .sort((a, b) => new Date(a.date || a.kickoff) - new Date(b.date || b.kickoff))
+      .slice(0, 4);
+  }, [fixtures]);
+
+  // Prioritize a live match, otherwise show the next upcoming match
+  const featuredMatch = liveMatches.length > 0 ? liveMatches[0] : (upcomingMatches.length > 0 ? upcomingMatches[0] : null);
+
   const filteredServices = useMemo(() => {
     const q = search.toLowerCase().trim();
     return streamingServices.filter(s => {
@@ -199,7 +226,7 @@ export default function LiveStream() {
         description="Follow live football matches, kickoff times, live scores, and official TV and streaming information for major leagues and competitions on ZOKASCORE."
         keywords="live football matches, football TV guide, football streaming information, live soccer, live scores, football fixtures, watch football legally, ZOKASCORE"
         robots="index,follow"
-        />
+      />
 
       <div className="zoka-wrap">
         <div className="flex-col items-center gap-8 mb-24 mt-16">
@@ -210,11 +237,16 @@ export default function LiveStream() {
           <p className="text-muted text-sm">Official broadcasters and legal streaming platforms for football worldwide</p>
         </div>
 
-        <LiveMatchHero />
+        {/* ✅ REAL DATA: Live Match Hero */}
+        {isLoading ? (
+          <div className="skeleton" style={{ width: '100%', height: 300, borderRadius: 'var(--r-16)', marginBottom: '24px' }} />
+        ) : (
+          <LiveMatchHero match={featuredMatch} />
+        )}
 
         <div className="glass-card flex-center gap-12 p-12 mb-24">
           <Globe size={16} className="text-muted" />
-          <div className="flex gap-8 overflow-x-auto">
+          <div className="flex gap-8 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
             {COUNTRIES.map(c => (
               <button key={c.code} className={`btn btn-sm ${selectedCountry === c.code ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedCountry(c.code)}>
                 <span>{c.flag}</span> {c.name}
@@ -224,13 +256,25 @@ export default function LiveStream() {
         </div>
 
         <div className="flex-center gap-8 text-muted text-xs font-bold uppercase mb-12">
-          <Clock size={16} /> <span>Today's Schedule</span>
+          <Clock size={16} /> <span>Today's Upcoming Matches</span>
         </div>
-        <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          {UPCOMING_MATCHES.map(m => <UpcomingMatchCard key={m.id} match={m} />)}
-        </div>
+        
+        {isLoading ? (
+           <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+             {[1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 'var(--r-12)' }} />)}
+           </div>
+        ) : upcomingMatches.length > 0 ? (
+          <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+            {upcomingMatches.map(m => <UpcomingMatchCard key={m.id} match={m} />)}
+          </div>
+        ) : (
+          <div className="glass-card flex-col items-center gap-8 p-16 mb-24 text-center">
+             <Clock size={24} className="text-muted" />
+             <p className="text-muted text-sm">No upcoming matches scheduled for today.</p>
+          </div>
+        )}
 
-        <div className={`glass-card flex-center gap-12 p-12 mb-16 ${searchFocused ? 'border-primary' : ''}`}>
+        <div className={`glass-card flex-center gap-12 p-12 mb-16`} style={{ borderColor: searchFocused ? 'var(--primary)' : 'var(--border)', transition: 'border-color 0.2s' }}>
           <Search size={18} style={{ color: searchFocused ? 'var(--primary)' : 'var(--text-muted)' }} />
           <input
             type="text"
@@ -244,7 +288,7 @@ export default function LiveStream() {
           {search && <button onClick={() => setSearch('')} className="btn-icon-sm"><X size={14} /></button>}
         </div>
 
-        <div className="flex gap-8 mb-24 overflow-x-auto">
+        <div className="flex gap-8 mb-24 overflow-x-auto" style={{ scrollbarWidth: 'none' }}>
           {categories.map(cat => (
             <button key={cat.key} onClick={() => setActiveCategory(cat.key)} className={`btn btn-sm ${activeCategory === cat.key ? 'btn-primary' : 'btn-secondary'}`}>
               <cat.Icon size={13} /> {cat.label}

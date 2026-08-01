@@ -249,10 +249,40 @@ export const seoGenerators = {
           : isFinished
           ? "https://schema.org/EventCompleted"
           : "https://schema.org/EventScheduled",
-        homeTeam: { "@type": "SportsTeam", name: homeName, logo: homeLogo },
-        awayTeam: { "@type": "SportsTeam", name: awayName, logo: awayLogo },
-        location: { "@type": "Place", name: venue?.name || leagueName },
-        about: { "@type": "SportsLeague", name: leagueName, logo: leagueLogo },
+        
+        // ★ ENRICHED: Added competitor array and images
+        competitor: [
+          {
+            "@type": "SportsTeam",
+            name: homeName,
+            logo: homeLogo,
+          },
+          {
+            "@type": "SportsTeam",
+            name: awayName,
+            logo: awayLogo,
+          }
+        ],
+        image: [
+          homeLogo,
+          awayLogo,
+          leagueLogo,
+        ].filter(Boolean),
+        
+        // ★ ENRICHED: Location address
+        location: { 
+          "@type": "Place", 
+          name: venue?.name || leagueName,
+          address: venue?.city 
+        },
+        
+        // ★ Changed from 'about' to 'superEvent' for better Schema.org compliance
+        superEvent: { 
+          "@type": "SportsLeague", 
+          name: leagueName, 
+          logo: leagueLogo 
+        },
+        
         ...(isFinished && {
           result: { "@type": "SportsResult", homeTeamScore: homeScore, awayTeamScore: awayScore },
         }),
