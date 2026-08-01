@@ -1,5 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { useLocation } from "react-router-dom";
+import { Helmet } from "react-helmet-async"; // ★ Import Helmet directly
 
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
@@ -9,7 +10,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import StatusCenter from "./components/StatusCenter";
 
-import SEO from "./components/SEO";
+// ★ REMOVED: import SEO from "./components/SEO";
 import { organizationSchema, websiteSchema } from "./utils/seoBuilder";
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -54,7 +55,25 @@ function AppShell() {
 
   return (
     <>
-      <SEO title="Football Predictions, Live Scores & Fixtures" path="/" structuredData={[organizationSchema(), websiteSchema()]} />
+      {/* ★ GLOBAL SITE-WIDE SCHEMAS ONLY */}
+      {/* Injected once at the root level to absolutely prevent duplicates */}
+      <Helmet>
+        <html lang="en-KE" />
+        <meta name="theme-color" content="#05070a" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(websiteSchema())
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify(organizationSchema())
+          }}
+        />
+      </Helmet>
+
       <ScrollToTop />
       <ConnectionManager />
       <PwaManager />
@@ -63,6 +82,7 @@ function AppShell() {
       <div className="app-layout flex-col min-h-screen">
         <Navbar />
         <div className="main-content flex-1 w-full overflow-x-hidden pb-64 md:pb-0">
+          {/* Visual Breadcrumbs component (not JSON-LD) */}
           <Breadcrumbs />
           <main>
             <Suspense fallback={<PageLoader />}>

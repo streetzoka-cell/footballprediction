@@ -4906,8 +4906,140 @@
       "matchScore": 100,
       "category": "LIVE",
       "minute": 0
+    },
+    {
+      "id": "204923031",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T06:30:00.000Z",
+      "utcDate": "2026-08-01T06:30:00.000Z",
+      "timestamp": 1785565800,
+      "status": "FT",
+      "homeTeam": {
+        "name": "East Coast Bays",
+        "shortName": "East Coast Bays",
+        "id": "27432",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Melville United",
+        "shortName": "Melville United",
+        "id": "27991",
+        "crest": null
+      },
+      "league": {
+        "name": "New Zealand Northern League",
+        "id": "122510",
+        "emblem": null
+      },
+      "competition": {
+        "name": "New Zealand Northern League",
+        "id": "122510",
+        "emblem": null
+      },
+      "homeTeamName": "East Coast Bays",
+      "awayTeamName": "Melville United",
+      "homeName": "East Coast Bays",
+      "awayName": "Melville United",
+      "homeTeamId": "27432",
+      "awayTeamId": "27991",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "New Zealand Northern League",
+      "leagueId": "122510",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 0,
+          "away": 2,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 0,
+      "awayScore": 2,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "204923031"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
+    },
+    {
+      "id": "387005921",
+      "sport": "football",
+      "dateStr": "2026-08-01",
+      "date": "2026-08-01T07:00:00.000Z",
+      "utcDate": "2026-08-01T07:00:00.000Z",
+      "timestamp": 1785567600,
+      "status": "FT",
+      "homeTeam": {
+        "name": "Floreat Athena",
+        "shortName": "Floreat Athena",
+        "id": "5890",
+        "crest": null
+      },
+      "awayTeam": {
+        "name": "Kingsley Westside",
+        "shortName": "Kingsley Westside",
+        "id": "60683",
+        "crest": null
+      },
+      "league": {
+        "name": "National Primera Division Western Australia",
+        "id": "174618",
+        "emblem": null
+      },
+      "competition": {
+        "name": "National Primera Division Western Australia",
+        "id": "174618",
+        "emblem": null
+      },
+      "homeTeamName": "Floreat Athena",
+      "awayTeamName": "Kingsley Westside",
+      "homeName": "Floreat Athena",
+      "awayName": "Kingsley Westside",
+      "homeTeamId": "5890",
+      "awayTeamId": "60683",
+      "homeLogo": null,
+      "awayLogo": null,
+      "leagueName": "National Primera Division Western Australia",
+      "leagueId": "174618",
+      "leagueLogo": null,
+      "display": {
+        "isLive": false,
+        "isFinished": true,
+        "isUpcoming": true,
+        "isHalfTime": false,
+        "minute": 0,
+        "status": "NS",
+        "score": {
+          "home": 2,
+          "away": 0,
+          "display": "0-0"
+        }
+      },
+      "homeScore": 2,
+      "awayScore": 0,
+      "isLive": false,
+      "isFinished": false,
+      "ids": {
+        "isports": "387005921"
+      },
+      "source": "isports",
+      "matchScore": 100,
+      "category": "LIVE",
+      "minute": 0
     }
   ],
-  "count": 75,
+  "count": 77,
   "date": "2026-08-01"
 }
