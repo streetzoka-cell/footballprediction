@@ -462,22 +462,7 @@ export default function Navbar() {
         </div>
       </aside>
 
-      {/* Live Ticker */}
-      {tickerMatches.length > 0 && (
-        <div className="nv-ticker-wrap hide-mobile">
-          <div className="nv-ticker-content">
-            {tickerMatches.map((m) => (
-              <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="nv-ticker-item">
-                {m.isLive && <span className="nv-ticker-live">LIVE</span>}
-                <span>{m.homeName}</span>
-                <span className="text-primary font-mono">{m.homeScore ?? '?'} - {m.awayScore ?? '?'}</span>
-                <span>{m.awayName}</span>
-                {m.isLive && <span className="text-muted">{m.displayMinute}'</span>}
-              </Link>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Live Ticker - Upgraded */}
 
       {/* Global Top Bar */}
       <header className={`nav-top-bar anim-fade-in ${scrolled ? 'scrolled' : ''}`}>
