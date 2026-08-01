@@ -4,7 +4,7 @@ import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
-// ★ NEW: Helper to clean team names for cross-provider deduplication
+// ★ Helper to clean team names for cross-provider deduplication
 const cleanName = (str) => {
   if (!str || typeof str !== 'string') return '';
   return str.toLowerCase()
@@ -42,7 +42,7 @@ export function useFixtures(dateStr, sport = 'football') {
       
       const map = new Map();
       
-      // ★ NEW: Helper to find if a match already exists in the map by ID OR by cleaned team names
+      // Helper to find if a match already exists in the map by ID OR by cleaned team names
       const findExisting = (match) => {
         // 1. Try exact ID match first
         const byId = map.get(String(match.id));

@@ -1,11 +1,7 @@
 // src/services/predictions.js
 import { db } from '../utils/firebase';
 import { safeWrite } from './safeWrite';
-
-import { 
-  collection, query, where, doc, setDoc, getDoc, getDocs, writeBatch, 
-  serverTimestamp, increment, runTransaction 
-} from 'firebase/firestore';
+import { collection, query, where, doc, getDoc, getDocs, writeBatch, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
 import { todayStr, getWeekStart, getMonthStart } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { PATHS, calcPoints } from '../utils/constants';
@@ -31,17 +27,12 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   };
 
   await safeWrite(PATHS.USER_PREDICTIONS, predId, payload, { merge: true });
-
   eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid, matchId, predId, dateStr, homeScore: Number(h), awayScore: Number(a) });
 }
 
 export async function saveZokaVote(uid, matchId, vote) {
-  if (!db) return;
   const dateStr = todayStr();
-  const voteRef = doc(db, PATHS.ZOKA_VOTE_STATS, dateStr);
   const fieldPath = `stats.${matchId}`;
-  
-  // ★ FIX: Use safeWrite instead of setDoc
   await safeWrite(PATHS.ZOKA_VOTE_STATS, dateStr, {
     [`${fieldPath}.agree`]: increment(vote === 'agree' ? 1 : 0),
     [`${fieldPath}.disagree`]: increment(vote === 'disagree' ? 1 : 0),
@@ -49,9 +40,10 @@ export async function saveZokaVote(uid, matchId, vote) {
     updatedAt: serverTimestamp(),
     date: dateStr,
   }, { merge: true });
-  
   eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr });
 }
+
+// ★ MISSING FUNCTION RESTORED HERE
 export async function removeZokaVote(uid, matchId, newVote) {
   if (!db) return;
   const dateStr = todayStr();
@@ -79,7 +71,6 @@ export async function removeZokaVote(uid, matchId, newVote) {
   } catch (err) {
     console.error('[SafeWrite] Transaction failed, falling back to queue:', err);
     // Fallback to safeWrite if transaction fails (e.g. quota exceeded)
-    // Note: We lose the exact transaction state, but we prevent the app from crashing.
     const matchStats = { agree: 0, disagree: 0, total: 0 };
     if (oldV === 'agree') { matchStats.agree = -1; matchStats.total = -1; } 
     else if (oldV === 'disagree') { matchStats.disagree = -1; matchStats.total = -1; }
@@ -92,12 +83,10 @@ export async function removeZokaVote(uid, matchId, newVote) {
   eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote: newVote, dateStr });
 }
 
-
 const _resolvingNow = new Set();
 
 export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDate) {
-  if (!db) return 0;
-  if (_resolvingNow.has(matchId)) return 0;
+  if (!db || _resolvingNow.has(matchId)) return 0;
   _resolvingNow.add(matchId);
 
   try {
@@ -158,16 +147,11 @@ export async function resolveMatchForAllUsers(matchId, actualH, actualA, matchDa
     }
 
     const zokaSnap = await getDoc(doc(db, PATHS.ZOKA_PICKS, dateKey));
-    let zokaChanged = false;
     if (zokaSnap.exists()) {
       const zokaData = zokaSnap.data();
       const matches = zokaData.matches || [];
-      const updated = matches.map((m) => {
-        if (String(m.matchId) === String(matchId) && m.status !== 'finished') { zokaChanged = true; return { ...m, homeScore: numH, awayScore: numA, status: 'finished' }; }
-        return m;
-      });
-      if (zokaChanged) {
-        // ★ FIX: Use safeWrite
+      const updated = matches.map((m) => String(m.matchId) === String(matchId) && m.status !== 'finished' ? { ...m, homeScore: numH, awayScore: numA, status: 'finished' } : m);
+      if (JSON.stringify(updated) !== JSON.stringify(matches)) {
         await safeWrite(PATHS.ZOKA_PICKS, dateKey, { ...zokaData, matches: updated, updatedAt: serverTimestamp() }, { merge: true });
       }
     }
@@ -192,22 +176,12 @@ export async function rebuildDailySummary(dateStr) {
   try {
     const resultsSnap = await getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('matchDate', '==', dateStr)));
     let predsSnap = await getDocs(query(collection(db, PATHS.USER_PREDICTIONS), where('matchDate', '==', dateStr)));
-    
-    if (predsSnap.empty) {
-      console.log(`[Summary] No predictions found for ${dateStr}. Skipping daily summary rebuild.`);
-      return;
-    }
+    if (predsSnap.empty) return;
 
     const activeSnap = await getDocs(query(collection(db, PATHS.ACTIVE_PREDICTIONS), where('matchDate', '==', dateStr)));
-    const summaryData = buildDailySummaryData(resultsSnap, predsSnap, activeSnap);
+    const summaryData = await buildDailySummaryData(resultsSnap, predsSnap, activeSnap);
     
-    // ★ FIX: Use safeWrite
-    await safeWrite(PATHS.DAILY_LEADERBOARD, dateStr, {
-      ...summaryData,
-      updatedAt: serverTimestamp(),
-      date: dateStr
-    });
-
+    await safeWrite(PATHS.DAILY_LEADERBOARD, dateStr, { ...summaryData, updatedAt: serverTimestamp(), date: dateStr });
     eventBus.emit(EVENT.DAILY_LEADERBOARD_UPDATED, { dateStr, entries: summaryData.entries });
     eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr });
   } catch (e) { console.error('[Summary] Rebuild failed:', e); }
@@ -219,26 +193,11 @@ export async function rebuildGoatLeaderboard() {
     const snap = await getDocs(collection(db, PATHS.USER_POINTS_TOTAL));
     const mappedList = snap.docs.map((d) => {
       const u = d.data();
-      return {
-        uid: d.id,
-        displayName: u.displayName || 'Player',
-        points: u.totalPoints || 0,
-        predictions: u.predictionsCount || 0,
-        exact: u.exactCount || 0,
-        result: u.resultCount || 0,
-        miss: u.missCount || 0,
-        resolved: u.predictionsCount || 0
-      };
+      return { uid: d.id, displayName: u.displayName || 'Player', points: u.totalPoints || 0, predictions: u.predictionsCount || 0, exact: u.exactCount || 0, result: u.resultCount || 0, miss: u.missCount || 0, resolved: u.predictionsCount || 0 };
     }).filter((u) => u.predictions > 0);
 
-    const summaryData = buildPeriodSummaryData({ docs: mappedList.map(u => ({ data: () => u })) }, 'goat', null);
-    
-    // ★ FIX: Use safeWrite
-    await safeWrite(PATHS.LEADERBOARD_SUMMARIES, 'current', {
-      ...summaryData,
-      updatedAt: serverTimestamp()
-    });
-    
+    const summaryData = await buildPeriodSummaryData({ docs: mappedList.map(u => ({ data: () => u })) }, 'goat', null);
+    await safeWrite(PATHS.LEADERBOARD_SUMMARIES, 'current', { ...summaryData, updatedAt: serverTimestamp() });
     eventBus.emit(EVENT.GOAT_LEADERBOARD_UPDATED, { entries: summaryData.entries });
   } catch (e) { console.error('[GOAT] Rebuild failed:', e); }
 }
@@ -253,23 +212,8 @@ export async function rebuildPeriodLeaderboard(period, startDate) {
   const docId = period === 'goat' ? 'current' : `${period}_${startDate}`;
   try {
     const snap = await getDocs(query(collection(db, PATHS.PREDICTION_RESULTS), where('resolvedAt', '>=', new Date(startDate + 'T00:00:00Z'))));
-    const summaryData = buildPeriodSummaryData(snap, period, startDate);
-    
-    // ★ FIX: Use safeWrite
-    await safeWrite(PATHS.LEADERBOARD_SUMMARIES, docId, {
-      ...summaryData,
-      updatedAt: serverTimestamp()
-    });
-    
+    const summaryData = await buildPeriodSummaryData(snap, period, startDate);
+    await safeWrite(PATHS.LEADERBOARD_SUMMARIES, docId, { ...summaryData, updatedAt: serverTimestamp() });
     eventBus.emit(EVENT.LEADERBOARD_UPDATED, { period, entries: summaryData.entries });
   } catch (e) { console.error(`[Period] Rebuild ${period} failed:`, e); }
-}
-
-export async function rebuildAllLeaderboards() {
-  await Promise.all([
-    rebuildDailySummary(todayStr()),
-    rebuildGoatLeaderboard(),
-    rebuildPeriodLeaderboard('weekly'),
-    rebuildPeriodLeaderboard('monthly')
-  ]);
 }

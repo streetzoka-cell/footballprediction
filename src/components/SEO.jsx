@@ -1,7 +1,7 @@
 // src/components/SEO.jsx
 import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
-import { SITE } from "../utils/seoBuilder";
+import { SITE, generateBreadcrumbs, breadcrumbSchema } from "../utils/seoBuilder";
 
 export default function SEO({
   title,
@@ -16,11 +16,9 @@ export default function SEO({
   modifiedTime,
   author = "Kimutai Gibson",
   structuredData,
-  breadcrumbs,
+  breadcrumbs: propBreadcrumbs,
   prevPath,
   nextPath,
-  twitterLabel1,
-  twitterData1,
   children,
 }) {
   const location = useLocation();
@@ -32,6 +30,7 @@ export default function SEO({
     : SITE.name;
 
   const url = canonical || `${SITE.url}${location.pathname}`;
+  const crumbs = propBreadcrumbs || generateBreadcrumbs(location.pathname);
 
   // Combine all structured data
   const schemas = [];
@@ -39,19 +38,10 @@ export default function SEO({
     if (Array.isArray(structuredData)) schemas.push(...structuredData);
     else schemas.push(structuredData);
   }
-  
-  if (breadcrumbs && breadcrumbs.length > 0) {
-    schemas.push({
-      "@context": "https://schema.org",
-      "@type": "BreadcrumbList",
-      itemListElement: breadcrumbs.map((item, index) => ({
-        "@type": "ListItem",
-        position: index + 1,
-        name: item.name,
-        item: `${SITE.url}${item.path}`,
-      })),
-    });
-  }
+
+  // Always include breadcrumb schema
+  const bcSchema = breadcrumbSchema(crumbs);
+  if (bcSchema) schemas.push(bcSchema);
 
   return (
     <Helmet prioritizeSeoTags>
@@ -65,25 +55,19 @@ export default function SEO({
       <meta name="robots" content={robots} />
       <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
-      {/* ★ NEW: Theme & PWA Meta */}
+      {/* Theme & PWA */}
       <meta name="theme-color" content={SITE.themeColor} />
       <meta name="color-scheme" content="dark light" />
-      <meta name="mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-capable" content="yes" />
-      <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
       <link rel="canonical" href={url} />
 
-      {/* ★ NEW: Prev / Next Pagination */}
+      {/* Pagination */}
       {prevPath && <link rel="prev" href={`${SITE.url}${prevPath}`} />}
       {nextPath && <link rel="next" href={`${SITE.url}${nextPath}`} />}
 
       {/* Language Alternates */}
       <link rel="alternate" hrefLang="en-KE" href={url} />
       <link rel="alternate" hrefLang="en" href={url} />
-      <link rel="alternate" hrefLang="sw" href={url} />
-      <link rel="alternate" hrefLang="fr" href={url} />
-      <link rel="alternate" hrefLang="es" href={url} />
       <link rel="alternate" hrefLang="x-default" href={url} />
 
       {/* Open Graph */}
@@ -95,10 +79,8 @@ export default function SEO({
       <meta property="og:url" content={url} />
       <meta property="og:image" content={image} />
       <meta property="og:image:secure_url" content={image} />
-      <meta property="og:image:type" content="image/png" />
       <meta property="og:image:width" content="1200" />
       <meta property="og:image:height" content="630" />
-      <meta property="og:image:alt" content={pageTitle} />
 
       {/* Twitter */}
       <meta name="twitter:card" content="summary_large_image" />
@@ -107,17 +89,12 @@ export default function SEO({
       <meta name="twitter:title" content={pageTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
-      <meta name="twitter:image:alt" content={pageTitle} />
-      
-      {/* ★ NEW: Twitter Labels */}
-      {twitterLabel1 && <meta name="twitter:label1" content={twitterLabel1} />}
-      {twitterData1 && <meta name="twitter:data1" content={twitterData1} />}
 
       {/* Article Meta */}
       {publishedTime && <meta property="article:published_time" content={publishedTime} />}
       {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
 
-      {/* Structured Data (JSON-LD) */}
+      {/* Structured Data */}
       {schemas.map((data, i) => (
         <script
           key={i}

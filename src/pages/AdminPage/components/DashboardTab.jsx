@@ -16,40 +16,28 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
   const zAcc = zT > 0 ? Math.round(((zE + zR) / res) * 100) : 0;
 
   return (
-    <div className="ae">
-      <div className="asec">
-        <h3 className="ast"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
-        <div className="asg">
-          <div className="astat"><span className="n bl">{fxCount}</span><span className="l">Fixtures</span></div>
-          <div className="astat"><span className="n rd">{liveCount}</span><span className="l">Live</span></div>
-          <div className="astat"><span className="n gn">{finCount}</span><span className="l">Finished</span></div>
-          <div className="astat"><span className="n gd">{preds.length}</span><span className="l">Featured</span></div>
-          <div className="astat"><span className="n gd">{zT}</span><span className="l">Zoka</span></div>
-          <div className="astat"><span className="n gn">{zAcc}%</span><span className="l">Zoka Acc</span></div>
+    <div className="flex-col gap-16">
+      <div className="glass-card p-16 flex-col gap-12">
+        <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
+        <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-accent">{fxCount}</span><span className="text-muted text-xs">Fixtures</span></div>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-danger">{liveCount}</span><span className="text-muted text-xs">Live</span></div>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-primary">{finCount}</span><span className="text-muted text-xs">Finished</span></div>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-gold">{preds.length}</span><span className="text-muted text-xs">Featured</span></div>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-gold">{zT}</span><span className="text-muted text-xs">Zoka</span></div>
+          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-primary">{zAcc}%</span><span className="text-muted text-xs">Zoka Acc</span></div>
         </div>
-        {zT > 0 && (
-          <div className="azs">
-            <span className="abdg ex"><CheckCircle2 size={9} /> {zE} Exact</span>
-            <span className="abdg rs"><TrendingUp size={9} /> {zR} Result</span>
-            <span className="abdg ms"><XCircle size={9} /> {zM} Miss</span>
-            {zP > 0 && <span className="abdg pn">{zP} Pending</span>}
-          </div>
-        )}
       </div>
-      <div className="asec">
-        <h3 className="ast"><RotateCcw size={15} /> Rebuild Leaderboards</h3>
-        <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: '0 0 12px', fontWeight: 600, lineHeight: 1.4 }}>
-          Manually trigger the backend to recalculate points and update ranks.
-          <br /><span style={{ fontSize: '.68rem', opacity: 0.7 }}>Leaderboards usually update automatically when matches finish.</span>
-        </p>
-        <div className="arg">
+      <div className="glass-card p-16 flex-col gap-12">
+        <h3 className="text-primary font-bold flex-center gap-8"><RotateCcw size={15} /> Rebuild Leaderboards</h3>
+        <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           {[['daily','Daily ('+dateLabel(date)+')',CalendarDays],['goat','GOAT',Crown],['weekly','Weekly',Timer],['monthly','Monthly',BarChart3]].map(([k,l,Ic]) => (
-            <button key={k} className="arb" onClick={() => onRebuild(k)} disabled={rebuilding === k}>
-              {rebuilding === k ? <Loader2 size={13} className="asp" /> : <Ic size={13} />}{l}
+            <button key={k} className="btn btn-secondary" onClick={() => onRebuild(k)} disabled={rebuilding === k}>
+              {rebuilding === k ? <Loader2 size={13} className="anim-spin" /> : <Ic size={13} />}{l}
             </button>
           ))}
-          <button className="arb" onClick={() => onRebuild('all')} disabled={rebuilding === 'all'} style={{ gridColumn: '1 / -1' }}>
-            {rebuilding === 'all' ? <Loader2 size={13} className="asp" /> : <Sparkles size={13} />}Rebuild All
+          <button className="btn btn-primary" onClick={() => onRebuild('all')} disabled={rebuilding === 'all'}>
+            {rebuilding === 'all' ? <Loader2 size={13} className="anim-spin" /> : <Sparkles size={13} />}Rebuild All
           </button>
         </div>
       </div>

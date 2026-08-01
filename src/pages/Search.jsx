@@ -1,15 +1,13 @@
 import { Link } from 'react-router-dom';
-import { liteClient } from 'algoliasearch/lite'; // ★ Fixed: named export
+import { liteClient } from 'algoliasearch/lite';
 import { InstantSearch, SearchBox, Hits, Highlight, Configure } from 'react-instantsearch';
 import SEO from '../components/SEO';
 
-// Initialize Algolia client
 const searchClient = liteClient(
   'YOUR_ALGOLIA_APP_ID',
   'YOUR_ALGOLIA_SEARCH_KEY'
 );
 
-// Component to render a single match result
 function MatchHit({ hit }) {
   const matchSlug = `${hit.homeTeamName}-vs-${hit.awayTeamName}`
     .toLowerCase()
@@ -20,31 +18,19 @@ function MatchHit({ hit }) {
   return (
     <Link
       to={`/match/${hit.objectID}/${matchSlug}`}
-      style={{
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        padding: '12px',
-        background: '#0a0f1a',
-        borderRadius: '8px',
-        textDecoration: 'none',
-        color: '#f8fafc',
-        border: '1px solid #151b26',
-        marginBottom: '8px',
-        transition: 'border-color 0.2s',
-      }}
-      className="hover:border-emerald-500"
+      className="glass-card flex-between p-12 mb-8 hover:border-primary"
+      style={{ textDecoration: 'none' }}
     >
-      <div>
-        <div style={{ fontWeight: '700' }}>
+      <div className="flex-col gap-4">
+        <div className="font-bold text-primary text-sm">
           <Highlight attribute="homeTeamName" hit={hit} /> vs{' '}
           <Highlight attribute="awayTeamName" hit={hit} />
         </div>
-        <div style={{ fontSize: '0.75rem', color: '#64748b' }}>
+        <div className="text-muted text-xs">
           <Highlight attribute="leagueName" hit={hit} />
         </div>
       </div>
-      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+      <span className="text-muted text-xs">
         {hit.status === 'NS' ? new Date(hit.date).toLocaleString() : hit.status}
       </span>
     </Link>
@@ -53,35 +39,27 @@ function MatchHit({ hit }) {
 
 export default function SearchPage() {
   return (
-    <div className="md-page">
-     <SEO
-  title="Search Football Matches, Teams & Leagues"
-  description="Search football matches, teams, leagues, fixtures, live scores, standings, and predictions instantly across ZOKASCORE."
-  keywords="football search, search matches, search teams, search leagues, football fixtures, live scores, ZOKASCORE search"
-  robots="noindex,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Search", path: "/search" }
-  ]}
-/>
+    <div className="zoka-page">
+      <SEO
+        title="Search Football Matches, Teams & Leagues"
+        description="Search football matches, teams, leagues, fixtures, live scores, standings, and predictions instantly across ZOKASCORE."
+        keywords="football search, search matches, search teams, search leagues, football fixtures, live scores, ZOKASCORE search"
+        robots="noindex,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Search", path: "/search" }]}
+      />
 
-
-
-      <div className="md-container">
-        <h1 className="md-team-name" style={{ marginBottom: '20px' }}>
-          Search Matches
-        </h1>
+      <div className="zoka-wrap">
+        <h1 className="text-primary font-extrabold mb-20">Search Matches</h1>
 
         <InstantSearch searchClient={searchClient} indexName="matches">
           <Configure hitsPerPage={20} />
 
-          <div style={{ marginBottom: '24px' }}>
+          <div className="mb-24">
             <SearchBox
               placeholder="Search team or league..."
               classNames={{
                 root: 'w-full',
-                input:
-                  'w-full bg-[#0a0f1a] border border-[#151b26] rounded-lg px-4 py-3 text-white outline-none focus:border-emerald-500',
+                input: 'glass-card w-full p-12 text-primary text-sm outline-none border-none',
                 submit: 'hidden',
                 reset: 'hidden',
               }}

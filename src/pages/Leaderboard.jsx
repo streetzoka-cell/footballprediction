@@ -18,14 +18,14 @@ const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 
 const AVATAR_COLORS = [
-  '#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4',
-  '#3b82f6', '#8b5cf6', '#ec4899', '#64748b', '#78716c',
+  'var(--danger)', 'var(--gold)', 'var(--bronze)', 'var(--primary)', 'var(--accent)',
+  'var(--accent)', 'var(--text-muted)', 'var(--text-muted)', 'var(--text-muted)', 'var(--text-muted)',
 ];
 
 const PODIUM_CFG = [
-  { h: 130, border: 'var(--gold)', bg: 'linear-gradient(180deg,rgba(245,197,66,.15) 0%,rgba(245,197,66,.02) 100%)', text: 'var(--gold)', avatar: 72, font: '1.25rem', shadow: '0 0 24px rgba(245,197,66,.2)', order: 2, medal: '🥇' },
-  { h: 95, border: '#94a3b8', bg: 'linear-gradient(180deg,rgba(148,163,184,.1) 0%,rgba(148,163,184,.01) 100%)', text: '#94a3b8', avatar: 58, font: '1rem', shadow: '0 0 16px rgba(148,163,184,.1)', order: 1, medal: '🥈' },
-  { h: 75, border: '#b45309', bg: 'linear-gradient(180deg,rgba(180,83,9,.1) 0%,rgba(180,83,9,.01) 100%)', text: '#d97706', avatar: 50, font: '.85rem', shadow: '0 0 12px rgba(180,83,9,.1)', order: 3, medal: '🥉' },
+  { h: 130, border: 'var(--gold)', bg: 'linear-gradient(180deg,rgba(var(--gold-rgb),.15) 0%,rgba(var(--gold-rgb),.02) 100%)', text: 'var(--gold)', avatar: 72, font: '1.25rem', shadow: '0 0 24px rgba(var(--gold-rgb),.2)', order: 2, medal: '🥇' },
+  { h: 95, border: 'var(--text-muted)', bg: 'linear-gradient(180deg,rgba(var(--text-muted-rgb),.1) 0%,rgba(var(--text-muted-rgb),.01) 100%)', text: 'var(--text-muted)', avatar: 58, font: '1rem', shadow: '0 0 16px rgba(var(--text-muted-rgb),.1)', order: 1, medal: '🥈' },
+  { h: 75, border: 'var(--bronze)', bg: 'linear-gradient(180deg,rgba(var(--bronze-rgb),.1) 0%,rgba(var(--bronze-rgb),.01) 100%)', text: 'var(--bronze)', avatar: 50, font: '.85rem', shadow: '0 0 12px rgba(var(--bronze-rgb),.1)', order: 3, medal: '🥉' },
 ];
 
 const TABS = [
@@ -35,7 +35,6 @@ const TABS = [
   { key: PERIOD.GOAT, label: 'G.O.A.T', Icon: Crown, isGoat: true },
 ];
 
-// ★ Real Achievement Badges Logic
 const getBadges = (user) => {
   const badges = [];
   if ((user.exact || 0) >= 5) badges.push({ text: '🎯 Sniper', cls: 'sniper' });
@@ -44,19 +43,19 @@ const getBadges = (user) => {
   return badges;
 };
 
-const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, color = 'var(--accent)' }) {
+const AccuracyRing = memo(function AccuracyRing({ value, size = 32, stroke = 3, color = 'var(--primary)' }) {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(100, Math.max(0, value)) / 100;
   return (
     <div style={{ position: 'relative', width: size, height: size, flexShrink: 0 }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#151b26" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-elevated)" strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
           strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
           strokeLinecap="round" style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)' }} />
       </svg>
-      <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: '#fff' }}>
+      <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.6rem', fontWeight: 800, color: 'var(--text-primary)' }}>
         {value}%
       </span>
     </div>
@@ -81,10 +80,10 @@ const PodiumUser = memo(function PodiumUser({ user, position, delay }) {
   const name = user.displayName || 'Player';
   
   return (
-    <div className="lb-pod-u" style={{ order: c.order, animation: `lb-pop .4s ${SPRING} ${(delay || 0) + 150}ms both` }}>
+    <div className="lb-pod-u" style={{ order: c.order, animation: `zk-pop .4s ${SPRING} ${(delay || 0) + 150}ms both` }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', marginBottom: 6, position: 'relative' }}>
         {position === 0 && (
-          <div style={{ color: 'var(--gold)', marginBottom: -2, filter: 'drop-shadow(0 0 5px rgba(245,197,66,.4))', animation: 'lb-crown 3s ease-in-out infinite' }}>
+          <div style={{ color: 'var(--gold)', marginBottom: -2, filter: 'drop-shadow(0 0 5px rgba(var(--gold-rgb),.4))', animation: 'zk-bounce 3s ease-in-out infinite' }}>
             <Crown size={24} />
           </div>
         )}
@@ -127,15 +126,14 @@ const TabBar = memo(function TabBar({ tabs, active, onChange }) {
           <span className="lbl">{t.label}</span>
         </button>
       ))}
-      <div className="lb-tab-ind" style={{ left: ind.left, width: ind.width, background: isGoat ? 'rgba(0,0,0,.15)' : 'var(--gold)', boxShadow: isGoat ? 'none' : '0 0 8px rgba(245,197,66,.3)' }} />
+      <div className="lb-tab-ind" style={{ left: ind.left, width: ind.width, background: isGoat ? 'rgba(0,0,0,.15)' : 'var(--gold)', boxShadow: isGoat ? 'none' : '0 0 8px rgba(var(--gold-rgb),.3)' }} />
     </div>
   );
 });
 
-// ★ Smart Row with Rank Change Animations & Badges
 const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, prevRank }) {
   const avColor = AVATAR_COLORS[(rank - 1) % AVATAR_COLORS.length];
-  const trend = prevRank ? prevRank - rank : 0; // Positive means moved up
+  const trend = prevRank ? prevRank - rank : 0;
   const name = user.displayName || 'Anonymous';
   const badges = getBadges(user);
 
@@ -146,14 +144,14 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, p
 
   return (
     <div className={rowCls} style={{ animationDelay: `${delay}ms` }}>
-      <div className="lb-row-rank" style={{ color: rank <= 10 ? 'var(--accent)' : 'var(--text-primary)' }}>
+      <div className="lb-row-rank" style={{ color: rank <= 10 ? 'var(--primary)' : 'var(--text-primary)' }}>
         #{rank}
         {trend > 0 && <span className="trend-up"><ArrowUp size={10} />{trend}</span>}
         {trend < 0 && <span className="trend-down"><ArrowDown size={10} />{Math.abs(trend)}</span>}
       </div>
       
       <div className="lb-row-user">
-        <div className="lb-row-avatar" style={{ background: avColor, boxShadow: isMe ? '0 0 0 2px var(--accent)' : 'none' }}>
+        <div className="lb-row-avatar" style={{ background: avColor, boxShadow: isMe ? '0 0 0 2px var(--primary)' : 'none' }}>
           {name.slice(0, 2).toUpperCase()}
         </div>
         <div className="lb-row-info">
@@ -169,7 +167,7 @@ const LeaderboardRow = memo(function LeaderboardRow({ user, rank, isMe, delay, p
       </div>
 
       <div className="lb-row-acc">
-        <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? 'var(--accent)' : (user.accuracy || 0) >= 40 ? '#fbbf24' : '#ef4444'} />
+        <AccuracyRing value={user.accuracy || 0} size={32} stroke={3} color={(user.accuracy || 0) >= 70 ? 'var(--primary)' : (user.accuracy || 0) >= 40 ? 'var(--gold)' : 'var(--danger)'} />
       </div>
 
       <div className="lb-row-pts">
@@ -217,7 +215,6 @@ export default function Leaderboard() {
     return loadingDaily;
   }, [tab, loadingWeekly, loadingMonthly, loadingGoat, loadingDaily]);
 
-  // ★ Personal Dashboard Data
   const myEntry = useMemo(() => {
     if (!uid) return null;
     return entries.find(u => u.uid === uid) || null;
@@ -286,7 +283,6 @@ export default function Leaderboard() {
           <p>{tabDesc}</p>
         </div>
 
-        {/* ★ PREMIUM PERSONAL DASHBOARD */}
         {myEntry && !loading && (
           <div className="lb-personal-card">
             <div className="lb-pc-main">
@@ -304,14 +300,14 @@ export default function Leaderboard() {
                   <span className="lbl">Exact</span>
                 </div>
                 <div className="lb-pc-stat">
-                  <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="var(--accent)" />
+                  <AccuracyRing value={myEntry.accuracy || 0} size={36} stroke={3} color="var(--primary)" />
                 </div>
               </div>
             </div>
             
             {rivalEntry && (
               <div className="lb-pc-rival">
-                <Swords size={14} style={{ color: '#ef4444', flexShrink: 0 }} />
+                <Swords size={14} style={{ color: 'var(--danger)', flexShrink: 0 }} />
                 <span className="text">
                   <strong>{pointsBehind} pts</strong> behind <strong>{rivalEntry.displayName}</strong> (#{rivalEntry.rank})
                 </span>
@@ -321,7 +317,7 @@ export default function Leaderboard() {
             
             {myEntry.rank === 1 && (
               <div className="lb-pc-rival champion">
-                <Crown size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
+                <Crown size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
                 <span className="text">You are the Champion! 👑</span>
               </div>
             )}
@@ -332,15 +328,15 @@ export default function Leaderboard() {
           <TabBar tabs={TABS} active={tab} onChange={handleTabChange} />
 
           <div className="lb-stats">
-            <StatCard icon={<Flame size={16} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(245,197,66,.05)" delay={0} />
-            <StatCard icon={<Users size={16} />} label="Players" value={stats.players || 0} color="#60a5fa" bg="rgba(59,130,246,.05)" delay={50} />
-            <StatCard icon={<Target size={16} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--accent)" bg="rgba(0,230,118,.04)" delay={100} />
-            <StatCard icon={<Award size={16} />} label="Exact Scores" value={stats.exact || 0} color="#f97316" bg="rgba(249,115,22,.05)" delay={150} />
+            <StatCard icon={<Flame size={16} />} label="Top Score" value={entries[0] ? `${entries[0].points} pts` : '–'} color="var(--gold)" bg="rgba(var(--gold-rgb),.05)" delay={0} />
+            <StatCard icon={<Users size={16} />} label="Players" value={stats.players || 0} color="var(--accent)" bg="rgba(var(--accent-rgb),.05)" delay={50} />
+            <StatCard icon={<Target size={16} />} label="Avg Accuracy" value={`${stats.avg || '0.0'}%`} color="var(--primary)" bg="rgba(var(--primary-rgb),.04)" delay={100} />
+            <StatCard icon={<Award size={16} />} label="Exact Scores" value={stats.exact || 0} color="var(--gold)" bg="rgba(var(--gold-rgb),.05)" delay={150} />
           </div>
 
           {loading ? (
              <div style={{ display: 'flex', justifyContent: 'center', gap: 12, marginBottom: 40, padding: '32px 0' }}>
-               {[0, 1, 2].map(i => <div key={i} className="lb-skel" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
+               {[0, 1, 2].map(i => <div key={i} className="skeleton" style={{ width: 120, height: 180, borderRadius: 12, animationDelay: `${i * 70}ms` }} />)}
              </div>
           ) : filteredTop3.length >= 1 ? (
             <div className="lb-podium">{filteredTop3.slice(0, 3).map((u, i) => <PodiumUser key={u.uid} user={u} position={i} delay={i * 80} />)}</div>
@@ -349,7 +345,7 @@ export default function Leaderboard() {
           )}
 
           <div className="lb-search-wrap">
-            <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--accent)' : 'var(--text-muted)', transition: 'color .15s', pointerEvents: 'none', zIndex: 1 }} />
+            <Search size={15} style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: searchFocused ? 'var(--primary)' : 'var(--text-muted)', transition: 'color .15s', pointerEvents: 'none', zIndex: 1 }} />
             <input ref={searchRef} type="text" placeholder="Search players..." value={search} onChange={e => setSearch(e.target.value)} onFocus={() => setSearchFocused(true)} onBlur={() => setSearchFocused(false)} className="lb-search" />
             {search && <button className="lb-search-clear" onClick={handleClear}><X size={11} /></button>}
           </div>
@@ -358,7 +354,7 @@ export default function Leaderboard() {
           <div className="lb-list">
             {loading ? (
               Array.from({ length: 6 }).map((_, i) => (
-                <div key={i} className="lb-skel" style={{ width: '100%', height: 60, borderRadius: 12, animationDelay: `${i * 40}ms` }} />
+                <div key={i} className="skeleton" style={{ width: '100%', height: 60, borderRadius: 12, animationDelay: `${i * 40}ms` }} />
               ))
             ) : visibleRest.length === 0 && !search.trim() && filteredTop3.length === 0 ? (
               <div className="lb-empty">{entries.length === 0 ? 'No predictions yet — be the first!' : 'Top players shown above.'}</div>

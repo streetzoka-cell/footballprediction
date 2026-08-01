@@ -7,8 +7,6 @@ import { useToast } from '../core/ToastManager';
 
 const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
-// ─── Memoized Sub-components ───
-
 const PasswordStrength = memo(function PasswordStrength({ password }) {
   if (!password) return null;
   let score = 0;
@@ -19,19 +17,19 @@ const PasswordStrength = memo(function PasswordStrength({ password }) {
   if (/[^A-Za-z0-9]/.test(password)) score++;
 
   const labels = ['Weak', 'Fair', 'Good', 'Strong', 'Very Strong'];
-  const colors = ['#ef4444', '#f97316', '#eab308', '#22c55e', 'var(--accent)'];
+  const colors = ['var(--danger)', 'var(--warning)', 'var(--gold)', 'var(--primary)', 'var(--accent)'];
   const activeColor = colors[Math.max(0, score - 1)];
 
   return (
-    <div className="auth-strength-meter">
-      <div className="auth-strength-bars">
+    <div className="flex-col gap-4 mt-8">
+      <div className="flex gap-4">
         {[0, 1, 2, 3, 4].map(i => (
-          <div key={i} className={`auth-bar ${i < score ? 'active' : ''}`} style={{ background: i < score ? activeColor : 'transparent', boxShadow: i < score ? `0 0 8px ${activeColor}44` : 'none' }} />
+          <div key={i} className="flex-1 h-1 rounded-md" style={{ background: i < score ? activeColor : 'var(--bg-elevated)', boxShadow: i < score ? `0 0 8px ${activeColor}44` : 'none', transition: 'background 0.3s' }} />
         ))}
       </div>
-      <div className="auth-strength-info">
-        <span style={{ color: activeColor }}>{labels[Math.max(0, score - 1)]}</span>
-        {password.length < 6 && <span>6+ characters required</span>}
+      <div className="flex-between text-xs">
+        <span style={{ color: activeColor, fontWeight: 700 }}>{labels[Math.max(0, score - 1)]}</span>
+        {password.length < 6 && <span className="text-muted">6+ characters required</span>}
       </div>
     </div>
   );
@@ -43,10 +41,10 @@ const InputField = memo(function InputField({ icon, type, placeholder, value, on
   const isPassword = type === 'password';
 
   return (
-    <div className="auth-input-group">
-      {label && <label className={`auth-label ${focused ? 'focused' : ''}`}>{label}</label>}
-      <div className="auth-input-wrap">
-        <div className={`auth-input-icon ${focused ? 'focused' : ''}`}>{icon}</div>
+    <div className="flex-col gap-4">
+      {label && <label className={`text-xs font-bold ${focused ? 'text-primary' : 'text-muted'}`}>{label}</label>}
+      <div className={`glass-card flex-center gap-12 ${focused ? 'border-primary' : ''}`} style={{ padding: '0 16px', height: '48px' }}>
+        <div style={{ color: focused ? 'var(--primary)' : 'var(--text-muted)' }}>{icon}</div>
         <input
           type={isPassword ? (showPass ? 'text' : 'password') : type}
           placeholder={placeholder}
@@ -57,30 +55,16 @@ const InputField = memo(function InputField({ icon, type, placeholder, value, on
           autoFocus={autoFocus}
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
-          className={`auth-input ${focused ? 'focused' : ''}`}
+          className="flex-1 bg-transparent border-none outline-none text-primary text-sm"
+          style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 'var(--fs-sm)' }}
         />
         {isPassword && (
-          <button type="button" onClick={() => setShowPass(p => !p)} className="auth-pass-toggle" aria-label="Toggle password visibility">
+          <button type="button" onClick={() => setShowPass(p => !p)} className="btn-icon-sm" aria-label="Toggle password visibility">
             {showPass ? <EyeOff size={20} /> : <Eye size={20} />}
           </button>
         )}
       </div>
     </div>
-  );
-});
-
-const PitchDecoration = memo(function PitchDecoration() {
-  return (
-    <svg width="100%" height="100%" className="auth-pitch-svg" preserveAspectRatio="none" viewBox="0 0 400 600">
-      <rect x="0" y="0" width="400" height="600" fill="none" stroke="white" strokeWidth="2" />
-      <line x1="200" y1="0" x2="200" y2="600" stroke="white" strokeWidth="1.5" />
-      <circle cx="200" cy="300" r="60" fill="none" stroke="white" strokeWidth="1.5" />
-      <circle cx="200" cy="300" r="3" fill="white" />
-      <rect x="80" y="0" width="240" height="80" fill="none" stroke="white" strokeWidth="1.5" />
-      <rect x="140" y="0" width="120" height="30" fill="none" stroke="white" strokeWidth="1" />
-      <rect x="80" y="520" width="240" height="80" fill="none" stroke="white" strokeWidth="1.5" />
-      <rect x="140" y="570" width="120" height="30" fill="none" stroke="white" strokeWidth="1" />
-    </svg>
   );
 });
 
@@ -97,9 +81,7 @@ export default function Login() {
   const toast = useToast();
 
   useEffect(() => {
-    if (!authLoading && currentUser) {
-      navigate('/profile', { replace: true });
-    }
+    if (!authLoading && currentUser) navigate('/profile', { replace: true });
   }, [currentUser, authLoading, navigate]);
 
   const handleSubmit = useCallback(async (e) => {
@@ -149,14 +131,14 @@ export default function Login() {
 
   if (authLoading) {
     return (
-      <div className="auth-loading-screen">
-        <Loader size={32} className="animate-spin text-emerald-500" />
+      <div className="flex-center" style={{ minHeight: '100vh' }}>
+        <Loader size={32} className="anim-spin text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="auth-page-wrap">
+    <div className="flex-center" style={{ minHeight: '100vh', padding: 'var(--sp-16)', position: 'relative', overflow: 'hidden' }}>
       <SEO
         title="Sign In to Your ZOKASCORE Account"
         description="Sign in to your ZOKASCORE account to manage your profile, track your prediction progress, view leaderboard rankings, and access your personalized football experience."
@@ -165,29 +147,16 @@ export default function Login() {
         breadcrumbs={[{ name: "Home", path: "/" }, { name: "Login", path: "/login" }]}
       />
       
-      <PitchDecoration />
-      <div className="auth-glow auth-glow-1" />
-      <div className="auth-glow auth-glow-2" />
-      <div className="auth-glow auth-glow-3" />
-
-      <div className="auth-card">
-        <div className="auth-shine-overlay" />
-
-        <div className="auth-header">
-          <div className="auth-logo-box">
-            <span>Z</span>
-            <div className="auth-logo-shine" />
+      <div className="glass-card flex-col gap-20 p-24" style={{ width: '100%', maxWidth: '420px', zIndex: 1, opacity: modeTrans ? 0 : 1, transition: 'opacity 0.25s ease' }}>
+        <div className="flex-col items-center gap-12">
+          <div className="glass-card flex-center" style={{ width: 64, height: 64, borderRadius: 'var(--r-16)', background: 'linear-gradient(135deg, var(--primary), var(--primary-dim))' }}>
+            <span className="font-extrabold text-inverse" style={{ fontSize: 'var(--fs-2xl)' }}>Z</span>
           </div>
-
-          <h2 className={`auth-title ${modeTrans ? 'transitioning' : ''}`}>
-            {isLogin ? 'Welcome Back' : 'Create Account'}
-          </h2>
-          <p className={`auth-subtitle ${modeTrans ? 'transitioning' : ''}`}>
-            {isLogin ? 'Sign in to track your predictions' : 'Join the prediction community'}
-          </p>
+          <h2 className="text-primary font-extrabold">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <p className="text-muted text-sm">{isLogin ? 'Sign in to track your predictions' : 'Join the prediction community'}</p>
         </div>
 
-        <button onClick={handleGoogle} disabled={loading} className={`auth-google-btn ${loading ? 'loading' : ''}`}>
+        <button onClick={handleGoogle} disabled={loading} className="btn btn-secondary btn-lg w-full">
           <svg width="20" height="20" viewBox="0 0 24 24">
             <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/>
             <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
@@ -197,48 +166,41 @@ export default function Login() {
           Continue with Google
         </button>
 
-        <div className="auth-divider">
-          <div className="auth-divider-line"></div>
-          <span>or use email</span>
-          <div className="auth-divider-line"></div>
+        <div className="flex-center gap-12">
+          <div className="flex-1 h-px bg-border"></div>
+          <span className="text-muted text-xs">or use email</span>
+          <div className="flex-1 h-px bg-border"></div>
         </div>
 
-        <form onSubmit={handleSubmit}>
-          <div className={`auth-name-field ${isLogin ? 'collapsed' : ''}`}>
+        <form onSubmit={handleSubmit} className="flex-col gap-16">
+          {!isLogin && (
             <InputField icon={<User size={20} />} type="text" placeholder="Your display name" value={displayName} onChange={e => setDisplayName(e.target.value)} label="Display Name" autoFocus={!isLogin} />
-          </div>
-
+          )}
           <InputField icon={<Mail size={20} />} type="email" placeholder="you@example.com" value={email} onChange={e => setEmail(e.target.value)} label="Email" required autoFocus={isLogin} />
           <InputField icon={<Lock size={20} />} type="password" placeholder="Min. 6 characters" value={password} onChange={e => setPassword(e.target.value)} label="Password" required minLength={6} />
-
           {!isLogin && <PasswordStrength password={password} />}
 
           {isLogin && (
-            <div className={`auth-forgot-pass ${modeTrans ? 'transitioning' : ''}`}>
-              <button type="button">Forgot password?</button>
+            <div className="text-right">
+              <button type="button" className="text-muted text-xs hover:text-primary">Forgot password?</button>
             </div>
           )}
 
-          <button type="submit" className="auth-submit-btn" disabled={loading}>
-            <div className="auth-btn-shine"></div>
-            <span className={loading ? 'hidden' : ''}>
-              {isLogin ? 'Sign In' : 'Create Account'}
-              <ArrowRight size={20} strokeWidth={2.5} />
-            </span>
-            {loading && <Loader size={26} className="auth-spinner" />}
+          <button type="submit" className="btn btn-primary btn-lg w-full" disabled={loading}>
+            {loading ? <Loader size={26} className="anim-spin" /> : <>{isLogin ? 'Sign In' : 'Create Account'} <ArrowRight size={20} /></>}
           </button>
         </form>
 
-        <div className="auth-toggle-mode">
+        <div className="text-center text-muted text-sm">
           {isLogin ? "Don't have an account? " : "Already have an account? "}
-          <button onClick={toggleMode}>{isLogin ? 'Sign Up' : 'Sign In'}</button>
+          <button onClick={toggleMode} className="text-primary font-bold">{isLogin ? 'Sign Up' : 'Sign In'}</button>
         </div>
 
-        <div className="auth-security-note">
-          <div className="auth-security-icon"><Shield size={18} /></div>
+        <div className="glass-card flex-center gap-12 p-12 text-muted text-xs">
+          <Shield size={16} className="text-primary" />
           <div>
-            <p>Secure authentication powered by Firebase</p>
-            <p className="sub">Your data is encrypted and protected.</p>
+            <p className="font-bold text-secondary">Secure authentication powered by Firebase</p>
+            <p>Your data is encrypted and protected.</p>
           </div>
         </div>
       </div>

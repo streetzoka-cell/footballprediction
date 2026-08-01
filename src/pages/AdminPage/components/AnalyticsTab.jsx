@@ -4,7 +4,6 @@ import { useAdminAnalytics } from '../../../hooks/useAdmin';
 import { Skel } from './common';
 
 const AnalyticsTab = memo(function AnalyticsTab() {
-  // Leverage the optimized React Query hook (uses Firestore server-side counts)
   const { data: stats, isLoading: loading } = useAdminAnalytics();
 
   if (loading) return <Skel n={3} />;
@@ -13,32 +12,31 @@ const AnalyticsTab = memo(function AnalyticsTab() {
   const totalPredictions = stats?.totalPredictions || 0;
 
   return (
-    <div className="ae">
-      <div className="asec">
-        <h3 className="ast"><BarChart3 size={15} /> Platform Analytics</h3>
-        <div className="asg">
-          <div className="astat">
-            <span className="n bl"><Users size={18} /></span>
-            <span className="l">{totalUsers.toLocaleString()} Users</span>
-          </div>
-          <div className="astat">
-            <span className="n gn"><MousePointerClick size={18} /></span>
-            <span className="l">{totalPredictions.toLocaleString()} Predictions</span>
-          </div>
-          <div className="astat">
-            <span className="n gd"><Eye size={18} /></span>
-            <span className="l">Connect GA</span>
-          </div>
-          <div className="astat">
-            <span className="n rd"><TrendingUp size={18} /></span>
-            <span className="l">Growth</span>
-          </div>
+    <div className="glass-card p-16 flex-col gap-12">
+      <h3 className="text-primary font-bold flex-center gap-8"><BarChart3 size={15} /> Platform Analytics</h3>
+      <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <div className="glass-card p-12 flex-col items-center gap-4">
+          <Users size={18} className="text-accent" />
+          <span className="font-extrabold text-primary">{totalUsers.toLocaleString()}</span>
+          <span className="text-muted text-xs">Users</span>
         </div>
-        <p style={{ fontSize: '.75rem', color: 'var(--text-muted)', margin: '12px 0 0', fontWeight: 600, lineHeight: 1.4 }}>
-          For detailed page views, integrate Google Analytics API.
-          <br />Currently displaying high-level Firestore stats.
-        </p>
+        <div className="glass-card p-12 flex-col items-center gap-4">
+          <MousePointerClick size={18} className="text-primary" />
+          <span className="font-extrabold text-primary">{totalPredictions.toLocaleString()}</span>
+          <span className="text-muted text-xs">Predictions</span>
+        </div>
+        <div className="glass-card p-12 flex-col items-center gap-4">
+          <Eye size={18} className="text-gold" />
+          <span className="font-extrabold text-primary">Connect GA</span>
+          <span className="text-muted text-xs">Page Views</span>
+        </div>
+        <div className="glass-card p-12 flex-col items-center gap-4">
+          <TrendingUp size={18} className="text-danger" />
+          <span className="font-extrabold text-primary">Growth</span>
+          <span className="text-muted text-xs">Analytics</span>
+        </div>
       </div>
+      <p className="text-muted text-xs mt-8">For detailed page views, integrate Google Analytics API. Currently displaying high-level Firestore stats.</p>
     </div>
   );
 });

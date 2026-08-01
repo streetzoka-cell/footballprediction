@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEditorStore } from '../store/editorStore';
 import { Newspaper, Trophy, Zap } from 'lucide-react';
+import SEO from '../../components/SEO';
 
 const TEMPLATES = [
   {
@@ -10,7 +11,7 @@ const TEMPLATES = [
       canvasSize: { width: 1080, height: 1350 },
       layers: [
         { type: 'rect', x: 0, y: 1050, width: 1080, height: 300, fill: 'rgba(0,0,0,0.8)' },
-        { type: 'text', text: 'MATCHDAY RECAP', x: 40, y: 1090, fontSize: 50, fill: 'var(--accent)', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
+        { type: 'text', text: 'MATCHDAY RECAP', x: 40, y: 1090, fontSize: 50, fill: '#16c784', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'text', text: 'Tap to edit text', x: 40, y: 1160, fontSize: 40, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'rect', x: 40, y: 1220, width: 1000, height: 6, fill: '#334155', cornerRadius: 3 }
       ]
@@ -33,8 +34,8 @@ const TEMPLATES = [
     config: {
       canvasSize: { width: 1080, height: 1920 },
       layers: [
-        { type: 'rect', x: 140, y: 700, width: 800, height: 400, fill: 'var(--accent-glow-strong)', cornerRadius: 20, stroke: 'var(--accent)', strokeWidth: 2 },
-        { type: 'text', text: 'GOAL!', x: 440, y: 780, fontSize: 100, fill: 'var(--accent)', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
+        { type: 'rect', x: 140, y: 700, width: 800, height: 400, fill: 'rgba(22, 199, 132, 0.2)', cornerRadius: 20, stroke: '#16c784', strokeWidth: 2 },
+        { type: 'text', text: 'GOAL!', x: 440, y: 780, fontSize: 100, fill: '#16c784', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' },
         { type: 'text', text: '0 - 0', x: 470, y: 920, fontSize: 80, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' }
       ]
     }
@@ -52,19 +53,22 @@ export default function Templates() {
   };
 
   return (
-    <div style={{ padding: '24px', maxWidth: '1000px', margin: '0 auto', color: '#fff' }}>
-      <h1 style={{ fontSize: '2.5rem', fontWeight: 900, marginBottom: '8px' }}>Templates Library</h1>
-      <p style={{ color: '#94a3b8', marginBottom: '32px' }}>Start instantly with professional football layouts.</p>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-        {TEMPLATES.map(tpl => (
-          <div key={tpl.id} onClick={() => loadTemplate(tpl)} style={{ background: tpl.bg, borderRadius: '16px', padding: '24px', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.1)', minHeight: '200px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
-            <div style={{ background: 'rgba(255,255,255,0.1)', width: 'fit-content', padding: '8px', borderRadius: '10px', color: '#fff' }}>{tpl.icon}</div>
-            <div>
-              <span style={{ fontSize: '12px', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 800 }}>{tpl.category}</span>
-              <h3 style={{ fontSize: '20px', fontWeight: 800, margin: '4px 0 0 0' }}>{tpl.name}</h3>
+    <div className="zoka-page">
+      <SEO title="Templates Library" description="Start instantly with professional football layouts." path="/studio/templates" />
+      <div className="zoka-wrap text-center flex-col items-center">
+        <h1 className="text-primary font-extrabold text-2xl mt-24 mb-8">Templates Library</h1>
+        <p className="text-muted mb-32">Start instantly with professional football layouts.</p>
+        <div className="grid w-full gap-20" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
+          {TEMPLATES.map(tpl => (
+            <div key={tpl.id} onClick={() => loadTemplate(tpl)} className="glass-card p-24 cursor-pointer flex-col gap-12" style={{ background: tpl.bg, minHeight: '200px', justifyContent: 'space-between' }}>
+              <div className="glass-card flex-center p-8 w-fit" style={{ background: 'rgba(255,255,255,0.1)', color: '#fff' }}>{tpl.icon}</div>
+              <div className="text-left">
+                <span className="text-muted text-xs font-bold uppercase">{tpl.category}</span>
+                <h3 className="text-primary font-bold text-md mt-4">{tpl.name}</h3>
+              </div>
             </div>
-          </div>
-        ))}
+          ))}
+        </div>
       </div>
     </div>
   );

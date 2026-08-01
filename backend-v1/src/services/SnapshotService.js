@@ -1,3 +1,4 @@
+// backend-v1/src/services/SnapshotService.js
 const snapshotRepo = require('../repositories/SnapshotRepository');
 const { publishJSON } = require('./StaticFilePublisher');
 const logger = require('../utils/logger');
@@ -46,6 +47,7 @@ function categorizeMatch(score) {
   if (score >= 30) return 'IMPORTANT';
   return 'NORMAL';
 }
+
 async function writeFootballSnapshot(dateStr, updates) {
   try {
     logger.info(`[SnapshotService] Preparing snapshot for ${dateStr}...`);
@@ -94,8 +96,13 @@ async function writeFootballSnapshot(dateStr, updates) {
     if (updates.live) {
       await publishJSON('live.json', { data: liveToPublish, count: liveToPublish.length });
     }
-    if (updates.finished) {
+    
+    // ★ NEW SAFETY CHECK: Only overwrite results if we actually have results!
+    if (updates.finished && updates.finished.length > 0) {
+      logger.info(`[SnapshotService] Publishing results JSON (${finishedToPublish.length} matches)...`);
       await publishJSON(`results/${dateStr}.json`, { data: finishedToPublish, count: finishedToPublish.length, date: dateStr });
+    } else if (updates.finished) {
+      logger.info(`[SnapshotService] Skipping results publish (0 finished matches). Preserving existing data.`);
     }
     
     logger.info(`[SnapshotService] ✓ Fully complete for ${dateStr}.`);

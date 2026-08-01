@@ -7,16 +7,13 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
   const [resolving, setResolving] = useState({});
   const [overriding, setOverriding] = useState({});
 
-  const unresolved = useMemo(() =>
-    preds.filter(p => {
-      const mid = String(p.matchId || p.id);
-      const s = scores[mid];
-      const hasNewScore = s && s.h !== '' && s.a !== '';
-      const hasExistingScore = p.homeScore != null && p.awayScore != null;
-      return !p.isFinished && p.status !== 'finished' || hasNewScore || !hasExistingScore;
-    }),
-    [preds, scores]
-  );
+  const unresolved = useMemo(() => preds.filter(p => {
+    const mid = String(p.matchId || p.id);
+    const s = scores[mid];
+    const hasNewScore = s && s.h !== '' && s.a !== '';
+    const hasExistingScore = p.homeScore != null && p.awayScore != null;
+    return !p.isFinished && p.status !== 'finished' || hasNewScore || !hasExistingScore;
+  }), [preds, scores]);
 
   const resolved = useMemo(() => preds.filter(p => p.isFinished || p.status === 'finished'), [preds]);
 
@@ -69,18 +66,17 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
       const s = scores[mid];
       try { await onResolve(p, Number(s.h), Number(s.a)); ok++; } catch { fail++; }
     }
-    setScores({});
-    setResolving({});
+    setScores({}); setResolving({});
     toast(`Resolved ${ok} match${ok !== 1 ? 'es' : ''}${fail > 0 ? ', ' + fail + ' failed' : ''}`, fail > 0 ? 'er' : 'ok');
   }, [unresolved, scores, onResolve, toast]);
 
   return (
-    <div className="ae">
+    <div className="flex-col gap-16">
       {unresolved.length > 0 && (
-        <div className="asec">
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-            <h3 className="ast" style={{ margin: 0 }}><Zap size={15} /> Score & Resolve ({unresolved.length})</h3>
-            <button className="ab ab-sm ab-p" onClick={handleResolveAll} disabled={Object.values(resolving).some(Boolean)}>
+        <div className="glass-card p-16 flex-col gap-12">
+          <div className="flex-between">
+            <h3 className="text-primary font-bold flex-center gap-8"><Zap size={15} /> Score & Resolve ({unresolved.length})</h3>
+            <button className="btn btn-primary btn-sm" onClick={handleResolveAll} disabled={Object.values(resolving).some(Boolean)}>
               <Zap size={11} /> Resolve All Scored
             </button>
           </div>
@@ -90,40 +86,40 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
             const isResolving = resolving[mid];
             const hasExisting = p.homeScore != null;
             return (
-              <div key={mid} className={`am card-in${hasExisting ? ' editing' : ''}`} style={{ animationDelay: `${i * 20}ms` }}>
-                <div className="amh">
-                  <div className="aml">
-                    {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+              <div key={mid} className="glass-card p-12 flex-col gap-8 anim-fade-up" style={{ animationDelay: `${i * 20}ms`, borderLeft: `3px solid ${hasExisting ? 'var(--warning)' : 'var(--accent)'}` }}>
+                <div className="flex-between">
+                  <div className="flex-center gap-8 text-muted text-xs font-bold">
+                    {p.league?.emblem && <img src={p.league.emblem} alt="" width="14" height="14" />}
                     <span>{p.league?.name || 'Match'}</span>
                   </div>
-                  {hasExisting && <span className="as" style={{ color: 'var(--gold)', background: 'rgba(245,158,11,.1)' }}>OVERRIDE</span>}
+                  {hasExisting && <span className="badge badge-gold">OVERRIDE</span>}
                 </div>
-                <div className="atm">
-                  <div className="ate">
-                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
+                <div className="flex-center gap-8">
+                  <div className="flex-center gap-8 flex-1 min-w-0">
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" width="24" height="24" />}
+                    <span className="text-primary font-bold text-sm truncate">{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
-                  <div className="asb" style={{ borderColor: 'rgba(16,185,129,.25)', background: 'rgba(16,185,129,.04)' }}>
-                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
-                    <span className="asep">–</span>
-                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
+                  <div className="flex-center gap-4 px-12 py-4 rounded-md bg-elevated">
+                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
+                    <span className="text-muted">–</span>
+                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
                   </div>
-                  <div className="ate aw">
-                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                  <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
+                    <span className="text-primary font-bold text-sm truncate">{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" width="24" height="24" />}
                   </div>
                 </div>
-                <div className="aa">
+                <div className="flex-between mt-4">
                   {hasExisting ? (
-                    <button className="ab ab-sm ab-olive" onClick={() => handleOverride(p)} disabled={overriding[mid] || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
-                      {overriding[mid] ? <Loader2 size={11} className="asp" /> : <Copy size={11} />} Override
+                    <button className="btn btn-secondary btn-sm" onClick={() => handleOverride(p)} disabled={overriding[mid] || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                      {overriding[mid] ? <Loader2 size={11} className="anim-spin" /> : <Copy size={11} />} Override
                     </button>
                   ) : (
-                    <button className="ab ab-sm ab-p" onClick={() => handleResolve(p)} disabled={isResolving || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
-                      {isResolving ? <Loader2 size={11} className="asp" /> : <Check size={11} />} Resolve
+                    <button className="btn btn-primary btn-sm" onClick={() => handleResolve(p)} disabled={isResolving || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                      {isResolving ? <Loader2 size={11} className="anim-spin" /> : <Check size={11} />} Resolve
                     </button>
                   )}
-                  {p.homeScore != null && <span className="abdg pn">Was: {p.homeScore}-{p.awayScore}</span>}
+                  {p.homeScore != null && <span className="badge badge-muted">Was: {p.homeScore}-{p.awayScore}</span>}
                 </div>
               </div>
             );
@@ -132,40 +128,40 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
       )}
 
       {resolved.length > 0 && (
-        <div className="asec">
-          <h3 className="ast"><CheckCircle2 size={15} /> Resolved ({resolved.length})</h3>
+        <div className="glass-card p-16 flex-col gap-12">
+          <h3 className="text-primary font-bold flex-center gap-8"><CheckCircle2 size={15} /> Resolved ({resolved.length})</h3>
           {resolved.map((p, i) => {
             const mid = String(p.matchId || p.id);
             const s = scores[mid] || {};
             const isOverriding = overriding[mid];
             return (
-              <div key={mid} className="am card-in ok resolved" style={{ animationDelay: `${i * 15}ms` }}>
-                <div className="amh">
-                  <div className="aml">
-                    {p.league?.emblem && <img src={p.league.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+              <div key={mid} className="glass-card p-12 flex-col gap-8 anim-fade-up opacity-80" style={{ animationDelay: `${i * 15}ms`, borderLeft: '3px solid var(--primary)' }}>
+                <div className="flex-between">
+                  <div className="flex-center gap-8 text-muted text-xs font-bold">
+                    {p.league?.emblem && <img src={p.league.emblem} alt="" width="14" height="14" />}
                     <span>{p.league?.name || 'Match'}</span>
                   </div>
-                  <span className="as" style={{ color: 'var(--accent)', background: 'rgba(16,185,129,.08)' }}>FT</span>
+                  <span className="badge badge-primary">FT</span>
                 </div>
-                <div className="atm">
-                  <div className="ate">
-                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
+                <div className="flex-center gap-8">
+                  <div className="flex-center gap-8 flex-1 min-w-0">
+                    {(p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest) && <img src={p.homeLogo || p.homeTeam?.logo || p.homeTeam?.crest} alt="" width="24" height="24" />}
+                    <span className="text-primary font-bold text-sm truncate">{p.homeTeam?.shortName || p.homeTeam?.name || 'Home'}</span>
                   </div>
-                  <div className="asb ft" style={{ borderColor: 'rgba(16,185,129,.25)', background: 'rgba(16,185,129,.04)' }}>
-                    <input className={`ari${s.h ? ' hv' : ''}`} type="number" min="0" max="99" value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
-                    <span className="asep">–</span>
-                    <input className={`ari${s.a ? ' hv' : ''}`} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
+                  <div className="flex-center gap-4 px-12 py-4 rounded-md bg-primary/10">
+                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.h ?? p.homeScore} onChange={e => updScore(mid, 'h', e.target.value)} />
+                    <span className="text-muted">–</span>
+                    <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.a ?? p.awayScore} onChange={e => updScore(mid, 'a', e.target.value)} />
                   </div>
-                  <div className="ate aw">
-                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-                    <span>{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                  <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
+                    <span className="text-primary font-bold text-sm truncate">{p.awayTeam?.shortName || p.awayTeam?.name || 'Away'}</span>
+                    {(p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest) && <img src={p.awayLogo || p.awayTeam?.logo || p.awayTeam?.crest} alt="" width="24" height="24" />}
                   </div>
                 </div>
-                <div className="aa">
-                  <span className="abdg ex"><CheckCircle2 size={9} /> {p.homeScore}-{p.awayScore}</span>
-                  <button className="ab ab-sm ab-olive" onClick={() => handleOverride(p)} disabled={isOverriding || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
-                    {isOverriding ? <Loader2 size={11} className="asp" /> : <Copy size={11} />} Override
+                <div className="flex-between mt-4">
+                  <span className="badge badge-primary"><CheckCircle2 size={9} /> {p.homeScore}-{p.awayScore}</span>
+                  <button className="btn btn-secondary btn-sm" onClick={() => handleOverride(p)} disabled={isOverriding || (!s.h && s.h !== '0') || (!s.a && s.a !== '0')}>
+                    {isOverriding ? <Loader2 size={11} className="anim-spin" /> : <Copy size={11} />} Override
                   </button>
                 </div>
               </div>
@@ -174,9 +170,7 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
         </div>
       )}
 
-      {preds.length === 0 && (
-        <Empty icon={Trophy} title="No featured matches for this date" hint="Add featured matches first, then score them here" />
-      )}
+      {preds.length === 0 && (<Empty icon={Trophy} title="No featured matches for this date" hint="Add featured matches first, then score them here" />)}
     </div>
   );
 });

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
-import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Loader2, Star, Plus, Trash2, Save, Send, Pencil, Copy, Check, TrendingUp } from 'lucide-react';
-import { getLocalDateStr, getLocalDateFromUtc, parseDateAsUTC } from '../../../utils/dates';
+import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown } from 'lucide-react';
+import { getLocalDateStr, getLocalDateFromUtc } from '../../../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../../../utils/constants';
 
 export const MAX_FEATURED = 10;
@@ -20,7 +20,6 @@ export const dateLabel = (d) => {
 
 export function extractMatchDate(m) {
   if (!m) return '';
-  // ★ FIX: Prioritize the pre-calculated dateStr from the frontend engine
   if (m.dateStr) return m.dateStr;
   if (m.utcDate) return getLocalDateFromUtc(m.utcDate);
   if (m.date && m.date.includes('T')) return m.date.split('T')[0];
@@ -29,27 +28,22 @@ export function extractMatchDate(m) {
 }
 
 export const extractDate = m => extractMatchDate(m);
-
 export const sortByImportance = (a, b) => (b.matchScore || 0) - (a.matchScore || 0);
 
 export const ST_MAP = {
-  SCHEDULED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
-  TIMED:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
-  NS:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'Upcoming'},
-  TBD:{c:'var(--text-muted)',b:'rgba(255,255,255,.04)',l:'TBD'},
-  IN_PLAY:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
-  PAUSED:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'HT'},
-  '1H':{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
-  '2H':{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Live'},
-  HT:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'HT'},
-  BT:{c:'#f97316',b:'rgba(249,115,22,.1)',l:'BT'},
-  ET:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'ET'},
-  P:{c:'#ef4444',b:'rgba(239,68,68,.1)',l:'Pens'},
-  FT:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
-  FINISHED:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
-  AET:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
-  PEN:{c:'var(--accent)',b:'rgba(16,185,129,.08)',l:'FT'},
-  PST:{c:'#f59e0b',b:'rgba(245,158,11,.1)',l:'PST'},
+  SCHEDULED: { c: 'var(--text-muted)', b: 'var(--bg-elevated)', l: 'Upcoming' },
+  NS: { c: 'var(--text-muted)', b: 'var(--bg-elevated)', l: 'Upcoming' },
+  IN_PLAY: { c: 'var(--danger)', b: 'rgba(var(--danger-rgb),.1)', l: 'Live' },
+  '1H': { c: 'var(--danger)', b: 'rgba(var(--danger-rgb),.1)', l: 'Live' },
+  '2H': { c: 'var(--danger)', b: 'rgba(var(--danger-rgb),.1)', l: 'Live' },
+  HT: { c: 'var(--gold)', b: 'rgba(var(--gold-rgb),.1)', l: 'HT' },
+  ET: { c: 'var(--danger)', b: 'rgba(var(--danger-rgb),.1)', l: 'ET' },
+  P: { c: 'var(--danger)', b: 'rgba(var(--danger-rgb),.1)', l: 'Pens' },
+  FT: { c: 'var(--primary)', b: 'rgba(var(--primary-rgb),.08)', l: 'FT' },
+  FINISHED: { c: 'var(--primary)', b: 'rgba(var(--primary-rgb),.08)', l: 'FT' },
+  AET: { c: 'var(--primary)', b: 'rgba(var(--primary-rgb),.08)', l: 'FT' },
+  PEN: { c: 'var(--primary)', b: 'rgba(var(--primary-rgb),.08)', l: 'FT' },
+  PST: { c: 'var(--warning)', b: 'rgba(var(--warning-rgb),.1)', l: 'PST' },
 };
 export const gst = s => ST_MAP[s] || ST_MAP.SCHEDULED;
 
@@ -84,14 +78,15 @@ export const fmtTimeAgo = dt => {
 };
 
 export const Skel = memo(function Skel({ n = 3 }) {
-  return <div>{Array.from({ length: n }).map((_, i) => <div key={i} className="askel" style={{ animationDelay: `${i * 80}ms` }} />)}</div>;
+  return <div className="flex-col gap-8">{Array.from({ length: n }).map((_, i) => <div key={i} className="skeleton" style={{ height: 80, animationDelay: `${i * 80}ms` }} />)}</div>;
 });
 
 export const Empty = memo(function Empty({ icon: Ic, title, hint }) {
   return (
-    <div className="aem">
-      {Ic && <Ic size={26} style={{ color: 'var(--text-muted)', display: 'block', margin: '0 auto 6px' }} />}
-      <p>{title}</p>{hint && <p className="h">{hint}</p>}
+    <div className="glass-card flex-col items-center gap-8 p-32 text-center">
+      {Ic && <Ic size={26} className="text-muted" />}
+      <p className="text-primary font-bold text-sm">{title}</p>
+      {hint && <p className="text-muted text-xs">{hint}</p>}
     </div>
   );
 });
@@ -99,7 +94,7 @@ export const Empty = memo(function Empty({ icon: Ic, title, hint }) {
 export const ShowMore = memo(function ShowMore({ count, show, onToggle }) {
   if (count <= 0) return null;
   return (
-    <button className="asm" onClick={onToggle} style={{ marginTop: 8 }}>
+    <button className="btn btn-secondary btn-sm w-full mt-8" onClick={onToggle}>
       {show ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
       {show ? 'Show less' : `Show ${count} more`}
     </button>
@@ -109,26 +104,28 @@ export const ShowMore = memo(function ShowMore({ count, show, onToggle }) {
 export const RBadge = memo(function RBadge({ pick }) {
   if (!pick?.adminPick || pick.status !== 'finished') return null;
   const h = pick.adminPick.home, a = pick.adminPick.away, ph = pick.homeScore, pa = pick.awayScore;
-  if (ph == null || pa == null) return <span className="abdg pn">PENDING</span>;
-  if (h === ph && a === pa) return <span className="abdg ex"><CheckCircle2 size={9} /> EXACT +10</span>;
-  if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="abdg rs"><TrendingUp size={9} /> RESULT +3</span>;
-  return <span className="abdg ms"><XCircle size={9} /> MISS</span>;
+  if (ph == null || pa == null) return <span className="badge badge-muted">PENDING</span>;
+  if (h === ph && a === pa) return <span className="badge badge-primary"><CheckCircle2 size={9} /> EXACT +10</span>;
+  if ((h > a ? 'H' : h < a ? 'A' : 'D') === (ph > pa ? 'H' : ph < pa ? 'A' : 'D')) return <span className="badge badge-gold">RESULT +3</span>;
+  return <span className="badge badge-danger"><XCircle size={9} /> MISS</span>;
 });
 
 export const Toast = memo(function Toast({ message, type, onDone }) {
   useEffect(() => { const t = setTimeout(onDone, 3000); return () => clearTimeout(t); }, [onDone]);
   const Ic = type === 'ok' ? CheckCircle2 : type === 'er' ? XCircle : AlertTriangle;
-  return <div className={`atst ${type}`}><Ic size={15} /> {message}</div>;
+  const cls = type === 'ok' ? 'badge-primary' : type === 'er' ? 'badge-danger' : 'badge-gold';
+  return <div className={`fixed bottom-20 left-1/2 -translate-x-1/2 glass-card px-16 py-12 flex-center gap-8 z-max anim-toast-in`}><Ic size={15} className={type === 'ok' ? 'text-primary' : type === 'er' ? 'text-danger' : 'text-gold'} /> {message}</div>;
 });
 
 export const Confirm = memo(function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false }) {
   return (
-    <div className="aov" onClick={onNo}>
-      <div className="abox" onClick={e => e.stopPropagation()}>
-        <h3>{title}</h3><p>{msg}</p>
-        <div className="abbtns">
-          <button className="ab ab-gh" onClick={onNo}>Cancel</button>
-          <button className={`ab ${danger ? 'ab-dg' : 'ab-p'}`} onClick={onYes}>{yesText}</button>
+    <div className="fixed inset-0 bg-black/70 flex-center z-max p-20" onClick={onNo}>
+      <div className="glass-card p-24 max-w-400 w-full flex-col gap-12" onClick={e => e.stopPropagation()}>
+        <h3 className="text-primary font-bold text-md">{title}</h3>
+        <p className="text-muted text-sm">{msg}</p>
+        <div className="flex gap-8 mt-8">
+          <button className="btn btn-secondary flex-1" onClick={onNo}>Cancel</button>
+          <button className={`btn ${danger ? 'btn-danger' : 'btn-primary'} flex-1`} onClick={onYes}>{yesText}</button>
         </div>
       </div>
     </div>
@@ -140,62 +137,57 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
   const live = isLive(m), fin = isFin(m), sc = getScore(m);
   const comp = m.competition || m.league;
   const st = gst(m.status);
-  const cls = `am card-in${sel ? ' zs' : ''}${live ? ' lg' : ''}`;
   
   return (
-    <div className={cls} style={{ animationDelay: `${idx * 20}ms` }}>
-      <div className="amh">
-        <div className="aml">
-          {comp?.emblem && <img src={comp.emblem} alt="" onError={e => { e.target.style.display = 'none'; }} />}
+    <div className="glass-card flex-col gap-8 p-12 anim-fade-up" style={{ animationDelay: `${idx * 20}ms`, borderLeft: sel ? '3px solid var(--gold)' : live ? '3px solid var(--danger)' : '3px solid var(--border)' }}>
+      <div className="flex-between">
+        <div className="flex-center gap-8 text-muted text-xs font-bold">
+          {comp?.emblem && <img src={comp.emblem} alt="" width="14" height="14" />}
           <span>{comp?.name || 'Unknown'}</span>
-          {m.category === 'FEATURED' && (
-            <span style={{ fontSize: '0.55rem', fontWeight: 900, color: '#fbbf24', background: 'rgba(251,191,36,0.12)', padding: '2px 6px', borderRadius: 4, marginLeft: 6, letterSpacing: '0.05em' }}>★ TOP</span>
-          )}
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-          {live && <span className="ld" />}
-          <span className="as" style={{ color: st.c, background: st.b }}>
+        <div className="flex-center gap-4">
+          {live && <span className="zk-live-pulse-dot" />}
+          <span className="badge" style={{ color: st.c, background: st.b, border: 'none' }}>
             {live && m.minute != null ? `${m.minute}'` : st.l}
           </span>
         </div>
       </div>
-      <div className="atm">
-        <div className="ate">
-          {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
+      <div className="flex-center gap-8">
+        <div className="flex-center gap-8 flex-1 min-w-0">
+          {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width="24" height="24" />}
+          <span className="text-primary font-bold text-sm truncate">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
         </div>
-        <div className={`asb${live ? ' lv' : ''}${fin ? ' ft' : ''}`}>
+        <div className={`flex-center gap-8 px-12 py-4 rounded-md ${live ? 'bg-danger/10' : fin ? 'bg-primary/10' : 'bg-elevated'}`}>
           {(live || fin) ? (
-            <><span className={`asn${live ? ' r' : ' g'}`}>{sc.h ?? 0}</span><span className="asep">–</span><span className={`asn${live ? ' r' : ' g'}`}>{sc.a ?? 0}</span></>
-          ) : <span className="avs">VS</span>}
+            <><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.h ?? 0}</span><span className="text-muted">–</span><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.a ?? 0}</span></>
+          ) : <span className="text-muted text-xs font-bold">VS</span>}
         </div>
-        <div className="ate aw">
-          {m.awayTeam?.crest && <img src={m.awayTeam.crest} alt="" onError={e => { e.target.style.display = 'none'; }} />}
-          <span>{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
+        <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
+          <span className="text-primary font-bold text-sm truncate">{m.awayTeam?.shortName || m.awayTeam?.name || 'TBD'}</span>
+          {m.awayTeam?.crest && <img src={m.awayTeam.crest} alt="" width="24" height="24" />}
         </div>
       </div>
-      <div className="aa">
+      <div className="flex-between gap-8 flex-wrap mt-4">
         {mode === 'zoka' && onToggleSel && (
-          <button className={`ab ab-sm ${sel ? 'ab-gd' : 'ab-ol'}`} onClick={() => onToggleSel(m)}>
+          <button className={`btn btn-sm ${sel ? 'btn-primary' : 'btn-secondary'}`} onClick={() => onToggleSel(m)}>
             <Star size={11} fill={sel ? 'currentColor' : 'none'} />{sel ? 'Selected' : 'Zoka Pick'}
           </button>
         )}
         {mode === 'zoka' && sel && scoreInput && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <input className={`api${scoreInput.h ? ' hv' : ''}`} value={scoreInput.h} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
-            <span style={{ color: 'var(--text-muted)', fontWeight: 700 }}>–</span>
-            <input className={`api${scoreInput.a ? ' hv' : ''}`} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
+          <div className="flex-center gap-4">
+            <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.h} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
+            <span className="text-muted">–</span>
+            <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
           </div>
         )}
         {mode === 'featured' && (
           isFeatured ? (
-            <button className="ab ab-sm ab-dg" onClick={() => onRemoveClick(m)} disabled={isRemoving}>
-              {isRemoving ? <Loader2 size={11} className="asp" /> : <Trash2 size={11} />} Remove
+            <button className="btn btn-danger btn-sm" onClick={() => onRemoveClick(m)} disabled={isRemoving}>
+              {isRemoving ? '...' : <Trash2 size={11} />} Remove
             </button>
           ) : (
-            <button className="ab ab-sm ab-sc" onClick={() => onAddClick(m)} disabled={isAdding || isFull}>
-              {isAdding ? <Loader2 size={11} className="asp" /> : <Plus size={11} />}
-              {isFull ? 'Full' : 'Add'}
+            <button className="btn btn-primary btn-sm" onClick={() => onAddClick(m)} disabled={isAdding || isFull}>
+              {isAdding ? '...' : <Plus size={11} />} {isFull ? 'Full' : 'Add'}
             </button>
           )
         )}

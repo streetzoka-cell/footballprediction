@@ -1,5 +1,5 @@
 ﻿import { Link } from 'react-router-dom';
-import { ArrowLeft, Calendar, Loader, Zap, TrendingUp, Camera, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy } from 'lucide-react';
+import { ArrowLeft, Loader, Zap, TrendingUp, Camera, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
@@ -23,7 +23,6 @@ export default function MasterGames() {
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
 
   const all = useMemo(() => [...yestFx, ...todayFx, ...tomFx], [yestFx, todayFx, tomFx]);
-
   const enriched = useMemo(() => all.map(m => applySmartMinute(m, now)), [all, now]);
 
   const todayMatches = useMemo(
@@ -92,7 +91,6 @@ export default function MasterGames() {
           <ArrowLeft size={14} /> Back to Fixtures
         </Link>
 
-        {/* HERO */}
         <header className="mg-hero">
           <div className="mg-hero-glow-1" />
           <div className="mg-hero-glow-2" />
@@ -107,15 +105,13 @@ export default function MasterGames() {
           </div>
         </header>
 
-        {/* STATISTICS CARDS */}
         <section className="mg-stats-grid">
-          <StatCard icon={<Zap size={18} />} label="Smart Matches" value={smartMatchesCount} accent="#6366f1" delay={0} />
-          <StatCard icon={<Flame size={18} />} label="Top Picks" value={elitePicksCount} accent="#ef4444" delay={80} />
-          <StatCard icon={<Star size={18} />} label="Featured Games" value={featuredCount} accent="#fbbf24" delay={160} />
-          <StatCard icon={<BarChart3 size={18} />} label="Match Rating" value={avgRating ? `${avgRating}%` : '—'} accent="var(--accent)" delay={240} />
+          <StatCard icon={<Zap size={18} />} label="Smart Matches" value={smartMatchesCount} accent="var(--accent)" delay={0} />
+          <StatCard icon={<Flame size={18} />} label="Top Picks" value={elitePicksCount} accent="var(--danger)" delay={80} />
+          <StatCard icon={<Star size={18} />} label="Featured Games" value={featuredCount} accent="var(--gold)" delay={160} />
+          <StatCard icon={<BarChart3 size={18} />} label="Match Rating" value={avgRating ? `${avgRating}%` : '—'} accent="var(--primary)" delay={240} />
         </section>
 
-        {/* INFORMATION CARD */}
         <section className="mg-info-card">
           <h2 className="mg-info-title"><Trophy size={20} /> Why ZOKASCORE Intelligence?</h2>
           <p className="mg-info-text muted">Not every football match deserves your attention.</p>
@@ -125,14 +121,12 @@ export default function MasterGames() {
           <p className="mg-info-text muted">Our goal is simple—help you discover the games that matter most.</p>
         </section>
 
-        {/* LOADING */}
         {isLoading && (
           <div className="mg-loading-state">
-            <Loader size={32} className="animate-spin" />
+            <div className="skeleton-card" style={{ width: '100%', height: 100 }} />
           </div>
         )}
 
-        {/* EMPTY STATE */}
         {isEmpty && (
           <div className="mg-empty-state">
             <Clock size={32} className="mg-empty-icon" />
@@ -141,12 +135,10 @@ export default function MasterGames() {
           </div>
         )}
 
-        {/* MATCH SECTIONS */}
-        {elitePicks.length > 0 && <MatchSection title="🔥 Elite Picks" matches={elitePicks} accent="#ef4444" />}
-        {featuredMatches.length > 0 && <MatchSection title="⭐ Featured Matches" matches={featuredMatches} accent="#fbbf24" />}
-        {moreMatches.length > 0 && <MatchSection title="📈 More Matches to Watch" matches={moreMatches} accent="var(--accent)" />}
+        {elitePicks.length > 0 && <MatchSection title="🔥 Elite Picks" matches={elitePicks} accent="var(--danger)" />}
+        {featuredMatches.length > 0 && <MatchSection title="⭐ Featured Matches" matches={featuredMatches} accent="var(--gold)" />}
+        {moreMatches.length > 0 && <MatchSection title="📈 More Matches to Watch" matches={moreMatches} accent="var(--primary)" />}
 
-        {/* BOTTOM CTA */}
         <footer className="mg-bottom-cta">
           <h3>Football is better when you never miss the biggest moments.</h3>
           <p>

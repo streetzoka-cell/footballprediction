@@ -85,7 +85,7 @@ export default function MediaStudio() {
   ];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
+    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
       <div style={{ padding: '16px', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', zIndex: 10 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
           <button onClick={() => navigate('/studio')} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
@@ -110,7 +110,7 @@ export default function MediaStudio() {
             <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
               <Camera size={48} style={{ marginBottom: '12px' }} />
               <p style={{ fontWeight: 700, fontSize: '14px' }}>Camera is off</p>
-              <button onClick={startCamera} style={{ marginTop: '16px', background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+              <button onClick={startCamera} style={{ marginTop: '16px', background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
                 Enable Camera
               </button>
             </div>
@@ -145,7 +145,7 @@ export default function MediaStudio() {
           ) : (
             <>
               <button onClick={() => { setRecordedUrl(null); startCamera(); }} style={actionBtnStyle}><Video size={20} /></button>
-              <button onClick={handleDownload} style={{ ...actionBtnStyle, background: 'var(--accent)' }}><Download size={20} /></button>
+              <button onClick={handleDownload} style={{ ...actionBtnStyle, background: '#10b981' }}><Download size={20} /></button>
             </>
           )}
         </div>
@@ -154,7 +154,7 @@ export default function MediaStudio() {
           <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '8px' }}>Filters</div>
           <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
             {filters.map(f => (
-              <button key={f.name} onClick={() => setFilter(f.css)} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.css ? 'var(--accent)' : '#1f2937', color: filter === f.css ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}>{f.name}</button>
+              <button key={f.name} onClick={() => setFilter(f.css)} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.css ? '#10b981' : '#1f2937', color: filter === f.css ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}>{f.name}</button>
             ))}
           </div>
         </div>

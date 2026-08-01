@@ -13,7 +13,7 @@ import { todayStr, getLocalDateStr } from '../../utils/dates';
 import { eventBus, EVENT } from '../../utils/eventBus';
 import { PATHS } from '../../utils/constants';
 import { resolveMatchForAllUsers } from '../../services/predictions';
-import { doc, setDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { safeWrite } from '../../services/safeWrite';
 
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
@@ -165,10 +165,7 @@ export default function AdminPage() {
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
     
     try {
-      // Try to delete the actual doc, but don't crash if quota is exceeded.
       try { await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId)); } catch {}
-      
-      // Update the snapshot via safeWrite so the UI stays correct
       await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updatedPreds), updatedAt: new Date().toISOString() }, { merge: true });
     } catch (e) {
       showToast('Failed to remove match', 'er');
@@ -249,48 +246,46 @@ export default function AdminPage() {
   }, [date, showToast, queryClient]);
 
   return (
-    <div className="ap">
+    <div className="zoka-page">
       <SEO
-  title="Admin Dashboard & Control Center"
-  description="Securely manage ZOKASCORE operations, including fixtures, match results, leaderboards, predictions, monitoring, and platform administration."
-  keywords="ZOKASCORE admin, admin dashboard, control center, fixture management, match results, leaderboard management, platform administration"
-  robots="noindex,nofollow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Admin", path: "/admin" }
-  ]}
-/>
+        title="Admin Dashboard & Control Center"
+        description="Securely manage ZOKASCORE operations, including fixtures, match results, leaderboards, predictions, monitoring, and platform administration."
+        keywords="ZOKASCORE admin, admin dashboard, control center, fixture management, match results, leaderboard management, platform administration"
+        robots="noindex,nofollow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Admin", path: "/admin" }]}
+      />
 
-      <div className="aw">
-        <div className="ah">
-          <button className="ab ab-gh ab-sm" onClick={() => nav('/')} style={{ position: 'absolute', left: 16, top: 20 }}>
+      <div className="zoka-wrap">
+        <div className="glass-card p-16 mb-16 flex-between items-center">
+          <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}>
             <ArrowLeft size={14} />
           </button>
-          <h1><ShieldAlert size={14} style={{ color: 'var(--gold)', verticalAlign: 'middle', marginRight: 6 }} /> Admin Control Room</h1>
-          <div className="sub">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
+          <div className="text-center">
+            <h1 className="text-primary font-extrabold text-md flex-center gap-8"><ShieldAlert size={14} className="text-gold" /> Admin Control Room</h1>
+            <div className="text-muted text-xs">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
+          </div>
+          <div className="w-8"></div>
         </div>
 
-        <div className="at">
+        <div className="glass-card flex gap-4 p-8 mb-16 overflow-x-auto">
           {TABS.map(t => (
-            <button key={t.key} className={`atb${tab === t.key ? ' on' : ''}`} onClick={() => setTab(t.key)}>
-              <t.icon size={13} /><span className="lb">{t.label}</span>
+            <button key={t.key} className={`btn btn-sm ${tab === t.key ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab(t.key)}>
+              <t.icon size={13} /><span className="hidden md:inline">{t.label}</span>
             </button>
           ))}
         </div>
 
-        <div className="ask" style={{ top: 108 }}>
-          <div className="adb">
-            {defaultDates.map(d => (
-              <button key={d} className={`adp${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
-            ))}
-            <button className="more-dates-btn" onClick={() => setShowMoreDates(p => !p)}>
-              {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
-              {showMoreDates ? 'Less' : 'More dates'}
-            </button>
-            {showMoreDates && extraDates.map(d => (
-              <button key={d} className={`adp past${d === date ? ' on' : ''}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
-            ))}
-          </div>
+        <div className="glass-card flex gap-8 p-8 mb-16 overflow-x-auto">
+          {defaultDates.map(d => (
+            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
+          ))}
+          <button className="btn btn-sm btn-secondary" onClick={() => setShowMoreDates(p => !p)}>
+            {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />}
+            {showMoreDates ? 'Less' : 'More'}
+          </button>
+          {showMoreDates && extraDates.map(d => (
+            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
+          ))}
         </div>
 
         {tab === 'dashboard' && (

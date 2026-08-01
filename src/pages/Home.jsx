@@ -2,8 +2,8 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle, CheckCircle2,
-  Lock, Crown, Activity, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
-  ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon
+  Lock, Crown, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
+  ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon, Sparkles, Gamepad2
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -43,9 +43,9 @@ const getGreeting = () => {
   return { text: 'Good night', icon: <Moon size={16} />, emoji: '🦉' };
 };
 
-const AnimNum = React.memo(({ value, duration = 600, delay = 0, suffix = '' }) => {
+const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
   const [display, setDisplay] = useState(0);
-  const raf = React.useRef(null);
+  const raf = useRef(null);
   useEffect(() => {
     const target = value || 0;
     if (target === 0) { setDisplay(0); return; }
@@ -53,26 +53,63 @@ const AnimNum = React.memo(({ value, duration = 600, delay = 0, suffix = '' }) =
     const run = (now) => {
       if (now < start) { raf.current = requestAnimationFrame(run); return; }
       const p = Math.min((now - start) / duration, 1);
-      setDisplay(Math.round((1 - Math.pow(1 - p, 3)) * target));
+      setDisplay(Math.round((1 - Math.pow(1 - p, 4)) * target));
       if (p < 1) raf.current = requestAnimationFrame(run);
     };
     raf.current = requestAnimationFrame(run);
-    return () => { if (raf && raf.current) cancelAnimationFrame(raf.current); };
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
   }, [value, duration, delay]);
   return <span>{display.toLocaleString()}{suffix}</span>;
 });
 
-const AccuracyRing = React.memo(({ value, size = 44, stroke = 4, color = '#10b981' }) => {
+const AccuracyRing = React.memo(({ value, size = 44, stroke = 4, color = 'var(--primary)' }) => {
   const r = (size - stroke) / 2;
   const circ = 2 * Math.PI * r;
   const pct = Math.min(100, Math.max(0, value)) / 100;
   return (
     <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#151b26" strokeWidth={stroke} />
+      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-elevated)" strokeWidth={stroke} />
       <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
         strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-        strokeLinecap="round" style={{ transition: 'stroke-dashoffset .8s cubic-bezier(.22,1,.36,1)' }} />
+        strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)' }} />
     </svg>
+  );
+});
+
+const StreakBadge = React.memo(({ streak }) => {
+  if (!streak || streak < 2) return null;
+  return (
+    <div className="z-streak-badge">
+      <Flame size={16} fill="var(--danger)" color="var(--danger)" className="z-streak-fire" />
+      <span className="z-streak-text">{streak} Day Streak!</span>
+    </div>
+  );
+});
+
+const DailyChallenge = React.memo(({ match, isLoggedIn, onPredict }) => {
+  if (!match) return null;
+  return (
+    <div className="z-daily-challenge">
+      <div className="z-dc-glow" />
+      <div className="z-dc-header">
+        <span className="z-dc-badge"><Sparkles size={12} /> Daily Challenge</span>
+        <span className="z-dc-bonus">+50 Bonus PTS</span>
+      </div>
+      <div className="z-dc-match">
+        <div className="z-dc-team">
+          <img src={match.homeLogo} alt={match.homeName} width="32" height="32" loading="lazy" />
+          <span>{match.homeName}</span>
+        </div>
+        <div className="z-dc-vs">VS</div>
+        <div className="z-dc-team">
+          <img src={match.awayLogo} alt={match.awayName} width="32" height="32" loading="lazy" />
+          <span>{match.awayName}</span>
+        </div>
+      </div>
+      <button className="z-dc-btn" onClick={onPredict} disabled={!isLoggedIn}>
+        {isLoggedIn ? <><Gamepad2 size={14} /> Predict Now</> : <><Lock size={14} /> Login to Play</>}
+      </button>
+    </div>
   );
 });
 
@@ -82,12 +119,12 @@ const ZokaBadge = React.memo(({ pick }) => {
   const away = pick.adminPick.away;
   const ph = pick.homeScore;
   const pa = pick.awayScore;
-  if (ph == null || pa == null) return <span className="bdg pn">Pending</span>;
-  if (home === ph && away === pa) return <span className="bdg ex"><CheckCircle2 size={8} /> Exact</span>;
+  if (ph == null || pa == null) return <span className="badge badge-muted">Pending</span>;
+  if (home === ph && away === pa) return <span className="badge badge-primary"><CheckCircle2 size={10} /> Exact</span>;
   const predOutcome = home > away ? 'H' : home < away ? 'A' : 'D';
   const realOutcome = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
-  if (predOutcome === realOutcome) return <span className="bdg rs"><TrendingUp size={8} /> Result</span>;
-  return <span className="bdg ms"><XCircle size={8} /> Miss</span>;
+  if (predOutcome === realOutcome) return <span className="badge badge-gold"><TrendingUp size={10} /> Result</span>;
+  return <span className="badge badge-danger"><XCircle size={10} /> Miss</span>;
 });
 
 const MiniPodium = React.memo(({ entries }) => {
@@ -95,9 +132,9 @@ const MiniPodium = React.memo(({ entries }) => {
   if (top3.length === 0) return null;
   const order = [1, 0, 2];
   const cfg = [
-    { h: 84, border: '#fbbf24', bg: 'rgba(251,191,36,.06)', color: '#fbbf24', sz: 50, fs: '.9rem', glitter: true },
-    { h: 60, border: '#94a3b8', bg: 'rgba(148,163,184,.04)', color: '#94a3b8', sz: 40, fs: '.75rem', glitter: false },
-    { h: 48, border: '#b45309', bg: 'rgba(180,83,9,.04)', color: '#d97706', sz: 34, fs: '.68rem', glitter: false },
+    { h: 90, border: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.08)', color: 'var(--gold)', sz: 52, fs: '.95rem', glitter: true },
+    { h: 64, border: 'var(--text-muted)', bg: 'rgba(var(--text-muted-rgb),.06)', color: 'var(--text-muted)', sz: 42, fs: '.8rem', glitter: false },
+    { h: 52, border: 'var(--bronze)', bg: 'rgba(var(--bronze-rgb),.06)', color: 'var(--bronze)', sz: 36, fs: '.72rem', glitter: false },
   ];
   return (
     <div className="z-podium">
@@ -106,16 +143,16 @@ const MiniPodium = React.memo(({ entries }) => {
         if (!u) return <div key={pos} style={{ flex: 1, maxWidth: 120 }} />;
         const c = cfg[pos];
         return (
-          <div key={u.uid} className="z-pod-u">
+          <div key={u.uid} className="z-pod-u" style={{ animationDelay: pos * 100 + 'ms' }}>
             <div className="z-pod-info">
-              {pos === 0 && <Crown size={16} style={{ color: '#fbbf24', marginBottom: -2 }} />}
-              <div className="z-pod-avatar" style={{ width: c.sz, height: c.sz, background: c.border + '15', border: '2px solid ' + c.border, fontSize: c.fs, color: c.color }}>
+              {pos === 0 && <Crown size={18} style={{ color: 'var(--gold)', marginBottom: 2, filter: 'drop-shadow(0 0 4px rgba(var(--gold-rgb),.4))' }} />}
+              <div className="z-pod-avatar" style={{ width: c.sz, height: c.sz, background: c.bg, border: `2px solid ${c.border}`, fontSize: c.fs, color: c.color }}>
                 {(u.displayName || '??').slice(0, 2).toUpperCase()}
               </div>
               <div className="z-pod-name">{u.displayName}</div>
               <div className={'z-pod-pts' + (c.glitter ? ' gold-text' : '')} style={{ color: c.color }}>{u.points} pts</div>
             </div>
-            <div className="z-pod-bar" style={{ height: c.h, background: c.bg, border: '1px solid ' + c.border + '22' }}>
+            <div className="z-pod-bar" style={{ height: c.h, background: c.bg, border: `1px solid ${c.border}33`, borderTop: `3px solid ${c.border}` }}>
               <span className={'z-pod-num' + (c.glitter ? ' gold-text' : '')} style={{ color: c.color }}>#{pos + 1}</span>
             </div>
           </div>
@@ -139,25 +176,25 @@ const LiveMini = React.memo(({ match, index }) => {
   const matchLink = buildMatchRoute(match.id, match.homeName, match.awayName);
   
   return (
-    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 50 + 'ms', borderColor: isLive ? 'rgba(239,68,68,.2)' : '#151b26', textDecoration: 'none', color: 'inherit', display: 'block' }} title={`${match.homeName} vs ${match.awayName}`}>
+    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 60 + 'ms', borderColor: isLive ? 'rgba(var(--danger-rgb),.3)' : 'var(--border)', textDecoration: 'none', color: 'inherit', display: 'block' }} title={`${match.homeName} vs ${match.awayName}`}>
       <div className="z-lm-top">
         <span className="z-lm-league">{match.leagueName}</span>
         {isLive && min != null ? (
-          <div className="z-lm-status">
-            <span className="z-ldot" style={{ width: 4, height: 4 }} />
-            <span style={{ fontSize: '.62rem', fontWeight: 800, color: '#ef4444', fontFamily: 'var(--font-display,system-ui)' }}>{min}&apos;</span>
+          <div className="z-lm-status live">
+            <span className="z-ldot" />
+            <span style={{ fontSize: '.65rem', fontWeight: 800, color: 'var(--danger)', fontFamily: 'var(--font-display,system-ui)' }}>{min}&apos;</span>
           </div>
         ) : (
-          <div style={{ fontSize: '.62rem', fontWeight: 700, color: '#64748b' }}>{match.kickoff || 'VS'}</div>
+          <div style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{match.kickoff || 'VS'}</div>
         )}
       </div>
       <div className="z-lm-row">
         <span className="z-lm-name">{match.homeName}</span>
-        <span className="z-lm-score" style={{ color: isLive ? '#ef4444' : '#f8fafc' }}>{hasScore ? match.homeScore : '-'}</span>
+        <span className="z-lm-score" style={{ color: isLive ? 'var(--danger)' : 'var(--text-primary)' }}>{hasScore ? match.homeScore : '-'}</span>
       </div>
       <div className="z-lm-row">
         <span className="z-lm-name">{match.awayName}</span>
-        <span className="z-lm-score" style={{ color: isLive ? '#ef4444' : '#f8fafc' }}>{hasScore ? match.awayScore : '-'}</span>
+        <span className="z-lm-score" style={{ color: isLive ? 'var(--danger)' : 'var(--text-primary)' }}>{hasScore ? match.awayScore : '-'}</span>
       </div>
     </Link>
   );
@@ -173,20 +210,20 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   const isExact = isResolved && userResult.resultType === 'exact';
   const isHit = isResolved && userResult.resultType === 'result';
 
-  let border = '#151b26';
-  if (isExact) border = '#10b981';
-  else if (isHit) border = '#fbbf24';
-  else if (isResolved && !isExact && !isHit) border = '#ef4444';
-  else if (isLive || isHT) border = '#ef4444';
-  else if (isFin) border = 'rgba(16,185,129,.2)';
-  else if (isPredicted) border = '#10b981';
+  let border = 'var(--border)';
+  if (isExact) border = 'var(--primary)';
+  else if (isHit) border = 'var(--gold)';
+  else if (isResolved && !isExact && !isHit) border = 'var(--danger)';
+  else if (isLive || isHT) border = 'var(--danger)';
+  else if (isFin) border = 'rgba(var(--primary-rgb),.2)';
+  else if (isPredicted) border = 'var(--primary)';
 
   let sLabel = pred.kickoff || 'VS';
-  let sColor = '#64748b';
-  let sBg = 'rgba(255,255,255,.03)';
-  if (isLive) { sLabel = pred.minute != null ? pred.minute + "'" : 'LIVE'; sColor = '#ef4444'; sBg = 'rgba(239,68,68,.1)'; }
-  else if (isHT) { sLabel = 'HT'; sColor = '#fbbf24'; sBg = 'rgba(251,191,36,.1)'; }
-  else if (isFin) { sLabel = 'FT'; sColor = '#10b981'; sBg = 'rgba(16,185,129,.08)'; }
+  let sColor = 'var(--text-muted)';
+  let sBg = 'var(--bg-card)';
+  if (isLive) { sLabel = pred.minute != null ? pred.minute + "'" : 'LIVE'; sColor = 'var(--danger)'; sBg = 'rgba(var(--danger-rgb),.12)'; }
+  else if (isHT) { sLabel = 'HT'; sColor = 'var(--gold)'; sBg = 'rgba(var(--gold-rgb),.12)'; }
+  else if (isFin) { sLabel = 'FT'; sColor = 'var(--primary)'; sBg = 'rgba(var(--primary-rgb),.1)'; }
 
   let cls = 'z-mc';
   if (isLive) cls += ' live';
@@ -197,33 +234,32 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
 
   let actionContent = null;
   if (isResolved) {
-    let badgeCls = 'bdg ms';
-    let badgeText = '';
-    if (isExact) { badgeCls = 'bdg ex'; badgeText = 'Exact +10'; }
-    else if (isHit) { badgeCls = 'bdg rs'; badgeText = 'Result +3'; }
-    else { badgeCls = 'bdg ms'; badgeText = 'Miss'; }
+    let badgeCls = 'badge badge-danger';
+    let badgeText = 'Miss';
+    if (isExact) { badgeCls = 'badge badge-primary'; badgeText = 'Exact +10'; }
+    else if (isHit) { badgeCls = 'badge badge-gold'; badgeText = 'Result +3'; }
     actionContent = (
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2 }}>
+      <div className="flex-col items-end gap-4">
         <span className={badgeCls}>{badgeText}</span>
-        {isPredicted && <span style={{ fontSize: '.62rem', fontWeight: 600, color: '#64748b' }}>You: {userPred.homeScore}-{userPred.awayScore}</span>}
+        {isPredicted && <span style={{ fontSize: '.65rem', fontWeight: 600, color: 'var(--text-muted)' }}>You: {userPred.homeScore}-{userPred.awayScore}</span>}
       </div>
     );
   } else if (isPredicted) {
     actionContent = (
-      <Link to="/predictions" className="z-btn z-btn-ol on" style={{ minHeight: 32, fontSize: '.66rem', padding: '4px 10px' }}>
-        <CheckCircle size={10} /> Locked
+      <Link to="/predictions" className="btn btn-outline btn-sm locked-pred">
+        <CheckCircle size={12} /> Locked
       </Link>
     );
   } else if (isLoggedIn) {
     actionContent = (
-      <Link to={'/predictions?match=' + mid} className="z-btn z-btn-p" style={{ minHeight: 32, fontSize: '.66rem', padding: '4px 10px' }}>
-        <Target size={10} /> Predict
+      <Link to={'/predictions?match=' + mid} className="btn btn-primary btn-sm predict-btn">
+        <Target size={12} /> Predict
       </Link>
     );
   } else {
     actionContent = (
-      <Link to="/login" className="z-btn z-btn-gh" style={{ minHeight: 32, fontSize: '.66rem', padding: '4px 10px' }}>
-        <Lock size={10} /> Login
+      <Link to="/login" className="btn btn-ghost btn-sm">
+        <Lock size={12} /> Login
       </Link>
     );
   }
@@ -231,10 +267,10 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
   let scoreContent = null;
   if (hasScore) {
     scoreContent = (
-      <span>
-        <span className={'z-sn' + (isLive ? ' r' : ' g')}>{pred.homeScore}</span>
+      <span className="flex-center gap-8">
+        <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.homeScore}</span>
         <span className="z-sep">-</span>
-        <span className={'z-sn' + (isLive ? ' r' : ' g')}>{pred.awayScore}</span>
+        <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.awayScore}</span>
       </span>
     );
   } else {
@@ -256,7 +292,7 @@ const FeaturedRow = React.memo(({ pred, userPred, userResult, isLoggedIn }) => {
           {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildLeagueRoute(pred.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+        <div className="flex-center gap-4">
           {isLive && <span className="z-ldot" />}
           <span className="z-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
         </div>
@@ -294,7 +330,7 @@ const ZokaRow = React.memo(({ pick }) => {
   let scoreContent = null;
   if (isFin && pick.homeScore != null) {
     scoreContent = (
-      <span>
+      <span className="flex-center gap-8">
         <span className="z-sn g">{pick.homeScore}</span>
         <span className="z-sep">-</span>
         <span className="z-sn g">{pick.awayScore}</span>
@@ -319,7 +355,7 @@ const ZokaRow = React.memo(({ pick }) => {
           {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildLeagueRoute(pick.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
-        <span className="z-st" style={{ color: isFin ? '#10b981' : '#64748b', background: isFin ? 'rgba(16,185,129,.08)' : 'rgba(255,255,255,.03)' }}>{isFin ? 'FT' : ko}</span>
+        <span className="z-st" style={{ color: isFin ? 'var(--primary)' : 'var(--text-muted)', background: isFin ? 'rgba(var(--primary-rgb),.1)' : 'var(--bg-card)' }}>{isFin ? 'FT' : ko}</span>
       </div>
       <div className="z-tm">
         <div className="z-te">
@@ -329,17 +365,17 @@ const ZokaRow = React.memo(({ pick }) => {
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
           {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
-          <Link to={buildTeamRoute(pick.awayTeam?.id, awayName)}>{awayName}</Link>
+          <Link to={buildTeamRoute(pick.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
       <div className="z-ma">
-        {isFin ? <ZokaBadge pick={pick} /> : <span className="bdg gd"><Star size={8} fill="currentColor" /> Prediction</span>}
+        {isFin ? <ZokaBadge pick={pick} /> : <span className="badge badge-gold"><Star size={10} fill="currentColor" /> Prediction</span>}
       </div>
     </div>
   );
 });
 
-const LB_COLORS = ['#ef4444', '#f97316', '#eab308', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'];
+const LB_COLORS = ['var(--danger)', 'var(--gold)', 'var(--bronze)', 'var(--primary)', 'var(--accent)', 'var(--accent)', 'var(--text-muted)', 'var(--text-muted)'];
 
 const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
   const isMe = isLoggedIn && u.uid === uid;
@@ -347,11 +383,11 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
   const color = LB_COLORS[(rank - 1) % LB_COLORS.length];
   return (
     <div className={'z-lbrow' + (isMe ? ' me' : '')}>
-      <span className="z-lb-rank" style={{ color: rank <= 10 ? '#10b981' : '#64748b' }}>#{rank}</span>
-      <div className="z-lb-avatar" style={{ background: color }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
+      <span className="z-lb-rank" style={{ color: rank <= 3 ? color : 'var(--text-muted)', fontWeight: rank <= 10 ? 800 : 600 }}>#{rank}</span>
+      <div className="z-lb-avatar" style={{ background: color + '20', color: color, border: `1px solid ${color}40` }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
       <div className="z-lb-info">
-        <div className="z-lb-name">{u.displayName}</div>
-        <div className="z-lb-sub">{u.exact || 0} exact - {u.result || 0} results</div>
+        <div className="z-lb-name">{u.displayName} {isMe && <span className="z-me-badge">YOU</span>}</div>
+        <div className="z-lb-sub">{u.exact || 0} exact · {u.result || 0} results</div>
       </div>
       <span className="z-lb-pts">{u.points || 0}</span>
     </div>
@@ -419,7 +455,7 @@ export default function Home() {
       if (heroMatch.homeScore !== prevHeroScore.current.h || heroMatch.awayScore !== prevHeroScore.current.a) {
         if (prevHeroScore.current.h != null) {
           setHeroGoalFlash(true);
-          const t = setTimeout(() => setHeroGoalFlash(false), 2000);
+          const t = setTimeout(() => setHeroGoalFlash(false), 2500);
           prevHeroScore.current = { h: heroMatch.homeScore, a: heroMatch.awayScore };
           return () => clearTimeout(t);
         }
@@ -440,7 +476,6 @@ export default function Home() {
     return { goals, liveCount };
   }, [allFixtures]);
 
-  // ★ FIX: Calculate REAL unique leagues playing today
   const uniqueLeaguesCount = useMemo(() => {
     const ids = new Set();
     allFixtures.forEach(m => {
@@ -461,6 +496,7 @@ export default function Home() {
   const totalPredictionsMade = dailyStats.preds || 0;
   const avgAccuracy = dailyStats.avg ? parseFloat(dailyStats.avg) : 0;
   const myPoints = userStats.points || 0;
+  const userStreak = userProfile?.streak || 0;
 
   const zokaFlat = zokaPicks?.matches || [];
   const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
@@ -498,8 +534,12 @@ export default function Home() {
   const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
   const predRemaining = featFlat.length - myPredicted;
 
+  const heroGradient = heroMatch?.isLive 
+    ? 'radial-gradient(circle at 50% -20%, rgba(var(--danger-rgb), 0.15) 0%, transparent 60%)'
+    : 'radial-gradient(circle at 50% -20%, rgba(var(--primary-rgb), 0.12) 0%, transparent 60%)';
+
   return (
-    <div className="zoka-home">
+    <div className={`zoka-home ${heroGoalFlash ? 'goal-flash-active' : ''}`}>
       <SEO
         title="Football Predictions, Fixtures & Live Scores"
         description="Follow today's football fixtures, expert predictions, live scores, league standings, match analysis, and breaking football updates from competitions around the world on ZOKASCORE."
@@ -512,50 +552,40 @@ export default function Home() {
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
-        {/* ─── PREMIUM HERO SECTION ─── */}
-        <section className="z-hero-pro">
+        <section className="z-hero-pro" style={{ background: heroGradient }}>
           <div className="z-hero-content">
-            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
-            
-            {/* Value Proposition */}
+            <div className="z-hero-top-row">
+              <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+              <StreakBadge streak={userStreak} />
+            </div>
             <div className="z-hero-pills">
               <span className="z-pill">Predict</span>
               <span className="z-pill">Compete</span>
               <span className="z-pill">Win</span>
             </div>
-            
             <p className="z-sub">
-              Live football scores, AI-powered predictions, and community leaderboards—all in one place.
+              {greeting.emoji} {greeting.text}, {displayName || 'Manager'}. Live scores, AI predictions & leaderboards.
             </p>
-            
-            {/* Social Proof */}
-            <div className="z-social-proof">
-              <span className="z-stars">★★★★★</span>
-              <span className="z-sp-text">Live scores updated every minute</span>
-            </div>
           </div>
 
-          {/* Football Personality / Scale Stats (100% Real Data) */}
           <div className="z-scale-stats">
             <div className="z-scale-item">
-              <span className="val">{liveStats.liveCount}</span>
+              <span className="val"><AnimNum value={liveStats.liveCount} delay={100} /></span>
               <span className="lbl">Live Matches</span>
             </div>
             <div className="z-scale-divider"></div>
             <div className="z-scale-item">
-              <span className="val">{totalPredictionsMade.toLocaleString()}</span>
+              <span className="val"><AnimNum value={totalPredictionsMade} delay={200} /></span>
               <span className="lbl">Predictions Today</span>
             </div>
             <div className="z-scale-divider"></div>
             <div className="z-scale-item">
-              {/* ★ FIX: Real unique league count instead of hardcoded 180+ */}
-              <span className="val">{uniqueLeaguesCount}</span>
-              <span className="lbl">Leagues Today</span>
+              <span className="val"><AnimNum value={uniqueLeaguesCount} delay={300} /></span>
+              <span className="lbl">Leagues Active</span>
             </div>
           </div>
         </section>
 
-        {/* ─── FEATURED MATCH CARD (Rich Stats - NO FAKE DATA) ─── */}
         {heroMatch && (
           <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
             <div className="z-hero-top">
@@ -565,7 +595,7 @@ export default function Home() {
               </div>
               {heroMatch.isLive && (
                 <div className="z-hero-badge live">
-                  <span className="live-pulse-dot" style={{marginRight: 6}}></span> 
+                  <span className="live-pulse-dot"></span> 
                   LIVE {heroMatch.displayMinute || 0}'
                 </div>
               )}
@@ -591,7 +621,6 @@ export default function Home() {
               </div>
             </div>
 
-            {/* ★ FIX: Only show stats grid if REAL stats exist in the API data */}
             {heroMatch.stats && (heroMatch.stats.possession || heroMatch.stats.shots || heroMatch.stats.corners) ? (
               <div className="z-hero-stats-grid">
                 {heroMatch.stats.possession && (
@@ -609,21 +638,17 @@ export default function Home() {
                 {heroMatch.stats.corners && (
                   <div className="z-hs-item">
                     <span className="lbl">CORNERS</span>
-                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span>
+                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}%</span>
                   </div>
                 )}
               </div>
             ) : (
-              /* If no stats, show a clean info bar instead of fake numbers */
-              <div className="z-hero-info-bar" style={{ margin: '16px 0 0', padding: '12px', background: 'rgba(0,0,0,0.3)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.05)' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: '.75rem', color: '#94a3b8', fontWeight: 600 }}>
-                  <span>{heroMatch.date ? new Date(heroMatch.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Scheduled'}</span>
-                  <span>{heroMatch.venue?.name || heroMatch.leagueName}</span>
-                </div>
+              <div className="glass-card flex-between mt-16" style={{ padding: '12px 16px' }}>
+                <span className="text-muted font-bold text-sm">{heroMatch.date ? new Date(heroMatch.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Scheduled'}</span>
+                <span className="text-muted font-bold text-sm">{heroMatch.venue?.name || heroMatch.leagueName}</span>
               </div>
             )}
 
-            {/* ★ NEW: Quick Action Buttons */}
             <div className="z-hero-actions" onClick={(e) => e.preventDefault()}>
               <button className="z-ha-btn primary" onClick={() => navigate(buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName))}>View Match</button>
               <button className="z-ha-btn" onClick={() => navigate('/predictions')}>Predictions</button>
@@ -632,17 +657,24 @@ export default function Home() {
           </Link>
         )}
 
-        {/* ─── LIVE STATISTICS WIDGET ─── */}
+        {!ctxLoading && isLoggedIn && upcomingMatches.length > 0 && (
+          <DailyChallenge 
+            match={upcomingMatches[0]} 
+            isLoggedIn={isLoggedIn} 
+            onPredict={() => navigate(`/predictions?match=${upcomingMatches[0].id}`)} 
+          />
+        )}
+
         <div className="z-stats-widget">
           <div className="z-sw-item">
-            <LiveIcon size={14} style={{ color: '#ef4444' }} />
+            <LiveIcon size={14} style={{ color: 'var(--danger)' }} />
             <div className="z-sw-data">
               <span className="val">{liveStats.liveCount}</span>
-              <span className="lbl">Live</span>
+              <span className="lbl">Live Now</span>
             </div>
           </div>
           <div className="z-sw-item">
-            <Trophy size={14} style={{ color: '#fbbf24' }} />
+            <Trophy size={14} style={{ color: 'var(--gold)' }} />
             <div className="z-sw-data">
               <span className="val">{liveStats.goals}</span>
               <span className="lbl">Goals Today</span>
@@ -650,18 +682,18 @@ export default function Home() {
           </div>
         </div>
 
-        <div style={{ margin: '16px 0 0' }}>
+        <div className="mt-16">
           <div className="z-strip-header">
             {liveMatches.length > 0 ? (
-              <span style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+              <span className="flex-center gap-4">
                 <span className="z-ldot" />
-                <span className="z-strip-title" style={{ color: '#ef4444' }}>{liveMatches.length} LIVE</span>
+                <span className="z-strip-title" style={{ color: 'var(--danger)' }}>{liveMatches.length} LIVE</span>
               </span>
             ) : (
-              <span className="z-strip-title" style={{ color: '#64748b' }}>TODAY&apos;S MATCHES</span>
+              <span className="z-strip-title" style={{ color: 'var(--text-muted)' }}>TODAY&apos;S MATCHES</span>
             )}
             <div className="z-sech-line" />
-            <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={11} /></Link>
+            <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={12} /></Link>
           </div>
           <div className="z-livestrip">
             {ctxLoading && stripMatches.length === 0 ? (
@@ -670,7 +702,7 @@ export default function Home() {
               stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)
             ) : (
               <div className="z-live-loader" style={{ width: '100%', maxWidth: 'none', height: '80px' }}>
-                <div className="z-loader-text" style={{ color: '#64748b' }}>No matches scheduled today</div>
+                <div className="z-loader-text" style={{ color: 'var(--text-muted)' }}>No matches scheduled today</div>
               </div>
             )}
           </div>
@@ -679,10 +711,10 @@ export default function Home() {
         {newsPosts.length > 0 && (
           <div className="z-news-marquee-wrap">
             <div className="z-strip-header">
-              <Newspaper size={14} style={{ color: '#10b981' }} />
+              <Newspaper size={14} style={{ color: 'var(--primary)' }} />
               <span className="z-strip-title">LATEST NEWS</span>
               <div className="z-sech-line" />
-              <Link to="/highlights" className="z-strip-link">Hub <ChevronRight size={11} /></Link>
+              <Link to="/highlights" className="z-strip-link">Hub <ChevronRight size={12} /></Link>
             </div>
             <div className="z-news-marquee">
               {newsPosts.concat(newsPosts).map((post, i) => (
@@ -706,12 +738,12 @@ export default function Home() {
           <div className="z-chip">
             <div className="val"><AnimNum value={totalPredictors} delay={200} /></div>
             <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || 0) / 5) + '%', background: '#60a5fa' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || 0) / 5) + '%', background: 'var(--accent)' }} /></div>
           </div>
           <div className="z-chip">
             <div className="val"><AnimNum value={totalPredictionsMade} delay={280} /></div>
             <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: '#10b981' }} /></div>
+            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: 'var(--primary)' }} /></div>
           </div>
           <div className="z-chip" style={{ position: 'relative' }}>
             <div style={{ position: 'absolute', right: 8, top: 8 }}>
@@ -719,27 +751,27 @@ export default function Home() {
                 value={avgAccuracy}
                 size={36}
                 stroke={3}
-                color={avgAccuracy >= 50 ? '#10b981' : avgAccuracy >= 25 ? '#fbbf24' : '#ef4444'}
+                color={avgAccuracy >= 50 ? 'var(--primary)' : avgAccuracy >= 25 ? 'var(--gold)' : 'var(--danger)'}
               />
             </div>
             <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={Math.round(avgAccuracy)} delay={360} suffix="%" /></div>
             <div className="lbl">Accuracy</div>
           </div>
           <div className="z-chip">
-            <div className="val" style={{ color: isLoggedIn ? '#10b981' : '#64748b' }}>
+            <div className="val" style={{ color: isLoggedIn ? 'var(--primary)' : 'var(--text-muted)' }}>
               {isLoggedIn ? <AnimNum value={myPoints} delay={440} /> : '-'}
             </div>
             <div className="lbl">My Points</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: '#10b981' }} /></div>}
+            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: 'var(--primary)' }} /></div>}
           </div>
         </div>
 
         {!ctxLoading && zokaFlat.length > 0 && (
           <div className="z-sec">
             <div className="z-sech">
-              <Star size={14} style={{ color: '#fbbf24' }} />
+              <Star size={14} style={{ color: 'var(--gold)' }} />
               <h2 className="gold-text">Zoka Picks</h2>
-              <span className="z-sech-badge" style={{ background: 'rgba(251,191,36,.08)', color: '#fbbf24', border: '1px solid rgba(251,191,36,.25)' }}>{zokaFlat.length}</span>
+              <span className="z-sech-badge" style={{ background: 'rgba(var(--gold-rgb),.1)', color: 'var(--gold)', border: '1px solid rgba(var(--gold-rgb),.3)' }}>{zokaFlat.length}</span>
               <div className="z-sech-line" />
             </div>
             <div className="z-zoka-wrap">
@@ -755,10 +787,10 @@ export default function Home() {
 
         <div className="z-sec">
           <div className="z-sech">
-            <Target size={14} style={{ color: '#10b981' }} />
+            <Target size={14} style={{ color: 'var(--primary)' }} />
             <h2>Featured - Compete</h2>
-            <span className="z-sech-badge" style={{ background: 'rgba(16,185,129,.08)', color: '#10b981', border: '1px solid rgba(16,185,129,.25)' }}>{featFlat.length}</span>
-            {isLoggedIn && <span style={{ fontSize: '.62rem', fontWeight: 700, color: '#64748b' }}>{myPredicted}/{featFlat.length} predicted</span>}
+            <span className="z-sech-badge" style={{ background: 'rgba(var(--primary-rgb),.1)', color: 'var(--primary)', border: '1px solid rgba(var(--primary-rgb),.3)' }}>{featFlat.length}</span>
+            {isLoggedIn && <span style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{featFlat.length} predicted</span>}
             <div className="z-sech-line" />
           </div>
           {ctxLoading ? (
@@ -774,9 +806,9 @@ export default function Home() {
               />
             ))
           ) : (
-            <div style={{ textAlign: 'center', padding: 32, color: '#64748b', fontSize: '.8rem', fontWeight: 600 }}>
-              No featured matches right now
-              <div style={{ fontSize: '.68rem', opacity: 0.5, marginTop: 4 }}>Check back later or go to Predictions</div>
+            <div className="glass-card flex-col items-center p-32 gap-8 text-center">
+              <div className="text-muted font-bold text-sm">No featured matches right now</div>
+              <div className="text-muted text-xs">Check back later or go to Predictions</div>
             </div>
           )}
           {featHidden > 0 && (
@@ -788,17 +820,17 @@ export default function Home() {
 
         <div className="z-sec">
           <div className="z-sech">
-            <Trophy size={14} style={{ color: '#10b981' }} />
+            <Trophy size={14} style={{ color: 'var(--primary)' }} />
             <h2>Daily Leaderboard</h2>
             <div className="z-sech-line" />
-            <Link to="/leaderboard" className="z-strip-link">Full <ArrowUpRight size={11} /></Link>
+            <Link to="/leaderboard" className="z-strip-link">Full <ArrowUpRight size={12} /></Link>
           </div>
           {ctxLoading ? (
             <ListSkeleton count={5} />
           ) : dailyEntries && dailyEntries.length > 0 ? (
             <div>
               <MiniPodium entries={dailyEntries} />
-              <div style={{ marginTop: 12 }}>
+              <div className="mt-12">
                 {lbVis.slice(3).map((u, i) => (
                   <LbRow key={u.uid} u={u} index={i} isLoggedIn={isLoggedIn} uid={uid} />
                 ))}
@@ -810,55 +842,59 @@ export default function Home() {
               )}
             </div>
           ) : (
-            <div className="z-skel" style={{ height: 48 }} />
+            <div className="glass-card flex-col items-center p-32 gap-8 text-center">
+              <Trophy size={24} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+              <div className="text-muted font-bold text-sm">No predictions yet today</div>
+              <div className="text-muted text-xs">Be the first to claim the top spot!</div>
+            </div>
           )}
         </div>
 
         <div className="z-sec">
           <div className="z-sech">
-            <Zap size={14} style={{ color: '#10b981' }} />
+            <Zap size={14} style={{ color: 'var(--primary)' }} />
             <h2>Explore</h2>
             <div className="z-sech-line" />
           </div>
           <div className="z-explore">
             <Link to="/fixtures" className="z-ecard">
-              <div className="z-ecard-accent" style={{ background: '#10b981' }} />
-              <Activity size={20} style={{ color: '#10b981' }} />
-              <div className="z-ecard-title">Fixtures and Live</div>
+              <div className="z-ecard-accent" style={{ background: 'var(--primary)' }} />
+              <LiveIcon size={20} style={{ color: 'var(--primary)' }} />
+              <div className="z-ecard-title">Fixtures & Live</div>
               <div className="z-ecard-sub">Real-time scores, all leagues</div>
             </Link>
             <Link to="/predictions" className="z-ecard">
-              <div className="z-ecard-accent" style={{ background: '#fbbf24' }} />
-              <Target size={20} style={{ color: '#fbbf24' }} />
-              <div className="z-ecard-title">Predict and Win</div>
+              <div className="z-ecard-accent" style={{ background: 'var(--gold)' }} />
+              <Target size={20} style={{ color: 'var(--gold)' }} />
+              <div className="z-ecard-title">Predict & Win</div>
               <div className="z-ecard-sub">Score predictions, earn points</div>
             </Link>
             <Link to="/leaderboard" className="z-ecard">
-              <div className="z-ecard-accent" style={{ background: '#f59e0b' }} />
-              <Trophy size={20} style={{ color: '#f59e0b' }} />
+              <div className="z-ecard-accent" style={{ background: 'var(--gold)' }} />
+              <Trophy size={20} style={{ color: 'var(--gold)' }} />
               <div className="z-ecard-title">Leaderboard</div>
-              <div className="z-ecard-sub">Daily and weekly rankings</div>
+              <div className="z-ecard-sub">Daily & weekly rankings</div>
             </Link>
             <Link to="/highlights" className="z-ecard">
-              <div className="z-ecard-accent" style={{ background: '#3b82f6' }} />
-              <Newspaper size={20} style={{ color: '#3b82f6' }} />
-              <div className="z-ecard-title">News and Highlights</div>
+              <div className="z-ecard-accent" style={{ background: 'var(--accent)' }} />
+              <Newspaper size={20} style={{ color: 'var(--accent)' }} />
+              <div className="z-ecard-title">News & Highlights</div>
               <div className="z-ecard-sub">Latest football stories</div>
             </Link>
           </div>
         </div>
 
         {!isLoggedIn && (
-          <div style={{ marginTop: '8px', marginBottom: '32px' }}>
+          <div className="mt-8 mb-32">
             <Link to="/login" className="z-cta">
               <LogIn size={18} /> Join ZOKA - Predict and Compete
             </Link>
           </div>
         )}
 
-        <div style={{ textAlign: 'center', padding: '24px 0 32px', color: '#334155', fontSize: '.65rem', fontWeight: 600, letterSpacing: '.02em' }}>
+        <div className="text-center p-32 text-muted text-xs font-bold">
           ZOKA SCORE - FOOTBALL INTELLIGENCE
-          <div style={{ marginTop: 4, opacity: 0.5 }}>Data refreshes automatically - Scores protected by FT Shield</div>
+          <div className="mt-4" style={{ opacity: 0.5 }}>Data refreshes automatically · Scores protected by FT Shield</div>
         </div>
       </div>
     </div>

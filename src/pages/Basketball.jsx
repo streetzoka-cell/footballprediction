@@ -14,7 +14,8 @@ import { getDateRange, todayStr as getTodayStr, getLocalDateStr, formatTime } fr
 import { db } from '../utils/firebase';
 import { PATHS, getBasketballLeaguePriority, getLeagueColor, isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { eventBus, EVENT } from '../utils/eventBus';
-import { doc, setDoc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { doc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
+import { safeWrite } from '../services/safeWrite'; // ★ IMPORTED safeWrite
 import SEO from '../components/SEO';
 
 function normalizeBasketballGame(raw) {
@@ -71,25 +72,25 @@ function getTopPredictGames(gamesList, count = 10) {
 }
 
 const SkeletonCard = memo(({ delay = 0 }) => (
-  <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14, padding: '14px 16px', marginBottom: 8, animation: `bb_fadeInUp .35s ease ${delay}ms both` }}>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0' }}>
-      <div className="bb-shimmer" style={{ width: 30, height: 30, borderRadius: 8 }} />
-      <div className="bb-shimmer" style={{ width: '55%', height: 14, flex: 1 }} />
-      <div className="bb-shimmer" style={{ width: 28, height: 20 }} />
+  <div className="glass-card p-16 mb-8" style={{ animation: `zk-fade-up .35s ease ${delay}ms both` }}>
+    <div className="flex-center gap-10 p-4">
+      <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
+      <div className="skeleton" style={{ width: '55%', height: 14, flex: 1 }} />
+      <div className="skeleton" style={{ width: 28, height: 20 }} />
     </div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', marginTop: 6 }}>
-      <div className="bb-shimmer" style={{ width: 30, height: 30, borderRadius: 8 }} />
-      <div className="bb-shimmer" style={{ width: '45%', height: 14, flex: 1 }} />
-      <div className="bb-shimmer" style={{ width: 28, height: 20 }} />
+    <div className="flex-center gap-10 p-4 mt-6">
+      <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
+      <div className="skeleton" style={{ width: '45%', height: 14, flex: 1 }} />
+      <div className="skeleton" style={{ width: 28, height: 20 }} />
     </div>
   </div>
 ));
 
 const SkeletonGroup = memo(() => (
   <div>
-    <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px 8px' }}>
-      <div className="bb-shimmer" style={{ width: 22, height: 22, borderRadius: 5 }} />
-      <div className="bb-shimmer" style={{ width: 140, height: 14, flex: 1 }} />
+    <div className="flex-center gap-10 p-8">
+      <div className="skeleton" style={{ width: 22, height: 22, borderRadius: 5 }} />
+      <div className="skeleton" style={{ width: 140, height: 14, flex: 1 }} />
     </div>
     {[0, 1, 2].map(i => <SkeletonCard key={i} delay={i * 80} />)}
   </div>
@@ -97,16 +98,16 @@ const SkeletonGroup = memo(() => (
 
 const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
   const cfg = {
-    NETWORK: { icon: <WifiOff size={24} />, bg: 'rgba(239,68,68,.1)', color: '#ef4444', t: 'Connection error', d: 'Could not reach Firestore. Check your internet connection.' },
-    NO_DB: { icon: <Database size={24} />, bg: 'rgba(245,197,66,.1)', color: 'var(--gold)', t: 'No database', d: 'Firebase is not configured.' },
+    NETWORK: { icon: <WifiOff size={24} />, bg: 'rgba(var(--danger-rgb),.1)', color: 'var(--danger)', t: 'Connection error', d: 'Could not reach Firestore. Check your internet connection.' },
+    NO_DB: { icon: <Database size={24} />, bg: 'rgba(var(--gold-rgb),.1)', color: 'var(--gold)', t: 'No database', d: 'Firebase is not configured.' },
   };
   const c = cfg[error] || cfg.NETWORK;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14, padding: '36px 20px', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 14 }}>
-      <div style={{ width: 52, height: 52, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: c.bg, color: c.color }}>{c.icon}</div>
-      <div style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--text-primary)' }}>{c.t}</div>
-      <div style={{ fontSize: '.82rem', color: 'var(--text-muted)', maxWidth: 360, lineHeight: 1.5, textAlign: 'center' }}>{c.d}</div>
-      <button className="zoka-btn" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '9px 20px', borderRadius: 8, background: '#1D428A', color: '#fff', fontWeight: 600, fontSize: '.82rem', border: 'none' }} onClick={onRetry}>
+    <div className="glass-card flex-col items-center gap-12 p-32 text-center">
+      <div className="flex-center" style={{ width: 52, height: 52, borderRadius: '50%', background: c.bg, color: c.color }}>{c.icon}</div>
+      <div className="text-primary font-bold">{c.t}</div>
+      <div className="text-muted text-sm" style={{ maxWidth: 360 }}>{c.d}</div>
+      <button className="btn btn-primary" onClick={onRetry}>
         <RefreshCw size={14} /> Retry
       </button>
     </div>
@@ -115,31 +116,31 @@ const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
 
 const TeamLogo = memo(({ src, name }) => {
   if (!src) return (
-    <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(255,255,255,.05)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, color: 'var(--text-muted)', flexShrink: 0, fontWeight: 700 }}>
+    <div className="flex-center bg-elevated text-muted font-bold" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>
       {(name || '?')[0]}
     </div>
   );
-  return <img src={src} alt={name} style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', flexShrink: 0, background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
+  return <img src={src} alt={name} style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
 });
 
 const StatusBadge = memo(({ game }) => {
   const s = game.status;
-  let bg = 'rgba(255,255,255,.05)', color = 'var(--text-muted)', label = s;
+  let bg = 'var(--bg-elevated)', color = 'var(--text-muted)', label = s;
 
-  if (game.isLive) { bg = 'rgba(239,68,68,.15)'; color = '#ef4444'; label = game.minute || s; }
-  else if (game.isFinished) { bg = 'rgba(34,197,94,.1)'; color = '#4ade80'; label = s === 'AOT' ? 'OT' : 'FT'; }
-  else if (s === 'SUSP') { bg = 'rgba(245,158,11,.1)'; color = '#f59e0b'; label = 'SUSP'; }
-  else if (s === 'POST') { bg = 'rgba(245,158,11,.1)'; color = '#f59e0b'; label = 'POSTP'; }
-  else if (s === 'CANC') { bg = 'rgba(239,68,68,.1)'; color = '#ef4444'; label = 'CANC'; }
+  if (game.isLive) { bg = 'rgba(var(--danger-rgb),.15)'; color = 'var(--danger)'; label = game.minute || s; }
+  else if (game.isFinished) { bg = 'rgba(var(--primary-rgb),.1)'; color = 'var(--primary)'; label = s === 'AOT' ? 'OT' : 'FT'; }
+  else if (s === 'SUSP') { bg = 'rgba(var(--gold-rgb),.1)'; color = 'var(--gold)'; label = 'SUSP'; }
+  else if (s === 'POST') { bg = 'rgba(var(--gold-rgb),.1)'; color = 'var(--gold)'; label = 'POSTP'; }
+  else if (s === 'CANC') { bg = 'rgba(var(--danger-rgb),.1)'; color = 'var(--danger)'; label = 'CANC'; }
 
-  return <span style={{ fontSize: 10, fontWeight: 700, padding: '3px 9px', borderRadius: 6, letterSpacing: .3, background: bg, color, animation: 'bb_badgePop .35s ease' }}>{label}</span>;
+  return <span className="badge" style={{ background: bg, color, border: 'none', animation: 'zk-pop .35s ease' }}>{label}</span>;
 });
 
 const ScoreDisplay = memo(({ score, isLive }) => {
   const baseStyle = { fontSize: 18, fontWeight: 800, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums', transition: 'color .3s' };
   if (!isLive) return <span style={{ ...baseStyle, color: 'var(--text-primary)' }}>{score ?? '-'}</span>;
   return (
-    <span key={score} style={{ ...baseStyle, color: '#ef4444', textShadow: '0 0 12px rgba(239,68,68,.4)', display: 'inline-block', animation: 'bb_scoreFlash .5s cubic-bezier(.4,0,.2,1)' }}>
+    <span key={score} style={{ ...baseStyle, color: 'var(--danger)', textShadow: '0 0 12px rgba(var(--danger-rgb),.4)', display: 'inline-block', animation: 'zk-score-pop .5s ease' }}>
       {score ?? '-'}
     </span>
   );
@@ -160,35 +161,30 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
   const qCount = quarters.length;
 
   const teamNameStyle = (isWinner) => {
-    if (isWinner === true) return { flex: 1, fontSize: 14, fontWeight: 700, color: '#4ade80', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
+    if (isWinner === true) return { flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
     if (isWinner === false) return { flex: 1, fontSize: 14, fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
     return { flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
   };
 
   return (
-    <div className="zoka-card" style={{
-      background: game.isLive ? 'linear-gradient(135deg, rgba(239,68,68,.06) 0%, rgba(239,68,68,.02) 100%)' : 'var(--bg-card)',
-      border: game.isLive ? '1px solid rgba(239,68,68,.2)' : '1px solid var(--border)',
-      borderRadius: 14, padding: '14px 16px', marginBottom: 8, cursor: 'default',
-      position: 'relative', overflow: 'hidden',
-      animation: `bb_fadeInUp .35s cubic-bezier(.4,0,.2,1) ${index * 50}ms both${game.isLive ? ', bb_cardLiveBorder 2.5s ease-in-out infinite' : ''}`,
+    <div className="glass-card p-16 mb-8" style={{
+      border: game.isLive ? '1px solid rgba(var(--danger-rgb),.2)' : '1px solid var(--border)',
+      animation: `zk-fade-up .35s ease ${index * 50}ms both${game.isLive ? ', zk-live-glow 2.5s ease-in-out infinite' : ''}`,
     }}>
       {game.isLive && (
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'linear-gradient(180deg, #ef4444, #f87171, #ef4444)', borderRadius: '0 2px 2px 0', overflow: 'hidden' }}>
-          <div style={{ position: 'absolute', top: 0, left: 0, width: '100%', height: '30%', background: 'linear-gradient(180deg, transparent, rgba(255,255,255,.4), transparent)', animation: 'bb_liveBarSweep 2s linear infinite' }} />
-        </div>
+        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'linear-gradient(180deg, var(--danger), var(--danger-dim))', borderRadius: '0 2px 2px 0' }} />
       )}
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', paddingLeft: game.isLive ? 10 : 0 }}>
+      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
         <TeamLogo src={game.homeLogo} name={game.homeTeam?.name} />
         <span style={teamNameStyle(game.isFinished ? homeWin : undefined)}>{game.homeTeam?.name || 'TBD'}</span>
         {game.isScheduled
-          ? <span style={{ fontSize: 13, color: '#94a3b8', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{game.kickoff}</span>
+          ? <span className="text-secondary font-bold text-sm">{game.kickoff}</span>
           : <ScoreDisplay score={game.homeScore} isLive={game.isLive} />
         }
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 0', paddingLeft: game.isLive ? 10 : 0 }}>
+      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
         <TeamLogo src={game.awayLogo} name={game.awayTeam?.name} />
         <span style={teamNameStyle(game.isFinished ? awayWin : undefined)}>{game.awayTeam?.name || 'TBD'}</span>
         {game.isScheduled
@@ -198,27 +194,27 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
       </div>
 
       {!game.isScheduled && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 4, paddingRight: 2 }}>
+        <div className="flex justify-end mt-4 pr-2">
           <StatusBadge game={game} />
         </div>
       )}
 
       {showQuarters && (
-        <div style={{ display: 'grid', gap: 0, marginTop: 10, paddingTop: 8, borderTop: '1px solid var(--border)', gridTemplateColumns: `repeat(${qCount + 1}, 1fr)`, animation: `bb_fadeInUp .3s ease ${index * 50 + 150}ms both` }}>
-          {quarters.map(q => <span key={q} style={{ fontSize: 9, color: 'var(--text-muted)', textAlign: 'center', fontWeight: 700, padding: '2px 0', letterSpacing: .3 }}>{q}</span>)}
-          <span style={{ fontSize: 9, color: '#64748b', textAlign: 'center', fontWeight: 700, padding: '2px 0' }}>TOT</span>
+        <div className="grid gap-0 mt-10 pt-8 border-t" style={{ gridTemplateColumns: `repeat(${qCount + 1}, 1fr)`, animation: `zk-fade-up .3s ease ${index * 50 + 150}ms both` }}>
+          {quarters.map(q => <span key={q} className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>{q}</span>)}
+          <span className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>TOT</span>
           {qKeys.map((key) => (
-            <span key={`h_${key}`} style={{ fontSize: 11, color: '#64748b', textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '2px 0' }}>
+            <span key={`h_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
               {game.score?.[key]?.home ?? '-'}
             </span>
           ))}
-          <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '2px 0', fontWeight: 700 }}>{game.homeScore ?? '-'}</span>
+          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.homeScore ?? '-'}</span>
           {qKeys.map((key) => (
-            <span key={`a_${key}`} style={{ fontSize: 11, color: '#64748b', textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '2px 0' }}>
+            <span key={`a_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
               {game.score?.[key]?.away ?? '-'}
             </span>
           ))}
-          <span style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', fontVariantNumeric: 'tabular-nums', padding: '2px 0', fontWeight: 700 }}>{game.awayScore ?? '-'}</span>
+          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.awayScore ?? '-'}</span>
         </div>
       )}
     </div>
@@ -227,13 +223,13 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
 
 const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex = 0 }) {
   return (
-    <div style={{ animation: `bb_slideInLeft .4s cubic-bezier(.4,0,.2,1) ${sectionIndex * 80}ms both` }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 0 8px 8px', borderBottom: '1px solid var(--border)', marginBottom: 6, position: 'relative' }}>
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0', transformOrigin: 'top', animation: 'bb_borderGrow .5s cubic-bezier(.4,0,.2,1)' }} />
+    <div style={{ animation: `zk-slide-in .4s ease ${sectionIndex * 80}ms both` }}>
+      <div className="flex-center gap-10 py-8 px-8 border-b mb-6 relative">
+        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0' }} />
         {league.emblem && <img src={league.emblem} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} loading="lazy" />}
-        {!league.emblem && <div style={{ width: 22, height: 22, borderRadius: 5, background: league.color, flexShrink: 0 }} />}
-        <span style={{ fontSize: 13, fontWeight: 600, color: '#94a3b8', flex: 1 }}>{league.name}</span>
-        {league.country && <span style={{ fontSize: 11, color: '#334155' }}>{league.country}</span>}
+        {!league.emblem && <div style={{ width: 22, height: 22, borderRadius: 5, background: league.color }} />}
+        <span className="text-secondary font-bold flex-1" style={{ fontSize: 13 }}>{league.name}</span>
+        {league.country && <span className="text-muted text-xs">{league.country}</span>}
       </div>
       {games.map((g, i) => <GameCard key={g.id} game={g} index={i} />)}
     </div>
@@ -248,8 +244,8 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
 
   const pickLabels = { home: game.homeTeam?.name || 'Home', away: game.awayTeam?.name || 'Away' };
   const pickColors = {
-    home: { bg: currentPick === 'home' ? 'rgba(29,66,138,.18)' : 'rgba(255,255,255,.04)', border: currentPick === 'home' ? '#1D428A' : 'var(--border)', color: currentPick === 'home' ? '#60a5fa' : 'var(--text-secondary)' },
-    away: { bg: currentPick === 'away' ? 'rgba(239,68,68,.12)' : 'rgba(255,255,255,.04)', border: currentPick === 'away' ? '#ef4444' : 'var(--border)', color: currentPick === 'away' ? '#ef4444' : 'var(--text-secondary)' },
+    home: { bg: currentPick === 'home' ? 'rgba(var(--accent-rgb),.18)' : 'var(--bg-elevated)', border: currentPick === 'home' ? 'var(--accent)' : 'var(--border)', color: currentPick === 'home' ? 'var(--accent)' : 'var(--text-secondary)' },
+    away: { bg: currentPick === 'away' ? 'rgba(var(--danger-rgb),.12)' : 'var(--bg-elevated)', border: currentPick === 'away' ? 'var(--danger)' : 'var(--border)', color: currentPick === 'away' ? 'var(--danger)' : 'var(--text-secondary)' },
   };
 
   const handlePick = useCallback((pick) => {
@@ -258,49 +254,49 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
   }, [loggedIn, onPredict, currentPick, onRemove, game.id]);
 
   return (
-    <div className="zoka-card bb-predict-pop" style={{ padding: '14px 16px', background: 'var(--bg-card)', border: `1px solid ${isLive ? 'rgba(239,68,68,.25)' : 'var(--border)'}`, borderRadius: 12, marginBottom: 8, animationDelay: `${index * 60}ms`, position: 'relative', overflow: 'hidden' }}>
-      {isLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, #ef4444, #f97316, #ef4444)', animation: 'bb_cardLiveBorder 2s ease-in-out infinite' }} />}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 10 }}>
+    <div className="glass-card p-16 mb-8" style={{ border: `1px solid ${isLive ? 'rgba(var(--danger-rgb),.25)' : 'var(--border)'}`, animation: `zk-pop .35s ease ${index * 60}ms both` }}>
+      {isLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--danger), var(--warning))', animation: 'zk-live-glow 2s ease-in-out infinite' }} />}
+      <div className="flex-center gap-6 mb-10">
         {game.league?.emblem && <img src={game.league.emblem} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />}
-        <span style={{ fontSize: '.66rem', fontWeight: 600, color: 'var(--text-muted)', flex: 1 }}>{game.league?.name || ''}</span>
-        <span style={{ fontSize: '.64rem', fontWeight: 700, color: isLive ? '#ef4444' : 'var(--text-muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
-          {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: '#ef4444', animation: 'bb_pulse 1.5s ease-in-out infinite' }} />}
+        <span className="text-muted font-bold flex-1" style={{ fontSize: '.66rem' }}>{game.league?.name || ''}</span>
+        <span className="text-muted font-bold flex-center gap-4" style={{ fontSize: '.64rem', color: isLive ? 'var(--danger)' : 'var(--text-muted)' }}>
+          {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', animation: 'zk-pulse 1.5s ease-in-out infinite' }} />}
           {isLive ? 'LIVE' : kickOff}
         </span>
       </div>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+      <div className="flex-between gap-10 mb-12">
+        <div className="flex-center gap-8 flex-1 min-w-0">
           <TeamLogo src={game.homeLogo} name={game.homeTeam?.name} />
-          <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{game.homeTeam?.name}</span>
+          <span className="text-primary font-bold truncate" style={{ fontSize: '.82rem' }}>{game.homeTeam?.name}</span>
         </div>
         {game.isScheduled ? (
-          <div style={{ padding: '4px 12px', borderRadius: 8, background: 'rgba(255,255,255,.03)', fontSize: '.7rem', fontWeight: 700, color: 'var(--text-muted)' }}>VS</div>
+          <div className="badge badge-muted">VS</div>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 5, padding: '4px 14px', borderRadius: 8, background: isLive ? 'rgba(239,68,68,.08)' : 'rgba(255,255,255,.04)', fontVariantNumeric: 'tabular-nums', fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', letterSpacing: 2 }}>
-            {game.homeScore ?? '-'} <span style={{ color: 'var(--text-muted)', fontWeight: 400 }}>-</span> {game.awayScore ?? '-'}
+          <div className="flex-center gap-5 px-14 py-4 rounded-md font-extrabold text-primary" style={{ background: isLive ? 'rgba(var(--danger-rgb),.08)' : 'var(--bg-elevated)', fontSize: '1.1rem', letterSpacing: 2 }}>
+            {game.homeScore ?? '-'} <span className="text-muted font-normal">-</span> {game.awayScore ?? '-'}
           </div>
         )}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
-          <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textAlign: 'right' }}>{game.awayTeam?.name}</span>
+        <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
+          <span className="text-primary font-bold truncate text-right" style={{ fontSize: '.82rem' }}>{game.awayTeam?.name}</span>
           <TeamLogo src={game.awayLogo} name={game.awayTeam?.name} />
         </div>
       </div>
       {!isFinished && (
-        <div style={{ display: 'flex', gap: 8 }}>
+        <div className="flex gap-8">
           {['home', 'away'].map((pick) => (
-            <button key={pick} className="zoka-btn" onClick={() => handlePick(pick)}
-              style={{ flex: 1, padding: '10px 0', borderRadius: 9, background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: '.72rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5, position: 'relative', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <button key={pick} className="btn flex-1" onClick={() => handlePick(pick)}
+              style={{ background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: '.72rem' }}>
               {pickLabels[pick]}
-              {currentPick === pick && <CheckCircle2 size={13} style={{ marginLeft: 3, flexShrink: 0 }} />}
+              {currentPick === pick && <CheckCircle2 size={13} className="ml-3" />}
               {!loggedIn && <Lock size={10} style={{ position: 'absolute', top: 4, right: 5, opacity: .4 }} />}
             </button>
           ))}
         </div>
       )}
       {isFinished && currentPick && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, padding: '6px 0', fontSize: '.72rem', fontWeight: 600, color: 'var(--text-muted)' }}>
+        <div className="flex-center justify-center gap-6 py-6 text-muted font-bold" style={{ fontSize: '.72rem' }}>
           <span>Your pick:</span>
-          <span style={{ color: pickColors[currentPick]?.color || '#60a5fa', fontWeight: 800 }}>{pickLabels[currentPick]}</span>
+          <span style={{ color: pickColors[currentPick]?.color || 'var(--accent)' }}>{pickLabels[currentPick]}</span>
         </div>
       )}
     </div>
@@ -309,17 +305,17 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
 
 const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 9999, padding: 20, backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} className="bb-expand" style={{ background: 'var(--bg-card)', borderRadius: 16, padding: '32px 28px', maxWidth: 380, width: '100%', border: '1px solid var(--border)', textAlign: 'center' }}>
-        <div style={{ width: 56, height: 56, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(29,66,138,.12)', color: '#60a5fa', margin: '0 auto 16px' }}>
+    <div onClick={onClose} className="fixed inset-0 bg-black/60 flex-center z-max p-20" style={{ backdropFilter: 'blur(4px)' }}>
+      <div onClick={e => e.stopPropagation()} className="glass-card flex-col p-32 text-center max-w-380 w-full">
+        <div className="glass-card flex-center mb-16 mx-auto" style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(var(--accent-rgb),.12)', color: 'var(--accent)' }}>
           <Lock size={24} />
         </div>
-        <div style={{ fontSize: '1.1rem', fontWeight: 800, color: 'var(--text-primary)', marginBottom: 8 }}>Login to Predict</div>
-        <div style={{ fontSize: '.84rem', color: 'var(--text-muted)', lineHeight: 1.6, marginBottom: 20 }}>Sign in to start making basketball predictions and compete on the leaderboard.</div>
-        <button className="zoka-btn" style={{ width: '100%', padding: '12px 0', borderRadius: 10, background: '#1D428A', color: '#fff', fontWeight: 700, fontSize: '.9rem', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginBottom: 10 }} onClick={() => { window.location.href = '/login'; }}>
+        <div className="text-primary font-extrabold mb-8">Login to Predict</div>
+        <div className="text-muted text-sm leading-relaxed mb-20">Sign in to start making basketball predictions and compete on the leaderboard.</div>
+        <button className="btn btn-primary w-full mb-10" onClick={() => window.location.href = '/login'}>
           <LogIn size={16} /> Sign In
         </button>
-        <button className="zoka-btn" style={{ width: '100%', padding: '10px 0', borderRadius: 10, background: 'transparent', color: 'var(--text-muted)', fontWeight: 600, fontSize: '.82rem', border: '1px solid var(--border)' }} onClick={onClose}>Maybe Later</button>
+        <button className="btn btn-ghost w-full" onClick={onClose}>Maybe Later</button>
       </div>
     </div>
   );
@@ -339,10 +335,9 @@ export default function Basketball() {
 
   const [selectedDate, setSelectedDate] = useState(todayStr);
   
-   const { data: rawFixtures = [], isLoading: loading } = useFixtures(selectedDate, 'basketball');
+  const { data: rawFixtures = [], isLoading: loading } = useFixtures(selectedDate, 'basketball');
   const { data: rawLive = [] } = useLiveMatches('basketball');
   
-  // Normalize raw backend data to expected UI shapes
   const gamesByDate = useMemo(() => ({ [selectedDate]: rawFixtures.map(normalizeBasketballGame) }), [rawFixtures, selectedDate]);
   const liveGames = useMemo(() => rawLive.map(normalizeBasketballGame), [rawLive]);
   
@@ -384,8 +379,8 @@ export default function Basketball() {
   const handlePredict = useCallback(async (gameId, needsLogin, pick) => {
     if (needsLogin || !currentUser) { setShowLoginModal(true); return; }
     if (!gameId || !pick) return;
-    const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
-    await setDoc(predRef, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
+    // ★ Use safeWrite for offline queue support
+    await safeWrite('user_bb_predictions', `${currentUser.uid}_${gameId}`, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
     eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, sport: 'basketball' });
   }, [currentUser]);
 
@@ -454,22 +449,15 @@ export default function Basketball() {
     return counts;
   }, [gamesByDate]);
 
-  const todayPredictGames = useMemo(() => {
-    return getTopPredictGames(gamesByDate[todayStr] || [], 10);
-  }, [gamesByDate, todayStr]);
-
-  const tomorrowPredictGames = useMemo(() => {
-    return getTopPredictGames(gamesByDate[tomorrowStr] || [], 10);
-  }, [gamesByDate, tomorrowStr]);
+  const todayPredictGames = useMemo(() => getTopPredictGames(gamesByDate[todayStr] || [], 10), [gamesByDate, todayStr]);
+  const tomorrowPredictGames = useMemo(() => getTopPredictGames(gamesByDate[tomorrowStr] || [], 10), [gamesByDate, tomorrowStr]);
 
   const upcomingPredictGames = useMemo(() => {
     if (!upcomingOpen || !predictDay || predictDay === 'today' || predictDay === tomorrowStr) return [];
     return getTopPredictGames(gamesByDate[predictDay] || [], 10);
   }, [gamesByDate, predictDay, upcomingOpen, tomorrowStr]);
 
-  const predictViewDates = useMemo(() => {
-    return dates.filter(d => d.date > tomorrowStr).slice(0, 7);
-  }, [dates, tomorrowStr]);
+  const predictViewDates = useMemo(() => dates.filter(d => d.date > tomorrowStr).slice(0, 7), [dates, tomorrowStr]);
 
   useEffect(() => {
     if (dateScrollRef.current) {
@@ -481,84 +469,73 @@ export default function Basketball() {
   let sectionIdx = 0;
 
   return (
-    <div style={{ minHeight: '100vh', overflow: 'hidden', background: 'var(--bg-deep)', animation: 'bb_fadeInUp .45s ease' }}>
+    <div className="zoka-page" style={{ animation: 'zk-fade-up .45s ease' }}>
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO
-  title="Basketball Fixtures, Live Scores & Predictions"
-  description="Follow basketball fixtures, live scores, standings, match insights, and predictions from top competitions around the world on ZOKASCORE."
-  keywords="basketball, basketball fixtures, live basketball scores, basketball predictions, NBA, EuroLeague, standings, ZOKASCORE"
-  robots="index,follow"
-  breadcrumbs={[
-    { name: "Home", path: "/" },
-    { name: "Basketball", path: "/basketball" }
-  ]}
-/>
+        title="Basketball Fixtures, Live Scores & Predictions"
+        description="Follow basketball fixtures, live scores, standings, match insights, and predictions from top competitions around the world on ZOKASCORE."
+        keywords="basketball, basketball fixtures, live basketball scores, basketball predictions, NBA, EuroLeague, standings, ZOKASCORE"
+        robots="index,follow"
+        breadcrumbs={[{ name: "Home", path: "/" }, { name: "Basketball", path: "/basketball" }]}
+      />
 
-      <div style={{ position: 'sticky', top: 0, zIndex: 100, background: 'rgba(10,14,23,.88)', backdropFilter: 'blur(16px)', borderBottom: '1px solid var(--border)', animation: 'bb_slideDown .4s ease' }}>
-        <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 28, height: 28, borderRadius: 8, background: '#1D428A', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, fontSize: '.72rem', color: '#fff', fontFamily: 'var(--font-display)' }}>Z</div>
-            <span style={{ fontSize: '.88rem', fontWeight: 800, color: 'var(--text-primary)' }}>zokascore<span style={{ color: '#60a5fa' }}>.xyz</span></span>
+      <div className="glass sticky top-0 z-sticky" style={{ borderBottom: '1px solid var(--border)', animation: 'zk-slide-in .4s ease' }}>
+        <div className="zoka-wrap flex-between py-12">
+          <div className="flex-center gap-10">
+            <div className="flex-center font-extrabold text-inverse" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', fontSize: '.72rem' }}>Z</div>
+            <span className="text-primary font-extrabold text-sm">zokascore<span className="text-accent">.xyz</span></span>
             <span style={{ fontSize: 20 }}>🏀</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div className="flex-center gap-4">
             {liveCount > 0 && (
-              <div style={{ background: 'rgba(239,68,68,.15)', border: '1px solid rgba(239,68,68,.3)', color: '#ef4444', fontSize: 11, fontWeight: 700, padding: '4px 12px', borderRadius: 20, letterSpacing: .5, display: 'flex', alignItems: 'center', gap: 6, animation: 'bb_liveGlow 2s ease-in-out infinite' }}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#ef4444', animation: 'bb_pulse 1.2s ease-in-out infinite' }} />
-                LIVE {liveCount}
+              <div className="badge badge-danger anim-live-pulse">
+                <span className="zk-live-pulse-dot mr-2" /> LIVE {liveCount}
               </div>
             )}
-            <button className="zoka-btn" onClick={handleRefresh} disabled={refreshing} style={{ width: 34, height: 34, borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'transparent', border: 'none', color: refreshing ? '#60a5fa' : 'var(--text-muted)' }}>
-              <RefreshCw size={15} style={{ animation: refreshing ? 'refreshSpin 1s linear infinite' : 'none' }} />
+            <button className="btn-icon" onClick={handleRefresh} disabled={refreshing}>
+              <RefreshCw size={15} className={refreshing ? 'anim-spin' : ''} />
             </button>
           </div>
         </div>
 
-        <div style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <div className="sport-switch">
-            <button className="sport-pill inactive" onClick={() => navigate('/fixtures')}>
-              <span style={{ fontSize: '1rem' }}>⚽</span>
-              Football
-              <ChevronRight size={13} style={{ opacity: 0.5 }} />
+        <div className="zoka-wrap flex-between py-6">
+          <div className="flex gap-4">
+            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/fixtures')}>
+              <span style={{ fontSize: '1rem' }}>⚽</span> Football <ChevronRight size={13} className="opacity-50" />
             </button>
-            <button className="sport-pill active" style={{ background: '#1D428A' }}>
-              <span style={{ fontSize: '1rem' }}>🏀</span>
-              Basketball
+            <button className="btn btn-primary btn-sm">
+              <span style={{ fontSize: '1rem' }}>🏀</span> Basketball
             </button>
           </div>
-          <span style={{ fontSize: '.66rem', color: 'var(--text-muted)', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span className="text-muted font-medium flex-center gap-4 text-xs">
             <Database size={10} /> Firestore
           </span>
         </div>
 
-        <div style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px', display: 'flex', gap: 4 }}>
-          <button className="zoka-btn" onClick={() => setViewMode('fixtures')} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '.78rem', background: viewMode === 'fixtures' ? '#1D428A' : 'transparent', color: viewMode === 'fixtures' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+        <div className="zoka-wrap flex gap-4 py-6">
+          <button className={`btn flex-1 ${viewMode === 'fixtures' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('fixtures')}>
             <CalendarDays size={14} /> Fixtures
           </button>
-          <button className="zoka-btn" onClick={() => setViewMode('predict')} style={{ flex: 1, padding: '9px 0', borderRadius: 8, border: 'none', fontWeight: 700, fontSize: '.78rem', background: viewMode === 'predict' ? 'linear-gradient(135deg, #1D428A, #3b82f6)' : 'transparent', color: viewMode === 'predict' ? '#fff' : 'var(--text-muted)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+          <button className={`btn flex-1 ${viewMode === 'predict' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('predict')}>
             <Sparkles size={14} /> Predict
-            {Object.keys(predictions).length > 0 && (
-              <span style={{ padding: '1px 6px', borderRadius: 6, background: viewMode === 'predict' ? 'rgba(255,255,255,.2)' : 'rgba(29,66,138,.15)', fontSize: '.64rem', fontWeight: 800, color: viewMode === 'predict' ? '#fff' : '#60a5fa' }}>{Object.keys(predictions).length}</span>
-            )}
+            {Object.keys(predictions).length > 0 && <span className="badge badge-muted ml-2">{Object.keys(predictions).length}</span>}
           </button>
         </div>
 
         {viewMode === 'fixtures' && (
-          <div ref={dateScrollRef} className="date-scroll-hide" style={{ maxWidth: 640, margin: '6px auto 0', padding: '0 16px 10px', display: 'flex', gap: 4, overflowX: 'auto' }}>
+          <div ref={dateScrollRef} className="zoka-wrap flex gap-4 py-10 overflow-x-auto">
             {dates.map((d, i) => {
               const isActive = d.date === selectedDate;
               const isToday = d.isToday;
               const inWindow = windowDates.includes(d.date);
               const count = gameCounts[d.date];
               return (
-                <button key={d.date} data-date={d.date} className="zoka-btn" onClick={() => setSelectedDate(d.date)} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '6px 14px', borderRadius: 10, minWidth: 52, background: isActive ? '#1D428A' : isToday ? 'rgba(29,66,138,.12)' : 'transparent', border: `1.5px solid ${isActive ? '#1D428A' : isToday ? 'rgba(29,66,138,.25)' : 'transparent'}`, flexShrink: 0, animation: `bb_fadeInUp .3s ease ${i * 25}ms both`, position: 'relative' }}>
-                  <span style={{ fontSize: '.58rem', fontWeight: 700, color: isActive ? 'rgba(255,255,255,.7)' : 'var(--text-muted)', textTransform: 'uppercase' }}>{d.day}</span>
-                  <span style={{ fontSize: '1rem', fontWeight: 800, fontFamily: 'var(--font-display)', color: isActive ? '#fff' : isToday ? '#60a5fa' : 'var(--text-primary)' }}>{d.num}</span>
-                  <span style={{ fontSize: '.52rem', fontWeight: 600, color: isActive ? 'rgba(255,255,255,.5)' : 'var(--text-muted)' }}>{d.month}</span>
-                  {inWindow && count > 0 && (
-                    <span style={{ position: 'absolute', top: -3, right: -3, minWidth: 16, height: 16, borderRadius: 8, background: isActive ? 'rgba(255,255,255,.25)' : 'rgba(29,66,138,.7)', color: isActive ? '#fff' : '#fff', fontSize: '.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 4px' }}>{count}</span>
-                  )}
+                <button key={d.date} data-date={d.date} className={`btn flex-col min-w-52 ${isActive ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedDate(d.date)} style={{ animation: `zk-fade-up .3s ease ${i * 25}ms both`, position: 'relative' }}>
+                  <span className="text-xs font-bold opacity-70 uppercase">{d.day}</span>
+                  <span className="font-extrabold text-md">{d.num}</span>
+                  <span className="text-xs font-semibold opacity-50">{d.month}</span>
+                  {inWindow && count > 0 && <span className="absolute -top-3 -right-3 badge badge-primary">{count}</span>}
                 </button>
               );
             })}
@@ -566,169 +543,94 @@ export default function Basketball() {
         )}
       </div>
 
-      <div style={{ maxWidth: 640, margin: '0 auto', padding: '12px 16px 80px' }}>
-
+      <div className="zoka-wrap py-12 pb-80">
         {viewMode === 'fixtures' && (
           <>
-            {error && !loading && (
-              <ErrorScreen error={error} onRetry={() => { setError(null); handleRefresh(); }} />
-            )}
+            {error && !loading && <ErrorScreen error={error} onRetry={() => { setError(null); handleRefresh(); }} />}
 
             {loading && !error ? (
-              <div><SkeletonGroup /><div style={{ marginTop: 16 }}><SkeletonGroup /></div></div>
+              <div><SkeletonGroup /><div className="mt-16"><SkeletonGroup /></div></div>
             ) : !error && mergedGames.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '60px 20px' }}>
-                <div style={{ fontSize: 48, marginBottom: 16, animation: 'bb_float 4s ease-in-out infinite', display: 'inline-block' }}>🏀</div>
-                <div style={{ fontSize: 14, color: 'var(--text-muted)', fontWeight: 500 }}>No games scheduled for this date</div>
-                <div style={{ fontSize: '.72rem', color: '#334155', marginTop: 6 }}>Backend populates yesterday, today, and tomorrow</div>
+              <div className="glass-card flex-col items-center p-60 text-center gap-16">
+                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>🏀</div>
+                <div className="text-muted font-medium text-sm">No games scheduled for this date</div>
+                <div className="text-muted text-xs">Backend populates yesterday, today, and tomorrow</div>
                 {!windowDates.includes(selectedDate) && (
-                  <button className="zoka-btn" onClick={() => setSelectedDate(todayStr)} style={{ marginTop: 16, padding: '8px 20px', borderRadius: 8, background: 'rgba(29,66,138,.12)', border: '1px solid rgba(29,66,138,.25)', color: '#60a5fa', fontWeight: 600, fontSize: '.82rem' }}>
-                    Go to Today
-                  </button>
+                  <button className="btn btn-secondary mt-16" onClick={() => setSelectedDate(todayStr)}>Go to Today</button>
                 )}
               </div>
             ) : !error && (
               <div key={selectedDate}>
                 {liveLeagues.length > 0 && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--text-muted)', margin: '24px 0 10px', display: 'flex', alignItems: 'center', gap: 8, animation: `bb_fadeInUp .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#ef4444', boxShadow: '0 0 8px rgba(239,68,68,.25)' }} />
-                      LIVE ({totalLiveInDate})
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                      <div className="zk-live-pulse-dot" /> LIVE ({totalLiveInDate})
                     </div>
                     {liveLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`live-${l.key}`} league={l} games={l.games.filter(g => g.isLive)} sectionIndex={idx} />; })}
                   </>
                 )}
                 {scheduledLeagues.length > 0 && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--text-muted)', margin: '24px 0 10px', display: 'flex', alignItems: 'center', gap: 8, animation: `bb_fadeInUp .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#3b82f6', boxShadow: '0 0 8px rgba(59,130,246,.25)' }} />
-                      SCHEDULED
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /> SCHEDULED
                     </div>
                     {scheduledLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`sched-${l.key}`} league={l} games={l.games.filter(g => g.isScheduled)} sectionIndex={idx} />; })}
                   </>
                 )}
                 {finishedLeagues.length > 0 && (
                   <>
-                    <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 1.2, color: 'var(--text-muted)', margin: '24px 0 10px', display: 'flex', alignItems: 'center', gap: 8, animation: `bb_fadeInUp .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: '#22c55e', boxShadow: '0 0 8px rgba(34,197,94,.25)' }} />
-                      FINISHED
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)' }} /> FINISHED
                     </div>
                     {finishedLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`fin-${l.key}`} league={l} games={l.games.filter(g => g.isFinished)} sectionIndex={idx} />; })}
                   </>
                 )}
               </div>
             )}
-
-            {!loading && !error && mergedGames.length > 0 && (
-              <div style={{ textAlign: 'center', padding: '20px 0', fontSize: '.72rem', color: 'var(--text-muted)', fontWeight: 500 }}>
-                {mergedGames.length} game{mergedGames.length !== 1 ? 's' : ''} · Real-time from Firestore
-              </div>
-            )}
           </>
         )}
 
         {viewMode === 'predict' && (
-          <div className="bb-enter">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
-              <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg, rgba(29,66,138,.2), rgba(59,130,246,.08))', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#60a5fa' }}>
+          <div className="anim-fade-up">
+            <div className="flex-center gap-10 mb-16">
+              <div className="glass-card flex-center text-accent" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(var(--accent-rgb),.1)' }}>
                 <Flame size={18} />
               </div>
               <div>
-                <div style={{ fontSize: '1rem', fontWeight: 800, color: 'var(--text-primary)' }}>Predict & Win</div>
-                <div style={{ fontSize: '.72rem', color: 'var(--text-muted)' }}>Pick basketball game outcomes</div>
+                <div className="text-primary font-extrabold">Predict & Win</div>
+                <div className="text-muted text-xs">Pick basketball game outcomes</div>
               </div>
-              {!loggedIn && (
-                <button className="zoka-btn" onClick={() => setShowLoginModal(true)} style={{ marginLeft: 'auto', padding: '7px 14px', borderRadius: 8, background: 'rgba(29,66,138,.12)', border: '1px solid rgba(29,66,138,.3)', color: '#60a5fa', fontWeight: 600, fontSize: '.78rem', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <Lock size={12} /> Sign in
-                </button>
-              )}
-              {loggedIn && Object.keys(predictions).length > 0 && (
-                <div style={{ marginLeft: 'auto', padding: '6px 12px', borderRadius: 20, background: 'rgba(29,66,138,.12)', border: '1px solid rgba(29,66,138,.25)', fontSize: '.72rem', fontWeight: 700, color: '#60a5fa', display: 'flex', alignItems: 'center', gap: 4 }}>
-                  <CheckCircle2 size={12} /> {Object.keys(predictions).length} Picked
-                </div>
-              )}
+              {!loggedIn && <button className="btn btn-secondary btn-sm ml-auto" onClick={() => setShowLoginModal(true)}><Lock size={12} /> Sign in</button>}
+              {loggedIn && Object.keys(predictions).length > 0 && <div className="badge badge-accent ml-auto"><CheckCircle2 size={12} /> {Object.keys(predictions).length} Picked</div>}
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <CalendarDays size={14} color="#60a5fa" />
-                <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Today's Games</span>
-              </div>
-              {todayPredictGames.length > 0 ? (
-                todayPredictGames.map((g, i) => (
-                  <PredictCard 
-                    key={g.id} 
-                    game={g} 
-                    index={i} 
-                    prediction={predictions[g.id]} 
-                    onPredict={handlePredict} 
-                    onRemove={handleRemovePredict} 
-                    loggedIn={loggedIn} 
-                  />
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>No predictions available for today.</div>
-              )}
+            <div className="mb-24">
+              <div className="flex-center gap-8 mb-12 text-primary font-bold text-sm"><CalendarDays size={14} className="text-accent" /> Today's Games</div>
+              {todayPredictGames.length > 0 ? todayPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">No predictions available for today.</div>}
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <CalendarDays size={14} color="#f59e0b" />
-                <span style={{ fontSize: '.82rem', fontWeight: 700, color: 'var(--text-primary)' }}>Tomorrow's Games</span>
-              </div>
-              {tomorrowPredictGames.length > 0 ? (
-                tomorrowPredictGames.map((g, i) => (
-                  <PredictCard 
-                    key={g.id} 
-                    game={g} 
-                    index={i} 
-                    prediction={predictions[g.id]} 
-                    onPredict={handlePredict} 
-                    onRemove={handleRemovePredict} 
-                    loggedIn={loggedIn} 
-                  />
-                ))
-              ) : (
-                <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>No predictions available for tomorrow.</div>
-              )}
+            <div className="mb-24">
+              <div className="flex-center gap-8 mb-12 text-primary font-bold text-sm"><CalendarDays size={14} className="text-gold" /> Tomorrow's Games</div>
+              {tomorrowPredictGames.length > 0 ? tomorrowPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">No predictions available for tomorrow.</div>}
             </div>
 
-            <div style={{ marginBottom: 24 }}>
-              <button className="zoka-btn" onClick={() => setUpcomingOpen(!upcomingOpen)} style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 16px', borderRadius: 10, background: 'var(--bg-card)', border: '1px solid var(--border)', color: 'var(--text-primary)', fontWeight: 700, fontSize: '.82rem' }}>
-                <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <ChevronDown size={14} color="var(--text-muted)" />
-                  Upcoming Games
-                </span>
-                <ChevronRight size={14} color="var(--text-muted)" style={{ transform: upcomingOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
+            <div className="mb-24">
+              <button className="btn btn-secondary w-full flex-between" onClick={() => setUpcomingOpen(!upcomingOpen)}>
+                <span className="flex-center gap-8"><ChevronDown size={14} className="text-muted" /> Upcoming Games</span>
+                <ChevronRight size={14} className="text-muted" style={{ transform: upcomingOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
               </button>
               
               {upcomingOpen && (
-                <div style={{ marginTop: 12 }}>
-                  <div style={{ display: 'flex', gap: 8, overflowX: 'auto', paddingBottom: 8, marginBottom: 12 }} className="date-scroll-hide">
+                <div className="mt-12">
+                  <div className="flex gap-8 overflow-x-auto pb-8 mb-12">
                     {predictViewDates.map(d => (
-                      <button key={d.date} onClick={() => setPredictDay(d.date)} className="zoka-btn" style={{ padding: '8px 14px', borderRadius: 8, background: predictDay === d.date ? '#1D428A' : 'var(--bg-card)', border: `1px solid ${predictDay === d.date ? '#1D428A' : 'var(--border)'}`, color: predictDay === d.date ? '#fff' : 'var(--text-muted)', fontWeight: 600, fontSize: '.72rem', flexShrink: 0 }}>
+                      <button key={d.date} onClick={() => setPredictDay(d.date)} className={`btn btn-sm ${predictDay === d.date ? 'btn-primary' : 'btn-secondary'}`}>
                         {d.day} {d.num}
                       </button>
                     ))}
                   </div>
                   
-                  {upcomingPredictGames.length > 0 ? (
-                    upcomingPredictGames.map((g, i) => (
-                      <PredictCard 
-                        key={g.id} 
-                        game={g} 
-                        index={i} 
-                        prediction={predictions[g.id]} 
-                        onPredict={handlePredict} 
-                        onRemove={handleRemovePredict} 
-                        loggedIn={loggedIn} 
-                      />
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '20px', color: 'var(--text-muted)', fontSize: '.82rem' }}>
-                      {predictDay ? `No games scheduled for ${predictDay}.` : 'Select a date to view upcoming games.'}
-                    </div>
-                  )}
+                  {upcomingPredictGames.length > 0 ? upcomingPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">{predictDay ? `No games scheduled for ${predictDay}.` : 'Select a date to view upcoming games.'}</div>}
                 </div>
               )}
             </div>

@@ -2,15 +2,28 @@
   "name": "ZokaScore",
   "short_name": "Zoka",
   "description": "Live Football Scores & Predictions",
-  "theme_color": "var(--bg-deep)",
-  "background_color": "var(--bg-deep)",
+  "theme_color": "#00E676",
+  "background_color": "#0f172a",
   "display": "standalone",
   "start_url": "/",
   "scope": "/",
   "icons": [
-    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
-    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
   ],
   "shortcuts": [
     {
@@ -18,21 +31,36 @@
       "short_name": "Fixtures",
       "description": "View today's football fixtures",
       "url": "/fixtures",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Make Predictions",
       "short_name": "Predict",
       "description": "Predict today's matches",
       "url": "/predictions",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
       "name": "Leaderboard",
       "short_name": "Ranks",
       "description": "View the daily leaderboard",
       "url": "/leaderboard",
-      "icons": [{ "src": "/icons/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

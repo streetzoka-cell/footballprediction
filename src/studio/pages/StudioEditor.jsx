@@ -7,16 +7,20 @@ import { useEditorStore } from '../store/editorStore';
 import FootballDataPanel from '../components/FootballDataPanel';
 import AssetPanel from '../components/AssetPanel';
 import { saveProject } from '../services/studioService';
-import { Trash2, Type, Square, Shirt, Download, Loader, Save, Check, Copy, Layers, Play, Pause, Shapes, AlignLeft, AlignCenter, AlignRight, Upload, Video, Volume2, Scissors } from 'lucide-react';
+import { Trash2, Type, Square, Shirt, Download, Loader, Save, Check, Copy, Layers, Play, Pause, Shapes, Upload, Video, Volume2, Scissors } from 'lucide-react';
 
 const CanvasImage = ({ layer, isSelected, onSelect, onChange }) => {
   const [img] = useImage(layer.src || '', 'anonymous');
   return (
-    <KonvaImage image={img} x={layer.x} y={layer.y} width={layer.width} height={layer.height} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable onClick={onSelect} onTap={onSelect}
+    <KonvaImage 
+      image={img} x={layer.x} y={layer.y} width={layer.width} height={layer.height} 
+      rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable 
+      onClick={onSelect} onTap={onSelect}
       onDragMove={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onTransformEnd={(e) => {
-        const node = e.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1);
+        const node = e.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); 
+        node.scaleX(1); node.scaleY(1);
         onChange({ x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(5, node.width() * scaleX), height: Math.max(5, node.height() * scaleY) });
       }}
     />
@@ -32,7 +36,6 @@ const CanvasVideo = ({ layer, videoRef, onSelect, onChange }) => {
     }
   }, [videoRef]);
 
-  // Continuously draw video frame to canvas for smooth playback and scrubbing
   useEffect(() => {
     let anim;
     const draw = () => {
@@ -46,11 +49,15 @@ const CanvasVideo = ({ layer, videoRef, onSelect, onChange }) => {
   }, []);
 
   return (
-    <KonvaImage ref={imageRef} x={layer.x} y={layer.y} width={layer.width} height={layer.height} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable onClick={onSelect} onTap={onSelect}
+    <KonvaImage 
+      ref={imageRef} x={layer.x} y={layer.y} width={layer.width} height={layer.height} 
+      rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable 
+      onClick={onSelect} onTap={onSelect}
       onDragMove={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y() })}
       onTransformEnd={(e) => {
-        const node = e.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); node.scaleX(1); node.scaleY(1);
+        const node = e.target; const scaleX = node.scaleX(); const scaleY = node.scaleY(); 
+        node.scaleX(1); node.scaleY(1);
         onChange({ x: node.x(), y: node.y(), rotation: node.rotation(), width: Math.max(5, node.width() * scaleX), height: Math.max(5, node.height() * scaleY) });
       }}
     />
@@ -81,22 +88,39 @@ export default function StudioEditor() {
   useEffect(() => {
     if (!containerRef.current || !project) return;
     const handleResize = () => {
-      const cw = containerRef.current.offsetWidth - 48; const ch = containerRef.current.offsetHeight - 250;
+      const cw = containerRef.current.offsetWidth - 48; 
+      const ch = containerRef.current.offsetHeight - 250;
       setScale(Math.min(cw / project.canvasSize.width, ch / project.canvasSize.height, 1));
     };
-    handleResize(); window.addEventListener('resize', handleResize); return () => window.removeEventListener('resize', handleResize);
+    handleResize(); 
+    window.addEventListener('resize', handleResize); 
+    return () => window.removeEventListener('resize', handleResize);
   }, [project]);
 
   useEffect(() => {
-    if (selectedLayerId === null || !transformerRef.current) { transformerRef.current?.nodes([]); return; }
+    if (selectedLayerId === null || !transformerRef.current) { 
+      transformerRef.current?.nodes([]); 
+      return; 
+    }
     const node = layerRefs.current.get(selectedLayerId);
-    if (node) { transformerRef.current.nodes([node]); transformerRef.current.getLayer().batchDraw(); }
+    if (node) { 
+      transformerRef.current.nodes([node]); 
+      transformerRef.current.getLayer().batchDraw(); 
+    }
   }, [selectedLayerId, project]);
 
   useEffect(() => {
     if (!project || !project.id) return;
     setSaveStatus('saving');
-    const timer = setTimeout(() => { try { saveProject(project); setSaveStatus('saved'); setTimeout(() => setSaveStatus('idle'), 2000); } catch (err) { setSaveStatus('idle'); } }, 1000);
+    const timer = setTimeout(() => { 
+      try { 
+        saveProject(project); 
+        setSaveStatus('saved'); 
+        setTimeout(() => setSaveStatus('idle'), 2000); 
+      } catch (err) { 
+        setSaveStatus('idle'); 
+      } 
+    }, 1000);
     return () => clearTimeout(timer);
   }, [project]);
 
@@ -145,7 +169,8 @@ export default function StudioEditor() {
   };
 
   const handleExportVideo = () => {
-    if (!stageRef.current || isExporting) return; setIsExporting(true); selectLayer(null); setPlaying(false);
+    if (!stageRef.current || isExporting) return; 
+    setIsExporting(true); selectLayer(null); setPlaying(false);
     setTimeout(() => {
       const canvas = stageRef.current.toCanvas(); const stream = canvas.captureStream(30);
       const videoNode = hiddenVideoRef.current;
@@ -169,7 +194,8 @@ export default function StudioEditor() {
   };
 
   const handleExportPNG = () => {
-    if (!stageRef.current || isExporting) return; setIsExporting(true); selectLayer(null);
+    if (!stageRef.current || isExporting) return; 
+    setIsExporting(true); selectLayer(null);
     setTimeout(() => {
       const dataURL = stageRef.current.toDataURL({ pixelRatio: 2, mimeType: 'image/png' });
       const link = document.createElement('a'); link.href = dataURL; link.download = `${project.name.replace(/\s+/g, '_')}_zokascore.png`;
@@ -184,90 +210,102 @@ export default function StudioEditor() {
   };
 
   if (!project) {
-    return <div style={{ padding: '24px', textAlign: 'center', color: '#fff', height: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column' }}><p>No project loaded.</p><button onClick={() => navigate('/studio')} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', marginTop: '12px' }}>Go to Studio Home</button></div>;
+    return (
+      <div className="zs-empty-state zs-empty-state-full">
+        <p>No project loaded.</p>
+        <button className="zs-btn-primary" onClick={() => navigate('/studio')}>Go to Studio Home</button>
+      </div>
+    );
   }
 
   const selectedLayer = project.layers.find(l => l.id === selectedLayerId);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', background: '#0a0f1a', position: 'relative', overflow: 'hidden' }}>
-      <video ref={hiddenVideoRef} style={{ display: 'none' }} playsInline />
-      <audio ref={hiddenAudioRef} style={{ display: 'none' }} />
+    <div className="zs-editor-container">
+      <video ref={hiddenVideoRef} className="zs-hidden-media" playsInline />
+      <audio ref={hiddenAudioRef} className="zs-hidden-media" />
 
-      <div style={{ padding: '12px 16px', background: '#111827', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid #1f2937', zIndex: 10, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => navigate('/studio')} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer' }}>← Back</button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', color: saveStatus === 'saving' ? '#f59e0b' : 'var(--accent)' }}>
-            {saveStatus === 'saving' ? <Save size={12} /> : <Check size={12} />} {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
+      <div className="zs-editor-header">
+        <div className="zs-header-left">
+          <button className="zs-btn-ghost" onClick={() => navigate('/studio')}>← Back</button>
+          <div className={`zs-save-status ${saveStatus === 'saving' ? 'saving' : 'saved'}`}>
+            {saveStatus === 'saving' ? <Save size={12} /> : <Check size={12} />} 
+            {saveStatus === 'saving' ? 'Saving...' : 'Saved'}
           </div>
         </div>
-        <span style={{ color: '#fff', fontWeight: 800, fontSize: '14px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '40%' }}>{project.name}</span>
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <span className="zs-project-name-header">{project.name}</span>
+        <div className="zs-header-right">
           {videoLayer && (
-            <button onClick={handleExportVideo} style={{ background: isExporting ? '#334155' : '#ef4444', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} disabled={isExporting}>
-              {isExporting ? <Loader size={14} className="animate-spin" /> : <Video size={14} />} Export Video
+            <button className="zs-btn-danger" onClick={handleExportVideo} disabled={isExporting}>
+              {isExporting ? <Loader size={14} className="zs-spin" /> : <Video size={14} />} Export Video
             </button>
           )}
-          <button onClick={handleExportPNG} style={{ background: 'var(--accent)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }} disabled={isExporting}>
+          <button className="zs-btn-primary" onClick={handleExportPNG} disabled={isExporting}>
             <Download size={14} /> PNG
           </button>
         </div>
       </div>
 
-      <div ref={containerRef} style={{ flex: 1, overflow: 'hidden', display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
-        <Stage ref={stageRef} width={project.canvasSize.width * scale} height={project.canvasSize.height * scale} scaleX={scale} scaleY={scale} onMouseDown={(e) => { if (e.target === e.target.getStage()) selectLayer(null); }}>
-          <Layer>
-            <Rect width={project.canvasSize.width} height={project.canvasSize.height} fill="#0f172a" />
-            {project.layers.map((layer) => {
-              const commonProps = {
-                isSelected: layer.id === selectedLayerId,
-                onSelect: () => selectLayer(layer.id),
-                onChange: (newAttrs) => updateLayer(layer.id, newAttrs),
-                ref: (node) => { if (node) layerRefs.current.set(layer.id, node); else layerRefs.current.delete(layer.id); }
-              };
-              
-              
-              if (layer.type === 'rect') {
-                let fillProp = layer.fill;
-                // 🆕 Fixed Konva Gradient Syntax
-                if (layer.isGradient && typeof layer.fill === 'string' && layer.fill.includes('linear-gradient')) {
-                  const colors = layer.fill.match(/#[a-f0-9]{6}/gi);
-                  if (colors && colors.length >= 2) {
-                    fillProp = {
-                      fillLinearGradientStartPoint: { x: 0, y: 0 },
-                      fillLinearGradientEndPoint: { x: layer.width, y: layer.height },
-                      fillLinearGradientColorStops: [0, colors[0], 1, colors[1]]
-                    };
+      <div ref={containerRef} className="zs-canvas-area">
+        <div className="zs-canvas-wrap">
+          <Stage 
+            ref={stageRef} 
+            width={project.canvasSize.width * scale} 
+            height={project.canvasSize.height * scale} 
+            scaleX={scale} scaleY={scale} 
+            onMouseDown={(e) => { if (e.target === e.target.getStage()) selectLayer(null); }}
+          >
+            <Layer>
+              <Rect width={project.canvasSize.width} height={project.canvasSize.height} fill="#0f172a" />
+              {project.layers.map((layer) => {
+                const commonProps = {
+                  isSelected: layer.id === selectedLayerId,
+                  onSelect: () => selectLayer(layer.id),
+                  onChange: (newAttrs) => updateLayer(layer.id, newAttrs),
+                  ref: (node) => { if (node) layerRefs.current.set(layer.id, node); else layerRefs.current.delete(layer.id); }
+                };
+                
+                if (layer.type === 'rect') {
+                  let fillProp = layer.fill;
+                  if (layer.isGradient && typeof layer.fill === 'string' && layer.fill.includes('linear-gradient')) {
+                    const colors = layer.fill.match(/#[a-f0-9]{6}/gi);
+                    if (colors && colors.length >= 2) {
+                      fillProp = {
+                        fillLinearGradientStartPoint: { x: 0, y: 0 },
+                        fillLinearGradientEndPoint: { x: layer.width, y: layer.height },
+                        fillLinearGradientColorStops: [0, colors[0], 1, colors[1]]
+                      };
+                    }
                   }
+                  return <Rect key={layer.id} {...commonProps} x={layer.x} y={layer.y} width={layer.width} height={layer.height} fill={fillProp} cornerRadius={layer.cornerRadius || 0} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
                 }
-                return <Rect key={layer.id} {...commonProps} x={layer.x} y={layer.y} width={layer.width} height={layer.height} fill={fillProp} cornerRadius={layer.cornerRadius || 0} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
-              }
 
-              if (layer.type === 'text') return <Text key={layer.id} {...commonProps} text={layer.text} x={layer.x} y={layer.y} fontSize={layer.fontSize} fill={layer.fill} fontStyle={layer.fontStyle} fontFamily={layer.fontFamily || 'Inter, sans-serif'} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} align={layer.align || 'left'} width={layer.width || undefined} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
-              if (layer.type === 'image') return <CanvasImage key={layer.id} layer={layer} {...commonProps} />;
-              if (layer.type === 'video') return <CanvasVideo key={layer.id} layer={layer} videoRef={hiddenVideoRef} onSelect={commonProps.onSelect} onChange={commonProps.onChange} />;
-              if (layer.type === 'circle') return <Circle key={layer.id} {...commonProps} x={layer.x} y={layer.y} radius={layer.radius} fill={layer.fill} opacity={layer.opacity ?? 1} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
-              return null;
-            })}
-            <Transformer ref={transformerRef} borderStroke="var(--accent)" anchorStroke="var(--accent)" anchorCornerRadius={6} anchorSize={8} rotateEnabled={true} enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']} />
-          </Layer>
-        </Stage>
+                if (layer.type === 'text') return <Text key={layer.id} {...commonProps} text={layer.text} x={layer.x} y={layer.y} fontSize={layer.fontSize} fill={layer.fill} fontStyle={layer.fontStyle} fontFamily={layer.fontFamily || 'Inter, sans-serif'} rotation={layer.rotation || 0} opacity={layer.opacity ?? 1} align={layer.align || 'left'} width={layer.width || undefined} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
+                if (layer.type === 'image') return <CanvasImage key={layer.id} layer={layer} {...commonProps} />;
+                if (layer.type === 'video') return <CanvasVideo key={layer.id} layer={layer} videoRef={hiddenVideoRef} onSelect={commonProps.onSelect} onChange={commonProps.onChange} />;
+                if (layer.type === 'circle') return <Circle key={layer.id} {...commonProps} x={layer.x} y={layer.y} radius={layer.radius} fill={layer.fill} opacity={layer.opacity ?? 1} draggable onDragMove={(e) => commonProps.onChange({x: e.target.x(), y: e.target.y()})} />;
+                return null;
+              })}
+              <Transformer ref={transformerRef} borderStroke="var(--zs-accent)" anchorStroke="var(--zs-accent)" anchorCornerRadius={6} anchorSize={8} rotateEnabled={true} enabledAnchors={['top-left', 'top-right', 'bottom-left', 'bottom-right']} />
+            </Layer>
+          </Stage>
+        </div>
       </div>
 
       {videoLayer && (
-        <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px', flexShrink: 0 }}>
-          <button onClick={() => setPlaying(!isPlaying)} style={{ background: '#334155', border: 'none', color: '#fff', padding: '6px', borderRadius: '6px', cursor: 'pointer', display: 'flex' }}>
+        <div className="zs-timeline">
+          <button className="zs-btn-icon" onClick={() => setPlaying(!isPlaying)}>
             {isPlaying ? <Pause size={16} /> : <Play size={16} fill="#fff" />}
           </button>
-          <input type="range" min="0" max={videoDuration || 0} step="0.1" value={currentTime} onChange={handleTimelineScrub} style={{ flex: 1, accentColor: 'var(--accent)' }} />
-          <span style={{ color: '#64748b', fontSize: '11px', fontWeight: 700, minWidth: '80px', textAlign: 'right' }}>{Math.floor(currentTime)}s / {Math.floor(videoDuration)}s</span>
+          <input type="range" min="0" max={videoDuration || 0} step="0.1" value={currentTime} onChange={handleTimelineScrub} className="zs-range" />
+          <span className="zs-time-display">{Math.floor(currentTime)}s / {Math.floor(videoDuration)}s</span>
         </div>
       )}
 
-      <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '12px', overflowX: 'auto', flexShrink: 0 }}>
-        <Layers size={16} color="#64748b" />
+      <div className="zs-layer-bar">
+        <Layers size={16} color="var(--zs-text-muted)" />
         {project.layers.map(layer => (
-          <div key={layer.id} onClick={() => selectLayer(layer.id)} style={{ padding: '6px 12px', borderRadius: '6px', background: selectedLayerId === layer.id ? 'var(--accent)' : '#1f2937', color: selectedLayerId === layer.id ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', border: '1px solid #334155', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div key={layer.id} onClick={() => selectLayer(layer.id)} className={`zs-layer-chip ${selectedLayerId === layer.id ? 'active' : ''}`}>
             {layer.type === 'text' && <Type size={10} />} {layer.type === 'rect' && <Square size={10} />} {layer.type === 'image' && '🖼️'} {layer.type === 'video' && '🎥'} {layer.type === 'audio' && '🎵'} {layer.type === 'circle' && '⭕'}
             {layer.type === 'text' ? layer.text.substring(0, 10) : layer.type}
           </div>
@@ -275,45 +313,45 @@ export default function StudioEditor() {
       </div>
 
       {selectedLayer && (
-        <div style={{ position: 'absolute', bottom: '50px', left: 0, right: 0, background: '#1f2937', borderTop: '1px solid #334155', padding: '16px', zIndex: 20, boxShadow: '0 -10px 20px rgba(0,0,0,0.3)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-            <span style={{ color: '#94a3b8', fontSize: '10px', textTransform: 'uppercase', fontWeight: 800 }}>Edit {selectedLayer.type}</span>
-            <div style={{ display: 'flex', gap: '12px' }}>
-              <button onClick={() => handleDuplicate(selectedLayer)} style={{ color: '#3b82f6', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><Copy size={14} /> Duplicate</button>
-              <button onClick={() => removeLayer(selectedLayer.id)} style={{ color: '#ef4444', background: 'none', border: 'none', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', cursor: 'pointer' }}><Trash2 size={14} /> Delete</button>
+        <div className="zs-properties-panel">
+          <div className="zs-panel-header">
+            <span className="zs-panel-title">Edit {selectedLayer.type}</span>
+            <div className="zs-panel-actions">
+              <button className="zs-btn-text zs-text-blue" onClick={() => handleDuplicate(selectedLayer)}><Copy size={14} /> Duplicate</button>
+              <button className="zs-btn-text zs-text-danger" onClick={() => removeLayer(selectedLayer.id)}><Trash2 size={14} /> Delete</button>
             </div>
           </div>
           
-          <div style={{ display: 'flex', gap: '12px', flexWrap: 'wrap', marginBottom: '12px' }}>
+          <div className="zs-panel-controls">
             {selectedLayer.type === 'text' && (
               <>
-                <input type="text" value={selectedLayer.text} onChange={(e) => updateLayer(selectedLayer.id, { text: e.target.value })} style={inputStyle} placeholder="Caption..." />
-                <input type="number" value={selectedLayer.fontSize} onChange={(e) => updateLayer(selectedLayer.id, { fontSize: parseInt(e.target.value) || 12 })} style={{ ...inputStyle, width: '80px' }} />
-                <select value={selectedLayer.fontFamily || 'Inter, sans-serif'} onChange={(e) => updateLayer(selectedLayer.id, { fontFamily: e.target.value })} style={selectStyle}>
+                <input type="text" value={selectedLayer.text} onChange={(e) => updateLayer(selectedLayer.id, { text: e.target.value })} className="zs-input" placeholder="Caption..." />
+                <input type="number" value={selectedLayer.fontSize} onChange={(e) => updateLayer(selectedLayer.id, { fontSize: parseInt(e.target.value) || 12 })} className="zs-input zs-input-sm" />
+                <select value={selectedLayer.fontFamily || 'Inter, sans-serif'} onChange={(e) => updateLayer(selectedLayer.id, { fontFamily: e.target.value })} className="zs-select">
                   <option value="Inter, sans-serif">Inter</option><option value="Arial, sans-serif">Arial</option><option value="Impact, sans-serif">Impact</option>
                 </select>
-                <input type="color" value={selectedLayer.fill} onChange={(e) => updateLayer(selectedLayer.id, { fill: e.target.value })} style={colorInputStyle} />
+                <input type="color" value={selectedLayer.fill} onChange={(e) => updateLayer(selectedLayer.id, { fill: e.target.value })} className="zs-color-input" />
               </>
             )}
             {selectedLayer.type === 'video' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px', width: '100%' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Scissors size={14} color="#64748b" />
-                  <select value={selectedLayer.speed || 1} onChange={(e) => updateLayer(selectedLayer.id, { speed: parseFloat(e.target.value) })} style={selectStyle}>
+              <div className="zs-control-row">
+                <div className="zs-control-group">
+                  <Scissors size={14} color="var(--zs-text-muted)" />
+                  <select value={selectedLayer.speed || 1} onChange={(e) => updateLayer(selectedLayer.id, { speed: parseFloat(e.target.value) })} className="zs-select">
                     <option value="0.5">0.5x (Slow Mo)</option><option value="1">1x (Normal)</option><option value="2">2x (Fast)</option>
                   </select>
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1 }}>
-                  <Volume2 size={14} color="#64748b" />
-                  <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: 'var(--accent)' }} />
+                <div className="zs-control-group zs-flex-1">
+                  <Volume2 size={14} color="var(--zs-text-muted)" />
+                  <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} className="zs-range" />
                 </div>
               </div>
             )}
             {selectedLayer.type === 'audio' && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', width: '100%' }}>
-                <Volume2 size={14} color="#64748b" />
-                <span style={{ fontSize: '12px', color: '#fff' }}>{selectedLayer.name}</span>
-                <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} style={{ flex: 1, accentColor: 'var(--accent)' }} />
+              <div className="zs-control-row">
+                <Volume2 size={14} color="var(--zs-text-muted)" />
+                <span className="zs-audio-name">{selectedLayer.name}</span>
+                <input type="range" min="0" max="1" step="0.1" value={selectedLayer.volume ?? 1} onChange={(e) => updateLayer(selectedLayer.id, { volume: parseFloat(e.target.value) })} className="zs-range zs-flex-1" />
               </div>
             )}
           </div>
@@ -321,23 +359,18 @@ export default function StudioEditor() {
       )}
 
       {!selectedLayer && !showFootballPanel && !showAssetPanel && (
-        <div style={{ position: 'absolute', bottom: '70px', right: '24px', display: 'flex', gap: '12px' }}>
-          <label style={{ ...fabStyle, background: '#8b5cf6', cursor: 'pointer' }}>
-            <Upload size={24} /><input type="file" accept="video/*,image/*,audio/*" onChange={handleImportMedia} style={{ display: 'none' }} />
+        <div className="zs-fab-container">
+          <label className="zs-fab zs-fab-purple">
+            <Upload size={24} /><input type="file" accept="video/*,image/*,audio/*" onChange={handleImportMedia} className="zs-hidden-file" />
           </label>
-          <button onClick={() => setShowFootballPanel(true)} style={{ ...fabStyle, background: '#3b82f6' }}><Shirt size={24} /></button>
-          <button onClick={() => setShowAssetPanel(true)} style={{ ...fabStyle, background: '#f59e0b' }}><Shapes size={24} /></button>
-          <button onClick={() => addLayer({ type: 'text', text: 'Caption', x: 400, y: 800, fontSize: 60, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' })} style={fabStyle}><Type size={24} /></button>
+          <button className="zs-fab zs-fab-blue" onClick={() => setShowFootballPanel(true)}><Shirt size={24} /></button>
+          <button className="zs-fab zs-fab-gold" onClick={() => setShowAssetPanel(true)}><Shapes size={24} /></button>
+          <button className="zs-fab" onClick={() => addLayer({ type: 'text', text: 'Caption', x: 400, y: 800, fontSize: 60, fill: '#ffffff', fontStyle: 'bold', fontFamily: 'Inter, sans-serif' })}><Type size={24} /></button>
         </div>
       )}
 
-      {showFootballPanel && <div style={{ position: 'absolute', bottom: '50px', left: 0, right: 0, height: '60vh', zIndex: 30 }}><FootballDataPanel onClose={() => setShowFootballPanel(false)} /></div>}
-      {showAssetPanel && <div style={{ position: 'absolute', bottom: '50px', left: 0, right: 0, height: '60vh', zIndex: 30 }}><AssetPanel onClose={() => setShowAssetPanel(false)} /></div>}
+      {showFootballPanel && <div className="zs-overlay-panel"><FootballDataPanel onClose={() => setShowFootballPanel(false)} /></div>}
+      {showAssetPanel && <div className="zs-overlay-panel"><AssetPanel onClose={() => setShowAssetPanel(false)} /></div>}
     </div>
   );
 }
-
-const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', fontFamily: 'inherit', flex: 1, minWidth: '120px' };
-const selectStyle = { background: '#0f172a', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '8px', fontSize: '12px', cursor: 'pointer', outline: 'none' };
-const colorInputStyle = { width: '40px', height: '40px', background: 'none', border: '1px solid #334155', borderRadius: '8px', cursor: 'pointer', padding: '2px' };
-const fabStyle = { width: '56px', height: '56px', borderRadius: '16px', background: 'var(--accent)', color: '#fff', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.3)', cursor: 'pointer' };

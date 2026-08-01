@@ -6,9 +6,6 @@ import {
 } from 'lucide-react';
 import SEO from "../components/SEO";
 
-/* ═══════════════════════════════════════════════════════════════
-   DATA & CONFIG
-   ═══════════════════════════════════════════════════════════════ */
 const COUNTRIES = [
   { code: 'ALL', name: 'Global', flag: '🌍' },
   { code: 'KE', name: 'Kenya', flag: '🇰🇪' },
@@ -37,7 +34,6 @@ const categories = [
   { key: 'free', label: 'Free / Legal', Icon: Eye },
 ];
 
-// Mock Live Match Data for the Hero (In production, map this to real fixtures)
 const LIVE_MATCH = {
   homeName: "Manchester United", homeLogo: "https://media.api-sports.io/football/teams/33.png",
   awayName: "Arsenal", awayLogo: "https://media.api-sports.io/football/teams/42.png",
@@ -53,7 +49,6 @@ const UPCOMING_MATCHES = [
   { id: 3, time: Date.now() + 1000 * 60 * 60 * 24, homeName: "Bayern", awayName: "Dortmund", league: "Bundesliga" },
 ];
 
-// Countdown Hook
 function useCountdown(targetDate) {
   const calc = () => {
     const diff = targetDate - Date.now();
@@ -73,64 +68,57 @@ function useCountdown(targetDate) {
   return time;
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   COMPONENTS
-   ═══════════════════════════════════════════════════════════════ */
 function LiveMatchHero() {
-  const [notify, setNotify] = useState(false);
   return (
-    <div className="ls-hero-card">
-      <div className="ls-hero-bg" style={{ background: `linear-gradient(135deg, ${LIVE_MATCH.league === 'Premier League' ? '#3d195b' : '#0f172a'}, var(--bg-deep))` }} />
-      
-      <div className="ls-hero-top">
-        <div className="ls-hero-league">
-          {LIVE_MATCH.leagueLogo && <img src={LIVE_MATCH.leagueLogo} alt="" />}
+    <div className="glass-card flex-col gap-16 p-20 mb-24">
+      <div className="flex-between">
+        <div className="flex-center gap-8 text-muted text-xs font-bold">
+          {LIVE_MATCH.leagueLogo && <img src={LIVE_MATCH.leagueLogo} alt="" width="16" height="16" />}
           <span>{LIVE_MATCH.league}</span>
         </div>
-        <div className="ls-hero-live-badge">
-          <span className="ls-pulse-dot" /> LIVE {LIVE_MATCH.minute}'
+        <div className="badge badge-danger">
+          <span className="zk-live-pulse-dot mr-2" /> LIVE {LIVE_MATCH.minute}'
         </div>
       </div>
 
-      <div className="ls-hero-teams">
-        <div className="ls-hero-team">
-          <img src={LIVE_MATCH.homeLogo} alt={LIVE_MATCH.homeName} />
-          <span>{LIVE_MATCH.homeName}</span>
+      <div className="flex-between gap-12">
+        <div className="flex-col items-center gap-8" style={{ width: '40%' }}>
+          <img src={LIVE_MATCH.homeLogo} alt={LIVE_MATCH.homeName} width="48" height="48" />
+          <span className="text-primary font-bold text-sm">{LIVE_MATCH.homeName}</span>
         </div>
-        <div className="ls-hero-score">
-          <span>{LIVE_MATCH.scoreHome} - {LIVE_MATCH.scoreAway}</span>
+        <div className="text-primary font-extrabold" style={{ fontSize: 'var(--fs-2xl)' }}>
+          {LIVE_MATCH.scoreHome} - {LIVE_MATCH.scoreAway}
         </div>
-        <div className="ls-hero-team">
-          <img src={LIVE_MATCH.awayLogo} alt={LIVE_MATCH.awayName} />
-          <span>{LIVE_MATCH.awayName}</span>
+        <div className="flex-col items-center gap-8" style={{ width: '40%' }}>
+          <img src={LIVE_MATCH.awayLogo} alt={LIVE_MATCH.awayName} width="48" height="48" />
+          <span className="text-primary font-bold text-sm">{LIVE_MATCH.awayName}</span>
         </div>
       </div>
 
-      <div className="ls-hero-stats">
-        <div className="ls-stat-row">
+      <div className="flex-col gap-8 mt-8">
+        <div className="flex-between text-muted text-xs font-bold">
           <span>{LIVE_MATCH.stats.possession[0]}%</span>
-          <div className="ls-stat-bar"><div style={{ width: `${LIVE_MATCH.stats.possession[0]}%`, background: '#60a5fa' }} /></div>
+          <span>POSSESSION</span>
           <span>{LIVE_MATCH.stats.possession[1]}%</span>
         </div>
-        <div className="ls-stat-row">
-          <span>{LIVE_MATCH.stats.shots[0]}</span>
-          <span style={{fontSize:'.6rem', color:'#64748b'}}>SHOTS</span>
-          <span>{LIVE_MATCH.stats.shots[1]}</span>
+        <div className="flex h-6 rounded-md overflow-hidden bg-elevated">
+          <div style={{ width: `${LIVE_MATCH.stats.possession[0]}%`, background: 'var(--accent)' }}></div>
+          <div style={{ width: `${LIVE_MATCH.stats.possession[1]}%`, background: 'var(--gold)' }}></div>
         </div>
       </div>
 
-      <div className="ls-hero-providers">
-        <span className="ls-providers-label">Available On:</span>
-        <div className="ls-providers-logos">
+      <div className="flex-col gap-8 mt-8">
+        <span className="text-muted text-xs font-bold">Available On:</span>
+        <div className="flex gap-8 flex-wrap">
           {LIVE_MATCH.providers.map(p => (
-            <div key={p.name} className="ls-provider-chip" style={{ background: `${p.color}20`, border: `1px solid ${p.color}40`, color: '#fff' }}>
+            <div key={p.name} className="badge" style={{ background: `${p.color}20`, border: `1px solid ${p.color}40`, color: 'var(--text-primary)' }}>
               {p.name}
             </div>
           ))}
         </div>
       </div>
 
-      <button className="ls-watch-guide-btn">
+      <button className="btn btn-primary w-full mt-8">
         <Play size={14} fill="#fff" /> Open Watch Guide
       </button>
     </div>
@@ -140,19 +128,19 @@ function LiveMatchHero() {
 function UpcomingMatchCard({ match }) {
   const time = useCountdown(match.time);
   return (
-    <div className="ls-upcoming-card">
-      <div className="ls-upcoming-time">
+    <div className="glass-card flex-col gap-8 p-12">
+      <div className="flex-center gap-4 text-muted text-xs font-bold">
         <Clock size={12} />
         {time.done ? 'Started' : `Starts in ${time.h}:${time.m}:${time.s}`}
       </div>
-      <div className="ls-upcoming-teams">
+      <div className="flex-center gap-8 text-primary font-bold text-sm">
         <span>{match.homeName}</span>
-        <span className="ls-vs">VS</span>
+        <span className="text-muted text-xs">VS</span>
         <span>{match.awayName}</span>
       </div>
-      <div className="ls-upcoming-footer">
-        <span className="ls-upcoming-league">{match.league}</span>
-        <button className="ls-notify-btn" onClick={(e) => { e.currentTarget.classList.toggle('on'); }}>
+      <div className="flex-between">
+        <span className="text-muted text-xs">{match.league}</span>
+        <button className="btn btn-ghost btn-sm">
           <Bell size={12} /> Notify Me
         </button>
       </div>
@@ -163,42 +151,29 @@ function UpcomingMatchCard({ match }) {
 function ServiceCard({ s, i }) {
   const isLight = s.lightText;
   return (
-    <a
-      href={s.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="ls-service-card"
-      style={{ animationDelay: `${i * 50}ms` }}
-    >
-      <div className="ls-card-accent" style={{ background: `linear-gradient(135deg, ${s.color}, ${s.color}80)` }} />
-      
-      <div className="ls-card-head">
-        <div className="ls-provider-logo" style={{ background: `linear-gradient(135deg, ${s.color}, ${s.color}40)`, color: isLight ? '#111' : '#fff' }}>
-          {s.name.slice(0, 2).toUpperCase()}
+    <a href={s.url} target="_blank" rel="noopener noreferrer" className="glass-card flex-col gap-12 p-16 anim-fade-up" style={{ animationDelay: `${i * 50}ms`, textDecoration: 'none' }}>
+      <div className="flex-between">
+        <div className="flex-center gap-8 font-bold text-primary">
+          <div className="flex-center" style={{ width: '32px', height: '32px', borderRadius: 'var(--r-8)', background: `linear-gradient(135deg, ${s.color}, ${s.color}40)`, color: isLight ? '#111' : '#fff', fontSize: '10px' }}>
+            {s.name.slice(0, 2).toUpperCase()}
+          </div>
+          {s.name}
         </div>
-        <div className="ls-quality-badges">
-          {s.quality.map(q => <span key={q} className="ls-q-badge">{q}</span>)}
-          {s.tier === 'FREE' && <span className="ls-tier-free">FREE</span>}
-          {s.tier === 'PREMIUM' && <span className="ls-tier-premium"><Crown size={8} /> PREMIUM</span>}
+        <div className="flex gap-4">
+          {s.quality.map(q => <span key={q} className="badge badge-muted">{q}</span>)}
+          {s.tier === 'FREE' && <span className="badge badge-primary">FREE</span>}
+          {s.tier === 'PREMIUM' && <span className="badge badge-gold"><Crown size={8} /> PREMIUM</span>}
         </div>
       </div>
-
-      <h3 className="ls-card-title">{s.name}</h3>
-      <p className="ls-card-desc">{s.description}</p>
-
-      <div className="ls-card-footer">
-        <span className="ls-card-cats">{s.competitions}</span>
-        <span className="ls-visit-btn">
-          Visit <ExternalLink size={12} />
-        </span>
+      <p className="text-muted text-sm">{s.description}</p>
+      <div className="flex-between mt-8 pt-8" style={{ borderTop: '1px solid var(--border)' }}>
+        <span className="text-muted text-xs">{s.competitions}</span>
+        <span className="text-primary font-bold text-xs flex-center gap-4">Visit <ExternalLink size={12} /></span>
       </div>
     </a>
   );
 }
 
-/* ═══════════════════════════════════════════════════════════════
-   MAIN PAGE
-   ═══════════════════════════════════════════════════════════════ */
 export default function LiveStream() {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState('all');
@@ -218,7 +193,7 @@ export default function LiveStream() {
   const clearAll = useCallback(() => { setSearch(''); setActiveCategory('all'); setSelectedCountry('ALL'); }, []);
 
   return (
-    <div className="ls-page">
+    <div className="zoka-page">
       <SEO
         title="Live Football Matches, TV Guide & Streaming Information"
         description="Follow live football matches, kickoff times, live scores, and official TV and streaming information for major leagues and competitions on ZOKASCORE."
@@ -227,58 +202,37 @@ export default function LiveStream() {
         breadcrumbs={[{ name: "Home", path: "/" }, { name: "Live Stream", path: "/livestream" }]}
       />
 
-      {/* Header */}
-      <div className="ls-header">
-        <div className="ls-header-inner">
-          <div className="ls-logo-btn" onClick={() => window.location.href = '/'}>
-            <div className="ls-logo-icon"><Tv size={16} /></div>
-            <span>Live Streams</span>
+      <div className="zoka-wrap">
+        <div className="flex-col items-center gap-8 mb-24 mt-16">
+          <div className="glass-card flex-center mb-12" style={{ width: '48px', height: '48px', borderRadius: 'var(--r-12)', background: 'rgba(var(--primary-rgb), 0.1)' }}>
+            <Tv size={24} className="text-primary" />
           </div>
-          <div className="ls-header-right">
-            <MonitorSmartphone size={15} /> Official Partners
-          </div>
-        </div>
-      </div>
-
-      <div className="ls-container">
-        
-        {/* Title */}
-        <div className="ls-title-wrap">
-          <div className="ls-title-icon"><Tv size={28} /></div>
-          <h1>Where to Watch Live Football</h1>
-          <p>Official broadcasters and legal streaming platforms for football worldwide</p>
+          <h1 className="text-primary font-extrabold">Where to Watch Live Football</h1>
+          <p className="text-muted text-sm">Official broadcasters and legal streaming platforms for football worldwide</p>
         </div>
 
-        {/* Hero Live Match */}
         <LiveMatchHero />
 
-        {/* Country Selector */}
-        <div className="ls-country-wrap">
-          <Globe size={16} className="ls-country-globe" />
-          <div className="ls-country-scroll">
+        <div className="glass-card flex-center gap-12 p-12 mb-24">
+          <Globe size={16} className="text-muted" />
+          <div className="flex gap-8 overflow-x-auto">
             {COUNTRIES.map(c => (
-              <button 
-                key={c.code} 
-                className={`ls-country-btn ${selectedCountry === c.code ? 'on' : ''}`}
-                onClick={() => setSelectedCountry(c.code)}
-              >
+              <button key={c.code} className={`btn btn-sm ${selectedCountry === c.code ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedCountry(c.code)}>
                 <span>{c.flag}</span> {c.name}
               </button>
             ))}
           </div>
         </div>
 
-        {/* Upcoming Schedule */}
-        <div className="ls-section-head">
+        <div className="flex-center gap-8 text-muted text-xs font-bold uppercase mb-12">
           <Clock size={16} /> <span>Today's Schedule</span>
         </div>
-        <div className="ls-upcoming-grid">
+        <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
           {UPCOMING_MATCHES.map(m => <UpcomingMatchCard key={m.id} match={m} />)}
         </div>
 
-        {/* Search */}
-        <div className="ls-search-wrap">
-          <Search size={18} className="ls-search-icon" style={{ color: searchFocused ? 'var(--accent)' : '#64748b' }} />
+        <div className={`glass-card flex-center gap-12 p-12 mb-16 ${searchFocused ? 'border-primary' : ''}`}>
+          <Search size={18} style={{ color: searchFocused ? 'var(--primary)' : 'var(--text-muted)' }} />
           <input
             type="text"
             placeholder="Search provider, league, or channel..."
@@ -286,67 +240,41 @@ export default function LiveStream() {
             onChange={e => setSearch(e.target.value)}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
-            className="ls-search-input"
+            className="flex-1 bg-transparent border-none outline-none text-primary text-sm"
           />
-          {search && <button onClick={() => setSearch('')} className="ls-search-clear"><X size={14} /></button>}
+          {search && <button onClick={() => setSearch('')} className="btn-icon-sm"><X size={14} /></button>}
         </div>
 
-        {/* Filter Tabs */}
-        <div className="ls-filter-tabs">
+        <div className="flex gap-8 mb-24 overflow-x-auto">
           {categories.map(cat => (
-            <button
-              key={cat.key}
-              onClick={() => setActiveCategory(cat.key)}
-              className={`ls-filter-btn ${activeCategory === cat.key ? 'on' : ''}`}
-            >
-              <cat.Icon size={13} />
-              {cat.label}
+            <button key={cat.key} onClick={() => setActiveCategory(cat.key)} className={`btn btn-sm ${activeCategory === cat.key ? 'btn-primary' : 'btn-secondary'}`}>
+              <cat.Icon size={13} /> {cat.label}
             </button>
           ))}
         </div>
 
-        {/* Results Count */}
-        <div className="ls-results-bar">
-          <span>Showing <strong>{filteredServices.length}</strong> services</span>
+        <div className="flex-between mb-16 text-muted text-xs">
+          <span>Showing <strong className="text-primary">{filteredServices.length}</strong> services</span>
           {(search || activeCategory !== 'all' || selectedCountry !== 'ALL') && (
-            <button onClick={clearAll} className="ls-clear-btn"><X size={12} /> Clear filters</button>
+            <button onClick={clearAll} className="btn btn-ghost btn-sm"><X size={12} /> Clear filters</button>
           )}
         </div>
 
-        {/* Services Grid */}
         {filteredServices.length === 0 ? (
-          <div className="ls-empty-state">
-            <Wifi size={24} />
-            <h3>No services found</h3>
-            <p>Try adjusting your search or country filter</p>
+          <div className="glass-card flex-col items-center gap-12 p-32 text-center">
+            <Wifi size={24} className="text-muted" />
+            <h3 className="text-primary font-bold">No services found</h3>
+            <p className="text-muted text-sm">Try adjusting your search or country filter</p>
           </div>
         ) : (
-          <div className="ls-services-grid">
+          <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))' }}>
             {filteredServices.map((s, i) => <ServiceCard key={s.id} s={s} i={i} />)}
           </div>
         )}
 
-        {/* Partner Marquee */}
-        <div className="ls-marquee-wrap">
-          <div className="ls-marquee-track">
-            {[...streamingServices, ...streamingServices].map((s, i) => (
-              <div key={i} className="ls-marquee-item" style={{ color: s.color }}>
-                <Signal size={12} /> {s.name}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Disclaimer */}
-        <div className="ls-disclaimer">
-          <Info size={16} className="ls-disclaimer-icon" />
+        <div className="glass-card flex-center gap-12 p-16 mt-24 text-muted text-xs">
+          <Info size={16} className="text-primary" />
           <p><strong>Regional availability:</strong> Streaming rights vary by country. These links direct to official platforms where you can find accurate local broadcasting information. We do not host or link to unofficial streams.</p>
-        </div>
-
-        {/* Footer */}
-        <div className="ls-footer">
-          <p>Football never sleeps. Official partners only. Updated every minute.</p>
-          <span>Powered by ZOKASCORE Intelligence</span>
         </div>
       </div>
     </div>

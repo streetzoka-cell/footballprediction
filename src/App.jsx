@@ -1,7 +1,6 @@
 import { Suspense, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 
-// ★ FIX: Corrected import paths to point to the 'app' and 'components' folders
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
 import ScrollToTop from "./app/ScrollToTop";
@@ -11,10 +10,9 @@ import Footer from "./components/Footer";
 import StatusCenter from "./components/StatusCenter";
 
 import SEO from "./components/SEO";
-import { organizationSchema, websiteSchema } from "./utils/schema";
+import { organizationSchema, websiteSchema } from "./utils/seoBuilder";
 import ErrorBoundary from "./components/ErrorBoundary";
 
-// Core Managers
 import { ToastProvider } from "./core/ToastManager";
 import ConnectionManager from "./core/ConnectionManager";
 import PwaManager from "./core/PwaManager";
@@ -24,33 +22,27 @@ import { initApp } from "./utils/init";
 import { initAnalytics } from "./utils/analytics";
 
 const PageLoader = () => (
-  <div className="flex flex-col items-center justify-center min-h-[70vh] gap-6">
-    <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-400 to-emerald-600 flex items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.3)] animate-bounce">
-      <img src="/icons/icon-192.png" width="48" height="48" alt="ZOKASCORE Logo" className="rounded-xl" />
-    </div>
-    <div className="w-8 h-8 border-4 border-white/10 border-t-emerald-500 rounded-full animate-spin" />
+  <div className="flex-center" style={{ minHeight: "70vh", gap: "var(--sp-16)" }}>
+    <div className="skeleton-card" style={{ width: 200, height: 20 }} />
+    <div className="skeleton-card" style={{ width: 280, height: 16 }} />
+    <div className="skeleton-card" style={{ width: 160, height: 16 }} />
   </div>
 );
 
 function AppShell() {
   const location = useLocation();
 
-  useEffect(() => {
-    initApp();
-    initAnalytics();
-  }, []);
+  useEffect(() => { initApp(); initAnalytics(); }, []);
 
-  // Remove static loader on mount
   useEffect(() => {
-    const staticLoader = document.getElementById('static-loader');
-    if (staticLoader) {
-      staticLoader.style.transition = 'opacity 0.3s ease';
-      staticLoader.style.opacity = '0';
-      setTimeout(() => staticLoader.remove(), 300);
+    const loader = document.getElementById("static-loader");
+    if (loader) {
+      loader.style.transition = 'opacity 0.3s ease';
+      loader.style.opacity = '0';
+      setTimeout(() => loader.remove(), 300);
     }
   }, []);
 
-  // Dynamic Analytics Tracking
   useEffect(() => {
     if (typeof window.gtag === "function") {
       window.gtag("event", "page_view", {
@@ -62,37 +54,25 @@ function AppShell() {
 
   return (
     <>
-      <SEO 
-        title="Football Predictions, Live Scores & Fixtures | ZOKASCORE"
-        description="Follow football fixtures, live scores, predictions, league tables, match statistics, and football news from competitions around the world on ZOKASCORE."
-        keywords="football predictions, live scores, football fixtures, league tables, football statistics, premier league, champions league, la liga, ZOKASCORE"
-        path="/"
-        robots="index,follow"
-        breadcrumbs={[{ name: "Home", path: "/" }]}
-        structuredData={[organizationSchema(), websiteSchema()]}
-      />
-      
+      <SEO title="Football Predictions, Live Scores & Fixtures" path="/" structuredData={[organizationSchema(), websiteSchema()]} />
       <ScrollToTop />
-
-      {/* Mount Core Managers */}
       <ConnectionManager />
       <PwaManager />
       <KeyboardManager />
 
-      <div className="flex flex-col min-h-screen bg-gradient-to-b from-[#07141f] to-[#06121b] overflow-x-hidden">
+      <div className="app-layout flex-col min-h-screen">
         <Navbar />
-        <Breadcrumbs />
-
-        <main className="flex-1 relative w-full overflow-x-hidden">
-          <Suspense fallback={<PageLoader />}>
-            <AppRoutes />
-          </Suspense>
-        </main>
-
-        <Footer />
+        <div className="main-content flex-1 w-full overflow-x-hidden pb-64 md:pb-0">
+          <Breadcrumbs />
+          <main>
+            <Suspense fallback={<PageLoader />}>
+              <AppRoutes />
+            </Suspense>
+          </main>
+          <Footer />
+        </div>
       </div>
 
-      {/* Global UI Elements */}
       <StatusCenter />
     </>
   );

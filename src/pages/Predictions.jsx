@@ -17,11 +17,7 @@ import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote } 
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
-
-// ★ NEW: Global Toast Manager
 import { useToast } from '../core/ToastManager';
-
-// Centralized imports
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
 import { buildTeamRoute, buildLeagueRoute, buildMatchRoute } from '../utils/routes';
 import EmptyState from '../components/EmptyState';
@@ -32,7 +28,6 @@ const ZOKA_VISIBLE_COUNT = 5;
 const SMOOTH = 'cubic-bezier(0.22, 1, 0.36, 1)';
 const SPRING = 'cubic-bezier(0.34, 1.56, 0.64, 1)';
 
-// ★ ADDICTIVE FEATURE: Pro Jokes & Quotes
 const ZOKA_JOKES = [
   "Why did the football coach go to the bank? To get his quarterback! 🏦",
   "Why don't football stadiums ever get hot? Because there are too many fans! 🥶",
@@ -119,7 +114,7 @@ function parseKickoffTime(kickoff) {
   }
 }
 
-const modalStyle = { background: 'rgba(15,23,42,0.95)', border: '1.5px solid rgba(255,255,255,0.1)', borderRadius: 16, padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `v21-pop .3s ${SPRING} both` };
+const modalStyle = { background: 'var(--bg-glass-strong)', border: '1.5px solid var(--glass-border)', borderRadius: 'var(--r-16)', padding: '24px 20px', maxWidth: 340, width: '100%', textAlign: 'center', animation: `zk-pop .3s ${SPRING} both` };
 
 const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   const [d, setD] = useState(0);
@@ -140,7 +135,7 @@ const AnimNum = memo(function AnimNum({ value, duration = 400, delay = 0 }) {
   return <>{d}</>;
 });
 
-const Skeleton = memo(function Skeleton() { return <div className="v21-skel" />; });
+const Skeleton = memo(function Skeleton() { return <div className="skeleton" style={{ height: 100, borderRadius: 'var(--r-12)', marginBottom: 'var(--sp-8)' }} />; });
 
 const ResultBadge = memo(function ResultBadge({ result, isCalculating }) {
   if (isCalculating) return <span className="v21-bdg pn"><Clock size={8} /> Calc...</span>;
@@ -152,11 +147,11 @@ const ResultBadge = memo(function ResultBadge({ result, isCalculating }) {
 
 const LoginModal = memo(function LoginModal({ onClose, nav }) {
   return (
-    <div onClick={onClose} className="v21-overlay" style={{ zIndex: 9999 }}>
+    <div onClick={onClose} className="v21-overlay" style={{ zIndex: 9999, alignItems: 'center' }}>
       <div onClick={e => e.stopPropagation()} style={modalStyle}>
-        <div style={{ width: 48, height: 48, borderRadius: 12, background: 'rgba(16,185,129,.08)', border: '1.5px solid rgba(16,185,129,.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--accent)' }}><LogIn size={22} /></div>
-        <div style={{ fontSize: '1rem', fontWeight: 900, color: '#fff', marginBottom: 6 }}>Login Required</div>
-        <div style={{ fontSize: '.8rem', color: '#94a3b8', marginBottom: 18, lineHeight: 1.5 }}>Sign in to make predictions and compete on the leaderboard.</div>
+        <div style={{ width: 48, height: 48, borderRadius: 'var(--r-12)', background: 'rgba(var(--primary-rgb),.08)', border: '1.5px solid rgba(var(--primary-rgb),.12)', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 12px', color: 'var(--primary)' }}><LogIn size={22} /></div>
+        <div style={{ fontSize: '1rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 6 }}>Login Required</div>
+        <div style={{ fontSize: '.8rem', color: 'var(--text-muted)', marginBottom: 18, lineHeight: 1.5 }}>Sign in to make predictions and compete on the leaderboard.</div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={onClose} className="v21-b v21-bgh" style={{ flex: 1, minHeight: 44 }}>Cancel</button>
           <button onClick={() => { onClose(); nav('/login'); }} className="v21-b v21-bp" style={{ flex: 1, minHeight: 44 }}>Log In</button>
@@ -204,7 +199,7 @@ const DateStrip = memo(function DateStrip({ date, onChange, dates, hasDataMap })
             <span className="dn">{dateDayName(d)}</span>
             <span className="dd">{dateDayNum(d)}</span>
             <span className="dm">{dateMonth(d)}</span>
-            {hasData && !isActive && <span style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: '50%', background: 'var(--accent)', opacity: .5 }} />}
+            {hasData && !isActive && <span style={{ position: 'absolute', bottom: 3, width: 4, height: 4, borderRadius: '50%', background: 'var(--primary)', opacity: .5 }} />}
           </button>
         );
       })}
@@ -259,11 +254,11 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
   const awayId = pick.awayTeam?.id || pick.awayTeamId;
   const matchLink = buildMatchRoute(mid, homeName, awayName);
 
-  let leftColor = 'rgba(245,197,66,.12)';
-  if (res?.resultType === 'exact') leftColor = 'var(--accent)';
-  else if (res?.resultType === 'result') leftColor = '#f5c542';
-  else if (res?.resultType === 'miss') leftColor = '#ef4444';
-  else if (isFin) leftColor = 'rgba(16,185,129,.2)';
+  let leftColor = 'rgba(var(--gold-rgb),.12)';
+  if (res?.resultType === 'exact') leftColor = 'var(--primary)';
+  else if (res?.resultType === 'result') leftColor = 'var(--gold)';
+  else if (res?.resultType === 'miss') leftColor = 'var(--danger)';
+  else if (isFin) leftColor = 'rgba(var(--primary-rgb),.2)';
 
   const cardCls = `v21-mc zoka${!isFin && !isLive ? ' pending' : ''}${isLive ? ' live' : ''}${isFin ? ' finished' : ''}`;
 
@@ -275,7 +270,7 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
             {pick.league?.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
             <span>{leagueName}</span>
           </div>
-          <span className="v21-st" style={{ color: isFin ? 'var(--accent)' : isLive ? '#ef4444' : '#94a3b8', background: isFin ? 'rgba(16,185,129,.08)' : isLive ? 'rgba(239,68,68,.1)' : 'rgba(255,255,255,.04)' }}>
+          <span className="v21-st" style={{ color: isFin ? 'var(--primary)' : isLive ? 'var(--danger)' : 'var(--text-muted)', background: isFin ? 'rgba(var(--primary-rgb),.08)' : isLive ? 'rgba(var(--danger-rgb),.1)' : 'var(--bg-elevated)' }}>
             {isFin ? 'FT' : isLive ? (pick.minute || 'LIVE') : kickoff}
           </span>
         </div>
@@ -286,21 +281,21 @@ const ZokaPickCard = memo(function ZokaPickCard({ pick, index, voteStats, userVo
           </div>
           {isFin && pick.homeScore != null ? (
             <div className="v21-sb ft">
-              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pick.homeScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--primary)' }}>{pick.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pick.awayScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--primary)' }}>{pick.awayScore}</span>
             </div>
           ) : isLive && pick.homeScore != null ? (
             <div className="v21-sb live">
-              <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.homeScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--danger)' }}>{pick.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: '#ef4444' }}>{pick.awayScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--danger)' }}>{pick.awayScore}</span>
             </div>
           ) : (
             <div className="v21-sb">
-              <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.home ?? '?'}</span>
+              <span className="v21-sn" style={{ color: 'var(--gold)' }}>{pick.adminPick?.home ?? '?'}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: '#f5c542' }}>{pick.adminPick?.away ?? '?'}</span>
+              <span className="v21-sn" style={{ color: 'var(--gold)' }}>{pick.adminPick?.away ?? '?'}</span>
             </div>
           )}
           <div className="v21-te aw">
@@ -379,14 +374,14 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const drawPct = totalVotes > 0 ? Math.round(((communityStats?.draw || 0) / totalVotes) * 100) : 0;
   const awayPct = totalVotes > 0 ? Math.round(((communityStats?.away || 0) / totalVotes) * 100) : 0;
 
-  let leftColor = 'rgba(255,255,255,0.06)';
-  if (isResolved && effectiveResult?.resultType === 'exact') leftColor = 'var(--accent)';
-  else if (isResolved && effectiveResult?.resultType === 'result') leftColor = '#f5c542';
-  else if (isResolved && effectiveResult?.resultType === 'miss') leftColor = '#ef4444';
-  else if (isFin) leftColor = 'rgba(16,185,129,.2)';
-  else if (isLive) leftColor = 'rgba(239,68,68,.3)';
-  else if (hasPred) leftColor = '#60a5fa';
-  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90) leftColor = 'rgba(245,197,36,.3)';
+  let leftColor = 'var(--bg-elevated)';
+  if (isResolved && effectiveResult?.resultType === 'exact') leftColor = 'var(--primary)';
+  else if (isResolved && effectiveResult?.resultType === 'result') leftColor = 'var(--gold)';
+  else if (isResolved && effectiveResult?.resultType === 'miss') leftColor = 'var(--danger)';
+  else if (isFin) leftColor = 'rgba(var(--primary-rgb),.2)';
+  else if (isLive) leftColor = 'rgba(var(--danger-rgb),.3)';
+  else if (hasPred) leftColor = 'var(--accent)';
+  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 90) leftColor = 'rgba(var(--gold-rgb),.3)';
 
   let cardCls = 'v21-mc';
   if (isEditing) cardCls += ' editing';
@@ -396,12 +391,12 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   else if (isFin && !hasPred) cardCls += ' missed';
 
   let statusLabel = kickoff;
-  let statusColor = '#94a3b8';
-  let statusBg = 'rgba(255,255,255,.04)';
-  if (isEditing) { statusLabel = 'EDITING'; statusColor = 'var(--accent)'; statusBg = 'rgba(16,185,129,.08)'; }
-  else if (isLive) { statusLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; statusColor = '#ef4444'; statusBg = 'rgba(239,68,68,.1)'; }
-  else if (isFin) { statusLabel = 'FT'; statusColor = 'var(--accent)'; statusBg = 'rgba(16,185,129,.08)'; }
-  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 60) { statusColor = '#f59e0b'; statusBg = 'rgba(245,158,11,.08)'; }
+  let statusColor = 'var(--text-muted)';
+  let statusBg = 'var(--bg-elevated)';
+  if (isEditing) { statusLabel = 'EDITING'; statusColor = 'var(--primary)'; statusBg = 'rgba(var(--primary-rgb),.08)'; }
+  else if (isLive) { statusLabel = pred.minute != null ? `${pred.minute}'` : 'LIVE'; statusColor = 'var(--danger)'; statusBg = 'rgba(var(--danger-rgb),.1)'; }
+  else if (isFin) { statusLabel = 'FT'; statusColor = 'var(--primary)'; statusBg = 'rgba(var(--primary-rgb),.08)'; }
+  else if (lockInfo.minutesLeft != null && lockInfo.minutesLeft <= 60) { statusColor = 'var(--warning)'; statusBg = 'rgba(var(--gold-rgb),.08)'; }
 
   return (
     <div className={cardCls} style={{ borderLeft: `3px solid ${leftColor}`, animationDelay: `${index * 20}ms` }}>
@@ -421,20 +416,20 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
           {isEditing ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: 4 }} onClick={e => e.preventDefault()}>
               <ScoreStepper value={editH} onChange={onEditH} />
-              <span style={{ color: '#64748b', fontWeight: 700, fontSize: '.7rem', opacity: .3 }}>–</span>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 700, fontSize: '.7rem', opacity: .3 }}>–</span>
               <ScoreStepper value={editA} onChange={onEditA} />
             </div>
           ) : hasPred ? (
-            <div className={`v21-sb${isFin ? ' ft' : ''}`} style={!isFin ? { borderColor: 'rgba(96,165,250,.2)', background: 'rgba(96,165,250,.05)' } : {}}>
-              <span className="v21-sn" style={{ color: isFin ? 'var(--accent)' : '#60a5fa' }}>{userPred.homeScore}</span>
+            <div className={`v21-sb${isFin ? ' ft' : ''}`} style={!isFin ? { borderColor: 'rgba(var(--accent-rgb),.2)', background: 'rgba(var(--accent-rgb),.05)' } : {}}>
+              <span className="v21-sn" style={{ color: isFin ? 'var(--primary)' : 'var(--accent)' }}>{userPred.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: isFin ? 'var(--accent)' : '#60a5fa' }}>{userPred.awayScore}</span>
+              <span className="v21-sn" style={{ color: isFin ? 'var(--primary)' : 'var(--accent)' }}>{userPred.awayScore}</span>
             </div>
           ) : isFin && pred.homeScore != null ? (
             <div className="v21-sb ft">
-              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pred.homeScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--primary)' }}>{pred.homeScore}</span>
               <span className="v21-sp">–</span>
-              <span className="v21-sn" style={{ color: 'var(--accent)' }}>{pred.awayScore}</span>
+              <span className="v21-sn" style={{ color: 'var(--primary)' }}>{pred.awayScore}</span>
             </div>
           ) : (
             <div className="v21-sb"><span className="v21-vs">VS</span></div>
@@ -446,29 +441,29 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
         </div>
 
         {!isEditing && (
-          <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'rgba(255,255,255,0.03)', borderRadius: 10 }}>
+          <div className="v21-benchmark-row" style={{ display: 'flex', gap: 10, marginTop: 12, padding: '10px 12px', background: 'var(--bg-elevated)', borderRadius: 'var(--r-8)' }}>
             <div style={{ flex: 1.5 }}>
-              <div style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
-              <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: '#1e293b' }}>
-                <div style={{ width: `${homePct}%`, background: '#60a5fa' }} title={`${homePct}% Home`} />
-                <div style={{ width: `${drawPct}%`, background: '#94a3b8' }} title={`${drawPct}% Draw`} />
-                <div style={{ width: `${awayPct}%`, background: '#f5c542' }} title={`${awayPct}% Away`} />
+              <div style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700, marginBottom: 4 }}>CROWD</div>
+              <div style={{ display: 'flex', height: 6, borderRadius: 3, overflow: 'hidden', background: 'var(--bg-deep)' }}>
+                <div style={{ width: `${homePct}%`, background: 'var(--accent)' }} title={`${homePct}% Home`} />
+                <div style={{ width: `${drawPct}%`, background: 'var(--text-muted)' }} title={`${drawPct}% Draw`} />
+                <div style={{ width: `${awayPct}%`, background: 'var(--gold)' }} title={`${awayPct}% Away`} />
               </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: '#64748b', marginTop: 3 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.6rem', color: 'var(--text-muted)', marginTop: 3 }}>
                 <span>{homePct}%</span><span>{drawPct}%</span><span>{awayPct}%</span>
               </div>
             </div>
             {zokaPick && (
-              <div style={{ flex: 1, borderLeft: '1px solid rgba(255,255,255,0.06)', paddingLeft: 10 }}>
+              <div style={{ flex: 1, borderLeft: '1px solid var(--border)', paddingLeft: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 4 }}>
-                  <Star size={10} style={{ color: '#f5c542' }} />
-                  <span style={{ fontSize: '0.6rem', color: '#94a3b8', fontWeight: 700 }}>ZOKAPICK</span>
+                  <Star size={10} style={{ color: 'var(--gold)' }} />
+                  <span style={{ fontSize: '0.6rem', color: 'var(--text-muted)', fontWeight: 700 }}>ZOKAPICK</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? 'var(--accent)' : '#fff' }}>
+                  <span style={{ fontSize: '0.85rem', fontWeight: 900, color: beatZoka ? 'var(--primary)' : 'var(--text-primary)' }}>
                     {zokaHome} - {zokaAway}
                   </span>
-                  {beatZoka && <span style={{ fontSize: '0.6rem', background: 'var(--accent)', color: '#000', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
+                  {beatZoka && <span style={{ fontSize: '0.6rem', background: 'var(--primary)', color: 'var(--text-inverse)', padding: '1px 4px', borderRadius: 4, fontWeight: 800 }}>BEAT!</span>}
                 </div>
               </div>
             )}
@@ -482,7 +477,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
             {QUICK_PICKS.map((qp, qi) => (
               <button key={qi} className={`v21-qp-btn${editH === String(qp.h) && editA === String(qp.a) ? ' sel' : ''}`} onClick={() => onQuickPick(qp.h, qp.a)}>{qp.h}–{qp.a}</button>
             ))}
-            {/* ★ ADDICTIVE FEATURE: Surprise Me Lucky Dip */}
             <button className="v21-qp-btn surprise" onClick={() => onQuickPick(Math.floor(Math.random()*4), Math.floor(Math.random()*4))}>
               <Dice5 size={12} /> Surprise Me
             </button>
@@ -568,19 +562,19 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
         <div style={{ padding: '16px 18px 24px' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
             <div>
-              <div style={{ fontSize: '.95rem', fontWeight: 900, color: '#fff' }}>My Results</div>
-              <div style={{ fontSize: '.68rem', color: '#94a3b8', fontWeight: 600, marginTop: 2 }}>{dateLabel(date)}</div>
+              <div style={{ fontSize: '.95rem', fontWeight: 900, color: 'var(--text-primary)' }}>My Results</div>
+              <div style={{ fontSize: '.68rem', color: 'var(--text-muted)', fontWeight: 600, marginTop: 2 }}>{dateLabel(date)}</div>
             </div>
             <button className="v21-b v21-bgh v21-bsm" onClick={onClose}><X size={14} /></button>
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 5, marginBottom: 12 }}>
-            <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}><AnimNum value={stats.totalPts} /></div><div className="l">Points</div></div>
-            <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}><AnimNum value={stats.exact} /></div><div className="l">Exact</div></div>
-            <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={stats.result} /></div><div className="l">Result</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}><AnimNum value={stats.totalPts} /></div><div className="l">Points</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: 'var(--primary)' }}><AnimNum value={stats.exact} /></div><div className="l">Exact</div></div>
+            <div className="v21-stat"><div className="n" style={{ color: 'var(--gold)' }}><AnimNum value={stats.result} /></div><div className="l">Result</div></div>
           </div>
           {stats.predicted > 0 && (
             <div className="v21-progress" style={{ marginBottom: 12 }}>
-              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((stats.predicted - stats.pending) / stats.predicted) * 100}%`, background: stats.allResolved ? 'var(--accent)' : 'linear-gradient(90deg,var(--accent),#34d399)' }} /></div>
+              <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((stats.predicted - stats.pending) / stats.predicted) * 100}%`, background: stats.allResolved ? 'var(--primary)' : 'linear-gradient(90deg,var(--primary),var(--primary-dim))' }} /></div>
               <div className="v21-progress-labels"><span>{stats.predicted} predicted</span><span>{stats.allResolved ? '✓ Complete' : `${stats.pending} pending`}</span></div>
             </div>
           )}
@@ -595,14 +589,14 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
             const rType = res?.resultType;
             const matchLink = buildMatchRoute(p.matchId, p.homeTeam?.name || 'Home', p.awayTeam?.name || 'Away');
             return (
-              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--accent)' : rType === 'result' ? '3px solid #f5c542' : rType === 'miss' ? '3px solid #ef4444' : '3px solid rgba(255,255,255,0.06)', textDecoration: 'none', color: 'inherit' }}>
+              <Link to={matchLink} key={p.id || i} className="v21-res-row" style={{ animationDelay: `${i * 20}ms`, borderLeft: rType === 'exact' ? '3px solid var(--primary)' : rType === 'result' ? '3px solid var(--gold)' : rType === 'miss' ? '3px solid var(--danger)' : '3px solid var(--border)', textDecoration: 'none', color: 'inherit' }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: '.72rem', fontWeight: 800, color: '#fff', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '.72rem', fontWeight: 800, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {typeof p.homeTeam === 'object' ? (p.homeTeam?.shortName || p.homeTeam?.name || 'Home') : (p.homeTeam || 'Home')} vs {typeof p.awayTeam === 'object' ? (p.awayTeam?.shortName || p.awayTeam?.name || 'Away') : (p.awayTeam || 'Away')}
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 5, flexShrink: 0 }}>
-                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: '#60a5fa', fontSize: '.78rem', background: 'rgba(96,165,250,.06)', padding: '2px 6px', borderRadius: 5 }}>{up.homeScore}-{up.awayScore}</span>
+                  <span style={{ fontFamily: 'var(--font-display)', fontWeight: 800, color: 'var(--accent)', fontSize: '.78rem', background: 'rgba(var(--accent-rgb),.06)', padding: '2px 6px', borderRadius: 5 }}>{up.homeScore}-{up.awayScore}</span>
                   {rType && rType !== 'pending' && <span className={`v21-bdg ${rType === 'exact' ? 'ex' : rType === 'result' ? 'rs' : 'ms'}`}>+{res.points || 0}</span>}
                 </div>
               </Link>
@@ -613,9 +607,9 @@ const ResultsOverlay = memo(function ResultsOverlay({ date, preds = [], userPred
           )}
           {stats.allResolved && (
             <div className="v21-rank" style={{ marginTop: 14, textAlign: 'center' }}>
-              <Trophy size={22} style={{ color: 'var(--accent)', marginBottom: 6 }} />
-              <div style={{ fontSize: '.88rem', fontWeight: 900, color: '#fff', marginBottom: 3 }}>All Results In!</div>
-              <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: '#a855f7' }}>{stats.totalPts} pts</strong> · {stats.accuracy}% accuracy</div>
+              <Trophy size={22} style={{ color: 'var(--primary)', marginBottom: 6 }} />
+              <div style={{ fontSize: '.88rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 3 }}>All Results In!</div>
+              <div style={{ fontSize: '.76rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 12 }}>You scored <strong style={{ color: 'var(--accent)' }}>{stats.totalPts} pts</strong> · {stats.accuracy}% accuracy</div>
               <button className="v21-b v21-bp" onClick={() => { onClose(); nav('/leaderboard'); }}>View Leaderboard <ArrowRight size={13} /></button>
             </div>
           )}
@@ -630,7 +624,7 @@ export default function Predictions() {
   const nav = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
-  const toast = useToast(); // ★ NEW: Global Toast hook
+  const toast = useToast();
   
   const uid = currentUser?.uid;
   const loggedIn = !!uid;
@@ -639,7 +633,7 @@ export default function Predictions() {
 
   const [selDate, setSelDate] = useState(todayStr());
   const [now, setNow] = useState(Date.now());
-  const [copyToast, setCopyToast] = useState(false); // Kept for immediate clipboard UI feedback
+  const [copyToast, setCopyToast] = useState(false);
   const [filter, setFilter] = useState('all');
   const [showLogin, setShowLogin] = useState(false);
   const [showResults, setShowResults] = useState(false);
@@ -651,7 +645,6 @@ export default function Predictions() {
   const [votingId, setVotingId] = useState(null);
   const [currentUserVotes, setCurrentUserVotes] = useState({});
   
-  // ★ ADDICTIVE FEATURE: Joke State
   const [joke, setJoke] = useState(getJoke());
   
   const mountedRef = useRef(true);
@@ -716,16 +709,15 @@ export default function Predictions() {
 
   const myDayStats = useMemo(() => calculateUserStats(Object.values(ctxUserPreds), mergedFeatured, officialResults || []) || { pts: 0, ex: 0, rs: 0, pred: 0, pn: 0, allResolved: false, accuracy: 0 }, [ctxUserPreds, mergedFeatured, officialResults]);
 
-  // ★ ADDICTIVE FEATURE: Dynamic Motivational Message
   const performanceMsg = useMemo(() => {
     if (!loggedIn) return null;
     if (myDayStats.allResolved) {
-      if (myDayStats.accuracy >= 70) return { text: "🎯 Prediction Master! You're a true football oracle.", color: 'var(--accent)' };
-      if (myDayStats.accuracy >= 40) return { text: "👍 Good job! Keep studying the form tables.", color: '#60a5fa' };
-      return { text: "😅 Tough day at the office? Tomorrow is another matchday!", color: '#f59e0b' };
+      if (myDayStats.accuracy >= 70) return { text: "🎯 Prediction Master! You're a true football oracle.", color: 'var(--primary)' };
+      if (myDayStats.accuracy >= 40) return { text: "👍 Good job! Keep studying the form tables.", color: 'var(--accent)' };
+      return { text: "😅 Tough day at the office? Tomorrow is another matchday!", color: 'var(--warning)' };
     }
-    if (myDayStats.ex >= 3) return { text: "🔥 On Fire! Three exact hits, you're unstoppable!", color: '#ef4444' };
-    if (myDayStats.pred > 0) return { text: "⚽ Matches in play. May the odds be ever in your favor!", color: '#a855f7' };
+    if (myDayStats.ex >= 3) return { text: "🔥 On Fire! Three exact hits, you're unstoppable!", color: 'var(--danger)' };
+    if (myDayStats.pred > 0) return { text: "⚽ Matches in play. May the odds be ever in your favor!", color: 'var(--accent)' };
     return null;
   }, [loggedIn, myDayStats]);
 
@@ -942,8 +934,8 @@ export default function Predictions() {
         <button className="v21-hdr-btn" onClick={() => nav('/')}><ArrowLeft size={12} /> Home</button>
         <div className="v21-hdr-title">
           <h1>
-            <span style={{ color: '#fff' }}>MATCH</span>
-            <span style={{ color: 'var(--accent)' }}>PREDICT</span>
+            <span style={{ color: 'var(--text-primary)' }}>MATCH</span>
+            <span style={{ color: 'var(--primary)' }}>PREDICT</span>
           </h1>
           <div className="sub">Predict · Compete · Win</div>
         </div>
@@ -957,14 +949,12 @@ export default function Predictions() {
       </div>
 
       <div className="v21-wrap">
-        {/* ★ ADDICTIVE FEATURE: Dynamic Joke Box */}
         <div className="v21-joke-box">
-          <Zap size={14} style={{ color: '#fbbf24', flexShrink: 0 }} />
-          <span style={{ fontSize: '.72rem', color: '#94a3b8', flex: 1 }}>{joke}</span>
+          <Zap size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+          <span style={{ fontSize: '.72rem', color: 'var(--text-muted)', flex: 1 }}>{joke}</span>
           <button onClick={() => setJoke(getJoke())} className="v21-joke-refresh"><RefreshCw size={12} /></button>
         </div>
 
-        {/* ★ ADDICTIVE FEATURE: Dynamic Performance Banner */}
         {performanceMsg && (
           <div className="v21-perf-banner" style={{ borderColor: `${performanceMsg.color}33`, color: performanceMsg.color, background: `${performanceMsg.color}11` }}>
             {performanceMsg.text}
@@ -972,26 +962,26 @@ export default function Predictions() {
         )}
 
         {loggedIn && (
-          <div style={{ marginBottom: 16, animation: `v21-fade-up .4s ${SMOOTH} both` }}>
+          <div style={{ marginBottom: 16, animation: `zk-fade-up .4s ${SMOOTH} both` }}>
             <div className="v21-stats">
-              <div className="v21-stat"><div className="n" style={{ color: '#fbbf24' }}><AnimNum value={myDayStats.pts} /></div><div className="l">Points</div></div>
-              <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}><AnimNum value={myDayStats.ex} /></div><div className="l">Exact</div></div>
-              <div className="v21-stat"><div className="n" style={{ color: '#f5c542' }}><AnimNum value={myDayStats.rs} /></div><div className="l">Results</div></div>
-              <div className="v21-stat"><div className="n" style={{ color: '#a855f7' }}>{myRank ? `#${myRank.rank}` : '—'}</div><div className="l">Rank</div></div>
+              <div className="v21-stat"><div className="n" style={{ color: 'var(--gold)' }}><AnimNum value={myDayStats.pts} /></div><div className="l">Points</div></div>
+              <div className="v21-stat"><div className="n" style={{ color: 'var(--primary)' }}><AnimNum value={myDayStats.ex} /></div><div className="l">Exact</div></div>
+              <div className="v21-stat"><div className="n" style={{ color: 'var(--gold)' }}><AnimNum value={myDayStats.rs} /></div><div className="l">Results</div></div>
+              <div className="v21-stat"><div className="n" style={{ color: 'var(--accent)' }}>{myRank ? `#${myRank.rank}` : '—'}</div><div className="l">Rank</div></div>
             </div>
             {myDayStats.pred > 0 && (
               <div className="v21-progress" style={{ marginBottom: 10 }}>
-                <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((myDayStats.pred - myDayStats.pn) / myDayStats.pred) * 100}%`, background: myDayStats.allResolved ? 'var(--accent)' : 'linear-gradient(90deg,var(--accent),#34d399)' }} /></div>
+                <div className="v21-progress-bar"><div className="v21-progress-fill" style={{ width: `${((myDayStats.pred - myDayStats.pn) / myDayStats.pred) * 100}%`, background: myDayStats.allResolved ? 'var(--primary)' : 'linear-gradient(90deg,var(--primary),var(--primary-dim))' }} /></div>
                 <div className="v21-progress-labels"><span>{myDayStats.pred} predicted · {myDayStats.accuracy}% accuracy</span><span>{myDayStats.allResolved ? '✓ Complete' : `${myDayStats.pn} pending`}</span></div>
               </div>
             )}
             {myRank && (
               <div className="v21-rank" style={{ marginTop: 10 }}>
                 <div className="v21-rank-inner">
-                  <Trophy size={18} style={{ color: '#f5c542' }} />
+                  <Trophy size={18} style={{ color: 'var(--gold)' }} />
                   <div>
-                    <div style={{ fontSize: '.76rem', fontWeight: 700, color: '#fff' }}>Rank #{myRank.rank}</div>
-                    <div style={{ fontSize: '.62rem', color: '#94a3b8', fontWeight: 600 }}>{myRank.points} pts · {myRank.accuracy}% accuracy</div>
+                    <div style={{ fontSize: '.76rem', fontWeight: 700, color: 'var(--text-primary)' }}>Rank #{myRank.rank}</div>
+                    <div style={{ fontSize: '.62rem', color: 'var(--text-muted)', fontWeight: 600 }}>{myRank.points} pts · {myRank.accuracy}% accuracy</div>
                   </div>
                   <button className="v21-rank-btn" onClick={() => nav('/leaderboard')}>Board <ChevronRight size={10} /></button>
                 </div>
@@ -1003,7 +993,7 @@ export default function Predictions() {
         {loggedIn && myDayStats.pred > 0 && (
           <div className="v21-banner">
             <div className="v21-banner-text">
-              <Trophy size={18} style={{ color: '#fbbf24', flexShrink: 0 }} />
+              <Trophy size={18} style={{ color: 'var(--gold)', flexShrink: 0 }} />
               You've predicted {myDayStats.pred} matches today! Challenge your friends to beat your score.
             </div>
             <button className="v21-banner-btn" onClick={handleBannerShare}>
@@ -1015,7 +1005,7 @@ export default function Predictions() {
         {!loggedIn && (
           <div className="v21-banner login-banner">
             <div className="v21-banner-text">
-              <Lock size={18} style={{ color: '#3b82f6', flexShrink: 0 }} />
+              <Lock size={18} style={{ color: 'var(--accent)', flexShrink: 0 }} />
               Sign in to lock in your predictions and climb the global leaderboard.
             </div>
             <Link to="/login" className="v21-banner-btn blue">
@@ -1040,10 +1030,10 @@ export default function Predictions() {
         {mergedZoka.length > 0 && (
           <div className="v21-zoka">
             <div className="v21-zoka-hd">
-              <div className="v21-zoka-icon"><Star size={14} style={{ color: '#f5c542' }} /></div>
+              <div className="v21-zoka-icon"><Star size={14} style={{ color: 'var(--gold)' }} /></div>
               <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: '.85rem', fontWeight: 900, color: '#fff' }}>Zoka Picks</div>
-                <div style={{ fontSize: '.6rem', fontWeight: 600, color: '#94a3b8', marginTop: 1 }}>
+                <div style={{ fontSize: '.85rem', fontWeight: 900, color: 'var(--text-primary)' }}>Zoka Picks</div>
+                <div style={{ fontSize: '.6rem', fontWeight: 600, color: 'var(--text-muted)', marginTop: 1 }}>
                   {mergedZoka.length} picks · Not for competition
                 </div>
               </div>
@@ -1064,7 +1054,7 @@ export default function Predictions() {
           </div>
         )}
 
-        <div style={{ animation: `v21-fade-up .3s ${SMOOTH} both` }}>
+        <div style={{ animation: `zk-fade-up .3s ${SMOOTH} both` }}>
           <div className="v21-sec">
             <div className="v21-sec-icon"><Target size={13} /></div>
             <span>Featured — Compete</span>
@@ -1111,10 +1101,10 @@ export default function Predictions() {
 
         {myDayStats.allResolved && myDayStats.pred > 0 && (
           <div className="v21-rank" style={{ marginTop: 16, textAlign: 'center' }}>
-            <Trophy size={24} style={{ color: 'var(--accent)', marginBottom: 8 }} />
-            <div style={{ fontSize: '.9rem', fontWeight: 900, color: '#fff', marginBottom: 3 }}>All Results In!</div>
-            <div style={{ fontSize: '.76rem', color: '#94a3b8', fontWeight: 600, marginBottom: 12 }}>
-              You scored <strong style={{ color: '#a855f7' }}>{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy
+            <Trophy size={24} style={{ color: 'var(--primary)', marginBottom: 8 }} />
+            <div style={{ fontSize: '.9rem', fontWeight: 900, color: 'var(--text-primary)', marginBottom: 3 }}>All Results In!</div>
+            <div style={{ fontSize: '.76rem', color: 'var(--text-muted)', fontWeight: 600, marginBottom: 12 }}>
+              You scored <strong style={{ color: 'var(--accent)' }}>{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy
             </div>
             <button className="v21-b v21-bp" onClick={() => nav('/leaderboard')}>View Leaderboard <ArrowRight size={13} /></button>
           </div>

@@ -1,9 +1,8 @@
-// src/studio/pages/WebShowcaseStudio.jsx
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  ArrowLeft, Download, Monitor, Camera, Mic, MicOff, Volume2, VolumeX, Square, Circle, 
-  Play, Pause, Loader, Trash2, Move, Film, AppWindow, Palette, Settings, X
+  ArrowLeft, Download, Monitor, Camera, Mic, MicOff, Volume2, Square, Circle, 
+  Trash2, Move, AppWindow, Palette, Settings, X
 } from 'lucide-react';
 
 const ASPECT_RATIOS = [
@@ -18,7 +17,6 @@ const CAMERA_FRAMES = [
   { id: 'neon', name: 'Neon Glow' }
 ];
 
-// WebM Duration Fixer (Prevents 30m TikTok bug & corruption)
 const fixWebmDuration = async (blob, durationMs) => {
   if (blob.type !== 'video/webm') return blob;
   const arrayBuffer = await blob.arrayBuffer();
@@ -81,7 +79,7 @@ export default function WebShowcaseStudio() {
   const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
   const [showMobileSettings, setShowMobileSettings] = useState(false);
 
-  const [aspectRatio, setAspectRatio] = useState('16:9');
+  const [aspectRatio, setAspectRatio] = useState('9:16'); // Default to TikTok mode
   const [cameraFrame, setCameraFrame] = useState('circle');
   const [bgColor, setBgColor] = useState('#0f172a');
   const [webcamSize, setWebcamSize] = useState(250);
@@ -130,7 +128,7 @@ export default function WebShowcaseStudio() {
         screenStreamRef.current = null;
       };
     } catch (err) {
-      alert("Screen share permission denied or canceled.");
+      console.warn("Screen share permission denied or canceled.");
     }
   };
 
@@ -150,7 +148,7 @@ export default function WebShowcaseStudio() {
         }
         setWebcamOn(true);
       } catch (err) {
-        alert("Webcam access denied.");
+        console.warn("Webcam access denied.");
       }
     }
   };
@@ -166,12 +164,11 @@ export default function WebShowcaseStudio() {
         micStreamRef.current = stream;
         setMicOn(true);
       } catch (err) {
-        alert("Microphone access denied.");
+        console.warn("Microphone access denied.");
       }
     }
   };
 
-  // Uninterrupted Canvas Drawing Loop using Refs
   const drawFrameRef = useRef(() => {});
   
   drawFrameRef.current = () => {
@@ -256,7 +253,6 @@ export default function WebShowcaseStudio() {
       
       ctx.restore();
 
-      // Draw Resize Handle (Bottom Right Corner)
       ctx.beginPath();
       ctx.arc(x + size, y + size, 16, 0, Math.PI * 2);
       ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
@@ -294,13 +290,11 @@ export default function WebShowcaseStudio() {
     const handleX = webcamPos.x + webcamSize;
     const handleY = webcamPos.y + webcamSize;
 
-    // 1. Check if user clicked the resize handle
     if (Math.hypot(x - handleX, y - handleY) < 30) {
       dragRef.current = { active: true, mode: 'resize' };
       return;
     }
 
-    // 2. Check if user clicked inside webcam to move it
     if (x >= webcamPos.x && x <= webcamPos.x + webcamSize && y >= webcamPos.y && y <= webcamPos.y + webcamSize) {
       dragRef.current = { active: true, mode: 'move', offsetX: x - webcamPos.x, offsetY: y - webcamPos.y };
     }
@@ -312,9 +306,8 @@ export default function WebShowcaseStudio() {
     const { x, y } = getCanvasCoords(e);
     
     if (dragRef.current.mode === 'resize') {
-      // Resize from bottom right corner
       let newSize = Math.max(x - webcamPos.x, y - webcamPos.y);
-      newSize = Math.max(80, Math.min(newSize, 600)); // Clamp size between 80px and 600px
+      newSize = Math.max(80, Math.min(newSize, 600));
       setWebcamSize(newSize);
     } else if (dragRef.current.mode === 'move') {
       let newX = Math.max(0, Math.min(x - dragRef.current.offsetX, activeRatio.w - webcamSize));
@@ -343,7 +336,6 @@ export default function WebShowcaseStudio() {
 
     const canvasStream = canvasRef.current.captureStream(30);
     mixedStreamRef.current = new MediaStream();
-    
     canvasStream.getVideoTracks().forEach(t => mixedStreamRef.current.addTrack(t));
 
     try {
@@ -351,17 +343,14 @@ export default function WebShowcaseStudio() {
       if (audioCtx.state === 'suspended') await audioCtx.resume();
       
       const audioDest = audioCtx.createMediaStreamDestination();
-      let hasAudio = false;
-
+      
       if (screenStreamRef.current && screenStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(screenStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
-        hasAudio = true;
       }
       if (micStreamRef.current && micStreamRef.current.getAudioTracks().length > 0) {
         const src = audioCtx.createMediaStreamSource(new MediaStream(micStreamRef.current.getAudioTracks()));
         src.connect(audioDest);
-        hasAudio = true;
       }
 
       const osc = audioCtx.createOscillator();
@@ -424,20 +413,18 @@ export default function WebShowcaseStudio() {
     return `${m.toString().padStart(2, '0')}:${sec.toString().padStart(2, '0')}`;
   };
 
-  const inputStyle = { background: '#1f2937', border: '1px solid #334155', borderRadius: '8px', padding: '8px 12px', color: '#fff', outline: 'none', width: '100%', fontSize: '13px' };
-  const panelStyle = { background: '#0f172a', border: '1px solid #1f2937', borderRadius: '12px', padding: '12px', display: 'flex', flexDirection: 'column', gap: '8px' };
-  const panelTitleStyle = { display: 'flex', alignItems: 'center', gap: '6px', color: '#64748b', fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', marginBottom: '4px' };
-  const topBtnStyle = { display: 'flex', alignItems: 'center', gap: '6px', background: '#1f2937', border: '1px solid #334155', color: '#fff', padding: '8px 12px', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '600' };
-  const sideBtnStyle = { width: '40px', height: '40px', borderRadius: '8px', background: '#1f2937', border: '1px solid #334155', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };
-  const mobileBtnStyle = { width: '44px', height: '44px', borderRadius: '50%', background: '#1f2937', border: '1px solid #334155', color: '#64748b', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };
-
   const renderSettings = () => (
     <>
-      <div style={panelStyle}>
-        <div style={panelTitleStyle}><AppWindow size={14} /> Aspect Ratio</div>
+      <div className="wss-panel">
+        <div className="wss-panel-title"><AppWindow size={14} /> Aspect Ratio</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {ASPECT_RATIOS.map(r => (
-            <button key={r.id} onClick={() => setAspectRatio(r.id)} style={{ flex: 1, padding: '8px', borderRadius: '6px', border: '1px solid #334155', background: aspectRatio === r.id ? 'var(--accent)' : '#1f2937', color: aspectRatio === r.id ? '#fff' : '#94a3b8', fontSize: '12px', cursor: 'pointer', fontWeight: 700 }}>
+            <button 
+              key={r.id} 
+              onClick={() => setAspectRatio(r.id)} 
+              className="wss-btn" 
+              style={{ flex: 1, background: aspectRatio === r.id ? 'var(--wss-accent)' : undefined, borderColor: aspectRatio === r.id ? 'var(--wss-accent)' : undefined }}
+            >
               {r.name}
             </button>
           ))}
@@ -445,153 +432,153 @@ export default function WebShowcaseStudio() {
       </div>
 
       {webcamOn && (
-        <div style={panelStyle}>
-          <div style={panelTitleStyle}><Camera size={14} /> Webcam Shape</div>
+        <div className="wss-panel">
+          <div className="wss-panel-title"><Camera size={14} /> Webcam Shape</div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
             {CAMERA_FRAMES.map(f => (
-              <button key={f.id} onClick={() => setCameraFrame(f.id)} style={{ padding: '6px 10px', borderRadius: '6px', border: '1px solid #334155', background: cameraFrame === f.id ? 'var(--accent)' : '#1f2937', color: cameraFrame === f.id ? '#fff' : '#94a3b8', fontSize: '11px', cursor: 'pointer' }}>
+              <button 
+                key={f.id} 
+                onClick={() => setCameraFrame(f.id)} 
+                className="wss-btn"
+                style={{ background: cameraFrame === f.id ? 'var(--wss-accent)' : undefined, borderColor: cameraFrame === f.id ? 'var(--wss-accent)' : undefined }}
+              >
                 {f.name}
               </button>
             ))}
           </div>
-          <span style={{ fontSize: '10px', color: '#64748b', display: 'flex', alignItems: 'center', gap: '4px', marginTop: '8px' }}>
-            <Move size={12} /> Drag the webcam to move. Drag the white circle at the bottom-right to resize.
+          <span className="wss-hint">
+            <Move size={12} /> Drag to move. Drag white circle to resize.
           </span>
         </div>
       )}
 
-      <div style={panelStyle}>
-        <div style={panelTitleStyle}><Palette size={14} /> Letterbox Color</div>
+      <div className="wss-panel">
+        <div className="wss-panel-title"><Palette size={14} /> Letterbox Color</div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} style={{ width: '40px', height: '38px', background: 'none', border: '1px solid #334155', borderRadius: '6px', cursor: 'pointer', padding: 0 }} />
-          <input type="text" value={bgColor} onChange={(e) => setBgColor(e.target.value)} style={inputStyle} />
+          <input type="color" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="wss-input-color" />
+          <input type="text" value={bgColor} onChange={(e) => setBgColor(e.target.value)} className="wss-input" />
         </div>
-        <span style={{ fontSize: '10px', color: '#64748b' }}>Background color shown if website doesn't fill the screen.</span>
+        <span className="wss-hint">Background shown if website doesn't fill screen.</span>
       </div>
     </>
   );
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
-      <div style={{ padding: isMobile ? '10px 12px' : '12px 16px', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', zIndex: 10, flexShrink: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <button onClick={() => navigate('/studio')} style={topBtnStyle}><ArrowLeft size={18} /></button>
-          {!isMobile && <h1 style={{ fontSize: '18px', fontWeight: 800, margin: 0 }}>Web Showcase Studio</h1>}
+    <div className="wss-container">
+      <div className="wss-header">
+        <div className="wss-header-left">
+          <button onClick={() => navigate('/studio')} className="wss-btn wss-btn-icon"><ArrowLeft size={18} /></button>
+          <h1 className="wss-title">Web Showcase Studio</h1>
         </div>
         
-        <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+        <div className="wss-header-right">
           {isRecording && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ef4444', fontWeight: 700, fontSize: '12px' }}>
+            <div className="wss-recording-badge">
               <Circle size={10} fill="#ef4444" /> {formatTime(elapsedTime)}
             </div>
           )}
           
           {recordedUrl ? (
             <>
-              <button onClick={discardRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444', padding: isMobile ? '6px' : '8px 12px' }}>
+              <button onClick={discardRecording} className="wss-btn wss-btn-danger">
                 <Trash2 size={16} /> {!isMobile && 'Discard'}
               </button>
-              <a href={recordedUrl} download={`web_showcase.${exportExt}`} style={{ ...topBtnStyle, background: 'var(--accent)', borderColor: 'var(--accent)', textDecoration: 'none', padding: isMobile ? '6px' : '8px 12px' }}>
+              <a href={recordedUrl} download={`web_showcase.${exportExt}`} className="wss-btn wss-btn-accent" style={{ textDecoration: 'none' }}>
                 <Download size={16} /> {!isMobile && 'Download'}
               </a>
             </>
           ) : isRecording ? (
-            <button onClick={stopRecording} style={{ ...topBtnStyle, background: '#ef4444', borderColor: '#ef4444', padding: isMobile ? '6px 10px' : '8px 12px' }}>
+            <button onClick={stopRecording} className="wss-btn wss-btn-danger">
               <Square size={16} fill="#fff" /> Stop
             </button>
           ) : (
-            <button onClick={startRecording} disabled={!screenReady} style={{ ...topBtnStyle, background: 'var(--accent)', borderColor: 'var(--accent)', opacity: !screenReady ? 0.5 : 1, padding: isMobile ? '6px 10px' : '8px 12px' }}>
+            <button onClick={startRecording} disabled={!screenReady} className="wss-btn wss-btn-accent">
               <Circle size={16} fill="#fff" /> Rec
             </button>
           )}
         </div>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {!isMobile && (
-          <div style={{ width: '60px', background: '#111827', borderRight: '1px solid #1f2937', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px 0', gap: '16px' }}>
-            <button onClick={startScreenShare} style={{...sideBtnStyle, color: screenReady ? 'var(--accent)' : '#64748b'}} title="Share Screen / Tab"><Monitor size={20} /></button>
-            <button onClick={toggleMic} style={{...sideBtnStyle, color: micOn ? 'var(--accent)' : '#64748b'}} title="Toggle Microphone">
-              {micOn ? <Mic size={20} /> : <MicOff size={20} />}
-            </button>
-            <button onClick={toggleWebcam} style={{...sideBtnStyle, color: webcamOn ? 'var(--accent)' : '#64748b'}} title="Toggle Webcam"><Camera size={20} /></button>
-          </div>
-        )}
+      <div className="wss-main">
+        <div className="wss-sidebar">
+          <button onClick={startScreenShare} className="wss-btn wss-btn-icon" style={{ color: screenReady ? 'var(--wss-accent)' : undefined }} title="Share Screen"><Monitor size={20} /></button>
+          <button onClick={toggleMic} className="wss-btn wss-btn-icon" style={{ color: micOn ? 'var(--wss-accent)' : undefined }} title="Toggle Microphone">
+            {micOn ? <Mic size={20} /> : <MicOff size={20} />}
+          </button>
+          <button onClick={toggleWebcam} className="wss-btn wss-btn-icon" style={{ color: webcamOn ? 'var(--wss-accent)' : undefined }} title="Toggle Webcam"><Camera size={20} /></button>
+        </div>
 
-        <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: isMobile ? '10px' : '20px', background: '#000', minHeight: 0 }}>
+        <div className="wss-canvas-area">
           <div 
-            style={{ position: 'relative', height: '100%', aspectRatio: activeRatio.id.replace(':', ' / '), borderRadius: '12px', overflow: 'hidden', border: '2px solid #1f2937', touchAction: 'none', boxShadow: '0 0 40px rgba(0,0,0,0.5)', cursor: webcamOn ? 'move' : 'default' }}
-            onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
-            onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}
+            className="wss-canvas-wrap"
+            data-ratio={aspectRatio}
+            onMouseDown={handlePointerDown} 
+            onMouseMove={handlePointerMove} 
+            onMouseUp={handlePointerUp} 
+            onMouseLeave={handlePointerUp}
+            onTouchStart={handlePointerDown} 
+            onTouchMove={handlePointerMove} 
+            onTouchEnd={handlePointerUp}
           >
-            <canvas ref={canvasRef} style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            <canvas ref={canvasRef} className="wss-canvas" />
             
             {!screenReady && !recordedUrl && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#111', color: '#64748b', cursor: 'pointer', gap: '12px', padding: '20px', textAlign: 'center' }} onClick={startScreenShare}>
+              <div className="wss-canvas-empty" onClick={startScreenShare}>
                 <Monitor size={48} />
-                <p style={{ fontWeight: 700, fontSize: '16px' }}>Tap to Share Screen</p>
-                <p style={{ fontSize: '12px', opacity: 0.7 }}>(Select a Tab or Entire Screen)</p>
+                <p>Tap to Share Screen</p>
+                <span>(Select a Tab or Entire Screen)</span>
               </div>
             )}
 
             {recordedUrl && (
-              <video src={recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'contain', background: '#000' }} />
+              <video src={recordedUrl} controls autoPlay loop className="wss-preview-video" />
             )}
           </div>
         </div>
 
-        {!isMobile && (
-          <div style={{ width: '300px', background: '#111827', borderLeft: '1px solid #1f2937', padding: '16px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-            {renderSettings()}
-            <div style={panelStyle}>
-              <div style={panelTitleStyle}><Volume2 size={14} /> Audio Sources</div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Monitor size={14} color={screenReady && screenStreamRef.current?.getAudioTracks().length ? 'var(--accent)' : '#64748b'} /> 
-                  Tab Audio: {screenReady && screenStreamRef.current?.getAudioTracks().length ? 'Active' : 'None'}
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                  <Mic size={14} color={micOn ? 'var(--accent)' : '#64748b'} /> 
-                  Microphone: {micOn ? 'Active' : 'Off'}
-                </div>
+        <div className="wss-settings">
+          {renderSettings()}
+          <div className="wss-panel">
+            <div className="wss-panel-title"><Volume2 size={14} /> Audio Sources</div>
+            <div style={{ fontSize: '12px', color: '#cbd5e1', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Monitor size={14} color={screenReady && screenStreamRef.current?.getAudioTracks().length ? 'var(--wss-accent)' : undefined} /> 
+                Tab Audio: {screenReady && screenStreamRef.current?.getAudioTracks().length ? 'Active' : 'None'}
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Mic size={14} color={micOn ? 'var(--wss-accent)' : undefined} /> 
+                Microphone: {micOn ? 'Active' : 'Off'}
               </div>
             </div>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Mobile Bottom Toolbar */}
       {isMobile && (
-        <div style={{ height: '70px', background: '#111827', borderTop: '1px solid #1f2937', display: 'flex', alignItems: 'center', justifyContent: 'space-around', padding: '0 10px', flexShrink: 0 }}>
-          <button onClick={startScreenShare} style={{...mobileBtnStyle, color: screenReady ? 'var(--accent)' : '#64748b'}} title="Share Screen"><Monitor size={20} /></button>
-          <button onClick={toggleMic} style={{...mobileBtnStyle, color: micOn ? 'var(--accent)' : '#64748b'}} title="Microphone">
+        <div className="wss-mobile-toolbar">
+          <button onClick={startScreenShare} className="wss-btn wss-btn-icon-mobile" style={{ color: screenReady ? 'var(--wss-accent)' : undefined }} title="Share Screen"><Monitor size={20} /></button>
+          <button onClick={toggleMic} className="wss-btn wss-btn-icon-mobile" style={{ color: micOn ? 'var(--wss-accent)' : undefined }} title="Microphone">
             {micOn ? <Mic size={20} /> : <MicOff size={20} />}
           </button>
-          <button onClick={toggleWebcam} style={{...mobileBtnStyle, color: webcamOn ? 'var(--accent)' : '#64748b'}} title="Webcam"><Camera size={20} /></button>
-          <button onClick={() => setShowMobileSettings(true)} style={{...mobileBtnStyle, color: '#64748b'}} title="Settings"><Settings size={20} /></button>
+          <button onClick={toggleWebcam} className="wss-btn wss-btn-icon-mobile" style={{ color: webcamOn ? 'var(--wss-accent)' : undefined }} title="Webcam"><Camera size={20} /></button>
+          <button onClick={() => setShowMobileSettings(true)} className="wss-btn wss-btn-icon-mobile" title="Settings"><Settings size={20} /></button>
         </div>
       )}
 
-      {/* Mobile Settings Bottom Sheet */}
       {isMobile && showMobileSettings && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 100, display: 'flex', alignItems: 'flex-end' }} onClick={() => setShowMobileSettings(false)}>
-          <div style={{ width: '100%', maxHeight: '70vh', background: '#0a0f1a', borderRadius: '16px 16px 0 0', border: '1px solid #334155', padding: '16px', overflowY: 'auto' }} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-              <h3 style={{ margin: 0, fontSize: '16px', fontWeight: 800 }}>Settings</h3>
-              <button onClick={() => setShowMobileSettings(false)} style={{ background: '#1f2937', border: 'none', color: '#fff', padding: '4px', borderRadius: '6px', cursor: 'pointer' }}><X size={18} /></button>
+        <div className="wss-modal-overlay" onClick={() => setShowMobileSettings(false)}>
+          <div className="wss-modal-sheet" onClick={e => e.stopPropagation()}>
+            <div className="wss-modal-header">
+              <h3 className="wss-modal-title">Settings</h3>
+              <button onClick={() => setShowMobileSettings(false)} className="wss-btn wss-btn-icon" style={{ background: 'transparent', border: 'none' }}><X size={18} /></button>
             </div>
             {renderSettings()}
           </div>
         </div>
       )}
 
-      {/* 
-        Hidden video elements. 
-        Positioned fixed with 2px size in the viewport so the browser's IntersectionObserver 
-        doesn't throttle them. This forces Chrome to decode every single frame perfectly.
-      */}
-      <video ref={screenVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} autoPlay playsInline muted />
-      <video ref={webcamVideoRef} style={{ position: 'fixed', bottom: '2px', right: '2px', width: '2px', height: '2px', opacity: 0, pointerEvents: 'none', zIndex: -1 }} autoPlay playsInline muted />
+      <video ref={screenVideoRef} className="wss-hidden-video" autoPlay playsInline muted />
+      <video ref={webcamVideoRef} className="wss-hidden-video" autoPlay playsInline muted />
     </div>
   );
 }
