@@ -1,3 +1,5 @@
+﻿// footballprediction/src/engine/leaderboardEngine.js
+
 import { calcPoints, RESULT_TYPE } from '../utils/constants';
 import { db } from '../utils/firebase';
 import { doc, getDoc } from 'firebase/firestore';
@@ -92,7 +94,7 @@ export async function buildDailySummaryData(resultsSnap, predsSnap, activeSnap) 
     pendingFinishedPreds.push({ ...p, actualH: actual.h, actualA: actual.a });
   }
 
-  // ★ CRITICAL FIX: Sort chronologically to ensure streaks are calculated accurately
+  // â˜… CRITICAL FIX: Sort chronologically to ensure streaks are calculated accurately
   pendingFinishedPreds.sort((a, b) => {
     const dateA = a.matchDate || '';
     const dateB = b.matchDate || '';
@@ -160,7 +162,7 @@ export async function buildPeriodSummaryData(snap, period, startDate) {
     if (!r.displayName && !missingNames.includes(uid)) missingNames.push(uid);
   }
 
-  // ★ CRITICAL FIX: Sort chronologically for accurate period streak calculation
+  // â˜… CRITICAL FIX: Sort chronologically for accurate period streak calculation
   allPreds.sort((a, b) => {
     const dateA = a.matchDate || '';
     const dateB = b.matchDate || '';

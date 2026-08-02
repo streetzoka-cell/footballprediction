@@ -1,3 +1,5 @@
+﻿// footballprediction/src/studio/pages/Templates.jsx
+
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useEditorStore } from '../store/editorStore';

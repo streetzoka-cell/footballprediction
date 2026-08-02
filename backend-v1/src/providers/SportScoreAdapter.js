@@ -8,11 +8,21 @@ class SportScoreAdapter extends BaseProvider {
     logger.info('[SportScoreAdapter] Initialized (Stub)');
   }
 
-  isBudgetAvailable() { return false; }
-  getRemaining() { return 0; }
-  
-  async getLiveFixtures() { return []; }
-  async getFixtures(date) { return []; }
+  isBudgetAvailable() {
+    return false;
+  }
+
+  getRemaining() {
+    return 0;
+  }
+
+  async getLiveFixtures() {
+    return [];
+  }
+
+  async getFixtures(date) {
+    return [];
+  }
 }
 
 module.exports = new SportScoreAdapter();

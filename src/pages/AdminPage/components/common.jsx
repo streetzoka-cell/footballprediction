@@ -1,5 +1,7 @@
+﻿// footballprediction/src/pages/AdminPage/components/common.jsx
+
 import React, { useState, useEffect, useRef, memo } from 'react';
-// ✅ ADDED: Plus, Trash2, Star to the imports
+// âœ… ADDED: Plus, Trash2, Star to the imports
 import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Plus, Trash2, Star } from 'lucide-react';
 import { getLocalDateStr, getLocalDateFromUtc } from '../../../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../../../utils/constants';
@@ -159,7 +161,7 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
         </div>
         <div className={`flex-center gap-8 px-12 py-4 rounded-md ${live ? 'bg-danger/10' : fin ? 'bg-primary/10' : 'bg-elevated'}`}>
           {(live || fin) ? (
-            <><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.h ?? 0}</span><span className="text-muted">–</span><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.a ?? 0}</span></>
+            <><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.h ?? 0}</span><span className="text-muted">â€“</span><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.a ?? 0}</span></>
           ) : <span className="text-muted text-xs font-bold">VS</span>}
         </div>
         <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
@@ -176,7 +178,7 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
         {mode === 'zoka' && sel && scoreInput && (
           <div className="flex-center gap-4">
             <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.h} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
-            <span className="text-muted">–</span>
+            <span className="text-muted">â€“</span>
             <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
           </div>
         )}

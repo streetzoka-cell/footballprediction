@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/Partners.jsx
+
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Globe, Handshake, Eye, BarChart3, Users, Zap, Mail, Trophy } from 'lucide-react';
 import SEO from '../../components/SEO';

@@ -1,8 +1,10 @@
+﻿// footballprediction/src/studio/components/AssetPanel.jsx
+
 import React from 'react';
 import { useEditorStore } from '../store/editorStore';
 import { X } from 'lucide-react';
 
-const STICKERS = ['⚽', '🔥', '🏆', '🟨', '🟥', '👟', '🥅', '💯', '🤯', '👏', '👑', '🚀', '📈', '⚡', '🛡️', '🎯'];
+const STICKERS = ['âš½', 'ðŸ”¥', 'ðŸ†', 'ðŸŸ¨', 'ðŸŸ¥', 'ðŸ‘Ÿ', 'ðŸ¥…', 'ðŸ’¯', 'ðŸ¤¯', 'ðŸ‘', 'ðŸ‘‘', 'ðŸš€', 'ðŸ“ˆ', 'âš¡', 'ðŸ›¡ï¸', 'ðŸŽ¯'];
 const BACKGROUNDS = [
   { name: 'Dark', fill: '#05070a' }, { name: 'Black', fill: '#000000' }, { name: 'White', fill: '#ffffff' },
   { name: 'Pitch', fill: '#15803d' }, { name: 'Blue', fill: '#0ea5e9' }, { name: 'Gold', fill: '#f59e0b' },
@@ -62,7 +64,7 @@ export default function AssetPanel({ onClose }) {
       <div className="studio-grid-2">
         {SFX.map((sfx, i) => (
           <button key={i} onClick={() => addSFX(sfx)} className="studio-sfx-btn">
-            🎵 {sfx.name}
+            ðŸŽµ {sfx.name}
           </button>
         ))}
       </div>

@@ -1,4 +1,4 @@
-const { getDb, isExpired, withTTL } = require('../config/firebase');
+const { getDb, withTTL } = require('../config/firebase');
 const { COLLECTIONS, TTL } = require('../config/constants');
 
 async function getLineups(fixtureId) {
@@ -9,7 +9,10 @@ async function getLineups(fixtureId) {
 
 async function upsertLineups(fixtureId, data) {
   const db = getDb();
-  await db.collection(COLLECTIONS.LINEUPS).doc(String(fixtureId)).set(withTTL(data, TTL.LINEUPS), { merge: true });
+  await db
+    .collection(COLLECTIONS.LINEUPS)
+    .doc(String(fixtureId))
+    .set(withTTL(data, TTL.LINEUPS), { merge: true });
 }
 
 async function getStatistics(fixtureId) {
@@ -20,7 +23,10 @@ async function getStatistics(fixtureId) {
 
 async function upsertStatistics(fixtureId, data) {
   const db = getDb();
-  await db.collection(COLLECTIONS.STATISTICS).doc(String(fixtureId)).set(withTTL(data, TTL.STATISTICS), { merge: true });
+  await db
+    .collection(COLLECTIONS.STATISTICS)
+    .doc(String(fixtureId))
+    .set(withTTL(data, TTL.STATISTICS), { merge: true });
 }
 
 async function getPredictions(fixtureId) {
@@ -31,7 +37,10 @@ async function getPredictions(fixtureId) {
 
 async function upsertPredictions(fixtureId, data) {
   const db = getDb();
-  await db.collection(COLLECTIONS.PREDICTIONS).doc(String(fixtureId)).set(withTTL(data, TTL.PREDICTIONS), { merge: true });
+  await db
+    .collection(COLLECTIONS.PREDICTIONS)
+    .doc(String(fixtureId))
+    .set(withTTL(data, TTL.PREDICTIONS), { merge: true });
 }
 
 async function getOdds(fixtureId) {
@@ -42,7 +51,10 @@ async function getOdds(fixtureId) {
 
 async function upsertOdds(fixtureId, data) {
   const db = getDb();
-  await db.collection(COLLECTIONS.ODDS).doc(String(fixtureId)).set(withTTL(data, TTL.ODDS), { merge: true });
+  await db
+    .collection(COLLECTIONS.ODDS)
+    .doc(String(fixtureId))
+    .set(withTTL(data, TTL.ODDS), { merge: true });
 }
 
 async function getH2H(key) {
@@ -53,13 +65,21 @@ async function getH2H(key) {
 
 async function upsertH2H(key, data) {
   const db = getDb();
-  await db.collection('head_to_head').doc(key).set(withTTL({ id: key, matches: data }, 24 * 3600), { merge: true });
+  await db
+    .collection('head_to_head')
+    .doc(key)
+    .set(withTTL({ id: key, matches: data }, 24 * 3600), { merge: true });
 }
 
 module.exports = {
-  getLineups, upsertLineups,
-  getStatistics, upsertStatistics,
-  getPredictions, upsertPredictions,
-  getOdds, upsertOdds,
-  getH2H, upsertH2H,
+  getLineups,
+  upsertLineups,
+  getStatistics,
+  upsertStatistics,
+  getPredictions,
+  upsertPredictions,
+  getOdds,
+  upsertOdds,
+  getH2H,
+  upsertH2H,
 };

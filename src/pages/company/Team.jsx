@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/Team.jsx
+
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -38,7 +40,7 @@ export default function Team() {
             <p className="text-muted text-xs uppercase">Built From Scratch</p>
           </div>
           <div className="glass-card p-16 flex-col items-center gap-4">
-            <h2 className="font-extrabold text-primary text-2xl">∞</h2>
+            <h2 className="font-extrabold text-primary text-2xl">âˆž</h2>
             <p className="text-muted text-xs uppercase">Continuous Dev</p>
           </div>
         </div>
@@ -54,7 +56,7 @@ export default function Team() {
           <Link to="/contact" className="btn btn-outline">Let's Connect</Link>
         </div>
 
-        <p className="text-muted text-xs mt-16">© {new Date().getFullYear()} ZOKASCORE. Built independently with passion for football.</p>
+        <p className="text-muted text-xs mt-16">Â© {new Date().getFullYear()} ZOKASCORE. Built independently with passion for football.</p>
       </div>
     </div>
   );

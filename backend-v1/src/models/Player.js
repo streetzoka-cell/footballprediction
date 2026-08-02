@@ -10,4 +10,5 @@
  * @property {string|null} position
  * @property {Object} team
  */
+
 module.exports = {};

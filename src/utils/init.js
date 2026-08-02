@@ -1,4 +1,4 @@
-// src/utils/init.js
+﻿// footballprediction/src/utils/init.js
 import { auth } from './firebase';
 
 export const initApp = async () => {

@@ -2,10 +2,10 @@
  * @typedef {Object} Match
  * @property {string} id
  * @property {string} sport
- * @property {string} date - ISO Date string
- * @property {number} timestamp - Unix timestamp
- * @property {string} status - Short status (e.g., '1H', 'FT', 'NS')
- * @property {string} statusLong - Long status (e.g., 'IN_PLAY')
+ * @property {string} date
+ * @property {number} timestamp
+ * @property {string} status
+ * @property {string} statusLong
  * @property {number|null} elapsed
  * @property {number|null} minute
  * @property {string} homeTeamId
@@ -34,4 +34,5 @@
  * @property {number} matchScore
  * @property {string} category
  */
+
 module.exports = {};

@@ -1,4 +1,4 @@
-// src/store/usePreferencesStore.js
+﻿// footballprediction/src/store/usePreferencesStore.js
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 

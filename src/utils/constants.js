@@ -1,7 +1,7 @@
-// ═══════════════════════════════════════════════════════════════
+// footballprediction/src/utils/constants.js
 // FILE: src/utils/constants.js
 // SINGLE SOURCE OF TRUTH — Business Logic, Types, and Paths
-// ═══════════════════════════════════════════════════════════════
+// -----------------------------------------------------------------------------
 
 export const SPORT = Object.freeze({
   FOOTBALL: 'football',
@@ -136,9 +136,9 @@ export const BASKETBALL_LEAGUE_PRIORITY = Object.freeze({
 export const getBasketballLeaguePriority = (leagueId) =>
   BASKETBALL_LEAGUE_PRIORITY[Number(leagueId)] || 20;
 
-/* ═══════════════════════════════════════════════════
+/* -----------------------------------------------------------------------------
    FIRESTORE COLLECTION/DOCUMENT PATHS
-   ═══════════════════════════════════════════════════ */
+   ----------------------------------------------------------------------------- */
 export const PATHS = Object.freeze({
   FIXTURE_SNAPSHOTS: 'fixture_snapshots',
   REFERENCE_DATA: 'reference_data',

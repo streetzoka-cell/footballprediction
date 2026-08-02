@@ -1,4 +1,3 @@
-// Deep comparison to check if Firestore document needs updating
 function getChangedFields(existing, incoming) {
   const changes = {};
   let hasChanges = false;

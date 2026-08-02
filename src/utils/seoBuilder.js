@@ -1,5 +1,5 @@
-// src/utils/seoBuilder.js
-// Unified SEO Builder — combines seoBuilder + Breadcrumbs logic
+﻿// footballprediction/src/utils/seoBuilder.js
+// Unified SEO Builder â€” combines seoBuilder + Breadcrumbs logic
 
 export const SITE = Object.freeze({
   name: "ZOKASCORE",
@@ -15,7 +15,7 @@ export const SITE = Object.freeze({
   searchUrl: "https://zokascore.xyz/search?q={search_term_string}",
 });
 
-// ─── Helpers ───────────────────────────────────────────
+// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const titleCase = (text = "") =>
   decodeURIComponent(text)
@@ -33,7 +33,7 @@ function deduplicateSchemas(schemas) {
   });
 }
 
-// ─── Breadcrumb Map ────────────────────────────────────
+// â”€â”€â”€ Breadcrumb Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 const BREADCRUMB_TITLES = Object.freeze({
   fixtures: "Fixtures",
@@ -62,7 +62,7 @@ const BREADCRUMB_TITLES = Object.freeze({
 
 /**
  * Generate breadcrumbs from a path string.
- * Used by both SEO.jsx and Breadcrumbs.jsx — single source of truth.
+ * Used by both SEO.jsx and Breadcrumbs.jsx â€” single source of truth.
  */
 export function generateBreadcrumbs(path = "/") {
   if (path === "/") return [{ name: "Home", path: "/" }];
@@ -78,21 +78,21 @@ export function generateBreadcrumbs(path = "/") {
     // Dynamic route: /league/:id/:slug
     if (part === "league" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Leagues", path: "/fixtures" });
-      // ★ FIX: Include ID in the path
+      // â˜… FIX: Include ID in the path
       crumbs.push({ name: titleCase(parts[i + 2]), path: `/league/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
     // Dynamic route: /team/:id/:slug
     else if (part === "team" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Teams", path: "/fixtures" });
-      // ★ FIX: Include ID in the path
+      // â˜… FIX: Include ID in the path
       crumbs.push({ name: titleCase(parts[i + 2]), path: `/team/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
     // Dynamic route: /match/:id/:slug
     else if (part === "match" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Fixtures", path: "/fixtures" });
-      // ★ FIX: Include ID in the path
+      // â˜… FIX: Include ID in the path
       crumbs.push({ name: "Match Details", path: `/match/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
     }
@@ -115,7 +115,7 @@ export function generateBreadcrumbs(path = "/") {
   return crumbs;
 }
 
-// ─── Base Schema Generators ────────────────────────────
+// â”€â”€â”€ Base Schema Generators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function websiteSchema() {
   return {
@@ -157,7 +157,7 @@ export function breadcrumbSchema(crumbs) {
   };
 }
 
-// ─── Universal SEO Builder ─────────────────────────────
+// â”€â”€â”€ Universal SEO Builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export function buildSEO({
   title,
@@ -209,7 +209,7 @@ export function buildSEO({
   };
 }
 
-// ─── Specialized SEO Generators ────────────────────────
+// â”€â”€â”€ Specialized SEO Generators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export const seoGenerators = {
   matchPage({

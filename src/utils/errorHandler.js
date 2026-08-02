@@ -1,4 +1,4 @@
-// src/utils/errorHandler.js
+﻿// footballprediction/src/utils/errorHandler.js
 export const ERROR_TYPES = Object.freeze({
   OFFLINE: 'offline', TIMEOUT: 'timeout', RATE_LIMIT: 'rate_limit',
   SERVER_ERROR: 'server_error', NOT_FOUND: 'not_found', UNKNOWN: 'unknown',

@@ -1,3 +1,5 @@
+﻿// footballprediction/src/utils/firebase.js
+
 import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
@@ -24,7 +26,7 @@ if (hasPrimaryConfig) {
     app = getApps().find(a => a.name === '[DEFAULT]') || initializeApp(primaryConfig);
     
     try {
-      // ★ FIX: Use persistentLocalCache so data survives app reloads and backend sleep!
+      // â˜… FIX: Use persistentLocalCache so data survives app reloads and backend sleep!
       db = initializeFirestore(app, {
         localCache: persistentLocalCache({ 
           tabManager: persistentMultipleTabManager()

@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/FeaturedTab.jsx
+
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { Radio, Plus, Trash2, Loader2, CalendarDays, Pencil, Star } from 'lucide-react';
 import { MAX_FEATURED, SHOW_INIT, extractDate, sortByImportance, hasMatchStarted, isLive, isFin, Skel, Empty, ShowMore, MatchRow } from './common';
@@ -93,7 +95,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
                       {sc ? (
                         <>
                           <span className={`font-extrabold text-lg ${live ? 'text-danger' : 'text-primary'}`}>{sc.h}</span>
-                          <span className="text-muted text-sm">–</span>
+                          <span className="text-muted text-sm">â€“</span>
                           <span className={`font-extrabold text-lg ${live ? 'text-danger' : 'text-primary'}`}>{sc.a}</span>
                         </>
                       ) : (

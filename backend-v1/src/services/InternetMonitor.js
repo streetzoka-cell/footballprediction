@@ -1,4 +1,4 @@
-// backend-v1/src/services/InternetMonitor.js
+// footballprediction/backend-v1/src/services/InternetMonitor.js
 const axios = require('axios');
 const logger = require('../utils/logger');
 const EventEmitter = require('events');
@@ -25,7 +25,7 @@ class InternetMonitor extends EventEmitter {
       
       this.failCount = 0; // Reset fail count on success
       if (!this.isOnline) {
-        logger.info('[InternetMonitor] 🌐 Internet restored! Triggering catch-up sync...');
+        logger.info('[InternetMonitor] ðŸŒ Internet restored! Triggering catch-up sync...');
         this.isOnline = true;
         this.emit('restored');
       }
@@ -33,7 +33,7 @@ class InternetMonitor extends EventEmitter {
       this.failCount++;
       // Only pause if it fails 2 times in a row (60 seconds of no internet)
       if (this.failCount >= 2 && this.isOnline) {
-        logger.warn('[InternetMonitor] ⚠️ Internet lost (2 consecutive fails). Pausing API polling.');
+        logger.warn('[InternetMonitor] âš ï¸ Internet lost (2 consecutive fails). Pausing API polling.');
         this.isOnline = false;
       }
     }

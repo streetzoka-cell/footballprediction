@@ -1,21 +1,101 @@
+// backend-v1/src/routes/v1/admin/leaderboards.js
+
 const express = require('express');
 const router = express.Router();
-const { rebuildDailyLeaderboard } = require('../../../scheduler/jobs/resolvePredictionsJob');
 
-router.post('/rebuild/:period', async (req, res) => {
+const adminAuth = require('../../../middleware/adminAuth');
+const LeaderboardEngine = require('../../../services/LeaderboardEngine');
+const RankingEngine = require('../../../services/RankingEngine');
+
+router.use(adminAuth);
+
+function todayStr() {
+  return new Date().toISOString().split('T')[0];
+}
+
+/**
+ * POST /api/v1/admin/leaderboards/resolve
+ *
+ * Body:
+ * {
+ *   "matchId": "123",
+ *   "homeScore": 2,
+ *   "awayScore": 1,
+ *   "matchDate": "2026-08-02"
+ * }
+ */
+router.post('/resolve', async (req, res, next) => {
   try {
-    const { period } = req.params;
-    const { dateStr } = req.body;
+    const result = await RankingEngine.resolveMatch(req.body || {});
 
-    if (period === 'daily' && dateStr) {
-      await rebuildDailyLeaderboard(dateStr);
-      return res.status(200).json({ success: true, message: `Daily leaderboard rebuilt for ${dateStr}` });
-    }
-    
-    return res.status(400).json({ error: 'Invalid period or missing dateStr' });
+    res.json({
+      success: true,
+      result,
+    });
   } catch (err) {
-    console.error('[AdminRoute] Rebuild error:', err.message);
-    return res.status(500).json({ error: err.message });
+    next(err);
+  }
+});
+
+/**
+ * POST /api/v1/admin/leaderboards/rebuild/:period
+ *
+ * period = daily | weekly | monthly | goat | all
+ */
+router.post('/rebuild/:period', async (req, res, next) => {
+  try {
+    const period = String(req.params.period || '').trim();
+    const dateStr = String(req.body?.dateStr || '').trim();
+
+    if (period === 'daily') {
+      const result = await LeaderboardEngine.rebuildDailyLeaderboard(
+        dateStr || todayStr()
+      );
+
+      return res.json({
+        success: true,
+        result,
+      });
+    }
+
+    if (period === 'weekly' || period === 'monthly' || period === 'goat') {
+      const result = await LeaderboardEngine.rebuildPeriod(period, dateStr);
+
+      return res.json({
+        success: true,
+        result,
+      });
+    }
+
+    if (period === 'all') {
+      const date = dateStr || todayStr();
+
+      const daily = await LeaderboardEngine.rebuildDailyLeaderboard(date);
+      const weekly = await LeaderboardEngine.rebuildPeriod('weekly');
+      const monthly = await LeaderboardEngine.rebuildPeriod('monthly');
+      const goat = await LeaderboardEngine.rebuildPeriod('goat');
+
+      return res.json({
+        success: true,
+        result: {
+          daily,
+          weekly,
+          monthly,
+          goat,
+        },
+      });
+    }
+
+    return res.status(400).json({
+      success: false,
+      error: {
+        code: 'INVALID_PERIOD',
+        message: 'Invalid period',
+        details: [],
+      },
+    });
+  } catch (err) {
+    next(err);
   }
 });
 

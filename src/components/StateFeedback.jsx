@@ -1,3 +1,5 @@
+﻿// footballprediction/src/components/StateFeedback.jsx
+
 import React from 'react';
 import { WifiOff, AlertCircle, RefreshCw } from 'lucide-react';
 import { ERROR_TYPES } from '../utils/errorHandler';

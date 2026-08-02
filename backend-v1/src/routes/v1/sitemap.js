@@ -1,9 +1,11 @@
+// footballprediction/backend-v1/src/routes/v1/sitemap.js
+
 const express = require("express");
 const router = express.Router();
 
 const HOST = "https://zokascore.xyz";
 
-// ★ NEW: Robust slug generator
+// â˜… NEW: Robust slug generator
 const createSlug = (str) =>
   String(str || "")
     .normalize("NFD")
@@ -12,7 +14,7 @@ const createSlug = (str) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-// ★ FIX: Removed the quotes around >/g
+// â˜… FIX: Removed the quotes around >/g
 const escapeXml = (unsafe) =>
   String(unsafe || "")
     .replace(/&/g, "&amp;")

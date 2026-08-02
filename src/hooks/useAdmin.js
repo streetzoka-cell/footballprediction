@@ -1,3 +1,5 @@
+﻿// footballprediction/src/hooks/useAdmin.js
+
 import { useQuery } from '@tanstack/react-query';
 import { db } from '../utils/firebase';
 import { collection, getDocs, query, where, orderBy, limit as limitQ, getCountFromServer } from 'firebase/firestore';
@@ -66,14 +68,12 @@ export function useSystemHealth() {
     retry: 1,
   });
 }
-
 export function useBackendLogs() {
   return useQuery({
     queryKey: ['backendLogs'],
     queryFn: async () => {
-      const res = await fetch(`${BACKEND_URL}/api/v1/monitoring`);
-      if (!res.ok) throw new Error('Not found');
-      return res.json();
+      const res = await adminFetchJSON('/api/v1/monitoring');
+      return res?.data || res;
     },
     refetchInterval: 10000,
     retry: 1,

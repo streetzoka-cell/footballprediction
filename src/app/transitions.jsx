@@ -1,3 +1,5 @@
+﻿// footballprediction/src/app/transitions.jsx
+
 import { useLocation } from "react-router-dom";
 
 export default function PageTransition({ children }) {

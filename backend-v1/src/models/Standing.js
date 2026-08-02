@@ -12,4 +12,5 @@
  * @property {Object} home
  * @property {Object} away
  */
+
 module.exports = {};

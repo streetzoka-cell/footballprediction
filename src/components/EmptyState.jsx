@@ -1,3 +1,5 @@
+﻿// footballprediction/src/components/EmptyState.jsx
+
 import React from 'react';
 
 export default function EmptyState({ icon: Icon, title, hint, action }) {

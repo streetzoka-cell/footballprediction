@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/Fixtures.jsx
+
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
@@ -500,10 +502,10 @@ export default function Fixtures() {
       if (goalScored) {
         Sound.goal();
         if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
-        addGoal({ matchId: m.id, homeName: m.homeName, awayName: m.awayName, score: `${m.homeScore}–${m.awayScore}`, homeLogo: m.homeLogo, awayLogo: m.awayLogo, league: m.leagueName });
+        addGoal({ matchId: m.id, homeName: m.homeName, awayName: m.awayName, score: `${m.homeScore}-${m.awayScore}`, homeLogo: m.homeLogo, awayLogo: m.awayLogo, league: m.leagueName });
 
         if (Notification.permission === 'granted') {
-          const body = `${m.homeName} ${m.homeScore}–${m.awayScore} ${m.awayName}\n${m.leagueName}`;
+          const body = `${m.homeName} ${m.homeScore}-${m.awayScore} ${m.awayName}\n${m.leagueName}`;
           const notif = new Notification('⚽ GOAL!', { body, icon: scoringTeamLogo, badge: m.leagueLogo, tag: m.id, data: { url: `/match/${m.id}` } });
           notif.onclick = (e) => { e.preventDefault(); window.focus(); window.location.href = `/match/${m.id}`; };
         }

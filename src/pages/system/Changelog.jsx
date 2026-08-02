@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/system/Changelog.jsx
+
 import SEO from "../../components/SEO";
 import PageLayout from "../../components/PageLayout";
 import Section from "../../components/Section";

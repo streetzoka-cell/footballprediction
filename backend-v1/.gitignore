@@ -1,0 +1,10 @@
+node_modules/
+logs/
+data/
+public_data/
+.env
+.env.local
+firebase-adminsdk.json
+*.log
+*.bak
+.DS_Store
