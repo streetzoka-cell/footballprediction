@@ -1,4 +1,4 @@
-// src/utils/preload.js
+﻿// footballprediction/src/utils/preload.js
 import { preload } from 'react-dom';
 
 const preloadMap = {

@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/system/Status.jsx
+
 import SEO from "../../components/SEO";
 import PageLayout from "../../components/PageLayout";
 import Section from "../../components/Section";
@@ -34,7 +36,7 @@ export default function Status() {
               <div key={service.name} className="glass-card p-20">
                 <div className="flex-between items-center mb-8">
                   <strong className="text-primary text-sm">{service.name}</strong>
-                  <span className="badge badge-primary">● {service.status}</span>
+                  <span className="badge badge-primary">â— {service.status}</span>
                 </div>
                 <p className="text-muted text-xs">{service.description}</p>
               </div>

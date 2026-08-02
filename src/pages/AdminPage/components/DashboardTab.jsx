@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/DashboardTab.jsx
+
 import React, { memo } from 'react';
 import { Activity, CheckCircle2, XCircle, TrendingUp, RotateCcw, CalendarDays, Crown, Timer, BarChart3, Sparkles, Loader2 } from 'lucide-react';
 import { dateLabel } from './common';
@@ -18,7 +20,7 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
   return (
     <div className="flex-col gap-16">
       <div className="glass-card p-16 flex-col gap-12">
-        <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
+        <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview â€” {dateLabel(date)}</h3>
         <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
           <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-accent">{fxCount}</span><span className="text-muted text-xs">Fixtures</span></div>
           <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-danger">{liveCount}</span><span className="text-muted text-xs">Live</span></div>

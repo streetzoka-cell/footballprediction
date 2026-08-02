@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/Highlights.jsx
+
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
@@ -20,6 +22,8 @@ import SEO from "../components/SEO";
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 const getSeoImageUrl = (post) => (!post || !post.imageUrl) ? "https://zokascore.xyz/logo.png" : `https://zokascore.xyz/api/og-image/${post.id}`;
 
+const BULLET = '\u2022'; // • bullet character, encoding-safe
+
 const formatTimestamp = (date) => {
   if (!date) return 'Just now';
   const now = new Date();
@@ -31,20 +35,33 @@ const formatTimestamp = (date) => {
   const yesterday = new Date(now); yesterday.setDate(now.getDate() - 1);
   const isYesterday = yesterday.toDateString() === d.toDateString();
   const timeStr = d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
-  if (isToday) return `Today • ${timeStr}`;
-  if (isYesterday) return `Yesterday • ${timeStr}`;
+  if (isToday) return `Today ${BULLET} ${timeStr}`;
+  if (isYesterday) return `Yesterday ${BULLET} ${timeStr}`;
   return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 };
 
 const calcReadTime = (body) => Math.max(1, Math.ceil((body?.trim().split(/\s+/).length || 1) / 200));
 
+// Encoding-safe emoji via surrogate pairs
+const RED_CIRCLE     = '\uD83D\uDD34'; // 🔴
+const GREEN_CIRCLE   = '\uD83D\uDFE2'; // 🟢
+const YELLOW_CIRCLE  = '\uD83D\uDFE1'; // 🟡
+const BLUE_CIRCLE    = '\uD83D\uDD35'; // 🔵
+const ORANGE_CIRCLE  = '\uD83D\uDFE0'; // 🟠
+const PURPLE_CIRCLE  = '\uD83D\uDFE3'; // 🟣
+const THUMBS_UP      = '\uD83D\uDC4D'; // 👍
+const FIRE           = '\uD83D\uDD25'; // 🔥
+const WOW_FACE       = '\uD83D\uDE2E'; // 😮
+const LAUGH_FACE     = '\uD83D\uDE02'; // 😂
+const SAD_FACE       = '\uD83D\uDE22'; // 😢
+
 const BADGES = {
-  'Breaking': { color: 'var(--danger)', bg: 'rgba(var(--danger-rgb),.15)', label: '🔴 BREAKING' },
-  'Official': { color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.15)', label: '🟢 OFFICIAL' },
-  'Rumour': { color: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.15)', label: '🟡 RUMOUR' },
-  'Match Report': { color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)', label: '🔵 MATCH REPORT' },
-  'Transfers': { color: 'var(--warning)', bg: 'rgba(var(--warning-rgb),.15)', label: '🟠 TRANSFERS' },
-  'Injuries': { color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)', label: '🟣 INJURIES' },
+  'Breaking':     { color: 'var(--danger)',  bg: 'rgba(var(--danger-rgb),.15)',  label: `${RED_CIRCLE} BREAKING` },
+  'Official':     { color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.15)', label: `${GREEN_CIRCLE} OFFICIAL` },
+  'Rumour':       { color: 'var(--gold)',    bg: 'rgba(var(--gold-rgb),.15)',    label: `${YELLOW_CIRCLE} RUMOUR` },
+  'Match Report': { color: 'var(--accent)',  bg: 'rgba(var(--accent-rgb),.15)',  label: `${BLUE_CIRCLE} MATCH REPORT` },
+  'Transfers':    { color: 'var(--warning)', bg: 'rgba(var(--warning-rgb),.15)', label: `${ORANGE_CIRCLE} TRANSFERS` },
+  'Injuries':     { color: 'var(--accent)',  bg: 'rgba(var(--accent-rgb),.15)',  label: `${PURPLE_CIRCLE} INJURIES` },
 };
 
 const CATEGORIES = [
@@ -54,9 +71,11 @@ const CATEGORIES = [
 ];
 
 const REACTIONS = [
-  { key: 'like', icon: '👍', label: 'Like' }, { key: 'fire', icon: '🔥', label: 'Fire' },
-  { key: 'wow', icon: '😮', label: 'Wow' }, { key: 'funny', icon: '😂', label: 'Funny' },
-  { key: 'sad', icon: '😢', label: 'Sad' },
+  { key: 'like',   icon: THUMBS_UP,  label: 'Like' },
+  { key: 'fire',   icon: FIRE,       label: 'Fire' },
+  { key: 'wow',    icon: WOW_FACE,   label: 'Wow' },
+  { key: 'funny',  icon: LAUGH_FACE, label: 'Funny' },
+  { key: 'sad',    icon: SAD_FACE,   label: 'Sad' },
 ];
 
 const useReadingProgress = () => {
@@ -456,7 +475,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
               <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="flex-center font-bold" style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', color: 'var(--text-inverse)' }}>{(post.authorName || 'A')[0]}</div>
               <div className="flex-col gap-2">
                 <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="text-primary font-bold" style={{ fontSize: 'var(--fs-sm)' }}>{post.authorName || 'Admin'}</div>
-                <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</div>
+                <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</div>
               </div>
               {!post.imageUrl && <span className="badge" style={{ background: badge.bg, color: badge.color, marginLeft: 'auto' }}>{badge.label}</span>}
             </div>
@@ -465,7 +484,7 @@ function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShar
           {isHero && post.imageUrl && (
             <div className="flex-center gap-8 text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
               <span onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="text-primary font-bold">By {post.authorName || 'Admin'}</span>
-              <span>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read</span>
+              <span>{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</span>
             </div>
           )}
 
@@ -514,7 +533,9 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
         <div onClick={onAuthorClick} className="flex-center font-bold" style={{ width: 40, height: 40, borderRadius: '50%', background: 'var(--accent)', color: 'var(--text-inverse)' }}>{(post.authorName || 'A')[0]}</div>
         <div className="flex-col gap-2 flex-1">
           <div onClick={onAuthorClick} className="text-primary font-bold">{post.authorName || 'Admin'}</div>
-          <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{formatTimestamp(post.createdAt)} • {calcReadTime(post.body)} min read • <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views</div>
+          <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
+            {formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read {BULLET} <Eye size={10} style={{ display: 'inline', verticalAlign: 'middle' }} /> {post.views || 0} views
+          </div>
         </div>
         <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
       </div>

@@ -1,5 +1,6 @@
 const normalizeTeam = (data) => {
   if (!data) return null;
+
   return {
     id: String(data.idTeam || ''),
     name: data.strTeam || 'TBD',
@@ -14,6 +15,7 @@ const normalizeTeam = (data) => {
 
 const normalizeLeague = (data) => {
   if (!data) return null;
+
   return {
     id: String(data.idLeague || ''),
     name: data.strLeague || 'Unknown',

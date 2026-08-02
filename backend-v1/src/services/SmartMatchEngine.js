@@ -1,4 +1,4 @@
-// backend-v1/src/services/SmartMatchEngine.js
+// footballprediction/backend-v1/src/services/SmartMatchEngine.js
 
 const MAJOR_LEAGUES = {
   'cmr77dwy000onrx06oqbv0dbl': 95, // Paraguay
@@ -147,7 +147,7 @@ function processMatch(data) {
     kickoffTimestamp: data.timestamp,
     status: rawStatus,
     importance,
-    time: processTime(kickoffTime, now), // ★ TIME ENGINE OUTPUT
+    time: processTime(kickoffTime, now), // â˜… TIME ENGINE OUTPUT
     display: {
       status: displayStatus,
       minute: displayMinute,
@@ -161,7 +161,7 @@ function processMatch(data) {
       isUpcoming,
       isHalfTime
     },
-    dataQuality // ★ DATA COMPLETENESS OUTPUT
+    dataQuality // â˜… DATA COMPLETENESS OUTPUT
   };
 }
 

@@ -1,3 +1,5 @@
+﻿// footballprediction/scripts/generate-sitemap.js
+
 import { SitemapStream, streamToPromise } from "sitemap";
 import { createWriteStream, mkdirSync } from "fs";
 import dotenv from "dotenv";
@@ -41,7 +43,7 @@ async function generateSitemap() {
       { id: "3", name: "Europa League" },
       { id: "88", name: "Eredivisie" },
       { id: "94", name: "Primeira Liga" },
-      { id: "71", name: "Brasileirão" },
+      { id: "71", name: "BrasileirÃ£o" },
     ];
 
     const createSlug = (str) =>
@@ -86,7 +88,7 @@ async function generateSitemap() {
           }
         });
 
-        console.log(`✅ Added ${matches.length} match URLs.`);
+        console.log(`âœ… Added ${matches.length} match URLs.`);
       }
     } catch (err) {
       console.warn("Error fetching matches:", err.message);
@@ -114,7 +116,7 @@ async function generateSitemap() {
     await streamToPromise(sitemap);
 
   console.log(
-  `✅ Generated public/sitemap.xml with ${validRoutes.length} URLs.`
+  `âœ… Generated public/sitemap.xml with ${validRoutes.length} URLs.`
 );
 
   } catch (err) {

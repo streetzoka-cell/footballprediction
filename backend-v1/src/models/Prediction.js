@@ -9,4 +9,5 @@
  * @property {Object} xG
  * @property {Object|null} comparison
  */
+
 module.exports = {};

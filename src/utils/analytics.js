@@ -1,4 +1,4 @@
-// src/utils/analytics.js
+﻿// footballprediction/src/utils/analytics.js
 import { onLCP, onINP, onCLS, onFCP, onTTFB } from 'web-vitals';
 
 function sendToGoogleAnalytics({ name, delta, value, id }) {

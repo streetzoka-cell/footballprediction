@@ -1,47 +1,82 @@
-// backend-v1/src/services/StandingsService.js
-const ProviderManager = require('../providers/ProviderManager');
-const standingsRepo = require('../repositories/StandingsRepository');
-const { publishJSON } = require('./StaticFilePublisher');
-const logger = require('../utils/logger');
+// backend-v1/src/routes/v1/standings.js
 
-// ★ FIX: Use API-Football numeric IDs. The FootballDataAdapter will translate them to string codes.
-const LEAGUES_TO_SYNC = [
-  { id: 39, name: 'Premier League', season: 2026 },
-  { id: 140, name: 'La Liga', season: 2026 },
-  { id: 135, name: 'Serie A', season: 2026 },
-  { id: 78, name: 'Bundesliga', season: 2026 },
-  { id: 61, name: 'Ligue 1', season: 2026 },
-  { id: 2, name: 'UEFA Champions League', season: 2026 },
-  { id: 3, name: 'UEFA Europa League', season: 2026 },
-  { id: 88, name: 'Eredivisie', season: 2026 },
-  { id: 94, name: 'Primeira Liga', season: 2026 },
-  { id: 71, name: 'Serie A (Brazil)', season: 2026 },
-  { id: 40, name: 'Championship', season: 2026 }
-];
+const express = require('express');
+const router = express.Router();
 
-async function syncStandings() {
-  logger.info(`[StandingsService] Syncing standings for ${LEAGUES_TO_SYNC.length} leagues`);
-  let ok = 0, fail = 0;
-  const allStandings = [];
+const localSnapshotRepo = require('../../repositories/LocalSnapshotRepository');
+const { findLeague, getLeagueAliases } = require('../../config/leagues');
 
-  for (const league of LEAGUES_TO_SYNC) {
-    try {
-      const data = await ProviderManager.getStandings(league.id, league.season);
-      if (data) {
-        await standingsRepo.upsert(league.id, data);
-        allStandings.push(data);
-        ok++;
-      } else {
-        fail++;
-      }
-    } catch (err) {
-      fail++;
-    }
-  }
+function matchesLeague(standing, identifiers) {
+  if (!standing) return false;
 
-  await publishJSON('standings.json', { data: allStandings, count: allStandings.length });
-  logger.info(`[StandingsService] ✓ Standings: ${ok} ok, ${fail} fail`);
-  return { ok, fail };
+  const candidates = [
+    standing.id,
+    standing.leagueId,
+    standing.competitionId,
+    standing.code,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
+
+  return identifiers.some((id) =>
+    candidates.includes(String(id).toLowerCase())
+  );
 }
 
-module.exports = { syncStandings };
+/**
+ * GET /api/v1/standings
+ * GET /api/v1/standings?league=39
+ */
+router.get('/', async (req, res, next) => {
+  try {
+    const standings = await localSnapshotRepo.getStandingsSnapshot();
+    const leagueQuery = req.query.league || req.query.leagueId;
+
+    if (!leagueQuery) {
+      return res.json({
+        data: standings,
+        count: standings.length,
+      });
+    }
+
+    const league = findLeague(leagueQuery);
+    const identifiers = league
+      ? getLeagueAliases(league.id)
+      : [String(leagueQuery)];
+
+    const match = standings.find((standing) =>
+      matchesLeague(standing, identifiers)
+    );
+
+    if (!match) {
+      return res.status(404).json({
+        data: null,
+        error: 'Standings not found for this league',
+      });
+    }
+
+    return res.json({
+      data: match,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/standings/overview
+ */
+router.get('/overview', async (req, res, next) => {
+  try {
+    const standings = await localSnapshotRepo.getStandingsSnapshot();
+
+    return res.json({
+      data: standings,
+      count: standings.length,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+module.exports = router;

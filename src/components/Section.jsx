@@ -1,4 +1,4 @@
-// section.jsx
+﻿// footballprediction/src/components/Section.jsx
 export default function Section({ title, icon: Icon, children }) {
   return (
     <section className="info-section">

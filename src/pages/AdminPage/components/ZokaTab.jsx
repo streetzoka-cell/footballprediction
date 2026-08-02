@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/ZokaTab.jsx
+
 import React, { useState, useEffect, useMemo, useCallback, memo } from 'react';
 import { Star, Save, Send, Pencil, History, ChevronUp, ChevronDown, CheckCircle2, TrendingUp, XCircle, Loader2, Target } from 'lucide-react';
 import { db } from '../../../utils/firebase';
@@ -194,7 +196,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
       {pubMatches.length > 0 && cnt === 0 && (
         <div className="glass-card p-16 flex-between flex-wrap gap-8 anim-fade-up">
           <span className="text-muted text-sm font-bold flex-center gap-6">
-            <Star size={14} className="text-gold" /> {pubMatches.length} Published Pick(s) · Tap a match below to edit
+            <Star size={14} className="text-gold" /> {pubMatches.length} Published Pick(s) Â· Tap a match below to edit
           </span>
           <div className="flex-center gap-6">
             <span className="badge badge-primary flex-center gap-4"><CheckCircle2 size={10} /> {pubRes.e} Exact</span>
@@ -313,7 +315,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
                             <span className="font-extrabold text-gold text-xs">{pk.adminPick?.home} - {pk.adminPick?.away}</span>
                             {pk.status === 'finished' && pk.homeScore != null && (
                               <>
-                                <span className="text-muted">→</span>
+                                <span className="text-muted">â†’</span>
                                 <span className="font-extrabold text-primary text-xs">{pk.homeScore} - {pk.awayScore}</span>
                               </>
                             )}

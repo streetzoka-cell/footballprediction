@@ -1,3 +1,5 @@
+﻿// footballprediction/scripts/prerender-warmup.js
+
 const PRERENDER_TOKEN = process.env.PRERENDER_TOKEN;
 
 if (PRERENDER_TOKEN) {
@@ -13,8 +15,8 @@ if (PRERENDER_TOKEN) {
       url:  "https://zokascore.xyz/zokascore-sitemap.xml"
     })
   })
-  .then(() => console.log("✅ Prerender.io notified!"))
-  .catch(err => console.error("❌ Prerender ping failed:", err.message));
+  .then(() => console.log("âœ… Prerender.io notified!"))
+  .catch(err => console.error("âŒ Prerender ping failed:", err.message));
 } else {
   console.log("Skipping Prerender warmup (no token found).");
 }

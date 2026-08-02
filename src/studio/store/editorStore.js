@@ -1,4 +1,4 @@
-// src/studio/store/editorStore.js
+﻿// footballprediction/src/studio/store/editorStore.js
 import { create } from 'zustand';
 
 export const useEditorStore = create((set) => ({

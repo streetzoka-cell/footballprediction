@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/LogsTab.jsx
+
 import React, { memo } from 'react';
 import { Activity, AlertTriangle, Cpu, Zap } from 'lucide-react';
 import { useSystemObservability } from '../../../hooks/useAdmin';
@@ -29,7 +31,7 @@ const LogsTab = memo(function LogsTab() {
               <div key={endpoint} className="flex-between p-12 glass-card">
                 <div className="flex-col gap-4">
                   <span className="text-primary font-bold text-sm">{endpoint}</span>
-                  <span className="text-muted text-xs">{metrics.count} calls · {metrics.failures} failed</span>
+                  <span className="text-muted text-xs">{metrics.count} calls Â· {metrics.failures} failed</span>
                 </div>
                 <span className={`badge ${metrics.avgLatency > 2000 ? 'badge-danger' : 'badge-primary'}`}>{Math.round(metrics.avgLatency)}ms</span>
               </div>

@@ -1,6 +1,6 @@
-import React, { useState, useEffect } from 'react';
+﻿import React, { useState, useEffect } from 'react';
 import { Link } from "react-router-dom";
-import { ShieldCheck, Lock, Smartphone, Download, Activity, CheckCircle } from 'lucide-react';
+import { ShieldCheck, Lock, Smartphone, Download, Activity, CheckCircle, Phone } from 'lucide-react';
 import { useFixtures } from '../hooks/useFixtures';
 import { useDailyLeaderboard } from '../hooks/useUserData';
 import { todayStr } from '../utils/dates';
@@ -47,11 +47,12 @@ const topLeagues = [
   { label: "Champions League", to: "/league/2/uefa-champions-league" },
 ];
 
+// Using Unicode escapes prevents encoding corruption (ðŸ, âœ, etc.)
 const socialLinks = [
-  { name: "Twitter", href: "https://twitter.com/zokascore", icon: '𝕏' },
+  { name: "Twitter", href: "https://twitter.com/zokascore", icon: '\uD835\uDD4F' }, // 𝕏
   { name: "Facebook", href: "https://facebook.com/zokascore", icon: 'f' },
-  { name: "Instagram", href: "https://instagram.com/zokascore", icon: '◉' },
-  { name: "Telegram", href: "https://t.me/zokascore", icon: '✈' },
+  { name: "Instagram", href: "https://instagram.com/zokascore", icon: '\u25C9' }, // ◉
+  { name: "Telegram", href: "https://t.me/zokascore", icon: '\u2708' }, // ✈
 ];
 
 export default function Footer() {
@@ -94,12 +95,12 @@ export default function Footer() {
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>LIVE MATCHES</span>
           </div>
           <div className="flex-center gap-8">
-            <span style={{ fontSize: 'var(--fs-md)' }}>📅</span>
+            <span style={{ fontSize: 'var(--fs-md)' }}>{'\uD83D\uDCC5'}</span> {/* 📅 */}
             <span className="font-bold text-primary">{todayFixturesCount}</span>
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>FIXTURES TODAY</span>
           </div>
           <div className="flex-center gap-8">
-            <span style={{ fontSize: 'var(--fs-md)' }}>🎯</span>
+            <span style={{ fontSize: 'var(--fs-md)' }}>{'\uD83C\uDFAF'}</span> {/* 🎯 */}
             <span className="font-bold text-primary">{dailyStats.preds.toLocaleString()}</span>
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>PREDICTIONS</span>
           </div>
@@ -110,9 +111,9 @@ export default function Footer() {
           <div className="glass-card flex-col gap-12 p-20">
             <h3 className="text-primary" style={{ fontSize: 'var(--fs-md)' }}>Get Daily Winning Picks</h3>
             <ul className="flex-col gap-8 text-secondary" style={{ fontSize: 'var(--fs-sm)' }}>
-              <li>✔ Match predictions</li>
-              <li>✔ Live alerts</li>
-              <li>✔ Breaking football news</li>
+              <li>{'\u2714'} Match predictions</li>
+              <li>{'\u2714'} Live alerts</li>
+              <li>{'\u2714'} Breaking football news</li>
             </ul>
             <div className="flex gap-8 mt-4">
               <input type="email" placeholder="Enter your email" className="form-input" style={{ flex: 1 }} />
@@ -146,6 +147,18 @@ export default function Footer() {
             <p className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>
               The smartest football companion. Live scores, AI-powered predictions, and real-time updates.
             </p>
+            
+            {/* Support Numbers */}
+            <div className="flex-col gap-4 mt-8">
+              <div className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>24/7 SUPPORT</div>
+              <div className="flex-center gap-8 text-secondary" style={{ fontSize: 'var(--fs-sm)' }}>
+                <Phone size={14} className="text-primary" />
+                <a href="tel:0728720281" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: '600' }}>0728720281</a>
+                <span className="text-muted">/</span>
+                <a href="tel:0721635810" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: '600' }}>0721635810</a>
+              </div>
+            </div>
+
             <div className="flex gap-8 mt-8">
               {socialLinks.map((s) => (
                 <a key={s.name} href={s.href} target="_blank" rel="noreferrer" aria-label={s.name} className="btn-icon btn-ghost">
@@ -177,10 +190,10 @@ export default function Footer() {
 
         {/* 5. Bottom Bar */}
         <div className="flex-between p-16 flex-wrap gap-8" style={{ borderTop: '1px solid var(--border)' }}>
-          <p className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>© {year} ZOKASCORE. All rights reserved.</p>
+          <p className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{'\u00A9'} {year} ZOKASCORE. All rights reserved.</p>
           <div className="flex-center gap-8 text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
             <ShieldCheck size={12} /> HTTPS Protected 
-            <span style={{ margin: '0 4px' }}>•</span> 
+            <span style={{ margin: '0 4px' }}>{'\u2022'}</span> 
             <Lock size={12} /> 18+ Play Responsibly
           </div>
         </div>

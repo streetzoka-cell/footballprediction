@@ -1,4 +1,4 @@
-// backend-v1/src/services/StandingsService.js
+// footballprediction/backend-v1/src/services/StandingsService.js
 const ApiFootballAdapter = require('../providers/ApiFootballAdapter');
 const FootballDataAdapter = require('../providers/FootballDataAdapter');
 const QuotaManager = require('./QuotaManager');
@@ -53,7 +53,7 @@ async function syncStandings() {
   }
 
   await StaticFilePublisher.publishJSON('standings.json', { data: allStandings, count: allStandings.length });
-  logger.info(`[StandingsService] ✓ Standings: ${ok} ok, ${fail} fail`);
+  logger.info(`[StandingsService] âœ“ Standings: ${ok} ok, ${fail} fail`);
   return { ok, fail };
 }
 

@@ -1,4 +1,4 @@
-// src/core/ConnectionManager.jsx
+﻿// footballprediction/src/core/ConnectionManager.jsx
 import { useEffect, useRef } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useToast } from './ToastManager';

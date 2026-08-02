@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/Contact.jsx
+
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin, Send, CheckCircle, MessageCircle, Clock, User, FileText, AlertCircle, Loader } from 'lucide-react';

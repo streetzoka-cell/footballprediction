@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/About.jsx
+
 import { useNavigate } from 'react-router-dom';
 import {
   Target, Trophy, Users, Globe, Shield, Zap, Star,
@@ -68,7 +70,7 @@ export default function About() {
 
         <div className="glass-card p-24 mb-16 flex-col gap-8 anim-fade-up">
           <h2 className="text-primary font-bold flex-center gap-8"><Star size={15} className="text-primary" /> Our Mission</h2>
-          <p className="text-secondary text-sm">We believe every football fan deserves a platform that celebrates knowledge of the game — not just luck. ZOKASCORE was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
+          <p className="text-secondary text-sm">We believe every football fan deserves a platform that celebrates knowledge of the game â€” not just luck. ZOKASCORE was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
         </div>
 
         <div className="glass-card p-24 mb-16 flex-col gap-12 anim-fade-up">

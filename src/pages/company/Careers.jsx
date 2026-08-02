@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/Careers.jsx
+
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Briefcase, MapPin, Clock, Zap, Code, Palette, BarChart3, Shield, Users, Star, Heart, Send } from 'lucide-react';
 import SEO from '../../components/SEO';
@@ -11,7 +13,7 @@ const PERKS = [
 
 const JOBS = [
   { title: 'Senior Frontend Engineer', dept: 'Engineering', color: 'var(--accent)', location: 'Remote', type: 'Full-time', desc: 'Build the prediction UI, leaderboard system, and real-time match experience. You\'ll work with React, Firebase, and modern CSS to create the smoothest football prediction platform.', tags: ['React', 'Firebase', 'CSS', 'TypeScript'] },
-  { title: 'Backend / Data Engineer', dept: 'Engineering', color: 'var(--accent)', location: 'Remote', type: 'Full-time', desc: 'Design and maintain our data pipeline — from football API ingestion to real-time scoring, leaderboard calculations, and analytics. Experience with Cloud Functions and Firestore is a plus.', tags: ['Node.js', 'Firebase', 'Python', 'Data'] },
+  { title: 'Backend / Data Engineer', dept: 'Engineering', color: 'var(--accent)', location: 'Remote', type: 'Full-time', desc: 'Design and maintain our data pipeline â€” from football API ingestion to real-time scoring, leaderboard calculations, and analytics. Experience with Cloud Functions and Firestore is a plus.', tags: ['Node.js', 'Firebase', 'Python', 'Data'] },
   { title: 'Football Content Creator', dept: 'Content', color: 'var(--gold)', location: 'Remote', type: 'Part-time / Contract', desc: 'Create match previews, highlight reels, prediction analysis content, and social media posts. You live and breathe football and know how to make it engaging.', tags: ['Video', 'Writing', 'Social Media', 'Football'] },
   { title: 'Community & Social Manager', dept: 'Growth', color: 'var(--primary)', location: 'Remote', type: 'Full-time', desc: 'Grow and manage the ZOKASCORE community across social platforms, Discord, and in-app. You\'ll run engagement campaigns, moderate discussions, and be the voice of the brand.', tags: ['Social Media', 'Community', 'Discord', 'Growth'] },
 ];

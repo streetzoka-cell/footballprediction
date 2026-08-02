@@ -1,6 +1,8 @@
+// footballprediction/backend-v1/src/services/QuotaManager.js
+
 const logger = require('../utils/logger');
 
-// ★ Scaled for 2 API keys (200 daily calls total)
+// â˜… Scaled for 2 API keys (200 daily calls total)
 const TOTAL_BUDGET = 200; 
 const FT_BUDGET = 24;       // 12 calls/day * 2 keys
 const FALLBACK_BUDGET = 6;  // 3 calls/day * 2 keys

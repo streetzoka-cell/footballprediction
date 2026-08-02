@@ -1,3 +1,5 @@
+﻿// footballprediction/src/components/StatusCenter.jsx
+
 import { useState, useEffect } from 'react';
 import { Activity, Wifi, Server } from 'lucide-react';
 

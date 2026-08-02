@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/ResultsTab.jsx
+
 import React, { useState, useMemo, useCallback, memo } from 'react';
 import { Zap, Check, Copy, CheckCircle2, Loader2, Trophy, Sparkles } from 'lucide-react';
 import { Empty } from './common';
@@ -81,7 +83,7 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
     try {
       await onOverride(pred, h, a);
       setScores(prev => { const n = { ...prev }; delete n[mid]; return n; });
-      toast(`Override: ${pred.homeTeam?.shortName || pred.homeTeam?.name} → ${h}-${a}`, 'ok');
+      toast(`Override: ${pred.homeTeam?.shortName || pred.homeTeam?.name} â†’ ${h}-${a}`, 'ok');
     } catch (e) { toast('Override failed: ' + e.message, 'er'); }
     setOverriding(prev => ({ ...prev, [mid]: false }));
   }, [scores, onOverride, toast]);
@@ -119,7 +121,7 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
                   </div>
                   <div className="flex-center gap-4 px-12 py-4 rounded-md bg-elevated">
                     <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.h ?? (p.homeScore ?? '')} onChange={e => updScore(mid, 'h', e.target.value)} placeholder={p.homeScore ?? '-'} />
-                    <span className="text-muted">–</span>
+                    <span className="text-muted">â€“</span>
                     <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} type="number" min="0" max="99" value={s.a ?? (p.awayScore ?? '')} onChange={e => updScore(mid, 'a', e.target.value)} placeholder={p.awayScore ?? '-'} />
                   </div>
                   <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
@@ -168,7 +170,7 @@ const ResultsTab = memo(function ResultsTab({ date, preds, onResolve, onOverride
                   </div>
                   <div className="flex-center gap-4 px-12 py-4 rounded-md bg-primary/10">
                     <span className="font-extrabold text-primary">{p.homeScore}</span>
-                    <span className="text-muted">–</span>
+                    <span className="text-muted">â€“</span>
                     <span className="font-extrabold text-primary">{p.awayScore}</span>
                   </div>
                   <div className="flex-center gap-8 flex-1 min-w-0 justify-end">

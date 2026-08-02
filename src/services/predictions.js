@@ -1,3 +1,5 @@
+﻿// footballprediction/src/services/predictions.js
+
 import { db } from '../utils/firebase';
 import { safeWrite } from './safeWrite';
 import { collection, query, where, doc, getDoc, getDocs, writeBatch, serverTimestamp, increment, runTransaction } from 'firebase/firestore';
@@ -5,29 +7,103 @@ import { todayStr, getWeekStart, getMonthStart } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { PATHS, calcPoints } from '../utils/constants';
 import { buildDailySummaryData, buildPeriodSummaryData } from '../engine/leaderboardEngine';
+import { footballApi } from './footballApi';
 
 export async function savePrediction(uid, displayName, pred, h, a) {
   const matchId = String(pred.matchId || pred.id);
   const dateStr = pred.matchDate || pred._dateStr || todayStr();
   const predId = `${uid}_${matchId}`;
 
-  const homeTeamName = typeof pred.homeTeam === 'object' ? (pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home') : (pred.homeTeam || 'Home');
-  const awayTeamName = typeof pred.awayTeam === 'object' ? (pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away') : (pred.awayTeam || 'Away');
-  const leagueName = typeof pred.league === 'object' ? (pred.league?.name || 'Other') : (pred.league || 'Other');
+  const homeTeamName =
+    typeof pred.homeTeam === 'object'
+      ? pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home'
+      : pred.homeTeam || 'Home';
+
+  const awayTeamName =
+    typeof pred.awayTeam === 'object'
+      ? pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'
+      : pred.awayTeam || 'Away';
+
+  const leagueName =
+    typeof pred.league === 'object'
+      ? pred.league?.name || 'Other'
+      : pred.league || 'Other';
 
   const payload = {
-    userId: uid, displayName: displayName || 'Anonymous', matchId, predId,
-    homeScore: Number(h), awayScore: Number(a), matchDate: dateStr,
-    homeTeam: homeTeamName, awayTeam: awayTeamName,
+    userId: uid,
+    displayName: displayName || 'Anonymous',
+    matchId,
+    predId,
+    homeScore: Number(h),
+    awayScore: Number(a),
+    matchDate: dateStr,
+    homeTeam: homeTeamName,
+    awayTeam: awayTeamName,
     homeLogo: pred.homeLogo || pred.homeTeam?.crest || pred.homeTeam?.logo || null,
     awayLogo: pred.awayLogo || pred.awayTeam?.crest || pred.awayTeam?.logo || null,
-    league: leagueName, kickoff: pred.kickoff || null,
-    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+    league: leagueName,
+    kickoff: pred.kickoff || null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   };
 
+  // 1. Backend-first ownership
+  try {
+    const res = await footballApi.saveUserPrediction(payload);
+
+    if (res?.success) {
+      eventBus.emit(EVENT.USER_PREDICTION_SAVED, {
+        uid,
+        matchId,
+        predId,
+        dateStr,
+        homeScore: Number(h),
+        awayScore: Number(a),
+      });
+
+      return {
+        success: true,
+        backend: true,
+        queued: false,
+        status: res.status,
+      };
+    }
+
+    throw new Error('Backend prediction response was not successful');
+  } catch (backendErr) {
+    const status = backendErr?.status;
+
+    // Validation/auth/conflict errors should NOT fallback to Firebase.
+    // Example: match already started.
+    if (status === 400 || status === 401 || status === 403 || status === 409) {
+      throw backendErr;
+    }
+
+    console.warn(
+      '[Predictions] Backend prediction save failed, using Firebase compatibility fallback:',
+      backendErr.message
+    );
+  }
+
+  // 2. Temporary Firebase compatibility fallback
   await safeWrite(PATHS.USER_PREDICTIONS, predId, payload, { merge: true });
-  eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid, matchId, predId, dateStr, homeScore: Number(h), awayScore: Number(a) });
+
+  eventBus.emit(EVENT.USER_PREDICTION_SAVED, {
+    uid,
+    matchId,
+    predId,
+    dateStr,
+    homeScore: Number(h),
+    awayScore: Number(a),
+  });
+
+  return {
+    success: true,
+    backend: false,
+    queued: false,
+  };
 }
+
 
 export async function saveZokaVote(uid, matchId, vote) {
   const dateStr = todayStr();

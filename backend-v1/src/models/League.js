@@ -8,4 +8,5 @@
  * @property {number} season
  * @property {Array} standings
  */
+
 module.exports = {};

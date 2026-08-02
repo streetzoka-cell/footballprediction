@@ -1,4 +1,4 @@
-// src/utils/soundEngine.js
+﻿// footballprediction/src/utils/soundEngine.js
 export const Sound = {
   ctx: null,
   on: true,
@@ -19,7 +19,7 @@ export const Sound = {
     return !!this.ctx;
   },
 
-  // ★ Unlock audio on first user interaction (Browser Autoplay Policy Fix)
+  // â˜… Unlock audio on first user interaction (Browser Autoplay Policy Fix)
   unlock() {
     if (this._unlocked) return;
     const unlockFn = () => {

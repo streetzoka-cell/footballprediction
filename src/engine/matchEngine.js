@@ -1,8 +1,10 @@
-import { getLocalDateFromUtc, formatTime } from '../utils/dates';
+﻿// footballprediction/src/engine/matchEngine.js
+
+import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
-  
+
   const display = raw.display || {};
   const time = raw.time || {};
   const score = display.score || {};
@@ -20,7 +22,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let minute = display.minute;
   let isHidden = false;
 
-  // ★ ADJUSTED THRESHOLDS (115m = 90m play + 15m HT + 10m stoppage)
+  // ★ Thresholds (115m = 90m play + 15m HT + 10m stoppage)
   const FT_THRESHOLD_MS = 125 * 60 * 1000;        // 2h05m — hard cap force FT
   const STUCK_LIVE_MS = 115 * 60 * 1000;          // 1h55m — if at 90' for 10 mins, force FT
   const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24h — hide completely
@@ -29,14 +31,13 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     const matchStartTime = raw.timestamp * 1000;
     const elapsed = now - matchStartTime;
 
-    // Hide very old stuck matches
     if (elapsed > HIDE_THRESHOLD_MS && (isLive || status === '90' || status === '2H')) {
       isHidden = true;
       isLive = false;
       isFinished = false;
       status = 'HIDDEN';
     }
-    // ★ KEY FIX: If minute already at 90' and elapsed > 115 min → FT NOW
+    // ★ If minute already at 90' and elapsed > 115 min → FT NOW
     else if (isLive && (minute >= 90 || status === '90' || status === '2H') && elapsed > STUCK_LIVE_MS) {
       isLive = false;
       isFinished = true;
@@ -59,11 +60,13 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
     date: raw.date,
-    utcDate: raw.utcDate || raw.date, 
-    dateStr: matchDateStr, 
+    utcDate: raw.utcDate || raw.date,
+
+    dateStr: matchDateStr,                              // UTC — backend key (do not change)
+    localDateStr: toLocalDateStr(raw.utcDate || raw.date), // LOCAL — for display bucketing
     timestamp: raw.timestamp,
-    kickoff: kickoffTime, 
-    kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date, 
+    kickoff: kickoffTime,
+    kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date,
     status: status,
     statusLong: raw.statusLong,
     isLive: isLive,
@@ -75,7 +78,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     displayMinute: minute,
     lastUpdated: raw.dataQuality?.lastUpdated || null,
     isHidden: isHidden,
-    
+
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
     homeTeamName: homeName,
@@ -96,7 +99,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     leagueCountry: raw.leagueCountry,
     matchScore: raw.importance || 0,
     category: raw.category || 'NORMAL',
-    
+
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
     league: { name: leagueName, emblem: leagueLogo, id: raw.leagueId },
@@ -107,13 +110,13 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 // ★ Bulletproof Smart Minute Calculator (HALFTIME BUG FIXED)
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
-  
+
   if (m.isFinished) {
     return { ...m, displayMinute: 90, minute: 90, isLive: false, isHT: false };
   }
 
   const statusUpper = String(m.status || "").toUpperCase();
-  
+
   if (['PST', 'SUSP', 'INT', 'CANC', 'ABD', 'POSTP', 'TBD', 'PENDING', 'NS'].includes(statusUpper)) {
     return m;
   }
@@ -122,7 +125,7 @@ export function applySmartMinute(m, now = Date.now()) {
   if (!matchStartTime) return m;
 
   const elapsedMs = now - matchStartTime;
-  
+
   if (elapsedMs < 0) {
     return {
       ...m,
@@ -149,7 +152,7 @@ export function applySmartMinute(m, now = Date.now()) {
     } else if (elapsedMins > 90) {
       smartMinute = 90;
     } else if (elapsedMins > 60) {
-      smartMinute = 45 + (elapsedMins - 60);
+      smartMinute = 45 + (elapsedMins - 60); // = elapsed - 15 (halftime subtracted)
       status = '2H';
     } else if (elapsedMins > 50) {
       smartMinute = 45;
@@ -164,28 +167,26 @@ export function applySmartMinute(m, now = Date.now()) {
     }
   } else {
     smartMinute = apiMinute;
-    
+
     if (m.lastUpdated) {
       const lastUpdateTime = new Date(m.lastUpdated).getTime();
       if (!isNaN(lastUpdateTime)) {
         let extraMins = Math.floor((now - lastUpdateTime) / 60000);
-        
-        // ★ FIX: Subtract 15 mins for halftime if we crossed it since last API update
+
         const totalElapsedMins = Math.floor(elapsedMs / 60000);
         const lastUpdateElapsedMins = Math.floor((lastUpdateTime - matchStartTime) / 60000);
-        
-        // If the last update was before halftime (<=60 mins) and we are now past halftime (>60 mins)
+
         if (lastUpdateElapsedMins <= 60 && totalElapsedMins > 60) {
-          extraMins -= 15; 
+          extraMins -= 15;
         }
-        
+
         smartMinute += Math.max(0, extraMins);
       }
     }
   }
 
   if (statusUpper === 'HT') {
-    isHT = true; 
+    isHT = true;
     smartMinute = 45;
     status = 'HT';
   }

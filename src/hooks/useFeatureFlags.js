@@ -1,4 +1,4 @@
-// src/hooks/useFeatureFlags.js
+﻿// footballprediction/src/hooks/useFeatureFlags.js
 import { useQuery } from '@tanstack/react-query';
 import { remoteConfig } from '../utils/firebase';
 import { fetchAndActivate, getValue } from 'firebase/remote-config';

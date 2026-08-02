@@ -1,3 +1,5 @@
+﻿// footballprediction/src/hooks/useFixtures.js
+
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
@@ -16,9 +18,9 @@ export function useHomeMatches() {
     queryKey: ['homeMatches'],
     queryFn: async () => {
       const res = await footballApi.getHomeData();
-      return res; 
+      return res;
     },
-    refetchInterval: 60000, 
+    refetchInterval: 60000,
     staleTime: 30000,
     refetchOnWindowFocus: true,
   });
@@ -33,20 +35,20 @@ export function useFixtures(dateStr, sport = 'football') {
         footballApi.getLive(sport),
         footballApi.getFinished(sport, dateStr)
       ]);
-      
+
       const fixtures = fixRes?.data || [];
       const live = liveRes?.data || [];
       const finished = finRes?.data || [];
-      
+
       const map = new Map();
-      
+
       const findExisting = (match) => {
         const byId = map.get(String(match.id));
         if (byId) return byId;
 
         const homeKey = cleanName(match.homeTeamName || match.homeTeam?.name);
         const awayKey = cleanName(match.awayTeamName || match.awayTeam?.name);
-        
+
         for (let [id, existing] of map.entries()) {
           const existHome = cleanName(existing.homeTeamName || existing.homeTeam?.name);
           const existAway = cleanName(existing.awayTeamName || existing.awayTeam?.name);
@@ -58,7 +60,7 @@ export function useFixtures(dateStr, sport = 'football') {
       };
 
       fixtures.forEach(m => map.set(String(m.id), m));
-      
+
       finished.forEach(m => {
         const existing = findExisting(m);
         if (existing) {
@@ -67,41 +69,39 @@ export function useFixtures(dateStr, sport = 'football') {
           map.set(String(m.id), m);
         }
       });
-      
+
       live.forEach(m => {
         const existing = findExisting(m);
-        
+
         if (existing && existing.display?.isFinished && !m.display?.isFinished) {
           return;
         }
-        
+
         if (existing) {
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else if (m.dateStr === dateStr) {
           map.set(String(m.id), m);
         }
       });
-      
+
       const now = Date.now();
-      // ★ ADJUSTED THRESHOLDS
-      const FT_THRESHOLD_MS = 125 * 60 * 1000;
       const STUCK_AT_90_MS = 115 * 60 * 1000;
       const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
-      
+
       return Array.from(map.values())
         .map(m => normalizeMatch(m, true, now))
         .filter(Boolean)
         .filter(m => {
           if (m.isHidden) return false;
-          
+
           const matchDate = new Date(m.dateStr + 'T12:00:00');
           const today = new Date(todayStr() + 'T12:00:00');
           const isYesterday = matchDate < today;
-          
+
           if (isYesterday && m.isLive && m.minute >= 90) {
             return false;
           }
-          
+
           if (m.timestamp) {
             const elapsed = now - (m.timestamp * 1000);
             if (elapsed > STUCK_AT_90_MS && m.isLive && m.minute >= 90) {
@@ -111,7 +111,7 @@ export function useFixtures(dateStr, sport = 'football') {
               return false;
             }
           }
-          
+
           return true;
         });
     },
@@ -125,7 +125,7 @@ export function useFixtures(dateStr, sport = 'football') {
       if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
         return 30000;
       }
-      return false; 
+      return false;
     }
   });
 }
@@ -135,11 +135,16 @@ export function useLiveMatches(sport = 'football') {
     queryKey: ['liveMatches', sport],
     queryFn: async () => {
       const res = await footballApi.getLive(sport);
-      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
+      const now = Date.now();
+      return (res?.data || [])
+        .map((m) => normalizeMatch(m, true, now))
+        .filter(Boolean)
+        // ★ Only genuinely live matches — drop force-FT'd, hidden, or finished entries
+        .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
     },
-    refetchInterval: 30000, 
-    refetchIntervalInBackground: true, 
-    staleTime: 15 * 1000, 
+    refetchInterval: 30000,
+    refetchIntervalInBackground: true,
+    staleTime: 15 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
     refetchOnWindowFocus: true,
@@ -170,7 +175,7 @@ export function useStandings(leagueId) {
     },
     enabled: !!leagueId,
     staleTime: 10 * 60 * 1000,
-    gcTime: 1000 * 60 * 60 * 24, 
+    gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
   });
 }
@@ -185,7 +190,7 @@ export function useTopScorers(leagueId) {
     },
     enabled: !!leagueId,
     staleTime: 60 * 60 * 1000,
-    gcTime: 1000 * 60 * 60 * 24, 
+    gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
   });
 }
@@ -200,7 +205,7 @@ export function useTeams(leagueId) {
     },
     enabled: !!leagueId,
     staleTime: 60 * 60 * 1000,
-    gcTime: 1000 * 60 * 60 * 24, 
+    gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
   });
 }

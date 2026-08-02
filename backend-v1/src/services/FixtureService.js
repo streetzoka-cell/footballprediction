@@ -1,3 +1,5 @@
+﻿// footballprediction/backend-v1/src/services/FixtureService.js
+
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -10,7 +12,7 @@ const PUBLIC_DIR = path.join(process.cwd(), 'public_data');
 
 async function syncFixturesForDate(dateStr) {
   const filePath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
-  
+
   if (fsSync.existsSync(filePath)) {
     const stats = await fs.stat(filePath);
     if (stats.size < 100) {
@@ -18,18 +20,18 @@ async function syncFixturesForDate(dateStr) {
       await fs.unlink(filePath);
     } else {
       logger.info(`[FixtureService] Fixtures for ${dateStr} already exist locally. Skipping API fetch.`);
-      return 0; 
+      return 0;
     }
   }
 
   logger.info(`[FixtureService] Syncing unified fixtures for ${dateStr}`);
   const matches = await buildUnifiedFixtures(dateStr);
-  
+
   if (!Array.isArray(matches) || matches.length === 0) {
     logger.warn(`[FixtureService] No matches returned for ${dateStr}. Skipping write to prevent overwriting good data.`);
     return 0;
   }
-  
+
   const scored = matches.map(doc => {
     doc.matchScore = calculateMatchScore(doc);
     doc.category = categorizeMatch(doc.matchScore);
@@ -62,7 +64,7 @@ async function syncYesterdayResults() {
 
   const matches = await buildUnifiedFixtures(dateStr);
   if (!Array.isArray(matches) || matches.length === 0) return 0;
-  
+
   const finished = matches.filter(m => m.display?.isFinished || m.status === 'FT');
   await writeFootballSnapshot(dateStr, { finished });
   return finished.length;
@@ -72,9 +74,9 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const dateStr = getDateOffset(offset);
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   const resultsPath = path.join(PUBLIC_DIR, 'results', `${dateStr}.json`);
-  
+
   let matches = [];
-  
+
   logger.info(`[FixtureService] Loading local fixtures for ${dateStr} (offset: ${offset})...`);
 
   try {
@@ -98,7 +100,8 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const newlyFinished = [];
   const nowMs = Date.now();
 
-  // ★ ADJUSTED: 125m hard cap, 115m for stuck at 90'
+  // Thresholds: 125m hard cap (90 play + 15 HT + 20 stoppage/ET buffer),
+  // 115m for a match stuck at 90'.
   const FT_FORCE_MS = 125 * 60 * 1000;
   const STUCK_AT_90_MS = 115 * 60 * 1000;
 
@@ -108,19 +111,31 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
     const atNinety = minute >= 90 || match.status === '90' || match.status === '2H';
 
     const elapsedMs = match.timestamp ? (nowMs - match.timestamp * 1000) : 0;
-    
+
     const stuckAtNinety = atNinety && elapsedMs > STUCK_AT_90_MS;
     const isExpired = elapsedMs > FT_FORCE_MS;
 
     if (isFT || isExpired || stuckAtNinety) {
+      // ★ FIX: match is over but the provider never sent a score.
+      // Stop showing it as LIVE (this was the "yesterday 33 live" leak).
+      // Keep the row as FT-not-live so a late score can still land via the
+      // live merge, but it must NOT count toward the live count.
       if (match.homeScore == null || match.awayScore == null) {
+        match.status = 'FT';
+        match.isLive = false;
+        if (match.display) {
+          match.display.isLive = false;
+          match.display.isFinished = true;
+          match.display.minute = 90;
+        }
         logger.warn(
-          `[FixtureService] Match ${match.id} is FT but has no final score yet. Keeping it in fixtures.`
+          `[FixtureService] Match ${match.id} is FT with no score — marked finished (not live).`
         );
         stillFixtures.push(match);
         continue;
       }
 
+      // Has a score → finalize and move to results.
       if (match.display) {
         match.display.isFinished = true;
         match.display.isLive = false;
@@ -139,6 +154,14 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
   if (newlyFinished.length === 0) {
     logger.info(`[FixtureService] No newly finished matches found for ${dateStr}.`);
+    // ★ Still rewrite the fixtures file so scoreless matches marked FT-not-live
+    // above are persisted (otherwise the live leak stays on disk).
+    const scoredStill = stillFixtures.map(doc => {
+      doc.matchScore = calculateMatchScore(doc);
+      doc.category = categorizeMatch(doc.matchScore);
+      return doc;
+    }).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+    await writeFootballSnapshot(dateStr, { matches: scoredStill });
     return [];
   }
 
@@ -161,12 +184,12 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
   const merged = [...existingResults, ...newlyFinished];
   const unique = Array.from(new Map(merged.map(m => [String(m.id || `${m.homeTeamName || m.homeTeam?.name}-${m.awayTeamName || m.awayTeam?.name}`), m])).values());
-  
+
   logger.info(`[FixtureService] Moved ${newlyFinished.length} finished matches to results for ${dateStr}. Total results: ${unique.length}`);
-  
+
   await writeFootballSnapshot(dateStr, { finished: unique });
-  
-  return newlyFinished; 
+
+  return newlyFinished;
 }
 
 async function syncRecentFinishedFixtures(forceFetch = false) {
@@ -176,10 +199,10 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
-module.exports = { 
-  syncTodayFixtures, 
-  syncTomorrowFixtures, 
-  syncYesterdayResults, 
+module.exports = {
+  syncTodayFixtures,
+  syncTomorrowFixtures,
+  syncYesterdayResults,
   syncFinishedFixtures,
-  syncRecentFinishedFixtures 
+  syncRecentFinishedFixtures
 };

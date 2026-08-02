@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/Basketball.jsx
+
 import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
@@ -15,7 +17,7 @@ import { db } from '../utils/firebase';
 import { PATHS, getBasketballLeaguePriority, getLeagueColor, isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { doc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { safeWrite } from '../services/safeWrite'; // ★ IMPORTED safeWrite
+import { safeWrite } from '../services/safeWrite'; // â˜… IMPORTED safeWrite
 import SEO from '../components/SEO';
 
 function normalizeBasketballGame(raw) {
@@ -379,7 +381,7 @@ export default function Basketball() {
   const handlePredict = useCallback(async (gameId, needsLogin, pick) => {
     if (needsLogin || !currentUser) { setShowLoginModal(true); return; }
     if (!gameId || !pick) return;
-    // ★ Use safeWrite for offline queue support
+    // â˜… Use safeWrite for offline queue support
     await safeWrite('user_bb_predictions', `${currentUser.uid}_${gameId}`, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
     eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, sport: 'basketball' });
   }, [currentUser]);
@@ -485,7 +487,7 @@ export default function Basketball() {
           <div className="flex-center gap-10">
             <div className="flex-center font-extrabold text-inverse" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', fontSize: '.72rem' }}>Z</div>
             <span className="text-primary font-extrabold text-sm">zokascore<span className="text-accent">.xyz</span></span>
-            <span style={{ fontSize: 20 }}>🏀</span>
+            <span style={{ fontSize: 20 }}>ðŸ€</span>
           </div>
           <div className="flex-center gap-4">
             {liveCount > 0 && (
@@ -502,10 +504,10 @@ export default function Basketball() {
         <div className="zoka-wrap flex-between py-6">
           <div className="flex gap-4">
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/fixtures')}>
-              <span style={{ fontSize: '1rem' }}>⚽</span> Football <ChevronRight size={13} className="opacity-50" />
+              <span style={{ fontSize: '1rem' }}>âš½</span> Football <ChevronRight size={13} className="opacity-50" />
             </button>
             <button className="btn btn-primary btn-sm">
-              <span style={{ fontSize: '1rem' }}>🏀</span> Basketball
+              <span style={{ fontSize: '1rem' }}>ðŸ€</span> Basketball
             </button>
           </div>
           <span className="text-muted font-medium flex-center gap-4 text-xs">
@@ -552,7 +554,7 @@ export default function Basketball() {
               <div><SkeletonGroup /><div className="mt-16"><SkeletonGroup /></div></div>
             ) : !error && mergedGames.length === 0 ? (
               <div className="glass-card flex-col items-center p-60 text-center gap-16">
-                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>🏀</div>
+                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>ðŸ€</div>
                 <div className="text-muted font-medium text-sm">No games scheduled for this date</div>
                 <div className="text-muted text-xs">Backend populates yesterday, today, and tomorrow</div>
                 {!windowDates.includes(selectedDate) && (

@@ -1,4 +1,4 @@
-// src/app/guards.jsx
+﻿// footballprediction/src/app/guards.jsx
 import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 import AppLoader from "../components/AppLoader";
@@ -28,7 +28,7 @@ export function GuestRoute({ children }) {
   return children;
 }
 
-// ★ UPDATED: Now checks the exact same `isAdmin` boolean that the Navbar uses!
+// â˜… UPDATED: Now checks the exact same `isAdmin` boolean that the Navbar uses!
 export function AdminRoute({ children }) {
   const { currentUser, userProfile, authLoading } = useAuth();
   const location = useLocation();

@@ -3,7 +3,7 @@ const EventEmitter = require('events');
 class EventBus extends EventEmitter {
   constructor() {
     super();
-    this.setMaxListeners(20); // Increase limit for schedulers/routes
+    this.setMaxListeners(20);
   }
 }
 

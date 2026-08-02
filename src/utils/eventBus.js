@@ -1,4 +1,4 @@
-// (Your exact code for eventBus.js)
+﻿// footballprediction/src/utils/eventBus.js
 class EventBus {
   constructor() { this._handlers = new Map(); this._lastValue = new Map(); this._debug = false; }
   on(event, handler, { immediate = false } = {}) { /* ... */ }

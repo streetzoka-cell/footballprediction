@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/AdminPage/components/StaffTab.jsx
+
 import React, { useState, useCallback, memo } from 'react';
 import { UserCog, Users, Plus, Ban, Loader2 } from 'lucide-react';
 import { db } from '../../../utils/firebase';

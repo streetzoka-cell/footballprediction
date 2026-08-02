@@ -8,4 +8,5 @@
  * @property {Object} venue
  * @property {string|null} leagueId
  */
+
 module.exports = {};

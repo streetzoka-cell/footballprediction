@@ -1,129 +1,182 @@
-const express = require('express');
-const logger = require('../../utils/logger');
-const path = require('path');
-const fs = require('fs');
+// backend-v1/src/routes/v1/predictions.js
 
+const express = require('express');
 const router = express.Router();
 
-// Simple in-memory store for predictions
-// Format: { "matchId": { totalVotes: 0, home: 0, draw: 0, away: 0 } }
-const predictionsStore = {};
+const logger = require('../../utils/logger');
+const predictionStore = require('../../services/PredictionStore');
+const UserPredictionStore = require('../../services/UserPredictionStore');
+const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
+const createRateLimit = require('../../middleware/simpleRateLimit');
+const { getDateOffset } = require('../../config/constants');
 
-// Path to save predictions locally (matches your public_data architecture)
-const PREDICTIONS_FILE = path.join(process.cwd(), 'public_data', 'predictions.json');
+const voteLimiter = createRateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyPrefix: 'prediction-vote',
+  message: 'Too many prediction votes. Please slow down.',
+});
 
-// Load existing votes on server startup
-function loadPredictions() {
-  try {
-    if (fs.existsSync(PREDICTIONS_FILE)) {
-      const data = fs.readFileSync(PREDICTIONS_FILE, 'utf8');
-      Object.assign(predictionsStore, JSON.parse(data));
-      logger.info('[Predictions] Loaded existing predictions from local file.');
-    }
-  } catch (err) {
-    logger.warn('[Predictions] Could not load local predictions file, starting fresh.');
-  }
-}
-
-// Save votes to local file for persistence across restarts
-function savePredictions() {
-  try {
-    fs.writeFileSync(PREDICTIONS_FILE, JSON.stringify(predictionsStore, null, 2), 'utf8');
-  } catch (err) {
-    logger.error('[Predictions] Failed to save predictions to local file:', err.message);
-  }
-}
-
-// Initialize on startup
-loadPredictions();
+const userPredictionLimiter = createRateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  keyPrefix: 'user-prediction',
+  message: 'Too many prediction attempts. Please slow down.',
+});
 
 /**
  * POST /api/v1/predictions/vote
+ *
+ * Match of the Day public vote.
  */
-router.post('/vote', async (req, res) => {
+router.post('/vote', voteLimiter, async (req, res, next) => {
   try {
-    const { matchId, choice } = req.body;
+    const { matchId, choice, voterId } = req.body || {};
 
-    if (!matchId || !['home', 'draw', 'away'].includes(choice)) {
-      return res.status(400).json({ error: 'Invalid matchId or choice' });
-    }
+    const headerVoterId = req.headers['x-voter-id'];
 
-    const mid = String(matchId);
-    
-    // Initialize match if it doesn't exist yet
-    if (!predictionsStore[mid]) {
-      predictionsStore[mid] = { totalVotes: 0, home: 0, draw: 0, away: 0 };
-    }
-
-    // Increment votes
-    predictionsStore[mid].totalVotes += 1;
-    predictionsStore[mid][choice] += 1;
-
-    // Save to local file immediately
-    savePredictions();
-
-    logger.info(`[✅ Prediction Vote] Match: ${mid}, Choice: ${choice}, Total: ${predictionsStore[mid].totalVotes}`);
-
-    res.status(200).json({ 
-      success: true, 
-      message: 'Vote recorded successfully',
-      matchId: mid,
-      choice
+    const result = predictionStore.vote({
+      matchId,
+      choice,
+      voterId: voterId || headerVoterId || null,
     });
 
-  } catch (error) {
-    logger.error('[❌ Prediction Vote Error]:', error);
-    res.status(500).json({ error: 'Failed to record vote' });
+    logger.info(
+      `[Prediction Vote] match=${result.matchId} choice=${result.choice} status=${result.status} total=${result.aggregate.totalVotes}`
+    );
+
+    return res.status(200).json({
+      success: true,
+      message:
+        result.status === 'duplicate'
+          ? 'Vote already recorded'
+          : 'Vote recorded successfully',
+      matchId: result.matchId,
+      choice: result.choice,
+      status: result.status,
+      totalVotes: result.aggregate.totalVotes,
+      votes: result.aggregate.votes,
+      percentages: result.aggregate.percentages,
+    });
+  } catch (err) {
+    if (err.status) {
+      return res.status(err.status).json({
+        success: false,
+        error: {
+          code: err.code || 'BAD_REQUEST',
+          message: err.message,
+          details: err.details || [],
+        },
+        meta: {
+          requestId: res.locals?.requestId || null,
+          timestamp: new Date().toISOString(),
+        },
+        error: err.message,
+      });
+    }
+
+    next(err);
   }
 });
 
 /**
- * GET /api/v1/predictions/:matchId
+ * GET /api/v1/predictions/user?date=YYYY-MM-DD
+ *
+ * Returns the authenticated user's predictions for a date.
  */
-router.get('/:matchId', async (req, res) => {
+router.get('/user', authenticateFirebaseUser, async (req, res, next) => {
   try {
-    const { matchId } = req.params;
-    const mid = String(matchId);
-    
-    const data = predictionsStore[mid] || { totalVotes: 0, home: 0, draw: 0, away: 0 };
-    const total = data.totalVotes || 0;
-    
-    // Calculate real percentages
-    let homePct = total > 0 ? Math.round((data.home / total) * 100) : 0;
-    let drawPct = total > 0 ? Math.round((data.draw / total) * 100) : 0;
-    let awayPct = total > 0 ? Math.round((data.away / total) * 100) : 0;
-    
-    // Fix rounding errors so percentages always add up to exactly 100%
-    const sum = homePct + drawPct + awayPct;
-    if (total > 0 && sum !== 100) {
-      const diff = 100 - sum;
-      // Add the missing percent to the highest vote getter
-      if (data.home >= data.draw && data.home >= data.away) homePct += diff;
-      else if (data.draw >= data.home && data.draw >= data.away) drawPct += diff;
-      else awayPct += diff;
-    }
+    const date = String(req.query.date || getDateOffset(0)).trim();
 
-    logger.info(`[📊 Prediction Fetch] Match: ${mid}, Total: ${total}, H:${homePct}% D:${drawPct}% A:${awayPct}%`);
+    const data = await UserPredictionStore.getUserPredictionsMap(
+      req.user.uid,
+      date
+    );
 
-    res.status(200).json({
+    return res.json({
       success: true,
-      matchId: mid,
-      totalVotes: total,
-      votes: {
-        home: data.home,
-        draw: data.draw,
-        away: data.away
-      },
-      percentages: {
-        home: homePct,
-        draw: drawPct,
-        away: awayPct
-      }
+      data,
+      count: Object.keys(data).length,
+      date,
     });
+  } catch (err) {
+    next(err);
+  }
+});
 
-  } catch (error) {
-    logger.error('[❌ Get Predictions Error]:', error);
-    res.status(500).json({ error: 'Failed to fetch predictions' });
+/**
+ * POST /api/v1/predictions/user
+ *
+ * Saves an authenticated user's prediction.
+ */
+router.post(
+  '/user',
+  authenticateFirebaseUser,
+  userPredictionLimiter,
+  async (req, res, next) => {
+    try {
+      const result = await UserPredictionStore.savePrediction(
+        req.user,
+        req.body || {}
+      );
+
+      const httpStatus =
+        result.status === 'recorded' || result.status === 'changed'
+          ? 201
+          : 200;
+
+      return res.status(httpStatus).json({
+        success: true,
+        status: result.status,
+        message:
+          result.status === 'duplicate'
+            ? 'Prediction already recorded'
+            : 'Prediction saved successfully',
+        data: result.prediction,
+        prediction: result.prediction,
+      });
+    } catch (err) {
+      next(err);
+    }
+  }
+);
+
+/**
+ * GET /api/v1/predictions/:matchId
+ *
+ * Match of the Day vote stats.
+ */
+router.get('/:matchId', (req, res, next) => {
+  try {
+    const data = predictionStore.get(req.params.matchId);
+
+    return res.json({
+      success: true,
+      matchId: data.matchId,
+      totalVotes: data.totalVotes,
+      votes: data.votes,
+      percentages: data.percentages,
+      updatedAt: data.updatedAt,
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/predictions
+ *
+ * Optional debug endpoint for match votes.
+ */
+router.get('/', (req, res, next) => {
+  try {
+    res.json({
+      success: true,
+      data: predictionStore.getAll(),
+      stats: predictionStore.stats(),
+    });
+  } catch (err) {
+    next(err);
   }
 });
 

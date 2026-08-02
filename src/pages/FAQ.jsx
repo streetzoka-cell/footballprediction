@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/FAQ.jsx
+
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ChevronDown, MessageSquare } from 'lucide-react';
@@ -51,7 +53,7 @@ export default function FAQ() {
           <MessageSquare size={32} className="text-primary" />
           <h3 className="text-primary font-bold">Still have questions?</h3>
           <p className="text-muted text-sm">Can't find what you're looking for? We're here to help.</p>
-          <Link to="/help-center" className="btn btn-primary">Visit Help Center →</Link>
+          <Link to="/help-center" className="btn btn-primary">Visit Help Center â†’</Link>
         </div>
       </div>
     </div>

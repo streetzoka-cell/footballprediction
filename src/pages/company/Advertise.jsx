@@ -1,3 +1,5 @@
+﻿// footballprediction/src/pages/company/Advertise.jsx
+
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Megaphone, CheckCircle, TrendingUp, Target, Users, BarChart3, Star } from 'lucide-react';
 import SEO from '../../components/SEO';
@@ -62,7 +64,7 @@ export default function Advertise() {
               { icon: <Target size={14} />, title: 'Audience Targeting', desc: 'Users are actively engaged in predictions and live scores, offering higher intent than passive social media scrolling.' },
               { icon: <Users size={14} />, title: 'Football Obsessed', desc: 'Every user is here because they love football. Your brand reaches real fans, not casual browsers.' },
               { icon: <BarChart3 size={14} />, title: 'Full Transparency', desc: 'Real-time impression and click analytics. Know exactly where your budget goes.' },
-              { icon: <Star size={14} />, title: 'Premium Placement', desc: 'Ads appear natively within the platform flow — not as disruptive pop-ups or spam.' },
+              { icon: <Star size={14} />, title: 'Premium Placement', desc: 'Ads appear natively within the platform flow â€” not as disruptive pop-ups or spam.' },
             ].map((w, i) => (
               <div key={i} className="glass-card p-16 flex-col gap-8">
                 <h4 className="text-primary font-bold text-sm flex-center gap-8">{w.icon} {w.title}</h4>

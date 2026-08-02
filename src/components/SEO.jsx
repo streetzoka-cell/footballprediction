@@ -1,4 +1,4 @@
-// src/components/SEO.jsx
+﻿// footballprediction/src/components/SEO.jsx
 import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
 import { SITE, generateBreadcrumbs, breadcrumbSchema } from "../utils/seoBuilder";
@@ -57,7 +57,7 @@ export default function SEO({
       <meta name="robots" content={robots} />
       <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
 
-      {/* ★ REMOVED: <meta name="theme-color" /> to prevent duplicate with index.html */}
+      {/* â˜… REMOVED: <meta name="theme-color" /> to prevent duplicate with index.html */}
 
       <link rel="canonical" href={url} />
 

@@ -1,3 +1,5 @@
+﻿// footballprediction/src/engine/predictionEngine.js
+
 import { calcPoints, RESULT_TYPE } from '../utils/constants';
 
 export function mergeLiveIntoPredictions(preds, fixtureMap) {
@@ -26,7 +28,7 @@ export function calculateUserStats(userPredictions, activePredictions, results) 
   const matchesMap = new Map();
   activePredictions.forEach(p => matchesMap.set(String(p.matchId), p));
   
-  // ★ CRITICAL FIX: Sort predictions chronologically for accurate streak calculation
+  // â˜… CRITICAL FIX: Sort predictions chronologically for accurate streak calculation
   const sortedPreds = [...userPredictions].sort((a, b) => {
     const dateA = a.matchDate || '';
     const dateB = b.matchDate || '';
@@ -59,7 +61,7 @@ export function calculateUserStats(userPredictions, activePredictions, results) 
     }
   });
   
-  // ★ CRITICAL FIX: Professional accuracy calculation: (Exact + Result) / Resolved * 100
+  // â˜… CRITICAL FIX: Professional accuracy calculation: (Exact + Result) / Resolved * 100
   const accuracy = resolved > 0 ? Math.round(((ex + rs) / resolved) * 100) : 0;
   
   return { 

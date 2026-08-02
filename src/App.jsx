@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+﻿import { Suspense, useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 
 import Providers from "./app/providers";
@@ -8,6 +8,10 @@ import Breadcrumbs from "./components/Breadcrumbs";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import StatusCenter from "./components/StatusCenter";
+
+// ★ NEW: Import Zoka AI and the Brain icon
+import ZokaAI from "./components/ZokaAI";
+import { Brain } from "lucide-react";
 
 import ErrorBoundary from "./components/ErrorBoundary";
 
@@ -29,6 +33,9 @@ const PageLoader = () => (
 
 function AppShell() {
   const location = useLocation();
+  
+  // ★ NEW: State to control the AI modal
+  const [isAiOpen, setIsAiOpen] = useState(false);
 
   useEffect(() => { initApp(); initAnalytics(); }, []);
 
@@ -52,9 +59,6 @@ function AppShell() {
 
   return (
     <>
-      {/* ★ REMOVED: Global Helmet schemas and theme-color. 
-          They are now statically hardcoded in index.html to prevent duplicates. */}
-
       <ScrollToTop />
       <ConnectionManager />
       <PwaManager />
@@ -75,6 +79,32 @@ function AppShell() {
       </div>
 
       <StatusCenter />
+
+      {/* ★ NEW: Global Floating Zoka AI Button ★ */}
+      <button 
+        onClick={() => setIsAiOpen(true)}
+        className="btn btn-primary"
+        style={{ 
+          position: 'fixed', 
+          bottom: '80px', // Sits above mobile bottom navs
+          right: '20px', 
+          zIndex: 900, 
+          borderRadius: '50%', 
+          width: '56px', 
+          height: '56px', 
+          padding: 0, 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.3)'
+        }}
+        aria-label="Open Zoka AI"
+      >
+        <Brain size={24} />
+      </button>
+
+      {/* ★ NEW: Global Zoka AI Modal ★ */}
+      <ZokaAI isOpen={isAiOpen} onClose={() => setIsAiOpen(false)} />
     </>
   );
 }

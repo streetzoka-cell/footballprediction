@@ -1,37 +1,40 @@
-const fs = require('fs');
+// backend-v1/src/services/StaticFilePublisher.js
+
 const path = require('path');
 const logger = require('../utils/logger');
+const {
+  writeJSONAtomic,
+  ensureDirSync,
+} = require('../utils/atomicWriter');
 
-// Ensure the local public directory exists
-const PUBLIC_DIR = path.join(__dirname, '../../public_data');
+const PUBLIC_DIR = path.join(process.cwd(), 'public_data');
 
-if (!fs.existsSync(PUBLIC_DIR)) {
-  fs.mkdirSync(PUBLIC_DIR, { recursive: true });
-}
+ensureDirSync(PUBLIC_DIR);
 
 /**
- * Saves a JSON payload to the local public_data folder.
- * The Express server will serve these files to the frontend.
- * @param {string} filePath - e.g., 'live.json', 'fixtures/today.json'
- * @param {Object|Array} data - The JSON payload
+ * Saves a JSON payload to the local public_data folder atomically.
+ *
+ * Examples:
+ *   publishJSON('live.json', payload)
+ *   publishJSON('fixtures/2026-08-02.json', payload)
+ *   publishJSON('featured/2026-08-02.json', payload)
  */
 async function publishJSON(filePath, data) {
   try {
     const fullPath = path.join(PUBLIC_DIR, filePath);
-    const dir = path.dirname(fullPath);
-    
-    // Create subdirectories if they don't exist (e.g., /fixtures)
-    if (!fs.existsSync(dir)) {
-      fs.mkdirSync(dir, { recursive: true });
-    }
-    
-    const buffer = JSON.stringify(data);
-    fs.writeFileSync(fullPath, buffer);
-    
-    logger.info(`[StaticPublisher] Published ${filePath} (${(buffer.length / 1024).toFixed(2)} KB)`);
+
+    const result = await writeJSONAtomic(fullPath, data, {
+      pretty: false,
+    });
+
+    logger.info(
+      `[StaticPublisher] Published ${filePath} (${(result.bytes / 1024).toFixed(2)} KB)`
+    );
   } catch (err) {
     logger.error(`[StaticPublisher] Failed to publish ${filePath}: ${err.message}`);
   }
 }
 
-module.exports = { publishJSON };
+module.exports = {
+  publishJSON,
+};

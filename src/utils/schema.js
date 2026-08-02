@@ -1,4 +1,4 @@
-// src/utils/schema.js
+﻿// footballprediction/src/utils/schema.js
 
 export const SITE = {
   name: "ZOKASCORE",
