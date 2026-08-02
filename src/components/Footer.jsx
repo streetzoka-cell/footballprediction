@@ -54,7 +54,6 @@ const socialLinks = [
   { name: "Instagram", href: "https://instagram.com/zokascore", icon: '\u25C9' }, // ◉
   { name: "Telegram", href: "https://t.me/zokascore", icon: '\u2708' }, // ✈
 ];
-
 export default function Footer() {
   const { data: rawFixtures = [] } = useFixtures(todayStr());
   const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
@@ -63,24 +62,25 @@ export default function Footer() {
   const todayFixturesCount = rawFixtures.length;
   const dailyStats = dailyLB?.stats || { preds: 0, players: 0 };
 
-  const [installPromptEvent, setInstallPromptEvent] = useState(null);
+  // ★ NEW: Clean Install Logic
   const [isInstalled, setIsInstalled] = useState(false);
+  const [canInstall, setCanInstall] = useState(!!window.deferredPrompt);
 
   useEffect(() => {
-    const handler = (e) => {
-      e.preventDefault();
-      setInstallPromptEvent(e);
-    };
     if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true);
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
+    
+    const onInstallable = () => setCanInstall(true);
+    window.addEventListener('pwaInstallable', onInstallable);
+    return () => window.removeEventListener('pwaInstallable', onInstallable);
   }, []);
 
   const handleInstallClick = async () => {
-    if (!installPromptEvent) return;
-    installPromptEvent.prompt();
-    await installPromptEvent.userChoice;
-    setInstallPromptEvent(null);
+    if (window.deferredPrompt) {
+      window.deferredPrompt.prompt();
+      await window.deferredPrompt.userChoice;
+      window.deferredPrompt = null;
+      setCanInstall(false);
+    }
   };
 
   return (
@@ -130,7 +130,7 @@ export default function Footer() {
                 <CheckCircle size={16} /> Installed
               </button>
             ) : (
-              <button className="btn btn-primary" onClick={handleInstallClick} disabled={!installPromptEvent}>
+              <button className="btn btn-primary" onClick={handleInstallClick} disabled={!canInstall}>
                 <Download size={16} /> Install App
               </button>
             )}
