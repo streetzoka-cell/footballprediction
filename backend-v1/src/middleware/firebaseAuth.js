@@ -1,137 +1,94 @@
 // backend-v1/src/middleware/firebaseAuth.js
-
 const admin = require('firebase-admin');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
 
-const userRoleCache = new Map();
-const ROLE_TTL_MS = 60 * 1000;
-
-function extractBearerToken(req) {
-  const authHeader = req.headers.authorization || '';
-
-  if (authHeader.startsWith('Bearer ')) {
-    return authHeader.slice(7).trim();
-  }
-
-  return null;
-}
-
-async function verifyFirebaseIdToken(token) {
+/**
+ * Extracts and verifies a Firebase ID token from "Authorization: Bearer <token>".
+ * Returns decoded token or null.
+ */
+async function verifyBearerToken(req) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) return null;
   try {
-    if (!token) return null;
-
+    const token = authHeader.split('Bearer ')[1];
     return await admin.auth().verifyIdToken(token);
   } catch (err) {
-    logger.warn(`[FirebaseAuth] verifyIdToken failed: ${err.message}`);
+    logger.warn(`[FirebaseAuth] Token verification failed: ${err.message}`);
     return null;
   }
 }
 
-async function getUserRole(uid) {
-  const cached = userRoleCache.get(uid);
-
-  if (cached && cached.expiresAt > Date.now()) {
-    return cached.role;
-  }
-
-  let role = 'user';
-  let isAdminCollection = false;
-
+/**
+ * Checks if a uid is admin (admin_users collection OR users.role).
+ */
+async function isAdminUser(uid) {
   try {
     const db = getDb();
+    const adminDoc = await db.collection('admin_users').doc(uid).get();
+    if (adminDoc.exists) return { role: 'admin', isSuperAdmin: true };
 
-    const [userSnap, adminSnap] = await Promise.all([
-      db.collection('users').doc(uid).get().catch(() => null),
-      db.collection('admin_users').doc(uid).get().catch(() => null),
-    ]);
-
-    if (userSnap && userSnap.exists) {
-      const data = userSnap.data() || {};
-      const normalizedRole = String(data.role || 'user').toLowerCase();
-
-      if (normalizedRole === 'admin' || normalizedRole === 'staff') {
-        role = normalizedRole;
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      const role = (userDoc.data().role || 'user').toLowerCase();
+      if (role === 'admin' || role === 'staff') {
+        return { role, isSuperAdmin: false };
       }
     }
-
-    if (adminSnap && adminSnap.exists) {
-      role = 'admin';
-      isAdminCollection = true;
-    }
   } catch (err) {
-    logger.warn(`[FirebaseAuth] Failed to load role for ${uid}: ${err.message}`);
+    logger.warn(`[FirebaseAuth] Admin check failed for ${uid}: ${err.message}`);
   }
-
-  userRoleCache.set(uid, {
-    role,
-    isAdminCollection,
-    expiresAt: Date.now() + ROLE_TTL_MS,
-  });
-
-  return role;
+  return null;
 }
 
-function clearUserRoleCache(uid) {
-  if (uid) {
-    userRoleCache.delete(uid);
-  } else {
-    userRoleCache.clear();
-  }
-}
-
-async function buildRequestUser(req) {
-  const token = extractBearerToken(req);
-
-  if (!token) return null;
-
-  const decoded = await verifyFirebaseIdToken(token);
-
-  if (!decoded || !decoded.uid) return null;
-
-  const role = await getUserRole(decoded.uid);
-
-  return {
-    uid: decoded.uid,
-    email: decoded.email || null,
-    role,
-    isAdmin: role === 'admin' || role === 'staff',
-    source: 'firebase',
-  };
-}
-
+/**
+ * Middleware: requires a valid Firebase user token.
+ * Attaches req.user = { uid, email }.
+ */
 async function authenticateFirebaseUser(req, res, next) {
-  try {
-    const user = await buildRequestUser(req);
-
-    if (!user) {
-      throw ApiError.unauthorized('Authentication required');
-    }
-
-    req.user = user;
-
-    next();
-  } catch (err) {
-    next(err);
+  const decoded = await verifyBearerToken(req);
+  if (!decoded) {
+    return next(ApiError.unauthorized('Valid Firebase ID token required'));
   }
+  req.user = { uid: decoded.uid, email: decoded.email || null };
+  next();
 }
 
+/**
+ * Middleware: attaches req.user if token present, but doesn't fail without one.
+ */
 async function optionalFirebaseUser(req, res, next) {
-  try {
-    req.user = await buildRequestUser(req);
-    next();
-  } catch (err) {
-    next(err);
+  const decoded = await verifyBearerToken(req);
+  if (decoded) {
+    req.user = { uid: decoded.uid, email: decoded.email || null };
   }
+  next();
+}
+
+/**
+ * Middleware: requires Firebase user AND admin role.
+ */
+async function requireFirebaseAdmin(req, res, next) {
+  const decoded = await verifyBearerToken(req);
+  if (!decoded) {
+    return next(ApiError.unauthorized('Valid Firebase ID token required'));
+  }
+  const adminInfo = await isAdminUser(decoded.uid);
+  if (!adminInfo) {
+    return next(ApiError.forbidden('Admin access required'));
+  }
+  req.user = { uid: decoded.uid, email: decoded.email || null, ...adminInfo };
+  next();
 }
 
 module.exports = {
-  extractBearerToken,
-  verifyFirebaseIdToken,
-  getUserRole,
-  clearUserRoleCache,
-  buildRequestUser,
+  verifyBearerToken,
+  isAdminUser,
   authenticateFirebaseUser,
   optionalFirebaseUser,
+  requireFirebaseAdmin,
+
+  // backwards compatibility
+  firebaseAdminAuth: requireFirebaseAdmin,
 };

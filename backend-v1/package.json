@@ -15,6 +15,7 @@
     "pm2:logs": "pm2 logs zokascore-backend-v1"
   },
   "dependencies": {
+    "@google/genai": "^2.15.0",
     "axios": "^1.18.1",
     "compression": "^1.7.4",
     "cors": "^2.8.6",

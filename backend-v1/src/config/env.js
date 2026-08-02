@@ -32,8 +32,14 @@ const env = {
   FIREBASE_CLIENT_EMAIL: process.env.FIREBASE_CLIENT_EMAIL,
   FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
 
+
+  // ── Google Gemini (Zoka AI) ──
+  GEMINI_API_KEY: process.env.GEMINI_API_KEY,
+
   // ── Admin ──
   ADMIN_API_KEY: process.env.ADMIN_API_KEY || 'dev-admin-key',
 };
+
+
 
 module.exports = Object.freeze(env);
