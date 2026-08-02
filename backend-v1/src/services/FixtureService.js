@@ -100,11 +100,12 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const newlyFinished = [];
   const nowMs = Date.now();
 
-  // Thresholds: 125m hard cap (90 play + 15 HT + 20 stoppage/ET buffer),
-  // 115m for a match stuck at 90'.
-  const FT_FORCE_MS = 125 * 60 * 1000;
-  const STUCK_AT_90_MS = 115 * 60 * 1000;
+  // Thresholds: 3.5h hard cap (allows for severe delays/ET/Penalties),
+  // 3h for a match stuck at 90'.
+  const FT_FORCE_MS = 3.5 * 60 * 60 * 1000;
+  const STUCK_AT_90_MS = 3 * 60 * 60 * 1000;
 
+  
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
     const minute = match.display?.minute || match.minute || 0;

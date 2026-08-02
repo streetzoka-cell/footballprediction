@@ -25,7 +25,6 @@ export function useHomeMatches() {
     refetchOnWindowFocus: true,
   });
 }
-
 export function useFixtures(dateStr, sport = 'football') {
   return useQuery({
     queryKey: ['fixtures', dateStr, sport],
@@ -85,7 +84,6 @@ export function useFixtures(dateStr, sport = 'football') {
       });
 
       const now = Date.now();
-      const STUCK_AT_90_MS = 115 * 60 * 1000;
       const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
 
       return Array.from(map.values())
@@ -94,20 +92,11 @@ export function useFixtures(dateStr, sport = 'football') {
         .filter(m => {
           if (m.isHidden) return false;
 
-          const matchDate = new Date(m.dateStr + 'T12:00:00');
-          const today = new Date(todayStr() + 'T12:00:00');
-          const isYesterday = matchDate < today;
-
-          if (isYesterday && m.isLive && m.minute >= 90) {
-            return false;
-          }
-
+          // ★ FIX: Removed the aggressive STUCK_AT_90_MS filter. 
+          // The matchEngine now handles force-FT safely up to 3.5 hours.
           if (m.timestamp) {
             const elapsed = now - (m.timestamp * 1000);
-            if (elapsed > STUCK_AT_90_MS && m.isLive && m.minute >= 90) {
-              return false;
-            }
-            if (elapsed > HIDE_OLD_MS && !m.isFinished && m.isLive) {
+            if (elapsed > HIDE_OLD_MS && !m.isFinished) {
               return false;
             }
           }
