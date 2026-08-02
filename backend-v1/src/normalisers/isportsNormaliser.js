@@ -1,3 +1,5 @@
+﻿// backend-v1/src/normalisers/isportsNormaliser.js
+
 function normaliseMatch(m) {
   if (!m) return null;
 
@@ -25,6 +27,9 @@ function normaliseMatch(m) {
   const homeName = m.homeName || 'TBD';
   const awayName = m.awayName || 'TBD';
   const leagueName = m.leagueName || 'Other';
+
+  // ★ NEW: Prioritise the calculated liveMinute from the adapter
+  const minute = m.liveMinute || m.displayMinute || m.extraExplain?.minute || 0;
 
   return {
     id: String(m.matchId),
@@ -78,12 +83,19 @@ function normaliseMatch(m) {
     leagueId: String(m.leagueId),
     leagueLogo: null,
 
+    // ★ CRITICAL: Keep halfStartTime and extraExplain so the frontend can continue calculating!
+    halfStartTime: m.halfStartTime,
+    extraExplain: m.extraExplain,
+    
+    // ★ NEW: Expose the live minute correctly
+    minute: minute,
+    
     display: {
       isLive,
       isFinished,
       isUpcoming,
       isHalfTime: mappedStatus === 'HT',
-      minute: m.extraExplain?.minute || 0,
+      minute: minute,
       status: mappedStatus,
       score: {
         home: m.homeScore ?? 0,

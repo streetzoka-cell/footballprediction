@@ -1,4 +1,5 @@
-﻿const express = require('express');
+﻿// backend-v1/src/server.js
+const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
@@ -26,8 +27,6 @@ const queueRoute = require('./routes/v1/queue');
 const featuredRoute = require('./routes/v1/featured');
 const zokaPicksRoute = require('./routes/v1/zokaPicks');
 const leaderboardRoute = require('./routes/v1/leaderboard');
-
-// Gemini AI (Zoka AI) route
 const aiRoutes = require('./routes/v1/ai');
 
 const app = express();
@@ -36,17 +35,31 @@ app.set('trust proxy', 1);
 
 securityHeaders(app);
 
-const allowedOrigins = (
-  process.env.CORS_ORIGINS ||
-  'https://zokascore.xyz,http://localhost:5173,https://zokascore.vercel.app'
-)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+// ★ FIX: Hardcode allowed origins to prevent CORS failures
+const allowedOrigins = [
+  'https://zokascore.xyz',
+  'https://www.zokascore.xyz',
+  'https://zokascore.vercel.app',
+  'http://localhost:5173',
+  'http://localhost:3000'
+];
 
 app.use(
   cors({
-    origin: allowedOrigins,
+    origin: (origin, callback) => {
+      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+      if (!origin) return callback(null, true);
+      
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn(`[CORS] Blocked origin: ${origin}`);
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key'],
   })
 );
 
