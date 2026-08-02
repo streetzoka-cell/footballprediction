@@ -22,10 +22,10 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let minute = display.minute;
   let isHidden = false;
 
-  // ★ Thresholds (115m = 90m play + 15m HT + 10m stoppage)
-  const FT_THRESHOLD_MS = 125 * 60 * 1000;        // 2h05m — hard cap force FT
-  const STUCK_LIVE_MS = 115 * 60 * 1000;          // 1h55m — if at 90' for 10 mins, force FT
-  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;  // 24h — hide completely
+  // ★ FIX: Increased thresholds to 3.5 hours to prevent delayed matches from forcing FT early
+  const FT_THRESHOLD_MS = 3.5 * 60 * 60 * 1000;        // 3.5h — hard cap force FT
+  const STUCK_LIVE_MS = 3 * 60 * 60 * 1000;            // 3h — if at 90' for a long time, force FT
+  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;       // 24h — hide completely
 
   if (raw.timestamp) {
     const matchStartTime = raw.timestamp * 1000;
@@ -37,14 +37,14 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       isFinished = false;
       status = 'HIDDEN';
     }
-    // ★ If minute already at 90' and elapsed > 115 min → FT NOW
+    // ★ If minute already at 90' and elapsed > 3h → FT NOW
     else if (isLive && (minute >= 90 || status === '90' || status === '2H') && elapsed > STUCK_LIVE_MS) {
       isLive = false;
       isFinished = true;
       status = 'FT';
       minute = 90;
     }
-    // Hard cap: any match older than 2h05m → FT
+    // Hard cap: any match older than 3.5h → FT
     else if (elapsed > FT_THRESHOLD_MS && isLive) {
       isLive = false;
       isFinished = true;
@@ -107,7 +107,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ Bulletproof Smart Minute Calculator (HALFTIME BUG FIXED)
+// ★ Bulletproof Smart Minute Calculator (DELAYED MATCH BUG FIXED)
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
 
@@ -144,14 +144,31 @@ export function applySmartMinute(m, now = Date.now()) {
   let status = statusUpper;
   let isHT = m.isHT || false;
 
-  if (apiMinute === 0) {
+  // If API provides a minute > 0, ALWAYS trust it over our local calculation.
+  if (apiMinute > 0) {
+    smartMinute = apiMinute;
+
+    if (m.lastUpdated) {
+      const lastUpdateTime = new Date(m.lastUpdated).getTime();
+      if (!isNaN(lastUpdateTime)) {
+        let extraMins = Math.floor((now - lastUpdateTime) / 60000);
+
+        const totalElapsedMins = Math.floor(elapsedMs / 60000);
+        const lastUpdateElapsedMins = Math.floor((lastUpdateTime - matchStartTime) / 60000);
+
+        // Subtract halftime if we crossed the 60m mark since last update
+        if (lastUpdateElapsedMins <= 60 && totalElapsedMins > 60) {
+          extraMins -= 15;
+        }
+
+        smartMinute += Math.max(0, extraMins);
+      }
+    }
+  } else {
+    // API Minute is 0 (likely missing data). Calculate purely from elapsed time.
     const elapsedMins = Math.floor(elapsedMs / 60000);
 
-    if (elapsedMins >= 105) {
-      smartMinute = 90;
-    } else if (elapsedMins > 90) {
-      smartMinute = 90;
-    } else if (elapsedMins > 60) {
+    if (elapsedMins > 60) {
       smartMinute = 45 + (elapsedMins - 60); // = elapsed - 15 (halftime subtracted)
       status = '2H';
     } else if (elapsedMins > 50) {
@@ -165,24 +182,6 @@ export function applySmartMinute(m, now = Date.now()) {
       smartMinute = elapsedMins;
       status = '1H';
     }
-  } else {
-    smartMinute = apiMinute;
-
-    if (m.lastUpdated) {
-      const lastUpdateTime = new Date(m.lastUpdated).getTime();
-      if (!isNaN(lastUpdateTime)) {
-        let extraMins = Math.floor((now - lastUpdateTime) / 60000);
-
-        const totalElapsedMins = Math.floor(elapsedMs / 60000);
-        const lastUpdateElapsedMins = Math.floor((lastUpdateTime - matchStartTime) / 60000);
-
-        if (lastUpdateElapsedMins <= 60 && totalElapsedMins > 60) {
-          extraMins -= 15;
-        }
-
-        smartMinute += Math.max(0, extraMins);
-      }
-    }
   }
 
   if (statusUpper === 'HT') {
@@ -191,10 +190,12 @@ export function applySmartMinute(m, now = Date.now()) {
     status = 'HT';
   }
 
+  // Cap at 90 minutes unless it's Extra Time or Penalties
   if (smartMinute > 90 && statusUpper !== 'ET' && statusUpper !== 'P') {
     smartMinute = 90;
   }
 
+  // Never let the calculated minute go backwards
   if (apiMinute > smartMinute) {
     smartMinute = apiMinute;
   }
