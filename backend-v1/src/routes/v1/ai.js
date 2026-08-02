@@ -3,9 +3,13 @@ const router = express.Router();
 const { GoogleGenAI } = require('@google/genai');
 const env = require('../../config/env');
 
+// Initialize Google GenAI client
 const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
-// The Master Knowledge Base (Distilled from your code)
+// ==========================================
+// CONSTANTS & KNOWLEDGE BASE
+// ==========================================
+
 const ZOKASCORE_KNOWLEDGE_BASE = `
 ZOKASCORE APP KNOWLEDGE BASE:
 - Overview: ZOKASCORE is a premium football intelligence, live scores, predictions, and content creation platform.
@@ -38,386 +42,240 @@ SUPPORT:
 - Socials: Twitter (X), Facebook, Instagram, Telegram.
 `;
 
-// POST /api/v1/ai/zoka
+const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE.
+You are an elite football analyst, tactical expert, friendly, professional, and honest.
+Rules:
+- Never invent facts.
+- Never hallucinate scores.
+- Never pretend to know unavailable live data.
+- Explain reasoning clearly.
+- Keep answers concise.
+- Use headings and bullet points where useful.
+- Represent the ZOKASCORE brand professionally.
+- Only use supplied context. Never invent information.`;
+
+const MODELS = [
+  "gemini-3.6-flash",
+  "gemini-3.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash-lite"
+];
+
+const FALLBACK_CODES = [429, 404, 503];
+
+// ==========================================
+// HELPER FUNCTIONS
+// ==========================================
+
+function validateRequest(body) {
+  if (!body || typeof body !== 'object') {
+    return { valid: false, error: "Invalid JSON payload." };
+  }
+  if (!body.message || typeof body.message !== 'string' || !body.message.trim()) {
+    return { valid: false, error: "Message is required and cannot be empty." };
+  }
+  if (body.message.length > 2000) {
+    return { valid: false, error: "Message is too long. Maximum 2000 characters." };
+  }
+  if (body.history && !Array.isArray(body.history)) {
+    return { valid: false, error: "History must be an array." };
+  }
+  if (body.appContext && typeof body.appContext !== 'object') {
+    return { valid: false, error: "App context must be an object." };
+  }
+  return { valid: true };
+}
+
+function sanitizeHistory(history) {
+  if (!Array.isArray(history)) return [];
+  return history
+    .slice(-15) // Limit to latest 15 messages
+    .filter(msg => msg && typeof msg.role === 'string' && typeof msg.content === 'string')
+    .map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      content: msg.content.substring(0, 1500) // Prevent massive tokens per message
+    }));
+}
+
+function buildPrompt({ message, history, appContext }) {
+  const contents = [];
+  const sanitizedHistory = sanitizeHistory(history);
+  
+  for (const msg of sanitizedHistory) {
+    contents.push({
+      role: msg.role,
+      parts: [{ text: msg.content }]
+    });
+  }
+  
+  const contextParts = [];
+  if (appContext) {
+    if (appContext.currentDate) contextParts.push(`Current Date: ${appContext.currentDate}`);
+    if (appContext.liveMatches?.length) contextParts.push(`Live Matches: ${appContext.liveMatches.join(' | ')}`);
+    if (appContext.topMatches?.length) contextParts.push(`Top Matches: ${appContext.topMatches.join(' | ')}`);
+    if (appContext.leagueStandings) contextParts.push(`League Standings: ${appContext.leagueStandings}`);
+    if (appContext.fixtures) contextParts.push(`Fixtures: ${appContext.fixtures}`);
+    if (appContext.userFavorites) contextParts.push(`User Favorites: ${appContext.userFavorites}`);
+    if (appContext.latestNews) contextParts.push(`Latest News: ${appContext.latestNews}`);
+    if (appContext.competition) contextParts.push(`Competition: ${appContext.competition}`);
+  }
+  
+  const contextString = contextParts.length > 0 
+    ? `\n[REAL-TIME CONTEXT]\n${contextParts.join('\n')}\n` 
+    : '';
+    
+  const knowledgeBaseString = `\n[ZOKASCORE KNOWLEDGE BASE]\n${ZOKASCORE_KNOWLEDGE_BASE}\n`;
+  const finalUserMessage = `${contextString}${knowledgeBaseString}User Query: ${message}`;
+  
+  contents.push({
+    role: 'user',
+    parts: [{ text: finalUserMessage }]
+  });
+  
+  return contents;
+}
+
+function handleGeminiError(err, model) {
+  const code = err.status || err.code;
+  console.error(`[ZOKASCORE AI] Error ${code} on model ${model}:`, err.message);
+  
+  let clientError = "An unexpected error occurred. Please try again.";
+  
+  if (err.message === 'TIMEOUT' || code === 408) {
+    clientError = "The AI is taking longer than expected. Please try again.";
+  } else if (code === 400) {
+    clientError = "Invalid request format. Please check your input.";
+  } else if (code === 401 || code === 403) {
+    clientError = "Authentication failed. Please contact support.";
+  } else if (code === 404) {
+    clientError = "AI model temporarily unavailable.";
+  } else if (code === 429) {
+    clientError = "Rate limit exceeded. Please slow down and try again.";
+  } else if (code === 500) {
+    clientError = "Internal server error. Our team has been notified.";
+  } else if (code === 503) {
+    clientError = "AI service is temporarily overloaded. Please try again shortly.";
+  } else if (err.message && err.message.toLowerCase().includes('quota')) {
+    clientError = "API quota exceeded. Please try again later.";
+  } else if (err.message && err.message.toLowerCase().includes('network')) {
+    clientError = "Network error. Please check your connection and try again.";
+  }
+  
+  return {
+    success: false,
+    error: clientError,
+    model: model || "unknown"
+  };
+}
+
+async function generateWithFallback(contents) {
+  for (const model of MODELS) {
+    const startTime = Date.now();
+    try {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('TIMEOUT')), 15000);
+      });
+      
+      const generationPromise = ai.models.generateContent({
+        model,
+        contents,
+        systemInstruction: SYSTEM_PROMPT,
+        generationConfig: {
+          temperature: 0.55,
+          topP: 0.9,
+          topK: 32,
+          maxOutputTokens: 800
+        }
+      });
+      
+      const response = await Promise.race([generationPromise, timeoutPromise]);
+      const responseTime = Date.now() - startTime;
+      
+      console.log(`[ZOKASCORE AI] Success with model: ${model} in ${responseTime}ms`);
+      
+      if (response.usageMetadata) {
+        console.log(`[ZOKASCORE AI] Tokens - Prompt: ${response.usageMetadata.promptTokenCount}, Completion: ${response.usageMetadata.candidatesTokenCount}`);
+      }
+      
+      return {
+        success: true,
+        model,
+        reply: response.text || "I'm unable to answer that at the moment.",
+        responseTime: `${responseTime}ms`
+      };
+      
+    } catch (err) {
+      const errCode = err.status || err.code;
+      
+      if (err.message === 'TIMEOUT' || errCode === 408) {
+        console.warn(`[ZOKASCORE AI] Timeout on ${model} after 15s. Switching model...`);
+        continue;
+      }
+      
+      if (FALLBACK_CODES.includes(errCode) || err.message.toLowerCase().includes('quota') || err.message.toLowerCase().includes('unavailable')) {
+        console.warn(`[ZOKASCORE AI] Fallback triggered for ${model}. Error: ${errCode || err.message}`);
+        continue;
+      }
+      
+      if ([400, 401, 403, 500].includes(errCode)) {
+        console.error(`[ZOKASCORE AI] Fatal error on ${model}:`, err);
+        return handleGeminiError(err, model);
+      }
+      
+      console.warn(`[ZOKASCORE AI] Network/Other error on ${model}, trying next:`, err.message);
+      continue;
+    }
+  }
+  
+  console.error(`[ZOKASCORE AI] All models failed.`);
+  return {
+    success: false,
+    error: "Our AI is currently experiencing high demand. Please try again in a moment.",
+    model: "fallback_failed"
+  };
+}
+
+// ==========================================
+// EXPRESS ROUTE
+// ==========================================
+
 router.post('/zoka', async (req, res) => {
   try {
     if (!env.GEMINI_API_KEY) {
-      return res.status(500).json({ error: 'GEMINI_API_KEY is not configured.' });
+      console.error('[ZOKASCORE AI] GEMINI_API_KEY is not configured.');
+      return res.status(500).json({ 
+        success: false, 
+        error: "AI service is currently misconfigured. Please contact support.",
+        model: "none"
+      });
+    }
+
+    const validation = validateRequest(req.body);
+    if (!validation.valid) {
+      return res.status(400).json({ 
+        success: false, 
+        error: validation.error,
+        model: "none"
+      });
     }
 
     const { message, history = [], appContext = {} } = req.body;
+    const contents = buildPrompt({ message, history, appContext });
+    const result = await generateWithFallback(contents);
 
-    if (!message || !message.trim()) {
-      return res.status(400).json({ error: 'Message is required.' });
+    if (result.success) {
+      return res.status(200).json(result);
+    } else {
+      return res.status(503).json(result);
     }
-
-    const systemPrompt = `
-You are Kim, the official AI Football Intelligence of ZOKASCORE.
-
-You are NOT a generic chatbot.
-
-You are an elite football analyst, statistician, tactician, researcher, commentator, and assistant built exclusively for football fans.
-
-Your goal is simple:
-
-Help every user become smarter about football.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PERSONALITY
-
-• Extremely intelligent.
-• Friendly and approachable.
-• Professional.
-• Confident but never arrogant.
-• Calm.
-• Honest.
-• Fast.
-• Helpful.
-• Slightly humorous when appropriate.
-• Passionate about football.
-
-Speak naturally like an experienced football analyst.
-
-Never sound robotic.
-
-Never repeat yourself.
-
-Never say:
-"As an AI language model..."
-"I think..."
-"I'm just an AI..."
-
-Instead speak naturally.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-EXPERTISE
-
-You have expert knowledge in:
-
-• Live football
-• Fixtures
-• Match predictions
-• Tactical analysis
-• Team analysis
-• Player analysis
-• League standings
-• Statistics
-• Form analysis
-• Historical football
-• Transfers
-• Managers
-• Competitions worldwide
-• Betting concepts (without encouraging gambling)
-• Fantasy football
-• Football rules
-• VAR
-• FIFA
-• UEFA
-• CAF
-• Domestic leagues
-• Women's football
-• Youth football
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-YOUR THINKING PROCESS
-
-Before answering, silently:
-
-1. Understand exactly what the user wants.
-
-2. Decide whether they need:
-- facts
-- prediction
-- explanation
-- tactical analysis
-- statistics
-- comparison
-- opinion
-- advice
-
-3. Use the supplied ZOKASCORE data first.
-
-4. If data isn't supplied,
-say so clearly instead of inventing information.
-
-5. Give the best possible answer.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PREDICTIONS
-
-When predicting matches always explain:
-
-• Recent form
-• Home advantage
-• Away form
-• Injuries if provided
-• Suspensions if provided
-• Tactical matchup
-• Head-to-head if available
-• Motivation
-• Competition importance
-
-Then provide:
-
-Predicted score
-
-Confidence:
-/10
-
-Key player
-
-Possible upset
-
-Remember:
-
-Football is unpredictable.
-
-Never claim certainty.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-TACTICAL ANALYSIS
-
-Explain football simply.
-
-Example topics:
-
-• Pressing
-• Counter attacks
-• Low block
-• Possession
-• High line
-• False 9
-• Double pivot
-• Build-up play
-• Wing overloads
-
-Use examples.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-LIVE MATCHES
-
-When live data is provided:
-
-Only use the supplied live information.
-
-Never invent:
-
-Goals
-
-Cards
-
-Substitutions
-
-Minutes
-
-Scores
-
-If information isn't available say:
-
-"I don't currently have that live detail."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-MATCH COMPARISONS
-
-When comparing teams include:
-
-Attack
-
-Defense
-
-Midfield
-
-Manager
-
-Current form
-
-Home/Away performance
-
-Set pieces
-
-Weaknesses
-
-Key players
-
-Predicted tactical battle
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-PLAYER COMPARISONS
-
-Compare:
-
-Goals
-
-Assists
-
-Passing
-
-Finishing
-
-Dribbling
-
-Vision
-
-Defending
-
-Leadership
-
-Current form
-
-Career achievements
-
-Be objective.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-STATISTICS
-
-When statistics exist:
-
-Explain what they actually mean.
-
-Do not simply list numbers.
-
-Example:
-
-"Team A averages 2.3 goals per game, suggesting they consistently create high-quality chances."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-UNCERTAINTY
-
-If something is unknown:
-
-Say:
-
-"I don't have enough verified information to answer accurately."
-
-Never guess.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WRITING STYLE
-
-Keep answers:
-
-Clear
-
-Structured
-
-Easy to read
-
-Professional
-
-Use:
-
-Headings
-
-Bullet points
-
-Short paragraphs
-
-Highlight key insights.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WHEN USERS ASK CASUAL QUESTIONS
-
-Be conversational.
-
-Example:
-
-User:
-Who wins today?
-
-Instead of:
-
-"Team A."
-
-Say:
-
-"Team A looks slightly stronger today because they've been creating more chances recently and are playing at home. I'd lean toward a 2–1 win, but football is unpredictable."
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-WHEN USERS ASK ABOUT ZOKASCORE
-
-You represent the platform.
-
-Know its features.
-
-Help users navigate it.
-
-Recommend useful pages.
-
-Promote the platform naturally without sounding like an advertisement.
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-ZOKASCORE KNOWLEDGE BASE:
- ${ZOKASCORE_KNOWLEDGE_BASE}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-REAL-TIME APP CONTEXT:
-Current Date: ${appContext.currentDate || 'Unknown'}
-Live Matches Right Now: ${appContext.liveMatches?.length ? appContext.liveMatches.join(' | ') : 'None currently live.'}
-Top/Featured Matches Today: ${appContext.topMatches?.length ? appContext.topMatches.join(' | ') : 'None scheduled.'}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-GOAL
-
-Every response should make the user feel like they asked one of the world's best football analysts.
-
-Be intelligent.
-
-Be accurate.
-
-Be concise.
-
-Be trustworthy.
-
-Always prioritize truth over confidence.
-
-You are Kim.
-
-You are the Football Intelligence behind ZOKASCORE.
-`;
-
-    let conversation = systemPrompt + "\n\n";
-
-    for (const msg of history) {
-      if (!msg?.content) continue;
-      conversation += `${msg.role === 'assistant' ? 'Kim' : 'User'}: ${msg.content}\n`;
-    }
-
-    conversation += `User: ${message}\n`;
-    conversation += `Kim:`;
-
-    const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
-      contents: conversation,
-      config: {
-        temperature: 0.6,
-        maxOutputTokens: 800,
-      },
-    });
-
-    return res.json({
-      reply: response.text || "I'm unable to answer that at the moment."
-    });
 
   } catch (err) {
-    console.error('Gemini Error:', err);
-    return res.status(500).json({ error: err.message || 'Gemini request failed.' });
+    console.error('[ZOKASCORE AI] Unhandled route error:', err);
+    return res.status(500).json({ 
+      success: false, 
+      error: "An unexpected error occurred. Please try again.",
+      model: "unknown"
+    });
   }
 });
 

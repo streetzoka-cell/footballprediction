@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
-  Menu, User, Sparkles 
+  Menu, User, Sparkles, AlertCircle, RefreshCw 
 } from 'lucide-react';
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr } from '../utils/dates';
@@ -17,6 +17,7 @@ export default function ZokaAI({ isOpen, onClose }) {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
+  const [error, setError] = useState(null);
   
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -47,12 +48,14 @@ export default function ZokaAI({ isOpen, onClose }) {
       setTimeout(() => inputRef.current?.focus(), 300);
     } else {
       setShowSidebar(false);
+      setError(null);
     }
   }, [isOpen]);
 
   const startNewChat = () => {
     setActiveChatId(null);
     setInput("");
+    setError(null);
     setShowSidebar(false);
     inputRef.current?.focus();
   };
@@ -60,16 +63,79 @@ export default function ZokaAI({ isOpen, onClose }) {
   const deleteChat = (id, e) => {
     e.stopPropagation();
     setChats(prev => prev.filter(c => c.id !== id));
-    if (activeChatId === id) setActiveChatId(null);
+    if (activeChatId === id) {
+      setActiveChatId(null);
+      setError(null);
+    }
+  };
+
+  const handleRetry = async () => {
+    if (!messages.length) return;
+    const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+    if (!lastUserMsg) return;
+    
+    // Remove the error message if it exists
+    setChats(prev => prev.map(c => {
+      if (c.id === activeChatId) {
+        return { ...c, messages: c.messages.filter(m => !m.isError) };
+      }
+      return c;
+    }));
+    
+    await sendMessageToBackend(lastUserMsg.content, true);
+  };
+
+  const sendMessageToBackend = async (currentInput, isRetry = false) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const history = (activeChat?.messages || []).filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
+      
+      const response = await fetch(`${BACKEND_URL}/api/v1/ai/zoka`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: currentInput, history, appContext })
+      });
+      
+      const data = await response.json();
+      if (!response.ok || !data.success) throw new Error(data.error || 'Failed to get response');
+      
+      const aiMsg = { role: 'assistant', content: data.reply };
+      
+      setChats(prev => prev.map(c => {
+        if (c.id === activeChatId) {
+          return { ...c, messages: [...c.messages.filter(m => !m.isError), aiMsg] };
+        }
+        return c;
+      }));
+
+    } catch (error) {
+      console.error('AI Request Failed:', error);
+      const errorMsg = { 
+        role: 'assistant', 
+        content: error.message, 
+        isError: true 
+      };
+      setChats(prev => prev.map(c => {
+        if (c.id === activeChatId) {
+          return { ...c, messages: [...c.messages, errorMsg] };
+        }
+        return c;
+      }));
+      setError(error.message);
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
 
-    const userMsg = { role: 'user', content: input };
-    const currentInput = input;
+    const currentInput = input.trim();
+    const userMsg = { role: 'user', content: currentInput };
     setInput("");
-    setLoading(true);
+    setError(null);
 
     const newChatId = activeChatId || Date.now().toString();
     const chatTitle = currentInput.substring(0, 30) + (currentInput.length > 30 ? '...' : '');
@@ -84,51 +150,31 @@ export default function ZokaAI({ isOpen, onClose }) {
     });
     setActiveChatId(newChatId);
 
-    try {
-      const history = (activeChat?.messages || []).map(m => ({ role: m.role, content: m.content }));
-      
-      const response = await fetch(`${BACKEND_URL}/api/v1/ai/zoka`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: currentInput, history, appContext })
-      });
-      
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || 'Failed to get response');
-      
-      const aiMsg = { role: 'assistant', content: data.reply };
-      
-      setChats(prev => {
-        return prev.map(c => {
-          if (c.id === newChatId) {
-            return { ...c, messages: [...c.messages, aiMsg] };
-          }
-          return c;
-        });
-      });
+    await sendMessageToBackend(currentInput);
+  };
 
-    } catch (error) {
-      const errorMsg = { role: 'assistant', content: "I'm having trouble connecting to the mainframe right now. Try again in a moment." };
-      setChats(prev => prev.map(c => c.id === newChatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
-    } finally {
-      setLoading(false);
-    }
+  // Simple markdown-like formatter for AI responses
+  const formatMessage = (text) => {
+    return text.split('\n').map((line, i) => {
+      if (line.startsWith('###') || line.startsWith('##') || line.startsWith('#')) {
+        return <h4 key={i} className="font-bold text-primary mt-3 mb-1">{line.replace(/^#+\s*/, '')}</h4>;
+      }
+      if (line.startsWith('- ') || line.startsWith('* ')) {
+        return <li key={i} className="ml-4 list-disc text-sm opacity-90">{line.substring(2)}</li>;
+      }
+      if (line.trim() === '') return <br key={i} />;
+      return <p key={i} className="text-sm leading-relaxed">{line}</p>;
+    });
   };
 
   if (!isOpen) return null;
 
   return (
     <>
-      {/* Transparent backdrop to catch outside clicks without darkening screen */}
       <div className="kim-backdrop" onClick={onClose} />
       
-      {/* Main Chat Window */}
       <div className="kim-window">
-        
-        {/* Sidebar Overlay */}
-        {showSidebar && (
-          <div className="kim-sidebar-overlay" onClick={() => setShowSidebar(false)} />
-        )}
+        {showSidebar && <div className="kim-sidebar-overlay" onClick={() => setShowSidebar(false)} />}
         
         {/* Sidebar */}
         <div className={`kim-sidebar ${showSidebar ? 'open' : ''}`}>
@@ -138,7 +184,7 @@ export default function ZokaAI({ isOpen, onClose }) {
           </div>
           
           <div className="kim-sidebar-actions">
-            <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-8" style={{ justifyContent: 'center' }}>
+            <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-2">
               <Plus size={16} /> New Chat
             </button>
           </div>
@@ -150,14 +196,14 @@ export default function ZokaAI({ isOpen, onClose }) {
             {chats.map(chat => (
               <div 
                 key={chat.id} 
-                onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); }}
+                onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); setError(null); }}
                 className={`kim-chat-item ${activeChatId === chat.id ? 'active' : ''}`}
               >
                 <div className="kim-chat-item-info">
                   <MessageSquare size={14} />
-                  <span>{chat.title}</span>
+                  <span className="truncate">{chat.title}</span>
                 </div>
-                <button onClick={(e) => deleteChat(chat.id, e)} className="kim-chat-delete">
+                <button onClick={(e) => deleteChat(chat.id, e)} className="kim-chat-delete" title="Delete chat">
                   <Trash2 size={12} />
                 </button>
               </div>
@@ -165,9 +211,8 @@ export default function ZokaAI({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Chat Main Area */}
+        {/* Main Chat Area */}
         <div className="kim-main">
-          {/* Header */}
           <div className="kim-header">
             <div className="kim-header-left">
               <button onClick={() => setShowSidebar(!showSidebar)} className="btn-icon btn-ghost">
@@ -186,11 +231,10 @@ export default function ZokaAI({ isOpen, onClose }) {
             <button onClick={onClose} className="btn-icon btn-ghost"><X size={20} /></button>
           </div>
 
-          {/* Chat Body */}
           <div className="kim-body">
             {messages.length === 0 && (
               <div className="kim-empty-state">
-                <Brain size={48} className="text-primary" style={{ opacity: 0.5 }} />
+                <Brain size={48} className="text-primary mb-4" style={{ opacity: 0.5 }} />
                 <h3>Chat with Kim</h3>
                 <p>Ask me about today's matches, tactical breakdowns, or predictions.</p>
               </div>
@@ -203,8 +247,18 @@ export default function ZokaAI({ isOpen, onClose }) {
                     <Sparkles size={14} color="#fff" />
                   </div>
                 )}
-                <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
-                  {msg.content}
+                <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'} ${msg.isError ? 'error' : ''}`}>
+                  {msg.isError ? (
+                    <div className="flex items-center gap-2">
+                      <AlertCircle size={14} />
+                      <span>{msg.content}</span>
+                      <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1">
+                        <RefreshCw size={12} /> Retry
+                      </button>
+                    </div>
+                  ) : (
+                    formatMessage(msg.content)
+                  )}
                 </div>
                 {msg.role === 'user' && (
                   <div className="kim-msg-avatar user">
@@ -220,26 +274,29 @@ export default function ZokaAI({ isOpen, onClose }) {
                   <Sparkles size={14} color="#fff" />
                 </div>
                 <div className="kim-bubble ai loading">
-                  <Loader size={14} className="anim-spin" /> <span>Analyzing...</span>
+                  <Loader size={14} className="anim-spin" /> <span>Analyzing tactics...</span>
                 </div>
               </div>
             )}
             <div ref={chatEndRef} />
           </div>
 
-          {/* Input Area */}
           <div className="kim-input-area">
             <div className="kim-input-wrap">
               <input
                 ref={inputRef}
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
                 placeholder="Message Kim..."
                 className="kim-input"
                 disabled={loading}
               />
-              <button onClick={handleSend} disabled={loading || !input.trim()} className="kim-send-btn">
+              <button 
+                onClick={handleSend} 
+                disabled={loading || !input.trim()} 
+                className={`kim-send-btn ${!input.trim() || loading ? 'disabled' : ''}`}
+              >
                 <Send size={18} />
               </button>
             </div>

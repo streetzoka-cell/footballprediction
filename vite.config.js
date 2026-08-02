@@ -1,4 +1,4 @@
-import { defineConfig } from 'vite';
+﻿import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 
@@ -32,15 +32,17 @@ export default defineConfig({
           {
             src: '/icons/icon-512.png',
             sizes: '512x512',
-            type: 'image/png'
+            type: 'image/png',
+            purpose: 'any maskable' // ★ NEW: Required for Android install prompts
           }
         ]
       },
 
       workbox: {
+        skipWaiting: true, // Force SW to activate immediately
+        clientsClaim: true, // Take control of all open tabs instantly
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 
-        // Never allow the service worker to intercept SEO or API files.
         navigateFallbackDenylist: [
           /^\/robots\.txt$/,
           /^\/zokascore-sitemap\.xml$/,
@@ -95,9 +97,9 @@ export default defineConfig({
             }
           }
         ]
-      }
-    })
-  ],
+      } // ★ FIXED: Closed workbox object
+    }) // ★ FIXED: Closed VitePWA function
+  ], // ★ FIXED: Closed plugins array
 
   server: {
     port: 5173,
@@ -112,12 +114,9 @@ export default defineConfig({
 
   build: {
     chunkSizeWarningLimit: 1000,
-
- esbuild: {
+    esbuild: {
       drop: ['console', 'debugger'],
     },
-
-
     rollupOptions: {
       output: {
         manualChunks(id) {
@@ -129,18 +128,15 @@ export default defineConfig({
             ) {
               return 'react-vendor';
             }
-
             if (id.includes('firebase')) {
               return 'firebase-vendor';
             }
-
             if (
               id.includes('lucide-react') ||
               id.includes('framer-motion')
             ) {
               return 'ui-vendor';
             }
-
             if (id.includes('@tanstack')) {
               return 'query-vendor';
             }
