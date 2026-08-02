@@ -44,7 +44,7 @@ export default function ZokaAI({ isOpen, onClose }) {
 
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => inputRef.current?.focus(), 100);
+      setTimeout(() => inputRef.current?.focus(), 300);
     } else {
       setShowSidebar(false);
     }
@@ -71,7 +71,6 @@ export default function ZokaAI({ isOpen, onClose }) {
     setInput("");
     setLoading(true);
 
-    // Optimistic UI update
     const newChatId = activeChatId || Date.now().toString();
     const chatTitle = currentInput.substring(0, 30) + (currentInput.length > 30 ? '...' : '');
 
@@ -119,182 +118,134 @@ export default function ZokaAI({ isOpen, onClose }) {
   if (!isOpen) return null;
 
   return (
-    <div className="flex-center" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 9999, padding: '0', backdropFilter: 'blur(10px)' }} onClick={onClose}>
+    <>
+      {/* Transparent backdrop to catch outside clicks without darkening screen */}
+      <div className="kim-backdrop" onClick={onClose} />
       
-      {/* Main Chat Container */}
-      <div 
-        onClick={e => e.stopPropagation()} 
-        className="glass-card flex-col" 
-        style={{ 
-          width: '100%', 
-          maxWidth: '900px', 
-          height: '100vh', 
-          maxHeight: '100vh', 
-          overflow: 'hidden', 
-          borderRadius: '0',
-          borderLeft: showSidebar ? '1px solid var(--border)' : 'none',
-          borderRight: 'none',
-          borderTop: 'none',
-          borderBottom: 'none',
-          margin: 0,
-          position: 'relative'
-        }}
-      >
+      {/* Main Chat Window */}
+      <div className="kim-window">
         
-        {/* Header */}
-        <div className="flex-between p-16" style={{ borderBottom: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
-          <div className="flex-center gap-12">
-            <button onClick={() => setShowSidebar(!showSidebar)} className="btn-icon btn-ghost" style={{ padding: '4px' }}>
-              <Menu size={20} />
-            </button>
-            <div className="flex-center gap-8">
-              <div style={{ width: '32px', height: '32px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <Sparkles size={16} color="#fff" />
-              </div>
-              <div className="flex-col">
-                <h2 className="text-primary font-extrabold" style={{ fontSize: '1.1rem', lineHeight: 1 }}>Kim</h2>
-                <span className="text-muted" style={{ fontSize: '0.7rem', fontWeight: 600 }}>Football Intelligence</span>
-              </div>
-            </div>
+        {/* Sidebar Overlay */}
+        {showSidebar && (
+          <div className="kim-sidebar-overlay" onClick={() => setShowSidebar(false)} />
+        )}
+        
+        {/* Sidebar */}
+        <div className={`kim-sidebar ${showSidebar ? 'open' : ''}`}>
+          <div className="kim-sidebar-header">
+            <span className="kim-sidebar-title">Chat History</span>
+            <button onClick={() => setShowSidebar(false)} className="btn-icon btn-ghost"><X size={18} /></button>
           </div>
-          <button onClick={onClose} className="btn-icon btn-ghost"><X size={20} /></button>
+          
+          <div className="kim-sidebar-actions">
+            <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-8" style={{ justifyContent: 'center' }}>
+              <Plus size={16} /> New Chat
+            </button>
+          </div>
+
+          <div className="kim-sidebar-list">
+            {chats.length === 0 && (
+              <div className="kim-sidebar-empty">No recent chats.</div>
+            )}
+            {chats.map(chat => (
+              <div 
+                key={chat.id} 
+                onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); }}
+                className={`kim-chat-item ${activeChatId === chat.id ? 'active' : ''}`}
+              >
+                <div className="kim-chat-item-info">
+                  <MessageSquare size={14} />
+                  <span>{chat.title}</span>
+                </div>
+                <button onClick={(e) => deleteChat(chat.id, e)} className="kim-chat-delete">
+                  <Trash2 size={12} />
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
 
-        {/* Chat Body */}
-        <div className="flex-col gap-16 p-16" style={{ overflowY: 'auto', flex: 1, background: 'var(--bg-deep)' }}>
-          {messages.length === 0 && (
-            <div className="flex-col items-center justify-center text-center" style={{ flex: 1, gap: '16px' }}>
-              <Brain size={48} className="text-primary" style={{ opacity: 0.5 }} />
-              <div>
-                <h3 className="text-primary font-bold" style={{ fontSize: '1.2rem' }}>Chat with Kim</h3>
-                <p className="text-muted" style={{ fontSize: '0.85rem', marginTop: '4px' }}>Ask me about today's matches, tactical breakdowns, or predictions.</p>
+        {/* Chat Main Area */}
+        <div className="kim-main">
+          {/* Header */}
+          <div className="kim-header">
+            <div className="kim-header-left">
+              <button onClick={() => setShowSidebar(!showSidebar)} className="btn-icon btn-ghost">
+                <Menu size={20} />
+              </button>
+              <div className="kim-header-info">
+                <div className="kim-avatar">
+                  <Sparkles size={16} color="#fff" />
+                </div>
+                <div>
+                  <h2 className="kim-name">Kim</h2>
+                  <span className="kim-status">Football Intelligence</span>
+                </div>
               </div>
             </div>
-          )}
-          
-          {messages.map((msg, i) => (
-            <div key={i} className={`flex gap-8 ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-              {msg.role !== 'user' && (
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <button onClick={onClose} className="btn-icon btn-ghost"><X size={20} /></button>
+          </div>
+
+          {/* Chat Body */}
+          <div className="kim-body">
+            {messages.length === 0 && (
+              <div className="kim-empty-state">
+                <Brain size={48} className="text-primary" style={{ opacity: 0.5 }} />
+                <h3>Chat with Kim</h3>
+                <p>Ask me about today's matches, tactical breakdowns, or predictions.</p>
+              </div>
+            )}
+            
+            {messages.map((msg, i) => (
+              <div key={i} className={`kim-msg-row ${msg.role === 'user' ? 'user' : 'ai'}`}>
+                {msg.role !== 'user' && (
+                  <div className="kim-msg-avatar">
+                    <Sparkles size={14} color="#fff" />
+                  </div>
+                )}
+                <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'}`}>
+                  {msg.content}
+                </div>
+                {msg.role === 'user' && (
+                  <div className="kim-msg-avatar user">
+                    <User size={14} color="#fff" />
+                  </div>
+                )}
+              </div>
+            ))}
+            
+            {loading && (
+              <div className="kim-msg-row ai">
+                <div className="kim-msg-avatar">
                   <Sparkles size={14} color="#fff" />
                 </div>
-              )}
-              <div 
-                style={{ 
-                  maxWidth: '75%', 
-                  background: msg.role === 'user' ? 'var(--primary)' : 'var(--bg-card)',
-                  color: msg.role === 'user' ? '#fff' : 'var(--text-primary)',
-                  padding: '10px 14px',
-                  borderRadius: msg.role === 'user' ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-                  border: msg.role === 'user' ? 'none' : '1px solid var(--border)',
-                  fontSize: '0.9rem',
-                  lineHeight: 1.5,
-                  whiteSpace: 'pre-wrap'
-                }}
-              >
-                {msg.content}
-              </div>
-              {msg.role === 'user' && (
-                <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <User size={14} color="#fff" />
+                <div className="kim-bubble ai loading">
+                  <Loader size={14} className="anim-spin" /> <span>Analyzing...</span>
                 </div>
-              )}
-            </div>
-          ))}
-          
-          {loading && (
-            <div className="flex gap-8 justify-start">
-              <div style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <Sparkles size={14} color="#fff" />
               </div>
-              <div className="flex-center gap-8" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', padding: '10px 14px', borderRadius: '16px 16px 16px 4px' }}>
-                <Loader size={14} className="anim-spin text-primary" /> <span className="text-muted" style={{ fontSize: '0.85rem' }}>Analyzing...</span>
-              </div>
-            </div>
-          )}
-          <div ref={chatEndRef} />
-        </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
 
-        {/* Input Area */}
-        <div className="p-16" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
-          <div className="flex gap-8 items-center" style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: '12px', padding: '4px 4px 4px 16px' }}>
-            <input
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-              placeholder="Message Kim..."
-              className="form-input"
-              style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', boxShadow: 'none', padding: '8px 0' }}
-              disabled={loading}
-            />
-            <button onClick={handleSend} disabled={loading || !input.trim()} className="btn btn-primary" style={{ borderRadius: '8px', minWidth: '40px', height: '40px', padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Send size={16} />
-            </button>
+          {/* Input Area */}
+          <div className="kim-input-area">
+            <div className="kim-input-wrap">
+              <input
+                ref={inputRef}
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSend()}
+                placeholder="Message Kim..."
+                className="kim-input"
+                disabled={loading}
+              />
+              <button onClick={handleSend} disabled={loading || !input.trim()} className="kim-send-btn">
+                <Send size={18} />
+              </button>
+            </div>
           </div>
         </div>
       </div>
-
-      {/* History Sidebar */}
-      {showSidebar && (
-        <>
-          <div onClick={() => setShowSidebar(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 10 }} />
-          <div 
-            className="glass-card flex-col" 
-            style={{ 
-              position: 'absolute', 
-              top: 0, 
-              left: 0, 
-              height: '100%', 
-              width: '300px', 
-              zIndex: 20, 
-              borderRadius: 0, 
-              borderRight: '1px solid var(--border)',
-              background: 'var(--bg-deep)'
-            }}
-          >
-            <div className="flex-between p-16" style={{ borderBottom: '1px solid var(--border)' }}>
-              <span className="text-primary font-bold">Chat History</span>
-              <button onClick={() => setShowSidebar(false)} className="btn-icon btn-ghost"><X size={18} /></button>
-            </div>
-            
-            <div className="p-12">
-              <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-8" style={{ justifyContent: 'center' }}>
-                <Plus size={16} /> New Chat
-              </button>
-            </div>
-
-            <div className="flex-col gap-4 p-8" style={{ overflowY: 'auto', flex: 1 }}>
-              {chats.length === 0 && (
-                <div className="text-center p-16">
-                  <p className="text-muted text-sm">No recent chats.</p>
-                </div>
-              )}
-              {chats.map(chat => (
-                <div 
-                  key={chat.id} 
-                  onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); }}
-                  className={`flex-between p-12 cursor-pointer ${activeChatId === chat.id ? 'bg-elevated' : ''}`}
-                  style={{ 
-                    borderRadius: '8px', 
-                    background: activeChatId === chat.id ? 'rgba(var(--primary-rgb), 0.1)' : 'transparent', 
-                    border: `1px solid ${activeChatId === chat.id ? 'var(--primary)' : 'transparent'}`,
-                    transition: 'all 0.2s'
-                  }}
-                >
-                  <div className="flex-center gap-8" style={{ overflow: 'hidden' }}>
-                    <MessageSquare size={14} className="text-muted" style={{ flexShrink: 0 }} />
-                    <span className="text-secondary text-sm" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{chat.title}</span>
-                  </div>
-                  <button onClick={(e) => deleteChat(chat.id, e)} className="btn-icon btn-ghost" style={{ padding: '4px', opacity: 0.5 }}>
-                    <Trash2 size={12} />
-                  </button>
-                </div>
-              ))}
-            </div>
-          </div>
-        </>
-      )}
-    </div>
+    </>
   );
 }

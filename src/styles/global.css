@@ -4152,3 +4152,360 @@ p { color: var(--text-secondary); line-height: 1.7; }
   }
 }
 
+
+
+/* ================== ZOKA AI (KIM) STYLES ================== */
+
+.kim-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  background: transparent;
+}
+
+.kim-window {
+  position: fixed;
+  z-index: 9999;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 90vh;
+  background: var(--bg-deep);
+  border-top: 1px solid var(--border);
+  border-radius: 16px 16px 0 0;
+  display: flex;
+  overflow: hidden;
+  box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
+  animation: kim-slide-up 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes kim-slide-up {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.kim-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-deep);
+  position: relative;
+  z-index: 1;
+}
+
+.kim-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.kim-header-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.kim-header-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.kim-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.kim-name {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: var(--text-primary);
+  line-height: 1;
+  margin: 0;
+}
+
+.kim-status {
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.kim-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.kim-empty-state {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 8px;
+}
+
+.kim-empty-state h3 {
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  margin: 8px 0 0 0;
+}
+
+.kim-empty-state p {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  max-width: 280px;
+}
+
+.kim-msg-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-end;
+}
+
+.kim-msg-row.user {
+  justify-content: flex-end;
+}
+
+.kim-msg-avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.kim-msg-avatar.user {
+  background: var(--accent);
+}
+
+.kim-bubble {
+  max-width: 75%;
+  padding: 10px 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.kim-bubble.user {
+  background: var(--primary);
+  color: #fff;
+  border-radius: 16px 16px 4px 16px;
+}
+
+.kim-bubble.ai {
+  background: var(--bg-card);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: 16px 16px 16px 4px;
+}
+
+.kim-bubble.ai.loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.kim-input-area {
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-elevated);
+}
+
+.kim-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px 4px 4px 16px;
+}
+
+.kim-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  box-shadow: none;
+  color: var(--text-primary);
+  padding: 8px 0;
+  font-size: 0.95rem;
+}
+
+.kim-input::placeholder {
+  color: var(--text-muted);
+}
+
+.kim-send-btn {
+  width: 40px;
+  height: 40px;
+  min-height: 40px;
+  border-radius: 8px;
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.kim-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Sidebar */
+.kim-sidebar-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 10;
+}
+
+.kim-sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 280px;
+  background: var(--bg-deep);
+  border-right: 1px solid var(--border);
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  transform: translateX(-100%);
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.kim-sidebar.open {
+  transform: translateX(0);
+}
+
+.kim-sidebar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.kim-sidebar-title {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.kim-sidebar-actions {
+  padding: 12px;
+}
+
+.kim-sidebar-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.kim-sidebar-empty {
+  text-align: center;
+  padding: 24px 16px;
+  color: var(--text-muted);
+  font-size: 0.875rem;
+}
+
+.kim-chat-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.kim-chat-item:hover {
+  background: rgba(255,255,255,0.03);
+}
+
+.kim-chat-item.active {
+  background: rgba(var(--primary-rgb), 0.1);
+  border-color: var(--primary);
+}
+
+.kim-chat-item-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow: hidden;
+  color: var(--text-secondary);
+}
+
+.kim-chat-item-info span {
+  font-size: 0.875rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kim-chat-delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 4px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.kim-chat-delete:hover {
+  opacity: 1;
+  color: var(--danger);
+}
+
+/* ================== DESKTOP RESPONSIVE ================== */
+@media (min-width: 768px) {
+  .kim-window {
+    width: 400px;
+    height: 600px;
+    bottom: 90px;
+    right: 24px;
+    left: auto;
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: 0 20px 50px rgba(0,0,0,0.5);
+    animation: kim-pop-in 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+
+  @keyframes kim-pop-in {
+    from { transform: scale(0.9) translateY(20px); opacity: 0; }
+    to { transform: scale(1) translateY(0); opacity: 1; }
+  }
+
+  .kim-backdrop {
+    background: rgba(0,0,0,0.2);
+    backdrop-filter: blur(2px);
+  }
+}
