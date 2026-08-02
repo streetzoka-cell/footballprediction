@@ -34,10 +34,15 @@ async function isFirebaseAdmin(req) {
     const adminDoc = await db.collection('admin_users').doc(decoded.uid).get();
     if (adminDoc.exists) return true;
 
-    // Role admin → users/{uid}.role === 'admin' | 'staff'
+    // Role admin → users/{uid}.role === 'admin' | 'staff' | 'super_admin'
     const userDoc = await db.collection('users').doc(decoded.uid).get();
-    const role = (userDoc.exists ? userDoc.data().role : 'user') || 'user';
-    return role === 'admin' || role === 'staff';
+    if (userDoc.exists) {
+      const role = userDoc.data().role || 'user';
+      // ★ FIX: Added 'super_admin' to the allowed roles
+      return role === 'admin' || role === 'staff' || role === 'super_admin';
+    }
+    
+    return false;
   } catch (err) {
     logger.warn(`[adminAuth] Firebase token check failed: ${err.message}`);
     return false;

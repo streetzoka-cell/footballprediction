@@ -13,12 +13,8 @@ export default function PwaManager() {
     updateServiceWorker,
   } = useRegisterSW({
     onRegistered(r) {
-      console.log('PWA Registered');
       if (r) {
-        // Check for updates every hour
         setInterval(() => r.update(), 60 * 60 * 1000); 
-        
-        // ★ NEW: Check for updates immediately when internet reconnects
         window.addEventListener('online', () => {
           r.update();
         });
@@ -26,16 +22,13 @@ export default function PwaManager() {
     },
   });
 
-  // ★ NEW: Automatically reload the app when a new version is detected
   useEffect(() => {
     if (needRefresh) {
       toast.info('New version available! Updating...', {
-        action: { label: 'Reload', onClick: () => updateServiceWorker(true) },
         icon: <RefreshCw size={18} className="text-amber-400" />,
-        duration: 4000
+        duration: 3000
       });
-      // Force update after 4 seconds automatically
-      const timer = setTimeout(() => updateServiceWorker(true), 4000);
+      const timer = setTimeout(() => updateServiceWorker(true), 3000);
       setNeedRefresh(false);
       return () => clearTimeout(timer);
     }
@@ -50,16 +43,12 @@ export default function PwaManager() {
     }
   }, [offlineReady, toast, setOfflineReady]);
 
-  // ★ NEW: Centralized Install Prompt Logic
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
-      window.deferredPrompt = e; // Store globally for Footer to use
-      
-      // Dispatch event so Footer button enables itself
+      window.deferredPrompt = e; 
       window.dispatchEvent(new Event('pwaInstallable'));
       
-      // Show install popup after 5 seconds if not installed
       setTimeout(() => {
         if (!window.matchMedia('(display-mode: standalone)').matches && window.deferredPrompt) {
           toast.info('Install ZOKASCORE for offline access!', {
@@ -76,7 +65,7 @@ export default function PwaManager() {
             duration: 10000
           });
         }
-      }, 5000); // 5 seconds
+      }, 10000);
     };
     window.addEventListener('beforeinstallprompt', handler);
     return () => window.removeEventListener('beforeinstallprompt', handler);
