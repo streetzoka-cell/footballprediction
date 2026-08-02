@@ -7,7 +7,7 @@ const BaseProvider = require('./BaseProvider');
 const PRIMARY_BASE = env.ISPORTS_PRIMARY_URL;
 const BACKUP_BASE  = env.ISPORTS_BACKUP_URL;
 const API_KEY = env.ISPORTS_API_KEY;
-const TIMEOUT = 8000; // â˜… CHANGED to 8000ms. Safe for Cloudflare, enough for iSports.
+const TIMEOUT = 30000; // â˜… CHANGED to 8000ms. Safe for Cloudflare, enough for iSports.
 
 const DAILY_LIMIT = 190; 
 let callsToday = 0;
@@ -33,7 +33,7 @@ async function requestWithFailover(path, params = {}) {
   callsToday++;
   
   const query = { api_key: API_KEY, ...params };
-  const bases = [PRIMARY_BASE, BACKUP_BASE];
+  const TIMEOUT = 8000;
   let lastErr = null;
 
   for (const base of bases) {

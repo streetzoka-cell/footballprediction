@@ -18,11 +18,11 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   let isLive = display.isLive || false;
   let isFinished = display.isFinished || false;
-  let status = raw.status;
+  let status = raw.status || display.status;
   let minute = display.minute || raw.minute || 0;
   let isHidden = false;
 
-  // ★ FIX: Fallback timestamp calculation from utcDate
+  // Fallback timestamp calculation from utcDate
   let timestamp = raw.timestamp;
   if (!timestamp) {
     const dateStr = raw.utcDate || raw.date;
@@ -32,10 +32,9 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  // ★ FIX: Increased thresholds to 3.5 hours to prevent delayed matches from forcing FT early
-  const FT_THRESHOLD_MS = 3.5 * 60 * 60 * 1000;        // 3.5h — hard cap force FT
-  const STUCK_LIVE_MS = 3 * 60 * 60 * 1000;            // 3h — if at 90' for a long time, force FT
-  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;       // 24h — hide completely
+  // Hard caps to prevent stuck live matches (3.5 hours max)
+  const FT_THRESHOLD_MS = 3.5 * 60 * 60 * 1000; 
+  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000; 
 
   if (timestamp) {
     const matchStartTime = timestamp * 1000;
@@ -46,16 +45,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       isLive = false;
       isFinished = false;
       status = 'HIDDEN';
-    }
-    // ★ If minute already at 90' and elapsed > 3h → FT NOW
-    else if (isLive && (minute >= 90 || status === '90' || status === '2H') && elapsed > STUCK_LIVE_MS) {
-      isLive = false;
-      isFinished = true;
-      status = 'FT';
-      minute = 90;
-    }
-    // Hard cap: any match older than 3.5h → FT
-    else if (elapsed > FT_THRESHOLD_MS && isLive) {
+    } else if (elapsed > FT_THRESHOLD_MS && isLive) {
       isLive = false;
       isFinished = true;
       status = 'FT';
@@ -66,15 +56,17 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
   const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
 
+  // ★ CRITICAL: Get the exact time the backend received this update
+  const updatedAt = raw.dataQuality?.lastUpdated || raw.lastUpdated || raw.updatedAt || null;
+
   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
     date: raw.date,
     utcDate: raw.utcDate || raw.date,
-
-    dateStr: matchDateStr,                              // UTC — backend key (do not change)
-    localDateStr: toLocalDateStr(raw.utcDate || raw.date), // LOCAL — for display bucketing
-    timestamp: timestamp, // ★ FIX: Use calculated timestamp
+    dateStr: matchDateStr, 
+    localDateStr: toLocalDateStr(raw.utcDate || raw.date), 
+    timestamp: timestamp,
     kickoff: kickoffTime,
     kickoffUtc: raw.kickoffUtc || raw.utcDate || raw.date,
     status: status,
@@ -82,13 +74,13 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     isLive: isLive,
     isFinished: isFinished,
     isScheduled: display.isUpcoming || false,
-    isHT: display.isHalfTime || false,
+    isHT: display.isHalfTime || status === 'HT',
     isStarted: isLive && !display.isHalfTime,
     minute: minute,
     displayMinute: minute,
-    lastUpdated: raw.dataQuality?.lastUpdated || raw.lastUpdated || null, // ★ FIX: ensure lastUpdated is captured
+    updatedAt: updatedAt, // ★ NEW: Pass this to the frontend for hybrid calculation
     isHidden: isHidden,
-
+    
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
     homeTeamName: homeName,
@@ -117,93 +109,82 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   };
 }
 
-// ★ Bulletproof Smart Minute Calculator (SAFETY CHECK & RESET ADDED)
+// ★ NEW: Format minute to show stoppage time correctly (45+1', 90+3')
+export function formatMinute(min, status) {
+  if (status === 'HT') return 'HT';
+  if (status === 'FT' || status === 'AET' || status === 'PEN') return 'FT';
+  if (status === 'NS' || status === 'TBD' || status === 'PST') return '';
+  
+  min = Math.max(0, min);
+  
+  // 1st Half Stoppage Time
+  if (status === '1H' && min > 45) {
+    return `45+${min - 45}'`;
+  }
+  
+  // 2nd Half Stoppage Time
+  if (status === '2H' && min > 90) {
+    return `90+${min - 90}'`;
+  }
+  
+  // Extra Time Stoppage Time
+  if (status === 'ET') {
+    if (min > 105 && min <= 110) return `105+${min - 105}'`;
+    if (min > 120) return `120+${min - 120}'`;
+  }
+  
+  return `${min}'`;
+}
+
+// ★ NEW: Hybrid Smart Minute Calculator
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
 
-  if (m.isFinished) {
-    return { ...m, displayMinute: 90, minute: 90, isLive: false, isHT: false };
-  }
+  const status = String(m.status || "").toUpperCase();
 
-  const statusUpper = String(m.status || "").toUpperCase();
-
-  if (['PST', 'SUSP', 'INT', 'CANC', 'ABD', 'POSTP', 'TBD', 'PENDING', 'NS'].includes(statusUpper)) {
-    return m;
-  }
-
-  // If we don't have a timestamp, we can't calculate smart minute
-  const matchStartTime = m.timestamp ? m.timestamp * 1000 : null;
-  if (!matchStartTime) return m;
-
-  const elapsedMs = now - matchStartTime;
-
-  if (elapsedMs < 0) {
-    return {
-      ...m,
-      isLive: false,
-      isHT: false,
-      isFinished: false,
-      isStarted: false,
-      status: 'NS',
-      minute: 0,
-      displayMinute: 0
+  // 1. Freeze clock for non-play states (NS, HT, FT, INTERRUPTED, SUSPENDED, etc.)
+  const frozenStatuses = ['FT', 'AET', 'PEN', 'NS', 'TBD', 'PST', 'CANC', 'ABD', 'POSTP', 'SUSP', 'INT', 'PENDING', 'HT'];
+  
+  if (frozenStatuses.includes(status) || m.isFinished) {
+    let displayMin = m.minute;
+    if (status === 'FT' || status === 'AET' || status === 'PEN' || m.isFinished) displayMin = 90;
+    if (status === 'HT') displayMin = 45;
+    if (status === 'NS' || status === 'TBD' || status === 'PST') displayMin = 0;
+    
+    return { 
+      ...m, 
+      displayMinute: displayMin, 
+      isLive: status === 'HT' || status === 'INT' || status === 'SUSP', // Interrupted is technically "live" but frozen
+      isHT: status === 'HT',
+      isStarted: !['NS', 'TBD', 'PST', 'CANC', 'ABD', 'POSTP'].includes(status)
     };
   }
 
+  // 2. Match is LIVE (1H, 2H, ET, P) -> Calculate local minute
   const apiMinute = m.minute || 0;
-  let smartMinute = 0;
-  let status = statusUpper;
-  let isHT = m.isHT || false;
-  let isLive = true; // ★ FIX: If we are calculating smart minute, the match MUST be live
+  let smartMinute = apiMinute;
 
-  // 1. If API provides a minute > 0, ALWAYS anchor to it and the lastUpdated time
-  if (apiMinute > 0) {
-    // ★ RESET: Start exactly at the API's latest minute
-    smartMinute = apiMinute;
-    
-    if (m.lastUpdated) {
-      const lastUpdateTime = new Date(m.lastUpdated).getTime();
-      if (!isNaN(lastUpdateTime) && lastUpdateTime > 0) {
-        const elapsedSinceUpdateMs = now - lastUpdateTime;
-        
-        // ★ SAFETY CHECK: Only count forward from the last update
-        if (elapsedSinceUpdateMs > 0) {
-          const extraMins = Math.floor(elapsedSinceUpdateMs / 60000);
-          smartMinute += extraMins;
-        }
+  // ★ RESYNC LOGIC: Anchor strictly to updatedAt timestamp from backend
+  if (m.updatedAt) {
+    const lastUpdateTime = new Date(m.updatedAt).getTime();
+    if (!isNaN(lastUpdateTime) && lastUpdateTime > 0) {
+      const elapsedSinceUpdateMs = now - lastUpdateTime;
+      
+      // Only count forward if time has passed
+      if (elapsedSinceUpdateMs > 0) {
+        const elapsedMins = Math.floor(elapsedSinceUpdateMs / 60000);
+        smartMinute = apiMinute + elapsedMins;
       }
     }
-  } else {
-    // 2. API Minute is 0 (missing data). Calculate purely from kickoff time.
-    const elapsedMins = Math.floor(elapsedMs / 60000);
-
-    if (elapsedMins > 60) {
-      smartMinute = 45 + (elapsedMins - 60); // = elapsed - 15 (halftime subtracted)
-      status = '2H';
-    } else if (elapsedMins > 50) {
-      smartMinute = 45;
-      status = 'HT';
-      isHT = true;
-      isLive = false; // HT is technically not live play
-    } else if (elapsedMins > 45) {
-      smartMinute = 45;
-      status = '1H';
-    } else {
-      smartMinute = elapsedMins;
-      status = '1H';
-    }
   }
 
-  if (statusUpper === 'HT') {
-    isHT = true;
-    isLive = false;
-    smartMinute = 45;
-    status = 'HT';
-  }
-
-  // Cap at 90 minutes unless it's Extra Time or Penalties
-  if (smartMinute > 90 && statusUpper !== 'ET' && statusUpper !== 'P') {
-    smartMinute = 90;
+  // 3. Cap the minutes based on status to prevent infinite counting
+  if (status === '1H') {
+    smartMinute = Math.min(smartMinute, 50); // Cap at 45+5
+  } else if (status === '2H' || status === 'LIVE') {
+    smartMinute = Math.min(smartMinute, 95); // Cap at 90+5
+  } else if (status === 'ET') {
+    smartMinute = Math.min(smartMinute, 125); // Cap at 120+5
   }
 
   return {
@@ -211,10 +192,10 @@ export function applySmartMinute(m, now = Date.now()) {
     minute: smartMinute,
     displayMinute: smartMinute,
     status: status,
-    isHT: isHT,
-    isLive: isLive,
+    isLive: true,
     isFinished: false,
-    isStarted: !isHT
+    isHT: false,
+    isStarted: true
   };
 }
 

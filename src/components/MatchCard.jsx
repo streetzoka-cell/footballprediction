@@ -1,7 +1,8 @@
-import React, { memo, useState, useEffect, useRef } from 'react';
+﻿import React, { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Pin, Camera, Clock } from 'lucide-react';
 import { buildMatchRoute } from '../utils/routes';
+import { formatMinute } from '../engine/matchEngine'; // ★ NEW: Import formatMinute
 
 const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite, handleReactNow }) => {
   if (!m) return null;
@@ -11,7 +12,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   const [goalFlash, setGoalFlash] = useState(false);
 
   useEffect(() => {
-    if (m.isLive && (prevScoreRef.current.home !== m.homeScore || prevScoreRef.current.away !== m.awayScore)) {
+    if (m.isLive && (prevScoreRef.current.home !== m.homeScore || prevScoreRef.current.awayScore !== m.awayScore)) {
       setScoreFlash(true);
       setGoalFlash(true);
       const t1 = setTimeout(() => setScoreFlash(false), 500);
@@ -36,7 +37,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   
   const matchLink = buildMatchRoute(m.id, m.homeName, m.awayName);
   const display = m.display || {};
-  const minute = m.displayMinute || display.minute;
+  const minute = m.displayMinute || display.minute || 0;
 
   let statusBadge = null;
   const matchStatus = (m.status || display.status || '').toUpperCase();
@@ -49,15 +50,18 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
     statusBadge = <span className="status-badge" style={{ color: 'var(--gold)', background: 'rgba(var(--gold-rgb), 0.1)' }}>PST</span>;
   } else if (matchStatus === 'CANC' || matchStatus === 'ABD') {
     statusBadge = <span className="status-badge" style={{ color: 'var(--danger)', background: 'rgba(var(--danger-rgb), 0.1)' }}>CANC</span>;
+  } else if (matchStatus === 'INT' || matchStatus === 'SUSP') {
+    // ★ NEW: Handle INTERRUPTED status like Flashscore
+    statusBadge = <span className="status-badge" style={{ color: 'var(--gold)', background: 'rgba(var(--gold-rgb), 0.1)' }}>INTERRUPTED</span>;
   } else if (isHT) {
     statusBadge = <span className="status-badge status-ht">HT</span>;
   } else if (isLive) {
     if (matchStatus === 'ET') {
-      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> ET {minute != null ? `${minute}'` : ''}</span>;
+      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> {formatMinute(minute, 'ET')}</span>;
     } else if (matchStatus === 'P') {
       statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> PEN</span>;
     } else {
-      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> {minute != null ? `${minute}'` : 'LIVE'}</span>;
+      statusBadge = <span className="status-badge status-live"><span className="zk-live-pulse-dot" style={{ background: 'var(--danger)', marginRight: '4px' }}></span> {formatMinute(minute, matchStatus)}</span>;
     }
   } else if (isStarted) {
     statusBadge = <span className="status-badge status-upcoming"><Clock size={10} /> STARTED</span>;

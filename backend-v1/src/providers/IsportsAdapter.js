@@ -6,8 +6,33 @@ const BaseProvider = require('./BaseProvider');
 
 const PRIMARY_BASE = env.ISPORTS_PRIMARY_URL;
 const BACKUP_BASE  = env.ISPORTS_BACKUP_URL;
-const TIMEOUT = 8000; // Safe for Cloudflare, enough for iSports
+const TIMEOUT = 30000; // Safe for Cloudflare, enough for iSports
 const PER_KEY_BUDGET = env.ISPORTS_DAILY_BUDGET || 200;
+
+// ★ NEW: The Smart Live Minute Calculator
+function getLiveMinute(match) {
+  // 1. Trust iSports official minute if it exists and is > 0
+  if (match.extraExplain && match.extraExplain.minute > 0) {
+    return match.extraExplain.minute;
+  }
+
+  // 2. Fallback calculation using halfStartTime
+  if (match.halfStartTime) {
+    const now = Math.floor(Date.now() / 1000);
+    let minutes = Math.floor((now - match.halfStartTime) / 60);
+
+    if (minutes < 0) minutes = 0;
+
+    // iSports status 3 = 2nd Half. Add 45 minutes.
+    if (match.status === 3) {
+      minutes += 45;
+    }
+
+    return minutes;
+  }
+
+  return 0; // Default to 0 if no data
+}
 
 class IsportsAdapter extends BaseProvider {
   constructor() {
@@ -69,48 +94,90 @@ class IsportsAdapter extends BaseProvider {
     return this.keys.reduce((sum, k) => sum + k.remaining, 0);
   }
 
-  async _requestWithFailover(path, params = {}) {
-    const activeKey = this._getActiveKey();
-    if (!activeKey) throw new Error('iSports daily quota depleted (all keys exhausted)');
+async _requestWithFailover(path, params = {}) {
+  const activeKey = this._getActiveKey();
 
-    // Reserve one call on this key upfront, then rotate to the other key next time
-    activeKey.remaining = Math.max(0, activeKey.remaining - 1);
-    this.activeKeyIndex = (this.activeKeyIndex + 1) % this.keys.length;
-
-    const query = { api_key: activeKey.key, ...params };
-    const bases = [PRIMARY_BASE, BACKUP_BASE];
-    let lastErr = null;
-
-    for (const base of bases) {
-      const url = `${base}${path}`;
-      try {
-        const t0 = Date.now();
-        const { data, status } = await fetchWithRetry(
-          { url, params: query, timeout: TIMEOUT, validateStatus: () => true },
-          3
-        );
-        const latency = Date.now() - t0;
-        this.avgLatency = Math.round((this.avgLatency + latency) / 2);
-
-        if (status < 200 || status >= 300) { lastErr = new Error(`HTTP ${status}`); continue; }
-        if (data.code !== 0) { lastErr = new Error(`iSports API Error ${data.code}: ${data.message}`); continue; }
-
-        const payload = data.data;
-        if (!payload || (Array.isArray(payload) && payload.length === 0)) { lastErr = new Error('Empty payload'); continue; }
-
-        this.lastSuccessTime = new Date().toISOString();
-        return payload;
-      } catch (err) {
-        lastErr = err;
-      }
-    }
-
-    throw lastErr || new Error(`iSports: both bases failed for ${path}`);
+  if (!activeKey) {
+    throw new Error('iSports daily quota depleted (all keys exhausted)');
   }
+
+  activeKey.remaining = Math.max(0, activeKey.remaining - 1);
+
+  this.activeKeyIndex =
+    (this.activeKeyIndex + 1) % this.keys.length;
+
+  const query = {
+    api_key: activeKey.key,
+    ...params
+  };
+
+  const bases = [PRIMARY_BASE, BACKUP_BASE];
+
+  let lastErr = null;
+
+  for (const base of bases) {
+    const url = `${base}${path}`;
+
+    try {
+      const t0 = Date.now();
+
+      const { data, status } = await fetchWithRetry(
+        {
+          url,
+          params: query,
+          timeout: TIMEOUT,
+          validateStatus: () => true
+        },
+        3
+      );
+
+      const latency = Date.now() - t0;
+      this.avgLatency = Math.round(
+        (this.avgLatency + latency) / 2
+      );
+
+      if (status < 200 || status >= 300) {
+        lastErr = new Error(`HTTP ${status}`);
+        continue;
+      }
+
+      if (data.code !== 0) {
+        lastErr = new Error(
+          `iSports API Error ${data.code}: ${data.message}`
+        );
+        continue;
+      }
+
+      const payload = data.data;
+
+      if (!payload || (Array.isArray(payload) && payload.length === 0)) {
+        lastErr = new Error('Empty payload');
+        continue;
+      }
+
+      this.lastSuccessTime = new Date().toISOString();
+
+      return payload;
+
+    } catch (err) {
+      lastErr = err;
+    }
+  }
+
+  throw lastErr || new Error(`iSports failed for ${path}`);
+}
 
   async getLiveFixtures() {
     const allMatches = await this._requestWithFailover('/sport/football/livescores');
-    return allMatches.filter((m) => m.status > 0);
+    
+    // ★ NEW: Map and inject the calculated liveMinute
+    return allMatches
+      .filter((m) => m.status > 0)
+      .map((m) => ({
+        ...m,
+        liveMinute: getLiveMinute(m),
+        displayMinute: getLiveMinute(m) // Duplicate it for the normaliser to easily find
+      }));
   }
 
   async getFixtures(date) {
