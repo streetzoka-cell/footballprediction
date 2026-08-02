@@ -116,9 +116,15 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
     if (isFT || isExpired || stuckAtNinety) {
       if (match.homeScore == null || match.awayScore == null) {
-        logger.warn(
-          `[FixtureService] Match ${match.id} is FT but has no final score yet. Keeping it in fixtures.`
-        );
+        // Over but no score reported: mark finished, NOT live.
+        match.status = 'FT';
+        match.isLive = false;
+        if (match.display) {
+          match.display.isLive = false;
+          match.display.isFinished = true;
+          match.display.minute = 90;
+        }
+        logger.warn(`[FixtureService] Match ${match.id} is FT with no score — marked finished (not live).`);
         stillFixtures.push(match);
         continue;
       }

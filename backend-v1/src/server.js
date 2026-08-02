@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const path = require('path');
 
@@ -26,6 +26,9 @@ const queueRoute = require('./routes/v1/queue');
 const featuredRoute = require('./routes/v1/featured');
 const zokaPicksRoute = require('./routes/v1/zokaPicks');
 const leaderboardRoute = require('./routes/v1/leaderboard');
+
+// Gemini AI (Zoka AI) route
+const aiRoutes = require('./routes/v1/ai');
 
 const app = express();
 
@@ -101,6 +104,8 @@ app.use('/api/v1/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/monitoring', monitoringDashboard);
 
 app.use('/zokascore-sitemap.xml', sitemapRoute);
+
+app.use('/api/v1/ai', aiRoutes);
 
 app.use(
   '/api/v1/data',

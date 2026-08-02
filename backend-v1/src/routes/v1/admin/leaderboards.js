@@ -1,6 +1,4 @@
-// backend-v1/src/routes/v1/admin/leaderboards.js
-
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 const adminAuth = require('../../../middleware/adminAuth');
@@ -13,17 +11,6 @@ function todayStr() {
   return new Date().toISOString().split('T')[0];
 }
 
-/**
- * POST /api/v1/admin/leaderboards/resolve
- *
- * Body:
- * {
- *   "matchId": "123",
- *   "homeScore": 2,
- *   "awayScore": 1,
- *   "matchDate": "2026-08-02"
- * }
- */
 router.post('/resolve', async (req, res, next) => {
   try {
     const result = await RankingEngine.resolveMatch(req.body || {});
@@ -37,11 +24,6 @@ router.post('/resolve', async (req, res, next) => {
   }
 });
 
-/**
- * POST /api/v1/admin/leaderboards/rebuild/:period
- *
- * period = daily | weekly | monthly | goat | all
- */
 router.post('/rebuild/:period', async (req, res, next) => {
   try {
     const period = String(req.params.period || '').trim();
