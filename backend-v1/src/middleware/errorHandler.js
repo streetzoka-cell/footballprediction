@@ -1,80 +1,101 @@
-// backend-v1/src/middleware/errorHandler.js
+﻿// backend-v1/src/middleware/errorHandler.js
 
 const logger = require('../utils/logger');
 
 /**
- * 404 Handler
+ * 404 Not Found Handler
  *
- * Keeps legacy compatibility:
- *   { error: "Route not found" }
+ * Public response:
+ *  - No internal paths
+ *  - No filesystem details
+ *  - No debugging metadata exposed
  *
- * Adds standardized enterprise format:
- *   {
- *     success: false,
- *     error: { code, message, details },
- *     meta: { requestId, timestamp }
- *   }
+ * Internal logs keep full details.
  */
 function notFound(req, res) {
+  const requestId = res.locals?.requestId || 'req_unknown';
+
+  logger.warn(
+    `[404] [${requestId}] ${req.method} ${req.originalUrl}`
+  );
+
   res.status(404).json({
     success: false,
     error: {
-      code: 'ROUTE_NOT_FOUND',
-      message: 'Route not found',
-      details: [],
-    },
-    meta: {
-      requestId: res.locals?.requestId || null,
-      timestamp: new Date().toISOString(),
-      path: req.originalUrl,
-      method: req.method,
-    },
-
-    // Legacy compatibility
-    error: 'Route not found',
-  });
-}
-
-/**
- * 500 Error Handler
- */
-function errorHandler(err, req, res, next) {
-  const status = err.status || 500;
-  const code = err.code || (status >= 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR');
-
-  const publicMessage =
-    status >= 500 && process.env.NODE_ENV === 'production'
-      ? 'Internal Server Error'
-      : err.message || 'Internal Server Error';
-
-  const requestId = res.locals?.requestId || 'req_unknown';
-
-  logger.error(
-    `[API Error] [${requestId}] ${req.method} ${req.originalUrl}: ${err.message}`
-  );
-
-  if (status >= 500) {
-    logger.error(err.stack);
-  }
-
-  res.status(status).json({
-    success: false,
-    error: {
-      code,
-      message: publicMessage,
-      details: err.details || [],
+      code: 'NOT_FOUND',
+      message: 'The requested resource was not found.',
     },
     meta: {
       requestId,
       timestamp: new Date().toISOString(),
-      path: req.originalUrl,
-      method: req.method,
     },
-
-    // Legacy compatibility
-    error: publicMessage,
   });
 }
+
+
+/**
+ * Global Error Handler
+ *
+ * Handles:
+ * - API errors
+ * - Provider failures
+ * - Database errors
+ * - Unexpected crashes
+ */
+function errorHandler(err, req, res, next) {
+  const status = err.status || 500;
+
+  const code =
+    err.code ||
+    (status >= 500 ? 'INTERNAL_ERROR' : 'REQUEST_ERROR');
+
+  const requestId =
+    res.locals?.requestId || 'req_unknown';
+
+
+  // Internal logging only
+  logger.error(
+    `[API Error] [${requestId}] ${req.method} ${req.originalUrl}: ${err.message}`
+  );
+
+
+  // Stack traces stay private
+  if (status >= 500) {
+    logger.error(err.stack);
+  }
+
+
+  // Safe public message
+  let publicMessage;
+
+  if (status >= 500) {
+    publicMessage =
+      'Something went wrong. Please try again later.';
+  } else {
+    publicMessage =
+      err.message || 'Request failed.';
+  }
+
+
+  res.status(status).json({
+    success: false,
+
+    error: {
+      code,
+      message: publicMessage,
+      details:
+        process.env.NODE_ENV === 'production'
+          ? []
+          : (err.details || []),
+    },
+
+    meta: {
+      requestId,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
 
 module.exports = {
   notFound,

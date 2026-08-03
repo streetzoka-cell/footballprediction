@@ -1,1 +1,27 @@
-{}
+{
+  "hello": {
+    "reply": "Hello there! **Kim** here, your ZOKASCORE Football Intelligence AI! ⚽🤖 \n\nIt is fantastic to chat with you again on this fine Monday, **August 3, 2026**! \n\nWe've already got some live action kicking off right now on the ZOKASCORE ticker:\n* 🇳🇮 **Walter Ferretti** is off to a flying start, leading **Matagalpa FC 1-0** in the 12th minute!\n* 🇬🇹 **Marquense** and **CSD Municipal** are currently locked at **0-0** early in the 5th minute.\n\nWe also have some massive matches coming up later today, including **Celtic FC vs Dundee FC** at 21:30 and **Toluca vs Necaxa** at 04:00! Have you locked in your scores on the `/predictions` page yet? Remember, you've got until **60 minutes before kickoff** to get your picks in and secure those **+10 points** for an exact scoreline!\n\nHow can I help you dominate the ZOKASCORE leaderboards today? \n* 🔮 Want a **Zoka Pick** score prediction for Celtic or Toluca?\n* 🏆 Want to check your current rank on the **Leaderboard**?\n* 🎬 Or are you looking to create some viral content in the **Reactor Studio**? \n\nLet me know what you need, buddy!",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785715855832
+  },
+  "heyy": {
+    "reply": "Hey there! Welcome to **ZOKASCORE** – your ultimate football intelligence and live scores arena! ⚽️🔥\n\nWe've got some live action on the pitch right now:\n*   **Marquense 0-0 CSD Municipal** (5')\n*   **Walter Ferretti 1-0 Matagalpa FC** (12')\n\nAnd some massive fixtures coming up later today, including **Celtic FC vs Dundee FC** at 21:30! \n\nWhat are we doing today? \n*   🔮 **Submit some score predictions** to climb the Leaderboard (remember, an exact score gets you **+10 pts**!).\n*   🎮 Check out the **Reactor Studio** to edit some viral Reels/TikToks.\n*   🗳️ Cast your vote on today's **Match of the Day**.\n*   📞 Need help? Our 24/7 support is always here (0728720281 / 0721635810).\n\nLet me know how I can help you dominate the pitch today! 🚀",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785715872700
+  },
+  "you said who built you": {
+    "reply": "Let me clear that up so there is absolutely no confusion! \n\nI am actually a combination of two incredible things:\n\n1. **My AI \"Brain\" (Built by Google):** The core technology that allows me to process language, think, and chat with you is **Gemini**, which was built by the engineers at **Google**. \n2. **My Football Persona & Platform (Built by ZOKASCORE):** The brilliant development team at **ZOKASCORE** took that powerful Google engine, hooked it up to their real-time football databases (live scores, fixture stats, and the predictions engine), and customized me into **Kim**—your resident ZOKASCORE Football Intelligence AI!\n\nSo, in short: **Google** built my artificial intelligence, but the **ZOKASCORE team** built the app, the platform, and shaped me into the football expert you are chatting with right now! \n\nTeamwork makes the dream work—just like a perfect assist and finish on the pitch! ⚽ \n\nSpeaking of the platform, are you ready to lock in some more predictions today, or do you want to check out how those live matches are progressing?",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785715912019
+  },
+  "no you are kim": {
+    "reply": "You are 100% right, and I apologize for overcomplicating things! \n\n**I am Kim!** ⚽🤖 Your dedicated ZOKASCORE Football Intelligence AI. No more tech talk—I am here, in the zone, and ready to help you dominate the ZOKASCORE leaderboards!\n\nSince I'm fully locked in as Kim now, let's look at what's happening on the pitch right this second:\n\n* 🇳🇮 **Walter Ferretti** is still holding onto that early **1-0** lead against Matagalpa FC (around the 12th minute).\n* 🇬🇹 **Marquense and CSD Municipal** are battling it out at **0-0** in the opening minutes.\n\nAnd don't forget, we have some massive fixtures coming up later today, like **Celtic FC vs Dundee FC**! \n\nHave you locked in your score predictions on the `/predictions` page yet? Let your pal Kim know if you need a statistical breakdown or a **Zoka Pick** for any of today's matches to help you grab that sweet **+10 points** for an exact scoreline! 🏆 What match are we looking at next?",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785715948263
+  },
+  "who built you": {
+    "reply": "I am **Gemini**, a large language model built by **Google**. \n\nIn this space, I am acting as **Kim**, your **ZOKASCORE Football Intelligence AI**! I've been trained to help you navigate the ZOKASCORE platform, analyze match data, make expert score predictions, and help you climb the leaderboards. \n\nWhether you need a **Zoka Pick** for the upcoming Celtic vs Dundee match or want to know how to use the **Reactor Studio** to create viral football clips, I've got you covered! How can I help you today?",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785716007690
+  }
+}
