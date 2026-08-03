@@ -2,6 +2,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const fs = require('fs');
 
 const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
@@ -120,19 +121,77 @@ app.use('/zokascore-sitemap.xml', sitemapRoute);
 
 app.use('/api/v1/ai', aiRoutes);
 
+// ─────────────────────────────────────────────
+// Static public JSON data
+// ─────────────────────────────────────────────
+
+// Results fallback
+// Returns a clean response when today's results file
+// does not exist yet because no matches have finished.
+
+
+app.get('/api/v1/data/results/:date.json', (req, res) => {
+
+  const filePath = path.join(
+    process.cwd(),
+    'public_data',
+    'results',
+    `${req.params.date}.json`
+  );
+
+
+  if (!fs.existsSync(filePath)) {
+
+    return res.json({
+      success: true,
+      data: [],
+      count: 0,
+      date: req.params.date,
+      message: 'No finished matches yet'
+    });
+
+  }
+
+
+  res.sendFile(filePath);
+
+});
+
+
+// Serve public_data JSON files
+
 app.use(
   '/api/v1/data',
-  express.static(path.join(process.cwd(), 'public_data'), {
-    setHeaders: (res, filePath) => {
-      if (filePath.endsWith('.json')) {
-        if (filePath.includes('live.json')) {
-          res.setHeader('Cache-Control', 'public, max-age=15');
-        } else {
-          res.setHeader('Cache-Control', 'public, max-age=900');
+  express.static(
+    path.join(process.cwd(), 'public_data'),
+    {
+      setHeaders: (res, filePath) => {
+
+        if (filePath.endsWith('.json')) {
+
+          // Live data changes frequently
+          if (filePath.includes('live.json')) {
+
+            res.setHeader(
+              'Cache-Control',
+              'public, max-age=15'
+            );
+
+          } else {
+
+            // Fixtures/results snapshots
+            res.setHeader(
+              'Cache-Control',
+              'public, max-age=900'
+            );
+
+          }
+
         }
-      }
-    },
-  })
+
+      },
+    }
+  )
 );
 
 app.use(notFound);
