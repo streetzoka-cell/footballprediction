@@ -8,6 +8,73 @@ import { todayStr } from '../utils/dates';
 
 const BACKEND_URL = 'https://api.zokascore.xyz'; 
 
+// Premium Typewriter Component
+const TypewriterText = ({ text, isActive, onComplete }) => {
+  const [displayed, setDisplayed] = useState('');
+  const containerRef = useRef(null);
+
+  useEffect(() => {
+    if (!isActive) {
+      setDisplayed(text);
+      if (onComplete) onComplete();
+      return;
+    }
+    setDisplayed('');
+    let i = 0;
+    const timer = setInterval(() => {
+      setDisplayed(text.substring(0, i));
+      i++;
+      if (i > text.length) {
+        clearInterval(timer);
+        if (onComplete) onComplete();
+      }
+    }, 12); // Fast, professional typing speed
+    return () => clearInterval(timer);
+  }, [text, isActive, onComplete]);
+
+  useEffect(() => {
+    if (isActive && containerRef.current) {
+      containerRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+    }
+  }, [displayed, isActive]);
+
+  const cleanFormat = (str) => {
+    // 1. Force clean ZOKASCORE text (remove any accidental bolding from AI)
+    let clean = str.replace(/\*\*(ZOKASCORE|Zokascore|zokascore)\*\*/gi, 'ZOKASCORE');
+    
+    return clean.split('\n').map((line, idx) => {
+      const trimmed = line.trim();
+      if (trimmed === '') return <br key={idx} />;
+      
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        return (
+          <div key={idx} className="flex items-start gap-2 ml-1 my-1">
+            <span className="text-primary mt-1.5 text-[10px]">●</span>
+            <span className="text-sm opacity-90 leading-relaxed">{trimmed.substring(2)}</span>
+          </div>
+        );
+      }
+      
+      if (trimmed.match(/^#{1,3}\s+(.*)/)) {
+        return (
+          <h4 key={idx} className="font-semibold text-primary mt-3 mb-1 text-sm uppercase tracking-wide">
+            {trimmed.replace(/^#{1,3}\s+/, '')}
+          </h4>
+        );
+      }
+      
+      return <p key={idx} className="text-sm leading-relaxed mb-1 opacity-90">{trimmed}</p>;
+    });
+  };
+
+  return (
+    <div ref={containerRef}>
+      {cleanFormat(displayed)}
+      {isActive && <span className="typewriter-cursor" />}
+    </div>
+  );
+};
+
 export default function ZokaAI({ isOpen, onClose }) {
   const [chats, setChats] = useState(() => {
     try { return JSON.parse(localStorage.getItem('kim_chats')) || []; } 
@@ -18,6 +85,7 @@ export default function ZokaAI({ isOpen, onClose }) {
   const [loading, setLoading] = useState(false);
   const [showSidebar, setShowSidebar] = useState(false);
   const [error, setError] = useState(null);
+  const [typingMessageId, setTypingMessageId] = useState(null);
   
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -40,8 +108,10 @@ export default function ZokaAI({ isOpen, onClose }) {
   }, [chats]);
 
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, loading]);
+    if (!typingMessageId) {
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, loading, typingMessageId]);
 
   useEffect(() => {
     if (isOpen) {
@@ -49,6 +119,7 @@ export default function ZokaAI({ isOpen, onClose }) {
     } else {
       setShowSidebar(false);
       setError(null);
+      setTypingMessageId(null);
     }
   }, [isOpen]);
 
@@ -56,6 +127,7 @@ export default function ZokaAI({ isOpen, onClose }) {
     setActiveChatId(null);
     setInput("");
     setError(null);
+    setTypingMessageId(null);
     setShowSidebar(false);
     inputRef.current?.focus();
   };
@@ -66,6 +138,7 @@ export default function ZokaAI({ isOpen, onClose }) {
     if (activeChatId === id) {
       setActiveChatId(null);
       setError(null);
+      setTypingMessageId(null);
     }
   };
 
@@ -74,7 +147,6 @@ export default function ZokaAI({ isOpen, onClose }) {
     const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
     if (!lastUserMsg) return;
     
-    // Remove the error message if it exists
     setChats(prev => prev.map(c => {
       if (c.id === activeChatId) {
         return { ...c, messages: c.messages.filter(m => !m.isError) };
@@ -82,15 +154,16 @@ export default function ZokaAI({ isOpen, onClose }) {
       return c;
     }));
     
-    await sendMessageToBackend(lastUserMsg.content, true);
+    await sendMessageToBackend(lastUserMsg.content, activeChatId);
   };
 
-  const sendMessageToBackend = async (currentInput, isRetry = false) => {
+  const sendMessageToBackend = async (currentInput, chatId) => {
     setLoading(true);
     setError(null);
 
     try {
-      const history = (activeChat?.messages || []).filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
+      const currentMessages = chats.find(c => c.id === chatId)?.messages || [];
+      const history = currentMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
       
       const response = await fetch(`${BACKEND_URL}/api/v1/ai/zoka`, {
         method: 'POST',
@@ -101,24 +174,22 @@ export default function ZokaAI({ isOpen, onClose }) {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to get response');
       
-      const aiMsg = { role: 'assistant', content: data.reply };
+      const aiMsg = { role: 'assistant', content: data.reply, id: Date.now() + 1 };
+      setTypingMessageId(aiMsg.id);
       
       setChats(prev => prev.map(c => {
-        if (c.id === activeChatId) {
-          return { ...c, messages: [...c.messages.filter(m => !m.isError), aiMsg] };
+        if (c.id === chatId) {
+          const cleanMessages = c.messages.filter(m => !m.isError);
+          return { ...c, messages: [...cleanMessages, aiMsg] };
         }
         return c;
       }));
 
     } catch (error) {
       console.error('AI Request Failed:', error);
-      const errorMsg = { 
-        role: 'assistant', 
-        content: error.message, 
-        isError: true 
-      };
+      const errorMsg = { role: 'assistant', content: error.message, isError: true, id: Date.now() + 1 };
       setChats(prev => prev.map(c => {
-        if (c.id === activeChatId) {
+        if (c.id === chatId) {
           return { ...c, messages: [...c.messages, errorMsg] };
         }
         return c;
@@ -131,15 +202,20 @@ export default function ZokaAI({ isOpen, onClose }) {
 
   const handleSend = async () => {
     if (!input.trim() || loading) return;
-
     const currentInput = input.trim();
-    const userMsg = { role: 'user', content: currentInput };
     setInput("");
     setError(null);
-
+    setTypingMessageId(null);
+    
     const newChatId = activeChatId || Date.now().toString();
     const chatTitle = currentInput.substring(0, 30) + (currentInput.length > 30 ? '...' : '');
+    const userMsg = { role: 'user', content: currentInput, id: Date.now() };
 
+    // 1. Calculate history synchronously from CURRENT state before updates
+    const currentMessages = activeChat?.messages || [];
+    const history = currentMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
+
+    // 2. Update chats state
     setChats(prev => {
       const existing = prev.find(c => c.id === newChatId);
       if (existing) {
@@ -149,22 +225,10 @@ export default function ZokaAI({ isOpen, onClose }) {
       }
     });
     setActiveChatId(newChatId);
+    setLoading(true);
 
-    await sendMessageToBackend(currentInput);
-  };
-
-  // Simple markdown-like formatter for AI responses
-  const formatMessage = (text) => {
-    return text.split('\n').map((line, i) => {
-      if (line.startsWith('###') || line.startsWith('##') || line.startsWith('#')) {
-        return <h4 key={i} className="font-bold text-primary mt-3 mb-1">{line.replace(/^#+\s*/, '')}</h4>;
-      }
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        return <li key={i} className="ml-4 list-disc text-sm opacity-90">{line.substring(2)}</li>;
-      }
-      if (line.trim() === '') return <br key={i} />;
-      return <p key={i} className="text-sm leading-relaxed">{line}</p>;
-    });
+    // 3. Send to backend with explicit chatId to avoid closure staleness
+    await sendMessageToBackend(currentInput, newChatId);
   };
 
   if (!isOpen) return null;
@@ -172,31 +236,25 @@ export default function ZokaAI({ isOpen, onClose }) {
   return (
     <>
       <div className="kim-backdrop" onClick={onClose} />
-      
       <div className="kim-window">
         {showSidebar && <div className="kim-sidebar-overlay" onClick={() => setShowSidebar(false)} />}
         
-        {/* Sidebar */}
         <div className={`kim-sidebar ${showSidebar ? 'open' : ''}`}>
           <div className="kim-sidebar-header">
             <span className="kim-sidebar-title">Chat History</span>
             <button onClick={() => setShowSidebar(false)} className="btn-icon btn-ghost"><X size={18} /></button>
           </div>
-          
           <div className="kim-sidebar-actions">
             <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-2">
               <Plus size={16} /> New Chat
             </button>
           </div>
-
           <div className="kim-sidebar-list">
-            {chats.length === 0 && (
-              <div className="kim-sidebar-empty">No recent chats.</div>
-            )}
+            {chats.length === 0 && <div className="kim-sidebar-empty">No recent chats.</div>}
             {chats.map(chat => (
               <div 
                 key={chat.id} 
-                onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); setError(null); }}
+                onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); setError(null); setTypingMessageId(null); }}
                 className={`kim-chat-item ${activeChatId === chat.id ? 'active' : ''}`}
               >
                 <div className="kim-chat-item-info">
@@ -211,7 +269,6 @@ export default function ZokaAI({ isOpen, onClose }) {
           </div>
         </div>
 
-        {/* Main Chat Area */}
         <div className="kim-main">
           <div className="kim-header">
             <div className="kim-header-left">
@@ -241,7 +298,7 @@ export default function ZokaAI({ isOpen, onClose }) {
             )}
             
             {messages.map((msg, i) => (
-              <div key={i} className={`kim-msg-row ${msg.role === 'user' ? 'user' : 'ai'}`}>
+              <div key={msg.id || i} className={`kim-msg-row ${msg.role === 'user' ? 'user' : 'ai'}`}>
                 {msg.role !== 'user' && (
                   <div className="kim-msg-avatar">
                     <Sparkles size={14} color="#fff" />
@@ -252,12 +309,18 @@ export default function ZokaAI({ isOpen, onClose }) {
                     <div className="flex items-center gap-2">
                       <AlertCircle size={14} />
                       <span>{msg.content}</span>
-                      <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1">
+                      <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1 hover:text-white transition-colors">
                         <RefreshCw size={12} /> Retry
                       </button>
                     </div>
+                  ) : msg.role === 'assistant' ? (
+                    <TypewriterText 
+                      text={msg.content} 
+                      isActive={msg.id === typingMessageId} 
+                      onComplete={() => setTypingMessageId(null)} 
+                    />
                   ) : (
-                    formatMessage(msg.content)
+                    <div className="text-sm leading-relaxed">{msg.content}</div>
                   )}
                 </div>
                 {msg.role === 'user' && (
@@ -268,7 +331,7 @@ export default function ZokaAI({ isOpen, onClose }) {
               </div>
             ))}
             
-            {loading && (
+            {loading && !typingMessageId && (
               <div className="kim-msg-row ai">
                 <div className="kim-msg-avatar">
                   <Sparkles size={14} color="#fff" />
