@@ -15,7 +15,7 @@ const logger = require('../utils/logger');
 const CRON = {
   TODAY_FIXTURES: '5 0 * * *',
   TOMORROW_FIXTURES: '10 0 * * *',
-  FINISHED_FIXTURES: '0 */2 * * *',
+  FINISHED_FIXTURES: '*/5 * * * *', // ★ FIX: Run every 5 minutes to correct scores fast!
   STANDINGS: '0 */6 * * *',
 };
 

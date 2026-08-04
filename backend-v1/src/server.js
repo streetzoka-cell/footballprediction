@@ -129,8 +129,11 @@ app.use('/api/v1/ai', aiRoutes);
 // Returns a clean response when today's results file
 // does not exist yet because no matches have finished.
 
-
 app.get('/api/v1/data/results/:date.json', (req, res) => {
+  // ★ FIX: Explicitly set CORS header for static file
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type');
 
   const filePath = path.join(
     process.cwd(),
@@ -139,9 +142,7 @@ app.get('/api/v1/data/results/:date.json', (req, res) => {
     `${req.params.date}.json`
   );
 
-
   if (!fs.existsSync(filePath)) {
-
     return res.json({
       success: true,
       data: [],
@@ -149,46 +150,38 @@ app.get('/api/v1/data/results/:date.json', (req, res) => {
       date: req.params.date,
       message: 'No finished matches yet'
     });
-
   }
 
-
   res.sendFile(filePath);
-
 });
 
-
 // Serve public_data JSON files
-
 app.use(
   '/api/v1/data',
   express.static(
     path.join(process.cwd(), 'public_data'),
     {
       setHeaders: (res, filePath) => {
+        // ★ FIX: Ensure CORS header is set on the actual file response as well
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
         if (filePath.endsWith('.json')) {
-
           // Live data changes frequently
           if (filePath.includes('live.json')) {
-
             res.setHeader(
               'Cache-Control',
               'public, max-age=15'
             );
-
           } else {
-
             // Fixtures/results snapshots
             res.setHeader(
               'Cache-Control',
               'public, max-age=900'
             );
-
           }
-
         }
-
       },
     }
   )

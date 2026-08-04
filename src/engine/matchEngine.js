@@ -53,15 +53,15 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  // ★ FIX: Strictly determine isScheduled
   const isHT = display.isHalfTime || status === 'HT';
   const isScheduled = !isLive && !isFinished && !isHT && (status === 'NS' || status === 'TBD' || display.isUpcoming || false);
 
   const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
   const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
-  const updatedAt = raw.dataQuality?.lastUpdated || raw.lastUpdated || raw.updatedAt || null;
+  
+  // ★ FIX: Fallback to Date.now() if updatedAt is missing so applySmartMinute can count forward
+  const updatedAt = raw.dataQuality?.lastUpdated || raw.lastUpdated || raw.updatedAt || Date.now();
 
-  // ★ FIX: Calculate UI Labels and Timeline Progress
   let statusLabel = '';
   let statusClass = 'status-upcoming';
   let timelineProgress = 0;
@@ -87,7 +87,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     statusLabel = status || 'Scheduled';
   }
 
-  // ★ NEW: Robust Stats Extraction
   const rawStats = raw.statistics || raw.stats;
   const stats = {
     possession: null, shots: null, shotsOnTarget: null, corners: null,
@@ -144,7 +143,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     updatedAt: updatedAt,
     isHidden: isHidden,
     
-    // ★ ATTACH UI LABELS
     statusLabel: statusLabel,
     statusClass: statusClass,
     timelineProgress: timelineProgress,
@@ -170,8 +168,8 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     matchScore: raw.importance || 0,
     category: raw.category || 'NORMAL',
 
-    stats, // ★ ATTACH STATS
-    hasRealStats, // ★ FLAG FOR UI
+    stats, 
+    hasRealStats, 
     
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
@@ -244,7 +242,6 @@ export function applySmartMinute(m, now = Date.now()) {
   else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 95);
   else if (status === 'ET') smartMinute = Math.min(smartMinute, 125);
 
-  // Recalculate UI labels for smart minute
   const newProgress = Math.min((smartMinute / 90) * 100, 100);
   const newLabel = `${smartMinute}'`;
 

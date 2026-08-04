@@ -1,6 +1,4 @@
-﻿// footballprediction/backend-v1/src/services/FixtureService.js
-
-const fs = require('fs').promises;
+﻿const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const { buildUnifiedFixtures } = require('./UnifiedFixtureService');
@@ -100,12 +98,9 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const newlyFinished = [];
   const nowMs = Date.now();
 
-  // Thresholds: 3.5h hard cap (allows for severe delays/ET/Penalties),
-  // 3h for a match stuck at 90'.
   const FT_FORCE_MS = 3.5 * 60 * 60 * 1000;
   const STUCK_AT_90_MS = 3 * 60 * 60 * 1000;
 
-  
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
     const minute = match.display?.minute || match.minute || 0;
@@ -117,10 +112,6 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
     const isExpired = elapsedMs > FT_FORCE_MS;
 
     if (isFT || isExpired || stuckAtNinety) {
-      // ★ FIX: match is over but the provider never sent a score.
-      // Stop showing it as LIVE (this was the "yesterday 33 live" leak).
-      // Keep the row as FT-not-live so a late score can still land via the
-      // live merge, but it must NOT count toward the live count.
       if (match.homeScore == null || match.awayScore == null) {
         match.status = 'FT';
         match.isLive = false;
@@ -136,7 +127,6 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
         continue;
       }
 
-      // Has a score → finalize and move to results.
       if (match.display) {
         match.display.isFinished = true;
         match.display.isLive = false;
@@ -155,8 +145,6 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
 
   if (newlyFinished.length === 0) {
     logger.info(`[FixtureService] No newly finished matches found for ${dateStr}.`);
-    // ★ Still rewrite the fixtures file so scoreless matches marked FT-not-live
-    // above are persisted (otherwise the live leak stays on disk).
     const scoredStill = stillFixtures.map(doc => {
       doc.matchScore = calculateMatchScore(doc);
       doc.category = categorizeMatch(doc.matchScore);
@@ -200,8 +188,7 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
-// Add this function inside FixtureService.js
-
+// ★ NEW: Force refresh finished matches directly from the API
 async function forceRefreshFinishedMatches(dateStr) {
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   
