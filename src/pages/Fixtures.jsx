@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
-  Search, X, Star, Volume2, VolumeX, Clock, Trophy, Users,
+  Search, X, Star, Volume2, VolumeX, Trophy, Users,
   ChevronRight, ChevronDown, ChevronUp, RefreshCw, Calendar, Activity, 
-  Plus, Minus, Pin, Flame, Loader, Brain, TrendingUp, BarChart2, Check
+  Pin, Flame, Loader, Brain, TrendingUp, Check
 } from 'lucide-react';
 
 import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
@@ -73,39 +73,29 @@ const ToastContainer = memo(({ toasts }) => {
   if (!toasts.length) return null;
   return (
     <div className="zoka-toast-wrap" style={{
-      position: 'fixed',
-      top: '80px',
-      right: '20px',
-      zIndex: 9999,
-      display: 'flex',
-      flexDirection: 'column',
-      gap: '12px',
-      maxWidth: '400px',
-      pointerEvents: 'none'
+      position: 'fixed', top: '80px', right: '20px', zIndex: 9999,
+      display: 'flex', flexDirection: 'column', gap: '12px',
+      maxWidth: '400px', pointerEvents: 'none'
     }}>
       {toasts.map(t => {
         if (t.type === 'multi-goal') {
           return (
             <div key={t.id} className="zoka-toast multi-goal" style={{
-              background: '#1e293b',
-              border: '2px solid #3b82f6',
-              borderRadius: '12px',
-              padding: '16px',
-              boxShadow: '0 10px 40px rgba(0,0,0,0.4)',
-              pointerEvents: 'auto',
-              animation: 'slideInRight 0.3s ease-out'
+              background: 'var(--bg-elevated)', border: '1px solid var(--accent)',
+              borderRadius: 'var(--r-12)', padding: '16px', boxShadow: 'var(--shadow-xl)',
+              pointerEvents: 'auto', animation: 'slideInRight 0.3s ease-out'
             }}>
               <div className="flex-center gap-12">
-                <span style={{ fontSize: '32px' }}>⚽</span>
+                <span style={{ fontSize: '28px' }}>⚽</span>
                 <div className="flex-1">
-                  <div style={{ fontWeight: 'bold', color: '#3b82f6', fontSize: '14px' }}>{t.count} New Match Events!</div>
+                  <div style={{ fontWeight: '800', color: 'var(--accent)', fontSize: '14px', marginBottom: '4px' }}>{t.count} New Match Events!</div>
                   {t.events.slice(0, 3).map((e, i) => (
-                    <div key={i} className="flex-center gap-8" style={{ fontSize: '12px', color: '#94a3b8' }}>
-                      {e.homeLogo && <img src={e.homeLogo} alt="" width="14" height="14" />}
-                      <span style={{ fontWeight: 'bold', color: '#e2e8f0' }}>{e.homeName}</span> 
-                      <span style={{ fontWeight: 'bold', color: '#3b82f6' }}>{e.score}</span> 
-                      <span style={{ fontWeight: 'bold', color: '#e2e8f0' }}>{e.awayName}</span>
-                      {e.awayLogo && <img src={e.awayLogo} alt="" width="14" height="14" />}
+                    <div key={i} className="flex-center gap-8" style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+                      {e.homeLogo && <img src={e.homeLogo} alt="" width="14" height="14" style={{borderRadius: '50%'}} />}
+                      <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{e.homeName}</span> 
+                      <span style={{ fontWeight: '800', color: 'var(--accent)' }}>{e.score}</span> 
+                      <span style={{ fontWeight: '700', color: 'var(--text-primary)' }}>{e.awayName}</span>
+                      {e.awayLogo && <img src={e.awayLogo} alt="" width="14" height="14" style={{borderRadius: '50%'}} />}
                     </div>
                   ))}
                 </div>
@@ -115,25 +105,21 @@ const ToastContainer = memo(({ toasts }) => {
         }
         return (
           <div key={t.id} className="zoka-toast goal-toast" onClick={() => window.location.hash = `/match/${t.matchId}`} style={{
-            background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
-            borderRadius: '12px',
-            padding: '16px',
-            boxShadow: '0 10px 40px rgba(5, 150, 105, 0.4)',
-            cursor: 'pointer',
-            pointerEvents: 'auto',
-            animation: 'slideInRight 0.3s ease-out',
-            border: '2px solid #34d399'
+            background: 'linear-gradient(135deg, var(--primary-dim) 0%, var(--primary) 100%)',
+            borderRadius: 'var(--r-12)', padding: '16px', boxShadow: 'var(--shadow-primary)',
+            cursor: 'pointer', pointerEvents: 'auto', animation: 'slideInRight 0.3s ease-out',
+            border: '1px solid rgba(var(--primary-rgb), 0.4)'
           }}>
             <div className="flex-center gap-12">
-              <span style={{ fontSize: '32px' }}>⚽</span>
+              <span style={{ fontSize: '28px' }}>⚽</span>
               <div className="flex-1">
-                <div style={{ fontWeight: 'bold', color: '#fff', fontSize: '16px' }}>GOAL!</div>
-                <div className="flex-center gap-8" style={{ color: '#fff', fontSize: '13px' }}>
-                  {t.homeLogo && <img src={t.homeLogo} alt="" width="14" height="14" />}
+                <div style={{ fontWeight: '800', color: 'var(--text-inverse)', fontSize: '15px', marginBottom: '2px' }}>GOAL!</div>
+                <div className="flex-center gap-8" style={{ color: 'var(--text-inverse)', fontSize: '13px' }}>
+                  {t.homeLogo && <img src={t.homeLogo} alt="" width="16" height="16" style={{borderRadius: '50%'}} />}
                   <span style={{ fontWeight: '600' }}>{t.homeName}</span> 
-                  <span style={{ fontWeight: 'bold', fontSize: '16px' }}>{t.score}</span> 
+                  <span style={{ fontWeight: '800', fontSize: '15px' }}>{t.score}</span> 
                   <span style={{ fontWeight: '600' }}>{t.awayName}</span>
-                  {t.awayLogo && <img src={t.awayLogo} alt="" width="14" height="14" />}
+                  {t.awayLogo && <img src={t.awayLogo} alt="" width="16" height="16" style={{borderRadius: '50%'}} />}
                 </div>
               </div>
             </div>
@@ -152,9 +138,9 @@ const LiveTicker = memo(({ matches }) => {
         <Link key={m.id} to={`/match/${m.id}`} className="zoka-ticker-item">
           <div className="zoka-ticker-live" />
           <span className="text-muted" style={{fontSize: '10px', fontWeight: 700, minWidth: '28px'}}>{m.displayMinute}'</span>
-          <span className="font-bold" style={{maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{m.homeName}</span>
+          <span className="font-bold truncate" style={{maxWidth: '70px'}}>{m.homeName}</span>
           <span className="text-primary font-extrabold" style={{minWidth: '45px', textAlign: 'center'}}>{m.homeScore ?? 0} - {m.awayScore ?? 0}</span>
-          <span className="font-bold" style={{maxWidth: '70px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap'}}>{m.awayName}</span>
+          <span className="font-bold truncate" style={{maxWidth: '70px'}}>{m.awayName}</span>
         </Link>
       ))}
     </div>
@@ -170,9 +156,7 @@ const MatchOfTheDayCard = memo(({ match }) => {
   const [isLoadingVotes, setIsLoadingVotes] = useState(true);
 
   useEffect(() => {
-    if (isExpanded && match?.id) {
-      fetchRealVotes(match.id);
-    }
+    if (isExpanded && match?.id) fetchRealVotes(match.id);
   }, [isExpanded, match?.id]);
 
   const fetchRealVotes = async (matchId) => {
@@ -181,10 +165,7 @@ const MatchOfTheDayCard = memo(({ match }) => {
       const BACKEND_URL = "https://api.zokascore.xyz";
       const res = await fetch(`${BACKEND_URL}/api/v1/predictions/${matchId}`);
       const data = await res.json();
-      
-      if (data.success) {
-        setVoteData(data);
-      }
+      if (data.success) setVoteData(data);
     } catch (err) {
       console.error("Failed to fetch votes:", err);
     } finally {
@@ -197,7 +178,6 @@ const MatchOfTheDayCard = memo(({ match }) => {
   const handleVote = async (choice) => {
     if (userVote || isVoting) return;
     setIsVoting(true);
-    
     setUserVote(choice);
     localStorage.setItem(`zoka_vote_${match.id}`, choice);
 
@@ -206,16 +186,10 @@ const MatchOfTheDayCard = memo(({ match }) => {
       const res = await fetch(`${BACKEND_URL}/api/v1/predictions/vote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          matchId: String(match.id),
-          choice: choice
-        })
+        body: JSON.stringify({ matchId: String(match.id), choice: choice })
       });
-      
       if (!res.ok) throw new Error(`Failed to submit vote`);
-      
       await fetchRealVotes(match.id);
-      
       if (navigator.vibrate) navigator.vibrate(15);
     } catch (err) {
       console.error("Failed to save vote:", err);
@@ -226,29 +200,19 @@ const MatchOfTheDayCard = memo(({ match }) => {
     }
   };
 
-  const renderForm = (formStr) => {
-    if (!formStr) return '-';
-    return formStr.split('').map((res, i) => (
-      <span key={i} className={`zoka-form-pill form-${res.toLowerCase()}`}>{res}</span>
-    ));
-  };
-
   const percentages = voteData?.percentages || { home: 0, draw: 0, away: 0 };
   const totalVotes = voteData?.totalVotes || 0;
 
   return (
     <div className={`zoka-motd-card ${isExpanded ? 'expanded' : ''}`}>
-      <button 
-        className="zoka-motd-header"
-        onClick={() => setIsExpanded(!isExpanded)}
-      >
+      <button className="zoka-motd-header" onClick={() => setIsExpanded(!isExpanded)}>
         <div className="flex-center gap-8">
-          <div className="p-8 rounded-8" style={{ background: 'rgba(var(--gold-rgb), 0.1)', color: 'var(--gold)' }}>
+          <div className="p-8 rounded-8" style={{ background: 'rgba(var(--gold-rgb), 0.12)', color: 'var(--gold)' }}>
             <Brain size={18} />
           </div>
           <span className="font-bold text-md" style={{ color: 'var(--text-primary)' }}>Match of the Day</span>
           {match.leagueName && (
-            <span className="text-xs font-semibold px-8 py-4 rounded-4" style={{ background: 'rgba(255,255,255,0.05)', color: 'var(--text-muted)' }}>
+            <span className="text-xs font-semibold px-8 py-4 rounded-4" style={{ background: 'var(--bg-card)', color: 'var(--text-muted)' }}>
               {match.leagueName}
             </span>
           )}
@@ -257,30 +221,21 @@ const MatchOfTheDayCard = memo(({ match }) => {
       </button>
 
       {isExpanded && (
-        <div className="zoka-intel-animate flex-col gap-20 pt-16">
-          <div className="flex-center justify-between gap-12 py-12">
+        <div className="zoka-intel-animate flex-col gap-16 pt-16">
+          <div className="flex-center justify-between gap-12 py-8">
             <div className="flex-col items-center gap-8 flex-1 min-w-0">
               {match.homeLogo ? (
-                <img 
-                  src={match.homeLogo} 
-                  alt={match.homeName} 
-                  className="object-contain drop-shadow-md" 
-                  style={{ width: 56, height: 56 }}
-                  onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/56?text=H';
-                  }}
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-elevated flex-center text-muted text-xs font-bold">
-                  {match.homeName?.charAt(0) || 'H'}
-                </div>
-              )}
-              <span className="font-bold text-sm text-center leading-tight" style={{ color: 'var(--text-primary)' }}>{match.homeName}</span>
+                <img src={match.homeLogo} alt={match.homeName} className="object-contain drop-shadow-md" style={{ width: 56, height: 56 }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+              ) : null}
+              <div className="w-14 h-14 rounded-full flex-center text-muted text-xs font-bold" style={{ background: 'var(--bg-elevated)', display: match.homeLogo ? 'none' : 'flex' }}>
+                {match.homeName?.charAt(0) || 'H'}
+              </div>
+              <span className="font-bold text-sm text-center leading-tight truncate max-w-full" style={{ color: 'var(--text-primary)' }}>{match.homeName}</span>
             </div>
             
-            <div className="flex-col items-center gap-4 flex-shrink-0 px-12">
+            <div className="flex-col items-center gap-4 flex-shrink-0 px-8">
               <div className="text-2xl font-black font-display tracking-tight" style={{ color: 'var(--text-primary)' }}>
-                {match.homeScore ?? '-'} : {match.awayScore ?? '-'}
+                {match.homeScore ?? '-'} <span className="text-muted text-lg">:</span> {match.awayScore ?? '-'}
               </div>
               <div className="zoka-status time-s" style={{ fontSize: '11px', padding: '4px 10px' }}>
                 {match.isLive ? <><span className="zoka-ticker-live" style={{ marginRight: 6 }} />{match.displayMinute}'</> : match.displayMinute}
@@ -289,21 +244,12 @@ const MatchOfTheDayCard = memo(({ match }) => {
 
             <div className="flex-col items-center gap-8 flex-1 min-w-0">
               {match.awayLogo ? (
-                <img 
-                  src={match.awayLogo} 
-                  alt={match.awayName} 
-                  className="object-contain drop-shadow-md" 
-                  style={{ width: 56, height: 56 }}
-                  onError={(e) => {
-                    e.target.src = 'https://via.placeholder.com/56?text=A';
-                  }}
-                />
-              ) : (
-                <div className="w-14 h-14 rounded-full bg-elevated flex-center text-muted text-xs font-bold">
-                  {match.awayName?.charAt(0) || 'A'}
-                </div>
-              )}
-              <span className="font-bold text-sm text-center leading-tight" style={{ color: 'var(--text-primary)' }}>{match.awayName}</span>
+                <img src={match.awayLogo} alt={match.awayName} className="object-contain drop-shadow-md" style={{ width: 56, height: 56 }} onError={(e) => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }} />
+              ) : null}
+              <div className="w-14 h-14 rounded-full flex-center text-muted text-xs font-bold" style={{ background: 'var(--bg-elevated)', display: match.awayLogo ? 'none' : 'flex' }}>
+                {match.awayName?.charAt(0) || 'A'}
+              </div>
+              <span className="font-bold text-sm text-center leading-tight truncate max-w-full" style={{ color: 'var(--text-primary)' }}>{match.awayName}</span>
             </div>
           </div>
 
@@ -313,20 +259,20 @@ const MatchOfTheDayCard = memo(({ match }) => {
             </div>
             
             {isLoadingVotes ? (
-              <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
-                <div className="w-full animate-pulse" style={{ background: 'rgba(255,255,255,0.1)' }} />
+              <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
+                <div className="w-full skeleton" />
               </div>
             ) : (
               <>
-                <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'rgba(255,255,255,0.05)' }}>
+                <div className="flex h-8 rounded-8 overflow-hidden" style={{ background: 'var(--bg-card)' }}>
                   <div style={{ width: `${percentages.home}%`, background: 'var(--primary)', transition: 'width 1s ease' }} />
                   <div style={{ width: `${percentages.draw}%`, background: 'var(--text-muted)', transition: 'width 1s ease' }} />
                   <div style={{ width: `${percentages.away}%`, background: 'var(--danger)', transition: 'width 1s ease' }} />
                 </div>
                 <div className="flex justify-between text-xs font-bold mt-4">
-                  <span style={{ color: 'var(--primary)' }}>{percentages.home}% Home ({voteData?.votes.home || 0})</span>
-                  <span className="text-muted">{percentages.draw}% Draw ({voteData?.votes.draw || 0})</span>
-                  <span style={{ color: 'var(--danger)' }}>{percentages.away}% Away ({voteData?.votes.away || 0})</span>
+                  <span style={{ color: 'var(--primary)' }}>{percentages.home}% Home</span>
+                  <span className="text-muted">{percentages.draw}% Draw</span>
+                  <span style={{ color: 'var(--danger)' }}>{percentages.away}% Away</span>
                 </div>
               </>
             )}
@@ -338,12 +284,7 @@ const MatchOfTheDayCard = memo(({ match }) => {
               {['home', 'draw', 'away'].map(choice => {
                 const isSelected = userVote === choice;
                 return (
-                  <button
-                    key={choice}
-                    disabled={!!userVote || isVoting}
-                    onClick={() => handleVote(choice)}
-                    className={`zoka-vote-btn ${isSelected ? 'selected' : ''}`}
-                  >
+                  <button key={choice} disabled={!!userVote || isVoting} onClick={() => handleVote(choice)} className={`zoka-vote-btn ${isSelected ? 'selected' : ''}`}>
                     <span className="capitalize">{choice}</span>
                     {isSelected && <Check size={16} />}
                   </button>
@@ -351,9 +292,7 @@ const MatchOfTheDayCard = memo(({ match }) => {
               })}
             </div>
             {userVote && (
-              <div className="text-center text-xs text-primary font-semibold animate-fade-in">
-                Vote recorded successfully!
-              </div>
+              <div className="text-center text-xs text-primary font-semibold anim-fade-in">Vote recorded successfully!</div>
             )}
           </div>
         </div>
@@ -373,7 +312,9 @@ const TabBar = memo(({ tabs, activeTab, onTabChange }) => {
         if (activeBtn) {
           setIndicatorStyle({
             width: activeBtn.offsetWidth,
-            transform: `translateX(${activeBtn.offsetLeft}px)`
+            transform: `translateX(${activeBtn.offsetLeft}px)`,
+            left: 0,
+            top: '4px' // Aligns perfectly inside the 4px padded tab bar
           });
         }
       }
@@ -386,12 +327,7 @@ const TabBar = memo(({ tabs, activeTab, onTabChange }) => {
   return (
     <div className="zoka-tabs" ref={tabsRef}>
       {tabs.map(t => (
-        <button 
-          key={t} 
-          data-tab={t}
-          className={`zoka-tab ${activeTab === t ? 'active' : ''}`} 
-          onClick={() => onTabChange(t)}
-        >
+        <button key={t} data-tab={t} className={`zoka-tab ${activeTab === t ? 'active' : ''}`} onClick={() => onTabChange(t)}>
           {t.charAt(0).toUpperCase() + t.slice(1)}
         </button>
       ))}
@@ -470,7 +406,6 @@ export default function Fixtures() {
   const { data: teamsData = [], isLoading: teamsLoading } = useTeams(selectedLeagueId);
 
   const [expandedLeagues, setExpandedLeagues] = useState(new Set());
-  const [fontScale, setFontScale] = useState(1);
   const moreRef = useRef(null);
   const dateDropdownRef = useRef(null);
 
@@ -521,7 +456,6 @@ export default function Fixtures() {
     Sound.unlock(); 
   }, [soundEnabled, soundType]);
 
-  // ✅ Close dropdowns when clicking outside
   useEffect(() => {
     const handler = (e) => { 
       if (dateDropdownRef.current && !dateDropdownRef.current.contains(e.target)) {
@@ -655,12 +589,7 @@ export default function Fixtures() {
   if (fixturesError && allFixtures.length === 0) {
     return (
       <div className="zoka-page">
-        <SEO 
-  title="Football Fixtures, Live Scores & League Tables" 
-  description="Explore today's football fixtures..." 
-  keywords="football fixtures, live scores..." 
-  robots="index,follow" 
-  />
+        <SEO title="Football Fixtures, Live Scores & League Tables" description="Explore today's football fixtures..." keywords="football fixtures, live scores..." robots="index,follow" />
         <div className="zoka-wrap" style={{ paddingTop: '20px' }}>
           <ErrorState error={fixturesError} onRetry={handleRefresh} />
         </div>
@@ -669,14 +598,8 @@ export default function Fixtures() {
   }
 
   return (
-    <div className="zoka-page" style={{ fontSize: `${fontScale * 16}px` }}>
-      <SEO 
-  title="Football Fixtures, Live Scores & League Tables" 
-  description="Explore today's football fixtures..." 
-  keywords="football fixtures, live scores..." 
-  robots="index,follow" 
-  
-/>
+    <div className="zoka-page">
+      <SEO title="Football Fixtures, Live Scores & League Tables" description="Explore today's football fixtures..." keywords="football fixtures, live scores..." robots="index,follow" />
       <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
@@ -686,37 +609,16 @@ export default function Fixtures() {
             <div className="zoka-hdr-sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
           </div>
           <div className="zoka-hdr-actions">
-            <button className="zoka-hdr-btn" onClick={() => setFontScale(p => Math.max(0.8, p - 0.1))} title="Decrease Font Size"><Minus size={16} /></button>
-            <button className="zoka-hdr-btn" onClick={() => setFontScale(p => Math.min(1.4, p + 0.1))} title="Increase Font Size"><Plus size={16} /></button>
-            
             <div className="zoka-sound-wrap">
               <button className={`zoka-hdr-btn ${soundEnabled ? 'active' : ''}`} onClick={toggleSound} title="Sound">
                 {soundEnabled ? <Volume2 size={18} /> : <VolumeX size={18} />}
               </button>
               {soundEnabled && (
-                <select 
-                  className="zoka-sound-select" 
-                  value={soundType} 
-                  onChange={(e) => setSoundType(e.target.value)} 
-                  title="Notification Sound"
-                  style={{
-                    background: '#1e293b',
-                    color: '#fff',
-                    border: '1px solid #334155',
-                    borderRadius: '8px',
-                    padding: '6px 10px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    outline: 'none',
-                    minWidth: '130px',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.2)'
-                  }}
-                >
-                  <option value="whistle" style={{ background: '#1e293b', color: '#fff' }}>Classic Whistle</option>
-                  <option value="cheer" style={{ background: '#1e293b', color: '#fff' }}>Stadium Cheer</option>
-                  <option value="horn" style={{ background: '#1e293b', color: '#fff' }}>Air Horn</option>
-                  <option value="silent" style={{ background: '#1e293b', color: '#fff' }}>Silent</option>
+                <select className="zoka-sound-select" value={soundType} onChange={(e) => setSoundType(e.target.value)} title="Notification Sound">
+                  <option value="whistle">Classic Whistle</option>
+                  <option value="cheer">Stadium Cheer</option>
+                  <option value="horn">Air Horn</option>
+                  <option value="silent">Silent</option>
                 </select>
               )}
             </div>
@@ -739,181 +641,47 @@ export default function Fixtures() {
           <div className="zoka-schip"><div className="val">{favorites.length}</div><div className="lbl">Favourites</div></div>
         </div>
 
-        {/* ✅ DATE DROPDOWN - TOGGLES IN/OUT SMOOTHLY */}
-        <div className="zoka-datenav" style={{ 
-          position: 'relative', 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: '8px',
-          zIndex: 100
-        }}>
+        {/* ✅ DATE DROPDOWN - Utilizing Design System Classes */}
+        <div className="zoka-datenav" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 100 }}>
           <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
           <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
           <button className={`zoka-nav-btn ${selectedDate === tomorrowStr() ? 'active' : ''}`} onClick={() => setSelectedDate(tomorrowStr())}>Tomorrow</button>
           
           <div className="zoka-more-wrap" ref={dateDropdownRef} style={{ position: 'relative' }}>
-            <button 
-              className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} 
-              onClick={() => setUI(prev => ({ ...prev, moreDatesOpen: !prev.moreDatesOpen }))}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 12px',
-                borderRadius: 'var(--r-8)',
-                background: ui.moreDatesOpen ? 'rgba(var(--primary-rgb), 0.2)' : 'var(--bg-card)',
-                border: `1px solid ${ui.moreDatesOpen ? 'var(--primary)' : 'var(--border)'}`,
-                color: ui.moreDatesOpen ? 'var(--primary)' : 'var(--text-primary)',
-                fontSize: 'var(--fs-sm)',
-                fontWeight: '600',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                whiteSpace: 'nowrap'
-              }}
-            >
+            <button className={`zoka-more-btn ${ui.moreDatesOpen ? 'open' : ''}`} onClick={() => setUI(prev => ({ ...prev, moreDatesOpen: !prev.moreDatesOpen }))}>
               <Calendar size={16} /> 
               <span>More</span>
-              <ChevronDown size={16} style={{ 
-                transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', 
-                transform: ui.moreDatesOpen ? 'rotate(180deg)' : 'rotate(0deg)' 
-              }} />
+              <ChevronDown size={16} style={{ transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', transform: ui.moreDatesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>
             
-            {/* Dropdown that toggles in/out with animation */}
             <div 
+              className="zoka-more-dropdown"
               style={{
-                position: 'absolute',
-                top: 'calc(100% + 10px)',
-                right: '0',
-                width: '220px',
                 maxHeight: ui.moreDatesOpen ? '450px' : '0',
                 opacity: ui.moreDatesOpen ? '1' : '0',
                 visibility: ui.moreDatesOpen ? 'visible' : 'hidden',
-                overflow: 'hidden',
+                padding: ui.moreDatesOpen ? 'var(--sp-8)' : '0 var(--sp-8)',
                 transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-                zIndex: 1000
               }}
             >
-              <div 
-                style={{
-                  background: 'var(--bg-glass-strong)',
-                  backdropFilter: 'blur(20px)',
-                  border: '1px solid var(--glass-border)',
-                  borderRadius: 'var(--r-16)',
-                  padding: '12px',
-                  boxShadow: '0 20px 60px rgba(0,0,0,0.4)',
-                  maxHeight: '450px',
-                  overflowY: 'auto'
-                }}
-              >
-                <div style={{ 
-                  fontSize: '11px', 
-                  fontWeight: '700', 
-                  color: 'var(--text-muted)', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.06em',
-                  padding: '8px',
-                  marginBottom: '8px'
-                }}>
-                  Past Dates
-                </div>
-                {dates.past.map(d => (
-                  <button 
-                    key={d.str} 
-                    onClick={() => { 
-                      setSelectedDate(d.str); 
-                      setUI(prev => ({ ...prev, moreDatesOpen: false })); 
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: selectedDate === d.str ? 'rgba(var(--primary-rgb), 0.15)' : 'transparent',
-                      border: 'none',
-                      color: selectedDate === d.str ? 'var(--primary)' : 'var(--text-secondary)',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      marginBottom: '4px',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedDate !== d.str) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                        e.currentTarget.style.color = 'var(--text-primary)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedDate !== d.str) {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-secondary)';
-                      }
-                    }}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-                
-                <div style={{ 
-                  fontSize: '11px', 
-                  fontWeight: '700', 
-                  color: 'var(--text-muted)', 
-                  textTransform: 'uppercase', 
-                  letterSpacing: '0.06em',
-                  padding: '8px',
-                  marginTop: '12px',
-                  marginBottom: '8px'
-                }}>
-                  Future Dates
-                </div>
-                {dates.future.map(d => (
-                  <button 
-                    key={d.str} 
-                    onClick={() => { 
-                      setSelectedDate(d.str); 
-                      setUI(prev => ({ ...prev, moreDatesOpen: false })); 
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '10px 12px',
-                      borderRadius: '8px',
-                      background: selectedDate === d.str ? 'rgba(var(--primary-rgb), 0.15)' : 'transparent',
-                      border: 'none',
-                      color: selectedDate === d.str ? 'var(--primary)' : 'var(--text-secondary)',
-                      fontSize: '13px',
-                      fontWeight: '600',
-                      cursor: 'pointer',
-                      textAlign: 'left',
-                      marginBottom: '4px',
-                      transition: 'all 0.15s ease'
-                    }}
-                    onMouseEnter={(e) => {
-                      if (selectedDate !== d.str) {
-                        e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                        e.currentTarget.style.color = 'var(--text-primary)';
-                      }
-                    }}
-                    onMouseLeave={(e) => {
-                      if (selectedDate !== d.str) {
-                        e.currentTarget.style.background = 'transparent';
-                        e.currentTarget.style.color = 'var(--text-secondary)';
-                      }
-                    }}
-                  >
-                    {d.label}
-                  </button>
-                ))}
-              </div>
+              <div className="zoka-more-label">Past Dates</div>
+              {dates.past.map(d => (
+                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
+                  {d.label}
+                </button>
+              ))}
+              
+              <div className="zoka-more-label" style={{ marginTop: '12px' }}>Future Dates</div>
+              {dates.future.map(d => (
+                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
+                  {d.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
 
-        <TabBar 
-          tabs={['fixtures', 'favourites', 'standings', 'teams']} 
-          activeTab={tab} 
-          onTabChange={setTab} 
-        />
+        <TabBar tabs={['fixtures', 'favourites', 'standings', 'teams']} activeTab={tab} onTabChange={setTab} />
 
         <div className="zoka-search-static">
           <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
