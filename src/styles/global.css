@@ -4734,3 +4734,136 @@ p { color: var(--text-secondary); line-height: 1.7; }
 .kim-bubble.ai p:last-child {
   margin-bottom: 0;
 }
+
+
+/* --- COMPACT HERO HEADER (Home Page) --- */
+.z-hero-pro.compact-hero {
+  padding: var(--sp-16) 0 var(--sp-8); /* Reduced bottom padding */
+  margin: 0 calc(var(--sp-16) * -1) var(--sp-8); /* Pull closer to matches */
+}
+
+.z-hero-pro.compact-hero .z-sub {
+  margin-top: 4px;
+  margin-bottom: 12px;
+  font-size: 0.85rem;
+}
+
+/* Rich Stats Grid */
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-8);
+  margin: 0;
+}
+
+.stat-card {
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: var(--r-12);
+  padding: var(--sp-12) var(--sp-8);
+  text-align: center;
+  transition: var(--transition-fast);
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-card:hover {
+  border-color: rgba(var(--primary-rgb), 0.4);
+  background: rgba(var(--primary-rgb), 0.05);
+  transform: translateY(-2px);
+}
+
+.stat-card .stat-value {
+  display: block;
+  font-size: var(--fs-xl);
+  font-weight: 900;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+  transition: color 0.3s ease;
+}
+
+.stat-card .stat-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Pulsing animation for the Live Now card */
+.stat-card.live-glow {
+  border-color: rgba(var(--danger-rgb), 0.4);
+  animation: live-stat-pulse 2s infinite;
+}
+
+@keyframes live-stat-pulse {
+  0%, 100% { 
+    box-shadow: 0 0 0 0 rgba(var(--danger-rgb), 0.2); 
+    background: rgba(var(--danger-rgb), 0.05);
+  }
+  50% { 
+    box-shadow: 0 0 12px 2px rgba(var(--danger-rgb), 0.1); 
+    background: rgba(var(--danger-rgb), 0.1);
+  }
+}
+
+/* Wrapper for the top live strip */
+.z-top-strip-wrapper {
+  margin-bottom: var(--sp-16);
+}
+
+/* Enhance the live strip cards to feel more alive */
+.z-livemini {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  position: relative;
+  overflow: hidden;
+}
+
+.z-livemini::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4px;
+  height: 100%;
+  background: var(--text-muted);
+  transition: background 0.3s ease;
+}
+
+.z-livemini:hover::before {
+  background: var(--primary);
+}
+
+.z-livemini[style*="border-color: rgba(var(--danger-rgb)"]::before {
+  background: var(--danger);
+  animation: live-bar-pulse 1.5s infinite;
+}
+
+@keyframes live-bar-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* Mobile fallback */
+@media (max-width: 380px) {
+  .stats-grid {
+    gap: var(--sp-4);
+  }
+  .stat-card {
+    padding: var(--sp-8) var(--sp-4);
+  }
+  .stat-card .stat-value {
+    font-size: var(--fs-lg);
+  }
+  .stat-card .stat-label {
+    font-size: 0.55rem;
+  }
+}
