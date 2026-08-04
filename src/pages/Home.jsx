@@ -57,10 +57,10 @@ const parseKickoff = (m) => {
 };
 
 const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
+  // ★ FIX: Initialize with 0 and enforce Number type to prevent crashes
   const [display, setDisplay] = useState(0);
   const raf = useRef(null);
   
-  // ★ FIX: Enforce strict Number type to prevent NaN.toLocaleString crash
   const target = Number(value) || 0;
 
   useEffect(() => {
@@ -78,9 +78,11 @@ const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) =
     };
     raf.current = requestAnimationFrame(run);
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [target, duration, delay]); // ★ Use target in dependencies
+  }, [target, duration, delay]);
   
-  return <span>{display.toLocaleString()}{suffix}</span>;
+  // ★ FIX: Safely call toLocaleString by ensuring it's a Number
+  const safeDisplay = Number(display) || 0;
+  return <span>{safeDisplay.toLocaleString()}{suffix}</span>;
 });
 
 

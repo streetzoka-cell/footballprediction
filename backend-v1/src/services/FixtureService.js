@@ -188,7 +188,7 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
-// ★ FIX: Return the array of matches, not the count!
+// ★ NEW: Force refresh finished matches directly from the API
 async function forceRefreshFinishedMatches(dateStr) {
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   
@@ -203,18 +203,27 @@ async function forceRefreshFinishedMatches(dateStr) {
   logger.info(`[FixtureService] Force fetching finished fixtures for ${dateStr} from API...`);
   const matches = await buildUnifiedFixtures(dateStr);
   
-  if (!Array.isArray(matches) || matches.length === 0) return []; // Return empty array
+  if (!Array.isArray(matches) || matches.length === 0) return [];
 
-  const finished = matches.filter(m => m.display?.isFinished || m.status === 'FT');
+  // ★ FIX: Re-save the scheduled/live matches back to the fixtures file!
+  const scored = matches.map(doc => {
+    doc.matchScore = calculateMatchScore(doc);
+    doc.category = categorizeMatch(doc.matchScore);
+    return doc;
+  }).sort((a, b) => (b.matchScore || 0) - (a.matchScore || 0));
+
+  await writeFootballSnapshot(dateStr, { matches: scored });
+
+  // Now filter for finished matches and save to results
+  const finished = scored.filter(m => m.display?.isFinished || m.status === 'FT');
   
   if (finished.length > 0) {
     await writeFootballSnapshot(dateStr, { finished });
     logger.info(`[FixtureService] Force updated ${finished.length} finished matches for ${dateStr}.`);
   }
   
-  return finished; // ★ Return the array
+  return finished; // Return the array
 }
-
 
 module.exports = {
   syncTodayFixtures,
@@ -222,5 +231,5 @@ module.exports = {
   syncYesterdayResults,
   syncFinishedFixtures,
   syncRecentFinishedFixtures,
-  forceRefreshFinishedMatches // ★ NEW EXPORT
+  forceRefreshFinishedMatches
 }

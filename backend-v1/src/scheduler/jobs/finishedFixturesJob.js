@@ -8,7 +8,6 @@ async function execute(forceFetch = false) {
   const today = new Date().toISOString().split('T')[0];
   const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
   
-  // ★ FIX: Force fetch finished matches from API to ensure scores are correct
   const todayFinished = await fixtureService.forceRefreshFinishedMatches(today);
   const yesterdayFinished = await fixtureService.forceRefreshFinishedMatches(yesterday);
   
