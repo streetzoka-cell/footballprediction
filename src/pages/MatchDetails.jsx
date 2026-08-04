@@ -242,7 +242,7 @@ export default function MatchDetails() {
             </div>
           </div>
 
-          {/* Rich Detailed Stats */}
+                   {/* Rich Detailed Stats */}
           {match.hasRealStats ? (
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
@@ -257,12 +257,30 @@ export default function MatchDetails() {
               
             </div>
           ) : (
-            <div className="glass-card p-24 mb-24 mt-24 flex-col items-center text-center gap-8">
-              <BarChart3 size={32} className="text-muted" style={{ opacity: 0.3 }} />
-              <h3 className="text-primary font-bold">Advanced Statistics</h3>
+            <div className="glass-card p-24 mb-24 mt-24 flex-col items-center text-center gap-12" style={{ border: '1px solid rgba(var(--primary-rgb), 0.2)', background: 'linear-gradient(180deg, rgba(var(--primary-rgb), 0.03) 0%, var(--bg-card) 100%)' }}>
+              {/* Glowing Icon Wrapper */}
+              <div style={{ position: 'relative', marginBottom: '8px' }}>
+                <div style={{ position: 'absolute', inset: '-8px', background: 'rgba(var(--primary-rgb), 0.15)', borderRadius: '50%', filter: 'blur(12px)' }}></div>
+                <div style={{ position: 'relative', width: '56px', height: '56px', background: 'rgba(var(--primary-rgb), 0.1)', border: '1px solid rgba(var(--primary-rgb), 0.3)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <Activity size={24} className="text-primary" />
+                </div>
+              </div>
+              
+              <h3 className="text-primary font-extrabold text-lg">Tactical Insight Pending</h3>
               <p className="text-muted text-sm max-w-400">
-                {(match.isLive || match.isFinished) ? 'Detailed match statistics are being processed and will appear here shortly.' : 'Live statistics will be available once the match begins.'}
+                {match.isLive ? 'Live stats are being tracked. While we wait, ask our AI for tactical insights on this match!' :
+                 match.isFinished ? 'Stats data for this match is still syncing. Ask Zoka AI for a full breakdown!' :
+                 'Stats will appear here once the match begins. Ask Zoka AI for pre-match analysis!'}
               </p>
+              
+              {/* Zoka AI CTA */}
+              <button 
+                onClick={() => window.dispatchEvent(new CustomEvent('openZokaAI', { detail: { message: `Give me a tactical breakdown and prediction for ${match.homeName} vs ${match.awayName} in the ${match.leagueName}.` } }))} 
+                className="btn btn-primary mt-8 flex-center gap-8"
+                style={{ background: 'linear-gradient(135deg, var(--primary), var(--primary-dim))' }}
+              >
+                <Zap size={16} fill="currentColor" /> Ask Zoka AI
+              </button>
             </div>
           )}
 
