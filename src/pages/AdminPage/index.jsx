@@ -14,9 +14,9 @@ import { db } from '../../utils/firebase';
 import { todayStr, getLocalDateStr } from '../../utils/dates';
 import { eventBus, EVENT } from '../../utils/eventBus';
 import { PATHS } from '../../utils/constants';
-import { resolveMatchForAllUsers } from '../../services/predictions';
-import { doc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, deleteDoc } from 'firebase/firestore';
 import { safeWrite } from '../../services/safeWrite';
+import { footballApi } from '../../services/footballApi';
 
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import { useActivePredictions, useZokaPicks } from '../../hooks/useUserData';
@@ -32,9 +32,6 @@ import BroadcastTab from './components/BroadcastTab';
 import StaffTab from './components/StaffTab';
 import UsersTab from './components/UsersTab';
 import SystemHealthTab from './components/SystemHealthTab';
-
-import { footballApi } from '../../services/footballApi';
-
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -183,17 +180,30 @@ export default function AdminPage() {
     const predId = pred.id || `feat_${date}_${matchId}`;
     
     try {
+      // 1. Optimistically update the UI and active_predictions doc
       await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
       const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
       queryClient.setQueryData(['activePredictions', date], updated);
       await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
-      await resolveMatchForAllUsers(matchId, h, a, date);
+
+      // 2. Trigger the Backend Resolution Engine (Handles all users safely)
+      await footballApi.adminResolveMatch({
+        matchId,
+        matchDate: date,
+        homeScore: h,
+        awayScore: a
+      });
+
+      // 3. Update UI state
       queryClient.invalidateQueries(['activePredictions', date]);
+      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard']); // Fetch new ranks
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+      
       if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
     } catch (e) {
-      showToast('Failed to resolve. Quota might be exceeded.', 'er');
+      showToast('Failed to resolve. Check backend permissions.', 'er');
+      console.error('[Admin] Resolve err:', e);
     }
   }, [preds, date, showToast, queryClient]);
 
@@ -201,34 +211,47 @@ export default function AdminPage() {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
     try {
+      // 1. Update the active_predictions doc with new scores
       await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
       const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
       queryClient.setQueryData(['activePredictions', date], updated);
       await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
-      await resolveMatchForAllUsers(matchId, h, a, date);
+      
+      // 2. Trigger backend to recalculate points for all users
+      await footballApi.adminResolveMatch({
+        matchId,
+        matchDate: date,
+        homeScore: h,
+        awayScore: a
+      });
+
+      // 3. Refresh leaderboard data
       queryClient.invalidateQueries(['activePredictions', date]);
+      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard']);
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
     } catch (e) {
-      showToast('Failed to override. Quota might be exceeded.', 'er');
+      showToast('Failed to override. Check backend permissions.', 'er');
+      console.error('[Admin] Override err:', e);
     }
   }, [preds, date, queryClient, showToast]);
 
- const handleRebuild = useCallback(async (period) => {
-  setRebuilding(period);
-  try {
-    // Use the authenticated API method instead of raw fetch
-    await footballApi.adminLeaderboardRebuild(period, date);
-    
-    showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-    queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
-  } catch (e) { 
-    console.error('[Admin] Rebuild err:', e); 
-    showToast(e.friendlyMessage || 'Rebuild failed. Check permissions.', 'er');
-  }
-  setRebuilding(null);
-}, [date, showToast, queryClient]);
+  const handleRebuild = useCallback(async (period) => {
+    setRebuilding(period);
+    try {
+      // Use the authenticated API method instead of raw fetch
+      await footballApi.adminLeaderboardRebuild(period, date);
+      
+      showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
+      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
+    } catch (e) { 
+      console.error('[Admin] Rebuild err:', e); 
+      showToast(e.friendlyMessage || 'Rebuild failed. Check permissions.', 'er');
+    }
+    setRebuilding(null);
+  }, [date, showToast, queryClient]);
 
+  if (!mounted) return null;
 
   return (
     <div className="zoka-page">
