@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
@@ -169,20 +170,27 @@ async function publishDailyLeaderboardSnapshot(date) {
 
   return payload;
 }
-
 async function getDailyLeaderboard(date) {
-  const local = await readJSONSafe(
-    path.join(PUBLIC_DIR, 'leaderboard', 'daily', `${date}.json`),
-    null
-  );
+  const filePath = path.join(PUBLIC_DIR, 'leaderboard', 'daily', `${date}.json`);
+  const local = await readJSONSafe(filePath, null);
 
-  if (local && Array.isArray(local.entries)) {
+  // Check if the file is older than 30 seconds
+  let isStale = true;
+  try {
+    const stats = fs.statSync(filePath);
+    isStale = (Date.now() - stats.mtimeMs) > 30000; // 30 seconds
+  } catch {
+    isStale = true; // File doesn't exist, so it's stale
+  }
+
+  // If we have data and it's fresh, return it instantly
+  if (local && Array.isArray(local.entries) && local.entries.length > 0 && !isStale) {
     return local;
   }
 
+  // If it's stale or empty, rebuild it to include recent predictions!
   return publishDailyLeaderboardSnapshot(date);
 }
-
 async function rebuildDailyLeaderboard(date) {
   return publishDailyLeaderboardSnapshot(date);
 }
