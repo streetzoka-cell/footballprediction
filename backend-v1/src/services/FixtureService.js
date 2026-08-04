@@ -188,7 +188,7 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
-// ★ NEW: Force refresh finished matches directly from the API
+// ★ FIX: Return the array of matches, not the count!
 async function forceRefreshFinishedMatches(dateStr) {
   const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
   
@@ -203,7 +203,7 @@ async function forceRefreshFinishedMatches(dateStr) {
   logger.info(`[FixtureService] Force fetching finished fixtures for ${dateStr} from API...`);
   const matches = await buildUnifiedFixtures(dateStr);
   
-  if (!Array.isArray(matches) || matches.length === 0) return 0;
+  if (!Array.isArray(matches) || matches.length === 0) return []; // Return empty array
 
   const finished = matches.filter(m => m.display?.isFinished || m.status === 'FT');
   
@@ -212,8 +212,9 @@ async function forceRefreshFinishedMatches(dateStr) {
     logger.info(`[FixtureService] Force updated ${finished.length} finished matches for ${dateStr}.`);
   }
   
-  return finished.length;
+  return finished; // ★ Return the array
 }
+
 
 module.exports = {
   syncTodayFixtures,
