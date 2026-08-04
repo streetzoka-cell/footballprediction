@@ -174,7 +174,6 @@ export default function AdminPage() {
       queryClient.invalidateQueries(['activePredictions', date]);
     }
   }, [date, queryClient, showToast]);
-
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
     const predId = pred.id || `feat_${date}_${matchId}`;
@@ -194,9 +193,13 @@ export default function AdminPage() {
         awayScore: a
       });
 
-      // 3. Update UI state
-      queryClient.invalidateQueries(['activePredictions', date]);
-      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard']); // Fetch new ranks
+      // 3. Update UI state & INVALIDATE ALL RELEVANT CACHES
+      queryClient.invalidateQueries(['activePredictions']);
+      // ★ FIX: Invalidate ALL leaderboards and user points globally
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] }); 
+      queryClient.invalidateQueries({ queryKey: ['userPoints'] });
+      queryClient.invalidateQueries({ queryKey: ['userPredictions'] });
+      
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
       
@@ -225,9 +228,12 @@ export default function AdminPage() {
         awayScore: a
       });
 
-      // 3. Refresh leaderboard data
-      queryClient.invalidateQueries(['activePredictions', date]);
-      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard']);
+      // 3. INVALIDATE ALL RELEVANT CACHES
+      queryClient.invalidateQueries(['activePredictions']);
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
+      queryClient.invalidateQueries({ queryKey: ['userPoints'] });
+      queryClient.invalidateQueries({ queryKey: ['userPredictions'] });
+
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
     } catch (e) {
@@ -236,6 +242,7 @@ export default function AdminPage() {
     }
   }, [preds, date, queryClient, showToast]);
 
+  
   const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
