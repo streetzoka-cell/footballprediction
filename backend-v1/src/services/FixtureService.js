@@ -200,10 +200,39 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
+// Add this function inside FixtureService.js
+
+async function forceRefreshFinishedMatches(dateStr) {
+  const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
+  
+  // Delete cached fixtures to force a fresh API fetch
+  try {
+    if (fsSync.existsSync(fixturesPath)) {
+      await fs.unlink(fixturesPath);
+      logger.info(`[FixtureService] Deleted cached fixtures for ${dateStr} to force refresh.`);
+    }
+  } catch (e) { /* ignore */ }
+
+  logger.info(`[FixtureService] Force fetching finished fixtures for ${dateStr} from API...`);
+  const matches = await buildUnifiedFixtures(dateStr);
+  
+  if (!Array.isArray(matches) || matches.length === 0) return 0;
+
+  const finished = matches.filter(m => m.display?.isFinished || m.status === 'FT');
+  
+  if (finished.length > 0) {
+    await writeFootballSnapshot(dateStr, { finished });
+    logger.info(`[FixtureService] Force updated ${finished.length} finished matches for ${dateStr}.`);
+  }
+  
+  return finished.length;
+}
+
 module.exports = {
   syncTodayFixtures,
   syncTomorrowFixtures,
   syncYesterdayResults,
   syncFinishedFixtures,
-  syncRecentFinishedFixtures
-};
+  syncRecentFinishedFixtures,
+  forceRefreshFinishedMatches // ★ NEW EXPORT
+}

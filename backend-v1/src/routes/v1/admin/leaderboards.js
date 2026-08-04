@@ -4,6 +4,7 @@ const router = express.Router();
 const adminAuth = require('../../../middleware/adminAuth');
 const LeaderboardEngine = require('../../../services/LeaderboardEngine');
 const RankingEngine = require('../../../services/RankingEngine');
+const FixtureService = require('../../../services/FixtureService'); // ★ NEW IMPORT
 
 router.use(adminAuth);
 
@@ -14,11 +15,7 @@ function todayStr() {
 router.post('/resolve', async (req, res, next) => {
   try {
     const result = await RankingEngine.resolveMatch(req.body || {});
-
-    res.json({
-      success: true,
-      result,
-    });
+    res.json({ success: true, result });
   } catch (err) {
     next(err);
   }
@@ -29,53 +26,33 @@ router.post('/rebuild/:period', async (req, res, next) => {
     const period = String(req.params.period || '').trim();
     const dateStr = String(req.body?.dateStr || '').trim();
 
-    if (period === 'daily') {
-      const result = await LeaderboardEngine.rebuildDailyLeaderboard(
-        dateStr || todayStr()
-      );
+    // ★ NEW: Handle Force Refresh Finished Matches
+    if (period === 'fixtures') {
+      const date = dateStr || todayStr();
+      const count = await FixtureService.forceRefreshFinishedMatches(date);
+      return res.json({ success: true, result: { count } });
+    }
 
-      return res.json({
-        success: true,
-        result,
-      });
+    if (period === 'daily') {
+      const result = await LeaderboardEngine.rebuildDailyLeaderboard(dateStr || todayStr());
+      return res.json({ success: true, result });
     }
 
     if (period === 'weekly' || period === 'monthly' || period === 'goat') {
       const result = await LeaderboardEngine.rebuildPeriod(period, dateStr);
-
-      return res.json({
-        success: true,
-        result,
-      });
+      return res.json({ success: true, result });
     }
 
     if (period === 'all') {
       const date = dateStr || todayStr();
-
       const daily = await LeaderboardEngine.rebuildDailyLeaderboard(date);
       const weekly = await LeaderboardEngine.rebuildPeriod('weekly');
       const monthly = await LeaderboardEngine.rebuildPeriod('monthly');
       const goat = await LeaderboardEngine.rebuildPeriod('goat');
-
-      return res.json({
-        success: true,
-        result: {
-          daily,
-          weekly,
-          monthly,
-          goat,
-        },
-      });
+      return res.json({ success: true, result: { daily, weekly, monthly, goat } });
     }
 
-    return res.status(400).json({
-      success: false,
-      error: {
-        code: 'INVALID_PERIOD',
-        message: 'Invalid period',
-        details: [],
-      },
-    });
+    return res.status(400).json({ success: false, error: { code: 'INVALID_PERIOD', message: 'Invalid period' } });
   } catch (err) {
     next(err);
   }
