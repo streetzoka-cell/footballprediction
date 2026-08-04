@@ -10,37 +10,6 @@ const { getDb } = require('../../config/firebase');
 
 const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
-const ZOKASCORE_KNOWLEDGE_BASE = `
-ZOKASCORE APP KNOWLEDGE BASE:
-- Overview: ZOKASCORE is a premium football intelligence, live scores, predictions, and content creation platform.
-- Frontend: React + Vite + Tailwind. Hosted on Vercel.
-- Backend: Node.js/Express (backend-v1) hosted on a VPS via PM2. Cloudflare tunnel (api.zokascore.xyz).
-- Database: Firebase Firestore (users, news_posts, predictions) & Local JSON files (fixtures, live matches).
-- API Providers: API-Football, iSports, Football-Data.org, TheSportsDB.
-
-PAGES & FEATURES:
-1. Home (/): Hero match, live ticker, daily challenge (+50 pts), Zoka Picks, Featured Matches, Daily Leaderboard, Latest News.
-2. Fixtures (/fixtures): Live scores, yesterday/today/tomorrow dates, top matches, live matches, standings, teams. Includes "Match of the Day" with community voting (Home/Draw/Away).
-3. Predictions (/predictions): User score predictions. Locks 60 mins before kickoff. Features Quick Picks, Surprise Dice, and Zoka Picks (Agree/Disagree voting). Results overlay shows exact/result/miss points.
-4. Leaderboard (/leaderboard): Daily, Weekly, Monthly, G.O.A.T (All Time) periods. Features a Podium for top 3, rival tracking (points behind next rank), and badges (Sniper, Streak, Veteran).
-5. Highlights (/highlights): News articles & match reports. Categories: Breaking, Official, Rumour, Transfers, Injuries.
-6. Live Stream (/livestream): Watch matches.
-7. Studio (/studio): Reactor Studio (Video editor for TikTok/Reels/Shorts), Web Showcase, Media Studio, Face AR Studio.
-8. Profile (/profile): Animated stats, Accuracy Ring, Achievements (First Step, 5-Day Streak, Sharpshooter, Beat ZOKA, Top 10). Tracks Fun Season vs Real Season.
-9. Admin (/admin): Admin panel to manage featured matches, zoka picks, leaderboards, and resolve matches.
-
-POINTS SYSTEM:
-- Exact Score Prediction: +10 points
-- Correct Result (Win/Draw/Loss): +3 points
-- Wrong Prediction: 0 points
-- Daily Challenge: +50 bonus points
-- Streaks: Users get fire badges for consecutive days of predicting.
-
-SUPPORT:
-- 24/7 Support Numbers: 0728720281 / 0721635810
-- Socials: Twitter (X), Facebook, Instagram, Telegram.
-`;
-
 const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by Kim.
 You are an elite football analyst, tactical expert, friendly, professional, and honest.
 
@@ -52,16 +21,14 @@ FORMATTING RULES:
 - Never invent facts, hallucinate scores, or pretend to know unavailable live data.
 - Explain reasoning clearly and concisely.
 - Represent the brand professionally.
-- Only use supplied context.
-- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE DATA] provided. If it's missing, tell them to make predictions first.`;
+- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE] provided. If it's missing, tell them to make predictions first.
+- If a user asks about today's matches or Zoka Picks, refer to the [PLATFORM DATA] provided.`;
 
-// Use the fastest models first to minimize latency
 const MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-3.5-flash"];
 const FALLBACK_CODES = [429, 404, 503];
 const CACHE_TTL_MS = 60 * 60 * 1000; 
 const MAX_CACHE_SIZE = 1000;
 
-// Instant responses to save Gemini quota for actual football questions
 const GREETING_TRIGGERS = ['hi', 'hello', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'how are you', 'yo', 'sup', 'hola'];
 const GREETING_REPLIES = [
   "Hello! I'm Kim, your ZOKASCORE AI assistant. How can I help you dominate the predictions leaderboard today?",
@@ -139,7 +106,6 @@ function validateRequest(body) {
   if (!body.message || typeof body.message !== 'string' || !body.message.trim()) return { valid: false, error: "Message is required." };
   if (body.message.length > 2000) return { valid: false, error: "Message is too long." };
   if (body.history && !Array.isArray(body.history)) return { valid: false, error: "History must be an array." };
-  if (body.appContext && typeof body.appContext !== 'object') return { valid: false, error: "App context must be an object." };
   return { valid: true };
 }
 
@@ -149,29 +115,94 @@ function sanitizeHistory(history) {
     .map(msg => ({ role: msg.role === 'assistant' ? 'model' : 'user', content: msg.content.substring(0, 1500) }));
 }
 
-async function buildPrompt({ message, history, appContext, userProfileData }) {
+// Fetches all user and platform data securely on the backend
+async function fetchSystemContext(uid) {
+  const db = getDb();
+  const today = new Date().toISOString().split('T')[0];
+  
+  let userContext = "[USER PROFILE]\nNo user data found. Ask them to make a prediction first.";
+  let platformContext = "";
+
+  try {
+    // 1. Fetch User Total Points
+    const userDoc = await db.collection('user_points_total').doc(uid).get();
+    let userData = null;
+    if (userDoc.exists) {
+      const d = userDoc.data();
+      userData = {
+        name: d.displayName || 'Player',
+        totalPoints: d.totalPoints || 0,
+        predictions: d.predictionsCount || 0,
+        exact: d.exactCount || 0,
+        result: d.resultCount || 0,
+        streak: d.streak || 0
+      };
+    }
+
+    // 2. Fetch Daily Leaderboard Rank
+    const dailyUserDoc = await db.collection('daily_leaderboard').doc(today).collection('users').doc(uid).get();
+    let dailyRank = 'Unranked';
+    let dailyPoints = 0;
+    if (dailyUserDoc.exists) {
+      dailyRank = dailyUserDoc.data().rank || 'Unranked';
+      dailyPoints = dailyUserDoc.data().points || 0;
+    }
+
+    if (userData) {
+      userContext = `
+[USER PROFILE]
+- Name: ${userData.name}
+- All-Time Points: ${userData.totalPoints}
+- Today's Rank: #${dailyRank} (${dailyPoints} pts today)
+- Total Predictions Made: ${userData.predictions}
+- Exact Scores Hit: ${userData.exact}
+- Correct Results Hit: ${userData.result}
+- Current Streak: ${userData.streak} days
+`;
+    }
+  } catch (e) {
+    logger.warn(`[AI Context] Failed to fetch user data: ${e.message}`);
+  }
+
+  try {
+    // 3. Fetch Today's Zoka Picks & Featured Matches from local JSON files
+    const featuredPath = path.join(process.cwd(), 'public_data', 'featured', `${today}.json`);
+    const zokaPath = path.join(process.cwd(), 'public_data', 'zokapicks', `${today}.json`);
+
+    let matches = [];
+    if (fs.existsSync(featuredPath)) {
+      const featuredData = JSON.parse(fs.readFileSync(featuredPath, 'utf8'));
+      matches = featuredData.matches || [];
+    }
+
+    let zokaPicks = [];
+    if (fs.existsSync(zokaPath)) {
+      const zokaData = JSON.parse(fs.readFileSync(zokaPath, 'utf8'));
+      zokaPicks = zokaData.matches || [];
+    }
+
+    if (matches.length > 0 || zokaPicks.length > 0) {
+      platformContext = `
+[PLATFORM DATA FOR TODAY ${today}]
+Featured Matches: ${matches.map(m => `${m.homeTeam?.name || 'Home'} vs ${m.awayTeam?.name || 'Away'} (${m.kickoff || 'TBD'})`).join(' | ') || 'None scheduled'}
+Zoka AI Picks: ${zokaPicks.map(p => `${p.homeTeam?.name || 'Home'} vs ${p.awayTeam?.name || 'Away'} (Zoka Prediction: ${p.adminPick?.home}-${p.adminPick?.away})`).join(' | ') || 'None scheduled'}
+`;
+    }
+  } catch (e) {
+    logger.warn(`[AI Context] Failed to fetch platform data: ${e.message}`);
+  }
+
+  return { userContext, platformContext };
+}
+
+async function buildPrompt({ message, history, context }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
   for (const msg of sanitizedHistory) {
     contents.push({ role: msg.role, parts: [{ text: msg.content }] });
   }
   
-  const contextParts = [];
-  if (appContext) {
-    if (appContext.currentDate) contextParts.push(`Current Date: ${appContext.currentDate}`);
-    if (appContext.liveMatches?.length) contextParts.push(`Live Matches: ${appContext.liveMatches.join(' | ')}`);
-    if (appContext.topMatches?.length) contextParts.push(`Top/Featured Matches: ${appContext.topMatches.join(' | ')}`);
-    if (appContext.leagueStandings) contextParts.push(`League Standings: ${appContext.leagueStandings}`);
-    if (appContext.fixtures) contextParts.push(`Fixtures: ${appContext.fixtures}`);
-    if (appContext.latestNews) contextParts.push(`Latest News: ${appContext.latestNews}`);
-  }
-  
-  if (userProfileData) {
-    contextParts.push(`[USER PROFILE DATA]\nName: ${userProfileData.displayName}\nTotal Points: ${userProfileData.totalPoints}\nPredictions Made: ${userProfileData.predictionsCount}\nExact Scores: ${userProfileData.exactCount}\nCorrect Results: ${userProfileData.resultCount}\nCurrent Streak: ${userProfileData.streak} days`);
-  }
-  
-  const contextString = contextParts.length > 0 ? `\n[REAL-TIME CONTEXT]\n${contextParts.join('\n')}\n` : '';
-  const finalUserMessage = `${contextString}\n[ZOKASCORE KNOWLEDGE BASE]\n${ZOKASCORE_KNOWLEDGE_BASE}\nUser Query: ${message}`;
+  const finalUserMessage = `${context.userContext}\n${context.platformContext}\nUser Query: ${message}`;
   contents.push({ role: 'user', parts: [{ text: finalUserMessage }] });
   return contents;
 }
@@ -224,10 +255,10 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     const validation = validateRequest(req.body);
     if (!validation.valid) return res.status(400).json({ success: false, error: validation.error, model: "none" });
 
-    const { message, history = [], appContext = {} } = req.body;
+    const { message, history = [] } = req.body;
     const normalizedQuery = normalizeQuery(message);
 
-    // 1. Instant Greeting Response (Saves quota & is lightning fast)
+    // 1. Instant Greeting Response
     if (GREETING_TRIGGERS.includes(normalizedQuery)) {
       const reply = GREETING_REPLIES[Math.floor(Math.random() * GREETING_REPLIES.length)];
       return res.status(200).json({ success: true, model: "instant-greeting", reply, responseTime: "1ms" });
@@ -240,28 +271,11 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
       return res.status(200).json({ success: true, model: `${cachedResponse.model} (cached)`, reply: cachedResponse.reply, responseTime: "0ms" });
     }
 
-    // 3. Fetch User Profile Data securely from Firestore
-    let userProfileData = null;
-    try {
-      const db = getDb();
-      const userDoc = await db.collection('user_points_total').doc(req.user.uid).get();
-      if (userDoc.exists) {
-        const d = userDoc.data();
-        userProfileData = {
-          displayName: d.displayName || req.user.email || 'Player',
-          totalPoints: d.totalPoints || 0,
-          predictionsCount: d.predictionsCount || 0,
-          exactCount: d.exactCount || 0,
-          resultCount: d.resultCount || 0,
-          streak: d.streak || 0
-        };
-      }
-    } catch (e) {
-      logger.warn(`[ZOKASCORE AI] Failed to fetch user profile: ${e.message}`);
-    }
+    // 3. Fetch all context securely on the backend
+    const context = await fetchSystemContext(req.user.uid);
 
     // 4. Generate AI Response
-    const contents = await buildPrompt({ message, history, appContext, userProfileData });
+    const contents = await buildPrompt({ message, history, context });
     const result = await generateWithFallback(contents);
 
     if (result.success) {

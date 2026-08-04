@@ -108,5 +108,10 @@
     "reply": "You're very welcome! 🙌 \n\nWhenever you're ready to lock in some match predictions, check live scores, or jump into the **Reactor Studio** to create some epic sports content, just give me a shout! \n\nGood luck on the leaderboards today! ⚽🔥🏆",
     "model": "gemini-3.6-flash",
     "timestamp": 1785829180587
+  },
+  "do you know me": {
+    "reply": "I don't know your personal identity or account details just yet, as I don't have direct access to your private profile in this chat! \n\nBut if you are a ZOKASCORE user, I know a few things about what you might be up to:\n* You might be making score predictions on the **Predictions** page to climb up our Daily, Weekly, or G.O.A.T Leaderboards.\n* You could be chasing after awesome achievements like the **Sharpshooter**, **5-Day Streak**, or trying to **Beat ZOKA**.\n* You might be earning **+10 points** for exact score predictions, **+3 points** for correct outcomes, or grabbing that **+50 point Daily Challenge** bonus.\n\nIf you want to share your favorite football team, your current prediction points, or if you need help finding today's fixtures (like *Nublense vs Rangers Talca* or *RTC FC vs Thimphu FC*), let me know! Who are you backing today?",
+    "model": "gemini-3.5-flash",
+    "timestamp": 1785830806664
   }
 }

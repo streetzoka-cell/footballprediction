@@ -1,5 +1,3 @@
-// backend-v1/src/services/LeaderboardEngine.js
-
 const path = require('path');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
@@ -15,42 +13,26 @@ function todayStr() {
 
 function getWeekStart() {
   const d = new Date();
-
-  const date = new Date(
-    Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
-  );
-
+  const date = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
   const day = date.getUTCDay();
   const diff = (day === 0 ? -6 : 1) - day;
-
   date.setUTCDate(date.getUTCDate() + diff);
-
   return date.toISOString().split('T')[0];
 }
 
 function getMonthStart() {
   const d = new Date();
-
   const year = d.getUTCFullYear();
   const month = String(d.getUTCMonth() + 1).padStart(2, '0');
-
   return `${year}-${month}-01`;
 }
 
 function computeStats(entries) {
   if (!entries || entries.length === 0) {
-    return {
-      avg: '0.0',
-      preds: 0,
-      exact: 0,
-      players: 0,
-    };
+    return { avg: '0.0', preds: 0, exact: 0, players: 0 };
   }
-
   return {
-    avg: (
-      entries.reduce((sum, u) => sum + (u.accuracy || 0), 0) / entries.length
-    ).toFixed(1),
+    avg: (entries.reduce((sum, u) => sum + (u.accuracy || 0), 0) / entries.length).toFixed(1),
     preds: entries.reduce((sum, u) => sum + (u.predictions || 0), 0),
     exact: entries.reduce((sum, u) => sum + (u.exact || 0), 0),
     players: entries.length,
@@ -59,7 +41,6 @@ function computeStats(entries) {
 
 function rankEntries(list) {
   if (!list || list.length === 0) return [];
-
   return list
     .sort((a, b) => {
       if (b.points !== a.points) return b.points - a.points;
@@ -79,31 +60,96 @@ function rankEntries(list) {
     }));
 }
 
+// ★ FIXED: Now calculates daily entries directly from user predictions and results
 async function buildDailyEntries(date) {
   const db = getDb();
+  const userMap = {};
 
-  const colRef = db
-    .collection('daily_leaderboard')
-    .doc(String(date))
-    .collection('users');
+  // 1. Fetch resolved results for this date
+  const resultsSnap = await db
+    .collection('prediction_results')
+    .where('matchDate', '==', String(date))
+    .get();
 
-  const q = colRef.orderBy('points', 'desc').limit(100);
+  resultsSnap.forEach((d) => {
+    const r = d.data() || {};
+    const uid = String(r.userId || '');
+    if (!uid) return;
 
-  const snap = await q.get();
+    if (!userMap[uid]) {
+      userMap[uid] = {
+        uid,
+        displayName: r.displayName || 'Player',
+        points: 0,
+        predictions: 0,
+        exact: 0,
+        result: 0,
+        miss: 0,
+        resolved: 0,
+        streak: 0,
+      };
+    }
 
-  return snap.docs.map((d, i) => {
-    const data = d.data() || {};
+    const u = userMap[uid];
+    u.predictions += 1;
+    u.resolved += 1;
+    u.points += Number(r.points || 0);
 
-    return {
-      ...data,
-      uid: d.id,
-      rank: i + 1,
-      accuracy:
-        data.predictions > 0
-          ? Math.round(((data.exact + data.result) / data.predictions) * 100)
-          : 0,
-    };
+    if (r.resultType === 'exact') {
+      u.exact += 1;
+      u.streak += 1;
+    } else if (r.resultType === 'result') {
+      u.result += 1;
+      u.streak += 1;
+    } else {
+      u.miss += 1;
+      u.streak = 0;
+    }
   });
+
+  // 2. Fetch pending predictions for this date (match not finished yet)
+  const predsSnap = await db
+    .collection('user_predictions')
+    .where('matchDate', '==', String(date))
+    .get();
+
+  const resolvedIds = new Set(resultsSnap.docs.map((d) => String(d.data().matchId)));
+
+  predsSnap.forEach((d) => {
+    const p = d.data() || {};
+    const uid = String(p.userId || '');
+    if (!uid) return;
+
+    const mid = String(p.matchId);
+    
+    // If it's already in results, just update the name if missing
+    if (resolvedIds.has(mid)) {
+      if (userMap[uid] && !userMap[uid].displayName && p.displayName) {
+        userMap[uid].displayName = p.displayName;
+      }
+      return;
+    }
+
+    if (!userMap[uid]) {
+      userMap[uid] = {
+        uid,
+        displayName: p.displayName || 'Player',
+        points: 0,
+        predictions: 0,
+        exact: 0,
+        result: 0,
+        miss: 0,
+        resolved: 0,
+        streak: 0,
+      };
+    }
+
+    // It's a pending prediction, count it in their total predictions for the day
+    userMap[uid].predictions += 1;
+  });
+
+  const all = rankEntries(Object.values(userMap).filter((u) => u.predictions > 0));
+  return all.slice(0, 100);
 }
 
 async function publishDailyLeaderboardSnapshot(date) {
@@ -130,7 +176,7 @@ async function getDailyLeaderboard(date) {
     null
   );
 
-  if (local && Array.isArray(local.entries) && local.entries.length > 0) {
+  if (local && Array.isArray(local.entries)) {
     return local;
   }
 
@@ -145,7 +191,6 @@ function summaryDocId(period, startDate) {
   if (period === 'goat') return 'current';
   if (period === 'weekly') return `weekly_${startDate || getWeekStart()}`;
   if (period === 'monthly') return `monthly_${startDate || getMonthStart()}`;
-
   throw ApiError.badRequest('Invalid leaderboard period');
 }
 
@@ -153,7 +198,6 @@ function summaryFileName(period) {
   if (period === 'goat') return 'goat.json';
   if (period === 'weekly') return 'weekly.json';
   if (period === 'monthly') return 'monthly.json';
-
   throw ApiError.badRequest('Invalid leaderboard period');
 }
 
@@ -167,7 +211,7 @@ async function getSummary(period) {
     null
   );
 
-  if (local && Array.isArray(local.entries) && local.entries.length > 0) {
+  if (local && Array.isArray(local.entries)) {
     return local;
   }
 
@@ -178,7 +222,6 @@ async function getSummary(period) {
 
   if (snap.exists) {
     const data = snap.data() || {};
-
     const payload = {
       ...data,
       period,
@@ -186,7 +229,6 @@ async function getSummary(period) {
     };
 
     await publishJSON(`leaderboard/${summaryFileName(period)}`, payload);
-
     return payload;
   }
 
@@ -212,7 +254,6 @@ async function rebuildGoat() {
   const entries = rankEntries(
     snap.docs.map((d) => {
       const u = d.data() || {};
-
       return {
         uid: d.id,
         displayName: u.displayName || 'Player',
@@ -238,10 +279,7 @@ async function rebuildGoat() {
   };
 
   await publishJSON('leaderboard/goat.json', payload);
-
-  await db.collection('leaderboard_summaries').doc('current').set(payload, {
-    merge: true,
-  });
+  await db.collection('leaderboard_summaries').doc('current').set(payload, { merge: true });
 
   return payload;
 }
@@ -251,15 +289,10 @@ async function rebuildPeriodFromResults(period, startDate) {
     throw ApiError.badRequest('Invalid leaderboard period');
   }
 
-  const start =
-    startDate || (period === 'weekly' ? getWeekStart() : getMonthStart());
-
+  const start = startDate || (period === 'weekly' ? getWeekStart() : getMonthStart());
   const end = todayStr();
-
   const db = getDb();
-
   const userMap = {};
-
   let lastDoc = null;
   let totalDocs = 0;
 
@@ -276,14 +309,11 @@ async function rebuildPeriodFromResults(period, startDate) {
     }
 
     const snap = await q.get();
-
     if (snap.empty) break;
 
     snap.forEach((d) => {
       const r = d.data() || {};
-
       const uid = String(r.userId || '');
-
       if (!uid) return;
 
       if (!userMap[uid]) {
@@ -301,7 +331,6 @@ async function rebuildPeriodFromResults(period, startDate) {
       }
 
       const u = userMap[uid];
-
       u.predictions += 1;
       u.resolved += 1;
       u.points += Number(r.points || 0);
@@ -324,10 +353,7 @@ async function rebuildPeriodFromResults(period, startDate) {
     if (snap.size < 1000) break;
   }
 
-  const all = rankEntries(
-    Object.values(userMap).filter((u) => u.predictions > 0)
-  );
-
+  const all = rankEntries(Object.values(userMap).filter((u) => u.predictions > 0));
   const entries = all.slice(0, 100);
 
   const payload = {
@@ -343,25 +369,15 @@ async function rebuildPeriodFromResults(period, startDate) {
   };
 
   await publishJSON(`leaderboard/${summaryFileName(period)}`, payload);
-
   const docId = summaryDocId(period, start);
-
-  await db.collection('leaderboard_summaries').doc(docId).set(payload, {
-    merge: true,
-  });
+  await db.collection('leaderboard_summaries').doc(docId).set(payload, { merge: true });
 
   return payload;
 }
 
 async function rebuildPeriod(period, startDate) {
-  if (period === 'goat') {
-    return rebuildGoat();
-  }
-
-  if (period === 'weekly' || period === 'monthly') {
-    return rebuildPeriodFromResults(period, startDate);
-  }
-
+  if (period === 'goat') return rebuildGoat();
+  if (period === 'weekly' || period === 'monthly') return rebuildPeriodFromResults(period, startDate);
   throw ApiError.badRequest('Invalid leaderboard period');
 }
 
