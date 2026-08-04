@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle2,
@@ -17,6 +17,8 @@ import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute 
 import SEO from '../components/SEO';
 import { ListSkeleton } from '../components/StateFeedback';
 import { applySmartMinute } from '../engine/matchEngine';
+
+import { useGlobalStats } from '../hooks/useGlobalStats';
 
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
@@ -378,6 +380,7 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
 });
 
 export default function Home() {
+  const { activePlayersToday, predictionsToday, totalPlayers, totalPredictions } = useGlobalStats();
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const isLoggedIn = !!currentUser;
@@ -470,7 +473,6 @@ export default function Home() {
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
-  // ★ ACCURATE DATA DERIVATION
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   const zokaFlat = zokaPicksData?.matches || [];
@@ -549,6 +551,21 @@ export default function Home() {
             <p className="z-sub">
               {greeting.emoji} {greeting.text}, {displayName || 'Manager'}. Live scores, AI predictions & leaderboards.
             </p>
+          </div>
+           
+          <div className="stats-grid">
+            <div className="stat-card">
+              <span className="stat-value">{activePlayersToday}</span>
+              <span className="stat-label">Predicting Today</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">{totalPredictions}</span>
+              <span className="stat-label">Total Predictions</span>
+            </div>
+            <div className="stat-card">
+              <span className="stat-value">{totalPlayers}</span>
+              <span className="stat-label">Total Players</span>
+            </div>
           </div>
 
           <div className="z-scale-stats">

@@ -11,12 +11,26 @@
     "draw": 1,
     "away": 0
   },
+  "239033929": {
+    "totalVotes": 2,
+    "home": 1,
+    "draw": 1,
+    "away": 0,
+    "updatedAt": "2026-08-03T17:08:00.482Z"
+  },
   "301289921": {
     "totalVotes": 1,
     "home": 1,
     "draw": 0,
     "away": 0,
     "updatedAt": "2026-08-02T16:26:42.749Z"
+  },
+  "318631920": {
+    "totalVotes": 1,
+    "home": 0,
+    "draw": 1,
+    "away": 0,
+    "updatedAt": "2026-08-03T18:05:15.253Z"
   },
   "376803925": {
     "totalVotes": 1,

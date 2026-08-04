@@ -1,12 +1,12 @@
-// backend-v1/src/scheduler/index.js
-
-const schedulerEngine = require('./SchedulerEngine');
+﻿const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
 const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
 const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
 const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
+
+const leaderboardJob = require('./jobs/leaderboardJob');
 
 const { processQueue } = require('../services/QueueService');
 const internetMonitor = require('../services/InternetMonitor');
@@ -51,6 +51,13 @@ function startScheduler() {
     standingsJob.execute
   );
 
+  // ★ FIX: Pass 3 arguments properly (Name, Schedule, Function)
+  schedulerEngine.schedule(
+    'LeaderboardJob',
+    leaderboardJob.schedule,
+    leaderboardJob.execute
+  );
+
   schedulerEngine.startLivePolling(async () => {
     if (!internetMonitor.isOnline) {
       logger.info('[Scheduler] Live polling skipped (Internet Offline).');
@@ -90,6 +97,7 @@ function startScheduler() {
       await finishedFixturesJob.execute(true);
       await standingsJob.execute();
       await liveJob.execute();
+      await leaderboardJob.execute(); // ★ ADDED: Run on startup
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {
@@ -105,6 +113,7 @@ function startScheduler() {
       await todayFixturesJob.execute();
       await finishedFixturesJob.execute(true);
       await liveJob.execute();
+      await leaderboardJob.execute(); // ★ ADDED: Run on reconnect
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {
