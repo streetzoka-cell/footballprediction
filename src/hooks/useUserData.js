@@ -117,10 +117,17 @@ export function useDailyLeaderboard(dateStr) {
       if (!dateStr) return null;
 
       try {
-        const backend = await footballApi.getDailyLeaderboard(dateStr);
-        if (backend && Array.isArray(backend.entries)) {
-          return backend;
-        }
+      const backend = await footballApi.getDailyLeaderboard(dateStr);
+
+if (backend && Array.isArray(backend.entries)) {
+  return {
+    entries: backend.entries,
+    stats: {
+      players: Number(backend.stats?.players ?? backend.entries.length),
+      preds: Number(backend.stats?.preds ?? 0),
+    },
+  };
+}
       } catch (err) {
         console.warn('[useDailyLeaderboard] Backend read failed, falling back to Firebase:', err.message);
       }

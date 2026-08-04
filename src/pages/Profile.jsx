@@ -41,20 +41,33 @@ const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 
   const [val, setVal] = useState(0);
   const [ref, visible] = useInView(0.5);
 
-  useEffect(() => {
-    if (!visible) return;
-    let start = null;
-    const duration = 1400;
-    const step = (ts) => {
-      if (!start) start = ts;
-      const p = Math.min((ts - start) / duration, 1);
-      const eased = 1 - Math.pow(1 - p, 3);
-      const cur = eased * value;
-      setVal(decimals > 0 ? cur.toFixed(decimals) : Math.floor(cur).toLocaleString());
-      if (p < 1) requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }, [visible, value, decimals]);
+ useEffect(() => {
+  if (!visible) return;
+
+  const safeValue = Number(value ?? 0);
+
+  let start = null;
+  const duration = 1400;
+
+  const step = (ts) => {
+    if (!start) start = ts;
+
+    const p = Math.min((ts - start) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3);
+    const cur = eased * safeValue;
+
+    setVal(
+      decimals > 0
+        ? cur.toFixed(decimals)
+        : Math.floor(cur).toLocaleString()
+    );
+
+    if (p < 1) requestAnimationFrame(step);
+  };
+
+  requestAnimationFrame(step);
+}, [visible, value, decimals]);
+
 
   return (
     <div ref={ref} className="pro-stat-card" style={{ animationDelay: `${delay}ms` }}>

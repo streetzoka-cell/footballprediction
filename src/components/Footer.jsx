@@ -60,7 +60,10 @@ export default function Footer() {
 
   const liveCount = rawFixtures.filter(m => m.isLive).length;
   const todayFixturesCount = rawFixtures.length;
-  const dailyStats = dailyLB?.stats || { preds: 0, players: 0 };
+  const dailyStats = {
+  preds: Number(dailyLB?.stats?.preds ?? 0),
+  players: Number(dailyLB?.stats?.players ?? 0),
+};
 
   // ★ NEW: Clean Install Logic
   const [isInstalled, setIsInstalled] = useState(false);
