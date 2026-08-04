@@ -3193,49 +3193,44 @@ into the global design system. Identical duplicates
   .zoka-wrap { max-width: var(--max-width); padding: 0 var(--sp-32); }
   .zoka-hdr { padding-left: var(--sp-32); padding-right: var(--sp-32); }
 }
+
 /* ============================================================
-========== 40. CLEANUP NOTES ================================
-What changed in CLEAN PASS 3 (zero styling was removed):
-1. KEYFRAMES — 6 keyframes were defined twice with different
-   values. Single definitions kept, using the LAST (effective)
-   version so rendering is unchanged:
-   - zk-fade-up  → 20px version
-   - zk-slide-in → translateX(20px) version
-   - zk-pulse    → opacity + scale version
-   - zk-shimmer  → 0%→200% version
-   - zk-goal-flash → box-shadow version
-   - zk-spin     → identical, deduplicated
-2. THEME SWITCHER — z-index was declared 4× (1003/1002/1002/1002).
-   Consolidated to one declaration (1003, per the CRITICAL comment).
-   Any value >1000 clears the sticky navbar.
-3. NAV TICKER — .nv-ticker-item and .nv-ticker-live each had two
-   conflicting definitions. Merged. The pill badge style was kept
-   for .nv-ticker-live (the 2-line override produced red-on-red).
-   Invalid nested "&:hover" (SCSS syntax) converted to plain CSS.
-   var(--bg-secondary) was an undefined token → var(--bg-surface).
-   BOTH ticker implementations (track + content) are preserved.
-4. MATCH CARDS — .z-mc/.z-mh/.z-ml/.z-st/.z-tm/.z-te/.z-sb/.z-sn/
-   .z-sep/.z-vs/.z-ma were defined twice; merged property-by-
-   property with the later (fixtures) values winning.
-5. HOME — .z-hero-pro, .z-pill(s), .z-scale-*, .z-stats-widget,
-   .z-sw-*, .z-ecard*, .z-lbrow*, .z-toggle, .z-cta, .z-podium,
-   .z-pod-*, .gold-text, .stats-grid/.stat-card, .z-livemini all
-   merged the same way. .z-offline kept as the fixed danger banner.
-6. LAYOUT — .app-layout/.main-content/.zoka-wrap desktop blocks
-   were declared 3× → one block. .nav-top-grid/.nav-link deduped
-   (max-width+margin extension preserved). Breadcrumbs double-
-   centering removed (single flex method retained).
-7. REACTOR STUDIO — .rs-controls-panel was defined twice (320px
-   animation-based + 360px transform-based). The transform-based
-   panel is the single source; rs-slide-in keyframe kept for
-   .rs-controls-panel-mobile. Timeline clip/playhead/del deduped.
-   .rs-panel-* merged (hover state preserved).
-8. KIM AI — .btn-icon/.btn-primary/.anim-spin overrides are now
-   scoped to .kim-window (they previously leaked globally and
-   would restyle every primary button site-wide). Identical
-   .flex-center/.w-full/.truncate redefinitions removed.
-9. TOKENS — added missing --r-6 and --r-24 (referenced by
-   .z-dc-bonus and .z-hero-pro but never defined).
-10. FIXTURES TABS — merged with the sliding .zoka-tab-indicator
-    upgrade (indicator sits at z-0, tabs at z-1).
+   NAVBAR OVERLAP FIX — paste at the BOTTOM of your CSS
+   Kills the logo/link collision at tablet & small widths
 ============================================================ */
+
+/* 1) 768px–1180px: not enough room for 7 links + logo + actions.
+      Hide the center links and bring the hamburger back. */
+@media (min-width: 768px) and (max-width: 1180px) {
+  .nav-top-center { display: none !important; }
+  .nav-top-bar .hide-desktop { display: inline-flex !important; }
+  .nav-top-grid {
+    grid-template-columns: auto 1fr auto;
+    gap: var(--sp-8);
+  }
+}
+
+/* 2) Phones: force-hide the center links even if an older
+      stylesheet tries to show them (fixes your screenshot). */
+@media (max-width: 767px) {
+  .nav-top-center { display: none !important; }
+  .nav-top-grid {
+    grid-template-columns: auto 1fr auto;
+    gap: var(--sp-8);
+    padding: 0 var(--sp-12);
+  }
+  .nav-top-right { gap: var(--sp-4); }
+}
+
+/* 3) Tiny phones: compress the right-hand cluster */
+@media (max-width: 400px) {
+  .nav-top-grid { padding: 0 var(--sp-8); gap: var(--sp-4); }
+  .nav-top-right .btn-icon,
+  .nav-top-right .btn-icon-sm { width: 32px; height: 32px; }
+  .nav-profile-block { padding: 4px var(--sp-8); }
+}
+
+/* 4) Failsafe: columns can shrink but never stack on top of each other */
+.nav-top-left, .nav-top-right { min-width: 0; }
+.nav-top-bar { overflow-x: clip; }
+
