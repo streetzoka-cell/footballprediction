@@ -2331,6 +2331,66 @@ p { color: var(--text-secondary); line-height: 1.7; }
 .z-sw-data .val { font-size: var(--fs-md); font-weight: 800; color: var(--text-primary); line-height: 1; }
 .z-sw-data .lbl { font-size: var(--fs-xs); color: var(--text-muted); }
 
+.stats-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-8);
+  margin: var(--sp-16) 0;
+}
+
+.stat-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-12);
+  padding: var(--sp-12) var(--sp-8);
+  text-align: center;
+  transition: var(--transition-fast);
+}
+
+.stat-card:hover {
+  border-color: rgba(var(--primary-rgb), 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(0,0,0,0.15);
+}
+
+.stat-card .stat-value {
+  display: block;
+  font-size: var(--fs-xl);
+  font-weight: 900;
+  font-family: var(--font-display);
+  color: var(--text-primary);
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.stat-card .stat-label {
+  display: block;
+  font-size: 0.6rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Mobile fallback for smaller screens */
+@media (max-width: 380px) {
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--sp-4);
+  }
+  .stat-card {
+    padding: var(--sp-8) var(--sp-4);
+  }
+  .stat-card .stat-value {
+    font-size: var(--fs-lg);
+  }
+  .stat-card .stat-label {
+    font-size: 0.55rem;
+  }
+}
 
 /* ========== 33. FIXTURES / PREDICTIONS PAGE (zoka-*) ========== */
 .zoka-page { min-height: 100vh; width: 100%; background: radial-gradient(circle at 50% 0%, rgba(var(--primary-rgb), 0.04), var(--bg-deep) 100%); padding: 0 0 120px; color: var(--text-primary); overflow-x: hidden; }
