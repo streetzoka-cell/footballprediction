@@ -4,6 +4,9 @@ const path = require('path');
 const router = express.Router();
 const { GoogleGenAI } = require('@google/genai');
 const env = require('../../config/env');
+const logger = require('../../utils/logger');
+const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
+const { getDb } = require('../../config/firebase');
 
 const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
@@ -23,7 +26,6 @@ PAGES & FEATURES:
 5. Highlights (/highlights): News articles & match reports. Categories: Breaking, Official, Rumour, Transfers, Injuries.
 6. Live Stream (/livestream): Watch matches.
 7. Studio (/studio): Reactor Studio (Video editor for TikTok/Reels/Shorts), Web Showcase, Media Studio, Face AR Studio.
-   - Reactor Studio Features: 30+ templates (Pro, TikTok, Insta, YT, Gaming, Football), PIP (camera/B-roll), video effects (glitch, VHS, Ken Burns), filters, stickers, audio import, timeline (split/trim), 1080p export. Users earn XP and achievements for editing.
 8. Profile (/profile): Animated stats, Accuracy Ring, Achievements (First Step, 5-Day Streak, Sharpshooter, Beat ZOKA, Top 10). Tracks Fun Season vs Real Season.
 9. Admin (/admin): Admin panel to manage featured matches, zoka picks, leaderboards, and resolve matches.
 
@@ -50,12 +52,23 @@ FORMATTING RULES:
 - Never invent facts, hallucinate scores, or pretend to know unavailable live data.
 - Explain reasoning clearly and concisely.
 - Represent the brand professionally.
-- Only use supplied context.`;
+- Only use supplied context.
+- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE DATA] provided. If it's missing, tell them to make predictions first.`;
 
-const MODELS = ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash-lite", "gemini-2.0-flash-lite"];
+// Use the fastest models first to minimize latency
+const MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-3.5-flash"];
 const FALLBACK_CODES = [429, 404, 503];
 const CACHE_TTL_MS = 60 * 60 * 1000; 
 const MAX_CACHE_SIZE = 1000;
+
+// Instant responses to save Gemini quota for actual football questions
+const GREETING_TRIGGERS = ['hi', 'hello', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'how are you', 'yo', 'sup', 'hola'];
+const GREETING_REPLIES = [
+  "Hello! I'm Kim, your ZOKASCORE AI assistant. How can I help you dominate the predictions leaderboard today?",
+  "Hi there! Ask me about today's fixtures, tactical breakdowns, or your prediction stats.",
+  "Hey! Ready to analyze some football matches? Ask me anything about today's games.",
+  "Greetings! I'm here to give you the edge in your football predictions. What's on your mind?"
+];
 
 const CACHE_DIR = path.resolve(__dirname, 'cache');
 const CACHE_FILE = path.join(CACHE_DIR, 'ai_responses.json');
@@ -136,7 +149,7 @@ function sanitizeHistory(history) {
     .map(msg => ({ role: msg.role === 'assistant' ? 'model' : 'user', content: msg.content.substring(0, 1500) }));
 }
 
-function buildPrompt({ message, history, appContext }) {
+async function buildPrompt({ message, history, appContext, userProfileData }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
   for (const msg of sanitizedHistory) {
@@ -147,12 +160,14 @@ function buildPrompt({ message, history, appContext }) {
   if (appContext) {
     if (appContext.currentDate) contextParts.push(`Current Date: ${appContext.currentDate}`);
     if (appContext.liveMatches?.length) contextParts.push(`Live Matches: ${appContext.liveMatches.join(' | ')}`);
-    if (appContext.topMatches?.length) contextParts.push(`Top Matches: ${appContext.topMatches.join(' | ')}`);
+    if (appContext.topMatches?.length) contextParts.push(`Top/Featured Matches: ${appContext.topMatches.join(' | ')}`);
     if (appContext.leagueStandings) contextParts.push(`League Standings: ${appContext.leagueStandings}`);
     if (appContext.fixtures) contextParts.push(`Fixtures: ${appContext.fixtures}`);
-    if (appContext.userFavorites) contextParts.push(`User Favorites: ${appContext.userFavorites}`);
     if (appContext.latestNews) contextParts.push(`Latest News: ${appContext.latestNews}`);
-    if (appContext.competition) contextParts.push(`Competition: ${appContext.competition}`);
+  }
+  
+  if (userProfileData) {
+    contextParts.push(`[USER PROFILE DATA]\nName: ${userProfileData.displayName}\nTotal Points: ${userProfileData.totalPoints}\nPredictions Made: ${userProfileData.predictionsCount}\nExact Scores: ${userProfileData.exactCount}\nCorrect Results: ${userProfileData.resultCount}\nCurrent Streak: ${userProfileData.streak} days`);
   }
   
   const contextString = contextParts.length > 0 ? `\n[REAL-TIME CONTEXT]\n${contextParts.join('\n')}\n` : '';
@@ -181,10 +196,10 @@ async function generateWithFallback(contents) {
   for (const model of MODELS) {
     const startTime = Date.now();
     try {
-      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 15000));
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 12000));
       const generationPromise = ai.models.generateContent({
         model, contents, systemInstruction: SYSTEM_PROMPT,
-        generationConfig: { temperature: 0.55, topP: 0.9, topK: 32, maxOutputTokens: 800 }
+        generationConfig: { temperature: 0.45, topP: 0.9, topK: 32, maxOutputTokens: 600 }
       });
       const response = await Promise.race([generationPromise, timeoutPromise]);
       const responseTime = Date.now() - startTime;
@@ -202,7 +217,8 @@ async function generateWithFallback(contents) {
   return { success: false, error: "Our AI is currently experiencing high demand. Please try again in a moment.", model: "fallback_failed" };
 }
 
-router.post('/zoka', async (req, res) => {
+// Route: POST /api/v1/ai/zoka
+router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
   try {
     if (!env.GEMINI_API_KEY) return res.status(500).json({ success: false, error: "AI service misconfigured.", model: "none" });
     const validation = validateRequest(req.body);
@@ -210,14 +226,42 @@ router.post('/zoka', async (req, res) => {
 
     const { message, history = [], appContext = {} } = req.body;
     const normalizedQuery = normalizeQuery(message);
-    const cachedResponse = getFromCache(normalizedQuery);
 
+    // 1. Instant Greeting Response (Saves quota & is lightning fast)
+    if (GREETING_TRIGGERS.includes(normalizedQuery)) {
+      const reply = GREETING_REPLIES[Math.floor(Math.random() * GREETING_REPLIES.length)];
+      return res.status(200).json({ success: true, model: "instant-greeting", reply, responseTime: "1ms" });
+    }
+
+    // 2. Check Cache
+    const cachedResponse = getFromCache(normalizedQuery);
     if (cachedResponse) {
       console.log(`[ZOKASCORE AI] Cache hit for: "${normalizedQuery.substring(0, 40)}..."`);
       return res.status(200).json({ success: true, model: `${cachedResponse.model} (cached)`, reply: cachedResponse.reply, responseTime: "0ms" });
     }
 
-    const contents = buildPrompt({ message, history, appContext });
+    // 3. Fetch User Profile Data securely from Firestore
+    let userProfileData = null;
+    try {
+      const db = getDb();
+      const userDoc = await db.collection('user_points_total').doc(req.user.uid).get();
+      if (userDoc.exists) {
+        const d = userDoc.data();
+        userProfileData = {
+          displayName: d.displayName || req.user.email || 'Player',
+          totalPoints: d.totalPoints || 0,
+          predictionsCount: d.predictionsCount || 0,
+          exactCount: d.exactCount || 0,
+          resultCount: d.resultCount || 0,
+          streak: d.streak || 0
+        };
+      }
+    } catch (e) {
+      logger.warn(`[ZOKASCORE AI] Failed to fetch user profile: ${e.message}`);
+    }
+
+    // 4. Generate AI Response
+    const contents = await buildPrompt({ message, history, appContext, userProfileData });
     const result = await generateWithFallback(contents);
 
     if (result.success) {

@@ -24,11 +24,6 @@
     "model": "gemini-3.6-flash",
     "timestamp": 1785744136511
   },
-  "ok thanks": {
-    "reply": "You're very welcome! ⚽🔥\n\nMake sure to log into the **Predictions** tab on ZOKASCORE and lock in your final scorelines early before the **60-minute cutoff**! \n\nGood luck climbing the leaderboards today! Let me know if you need live scores, league standings, or help creating content with the Reactor Studio later. May the points be with you! 🏆 predictions count down!",
-    "model": "gemini-3.6-flash",
-    "timestamp": 1785747371177
-  },
   "hello": {
     "reply": "Hello! 👋 Welcome to **ZOKASCORE** — your ultimate football intelligence, live predictions, and content creation platform! \n\nHow can I help you today? Here are a few things you can ask me about:\n\n* ⚽ **Live Matches & Scores** (e.g., *Celtic vs Dundee FC*, *FCSB vs Farul Constanta*)\n* 🎯 **Predictions & Points** (How scoring works, Zoka Picks, Quick Picks)\n* 🏆 **Leaderboards & Badges** (Daily/Weekly/G.O.A.T rankings & achievements)\n* 🎬 **Reactor Studio** (Editing videos for TikTok/Reels/Shorts)\n* 📰 **News & Match Highlights**\n* 📞 **Support & Contact Info**\n\nWhat would you like to check out?",
     "model": "gemini-3.6-flash",
@@ -108,5 +103,10 @@
     "reply": "I am **Gemini**, a large language model trained and built by **Google**. \n\nBut right here at **ZOKASCORE**, I’ve been fully geared up with premium football intelligence to be your ultimate companion for live scores, match predictions, and content creation! ⚽🔥\n\nWhether you want to lock in your predictions for today's matches (like *Myanmar vs Laos* or *Nublense vs Rangers Talca*), climb the leaderboards, or create some fire content in the **Reactor Studio**, I've got you covered. \n\nWhat are we diving into today? 🏆",
     "model": "gemini-3.5-flash",
     "timestamp": 1785824892189
+  },
+  "ok thanks": {
+    "reply": "You're very welcome! 🙌 \n\nWhenever you're ready to lock in some match predictions, check live scores, or jump into the **Reactor Studio** to create some epic sports content, just give me a shout! \n\nGood luck on the leaderboards today! ⚽🔥🏆",
+    "model": "gemini-3.6-flash",
+    "timestamp": 1785829180587
   }
 }
