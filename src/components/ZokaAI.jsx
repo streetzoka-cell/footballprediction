@@ -1,10 +1,8 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
   Menu, User, Sparkles, AlertCircle, RefreshCw, Lock
 } from 'lucide-react';
-import { useFixtures } from '../hooks/useFixtures';
-import { todayStr } from '../utils/dates';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../services/backendAuth';
 
@@ -87,16 +85,6 @@ export default function ZokaAI({ isOpen, onClose }) {
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
 
-  const { data: rawFixtures = [] } = useFixtures(todayStr());
-
-  const appContext = useMemo(() => {
-    const live = rawFixtures.filter(m => m.isLive).slice(0, 5)
-      .map(m => `${m.homeName} vs ${m.awayName} (${m.displayMinute || 0}', Score: ${m.homeScore}-${m.awayScore})`);
-    const top = rawFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 5)
-      .map(m => `${m.homeName} vs ${m.awayName} (Kickoff: ${m.kickoff || 'TBD'})`);
-    return { currentDate: todayStr(), liveMatches: live, topMatches: top };
-  }, [rawFixtures]);
-
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
 
@@ -159,7 +147,7 @@ export default function ZokaAI({ isOpen, onClose }) {
       const response = await fetch(`${BACKEND_URL}/api/v1/ai/zoka`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ message: currentInput, history, appContext })
+        body: JSON.stringify({ message: currentInput, history }) // No appContext needed, backend fetches it securely
       });
       
       const data = await response.json();
@@ -328,7 +316,7 @@ export default function ZokaAI({ isOpen, onClose }) {
           <div className="kim-input-area">
             {!currentUser && (
               <div className="kim-auth-warning">
-                <Lock size={12} /> Authentication required to chat.
+                <Lock size={12} /> Authentication required to chat with Kim.
               </div>
             )}
             <div className="kim-input-wrap">
