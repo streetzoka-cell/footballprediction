@@ -53,9 +53,39 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
+  // ★ FIX: Strictly determine isScheduled
+  const isHT = display.isHalfTime || status === 'HT';
+  const isScheduled = !isLive && !isFinished && !isHT && (status === 'NS' || status === 'TBD' || display.isUpcoming || false);
+
   const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
   const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
   const updatedAt = raw.dataQuality?.lastUpdated || raw.lastUpdated || raw.updatedAt || null;
+
+  // ★ FIX: Calculate UI Labels and Timeline Progress
+  let statusLabel = '';
+  let statusClass = 'status-upcoming';
+  let timelineProgress = 0;
+
+  if (isLive) {
+    statusClass = 'status-live';
+    if (isHT) {
+      statusLabel = 'Half Time';
+      statusClass = 'status-ht';
+      timelineProgress = 50;
+    } else {
+      statusLabel = `${minute}'`;
+      timelineProgress = Math.min((minute / 90) * 100, 100);
+    }
+  } else if (isFinished) {
+    statusLabel = status === 'AET' ? 'AET' : status === 'PEN' ? 'PEN' : 'Full Time';
+    statusClass = 'status-ft';
+    timelineProgress = 100;
+  } else if (isScheduled) {
+    statusLabel = kickoffTime;
+    statusClass = 'status-upcoming';
+  } else {
+    statusLabel = status || 'Scheduled';
+  }
 
   // ★ NEW: Robust Stats Extraction
   const rawStats = raw.statistics || raw.stats;
@@ -106,13 +136,18 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     statusLong: raw.statusLong,
     isLive: isLive,
     isFinished: isFinished,
-    isScheduled: display.isUpcoming || false,
-    isHT: display.isHalfTime || status === 'HT',
-    isStarted: isLive && !display.isHalfTime,
+    isScheduled: isScheduled,
+    isHT: isHT,
+    isStarted: isLive && !isHT,
     minute: minute,
     displayMinute: minute,
     updatedAt: updatedAt,
     isHidden: isHidden,
+    
+    // ★ ATTACH UI LABELS
+    statusLabel: statusLabel,
+    statusClass: statusClass,
+    timelineProgress: timelineProgress,
     
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
@@ -166,10 +201,29 @@ export function applySmartMinute(m, now = Date.now()) {
   
   if (frozenStatuses.includes(status) || m.isFinished) {
     let displayMin = m.minute;
-    if (status === 'FT' || status === 'AET' || status === 'PEN' || m.isFinished) displayMin = 90;
-    if (status === 'HT') displayMin = 45;
-    if (status === 'NS' || status === 'TBD' || status === 'PST') displayMin = 0;
-    return { ...m, displayMinute: displayMin, isLive: status === 'HT' || status === 'INT' || status === 'SUSP', isHT: status === 'HT', isStarted: !['NS', 'TBD', 'PST', 'CANC', 'ABD', 'POSTP'].includes(status) };
+    let progress = m.timelineProgress || 0;
+    
+    if (status === 'FT' || status === 'AET' || status === 'PEN' || m.isFinished) {
+      displayMin = 90;
+      progress = 100;
+    }
+    if (status === 'HT') {
+      displayMin = 45;
+      progress = 50;
+    }
+    if (status === 'NS' || status === 'TBD' || status === 'PST') {
+      displayMin = 0;
+      progress = 0;
+    }
+    
+    return { 
+      ...m, 
+      displayMinute: displayMin, 
+      isLive: status === 'HT' || status === 'INT' || status === 'SUSP', 
+      isHT: status === 'HT', 
+      isStarted: !['NS', 'TBD', 'PST', 'CANC', 'ABD', 'POSTP'].includes(status),
+      timelineProgress: progress,
+    };
   }
 
   const apiMinute = m.minute || 0;
@@ -190,7 +244,23 @@ export function applySmartMinute(m, now = Date.now()) {
   else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 95);
   else if (status === 'ET') smartMinute = Math.min(smartMinute, 125);
 
-  return { ...m, minute: smartMinute, displayMinute: smartMinute, status, isLive: true, isFinished: false, isHT: false, isStarted: true };
+  // Recalculate UI labels for smart minute
+  const newProgress = Math.min((smartMinute / 90) * 100, 100);
+  const newLabel = `${smartMinute}'`;
+
+  return { 
+    ...m, 
+    minute: smartMinute, 
+    displayMinute: smartMinute, 
+    status, 
+    isLive: true, 
+    isFinished: false, 
+    isHT: false, 
+    isStarted: true,
+    statusLabel: newLabel,
+    statusClass: 'status-live',
+    timelineProgress: newProgress,
+  };
 }
 
 export const extractTournamentStage = (raw) => null;
