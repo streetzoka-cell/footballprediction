@@ -108,6 +108,22 @@ export default function ZokaAI({ isOpen, onClose }) {
     }
   }, [isOpen]);
 
+  // ★ NEW: Listen for external triggers to open and pre-fill the chat
+  useEffect(() => {
+    const handleExternalOpen = (e) => {
+      const promptMessage = e.detail?.message;
+      if (promptMessage) {
+        // Use a timeout to ensure the modal is visually open before sending
+        setTimeout(() => {
+          handleSend(promptMessage); 
+        }, 300);
+      }
+    };
+    
+    window.addEventListener('openZokaAI', handleExternalOpen);
+    return () => window.removeEventListener('openZokaAI', handleExternalOpen);
+  }, []);
+
   const startNewChat = () => {
     setActiveChatId(null);
     setInput("");
@@ -174,15 +190,17 @@ export default function ZokaAI({ isOpen, onClose }) {
     }
   };
 
-  const handleSend = async () => {
-    if (!input.trim() || loading) return;
+  // ★ MODIFIED: Accept overrideText to handle external triggers cleanly
+  const handleSend = async (overrideText) => {
+    const textToSend = (overrideText || input).trim();
+    if (!textToSend || loading) return;
     
     if (!currentUser) {
       setError("Please log in to chat with Kim.");
       return;
     }
 
-    const currentInput = input.trim();
+    const currentInput = textToSend;
     setInput("");
     setError(null);
     setTypingMessageId(null);
@@ -329,7 +347,7 @@ export default function ZokaAI({ isOpen, onClose }) {
                 className="kim-input"
                 disabled={loading || !currentUser}
               />
-              <button onClick={handleSend} disabled={loading || !input.trim() || !currentUser} className={`kim-send-btn ${!input.trim() || loading || !currentUser ? 'disabled' : ''}`}>
+              <button onClick={() => handleSend()} disabled={loading || !input.trim() || !currentUser} className={`kim-send-btn ${!input.trim() || loading || !currentUser ? 'disabled' : ''}`}>
                 <Send size={18} />
               </button>
             </div>

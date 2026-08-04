@@ -39,6 +39,13 @@ function AppShell() {
 
   useEffect(() => { initApp(); initAnalytics(); }, []);
 
+  // ★ NEW: Listen for external requests to open Zoka AI
+  useEffect(() => {
+    const openHandler = () => setIsAiOpen(true);
+    window.addEventListener('openZokaAI', openHandler);
+    return () => window.removeEventListener('openZokaAI', openHandler);
+  }, []);
+
   useEffect(() => {
     const loader = document.getElementById("static-loader");
     if (loader) {
