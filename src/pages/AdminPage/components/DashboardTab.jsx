@@ -1,7 +1,5 @@
-﻿// footballprediction/src/pages/AdminPage/components/DashboardTab.jsx
-
-import React, { memo } from 'react';
-import { Activity, CheckCircle2, XCircle, TrendingUp, RotateCcw, CalendarDays, Crown, Timer, BarChart3, Sparkles, Loader2 } from 'lucide-react';
+﻿import React, { memo } from 'react';
+import { Activity, CheckCircle2, XCircle, TrendingUp, RotateCcw, CalendarDays, Crown, Timer, BarChart3, Sparkles, Loader2, Trophy } from 'lucide-react';
 import { dateLabel } from './common';
 
 const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuild, rebuilding }) {
@@ -20,7 +18,7 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
   return (
     <div className="flex-col gap-16">
       <div className="glass-card p-16 flex-col gap-12">
-        <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview â€” {dateLabel(date)}</h3>
+        <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
         <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
           <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-accent">{fxCount}</span><span className="text-muted text-xs">Fixtures</span></div>
           <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-danger">{liveCount}</span><span className="text-muted text-xs">Live</span></div>
@@ -30,16 +28,28 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
           <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-primary">{zAcc}%</span><span className="text-muted text-xs">Zoka Acc</span></div>
         </div>
       </div>
+      
       <div className="glass-card p-16 flex-col gap-12">
-        <h3 className="text-primary font-bold flex-center gap-8"><RotateCcw size={15} /> Rebuild Leaderboards</h3>
+        <h3 className="text-primary font-bold flex-center gap-8"><RotateCcw size={15} /> Rebuild Data & Leaderboards</h3>
         <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
-          {[['daily','Daily ('+dateLabel(date)+')',CalendarDays],['goat','GOAT',Crown],['weekly','Weekly',Timer],['monthly','Monthly',BarChart3]].map(([k,l,Ic]) => (
-            <button key={k} className="btn btn-secondary" onClick={() => onRebuild(k)} disabled={rebuilding === k}>
-              {rebuilding === k ? <Loader2 size={13} className="anim-spin" /> : <Ic size={13} />}{l}
-            </button>
-          ))}
+          {/* ★ NEW: Force Refresh Finished Matches Button */}
+          <button className="btn btn-secondary" onClick={() => onRebuild('fixtures')} disabled={rebuilding === 'fixtures'}>
+            {rebuilding === 'fixtures' ? <Loader2 size={13} className="anim-spin" /> : <Trophy size={13} />}Refresh Finished
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRebuild('daily')} disabled={rebuilding === 'daily'}>
+            {rebuilding === 'daily' ? <Loader2 size={13} className="anim-spin" /> : <CalendarDays size={13} />}Daily ({dateLabel(date)})
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRebuild('goat')} disabled={rebuilding === 'goat'}>
+            {rebuilding === 'goat' ? <Loader2 size={13} className="anim-spin" /> : <Crown size={13} />}GOAT
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRebuild('weekly')} disabled={rebuilding === 'weekly'}>
+            {rebuilding === 'weekly' ? <Loader2 size={13} className="anim-spin" /> : <Timer size={13} />}Weekly
+          </button>
+          <button className="btn btn-secondary" onClick={() => onRebuild('monthly')} disabled={rebuilding === 'monthly'}>
+            {rebuilding === 'monthly' ? <Loader2 size={13} className="anim-spin" /> : <BarChart3 size={13} />}Monthly
+          </button>
           <button className="btn btn-primary" onClick={() => onRebuild('all')} disabled={rebuilding === 'all'}>
-            {rebuilding === 'all' ? <Loader2 size={13} className="anim-spin" /> : <Sparkles size={13} />}Rebuild All
+            {rebuilding === 'all' ? <Loader2 size={13} className="anim-spin" /> : <Sparkles size={13} />}Rebuild All LBs
           </button>
         </div>
       </div>

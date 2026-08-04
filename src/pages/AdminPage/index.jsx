@@ -243,14 +243,19 @@ export default function AdminPage() {
   }, [preds, date, queryClient, showToast]);
 
   
-  const handleRebuild = useCallback(async (period) => {
+   const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
-      // Use the authenticated API method instead of raw fetch
-      await footballApi.adminLeaderboardRebuild(period, date);
-      
-      showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-      queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
+      if (period === 'fixtures') {
+        await footballApi.adminLeaderboardRebuild('fixtures', date);
+        showToast('Finished matches refreshed successfully!', 'ok');
+        queryClient.invalidateQueries(['fixtures', date]);
+        queryClient.invalidateQueries(['results', date]);
+      } else {
+        await footballApi.adminLeaderboardRebuild(period, date);
+        showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
+        queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
+      }
     } catch (e) { 
       console.error('[Admin] Rebuild err:', e); 
       showToast(e.friendlyMessage || 'Rebuild failed. Check permissions.', 'er');
@@ -258,6 +263,7 @@ export default function AdminPage() {
     setRebuilding(null);
   }, [date, showToast, queryClient]);
 
+  
   if (!mounted) return null;
 
   return (
