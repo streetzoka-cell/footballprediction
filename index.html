@@ -149,26 +149,5 @@
   </script>
 
   <script type="module" src="/src/main.jsx"></script>
-
-  <script>
-// Scroll-aware navbar
-let lastScroll = 0;
-const navbar = document.querySelector('.nav-top-bar');
-window.addEventListener('scroll', () => {
-  const curr = window.scrollY;
-  navbar.classList.toggle('nav-scrolled', curr > 50);
-  navbar.classList.toggle('nav-hidden', curr > lastScroll && curr > 150);
-  lastScroll = curr <= 0 ? 0 : curr;
-}, { passive: true });
-
-// Scroll reveal
-const io = new IntersectionObserver(es => es.forEach(e => {
-  if (e.isIntersecting) { e.target.classList.add('visible'); io.unobserve(e.target); }
-}), { threshold: .1, rootMargin: '0px 0px -50px 0px' });
-document.querySelectorAll('.reveal, .z-mc, .z-ecard, .zoka-card, .lb-row').forEach(el => {
-  el.classList.add('reveal'); io.observe(el);
-});
-</script>
-
 </body>
 </html>

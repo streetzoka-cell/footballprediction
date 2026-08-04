@@ -59,21 +59,30 @@ const parseKickoff = (m) => {
 const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
   const [display, setDisplay] = useState(0);
   const raf = useRef(null);
+  
+  // ★ FIX: Enforce strict Number type to prevent NaN.toLocaleString crash
+  const target = Number(value) || 0;
+
   useEffect(() => {
-    const target = value || 0;
-    if (target === 0) { setDisplay(0); return; }
+    if (target === 0) { 
+      setDisplay(0); 
+      return; 
+    }
     const start = performance.now() + delay;
     const run = (now) => {
       if (now < start) { raf.current = requestAnimationFrame(run); return; }
       const p = Math.min((now - start) / duration, 1);
-      setDisplay(Math.round((1 - Math.pow(1 - p, 4)) * target));
+      const currentVal = Math.round((1 - Math.pow(1 - p, 4)) * target);
+      setDisplay(currentVal);
       if (p < 1) raf.current = requestAnimationFrame(run);
     };
     raf.current = requestAnimationFrame(run);
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
-  }, [value, duration, delay]);
+  }, [target, duration, delay]); // ★ Use target in dependencies
+  
   return <span>{display.toLocaleString()}{suffix}</span>;
 });
+
 
 /* Ticking clock — makes the hero feel alive */
 const LiveClock = React.memo(() => {
