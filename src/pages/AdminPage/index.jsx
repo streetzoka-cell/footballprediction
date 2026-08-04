@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+﻿import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Star, Radio, Trophy, Megaphone, UserCog, Users, Activity,
@@ -32,6 +32,9 @@ import BroadcastTab from './components/BroadcastTab';
 import StaffTab from './components/StaffTab';
 import UsersTab from './components/UsersTab';
 import SystemHealthTab from './components/SystemHealthTab';
+
+import { footballApi } from '../../services/footballApi';
+
 
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
@@ -211,27 +214,21 @@ export default function AdminPage() {
     }
   }, [preds, date, queryClient, showToast]);
 
-  const handleRebuild = useCallback(async (period) => {
-    setRebuilding(period);
-    try {
-      const endpoint = period === 'all' ? 'all' : period;
-      const res = await fetch(`https://api.zokascore.xyz/api/v1/admin/leaderboards/rebuild/${endpoint}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dateStr: date })
-      });
-      if (res.ok) {
-        showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-        queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
-      } else {
-        throw new Error('Backend rebuild failed');
-      }
-    } catch (e) { 
-      console.error('[Admin] Rebuild err:', e); 
-      showToast('Rebuild failed', 'er');
-    }
-    setRebuilding(null);
-  }, [date, showToast, queryClient]);
+ const handleRebuild = useCallback(async (period) => {
+  setRebuilding(period);
+  try {
+    // Use the authenticated API method instead of raw fetch
+    await footballApi.adminLeaderboardRebuild(period, date);
+    
+    showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
+    queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
+  } catch (e) { 
+    console.error('[Admin] Rebuild err:', e); 
+    showToast(e.friendlyMessage || 'Rebuild failed. Check permissions.', 'er');
+  }
+  setRebuilding(null);
+}, [date, showToast, queryClient]);
+
 
   return (
     <div className="zoka-page">

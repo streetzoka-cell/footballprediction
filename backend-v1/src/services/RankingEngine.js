@@ -19,26 +19,17 @@ function calculatePoints(predH, predA, actualH, actualA) {
   const aa = Number(actualA);
 
   if (ph === ah && pa === aa) {
-    return {
-      points: 10,
-      resultType: 'exact',
-    };
+    return { points: 10, resultType: 'exact' };
   }
 
   const predResult = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
   const actualResult = ah > aa ? 'H' : ah < aa ? 'A' : 'D';
 
   if (predResult === actualResult) {
-    return {
-      points: 3,
-      resultType: 'result',
-    };
+    return { points: 3, resultType: 'result' };
   }
 
-  return {
-    points: 0,
-    resultType: 'miss',
-  };
+  return { points: 0, resultType: 'miss' };
 }
 
 function normalizeScore(value, field) {

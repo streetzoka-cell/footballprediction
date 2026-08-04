@@ -10,7 +10,6 @@ const {
   readJSONSafe,
   ensureDir,
 } = require('../utils/atomicWriter');
-
 const DATA_DIR = path.join(process.cwd(), 'data', 'featured');
 const PUBLIC_DIR = path.join(process.cwd(), 'public_data', 'featured');
 

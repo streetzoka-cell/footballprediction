@@ -32,9 +32,9 @@ const getPredictions = (p) => p?.predictions || p?.predictionsCount || 0;
 const getExact = (p) => p?.correctScore || p?.exactCount || 0;
 const getResult = (p) => p?.correctResult || p?.resultCount || 0;
 const getPoints = (p) => p?.points || p?.totalPoints || 0;
-const calculateAccuracy = (exact, result, total) => {
-  if (!total || total < 1) return 0;
-  return Math.min(100, Math.round(((exact + result) / total) * 100));
+const calculateAccuracy = (exact, result, totalResolved) => {
+  if (!totalResolved || totalResolved < 1) return 0;
+  return Math.min(100, Math.round(((exact + result) / totalResolved) * 100));
 };
 
 const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 0, icon }) => {
@@ -136,7 +136,6 @@ export default function Profile() {
   const navigate = useNavigate();
   const isDemo = !authLoading && !currentUser;
 
-  // ★ FIX: Robust admin detection
   const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
@@ -146,33 +145,44 @@ export default function Profile() {
 
   const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
 
-  if (authLoading) return <ProfileSkeleton />;
-
-  const baseProfile = userProfile || {
+  // ★ FIX: Wrap baseProfile in useMemo to stabilize the reference
+  const baseProfile = useMemo(() => userProfile || {
     displayName: 'Guest', email: 'Sign in to get started',
     points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
-  };
+  }, [userProfile]);
 
-  const dbPoints = userPoints || {};
-  const profile = {
-    ...baseProfile,
-    ...dbPoints,
-    points: (dbPoints.totalPoints || 0) + liveStats.pts,
-    predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
-    correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
-    correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
-    streak: liveStats.streak, 
-    beatZoka: false, 
-    bestRank: dbPoints.bestRank || 0,
-  };
+  // ★ FIX: Wrap dbPoints in useMemo
+  const dbPoints = useMemo(() => userPoints || {}, [userPoints]);
+
+  // ★ FIX: Wrap profile in useMemo so it doesn't break dependencies further down
+  const profile = useMemo(() => {
+    return {
+      ...baseProfile,
+      ...dbPoints,
+      points: (dbPoints.totalPoints || 0) + liveStats.pts,
+      predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
+      correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
+      correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
+      missCount: (dbPoints.missCount || 0), 
+      streak: liveStats.streak, 
+      beatZoka: false, 
+      bestRank: dbPoints.bestRank || 0,
+    };
+  }, [baseProfile, dbPoints, liveStats]);
+
+  if (authLoading) return <ProfileSkeleton />;
 
   const exact = getExact(profile);
   const result = getResult(profile);
+  const miss = profile.missCount || 0;
+  const totalResolved = exact + result + miss; 
+  
   const total = getPredictions(profile);
   const points = getPoints(profile);
-  const accuracyNum = calculateAccuracy(exact, result, total);
+  const accuracyNum = calculateAccuracy(exact, result, totalResolved);
   
   const initials = useMemo(() => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
+  
   const memberSince = useMemo(
     () => currentUser?.metadata?.creationTime
       ? new Date(currentUser.metadata.creationTime).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -180,6 +190,7 @@ export default function Profile() {
     [currentUser]
   );
 
+  // These now safely use the memoized `profile` object without ESLint errors
   const earnedBadges = useMemo(() => ACHIEVEMENTS.filter(b => b.check(profile)), [profile]);
   const lockedBadges = useMemo(() => ACHIEVEMENTS.filter(b => !b.check(profile)), [profile]);
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+﻿import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
@@ -45,21 +45,21 @@ function timeAgo(ts) {
 }
 
 const LINKS = [
-  { to: '/', label: 'Home', altLabel: 'ZOKA', icon: Home },
-  { to: '/fixtures', label: 'Fixtures', altLabel: 'Live Scores', icon: Activity },
-  { to: '/predictions', label: 'Predictions', altLabel: 'Win Big', icon: Target, badge: 'NEW' },
-  { to: '/leaderboard', label: 'Ranks', altLabel: 'Top 10', icon: Trophy },
-  { to: '/highlights', label: 'News', altLabel: 'Highlights', icon: Newspaper },
-  { to: '/livestream', label: 'Stream', altLabel: 'Live TV', icon: Tv, isLive: true },
-  { to: '/basketball', label: 'Hoops', altLabel: 'NBA', icon: Gamepad2 },
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/fixtures', label: 'Fixtures', icon: Activity },
+  { to: '/predictions', label: 'Predictions', icon: Target, badge: 'NEW' },
+  { to: '/leaderboard', label: 'Ranks', icon: Trophy },
+  { to: '/highlights', label: 'News', icon: Newspaper },
+  { to: '/livestream', label: 'Stream', icon: Tv, isLive: true },
+  { to: '/basketball', label: 'Hoops', icon: Gamepad2 },
 ];
 
 const MOBILE_NAV = [
-  { to: '/', label: 'Home', altLabel: 'ZOKA', icon: Home },
-  { to: '/fixtures', label: 'Live', altLabel: 'Scores', icon: Activity },
-  { to: '/predictions', label: 'Predict', altLabel: 'Win', icon: Target },
-  { to: '/leaderboard', label: 'Compete', altLabel: 'Ranks', icon: Trophy },
-  { to: '/profile', label: 'Profile', altLabel: 'Me', icon: User },
+  { to: '/', label: 'Home', icon: Home },
+  { to: '/fixtures', label: 'Live', icon: Activity },
+  { to: '/predictions', label: 'Predict', icon: Target },
+  { to: '/leaderboard', label: 'Compete', icon: Trophy },
+  { to: '/profile', label: 'Profile', icon: User },
 ];
 
 const SYSTEM_LINKS = [
@@ -208,14 +208,8 @@ export default function Navbar() {
   const [cmdOpen, setCmdOpen] = useState(false);
   const [systemOpen, setSystemOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [altText, setAltText] = useState(false);
 
   const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
-
-  useEffect(() => {
-    const id = setInterval(() => setAltText((p) => !p), 3000);
-    return () => clearInterval(id);
-  }, []);
 
   const { data: adminNotifs = [] } = useQuery({
     queryKey: ['notifications', uid],
@@ -356,7 +350,7 @@ export default function Navbar() {
           </button>
         </div>
 
-        <div className="p-12 flex-col gap-4" key={mobileOpen ? 'open' : 'closed'}>
+        <div className="p-12 flex-col gap-4">
           {LINKS.map((link, i) => (
             <Link
               key={link.to}
@@ -367,8 +361,8 @@ export default function Navbar() {
             >
               <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
                 <link.icon size={16} />
-                <span key={altText ? 'alt' : 'main'} className="link-text-anim">
-                  {altText && link.altLabel ? link.altLabel : link.label}
+                <span className="link-text-anim">
+                  {link.label}
                 </span>
                 {link.isLive && <span className="zk-live-pulse-dot" />}
               </span>
@@ -462,8 +456,6 @@ export default function Navbar() {
         </div>
       </aside>
 
-      {/* Live Ticker - Upgraded */}
-
       {/* Global Top Bar */}
       <header className={`nav-top-bar anim-fade-in ${scrolled ? 'scrolled' : ''}`}>
         <div className="nav-top-grid">
@@ -484,8 +476,8 @@ export default function Navbar() {
               return (
                 <Link key={link.to} to={link.to} className={`nav-link ${active ? 'active' : ''}`}>
                   <link.icon size={14} style={{ marginRight: '6px' }} />
-                  <span key={altText ? 'alt' : 'main'} className="link-text-anim">
-                    {altText ? link.altLabel : link.label}
+                  <span className="link-text-anim">
+                    {link.label}
                   </span>
                   {link.isLive && <span className="zk-live-pulse-dot" style={{ marginLeft: 'var(--sp-4)' }} />}
                   {link.badge && <span className="badge badge-primary" style={{ marginLeft: 'var(--sp-4)' }}>{link.badge}</span>}
@@ -597,8 +589,8 @@ export default function Navbar() {
                 <span className="nav-icon-wrap">
                   <link.icon size={20} />
                 </span>
-                <span key={altText ? 'alt' : 'main'} className="link-text-anim">
-                  {altText && link.altLabel ? link.altLabel : link.label}
+                <span className="link-text-anim">
+                  {link.label}
                 </span>
               </Link>
             );
