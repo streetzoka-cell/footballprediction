@@ -4,7 +4,7 @@ const router = express.Router();
 const adminAuth = require('../../../middleware/adminAuth');
 const LeaderboardEngine = require('../../../services/LeaderboardEngine');
 const RankingEngine = require('../../../services/RankingEngine');
-const finishedFixturesJob = require('../../../scheduler/jobs/finishedFixturesJob'); // ★ FIX: Correct path (../../../)
+const finishedFixturesJob = require('../../../scheduler/jobs/finishedFixturesJob'); // ★ Correct path
 
 router.use(adminAuth);
 

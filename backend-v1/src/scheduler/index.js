@@ -6,7 +6,7 @@ const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
 const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
 const leaderboardJob = require('./jobs/leaderboardJob');
-const statsJob = require('./jobs/statsJob'); // ★ NEW IMPORT
+const statsJob = require('./jobs/statsJob'); 
 
 const { processQueue } = require('../services/QueueService');
 const internetMonitor = require('../services/InternetMonitor');
@@ -15,7 +15,7 @@ const logger = require('../utils/logger');
 const CRON = {
   TODAY_FIXTURES: '5 0 * * *',
   TOMORROW_FIXTURES: '10 0 * * *',
-  FINISHED_FIXTURES: '*/5 * * * *', // ★ FIX: Run every 5 minutes to correct scores fast!
+  FINISHED_FIXTURES: '0 */5 * * *', // ★ FIX: Run every 5 hours to save API calls
   STANDINGS: '0 */6 * * *',
 };
 
@@ -33,8 +33,6 @@ function startScheduler() {
   schedulerEngine.schedule('Standings', CRON.STANDINGS, standingsJob.execute);
   
   schedulerEngine.schedule('LeaderboardJob', leaderboardJob.schedule, leaderboardJob.execute);
-  
-  // ★ NEW: Register Stats Job
   schedulerEngine.schedule('StatsJob', statsJob.schedule, statsJob.execute);
 
   schedulerEngine.startLivePolling(async () => {
@@ -45,21 +43,18 @@ function startScheduler() {
     return liveJob.execute();
   });
 
-  // Generic queue processor
   setInterval(() => {
     if (internetMonitor.isOnline) {
       processQueue().catch((e) => logger.error('[Scheduler] Queue processing failed', e));
     }
   }, 5 * 60 * 1000);
 
-  // User prediction batch sync checker
   setInterval(() => {
     if (internetMonitor.isOnline) {
       userPredictionSyncJob.execute(false).catch((e) => logger.error('[Scheduler] User prediction sync check failed', e));
     }
   }, USER_PREDICTION_SYNC_CHECK_MS);
 
-  // Startup sync
   setTimeout(async () => {
     logger.info('[Scheduler] Firing initial startup sync...');
     try {
@@ -69,7 +64,7 @@ function startScheduler() {
       await standingsJob.execute();
       await liveJob.execute();
       await leaderboardJob.execute(); 
-      await statsJob.execute(); // ★ NEW: Run on startup
+      await statsJob.execute(); 
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {
@@ -77,7 +72,6 @@ function startScheduler() {
     }
   }, 5000);
 
-  // Catch-up when internet returns
   internetMonitor.on('restored', async () => {
     logger.info('[Scheduler] Catch-up sync triggered...');
     try {
@@ -85,7 +79,7 @@ function startScheduler() {
       await finishedFixturesJob.execute(true);
       await liveJob.execute();
       await leaderboardJob.execute(); 
-      await statsJob.execute(); // ★ NEW: Run on reconnect
+      await statsJob.execute(); 
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {
