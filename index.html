@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   
-  <!-- ★ ULTIMATE CSP: Whitelists all Firebase & Google Analytics endpoints -->
+    <!-- ★ ULTIMATE CSP: Whitelists all Firebase, Google Analytics, and Reactor Studio blobs -->
   <meta http-equiv="Content-Security-Policy" content="
   default-src 'self';
 
@@ -34,6 +34,14 @@
     https:
     blob:;
 
+  media-src 'self'
+    blob:
+    data:
+    https:;
+
+  worker-src 'self'
+    blob:;
+
   style-src 'self'
     'unsafe-inline'
     https://fonts.googleapis.com;
@@ -46,6 +54,7 @@
     https://*.firebaseio.com
     https://auth.zokascore.xyz;
 ">
+
   <meta name="color-scheme" content="dark light" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
   <meta name="theme-color" content="#05070a" />
