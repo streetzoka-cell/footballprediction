@@ -3233,9 +3233,8 @@ into the global design system. Identical duplicates
 /* 4) Failsafe: columns can shrink but never stack on top of each other */
 .nav-top-left, .nav-top-right { min-width: 0; }
 .nav-top-bar { overflow-x: clip; }
-
 /* ============================================================
-   ALIVE HOME REBUILD — paste at BOTTOM of your CSS
+   ALIVE HOME REBUILD 
 ============================================================ */
 
 /* --- Animated aurora backdrop inside the hero --- */
