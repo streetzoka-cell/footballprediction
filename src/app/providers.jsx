@@ -1,6 +1,6 @@
 ﻿import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { persistQueryClient } from '@tanstack/react-query-persist-client';
-import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persistor';
+import { createSyncStoragePersister } from '@tanstack/query-sync-storage-persister'; // ★ FIX: 'persister' with an E
 import { AuthProvider } from "../context/AuthContext";
 import { ERROR_TYPES } from '../utils/errorHandler';
 
