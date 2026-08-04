@@ -4,7 +4,7 @@ const router = express.Router();
 const adminAuth = require('../../../middleware/adminAuth');
 const LeaderboardEngine = require('../../../services/LeaderboardEngine');
 const RankingEngine = require('../../../services/RankingEngine');
-const FixtureService = require('../../../services/FixtureService'); // ★ NEW IMPORT
+const finishedFixturesJob = require('../../../scheduler/jobs/finishedFixturesJob'); // ★ FIX: Correct path (../../../)
 
 router.use(adminAuth);
 
@@ -26,11 +26,16 @@ router.post('/rebuild/:period', async (req, res, next) => {
     const period = String(req.params.period || '').trim();
     const dateStr = String(req.body?.dateStr || '').trim();
 
-    // ★ NEW: Handle Force Refresh Finished Matches
+    // ★ NEW: Handle Fixtures Rebuild in the background to avoid Cloudflare timeout
     if (period === 'fixtures') {
-      const date = dateStr || todayStr();
-      const count = await FixtureService.forceRefreshFinishedMatches(date);
-      return res.json({ success: true, result: { count } });
+      // Respond immediately so Cloudflare doesn't cancel the request
+      res.json({ success: true, message: 'Refresh triggered in background.' });
+      
+      // Run the job in the background
+      finishedFixturesJob.execute(true).catch(err => {
+        console.error('[Admin Background] Finished fixtures refresh failed:', err.message);
+      });
+      return;
     }
 
     if (period === 'daily') {
