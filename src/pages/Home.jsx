@@ -380,7 +380,9 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
 });
 
 export default function Home() {
+  // ★ FIXED: Moved useGlobalStats INSIDE the component to prevent React Hooks crash
   const { activePlayersToday, predictionsToday, totalPlayers, totalPredictions } = useGlobalStats();
+  
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const isLoggedIn = !!currentUser;
@@ -473,6 +475,7 @@ export default function Home() {
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
 
+  // ★ ACCURATE DATA DERIVATION
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   const zokaFlat = zokaPicksData?.matches || [];
@@ -537,63 +540,57 @@ export default function Home() {
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
-        {/* COMPACT, ALIVE HERO HEADER */}
-        <section className="z-hero-pro compact-hero" style={{ background: heroGradient }}>
-          <div className="z-hero-top-row">
-            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
-            <StreakBadge streak={userStreak} />
+        <section className="z-hero-pro" style={{ background: heroGradient }}>
+          <div className="z-hero-content">
+            <div className="z-hero-top-row">
+              <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+              <StreakBadge streak={userStreak} />
+            </div>
+            <div className="z-hero-pills">
+              <span className="z-pill">Predict</span>
+              <span className="z-pill">Compete</span>
+              <span className="z-pill">Win</span>
+            </div>
+            <p className="z-sub">
+              {greeting.emoji} {greeting.text}, {displayName || 'Manager'}. Live scores, AI predictions & leaderboards.
+            </p>
           </div>
-          <p className="z-sub" style={{ margin: '8px 0 16px' }}>
-            {greeting.emoji} {greeting.text}, {displayName || 'Manager'}. {liveMatches.length > 0 ? `${liveMatches.length} matches live now.` : 'Check today\'s fixtures below.'}
-          </p>
            
           {/* Unified Rich Stats Grid */}
           <div className="stats-grid">
             <div className="stat-card">
               <span className="stat-value">{activePlayersToday}</span>
-              <span className="stat-label">Playing Today</span>
+              <span className="stat-label">Predicting Today</span>
             </div>
             <div className="stat-card">
               <span className="stat-value">{totalPredictions}</span>
-              <span className="stat-label">Total Preds</span>
+              <span className="stat-label">Total Predictions</span>
             </div>
-            <div className={`stat-card ${liveStats.liveCount > 0 ? 'live-glow' : ''}`}>
-              <span className="stat-value" style={{ color: liveStats.liveCount > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
-                {liveStats.liveCount}
-              </span>
-              <span className="stat-label">Live Now</span>
+            <div className="stat-card">
+              <span className="stat-value">{totalPlayers}</span>
+              <span className="stat-label">Total Players</span>
+            </div>
+          </div>
+
+          {/* Scale Stats (Live Matches, Predictions Today, Leagues Active) */}
+          <div className="z-scale-stats">
+            <div className="z-scale-item">
+              <span className="val"><AnimNum value={liveStats.liveCount} delay={100} /></span>
+              <span className="lbl">Live Matches</span>
+            </div>
+            <div className="z-scale-divider"></div>
+            <div className="z-scale-item">
+              <span className="val"><AnimNum value={totalPredictionsMade} delay={200} /></span>
+              <span className="lbl">Predictions Today</span>
+            </div>
+            <div className="z-scale-divider"></div>
+            <div className="z-scale-item">
+              <span className="val"><AnimNum value={uniqueLeaguesCount} delay={300} /></span>
+              <span className="lbl">Leagues Active</span>
             </div>
           </div>
         </section>
 
-        {/* PRIORITIZED LIVE & TODAY'S MATCHES STRIP */}
-        <div className="z-top-strip-wrapper">
-          <div className="z-strip-header">
-            {liveMatches.length > 0 ? (
-              <span className="flex-center gap-4">
-                <span className="z-ldot" />
-                <span className="z-strip-title" style={{ color: 'var(--danger)' }}>{liveMatches.length} LIVE</span>
-              </span>
-            ) : (
-              <span className="z-strip-title" style={{ color: 'var(--text-muted)' }}>TODAY&apos;S MATCHES</span>
-            )}
-            <div className="z-sech-line" />
-            <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={12} /></Link>
-          </div>
-          <div className="z-livestrip">
-            {ctxLoading && stripMatches.length === 0 ? (
-              <React.Fragment><LiveStripLoader /><LiveStripLoader /><LiveStripLoader /></React.Fragment>
-            ) : stripMatches.length > 0 ? (
-              stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)
-            ) : (
-              <div className="z-live-loader" style={{ width: '100%', maxWidth: 'none', height: '80px' }}>
-                <div className="z-loader-text" style={{ color: 'var(--text-muted)' }}>No matches scheduled today</div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* HERO MATCH DETAILS (If exists) */}
         {heroMatch && (
           <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
             <div className="z-hero-top">
@@ -672,6 +669,50 @@ export default function Home() {
             onPredict={() => navigate(`/predictions?match=${upcomingMatches[0].id}`)} 
           />
         )}
+
+        {/* Live Stats Widget (Goals & Live Count) */}
+        <div className="z-stats-widget">
+          <div className="z-sw-item">
+            <LiveIcon size={14} style={{ color: 'var(--danger)' }} />
+            <div className="z-sw-data">
+              <span className="val">{liveStats.liveCount}</span>
+              <span className="lbl">Live Now</span>
+            </div>
+          </div>
+          <div className="z-sw-item">
+            <Trophy size={14} style={{ color: 'var(--gold)' }} />
+            <div className="z-sw-data">
+              <span className="val">{liveStats.goals}</span>
+              <span className="lbl">Goals Today</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-16">
+          <div className="z-strip-header">
+            {liveMatches.length > 0 ? (
+              <span className="flex-center gap-4">
+                <span className="z-ldot" />
+                <span className="z-strip-title" style={{ color: 'var(--danger)' }}>{liveMatches.length} LIVE</span>
+              </span>
+            ) : (
+              <span className="z-strip-title" style={{ color: 'var(--text-muted)' }}>TODAY&apos;S MATCHES</span>
+            )}
+            <div className="z-sech-line" />
+            <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={12} /></Link>
+          </div>
+          <div className="z-livestrip">
+            {ctxLoading && stripMatches.length === 0 ? (
+              <React.Fragment><LiveStripLoader /><LiveStripLoader /><LiveStripLoader /></React.Fragment>
+            ) : stripMatches.length > 0 ? (
+              stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)
+            ) : (
+              <div className="z-live-loader" style={{ width: '100%', maxWidth: 'none', height: '80px' }}>
+                <div className="z-loader-text" style={{ color: 'var(--text-muted)' }}>No matches scheduled today</div>
+              </div>
+            )}
+          </div>
+        </div>
 
         {newsPosts.length > 0 && (
           <div className="z-news-marquee-wrap">
