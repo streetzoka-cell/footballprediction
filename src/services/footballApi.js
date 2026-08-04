@@ -133,6 +133,12 @@ export const footballApi = {
       fetchJSON(`${STATIC_BASE}/results/${dateStr}.json`)
     ),
 
+  // ★ NEW: Fetch global stats from backend static file
+  getGlobalStats: () =>
+    monitorApiCall('GET /data/stats/global.json', () =>
+      fetchJSON(`${STATIC_BASE}/stats/global.json`)
+    ),
+
   getStandings: (leagueId) =>
     monitorApiCall(`GET /standings?league=${leagueId}`, () =>
       fetchJSON(`${API_BASE}/standings?league=${leagueId}`)
@@ -282,7 +288,7 @@ export const footballApi = {
       })
     ),
 
-      // ───────────────────────────────
+  // ───────────────────────────────
   // User Prediction endpoints
   // ───────────────────────────────
 
@@ -299,7 +305,7 @@ export const footballApi = {
       })
     ),
 
-      // ───────────────────────────────
+  // ───────────────────────────────
   // Leaderboard endpoints
   // ───────────────────────────────
 
@@ -320,5 +326,4 @@ export const footballApi = {
         body: JSON.stringify(payload),
       })
     ),
-
 };
