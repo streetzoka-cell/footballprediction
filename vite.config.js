@@ -23,6 +23,7 @@ export default defineConfig({
         background_color: '#0a0d14',
         display: 'standalone',
         start_url: '/',
+        id: '/?source=pwa',
         icons: [
           {
             src: '/icons/icon-192.png',
@@ -33,14 +34,15 @@ export default defineConfig({
             src: '/icons/icon-512.png',
             sizes: '512x512',
             type: 'image/png',
-            purpose: 'any maskable' // ★ NEW: Required for Android install prompts
+            purpose: 'any maskable'
           }
         ]
       },
 
       workbox: {
-        skipWaiting: true, // Force SW to activate immediately
-        clientsClaim: true, // Take control of all open tabs instantly
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true, // ★ FIX 1: Force clean old caches on new deploy
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
 
         navigateFallbackDenylist: [
@@ -53,6 +55,15 @@ export default defineConfig({
         ],
 
         runtimeCaching: [
+          {
+            // ★ FIX 2: Always fetch HTML from network first to prevent stale UI
+            urlPattern: ({ url }) => url.origin === self.location.origin && (url.pathname === '/' || url.pathname.endsWith('.html')),
+            handler: 'NetworkFirst',
+            options: {
+              cacheName: 'html-cache',
+              networkTimeoutSeconds: 3,
+            }
+          },
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: 'CacheFirst',
@@ -97,9 +108,9 @@ export default defineConfig({
             }
           }
         ]
-      } // ★ FIXED: Closed workbox object
-    }) // ★ FIXED: Closed VitePWA function
-  ], // ★ FIXED: Closed plugins array
+      }
+    })
+  ],
 
   server: {
     port: 5173,
