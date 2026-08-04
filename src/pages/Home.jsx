@@ -2,7 +2,7 @@
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle2,
-  Lock, Crown, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar,
+  Lock, Crown, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar, Timer,
   ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon, Sparkles, Gamepad2
 } from 'lucide-react';
 
@@ -38,11 +38,22 @@ const Sunset = (props) => (
 
 const getGreeting = () => {
   const h = new Date().getHours();
-  if (h < 5) return { text: 'Burning the midnight oil', icon: <Moon size={16} />, emoji: '🦉' };
-  if (h < 12) return { text: 'Good morning', icon: <Sun size={16} />, emoji: '☀️' };
-  if (h < 17) return { text: 'Good afternoon', icon: <CloudSun size={16} />, emoji: '🌤️' };
-  if (h < 21) return { text: 'Good evening', icon: <Sunset size={16} />, emoji: '🌆' };
-  return { text: 'Good night', icon: <Moon size={16} />, emoji: '🦉' };
+  if (h < 5) return { text: 'Burning the midnight oil', emoji: '🦉' };
+  if (h < 12) return { text: 'Good morning', emoji: '☀️' };
+  if (h < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+  if (h < 21) return { text: 'Good evening', emoji: '🌆' };
+  return { text: 'Good night', emoji: '🦉' };
+};
+
+const parseKickoff = (m) => {
+  if (!m.date) return null;
+  const d = new Date(m.date);
+  if (isNaN(d.getTime())) return null;
+  if (m.kickoff && /^\d{1,2}:\d{2}/.test(m.kickoff) && d.getHours() === 0 && d.getMinutes() === 0) {
+    const [h, mi] = m.kickoff.split(':').map(Number);
+    d.setHours(h, mi, 0, 0);
+  }
+  return d.getTime();
 };
 
 const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
@@ -64,17 +75,66 @@ const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) =
   return <span>{display.toLocaleString()}{suffix}</span>;
 });
 
-const AccuracyRing = React.memo(({ value, size = 44, stroke = 4, color = 'var(--primary)' }) => {
-  const r = (size - stroke) / 2;
-  const circ = 2 * Math.PI * r;
-  const pct = Math.min(100, Math.max(0, value)) / 100;
+/* Ticking clock — makes the hero feel alive */
+const LiveClock = React.memo(() => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="z-clock">{now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>;
+});
+
+/* Scrolling live ticker — the heartbeat of the top section */
+const HeroTicker = React.memo(({ matches }) => {
+  if (!matches || matches.length === 0) return null;
+  const loop = matches.concat(matches);
   return (
-    <svg width={size} height={size} style={{ transform: 'rotate(-90deg)', flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-elevated)" strokeWidth={stroke} />
-      <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
-        strokeDasharray={circ} strokeDashoffset={circ * (1 - pct)}
-        strokeLinecap="round" style={{ transition: 'stroke-dashoffset 1s cubic-bezier(.22,1,.36,1)' }} />
-    </svg>
+    <div className="z-ticker-wrap">
+      <div className="z-ticker-track">
+        {loop.map((m, i) => (
+          <Link key={(m.id || i) + '-' + i} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="z-tk">
+            {m.isLive ? (
+              <><span className="z-ldot" /><span className="live">{m.displayMinute != null ? m.displayMinute + "'" : 'LIVE'}</span></>
+            ) : (
+              <span className="ko">{m.kickoff || 'VS'}</span>
+            )}
+            <b>{m.homeName}</b>
+            <span className="sc">{m.homeScore != null ? m.homeScore + '-' + m.awayScore : 'v'}</span>
+            <b>{m.awayName}</b>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+/* Real-time kickoff countdown */
+const KickoffCountdown = React.memo(({ match }) => {
+  const target = useMemo(() => (match ? parseKickoff(match) : null), [match]);
+  const [left, setLeft] = useState(null);
+  useEffect(() => {
+    if (!target) return;
+    const tick = () => setLeft(Math.max(0, target - Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  if (!target || left == null || left <= 0) return null;
+  const s = Math.floor(left / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return (
+    <Link to={buildMatchRoute(match.id, match.homeName, match.awayName)} className="z-countdown">
+      <span className="z-cd-left">
+        <Timer size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+        <span className="z-cd-teams">Next kickoff: {match.homeName} <em>vs</em> {match.awayName}</span>
+      </span>
+      <span className="z-cd-timer">
+        <span className="z-cd-seg">{hh}</span>:<span className="z-cd-seg">{mm}</span>:<span className="z-cd-seg">{ss}</span>
+      </span>
+    </Link>
   );
 });
 
@@ -135,8 +195,8 @@ const MiniPodium = React.memo(({ entries }) => {
   const order = [1, 0, 2];
   const cfg = [
     { h: 90, border: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.08)', color: 'var(--gold)', sz: 52, fs: '.95rem', glitter: true },
-    { h: 64, border: 'var(--text-muted)', bg: 'rgba(var(--text-muted-rgb),.06)', color: 'var(--text-muted)', sz: 42, fs: '.8rem', glitter: false },
-    { h: 52, border: 'var(--bronze)', bg: 'rgba(var(--bronze-rgb),.06)', color: 'var(--bronze)', sz: 36, fs: '.72rem', glitter: false },
+    { h: 64, border: 'var(--text-muted)', bg: 'rgba(var(--text-muted),.06)', color: 'var(--text-muted)', sz: 42, fs: '.8rem', glitter: false },
+    { h: 52, border: 'var(--bronze)', bg: 'rgba(var(--bronze),.06)', color: 'var(--bronze)', sz: 36, fs: '.72rem', glitter: false },
   ];
   return (
     <div className="z-podium">
@@ -172,19 +232,18 @@ const LiveStripLoader = React.memo(() => (
 ));
 
 const LiveMini = React.memo(({ match, index }) => {
-  const min = match.displayMinute; 
+  const min = match.displayMinute;
   const isLive = match.isLive;
   const hasScore = match.homeScore != null && match.awayScore != null;
   const matchLink = buildMatchRoute(match.id, match.homeName, match.awayName);
-  
   return (
-    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 60 + 'ms', borderColor: isLive ? 'rgba(var(--danger-rgb),.3)' : 'var(--border)', textDecoration: 'none', color: 'inherit', display: 'block' }} title={`${match.homeName} vs ${match.awayName}`}>
+    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 60 + 'ms', borderColor: isLive ? 'rgba(var(--danger-rgb),.3)' : 'var(--border)' }} title={`${match.homeName} vs ${match.awayName}`}>
       <div className="z-lm-top">
         <span className="z-lm-league">{match.leagueName}</span>
         {isLive && min != null ? (
           <div className="z-lm-status live">
             <span className="z-ldot" />
-            <span style={{ fontSize: '.65rem', fontWeight: 800, color: 'var(--danger)', fontFamily: 'var(--font-display,system-ui)' }}>{min}&apos;</span>
+            <span style={{ fontSize: '.65rem', fontWeight: 800, color: 'var(--danger)' }}>{min}&apos;</span>
           </div>
         ) : (
           <div style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{match.kickoff || 'VS'}</div>
@@ -230,37 +289,20 @@ const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
 
   let actionContent = null;
   if (isPredicted) {
-    actionContent = (
-      <Link to="/predictions" className="btn btn-outline btn-sm locked-pred">
-        <CheckCircle2 size={12} /> Locked
-      </Link>
-    );
+    actionContent = <Link to="/predictions" className="btn btn-outline btn-sm"><CheckCircle2 size={12} /> Locked</Link>;
   } else if (isLoggedIn) {
-    actionContent = (
-      <Link to={'/predictions?match=' + mid} className="btn btn-primary btn-sm predict-btn">
-        <Target size={12} /> Predict
-      </Link>
-    );
+    actionContent = <Link to={'/predictions?match=' + mid} className="btn btn-primary btn-sm"><Target size={12} /> Predict</Link>;
   } else {
-    actionContent = (
-      <Link to="/login" className="btn btn-ghost btn-sm">
-        <Lock size={12} /> Login
-      </Link>
-    );
+    actionContent = <Link to="/login" className="btn btn-ghost btn-sm"><Lock size={12} /> Login</Link>;
   }
 
-  let scoreContent = null;
-  if (hasScore) {
-    scoreContent = (
-      <span className="flex-center gap-8">
-        <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.homeScore}</span>
-        <span className="z-sep">-</span>
-        <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.awayScore}</span>
-      </span>
-    );
-  } else {
-    scoreContent = <span className="z-vs">VS</span>;
-  }
+  const scoreContent = hasScore ? (
+    <span className="flex-center gap-8">
+      <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.homeScore}</span>
+      <span className="z-sep">-</span>
+      <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.awayScore}</span>
+    </span>
+  ) : <span className="z-vs">VS</span>;
 
   let sbCls = 'z-sb';
   if (isLive) sbCls += ' lv';
@@ -274,7 +316,7 @@ const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
     <div className={cls} style={{ borderLeft: '3px solid ' + border }}>
       <div className="z-mh">
         <div className="z-ml">
-          {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildLeagueRoute(pred.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <div className="flex-center gap-4">
@@ -284,12 +326,12 @@ const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
       </div>
       <div className="z-tm">
         <div className="z-te">
-          {pred.homeLogo && <img src={pred.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pred.homeLogo && <img src={pred.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildTeamRoute(pred.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
-          {pred.awayLogo && <img src={pred.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pred.awayLogo && <img src={pred.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildTeamRoute(pred.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
@@ -301,7 +343,7 @@ const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
 const ZokaRow = React.memo(({ pick }) => {
   const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
   const koRaw = pick.kickoff || '';
-  const todayDateStr = todayStr(); 
+  const todayDateStr = todayStr();
   let ko = 'TBD';
   if (koRaw) {
     try {
@@ -312,22 +354,16 @@ const ZokaRow = React.memo(({ pick }) => {
   const predH = pick.adminPick ? pick.adminPick.home : null;
   const predA = pick.adminPick ? pick.adminPick.away : null;
 
-  let scoreContent = null;
-  if (isFin && pick.homeScore != null) {
-    scoreContent = (
-      <span className="flex-center gap-8">
-        <span className="z-sn g">{pick.homeScore}</span>
-        <span className="z-sep">-</span>
-        <span className="z-sn g">{pick.awayScore}</span>
-      </span>
-    );
-  } else {
-    scoreContent = <span className="z-sn gd">{predH != null ? predH : '?'}-{predA != null ? predA : '?'}</span>;
-  }
+  const scoreContent = isFin && pick.homeScore != null ? (
+    <span className="flex-center gap-8">
+      <span className="z-sn g">{pick.homeScore}</span>
+      <span className="z-sep">-</span>
+      <span className="z-sn g">{pick.awayScore}</span>
+    </span>
+  ) : <span className="z-sn gd">{predH != null ? predH : '?'}-{predA != null ? predA : '?'}</span>;
 
   let sbCls = 'z-sb';
-  if (isFin) sbCls += ' ft';
-  else sbCls += ' zk';
+  if (isFin) sbCls += ' ft'; else sbCls += ' zk';
 
   const homeName = pick.homeTeam?.shortName || pick.homeTeam?.name || '?';
   const awayName = pick.awayTeam?.shortName || pick.awayTeam?.name || '?';
@@ -337,19 +373,19 @@ const ZokaRow = React.memo(({ pick }) => {
     <div className="z-mc zoka">
       <div className="z-mh">
         <div className="z-ml">
-          {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildLeagueRoute(pick.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
         <span className="z-st" style={{ color: isFin ? 'var(--primary)' : 'var(--text-muted)', background: isFin ? 'rgba(var(--primary-rgb),.1)' : 'var(--bg-card)' }}>{isFin ? 'FT' : ko}</span>
       </div>
       <div className="z-tm">
         <div className="z-te">
-          {pick.homeLogo && <img src={pick.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pick.homeLogo && <img src={pick.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildTeamRoute(pick.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
         </div>
         <div className={sbCls}>{scoreContent}</div>
         <div className="z-te aw">
-          {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{objectFit:'contain'}} onError={e => { e.target.style.display = 'none'; }} />}
+          {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
           <Link to={buildTeamRoute(pick.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
         </div>
       </div>
@@ -380,9 +416,8 @@ const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
 });
 
 export default function Home() {
-  // ★ FIXED: Moved useGlobalStats INSIDE the component to prevent React Hooks crash
   const { activePlayersToday, predictionsToday, totalPlayers, totalPredictions } = useGlobalStats();
-  
+
   const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
   const isLoggedIn = !!currentUser;
@@ -400,7 +435,7 @@ export default function Home() {
   const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
   const [newsPosts, setNewsPosts] = useState([]);
   const [heroGoalFlash, setHeroGoalFlash] = useState(false);
-  
+
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
   useEffect(() => {
@@ -427,7 +462,7 @@ export default function Home() {
   }, []);
 
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
-  
+
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
   const featuredMatches = useMemo(() => allFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10), [allFixtures]);
   const upcomingMatches = useMemo(() => allFixtures.filter(m => !m.isLive && !m.isFinished && m.display?.isUpcoming).slice(0, 10), [allFixtures]);
@@ -437,6 +472,14 @@ export default function Home() {
     if (featuredMatches.length > 0) return featuredMatches[0];
     return null;
   }, [liveMatches, featuredMatches]);
+
+  const nextKickoff = useMemo(() => {
+    const cands = upcomingMatches
+      .map(m => ({ m, t: parseKickoff(m) }))
+      .filter(x => x.t != null && x.t > Date.now())
+      .sort((a, b) => a.t - b.t);
+    return cands.length > 0 ? cands[0].m : null;
+  }, [upcomingMatches, now]);
 
   const prevHeroScore = useRef({ h: heroMatch?.homeScore, a: heroMatch?.awayScore });
   useEffect(() => {
@@ -458,28 +501,24 @@ export default function Home() {
     let liveCount = 0;
     allFixtures.forEach(m => {
       if (m.isLive) liveCount++;
-      if (m.isLive || m.isFinished) {
-        goals += (m.homeScore || 0) + (m.awayScore || 0);
-      }
+      if (m.isLive || m.isFinished) goals += (m.homeScore || 0) + (m.awayScore || 0);
     });
     return { goals, liveCount };
   }, [allFixtures]);
 
   const uniqueLeaguesCount = useMemo(() => {
     const ids = new Set();
-    allFixtures.forEach(m => {
-      if (m.leagueId) ids.add(String(m.leagueId));
-    });
+    allFixtures.forEach(m => { if (m.leagueId) ids.add(String(m.leagueId)); });
     return ids.size;
   }, [allFixtures]);
 
   const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
+  const tickerMatches = stripMatches.slice(0, 10);
 
-  // ★ ACCURATE DATA DERIVATION
   const dailyEntries = dailyLB?.entries || [];
   const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
   const zokaFlat = zokaPicksData?.matches || [];
-  
+
   const myEntry = useMemo(() => {
     if (!isLoggedIn || !dailyEntries) return null;
     return dailyEntries.find(u => u.uid === uid) || null;
@@ -488,7 +527,7 @@ export default function Home() {
   const myPoints = myEntry?.points || 0;
   const myRank = myEntry?.rank || null;
   const userStreak = myEntry?.streak || userProfile?.streak || 0;
-  
+
   const totalPredictors = dailyStats.players || 0;
   const totalPredictionsMade = dailyStats.preds || 0;
   const avgAccuracy = dailyStats.avg ? parseFloat(dailyStats.avg) : 0;
@@ -507,7 +546,7 @@ export default function Home() {
   const userPredMap = useMemo(() => {
     const m = {};
     if (userPredictions) {
-      Object.values(userPredictions).forEach(p => { 
+      Object.values(userPredictions).forEach(p => {
         if (p.predId) m[p.predId] = p;
         if (p.matchId) m[String(p.matchId)] = p;
       });
@@ -522,7 +561,7 @@ export default function Home() {
 
   const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
 
-  const heroGradient = heroMatch?.isLive 
+  const heroGradient = heroMatch?.isLive
     ? 'radial-gradient(circle at 50% -20%, rgba(var(--danger-rgb), 0.15) 0%, transparent 60%)'
     : 'radial-gradient(circle at 50% -20%, rgba(var(--primary-rgb), 0.12) 0%, transparent 60%)';
 
@@ -540,57 +579,70 @@ export default function Home() {
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
-        <section className="z-hero-pro" style={{ background: heroGradient }}>
-          <div className="z-hero-content">
-            <div className="z-hero-top-row">
-              <h1 className="z-title">ZOKA<span>SCORE</span></h1>
-              <StreakBadge streak={userStreak} />
+        {/* ══ ALIVE HERO — dense, moving, real ══ */}
+        <section className="z-hero-pro compact-hero" style={{ background: heroGradient }}>
+          <div className="z-aurora" aria-hidden="true" />
+
+          <div className="z-hero-top-row z-hero-alive">
+            <div className="z-hello">
+              <span className="z-hello-emoji">{greeting.emoji}</span>
+              <div className="z-hello-txt">
+                <strong>{greeting.text}, {displayName || 'Manager'}.</strong>
+                <span className="z-hello-sub">
+                  {new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}
+                  · <LiveClock />
+                </span>
+              </div>
             </div>
-            <div className="z-hero-pills">
-              <span className="z-pill">Predict</span>
-              <span className="z-pill">Compete</span>
-              <span className="z-pill">Win</span>
-            </div>
-            <p className="z-sub">
-              {greeting.emoji} {greeting.text}, {displayName || 'Manager'}. Live scores, AI predictions & leaderboards.
-            </p>
-          </div>
-           
-          {/* Unified Rich Stats Grid */}
-          <div className="stats-grid">
-            <div className="stat-card">
-              <span className="stat-value">{activePlayersToday}</span>
-              <span className="stat-label">Predicting Today</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-value">{totalPredictions}</span>
-              <span className="stat-label">Total Predictions</span>
-            </div>
-            <div className="stat-card">
-              <span className="stat-value">{totalPlayers}</span>
-              <span className="stat-label">Total Players</span>
-            </div>
+            <StreakBadge streak={userStreak} />
           </div>
 
-          {/* Scale Stats (Live Matches, Predictions Today, Leagues Active) */}
-          <div className="z-scale-stats">
-            <div className="z-scale-item">
-              <span className="val"><AnimNum value={liveStats.liveCount} delay={100} /></span>
-              <span className="lbl">Live Matches</span>
+          <div className="z-hero-content">
+            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+            <p className="z-sub">Live scores, AI predictions & leaderboards — updated in real time.</p>
+          </div>
+
+          {/* scrolling live ticker */}
+          {tickerMatches.length > 0 && <HeroTicker matches={tickerMatches} />}
+
+          {/* ONE dense pulse bar replaces the 4 old stat blocks */}
+          <div className="z-pulse-bar">
+            <div className={'z-pb-item' + (liveStats.liveCount > 0 ? ' hot' : '')}>
+              <span className="z-pb-val" style={{ color: liveStats.liveCount > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                <AnimNum value={liveStats.liveCount} />
+              </span>
+              <span className="z-pb-lbl">Live Now</span>
             </div>
-            <div className="z-scale-divider"></div>
-            <div className="z-scale-item">
-              <span className="val"><AnimNum value={totalPredictionsMade} delay={200} /></span>
-              <span className="lbl">Predictions Today</span>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={liveStats.goals} delay={80} /></span>
+              <span className="z-pb-lbl">Goals</span>
             </div>
-            <div className="z-scale-divider"></div>
-            <div className="z-scale-item">
-              <span className="val"><AnimNum value={uniqueLeaguesCount} delay={300} /></span>
-              <span className="lbl">Leagues Active</span>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={totalPredictionsMade || predictionsToday} delay={160} /></span>
+              <span className="z-pb-lbl">Predictions</span>
             </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={activePlayersToday || totalPredictors} delay={240} /></span>
+              <span className="z-pb-lbl">Players</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={uniqueLeaguesCount} delay={320} /></span>
+              <span className="z-pb-lbl">Leagues</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val" style={{ color: 'var(--primary)' }}><AnimNum value={Math.round(avgAccuracy)} delay={400} suffix="%" /></span>
+              <span className="z-pb-lbl">Accuracy</span>
+            </div>
+            {isLoggedIn && (
+              <div className="z-pb-item me">
+                <span className="z-pb-val" style={{ color: 'var(--primary)' }}><AnimNum value={myPoints} delay={480} /></span>
+                <span className="z-pb-lbl">My Pts{myRank ? ' · #' + myRank : ''}</span>
+              </div>
+            )}
           </div>
         </section>
 
+        {/* ══ MATCH SPOTLIGHT — instantly visible ══ */}
         {heroMatch && (
           <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
             <div className="z-hero-top">
@@ -600,14 +652,14 @@ export default function Home() {
               </div>
               {heroMatch.isLive && (
                 <div className="z-hero-badge live">
-                  <span className="live-pulse-dot"></span> 
-                  LIVE {heroMatch.displayMinute || 0}'
+                  <span className="live-pulse-dot"></span>
+                  LIVE {heroMatch.displayMinute || 0}&apos;
                 </div>
               )}
               {heroMatch.isFinished && <div className="z-hero-badge ft">FULL TIME</div>}
               {!heroMatch.isLive && !heroMatch.isFinished && <div className="z-hero-badge sched">{heroMatch.kickoff}</div>}
             </div>
-            
+
             <div className="z-hero-teams">
               <div className="z-hero-team">
                 {heroMatch.homeLogo && <img src={heroMatch.homeLogo} alt={heroMatch.homeName} />}
@@ -629,26 +681,17 @@ export default function Home() {
             {heroMatch.stats && (heroMatch.stats.possession || heroMatch.stats.shots || heroMatch.stats.corners) ? (
               <div className="z-hero-stats-grid">
                 {heroMatch.stats.possession && (
-                  <div className="z-hs-item">
-                    <span className="lbl">POSS</span>
-                    <span className="val">{heroMatch.stats.possession.home || 0}% - {heroMatch.stats.possession.away || 0}%</span>
-                  </div>
+                  <div className="z-hs-item"><span className="lbl">POSS</span><span className="val">{heroMatch.stats.possession.home || 0}% - {heroMatch.stats.possession.away || 0}%</span></div>
                 )}
                 {heroMatch.stats.shots && (
-                  <div className="z-hs-item">
-                    <span className="lbl">SHOTS</span>
-                    <span className="val">{heroMatch.stats.shots.home || 0} - {heroMatch.stats.shots.away || 0}</span>
-                  </div>
+                  <div className="z-hs-item"><span className="lbl">SHOTS</span><span className="val">{heroMatch.stats.shots.home || 0} - {heroMatch.stats.shots.away || 0}</span></div>
                 )}
                 {heroMatch.stats.corners && (
-                  <div className="z-hs-item">
-                    <span className="lbl">CORNERS</span>
-                    <span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span>
-                  </div>
+                  <div className="z-hs-item"><span className="lbl">CORNERS</span><span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span></div>
                 )}
               </div>
             ) : (
-              <div className="glass-card flex-between mt-16" style={{ padding: '12px 16px' }}>
+              <div className="glass-card flex-between mt-16" style={{ padding: '10px 14px' }}>
                 <span className="text-muted font-bold text-sm">{heroMatch.date ? new Date(heroMatch.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Scheduled'}</span>
                 <span className="text-muted font-bold text-sm">{heroMatch.venue?.name || heroMatch.leagueName}</span>
               </div>
@@ -662,31 +705,16 @@ export default function Home() {
           </Link>
         )}
 
+        {/* ══ Ticking countdown to next kickoff ══ */}
+        {!ctxLoading && nextKickoff && <KickoffCountdown match={nextKickoff} />}
+
         {!ctxLoading && isLoggedIn && upcomingMatches.length > 0 && (
-          <DailyChallenge 
-            match={upcomingMatches[0]} 
-            isLoggedIn={isLoggedIn} 
-            onPredict={() => navigate(`/predictions?match=${upcomingMatches[0].id}`)} 
+          <DailyChallenge
+            match={upcomingMatches[0]}
+            isLoggedIn={isLoggedIn}
+            onPredict={() => navigate(`/predictions?match=${upcomingMatches[0].id}`)}
           />
         )}
-
-        {/* Live Stats Widget (Goals & Live Count) */}
-        <div className="z-stats-widget">
-          <div className="z-sw-item">
-            <LiveIcon size={14} style={{ color: 'var(--danger)' }} />
-            <div className="z-sw-data">
-              <span className="val">{liveStats.liveCount}</span>
-              <span className="lbl">Live Now</span>
-            </div>
-          </div>
-          <div className="z-sw-item">
-            <Trophy size={14} style={{ color: 'var(--gold)' }} />
-            <div className="z-sw-data">
-              <span className="val">{liveStats.goals}</span>
-              <span className="lbl">Goals Today</span>
-            </div>
-          </div>
-        </div>
 
         <div className="mt-16">
           <div className="z-strip-header">
@@ -726,7 +754,7 @@ export default function Home() {
               {newsPosts.concat(newsPosts).map((post, i) => (
                 <Link to={buildHighlightRoute(post.id, post.title)} key={post.id + '-' + i} className="z-newsmini">
                   {post.imageUrl ? (
-                    <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{objectFit:'cover'}} loading="lazy" />
+                    <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{ objectFit: 'cover' }} loading="lazy" />
                   ) : (
                     <div className="z-news-img-ph"><Newspaper size={18} /></div>
                   )}
@@ -739,38 +767,6 @@ export default function Home() {
             </div>
           </div>
         )}
-
-        <div className="z-stats">
-          <div className="z-chip">
-            <div className="val"><AnimNum value={totalPredictors} delay={200} /></div>
-            <div className="lbl">Users</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, (totalPredictors || 0) / 5) + '%', background: 'var(--accent)' }} /></div>
-          </div>
-          <div className="z-chip">
-            <div className="val"><AnimNum value={totalPredictionsMade} delay={280} /></div>
-            <div className="lbl">Predictions</div>
-            <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, totalPredictionsMade / 10) + '%', background: 'var(--primary)' }} /></div>
-          </div>
-          <div className="z-chip" style={{ position: 'relative' }}>
-            <div style={{ position: 'absolute', right: 8, top: 8 }}>
-              <AccuracyRing
-                value={avgAccuracy}
-                size={36}
-                stroke={3}
-                color={avgAccuracy >= 50 ? 'var(--primary)' : avgAccuracy >= 25 ? 'var(--gold)' : 'var(--danger)'}
-              />
-            </div>
-            <div className="val" style={{ fontSize: '.95rem' }}><AnimNum value={Math.round(avgAccuracy)} delay={360} suffix="%" /></div>
-            <div className="lbl">Accuracy</div>
-          </div>
-          <div className="z-chip">
-            <div className="val" style={{ color: isLoggedIn ? 'var(--primary)' : 'var(--text-muted)' }}>
-              {isLoggedIn ? <AnimNum value={myPoints} delay={440} /> : '-'}
-            </div>
-            <div className="lbl">My Points</div>
-            {isLoggedIn && <div className="bar"><div className="bar-fill" style={{ width: Math.min(100, myPoints / 5) + '%', background: 'var(--primary)' }} /></div>}
-          </div>
-        </div>
 
         {!ctxLoading && zokaFlat.length > 0 && (
           <div className="z-sec">
@@ -803,12 +799,7 @@ export default function Home() {
             <ListSkeleton count={4} />
           ) : featVis.length > 0 ? (
             featVis.map((p, i) => (
-              <FeaturedRow
-                key={p.id || String(p.matchId) || i}
-                pred={p}
-                userPred={userPredMap[String(p.matchId)]}
-                isLoggedIn={isLoggedIn}
-              />
+              <FeaturedRow key={p.id || String(p.matchId) || i} pred={p} userPred={userPredMap[String(p.matchId)]} isLoggedIn={isLoggedIn} />
             ))
           ) : (
             <div className="glass-card flex-col items-center p-32 gap-8 text-center">

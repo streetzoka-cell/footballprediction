@@ -3234,3 +3234,95 @@ into the global design system. Identical duplicates
 .nav-top-left, .nav-top-right { min-width: 0; }
 .nav-top-bar { overflow-x: clip; }
 
+/* ============================================================
+   ALIVE HOME REBUILD — paste at BOTTOM of your CSS
+============================================================ */
+
+/* --- Animated aurora backdrop inside the hero --- */
+.z-hero-pro { position: relative; overflow: hidden; gap: var(--sp-12); }
+.z-hero-pro > * { position: relative; z-index: 1; }
+.z-aurora {
+  position: absolute; inset: -40%; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(35% 35% at 20% 30%, rgba(var(--primary-rgb), 0.16), transparent 60%),
+    radial-gradient(30% 30% at 80% 20%, rgba(var(--danger-rgb), 0.10), transparent 60%),
+    radial-gradient(40% 40% at 60% 80%, rgba(var(--gold-rgb), 0.08), transparent 60%);
+  filter: blur(30px);
+  animation: z-aurora 14s ease-in-out infinite alternate;
+}
+@keyframes z-aurora {
+  from { transform: translate3d(-4%, -2%, 0) rotate(-2deg) scale(1); }
+  to   { transform: translate3d(4%, 3%, 0) rotate(2deg) scale(1.08); }
+}
+
+/* --- Greeting row with live clock --- */
+.z-hero-alive { justify-content: space-between; margin-bottom: 0; }
+.z-hello { display: flex; align-items: center; gap: 10px; min-width: 0; text-align: left; }
+.z-hello-emoji { font-size: 1.3rem; animation: zk-bounce 3s ease-in-out infinite; }
+.z-hello-txt { display: flex; flex-direction: column; min-width: 0; }
+.z-hello-txt strong { font-size: .85rem; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.z-hello-sub { font-size: .65rem; color: var(--text-muted); font-weight: 600; display: flex; gap: 6px; align-items: center; }
+.z-clock { font-variant-numeric: tabular-nums; color: var(--primary); font-weight: 800; }
+
+/* --- Scrolling live ticker --- */
+.z-ticker-wrap {
+  overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-12);
+  background: rgba(0, 0, 0, 0.25); backdrop-filter: blur(8px);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
+}
+.z-ticker-track { display: flex; gap: var(--sp-24); width: max-content; padding: 8px 0; animation: zk-marquee 28s linear infinite; }
+.z-ticker-wrap:hover .z-ticker-track { animation-play-state: paused; }
+.z-tk { display: inline-flex; align-items: center; gap: 6px; font-size: .7rem; font-weight: 800; color: var(--text-secondary); white-space: nowrap; text-decoration: none; }
+.z-tk b { color: var(--text-primary); }
+.z-tk .live { color: var(--danger); }
+.z-tk .ko { color: var(--gold); font-weight: 800; }
+.z-tk .sc { color: var(--text-muted); }
+
+/* --- Single dense pulse bar (replaces 4 stat blocks) --- */
+.z-pulse-bar { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.z-pulse-bar::-webkit-scrollbar { display: none; }
+.z-pb-item {
+  flex: 1 0 auto; min-width: 76px; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 10px; border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid var(--border);
+  transition: transform var(--duration-fast), border-color var(--duration-fast);
+}
+.z-pb-item:hover { transform: translateY(-2px); border-color: rgba(var(--primary-rgb), 0.3); }
+.z-pb-item.hot { border-color: rgba(var(--danger-rgb), 0.35); animation: live-stat-pulse 2s infinite; }
+.z-pb-item.me { border-color: rgba(var(--primary-rgb), 0.35); background: rgba(var(--primary-rgb), 0.06); }
+.z-pb-val { font-size: 1.05rem; font-weight: 900; font-family: var(--font-display); line-height: 1; color: var(--text-primary); }
+.z-pb-lbl { font-size: .55rem; font-weight: 800; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+
+/* --- Kickoff countdown strip --- */
+.z-countdown {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 10px 14px; margin: 12px 0; border-radius: 14px; text-decoration: none;
+  border: 1px dashed rgba(var(--gold-rgb), 0.4);
+  background: linear-gradient(90deg, rgba(var(--gold-rgb), 0.08), transparent);
+  transition: background var(--duration-fast), transform var(--duration-fast);
+}
+.z-countdown:hover { background: rgba(var(--gold-rgb), 0.12); transform: translateY(-1px); }
+.z-cd-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.z-cd-teams { font-size: .75rem; font-weight: 700; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.z-cd-teams em { color: var(--gold); font-style: normal; font-weight: 900; }
+.z-cd-timer { font-family: var(--font-display); font-weight: 900; color: var(--gold); letter-spacing: .04em; flex-shrink: 0; }
+.z-cd-seg { display: inline-block; min-width: 2ch; text-align: center; background: rgba(var(--gold-rgb), 0.12); border-radius: 6px; padding: 2px 4px; }
+
+/* --- Densify the whole home page (kill empty space) --- */
+.z-hero-pro.compact-hero { gap: 10px; padding: var(--sp-16) var(--sp-16) var(--sp-12); }
+.z-hero-pro.compact-hero .z-sub { margin-top: 0; margin-bottom: 2px; }
+.z-hero-match { margin-bottom: var(--sp-12); }
+.z-sec { margin-bottom: var(--sp-16); animation: zk-fade-up 0.5s var(--ease-out) both; }
+.z-daily-challenge { margin-bottom: var(--sp-12); }
+
+/* --- Make OTHER pages feel alive: drifting ambient glow --- */
+.zoka-page, .v21-page, .lb-page, .mg-page { position: relative; }
+.zoka-page::before, .v21-page::before, .lb-page::before, .mg-page::before {
+  content: ''; position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(38% 30% at 75% 8%, rgba(var(--primary-rgb), 0.06), transparent 60%),
+    radial-gradient(30% 26% at 15% 85%, rgba(var(--accent-rgb), 0.05), transparent 60%),
+    radial-gradient(26% 26% at 50% 50%, rgba(var(--gold-rgb), 0.03), transparent 60%);
+  animation: z-aurora 16s ease-in-out infinite alternate;
+}
