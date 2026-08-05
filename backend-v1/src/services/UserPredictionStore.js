@@ -1,4 +1,5 @@
 // backend-v1/src/services/UserPredictionStore.js
+
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -7,7 +8,7 @@ const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
 const QueueService = require('./QueueService');
 const LocalSnapshotRepository = require('../repositories/LocalSnapshotRepository');
-const StatsEngine = require('./StatsEngine'); // ★ NEW: Import StatsEngine
+const StatsEngine = require('./StatsEngine');
 const { getDb } = require('../config/firebase');
 const {
   BATCH_MAX_OPS,
@@ -34,7 +35,7 @@ ensureDirSync(WAL_DIR);
 ensureDirSync(SYNCED_DIR);
 
 const SYNC_INTERVAL_MS = parseInt(
-  process.env.USER_PREDICTION_SYNC_INTERVAL_MS || String(60 * 60 * 1000),
+  process.env.USER_PREDICTION_SYNC_INTERVAL_MS || String(30 * 60 * 1000), // ★ Changed to 30 mins
   10
 );
 
@@ -42,6 +43,8 @@ const RETRY_INTERVAL_MS = parseInt(
   process.env.USER_PREDICTION_RETRY_INTERVAL_MS || String(10 * 60 * 1000),
   10
 );
+
+const SYNC_SIZE_THRESHOLD = 500; // ★ NEW: Sync if WAL hits 500 ops
 
 const LIVE_STATUSES = new Set([
   '1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED',
@@ -147,16 +150,6 @@ async function validateMatchNotStarted(matchId, dateStr) {
   }
 }
 
-/**
- * Accepts a user prediction.
- * Safety order:
- * 1. Validate
- * 2. Prevent duplicate
- * 3. Store atomically
- * 4. Update Stats Engine (Local)
- * 5. Append WAL
- * 6. Return accepted
- */
 async function savePrediction(user, input = {}) {
   if (!user || !user.uid) {
     throw ApiError.unauthorized('Authentication required');
@@ -340,21 +333,32 @@ function archiveWalFile(filePath) {
   fs.renameSync(filePath, archivedPath);
 }
 
+// ★ NEW: Adaptive Sync Logic
 function shouldSync(force = false) {
   if (force) return true;
   const now = Date.now();
 
+  // 1. Check if WAL file size exceeds threshold
+  try {
+    const files = fs.readdirSync(WAL_DIR).filter(file => file.endsWith('.jsonl'));
+    let totalOps = 0;
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(WAL_DIR, file), 'utf8');
+      totalOps += content.split('\n').filter(Boolean).length;
+      if (totalOps >= SYNC_SIZE_THRESHOLD) return true;
+    }
+  } catch (e) { /* Ignore read errors */ }
+
+  // 2. Check retry interval (10 mins)
   if (state.lastFailedAt && now - state.lastFailedAt >= RETRY_INTERVAL_MS) return true;
+  
+  // 3. Check standard interval (30 mins)
   if (!state.lastSyncAt) return true;
   if (now - state.lastSyncAt >= SYNC_INTERVAL_MS) return true;
 
   return false;
 }
 
-/**
- * Batch sync pending predictions to Firebase.
- * Runs hourly by default. Retries after 10 minutes on failure. Never deletes unsynced WAL files.
- */
 async function processPendingSync(force = false) {
   if (!shouldSync(force)) {
     return { skipped: true, synced: 0 };
@@ -408,8 +412,14 @@ async function processPendingSync(force = false) {
 
 function getStats() {
   let pendingFiles = 0;
+  let pendingOps = 0;
   try {
-    pendingFiles = fs.readdirSync(WAL_DIR).filter((file) => file.endsWith('.jsonl')).length;
+    const files = fs.readdirSync(WAL_DIR).filter((file) => file.endsWith('.jsonl'));
+    pendingFiles = files.length;
+    for (const file of files) {
+      const content = fs.readFileSync(path.join(WAL_DIR, file), 'utf8');
+      pendingOps += content.split('\n').filter(Boolean).length;
+    }
   } catch {
     pendingFiles = 0;
   }
@@ -417,8 +427,10 @@ function getStats() {
   return {
     ...state,
     pendingFiles,
+    pendingOps,
     syncIntervalMs: SYNC_INTERVAL_MS,
     retryIntervalMs: RETRY_INTERVAL_MS,
+    syncSizeThreshold: SYNC_SIZE_THRESHOLD
   };
 }
 
@@ -428,3 +440,6 @@ module.exports = {
   processPendingSync,
   getStats,
 };
+
+
+

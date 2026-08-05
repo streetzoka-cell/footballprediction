@@ -1,24 +1,29 @@
-// backend-v1/src/jobs/cron/StatsJob.js
-
+// backend-v1/src/scheduler/jobs/statsJob.js
 const StatsEngine = require('../../services/StatsEngine');
 const logger = require('../../utils/logger');
 
 async function execute() {
   try {
-    logger.info('[Cron] Manual stats publish...');
+    const now = new Date();
+    const isMidnight = now.getUTCHours() === 0 && now.getUTCMinutes() < 5;
 
-    await StatsEngine.buildGlobalStats();
+    if (isMidnight) {
+      logger.info('[StatsJob] Midnight detected. Resetting daily stats...');
+      await StatsEngine.resetDailyStats();
+    }
 
-    logger.info('[Cron] Stats publish complete.');
+    // Ensure latest stats are pushed to global.json
+    await StatsEngine.getStats(); 
+    
+    logger.info('[StatsJob] Stats cache synced to global.json.');
+    return { success: true };
   } catch (err) {
-    logger.error(`[Cron] Stats publish failed: ${err.message}`);
+    logger.error(`[StatsJob] Error: ${err.message}`);
+    return { success: false, error: err.message };
   }
 }
 
 module.exports = {
   execute,
-
-  // Disabled.
-  // Stats are maintained by backend events instead of polling.
-  schedule: null,
+  schedule: '*/15 * * * *' // Runs every 15 minutes
 };
