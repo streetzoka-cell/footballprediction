@@ -6,7 +6,7 @@ const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
 const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
 const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
-const leaderboardJob = require('./jobs/leaderboardRebuildJob'); // ★ FIX: Added missing import
+const leaderboardJob = require('./jobs/leaderboardJob'); // ★ FIX: Added missing import
 const statsJob = require('./jobs/statsJob'); 
 
 const { processQueue } = require('../services/QueueService');
