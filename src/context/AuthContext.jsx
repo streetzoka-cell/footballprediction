@@ -24,6 +24,7 @@ export function AuthProvider({ children }) {
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
 
+  // Handle Firebase Auth initialization and Redirect results
   useEffect(() => {
     if (!auth) {
       console.warn('[Auth] Firebase Auth not initialized.');
@@ -40,8 +41,9 @@ export function AuthProvider({ children }) {
         if (result) console.log('[Auth] Redirect sign-in successful:', result.user.uid);
       })
       .catch((err) => console.error('[Auth] Redirect result error:', err.code));
-  }, []);
+  }, [auth]); // ★ FIX: Depend on auth so it runs when Firebase is ready
 
+  // Listen to Auth State Changes
   useEffect(() => {
     if (!auth) {
       setAuthLoading(false);
@@ -50,13 +52,16 @@ export function AuthProvider({ children }) {
 
     let unsubscribed = false;
 
+    // ★ FIX: onAuthStateChanged handles the initial load and restores the session
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
+      
       setCurrentUser(user);
 
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
+          const adminDocRef = doc(db, 'admin_users', user.uid);
 
           // 1. Fetch user profile ONCE (No onSnapshot to save Firestore reads)
           const profileDoc = await getDoc(userDocRef);
@@ -66,11 +71,16 @@ export function AuthProvider({ children }) {
             const role = (baseData.role || 'user').toLowerCase();
             const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
             
+            // 2. Check admin_users collection for Super Admin
+            const adminDoc = await getDoc(adminDocRef);
+            const isSuperAdmin = adminDoc.exists();
+            
             setUserProfile({
               uid: user.uid,
               ...baseData,
               role,
-              isAdmin: isRoleAdmin
+              isAdmin: isSuperAdmin || isRoleAdmin,
+              isSuperAdmin: isSuperAdmin
             });
           } else {
             // If profile doesn't exist, create it
@@ -84,7 +94,7 @@ export function AuthProvider({ children }) {
               updatedAt: serverTimestamp(),
             };
             await setDoc(userDocRef, profile);
-            setUserProfile({ ...profile, isAdmin: false });
+            setUserProfile({ ...profile, isAdmin: false, isSuperAdmin: false });
           }
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
@@ -92,12 +102,14 @@ export function AuthProvider({ children }) {
             ...(prev || {}), 
             uid: user.uid, 
             role: 'user', 
-            isAdmin: false 
+            isAdmin: false,
+            isSuperAdmin: false
           }));
         } finally {
           setAuthLoading(false);
         }
       } else {
+        // User is logged out
         setUserProfile(null);
         setAuthLoading(false);
       }
@@ -107,7 +119,7 @@ export function AuthProvider({ children }) {
       unsubscribed = true;
       unsubscribe();
     };
-  }, []);
+  }, [auth]); // ★ FIX: Depend on auth
 
   const login = useCallback(async (email, password) => {
     if (!auth) throw new Error('Auth not initialized');
@@ -130,7 +142,7 @@ export function AuthProvider({ children }) {
       updatedAt: serverTimestamp(),
     };
     await setDoc(doc(db, 'users', cred.user.uid), profile);
-    setUserProfile(profile);
+    setUserProfile({ ...profile, isAdmin: false, isSuperAdmin: false });
     return cred.user;
   }, []);
 
@@ -174,6 +186,8 @@ export function AuthProvider({ children }) {
     const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
     delete profileUpdates.role; // Prevent accidental role escalation from client
+    delete profileUpdates.isAdmin;
+    delete profileUpdates.isSuperAdmin;
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });
   }, [currentUser]);
