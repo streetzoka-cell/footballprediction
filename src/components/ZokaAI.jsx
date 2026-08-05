@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
   Menu, User, Sparkles, AlertCircle, RefreshCw, Lock
@@ -8,6 +8,61 @@ import { getAuthHeaders } from '../services/backendAuth';
 
 const BACKEND_URL = 'https://api.zokascore.xyz'; 
 
+// ═══════════════════════════════════════════════════════════
+// LOCAL INTENT ENGINE (Saves API Calls & Gives Instant Answers)
+// ═══════════════════════════════════════════════════════════
+const APP_KNOWLEDGE_BASE = [
+  {
+    keywords: ['predict', 'how to predict', 'make prediction', 'points', 'scoring', 'exact', 'result', 'miss'],
+    response: `# How Predictions Work\nMaking a prediction is easy! Go to the **Predictions** tab and enter your expected score before the match locks.\n\n- **Exact Score:** 10 Points 🎯\n- **Correct Result (Win/Draw/Loss):** 3 Points 📈\n- **Miss:** 0 Points\n\n*Note: Matches lock 60 minutes before kickoff to ensure fair play!*`
+  },
+  {
+    keywords: ['studio', 'edit', 'video', 'image', 'reactor', 'face ar', 'create', 'graphic', 'template'],
+    response: `# ZOKASCORE Studio\nThe Studio is our built-in pro creator toolkit! Access it from the main menu.\n\n- **Graphic Editor:** Build custom scoreboards and news cards.\n- **Reactor Studio:** Create viral TikTok/Reels templates with effects.\n- **Face AR:** Apply football masks and filters to your camera.\n- **Reaction Cam:** Record your match reactions in 9:16 format.`
+  },
+  {
+    keywords: ['leaderboard', 'rank', 'goat', 'weekly', 'daily', 'monthly', 'compete'],
+    response: `# Leaderboards & Ranks\nCompete against fans worldwide!\n\n- **Daily:** Resets every 24 hours.\n- **Weekly & Monthly:** Cumulative points for the week/month.\n- **G.O.A.T:** The all-time hall of fame.\n\nCheck your rank by tapping the **Trophy** icon in the navbar!`
+  },
+  {
+    keywords: ['zoka picks', 'admin picks', 'expert', 'best pick', 'vote'],
+    response: `# Zoka Picks\nThese are the premium, expert predictions made by the ZOKASCORE team. You can find them on the Predictions page. You can also vote "Agree" or "Disagree" on them to see how the community feels and join the debate!`
+  },
+  {
+    keywords: ['live', 'score', 'fixture', 'match', 'today', 'where', 'find'],
+    response: `# Live Scores & Fixtures\nTo see today's matches, tap the **Fixtures** or **Activity** icon in the navigation. Live matches will pulse with a red dot and update in real-time with possession stats and timelines!`
+  },
+  {
+    keywords: ['offline', 'pwa', 'install', 'app', 'download', 'home screen'],
+    response: `# Install the App\nZOKASCORE is a Progressive Web App (PWA)! You can install it directly to your home screen for an offline-capable, native app experience.\n\nScroll to the bottom of the page and tap **"Install App"**, or use your browser's "Add to Home Screen" option.`
+  },
+  {
+    keywords: ['who made', 'developer', 'creator', 'built', 'team', 'company'],
+    response: `# About the Creator\nZOKASCORE is 100% independently designed, developed, and maintained by a single passionate developer. No big corporate teams, just pure love for football and clean code! ⚽`
+  },
+  {
+    keywords: ['help', 'support', 'contact', 'bug', 'report', 'email'],
+    response: `# Need Help?\nIf you found a bug or need support, head over to the **Contact** page in the footer. You can also email us directly at **streetzoka@gmail.com**. We usually reply within 24 hours!`
+  },
+  {
+    keywords: ['mastergames', 'master games', 'game', 'play'],
+    response: `# Master Games\nMaster Games is our premium arcade section where you can play football-themed mini-games to test your reflexes and earn bonus bragging rights! Check the main menu to start playing.`
+  }
+];
+
+function interceptLocalQuery(query) {
+  const q = query.toLowerCase();
+  for (const item of APP_KNOWLEDGE_BASE) {
+    if (item.keywords.some(kw => q.includes(kw))) {
+      return item.response;
+    }
+  }
+  return null;
+}
+
+// ═══════════════════════════════════════════════════════════
+// TYPEWRITER COMPONENT
+// ═══════════════════════════════════════════════════════════
 const TypewriterText = ({ text, isActive, onComplete }) => {
   const [displayed, setDisplayed] = useState('');
   const containerRef = useRef(null);
@@ -69,6 +124,9 @@ const TypewriterText = ({ text, isActive, onComplete }) => {
   );
 };
 
+// ═══════════════════════════════════════════════════════════
+// MAIN ZOKA AI COMPONENT
+// ═══════════════════════════════════════════════════════════
 export default function ZokaAI({ isOpen, onClose }) {
   const { currentUser } = useAuth();
   const [chats, setChats] = useState(() => {
@@ -84,6 +142,7 @@ export default function ZokaAI({ isOpen, onClose }) {
   
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
+  const handleSendRef = useRef(null); // Prevent stale closures in external triggers
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
@@ -107,22 +166,6 @@ export default function ZokaAI({ isOpen, onClose }) {
       setTypingMessageId(null);
     }
   }, [isOpen]);
-
-  // ★ NEW: Listen for external triggers to open and pre-fill the chat
-  useEffect(() => {
-    const handleExternalOpen = (e) => {
-      const promptMessage = e.detail?.message;
-      if (promptMessage) {
-        // Use a timeout to ensure the modal is visually open before sending
-        setTimeout(() => {
-          handleSend(promptMessage); 
-        }, 300);
-      }
-    };
-    
-    window.addEventListener('openZokaAI', handleExternalOpen);
-    return () => window.removeEventListener('openZokaAI', handleExternalOpen);
-  }, []);
 
   const startNewChat = () => {
     setActiveChatId(null);
@@ -152,9 +195,6 @@ export default function ZokaAI({ isOpen, onClose }) {
   };
 
   const sendMessageToBackend = async (currentInput, chatId) => {
-    setLoading(true);
-    setError(null);
-
     try {
       const currentMessages = chats.find(c => c.id === chatId)?.messages || [];
       const history = currentMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
@@ -163,7 +203,7 @@ export default function ZokaAI({ isOpen, onClose }) {
       const response = await fetch(`${BACKEND_URL}/api/v1/ai/zoka`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...authHeaders },
-        body: JSON.stringify({ message: currentInput, history }) // No appContext needed, backend fetches it securely
+        body: JSON.stringify({ message: currentInput, history })
       });
       
       const data = await response.json();
@@ -180,18 +220,17 @@ export default function ZokaAI({ isOpen, onClose }) {
         return c;
       }));
 
-    } catch (error) {
-      console.error('AI Request Failed:', error);
-      const errorMsg = { role: 'assistant', content: error.message, isError: true, id: Date.now() + 1 };
+    } catch (err) {
+      console.error('AI Request Failed:', err);
+      const errorMsg = { role: 'assistant', content: err.message, isError: true, id: Date.now() + 1 };
       setChats(prev => prev.map(c => c.id === chatId ? { ...c, messages: [...c.messages, errorMsg] } : c));
-      setError(error.message);
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   };
 
-  // ★ MODIFIED: Accept overrideText to handle external triggers cleanly
-  const handleSend = async (overrideText) => {
+  const handleSend = useCallback(async (overrideText) => {
     const textToSend = (overrideText || input).trim();
     if (!textToSend || loading) return;
     
@@ -209,9 +248,6 @@ export default function ZokaAI({ isOpen, onClose }) {
     const chatTitle = currentInput.substring(0, 30) + (currentInput.length > 30 ? '...' : '');
     const userMsg = { role: 'user', content: currentInput, id: Date.now() };
 
-    const currentMessages = activeChat?.messages || [];
-    const history = currentMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
-
     setChats(prev => {
       const existing = prev.find(c => c.id === newChatId);
       if (existing) {
@@ -223,8 +259,49 @@ export default function ZokaAI({ isOpen, onClose }) {
     setActiveChatId(newChatId);
     setLoading(true);
 
+    // ★ PRO UPGRADE: Intercept simple app questions locally to save API calls
+    const localReply = interceptLocalQuery(currentInput);
+    
+    if (localReply) {
+      // Simulate AI "thinking" for 800ms so the typewriter feels natural
+      setTimeout(() => {
+        const aiMsg = { role: 'assistant', content: localReply, id: Date.now() + 1 };
+        setTypingMessageId(aiMsg.id);
+        setChats(prev => prev.map(c => {
+          if (c.id === newChatId) {
+            const cleanMessages = c.messages.filter(m => !m.isError && m.id !== userMsg.id);
+            return { ...c, messages: [...cleanMessages, userMsg, aiMsg] };
+          }
+          return c;
+        }));
+        setLoading(false);
+      }, 800);
+      return; // Stop execution, do not call backend
+    }
+
+    // If not a simple app question, call the backend Gemini API
     await sendMessageToBackend(currentInput, newChatId);
-  };
+  }, [input, loading, currentUser, activeChatId, chats]);
+
+  // Keep ref updated to prevent stale closures in external event listeners
+  useEffect(() => {
+    handleSendRef.current = handleSend;
+  }, [handleSend]);
+
+  // Listen for external triggers (e.g., from TeamPage or MatchPage)
+  useEffect(() => {
+    const handleExternalOpen = (e) => {
+      const promptMessage = e.detail?.message;
+      if (promptMessage && isOpen) {
+        setTimeout(() => {
+          handleSendRef.current(promptMessage); 
+        }, 400);
+      }
+    };
+    
+    window.addEventListener('openZokaAI', handleExternalOpen);
+    return () => window.removeEventListener('openZokaAI', handleExternalOpen);
+  }, [isOpen]);
 
   if (!isOpen) return null;
 
@@ -284,7 +361,7 @@ export default function ZokaAI({ isOpen, onClose }) {
               <div className="kim-empty-state">
                 <Brain size={48} className="text-primary mb-4" style={{ opacity: 0.5 }} />
                 <h3>Chat with Kim</h3>
-                <p>Ask me about today's matches, tactical breakdowns, or your prediction stats.</p>
+                <p>Ask me about today's matches, how to use the Studio, or your prediction stats.</p>
               </div>
             )}
             
