@@ -17,30 +17,25 @@ function extractAdminKey(req) {
   return extractBearer(req);
 }
 
-/** Sync: does this request carry the static ADMIN_API_KEY? */
 function isAdminKey(req) {
   const key = extractAdminKey(req);
   return Boolean(key && key === env.ADMIN_API_KEY);
 }
 
-/** Async: does this request carry a Firebase ID token belonging to an admin? */
 async function isFirebaseAdmin(req) {
   const token = extractBearer(req);
-  // If it's the admin key, skip Firebase check
   if (!token || token === env.ADMIN_API_KEY) return false;
   
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     const db = getDb();
 
-    // 1. Super admin → admin_users/{uid} exists
     const adminDoc = await db.collection('admin_users').doc(decoded.uid).get();
     if (adminDoc.exists) {
       req.adminUser = { uid: decoded.uid, role: 'super_admin', method: 'firebase' };
       return true;
     }
 
-    // 2. Role admin → users/{uid}.role === 'admin' | 'staff' | 'super_admin'
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     if (userDoc.exists) {
       const role = (userDoc.data().role || 'user').toLowerCase();
@@ -57,9 +52,6 @@ async function isFirebaseAdmin(req) {
   }
 }
 
-/**
- * Admin gate. Accepts the static admin key OR a Firebase admin token.
- */
 async function adminAuth(req, res, next) {
   try {
     if (isAdminKey(req)) {
@@ -77,7 +69,6 @@ async function adminAuth(req, res, next) {
   }
 }
 
-// Sync helper for inline gates (e.g. queue/add) — static key only, unchanged.
 adminAuth.verifyAdminRequest = (req) => isAdminKey(req);
 adminAuth.isAdminKey = isAdminKey;
 adminAuth.isFirebaseAdmin = isFirebaseAdmin;
