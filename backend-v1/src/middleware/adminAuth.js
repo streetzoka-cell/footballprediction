@@ -3,6 +3,7 @@ const admin = require('firebase-admin');
 const env = require('../config/env');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
+const ApiError = require('../utils/ApiError');
 
 function extractBearer(req) {
   const authHeader = req.headers.authorization || '';
@@ -25,21 +26,28 @@ function isAdminKey(req) {
 /** Async: does this request carry a Firebase ID token belonging to an admin? */
 async function isFirebaseAdmin(req) {
   const token = extractBearer(req);
+  // If it's the admin key, skip Firebase check
   if (!token || token === env.ADMIN_API_KEY) return false;
+  
   try {
     const decoded = await admin.auth().verifyIdToken(token);
     const db = getDb();
 
-    // Super admin → admin_users/{uid} exists
+    // 1. Super admin → admin_users/{uid} exists
     const adminDoc = await db.collection('admin_users').doc(decoded.uid).get();
-    if (adminDoc.exists) return true;
+    if (adminDoc.exists) {
+      req.adminUser = { uid: decoded.uid, role: 'super_admin', method: 'firebase' };
+      return true;
+    }
 
-    // Role admin → users/{uid}.role === 'admin' | 'staff' | 'super_admin'
+    // 2. Role admin → users/{uid}.role === 'admin' | 'staff' | 'super_admin'
     const userDoc = await db.collection('users').doc(decoded.uid).get();
     if (userDoc.exists) {
-      const role = userDoc.data().role || 'user';
-      // ★ FIX: Added 'super_admin' to the allowed roles
-      return role === 'admin' || role === 'staff' || role === 'super_admin';
+      const role = (userDoc.data().role || 'user').toLowerCase();
+      if (role === 'admin' || role === 'staff' || role === 'super_admin') {
+        req.adminUser = { uid: decoded.uid, role, method: 'firebase' };
+        return true;
+      }
     }
     
     return false;
@@ -54,13 +62,18 @@ async function isFirebaseAdmin(req) {
  */
 async function adminAuth(req, res, next) {
   try {
-    if (isAdminKey(req)) return next();
-    if (await isFirebaseAdmin(req)) return next();
-    return res.status(401).json({
-      error: 'Unauthorized: Invalid or missing admin credentials',
-    });
-  } catch {
-    return res.status(401).json({ error: 'Unauthorized' });
+    if (isAdminKey(req)) {
+      req.adminUser = { uid: 'api-key', role: 'super_admin', method: 'api-key' };
+      return next();
+    }
+    
+    if (await isFirebaseAdmin(req)) {
+      return next();
+    }
+
+    return next(ApiError.unauthorized('Invalid or missing admin credentials'));
+  } catch (err) {
+    return next(ApiError.unauthorized('Unauthorized'));
   }
 }
 

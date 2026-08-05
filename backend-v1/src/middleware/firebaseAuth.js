@@ -24,6 +24,28 @@ async function verifyBearerToken(req) {
 }
 
 /**
+ * Checks if a uid is admin (admin_users collection OR users.role).
+ */
+async function isAdminUser(uid) {
+  try {
+    const db = getDb();
+    const adminDoc = await db.collection('admin_users').doc(uid).get();
+    if (adminDoc.exists) return { role: 'admin', isSuperAdmin: true };
+
+    const userDoc = await db.collection('users').doc(uid).get();
+    if (userDoc.exists) {
+      const role = (userDoc.data().role || 'user').toLowerCase();
+      if (role === 'admin' || role === 'staff' || role === 'super_admin') {
+        return { role, isSuperAdmin: false };
+      }
+    }
+  } catch (err) {
+    logger.warn(`[FirebaseAuth] Admin check failed for ${uid}: ${err.message}`);
+  }
+  return null;
+}
+
+/**
  * Middleware: requires a valid Firebase user token.
  * 11. IDOR Prevention: Attaches req.user securely from token, ignoring any client-sent UID.
  */
@@ -57,37 +79,19 @@ async function requireFirebaseAdmin(req, res, next) {
     return next(ApiError.unauthorized('Valid Firebase ID token required'));
   }
   
-  try {
-    const db = getDb();
-    const uid = decoded.uid;
-    
-    // Check admin_users collection
-    const adminDoc = await db.collection('admin_users').doc(uid).get();
-    if (adminDoc.exists) {
-      req.user = { uid, email: decoded.email, role: 'super_admin' };
-      return next();
-    }
-
-    // Check users collection for role
-    const userDoc = await db.collection('users').doc(uid).get();
-    if (userDoc.exists) {
-      const role = (userDoc.data().role || 'user').toLowerCase();
-      if (role === 'admin' || role === 'staff' || role === 'super_admin') {
-        req.user = { uid, email: decoded.email, role };
-        return next();
-      }
-    }
-    
+  const adminInfo = await isAdminUser(decoded.uid);
+  if (!adminInfo) {
     return next(ApiError.forbidden('Admin access required'));
-  } catch (err) {
-    logger.error(`[FirebaseAuth] Admin check failed for ${decoded.uid}: ${err.message}`);
-    return next(ApiError.forbidden('Admin verification failed'));
   }
+
+  req.user = { uid: decoded.uid, email: decoded.email || null, ...adminInfo };
+  next();
 }
 
 module.exports = {
   verifyBearerToken,
+  isAdminUser, // ★ RESTORED
   authenticateFirebaseUser,
-  optionalFirebaseUser, // ★ RESTORED
+  optionalFirebaseUser,
   requireFirebaseAdmin,
 };
