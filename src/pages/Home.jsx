@@ -15,6 +15,7 @@ import { todayStr } from '../utils/dates';
 
 import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
+import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
 import { ListSkeleton } from '../components/StateFeedback';
 import { applySmartMinute } from '../engine/matchEngine';
 
@@ -57,7 +58,6 @@ const parseKickoff = (m) => {
 };
 
 const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
-  // ★ FIX: Initialize with 0 and enforce Number type to prevent crashes
   const [display, setDisplay] = useState(0);
   const raf = useRef(null);
   
@@ -80,13 +80,10 @@ const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) =
     return () => { if (raf.current) cancelAnimationFrame(raf.current); };
   }, [target, duration, delay]);
   
-  // ★ FIX: Safely call toLocaleString by ensuring it's a Number
   const safeDisplay = Number(display) || 0;
   return <span>{safeDisplay.toLocaleString()}{suffix}</span>;
 });
 
-
-/* Ticking clock — makes the hero feel alive */
 const LiveClock = React.memo(() => {
   const [now, setNow] = useState(new Date());
   useEffect(() => {
@@ -96,7 +93,6 @@ const LiveClock = React.memo(() => {
   return <span className="z-clock">{now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>;
 });
 
-/* Scrolling live ticker — the heartbeat of the top section */
 const HeroTicker = React.memo(({ matches }) => {
   if (!matches || matches.length === 0) return null;
   const loop = matches.concat(matches);
@@ -120,7 +116,6 @@ const HeroTicker = React.memo(({ matches }) => {
   );
 });
 
-/* Real-time kickoff countdown */
 const KickoffCountdown = React.memo(({ match }) => {
   const target = useMemo(() => (match ? parseKickoff(match) : null), [match]);
   const [left, setLeft] = useState(null);
@@ -590,7 +585,6 @@ export default function Home() {
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
-        {/* ══ ALIVE HERO — dense, moving, real ══ */}
         <section className="z-hero-pro compact-hero" style={{ background: heroGradient }}>
           <div className="z-aurora" aria-hidden="true" />
 
@@ -613,10 +607,8 @@ export default function Home() {
             <p className="z-sub">Live scores, AI predictions & leaderboards — updated in real time.</p>
           </div>
 
-          {/* scrolling live ticker */}
           {tickerMatches.length > 0 && <HeroTicker matches={tickerMatches} />}
 
-          {/* ONE dense pulse bar replaces the 4 old stat blocks */}
           <div className="z-pulse-bar">
             <div className={'z-pb-item' + (liveStats.liveCount > 0 ? ' hot' : '')}>
               <span className="z-pb-val" style={{ color: liveStats.liveCount > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
@@ -653,7 +645,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* ══ MATCH SPOTLIGHT — instantly visible ══ */}
         {heroMatch && (
           <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
             <div className="z-hero-top">
@@ -716,7 +707,6 @@ export default function Home() {
           </Link>
         )}
 
-        {/* ══ Ticking countdown to next kickoff ══ */}
         {!ctxLoading && nextKickoff && <KickoffCountdown match={nextKickoff} />}
 
         {!ctxLoading && isLoggedIn && upcomingMatches.length > 0 && (
@@ -778,6 +768,9 @@ export default function Home() {
             </div>
           </div>
         )}
+
+        {/* ✅ NEW AD PLACEMENT 1 */}
+        <AdSlot id="home-ad-1" mobile={true} desktop={true} />
 
         {!ctxLoading && zokaFlat.length > 0 && (
           <div className="z-sec">
@@ -856,6 +849,9 @@ export default function Home() {
             </div>
           )}
         </div>
+
+        {/* ✅ NEW AD PLACEMENT 2 */}
+        <AdSlot id="home-ad-2" mobile={true} desktop={true} />
 
         <div className="z-sec">
           <div className="z-sech">
