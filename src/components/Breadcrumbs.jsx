@@ -1,5 +1,4 @@
-// src/components/Breadcrumbs.jsx
-import { Link, useLocation } from "react-router-dom";
+﻿import { Link, useLocation } from "react-router-dom";
 import { ChevronRight, Home } from "lucide-react";
 import { generateBreadcrumbs } from "../utils/seoBuilder";
 
@@ -10,64 +9,86 @@ export default function Breadcrumbs() {
 
   const crumbs = generateBreadcrumbs(pathname);
 
+  // ★ SEO GOLD: BreadcrumbList Schema for Google Rich Snippets
+  const breadcrumbSchema = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    "itemListElement": crumbs.map((crumb, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": crumb.name || "Home",
+      "item": `${window.location.origin}${crumb.path}`
+    }))
+  };
+
   return (
-    <nav
-      aria-label="Breadcrumb"
-      className="breadcrumbs-nav"
-    >
-      {crumbs.map((crumb, index) => {
-        const last = index === crumbs.length - 1;
-        const isFirst = index === 0;
+    <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbSchema) }}
+      />
+      <nav
+        aria-label="Breadcrumb"
+        className="breadcrumbs-nav"
+      >
+        <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: 'var(--sp-4)', flexWrap: 'wrap' }}>
+          {crumbs.map((crumb, index) => {
+            const last = index === crumbs.length - 1;
+            const isFirst = index === 0;
 
-        return (
-          <span
-            key={`${crumb.path}-${index}`}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "var(--sp-4)",
-            }}
-          >
-            {index > 0 && (
-              <ChevronRight
-                size={12}
+            return (
+              <li
+                key={`${crumb.path}-${index}`}
                 style={{
-                  color: "var(--text-muted)",
-                  opacity: 0.4,
-                  flexShrink: 0,
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "var(--sp-4)",
                 }}
-              />
-            )}
-
-            {isFirst && !last && (
-              <Home
-                size={12}
-                style={{
-                  color: "var(--accent)",
-                  flexShrink: 0,
-                  marginRight: "var(--sp-4)",
-                }}
-              />
-            )}
-
-            {last ? (
-              <span
-                className="breadcrumbs-current"
-                aria-current="page"
               >
-                {crumb.name}
-              </span>
-            ) : (
-              <Link
-                to={crumb.path}
-                className="breadcrumbs-link"
-              >
-                {isFirst && !crumb.name ? "Home" : crumb.name}
-              </Link>
-            )}
-          </span>
-        );
-      })}
-    </nav>
+                {index > 0 && (
+                  <ChevronRight
+                    size={12}
+                    style={{
+                      color: "var(--text-muted)",
+                      opacity: 0.4,
+                      flexShrink: 0,
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+
+                {isFirst && !last && (
+                  <Home
+                    size={12}
+                    style={{
+                      color: "var(--accent)",
+                      flexShrink: 0,
+                      marginRight: "var(--sp-4)",
+                    }}
+                    aria-hidden="true"
+                  />
+                )}
+
+                {last ? (
+                  <span
+                    className="breadcrumbs-current"
+                    aria-current="page"
+                  >
+                    {crumb.name}
+                  </span>
+                ) : (
+                  <Link
+                    to={crumb.path}
+                    className="breadcrumbs-link"
+                  >
+                    {isFirst && !crumb.name ? "Home" : crumb.name}
+                  </Link>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+      </nav>
+    </>
   );
 }

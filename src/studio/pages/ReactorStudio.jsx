@@ -5,8 +5,10 @@ import {
   Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, Clock, ChevronDown, ChevronUp, Maximize2, Minimize2, RotateCcw, Save, Cloud, Lock, Unlock, Award, Target, TrendingUp, Eye, EyeOff, Copy, Check, AlertTriangle, Info, Smile, Sticker, Timer, Repeat, SkipBack, SkipForward, FastForward, Rewind, Sun, Moon, Contrast, Droplets, Wind, Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Settings, HelpCircle, Keyboard, MousePointer, Hand, Pin, PinOff, ArrowUp, ArrowDown, ArrowLeftRight, ArrowUpDown, CornerDownLeft, CornerUpRight, RefreshCw, History, GitBranch, CircleDot, Square, Hexagon, Triangle, Pentagon, ChevronRight, ChevronLeft
 } from 'lucide-react';
 
+// Import your CSS file here (e.g., import './ReactorStudio.css';)
+
 // ═══════════════════════════════════════════════════════════
-// HELPER: WebM Duration Metadata Fixer
+// HELPER: WebM Duration Metadata Fixer (Crucial for iOS/WhatsApp playback)
 // ═══════════════════════════════════════════════════════════
 const fixWebmDuration = async (blob, durationMs) => {
   if (blob.type !== 'video/webm') return blob;
@@ -25,7 +27,7 @@ const fixWebmDuration = async (blob, durationMs) => {
   if (timecodeOffset === -1) return blob;
   let timecodeScale = 1000000;
   const tsSize = view.getUint8(timecodeOffset + 3);
-  if (tsSize === 3) timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | (view.getUint8(timecodeOffset + 6));
+  if (tsSize === 3) timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | view.getUint8(timecodeOffset + 6);
   const durationInMkvUnits = durationMs * (timecodeScale / 1000000);
   const insertAt = timecodeOffset + 7;
   const durationElement = new Uint8Array(2 + 1 + 8);
@@ -52,7 +54,7 @@ const fixWebmDuration = async (blob, durationMs) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// HELPER: IndexedDB
+// HELPER: IndexedDB (Offline Storage for Heavy Media Blobs)
 // ═══════════════════════════════════════════════════════════
 const DB_NAME = 'ReactorStudioDB';
 const STORE_NAME = 'Assets';
@@ -69,7 +71,7 @@ const idbClear = async () => new Promise(async (res, rej) => { const tx = (await
 // ═══════════════════════════════════════════════════════════
 // HELPER: Draw ZOKA Logo Vector Fallback
 // ═══════════════════════════════════════════════════════════
-const drawZokaLogo = (ctx, x, y, size, color = 'var(--accent)') => {
+const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(-size / 2, -size / 2); ctx.lineTo(size / 2, -size / 2); ctx.lineTo(size / 2, -size / 4);
@@ -144,7 +146,6 @@ const getGameState = () => {
 };
 
 const saveGameState = (state) => localStorage.setItem('reactor-game-state', JSON.stringify(state));
-
 const getLevel = (xp) => Math.floor(xp / 200) + 1;
 const getLevelProgress = (xp) => (xp % 200) / 200;
 
@@ -191,13 +192,13 @@ const TEMPLATES = [
   { id: 'yt_edu', title: 'YT Educational', category: 'YouTube', tags: ['edu', 'tutorial'], pip: true, video: { x: 0, y: 0, w: 720, h: 1280 }, profile: { x: 50, y: 60, r: 35, ring: 'accent' }, username: { x: 100, y: 55, size: 28, badge: true, badgeColor: 'accent' }, caption: { x: 20, y: 120, size: 24, maxW: 680, align: 'left' }, topGradient: 350, bottomGradient: 200, preview: { bg: '#1a1a1a', layout: 'tl' } },
   { id: 'neon_pink', title: 'Neon Pink Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: { x: 60, y: 100, w: 600, h: 900, glow: '#ec4899' }, profile: { x: 360, y: 1150, r: 35, ring: '#ec4899' }, username: { x: 360, y: 1220, size: 28, center: true, badge: true, badgeColor: '#ec4899' }, caption: { x: 360, y: 1050, size: 28, maxW: 600, center: true }, bg: '#0a0f1a', preview: { bg: '#0a0f1a', layout: 'center' } },
   { id: 'neon_blue', title: 'Neon Blue Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: { x: 60, y: 100, w: 600, h: 900, glow: '#3b82f6' }, profile: { x: 360, y: 1150, r: 35, ring: '#3b82f6' }, username: { x: 360, y: 1220, size: 28, center: true, badge: true, badgeColor: '#3b82f6' }, caption: { x: 360, y: 1050, size: 28, maxW: 600, center: true }, bg: '#0a0f1a', preview: { bg: '#0a0f1a', layout: 'center' } },
-  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: { x: 60, y: 100, w: 600, h: 900, glow: 'var(--accent)' }, profile: { x: 360, y: 1150, r: 35, ring: 'var(--accent)' }, username: { x: 360, y: 1220, size: 28, center: true, badge: true, badgeColor: 'var(--accent)' }, caption: { x: 360, y: 1050, size: 28, maxW: 600, center: true }, bg: '#0a0f1a', preview: { bg: '#0a0f1a', layout: 'center' } },
+  { id: 'neon_green', title: 'Neon Green Glow', category: 'Gaming', tags: ['cyberpunk', 'twitch'], pip: false, video: { x: 60, y: 100, w: 600, h: 900, glow: '#10b981' }, profile: { x: 360, y: 1150, r: 35, ring: '#10b981' }, username: { x: 360, y: 1220, size: 28, center: true, badge: true, badgeColor: '#10b981' }, caption: { x: 360, y: 1050, size: 28, maxW: 600, center: true }, bg: '#0a0f1a', preview: { bg: '#0a0f1a', layout: 'center' } },
   { id: 'twitch_face', title: 'Twitch Facecam', category: 'Gaming', tags: ['twitch', 'facecam'], pip: true, video: { x: 0, y: 0, w: 720, h: 1280 }, profile: { x: 50, y: 60, r: 35, ring: '#9146ff' }, username: { x: 100, y: 55, size: 28, badge: true, badgeColor: '#9146ff' }, caption: { x: 20, y: 120, size: 24, maxW: 680, align: 'left' }, topGradient: 350, bottomGradient: 200, bg: '#0e0e10', preview: { bg: '#0e0e10', layout: 'tl' } },
   { id: 'pod_split', title: 'Podcast Split', category: 'Podcast', tags: ['podcast', 'split'], pip: true, video: { x: 0, y: 0, w: 360, h: 1280 }, profile: { x: 180, y: 640, r: 50, ring: 'accent' }, username: { x: 180, y: 720, size: 32, center: true, badge: true, badgeColor: 'accent' }, caption: { x: 540, y: 640, size: 28, maxW: 300, center: true }, bg: '#000', preview: { bg: '#111', layout: 'split' } },
   { id: 'pod_wave', title: 'Podcast Minimal', category: 'Podcast', tags: ['podcast', 'minimal'], pip: false, video: { x: 60, y: 100, w: 600, h: 900, glow: '#3b82f6' }, profile: { x: 360, y: 1150, r: 35, ring: '#3b82f6' }, username: { x: 360, y: 1220, size: 28, center: true, badge: true, badgeColor: '#3b82f6' }, caption: { x: 360, y: 1050, size: 28, maxW: 600, center: true }, bg: '#0a0f1a', preview: { bg: '#0a0f1a', layout: 'center' } },
   { id: 'news_red', title: 'Football Breaking', category: 'Football', tags: ['news', 'match'], pip: true, video: { x: 0, y: 100, w: 720, h: 1080 }, caption: { x: 360, y: 60, size: 32, color: '#fff', maxW: 680, center: true }, header: { h: 100, bg: '#dc2626', text: 'BREAKING NEWS', y: 45, size: 36 }, ticker: { h: 100, bg: '#111827', y: 1230, size: 28 }, bg: '#000', preview: { bg: '#dc2626', layout: 'news' } },
   { id: 'news_blue', title: 'Match Update', category: 'Football', tags: ['news', 'match'], pip: true, video: { x: 0, y: 100, w: 720, h: 1080 }, caption: { x: 360, y: 60, size: 32, color: '#fff', maxW: 680, center: true }, header: { h: 100, bg: '#1d9bf0', text: 'MATCH UPDATE', y: 45, size: 36 }, ticker: { h: 100, bg: '#111827', y: 1230, size: 28 }, bg: '#000', preview: { bg: '#1d9bf0', layout: 'news' } },
-  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: { x: 0, y: 100, w: 720, h: 1080 }, caption: { x: 360, y: 60, size: 32, color: '#fff', maxW: 680, center: true }, header: { h: 100, bg: 'var(--accent)', text: 'TRANSFER NEWS', y: 45, size: 36 }, ticker: { h: 100, bg: '#111827', y: 1230, size: 28 }, bg: '#000', preview: { bg: 'var(--accent)', layout: 'news' } },
+  { id: 'news_green', title: 'Transfer News', category: 'Football', tags: ['news', 'transfer'], pip: true, video: { x: 0, y: 100, w: 720, h: 1080 }, caption: { x: 360, y: 60, size: 32, color: '#fff', maxW: 680, center: true }, header: { h: 100, bg: '#10b981', text: 'TRANSFER NEWS', y: 45, size: 36 }, ticker: { h: 100, bg: '#111827', y: 1230, size: 28 }, bg: '#000', preview: { bg: '#10b981', layout: 'news' } },
   { id: 'news_dark', title: 'Broadcast Dark', category: 'Football', tags: ['news', 'minimal'], pip: true, video: { x: 0, y: 0, w: 720, h: 1280 }, profile: { x: 50, y: 60, r: 35, ring: 'accent' }, username: { x: 100, y: 55, size: 28, badge: true, badgeColor: 'accent' }, caption: { x: 20, y: 120, size: 24, maxW: 680, align: 'left' }, topGradient: 350, bottomGradient: 200, bg: '#000', preview: { bg: '#000', layout: 'tl' } },
   { id: 'polaroid_c', title: 'Polaroid Center', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: { x: 40, y: 80, w: 640, h: 900, border: 'accent' }, profile: { x: 360, y: 1100, r: 40, ring: '#f1f1f1' }, username: { x: 360, y: 1200, size: 36, color: '#000', center: true, badge: true, badgeColor: 'accent' }, caption: { x: 360, y: 130, size: 28, color: '#fff', maxW: 600, center: true }, bg: '#fff', preview: { bg: '#fff', layout: 'center' } },
   { id: 'polaroid_t', title: 'Polaroid Video Top', category: 'Minimal', tags: ['white', 'aesthetic'], pip: false, video: { x: 40, y: 40, w: 640, h: 800, border: 'accent' }, profile: { x: 360, y: 1000, r: 40, ring: '#f1f1f1' }, username: { x: 360, y: 1100, size: 36, color: '#000', center: true, badge: true, badgeColor: 'accent' }, caption: { x: 360, y: 900, size: 28, color: '#000', maxW: 600, center: true }, bg: '#fff', preview: { bg: '#fff', layout: 'center' } },
@@ -214,7 +215,7 @@ const FONT_PACKS = {
 };
 
 const BRAND_PRESETS = [
-  { name: 'ZOKA', color: 'var(--accent)' }, { name: 'Twitter', color: '#1d9bf0' },
+  { name: 'ZOKA', color: '#10b981' }, { name: 'Twitter', color: '#1d9bf0' },
   { name: 'TikTok', color: '#ec4899' }, { name: 'Twitch', color: '#9146ff' },
   { name: 'Gold', color: '#f59e0b' }, { name: 'Orange', color: '#f97316' },
   { name: 'Emerald', color: '#10b981' }, { name: 'Rose', color: '#f43f5e' }
@@ -251,9 +252,6 @@ const EXPORT_PRESETS = [
   { id: 'quality', name: 'Max Quality', desc: '1080×1920 • 60fps • VP9', fps: 60, format: 'webm', bitrate: 20000000 },
 ];
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Smart PIP Position Calculator
-// ═══════════════════════════════════════════════════════════
 const getPipPosForTemplate = (template) => {
   if (template.pipPos) return template.pipPos;
   const w = 280, h = 380;
@@ -280,9 +278,6 @@ const getPipPosForTemplate = (template) => {
   return { x: 410, y: 830, w, h };
 };
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Rounded Rectangle Path
-// ═══════════════════════════════════════════════════════════
 const roundRectPath = (ctx, x, y, w, h, r) => {
   const rr = Math.min(r, w / 2, h / 2);
   ctx.beginPath();
@@ -294,14 +289,11 @@ const roundRectPath = (ctx, x, y, w, h, r) => {
   ctx.closePath();
 };
 
-// ═══════════════════════════════════════════════════════════
-// 2. REDUCER STATE MANAGEMENT (with Undo/Redo)
-// ═══════════════════════════════════════════════════════════
 const initialState = {
   media: { sourceLoaded: false, brollLoaded: false, cameraOn: false, profileSrc: null, logoSrc: null, audioName: '' },
   editor: {
     templateId: 'pro_aura', displayName: 'Manu', username: 'manuel_palmer', povCaption: 'POV: You just witnessed greatness 🔥',
-    accentColor: 'var(--accent)', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
+    accentColor: '#10b981', fontPack: 'TikTok', nameColor: '#ffffff', nameSize: null, captionColor: '#ffffff', captionSize: null,
     showVerified: true, editMode: false, videoEffect: 'none', textAnimation: 'none',
     homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
     isMuted: false, filter: 'none', fadeIn: false,
@@ -331,7 +323,7 @@ function studioReducer(state, action) {
     case 'SET_EDITOR': {
       const newEditor = { ...state.editor, ...action.payload };
       const shouldTrack = action.trackHistory !== false;
-      if (shouldTrack && action.payload.templateId !== undefined || action.payload.videoEffect !== undefined || action.payload.filter !== undefined) {
+      if (shouldTrack && (action.payload.templateId !== undefined || action.payload.videoEffect !== undefined || action.payload.filter !== undefined)) {
         return {
           ...state,
           editor: newEditor,
@@ -358,9 +350,6 @@ function studioReducer(state, action) {
   }
 }
 
-// ═══════════════════════════════════════════════════════════
-// MAIN COMPONENT
-// ═══════════════════════════════════════════════════════════
 function ReactorStudioInner() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -369,7 +358,7 @@ function ReactorStudioInner() {
   const [state, dispatch] = useReducer(studioReducer, initialState);
   const [gameState, setGameState] = useState(getGameState);
   const [showOnboarding, setShowOnboarding] = useState(!localStorage.getItem('reactor-onboarded'));
-  const [isMobile, setIsMobile] = useState(window.innerWidth <= 768);
+  const [isMobile, setIsMobile] = useState(typeof window !== 'undefined' && window.innerWidth <= 768);
   
   const toolbarRef = useRef(null);
   const [scrollState, setScrollState] = useState({ left: false, right: false, up: false, down: false });
@@ -385,7 +374,6 @@ function ReactorStudioInner() {
   const chunksRef = useRef([]);
   const streamRef = useRef(null);
   const dragRef = useRef({ target: null, offsetX: 0, offsetY: 0 });
-  const timelineDragRef = useRef(null);
   const profileImgRef = useRef(new Image());
   const logoImgRef = useRef(new Image());
   const homeLogoRef = useRef(new Image());
@@ -394,7 +382,6 @@ function ReactorStudioInner() {
   const currentTimeRef = useRef(0);
   const renderOverlayRef = useRef(() => {});
   const mediaRecorderRef = useRef(null);
-  const writableStreamRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
 
   const { media, editor, slideshow, timeline, ui, history } = state;
@@ -402,7 +389,6 @@ function ReactorStudioInner() {
   const activeTemplate = templateMap[editor.templateId] || TEMPLATES[0];
   const activeClip = useMemo(() => timeline.clips.find(c => c.id === timeline.activeClipId) || timeline.clips[0], [timeline.clips, timeline.activeClipId]);
 
-  // ─── Responsive & Scroll Listener ───
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth <= 768);
     window.addEventListener('resize', handleResize);
@@ -413,54 +399,23 @@ function ReactorStudioInner() {
     const el = toolbarRef.current;
     if (!el) return;
     if (isMobile) {
-      setScrollState({
-        left: el.scrollLeft > 10,
-        right: el.scrollLeft < el.scrollWidth - el.clientWidth - 10,
-        up: false, down: false
-      });
+      setScrollState({ left: el.scrollLeft > 10, right: el.scrollLeft < el.scrollWidth - el.clientWidth - 10, up: false, down: false });
     } else {
-      setScrollState({
-        left: false, right: false,
-        up: el.scrollTop > 10,
-        down: el.scrollTop < el.scrollHeight - el.clientHeight - 10
-      });
+      setScrollState({ left: false, right: false, up: el.scrollTop > 10, down: el.scrollTop < el.scrollHeight - el.clientHeight - 10 });
     }
   }, [isMobile]);
 
-  useEffect(() => {
-    handleToolbarScroll();
-  }, [isMobile, state.ui.activePanel]);
+  useEffect(() => { handleToolbarScroll(); }, [isMobile, state.ui.activePanel, handleToolbarScroll]);
 
-  // ─── Sync Fullscreen State ───
   useEffect(() => {
     const handleFsChange = () => {
       const isFs = !!document.fullscreenElement;
-      if (isFs !== ui.fullscreen) {
-        dispatch({ type: 'SET_UI', payload: { fullscreen: isFs } });
-      }
+      if (isFs !== ui.fullscreen) dispatch({ type: 'SET_UI', payload: { fullscreen: isFs } });
     };
     document.addEventListener('fullscreenchange', handleFsChange);
     return () => document.removeEventListener('fullscreenchange', handleFsChange);
   }, [ui.fullscreen]);
 
-  // ─── Keyboard Shortcuts ───
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); if (e.shiftKey) dispatch({ type: 'REDO' }); else dispatch({ type: 'UNDO' }); }
-      if (e.key === ' ') { e.preventDefault(); togglePreview(); }
-      if (e.key === 'm') dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } });
-      if (e.key === 'g') dispatch({ type: 'SET_UI', payload: { showGuides: !ui.showGuides } });
-      if (e.key === 'e') dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } });
-      if (e.key === 'f') toggleFullscreen();
-      if (e.key === '?') dispatch({ type: 'SET_UI', payload: { showShortcuts: !ui.showShortcuts } });
-      if (e.key === 'Escape') dispatch({ type: 'SET_UI', payload: { activePanel: null, showShortcuts: false } });
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [editor.isMuted, ui.showGuides, editor.editMode, ui.showShortcuts]);
-
-  // ─── Achievement Checker ───
   const unlockAchievement = useCallback((id) => {
     setGameState(prev => {
       if (prev.achievements.includes(id)) return prev;
@@ -474,7 +429,6 @@ function ReactorStudioInner() {
     });
   }, [addToast]);
 
-  // ─── Streak Checker ───
   useEffect(() => {
     const today = new Date().toDateString();
     setGameState(prev => {
@@ -486,15 +440,13 @@ function ReactorStudioInner() {
       if (newStreak > 1) addToast(`🔥 ${newStreak} day streak! Keep creating!`, 'info');
       return newState;
     });
-  }, []);
+  }, [addToast]);
 
-  // ─── Night Owl Achievement ───
   useEffect(() => {
     const hour = new Date().getHours();
     if (hour >= 0 && hour < 5) unlockAchievement('night_owl');
-  }, []);
+  }, [unlockAchievement]);
 
-  // ─── Fixture Data ───
   useEffect(() => {
     if (fixtureData) {
       dispatch({
@@ -512,7 +464,6 @@ function ReactorStudioInner() {
     }
   }, [fixtureData]);
 
-  // ─── Load Project ───
   useEffect(() => {
     const load = async () => {
       const saved = JSON.parse(localStorage.getItem('reactor-project-state') || '{}');
@@ -550,7 +501,6 @@ function ReactorStudioInner() {
     load();
   }, []);
 
-  // ─── Auto-Save ───
   useEffect(() => {
     if (ui.isLoadingProject) return;
     dispatch({ type: 'SET_UI', payload: { autoSaveStatus: 'saving' } });
@@ -568,17 +518,44 @@ function ReactorStudioInner() {
   useEffect(() => { if (editor.awayLogoUrl) awayLogoRef.current.src = editor.awayLogoUrl; }, [editor.awayLogoUrl]);
   useEffect(() => { if (sourceVideoRef.current) sourceVideoRef.current.muted = editor.isMuted; }, [editor.isMuted]);
   useEffect(() => { if (sourceVideoRef.current && editor.mode === 'video') sourceVideoRef.current.playbackRate = editor.playbackRate; }, [editor.playbackRate, editor.mode, media.sourceLoaded]);
+  useEffect(() => { if (editor.playbackRate >= 2) unlockAchievement('speed_demon'); }, [editor.playbackRate, unlockAchievement]);
 
-  // ─── Speed Achievement ───
-  useEffect(() => { if (editor.playbackRate >= 2) unlockAchievement('speed_demon'); }, [editor.playbackRate]);
+  const toggleFullscreen = useCallback(() => {
+    if (!document.fullscreenElement) document.documentElement.requestFullscreen?.().catch(console.error);
+    else document.exitFullscreen?.().catch(console.error);
+  }, []);
 
-  // ─── Fullscreen Toggle ───
-  const toggleFullscreen = () => {
-    if (!document.fullscreenElement) { document.documentElement.requestFullscreen?.().catch(console.error); }
-    else { document.exitFullscreen?.().catch(console.error); }
-  };
+  const togglePreview = useCallback(() => {
+    if (editor.mode === 'video') {
+      const vid = sourceVideoRef.current;
+      if (!vid || !activeClip) return;
+      if (timeline.isPlaying) { vid.pause(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } }); }
+      else {
+        if (vid.currentTime < activeClip.start || vid.currentTime >= activeClip.end - 0.1) vid.currentTime = activeClip.start;
+        vid.play(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: true } });
+      }
+    } else {
+      dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: !timeline.isPlaying } });
+    }
+    haptic('light');
+  }, [editor.mode, activeClip, timeline.isPlaying, dispatch]);
 
-  // ─── Import Handlers ───
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if ((e.ctrlKey || e.metaKey) && e.key === 'z') { e.preventDefault(); if (e.shiftKey) dispatch({ type: 'REDO' }); else dispatch({ type: 'UNDO' }); }
+      if (e.key === ' ') { e.preventDefault(); togglePreview(); }
+      if (e.key === 'm') dispatch({ type: 'SET_EDITOR', payload: { isMuted: !editor.isMuted } });
+      if (e.key === 'g') dispatch({ type: 'SET_UI', payload: { showGuides: !ui.showGuides } });
+      if (e.key === 'e') dispatch({ type: 'SET_EDITOR', payload: { editMode: !editor.editMode } });
+      if (e.key === 'f') toggleFullscreen();
+      if (e.key === '?') dispatch({ type: 'SET_UI', payload: { showShortcuts: !ui.showShortcuts } });
+      if (e.key === 'Escape') dispatch({ type: 'SET_UI', payload: { activePanel: null, showShortcuts: false } });
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [editor.isMuted, ui.showGuides, editor.editMode, ui.showShortcuts, togglePreview, toggleFullscreen, dispatch]);
+
   const handleImport = async (e, type) => {
     const file = e.target.files[0];
     if (file) {
@@ -636,14 +613,14 @@ function ReactorStudioInner() {
     e.target.value = null;
   };
 
-  const handleClearProject = async () => {
+  const handleClearProject = useCallback(async () => {
     if (!window.confirm("Clear all project data?")) return;
     localStorage.removeItem('reactor-project-state');
     await idbClear();
     window.location.reload();
-  };
+  }, []);
 
-  const startCamera = async () => {
+  const startCamera = useCallback(async () => {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 1280, facingMode: 'user' }, audio: true });
       streamRef.current = stream;
@@ -653,24 +630,8 @@ function ReactorStudioInner() {
       unlockAchievement('pip_pro');
       addToast('Camera activated!', 'success');
     } catch { addToast("Camera access denied.", 'error'); }
-  };
+  }, [addToast, unlockAchievement, dispatch]);
 
-  const togglePreview = () => {
-    if (editor.mode === 'video') {
-      const vid = sourceVideoRef.current;
-      if (!vid || !activeClip) return;
-      if (timeline.isPlaying) { vid.pause(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } }); }
-      else {
-        if (vid.currentTime < activeClip.start || vid.currentTime >= activeClip.end - 0.1) vid.currentTime = activeClip.start;
-        vid.play(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: true } });
-      }
-    } else {
-      dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: !timeline.isPlaying } });
-    }
-    haptic('light');
-  };
-
-  // ─── Canvas Drawing Helpers ───
   const drawCover = (ctx, media, dx, dy, dw, dh, crop = { x: 0, y: 0, w: 1, h: 1 }) => {
     const vw = media.videoWidth || media.width, vh = media.videoHeight || media.height;
     if (!vw || !vh) return;
@@ -694,10 +655,10 @@ function ReactorStudioInner() {
     ctx.beginPath(); ctx.moveTo(x - s * 0.4, y); ctx.lineTo(x - s * 0.1, y + s * 0.35); ctx.lineTo(x + s * 0.45, y - s * 0.35); ctx.stroke(); ctx.restore();
   };
 
-  // ─── Overlay Render ───
   renderOverlayRef.current = () => {
     const oc = overlayCanvasRef.current;
     const ctx = oc.getContext('2d');
+    if (!ctx) return;
     const ratios = { '9:16': { w: 720, h: 1280 }, '1:1': { w: 1080, h: 1080 }, '4:5': { w: 864, h: 1080 } };
     const dims = ratios[editor.canvasRatio] || ratios['9:16'];
     const W = dims.w, H = dims.h;
@@ -755,7 +716,6 @@ function ReactorStudioInner() {
       if (editor.showVerified) { let nW = ctx.measureText(editor.username).width; let bX = (activeTemplate.isCustom || editor.editMode || u.center) ? ux + nW / 2 + 16 : ux + nW + 16; drawVerifiedBadge(ctx, bX, uy - uS / 2 + 2, uS / 2.5); }
     }
 
-    // Stickers
     if (ui.layers.stickers && editor.stickers && editor.stickers.length > 0) {
       ctx.globalAlpha = editor.stickerOpacity;
       editor.stickers.forEach(s => {
@@ -771,8 +731,6 @@ function ReactorStudioInner() {
           ctx.setLineDash([6, 6]);
           ctx.strokeRect(s.x - s.size/2, s.y - s.size/2, s.size, s.size);
           ctx.setLineDash([]);
-          
-          // Resize handle
           ctx.fillStyle = '#10b981';
           ctx.beginPath();
           ctx.arc(s.x + s.size/2, s.y + s.size/2, 16, 0, Math.PI * 2);
@@ -795,11 +753,11 @@ function ReactorStudioInner() {
     }
   };
 
-  // ─── Main Frame Render ───
   const drawFrameRef = useRef(() => {});
   drawFrameRef.current = () => {
     const canvas = canvasRef.current; if (!canvas) return;
     const ctx = canvas.getContext('2d');
+    if (!ctx) return;
     
     const ratios = { '9:16': { w: 720, h: 1280 }, '1:1': { w: 1080, h: 1080 }, '4:5': { w: 864, h: 1080 } };
     const dims = ratios[editor.canvasRatio] || ratios['9:16'];
@@ -883,7 +841,6 @@ function ReactorStudioInner() {
 
     renderOverlayRef.current(); if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
 
-    // Intro Animation
     if (editor.introEnabled && activeClip && editor.mode === 'video') {
       const introDur = 3.0; const introP = Math.min((currentTimeRef.current - activeClip.start) / introDur, 1.0);
       if (introP < 1.0) {
@@ -904,7 +861,6 @@ function ReactorStudioInner() {
       }
     }
 
-    // Guides
     if (ui.showGuides) {
       ctx.strokeStyle = 'rgba(255,0,0,0.3)'; ctx.lineWidth = 1; ctx.setLineDash([5, 5]);
       ctx.strokeRect(W * 0.1, H * 0.1, W * 0.8, H * 0.8);
@@ -913,13 +869,13 @@ function ReactorStudioInner() {
       ctx.setLineDash([]);
     }
 
-    if (ui.isExporting && exportCanvasRef.current) { const eCtx = exportCanvasRef.current.getContext('2d'); eCtx.imageSmoothingEnabled = true; eCtx.imageSmoothingQuality = 'high'; eCtx.drawImage(canvas, 0, 0, 1080, 1920); }
+    if (ui.isExporting && exportCanvasRef.current) { const eCtx = exportCanvasRef.current.getContext('2d'); if (eCtx) { eCtx.imageSmoothingEnabled = true; eCtx.imageSmoothingQuality = 'high'; eCtx.drawImage(canvas, 0, 0, 1080, 1920); } }
   };
 
   useEffect(() => { let aF; const l = () => { drawFrameRef.current(); aF = requestAnimationFrame(l); }; aF = requestAnimationFrame(l); return () => cancelAnimationFrame(aF); }, []);
 
-  // ─── Pointer / Drag (Updated for Stickers) ───
   const getCanvasCoords = (e) => { 
+    if (!canvasRef.current) return { x: 0, y: 0 };
     const r = canvasRef.current.getBoundingClientRect(); 
     const sx = canvasRef.current.width / r.width, sy = canvasRef.current.height / r.height; 
     const cx = e.touches ? e.touches[0].clientX : e.clientX, cy = e.touches ? e.touches[0].clientY : e.clientY; 
@@ -928,8 +884,6 @@ function ReactorStudioInner() {
 
   const handlePointerDown = (e) => {
     const { x, y } = getCanvasCoords(e);
-    
-    // 1. Check Sticker Resize Handle
     const selSticker = editor.stickers?.find(s => s.id === editor.selectedStickerId);
     if (selSticker) {
       const handleX = selSticker.x + selSticker.size/2;
@@ -940,7 +894,6 @@ function ReactorStudioInner() {
       }
     }
 
-    // 2. Check Sticker Body
     const clickedSticker = editor.stickers?.find(s => Math.abs(x - s.x) < s.size/2 && Math.abs(y - s.y) < s.size/2);
     if (clickedSticker) {
       dispatch({ type: 'SET_EDITOR', payload: { selectedStickerId: clickedSticker.id } });
@@ -948,12 +901,8 @@ function ReactorStudioInner() {
       return;
     }
 
-    // Deselect sticker if clicking empty space
-    if (editor.selectedStickerId) {
-      dispatch({ type: 'SET_EDITOR', payload: { selectedStickerId: null } });
-    }
+    if (editor.selectedStickerId) dispatch({ type: 'SET_EDITOR', payload: { selectedStickerId: null } });
 
-    // 3. Existing PIP / Profile Logic
     if (!editor.editMode && !activeTemplate.isCustom && !media.brollLoaded && !media.cameraOn) return;
     if ((activeTemplate.isCustom || editor.editMode) && media.profileSrc) { 
       if (Math.hypot(x - editor.profilePos.x, y - editor.profilePos.y) <= editor.profilePos.r) { 
@@ -1002,7 +951,6 @@ function ReactorStudioInner() {
 
   const handlePointerUp = () => dragRef.current.target = null;
 
-  // ─── Export ───
   const handleExportVideo = async (preset) => {
     const { format, fps, bitrate } = preset;
     const vid = sourceVideoRef.current;
@@ -1076,7 +1024,6 @@ function ReactorStudioInner() {
       if (aC) aC.close();
       exportCanvasRef.current = null;
 
-      // Achievements
       setGameState(prev => {
         const newExports = prev.totalExports + 1;
         const newState = { ...prev, totalExports: newExports };
@@ -1116,7 +1063,6 @@ function ReactorStudioInner() {
     exportCanvasRef.current = null;
   };
 
-  // ─── Template Apply ───
   const applyTemplate = (id) => {
     const t = templateMap[id];
     if (!t) return;
@@ -1189,9 +1135,6 @@ function ReactorStudioInner() {
     ));
   };
 
-  // ═══════════════════════════════════════════════════════════
-  // RENDER
-  // ═══════════════════════════════════════════════════════════
   return (
     <div className="rs-container">
       <input type="file" ref={el => fileInputRefs.current.video = el} onChange={(e) => handleImport(e, 'video')} accept="video/*" style={{ display: 'none' }} />
@@ -1201,7 +1144,6 @@ function ReactorStudioInner() {
       <input type="file" ref={el => fileInputRefs.current.audio = el} onChange={(e) => handleImport(e, 'audio')} accept="audio/*" style={{ display: 'none' }} />
       <input type="file" ref={el => fileInputRefs.current.images = el} onChange={handleImportImages} accept="image/*" multiple style={{ display: 'none' }} />
 
-      {/* ─── Top Header ─── */}
       <div className="rs-header">
         <div className="rs-header-left">
           <button onClick={() => navigate('/studio')} className="rs-top-btn"><ArrowLeft size={18} /></button>
@@ -1236,7 +1178,6 @@ function ReactorStudioInner() {
         </div>
       </div>
 
-      {/* ─── Export Progress Bar ─── */}
       {ui.isExporting && (
         <div className="rs-export-progress-bar">
           <div className="rs-export-progress-fill" style={{ width: `${ui.exportProgress}%` }} />
@@ -1244,7 +1185,6 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* ─── Main Canvas Area ─── */}
       <div className="rs-main">
         <div className="rs-canvas-area">
           <div className="rs-canvas-wrap" data-ratio={editor.canvasRatio}
@@ -1262,7 +1202,6 @@ function ReactorStudioInner() {
             {ui.recordedUrl && <video src={ui.recordedUrl} controls autoPlay loop className="rs-canvas-preview" />}
             {ui.isExporting && <div className="rs-canvas-exporting"><Loader size={12} className="rs-spin" /> EXPORTING {ui.exportProgress}%</div>}
             
-            {/* Sticker Quick Actions */}
             {editor.selectedStickerId && (
               <div className="rs-sticker-actions">
                 <button className="rs-btn-sm rs-btn-danger" onClick={() => {
@@ -1277,7 +1216,6 @@ function ReactorStudioInner() {
         </div>
       </div>
 
-      {/* ─── Bottom Controls (Timeline) ─── */}
       {(media.sourceLoaded || slideshow.images.length > 0) && (
         <div className="rs-bottom-controls">
           <div className="rs-playback-row">
@@ -1325,7 +1263,6 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* ─── Unified Toolbar with Scroll Arrows ─── */}
       {!ui.isExporting && !ui.recordedUrl && (
         <div className="rs-toolbar-wrap">
           {isMobile && scrollState.left && <div className="rs-scroll-arrow rs-arrow-left"><ChevronLeft size={20} /></div>}
@@ -1339,12 +1276,10 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* ─── Sliding Control Panel ─── */}
       {ui.activePanel && (
         <div className="rs-controls-panel open">
           <button onClick={() => dispatch({ type: 'SET_UI', payload: { activePanel: null } })} className="rs-panel-close"><X size={18} /></button>
 
-          {/* TEMPLATES PANEL */}
           {ui.activePanel === 'templates' && (
             <div>
               <h3 className="rs-panel-title"><LayoutGrid size={14} color="var(--accent)" /> Templates</h3>
@@ -1378,20 +1313,13 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* EDIT PANEL */}
           {ui.activePanel === 'edit' && (
             <div>
               <h3 className="rs-panel-title"><Layers size={14} color="var(--accent)" /> Edit & Layers</h3>
-              
-              {/* Canvas Ratio Pro Feature */}
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Crop size={12} /> Aspect Ratio</h4>
                 <div style={{ display: 'flex', gap: '8px' }}>
-                  {[
-                    { id: '9:16', name: 'TikTok' },
-                    { id: '1:1', name: 'Square' },
-                    { id: '4:5', name: 'Insta' }
-                  ].map(r => (
+                  {[{ id: '9:16', name: 'TikTok' }, { id: '1:1', name: 'Square' }, { id: '4:5', name: 'Insta' }].map(r => (
                     <button key={r.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { canvasRatio: r.id } })} 
                       className={`rs-btn-sm ${editor.canvasRatio === r.id ? 'active' : ''}`} style={{ flex: 1 }}>
                       {r.name}
@@ -1399,8 +1327,6 @@ function ReactorStudioInner() {
                   ))}
                 </div>
               </div>
-
-              {/* Template BG Color */}
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Palette size={12} /> Background Color</h4>
                 <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1408,7 +1334,6 @@ function ReactorStudioInner() {
                   <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { bgColor: null } })} className="rs-btn-sm">Reset to Default</button>
                 </div>
               </div>
-
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Gauge size={12} /> Playback Speed</h4>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
@@ -1480,7 +1405,6 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* TEXT PANEL */}
           {ui.activePanel === 'text' && (
             <div>
               <h3 className="rs-panel-title"><Type size={14} color="var(--accent)" /> Text & Social</h3>
@@ -1529,7 +1453,6 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* EFFECTS PANEL */}
           {ui.activePanel === 'effects' && (
             <div>
               <h3 className="rs-panel-title"><Wand2 size={14} color="var(--accent)" /> Effects & Filters</h3>
@@ -1563,7 +1486,6 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* STICKERS PANEL */}
           {ui.activePanel === 'stickers' && (
             <div>
               <h3 className="rs-panel-title"><Smile size={14} color="var(--accent)" /> Stickers</h3>
@@ -1585,7 +1507,6 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* AUDIO PANEL */}
           {ui.activePanel === 'audio' && (
             <div>
               <h3 className="rs-panel-title"><Music size={14} color="var(--accent)" /> Audio Controls</h3>
@@ -1603,7 +1524,6 @@ function ReactorStudioInner() {
             </div>
           )}
 
-          {/* EXPORT PANEL */}
           {ui.activePanel === 'export' && (
             <div>
               <h3 className="rs-panel-title"><Download size={14} color="var(--accent)" /> Export Presets</h3>
@@ -1621,7 +1541,6 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* ─── Keyboard Shortcuts Modal ─── */}
       {ui.showShortcuts && (
         <div className="rs-modal-overlay" onClick={() => dispatch({ type: 'SET_UI', payload: { showShortcuts: false } })}>
           <div className="rs-modal" onClick={e => e.stopPropagation()}>
@@ -1635,7 +1554,6 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* ─── Onboarding ─── */}
       {showOnboarding && (
         <div className="rs-modal-overlay">
           <div className="rs-modal rs-onboarding">
@@ -1655,7 +1573,6 @@ function ReactorStudioInner() {
         </div>
       )}
 
-      {/* Hidden media elements */}
       <video ref={sourceVideoRef} className="rs-hidden-video" playsInline preload="auto" />
       <video ref={brollVideoRef} className="rs-hidden-video" playsInline muted preload="auto" />
       <video ref={webcamVideoRef} className="rs-hidden-video" playsInline muted preload="auto" />

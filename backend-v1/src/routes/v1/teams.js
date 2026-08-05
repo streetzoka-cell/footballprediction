@@ -1,9 +1,11 @@
-// footballprediction/backend-v1/src/routes/v1/teams.js
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
+const path = require('path');
+const fsSync = require('fs');
 const ProviderManager = require('../../providers/ProviderManager');
 const cache = require('../../cache/MemoryCache');
 const logger = require('../../utils/logger');
+const { getDateOffset } = require('../../config/constants');
 
 // GET /api/v1/teams?league=39
 router.get('/', async (req, res, next) => {
@@ -58,6 +60,50 @@ router.get('/:id', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+// ★ SEO FIX: Targeted Team Fixtures Endpoint (Lightweight for Googlebot)
+router.get('/:teamId/fixtures', async (req, res, next) => {
+  try {
+    const teamId = String(req.params.teamId);
+    const cacheKey = `team-fixtures:${teamId}`;
+    
+    const cached = cache.get(cacheKey);
+    if (cached) {
+      logger.info(`[Gateway] Cache HIT for ${cacheKey}`);
+      return res.json(cached);
+    }
+
+    logger.info(`[Gateway] Cache MISS for ${cacheKey}. Reading local snapshots...`);
+    
+    const today = getDateOffset(0);
+    const yesterday = getDateOffset(-1);
+    const tomorrow = getDateOffset(1);
+    
+    const dates = [today, yesterday, tomorrow];
+    let teamMatches = [];
+    
+    for (const date of dates) {
+      const filePath = path.join(process.cwd(), 'public_data', 'fixtures', `${date}.json`);
+      if (fsSync.existsSync(filePath)) {
+        const raw = fsSync.readFileSync(filePath, 'utf8');
+        const parsed = JSON.parse(raw);
+        const matches = parsed.matches || parsed.data || [];
+        
+        const filtered = matches.filter(m => 
+          String(m.homeTeamId) === teamId || String(m.awayTeamId) === teamId ||
+          String(m.homeTeam?.id) === teamId || String(m.awayTeam?.id) === teamId
+        );
+        teamMatches = [...teamMatches, ...filtered];
+      }
+    }
+    
+    teamMatches.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+    
+    // Cache for 10 minutes to prevent disk spam during heavy crawling
+    cache.set(cacheKey, teamMatches, 10 * 60 * 1000);
+    res.json(teamMatches);
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

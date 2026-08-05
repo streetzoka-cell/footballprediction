@@ -1,6 +1,4 @@
-﻿// footballprediction/src/pages/Fixtures.jsx
-
-import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Trophy, Users,
@@ -12,11 +10,11 @@ import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
-import { buildMatchRoute } from '../utils/routes'; // ★ FIXED IMPORT
+import { buildMatchRoute } from '../utils/routes'; 
 import { Sound } from '../utils/soundEngine';
 import { applySmartMinute } from '../engine/matchEngine'; 
 import MatchCard from '../components/MatchCard';
-import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
+import AdSlot from '../components/AdSlot'; 
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
@@ -70,7 +68,6 @@ function useToasts() {
   return { toasts, addGoal };
 }
 
-// ✅ THEME-INDEPENDENT TOAST CONTAINER
 const ToastContainer = memo(({ toasts }) => {
   if (!toasts.length) return null;
   return (
@@ -106,7 +103,6 @@ const ToastContainer = memo(({ toasts }) => {
           );
         }
         return (
-          /* ✅ FIXED: Replaced window.location.hash with proper route build */
           <div key={t.id} className="zoka-toast goal-toast" onClick={() => window.location.href = buildMatchRoute(t.matchId, t.homeName, t.awayName)} style={{
             background: 'linear-gradient(135deg, var(--primary-dim) 0%, var(--primary) 100%)',
             borderRadius: 'var(--r-12)', padding: '16px', boxShadow: 'var(--shadow-primary)',
@@ -138,7 +134,6 @@ const LiveTicker = memo(({ matches }) => {
   return (
     <div className="zoka-live-ticker">
       {matches.map(m => (
-        /* ✅ FIXED: Broken Links targeting 404 */
         <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-ticker-item">
           <div className="zoka-ticker-live" />
           <span className="text-muted" style={{fontSize: '10px', fontWeight: 700, minWidth: '28px'}}>{m.displayMinute}'</span>
@@ -151,7 +146,6 @@ const LiveTicker = memo(({ matches }) => {
   );
 });
 
-// --- Match of the Day Card with REAL Intelligence & Voting ---
 const MatchOfTheDayCard = memo(({ match }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [userVote, setUserVote] = useState(() => localStorage.getItem(`zoka_vote_${match?.id}`));
@@ -318,7 +312,7 @@ const TabBar = memo(({ tabs, activeTab, onTabChange }) => {
             width: activeBtn.offsetWidth,
             transform: `translateX(${activeBtn.offsetLeft}px)`,
             left: 0,
-            top: '4px' // Aligns perfectly inside the 4px padded tab bar
+            top: '4px'
           });
         }
       }
@@ -503,6 +497,18 @@ export default function Fixtures() {
     return list; 
   }, [allFixtures, compFilter, ui.showLiveOnly, searchQ, timeFilter]);
 
+  // ★ SEO FIX: Inject ItemList Schema for Google Knowledge Graph
+  const itemListSchema = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Today's Football Fixtures & Live Scores",
+    "itemListElement": displayFixtures.slice(0, 50).map((m, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "url": `${window.location.origin}${buildMatchRoute(m.id, m.homeName, m.awayName)}`
+    }))
+  }), [displayFixtures]);
+
   const topMatches = useMemo(() => {
     return allFixtures.filter(m => {
       const home = norm(m.homeName); const away = norm(m.awayName);
@@ -603,7 +609,13 @@ export default function Fixtures() {
 
   return (
     <div className="zoka-page">
-      <SEO title="Football Fixtures, Live Scores & League Tables" description="Explore today's football fixtures..." keywords="football fixtures, live scores..." robots="index,follow" />
+      <SEO 
+        title="Football Fixtures, Live Scores & League Tables" 
+        description="Explore today's football fixtures, live scores, and predictions from top leagues worldwide." 
+        keywords="football fixtures, live scores, predictions, premier league, champions league" 
+        robots="index,follow" 
+        structuredData={itemListSchema}
+      />
       <ToastContainer toasts={toasts} />
       
       <div className="zoka-wrap">
@@ -645,7 +657,6 @@ export default function Fixtures() {
           <div className="zoka-schip"><div className="val">{favorites.length}</div><div className="lbl">Favourites</div></div>
         </div>
 
-        {/* ✅ DATE DROPDOWN - Utilizing Design System Classes */}
         <div className="zoka-datenav" style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '8px', zIndex: 100 }}>
           <button className={`zoka-nav-btn ${selectedDate === yesterdayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(yesterdayStr())}>Yesterday</button>
           <button className={`zoka-nav-btn ${selectedDate === todayStr() ? 'active' : ''}`} onClick={() => setSelectedDate(todayStr())}>Today</button>
@@ -745,7 +756,6 @@ export default function Fixtures() {
               </div>
             )}
             
-            {/* ✅ NEW AD PLACEMENT */}
             <AdSlot id="fixt-ad-1" mobile={true} desktop={true} />
 
             {fixturesLoading && isPrimaryDate ? (
@@ -780,24 +790,30 @@ export default function Fixtures() {
 
                 {(ui.leagueFilterOpen || compFilter !== 'ALL') && otherLeagues.map(group => renderLeagueSection(group))}
 
-                <div className="zoka-seo-links">
-                  <h3>Today's Match Links</h3>
-                  {displayFixtures.slice(0, 50).map(m => (
-                    /* ✅ FIXED: Broken SEO links targeting 404 */
-                    <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link" rel="bookmark">
-                      {m.homeName} vs {m.awayName}
-                    </Link>
-                  ))}
-                </div>
-
-                <div className="zoka-seo-links" style={{ marginTop: '20px' }}>
-                  <h3>Explore Leagues</h3>
-                  {MAJOR_LEAGUES.map(c => (
-                    <Link key={c.id || c.name} to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link">
-                      {c.name}
-                    </Link>
-                  ))}
-                </div>
+                {/* ★ SEO FIX: Semantic Internal Linking Directory */}
+                <nav className="zoka-seo-links glass-card p-24 mt-24" aria-label="Match and league directory">
+                  <h3 className="text-primary font-bold mb-12 text-lg">Today's Match Directory</h3>
+                  <ul className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
+                    {displayFixtures.slice(0, 60).map(m => (
+                      <li key={m.id}>
+                        <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link text-sm hover:text-primary transition-colors" rel="bookmark">
+                          {m.homeName} vs {m.awayName}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                  
+                  <h3 className="text-primary font-bold mt-24 mb-12 text-lg">Explore Leagues</h3>
+                  <ul className="flex flex-wrap gap-8">
+                    {MAJOR_LEAGUES.map(c => (
+                      <li key={c.id}>
+                        <Link to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link badge text-xs">
+                          {c.name}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
+                </nav>
               </>
             )}
           </>
@@ -874,10 +890,10 @@ export default function Fixtures() {
             ) : teamsData.length > 0 ? (
               <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
                 {teamsData.map(t => (
-                  <div key={t.id} className="zoka-team-card flex-center gap-8">
+                  <Link to={`/team/${t.id}/${slugify(t.name)}`} key={t.id} className="zoka-team-card flex-center gap-8" style={{textDecoration: 'none', color: 'inherit'}}>
                     {t.logo && <img src={t.logo} alt={t.name} width="32" height="32" loading="lazy" style={{objectFit:'contain', margin: 0}} />}
                     <div className="text-primary font-bold text-sm">{t.name}</div>
-                  </div>
+                  </Link>
                 ))}
               </div>
             ) : (

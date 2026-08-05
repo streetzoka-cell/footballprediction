@@ -1,6 +1,4 @@
-﻿// footballprediction/src/hooks/useFixtures.js
-
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
@@ -25,6 +23,7 @@ export function useHomeMatches() {
     refetchOnWindowFocus: true,
   });
 }
+
 export function useFixtures(dateStr, sport = 'football') {
   return useQuery({
     queryKey: ['fixtures', dateStr, sport],
@@ -71,11 +70,7 @@ export function useFixtures(dateStr, sport = 'football') {
 
       live.forEach(m => {
         const existing = findExisting(m);
-
-        if (existing && existing.display?.isFinished && !m.display?.isFinished) {
-          return;
-        }
-
+        if (existing && existing.display?.isFinished && !m.display?.isFinished) return;
         if (existing) {
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else if (m.dateStr === dateStr) {
@@ -91,16 +86,10 @@ export function useFixtures(dateStr, sport = 'football') {
         .filter(Boolean)
         .filter(m => {
           if (m.isHidden) return false;
-
-          // ★ FIX: Removed the aggressive STUCK_AT_90_MS filter. 
-          // The matchEngine now handles force-FT safely up to 3.5 hours.
           if (m.timestamp) {
             const elapsed = now - (m.timestamp * 1000);
-            if (elapsed > HIDE_OLD_MS && !m.isFinished) {
-              return false;
-            }
+            if (elapsed > HIDE_OLD_MS && !m.isFinished) return false;
           }
-
           return true;
         });
     },
@@ -111,9 +100,7 @@ export function useFixtures(dateStr, sport = 'football') {
     refetchOnWindowFocus: true,
     refetchInterval: (query) => {
       const date = query.queryKey[1];
-      if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) {
-        return 30000;
-      }
+      if ([todayStr(), yesterdayStr(), tomorrowStr()].includes(date)) return 30000;
       return false;
     }
   });
@@ -128,7 +115,6 @@ export function useLiveMatches(sport = 'football') {
       return (res?.data || [])
         .map((m) => normalizeMatch(m, true, now))
         .filter(Boolean)
-        // ★ Only genuinely live matches — drop force-FT'd, hidden, or finished entries
         .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
     },
     refetchInterval: 30000,

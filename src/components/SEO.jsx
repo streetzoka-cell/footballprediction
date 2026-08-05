@@ -1,7 +1,6 @@
-﻿// footballprediction/src/components/SEO.jsx
-import { Helmet } from "react-helmet-async";
+﻿import { Helmet } from "react-helmet-async";
 import { useLocation } from "react-router-dom";
-import { SITE, generateBreadcrumbs, breadcrumbSchema } from "../utils/seoBuilder";
+import { SITE, generateBreadcrumbs, breadcrumbSchema, websiteSchema, organizationSchema } from "../utils/seoBuilder";
 
 export default function SEO({
   title,
@@ -24,13 +23,16 @@ export default function SEO({
 }) {
   const location = useLocation();
 
+  // ★ SEO FIX: Sanitize Canonical (Remove trailing slashes to prevent duplicate URL penalties)
+  const cleanPath = location.pathname.replace(/\/$/, '') || '/';
+  const url = canonical || `${SITE.url}${cleanPath}`;
+
   const pageTitle = title
     ? title.includes(SITE.name)
       ? title
       : `${title} | ${SITE.name}`
     : SITE.name;
 
-  const url = canonical || `${SITE.url}${location.pathname}`;
   const crumbs = propBreadcrumbs || generateBreadcrumbs(location.pathname);
 
   const schemas = [];
@@ -45,59 +47,58 @@ export default function SEO({
     if (bcSchema) schemas.push(bcSchema);
   }
 
+  // ★ SEO FIX: Inject Global Schemas ONLY on the homepage to prevent duplicate schema errors
+  const isHome = cleanPath === '/';
+  if (isHome) {
+    schemas.push(websiteSchema(), organizationSchema());
+  }
+
   return (
     <Helmet prioritizeSeoTags>
-      {/* Primary */}
       <html lang="en-KE" />
       <title>{pageTitle}</title>
+      
+      {/* ★ SEO FIX: Added 'key' props to prevent duplicate tag bleeding on route transitions */}
       <meta charSet="utf-8" />
-      <meta name="description" content={description} />
-      <meta name="keywords" content={keywords} />
-      <meta name="author" content={author} />
-      <meta name="robots" content={robots} />
-      <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" />
+      <meta name="description" content={description} key="meta-desc" />
+      <meta name="keywords" content={keywords} key="meta-kw" />
+      <meta name="author" content={author} key="meta-author" />
+      <meta name="robots" content={robots} key="meta-robots" />
+      <meta name="googlebot" content="index,follow,max-snippet:-1,max-image-preview:large" key="meta-gbot" />
 
-      {/* â˜… REMOVED: <meta name="theme-color" /> to prevent duplicate with index.html */}
+      <link rel="canonical" href={url} key="canonical" />
 
-      <link rel="canonical" href={url} />
+      {prevPath && <link rel="prev" href={`${SITE.url}${prevPath}`} key="prev" />}
+      {nextPath && <link rel="next" href={`${SITE.url}${nextPath}`} key="next" />}
 
-      {/* Pagination */}
-      {prevPath && <link rel="prev" href={`${SITE.url}${prevPath}`} />}
-      {nextPath && <link rel="next" href={`${SITE.url}${nextPath}`} />}
+      <link rel="alternate" hrefLang="en-KE" href={url} key="hreflang-ke" />
+      <link rel="alternate" hrefLang="en" href={url} key="hreflang-en" />
+      <link rel="alternate" hrefLang="x-default" href={url} key="hreflang-default" />
 
-      {/* Language Alternates */}
-      <link rel="alternate" hrefLang="en-KE" href={url} />
-      <link rel="alternate" hrefLang="en" href={url} />
-      <link rel="alternate" hrefLang="x-default" href={url} />
+      <meta property="og:type" content={type} key="og-type" />
+      <meta property="og:site_name" content={SITE.name} key="og-site" />
+      <meta property="og:locale" content={locale} key="og-locale" />
+      <meta property="og:title" content={pageTitle} key="og-title" />
+      <meta property="og:description" content={description} key="og-desc" />
+      <meta property="og:url" content={url} key="og-url" />
+      <meta property="og:image" content={image} key="og-image" />
+      <meta property="og:image:secure_url" content={image} key="og-sec-image" />
+      <meta property="og:image:width" content="1200" key="og-w" />
+      <meta property="og:image:height" content="630" key="og-h" />
 
-      {/* Open Graph */}
-      <meta property="og:type" content={type} />
-      <meta property="og:site_name" content={SITE.name} />
-      <meta property="og:locale" content={locale} />
-      <meta property="og:title" content={pageTitle} />
-      <meta property="og:description" content={description} />
-      <meta property="og:url" content={url} />
-      <meta property="og:image" content={image} />
-      <meta property="og:image:secure_url" content={image} />
-      <meta property="og:image:width" content="1200" />
-      <meta property="og:image:height" content="630" />
+      <meta name="twitter:card" content="summary_large_image" key="tw-card" />
+      <meta name="twitter:site" content={SITE.twitter} key="tw-site" />
+      <meta name="twitter:creator" content={SITE.twitter} key="tw-creator" />
+      <meta name="twitter:title" content={pageTitle} key="tw-title" />
+      <meta name="twitter:description" content={description} key="tw-desc" />
+      <meta name="twitter:image" content={image} key="tw-image" />
 
-      {/* Twitter */}
-      <meta name="twitter:card" content="summary_large_image" />
-      <meta name="twitter:site" content={SITE.twitter} />
-      <meta name="twitter:creator" content={SITE.twitter} />
-      <meta name="twitter:title" content={pageTitle} />
-      <meta name="twitter:description" content={description} />
-      <meta name="twitter:image" content={image} />
+      {publishedTime && <meta property="article:published_time" content={publishedTime} key="pub-time" />}
+      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} key="mod-time" />}
 
-      {/* Article Meta */}
-      {publishedTime && <meta property="article:published_time" content={publishedTime} />}
-      {modifiedTime && <meta property="article:modified_time" content={modifiedTime} />}
-
-      {/* Structured Data */}
       {schemas.map((data, i) => (
         <script
-          key={i}
+          key={`schema-${i}`}
           type="application/ld+json"
           dangerouslySetInnerHTML={{ __html: JSON.stringify(data) }}
         />

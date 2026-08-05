@@ -16,6 +16,7 @@ const sections = [
       { label: "Leaderboard", to: "/leaderboard" },
       { label: "Highlights", to: "/highlights" },
       { label: "Live Stream", to: "/livestream" },
+      { label: "Creator Studio", to: "/studio" }, // ★ ADDED STUDIO
     ],
   },
   {
@@ -47,13 +48,13 @@ const topLeagues = [
   { label: "Champions League", to: "/league/2/uefa-champions-league" },
 ];
 
-// Using Unicode escapes prevents encoding corruption (ðŸ, âœ, etc.)
 const socialLinks = [
-  { name: "Twitter", href: "https://twitter.com/zokascore", icon: '\uD835\uDD4F' }, // 𝕏
+  { name: "Twitter", href: "https://twitter.com/zokascore", icon: '\uD835\uDD4F' }, 
   { name: "Facebook", href: "https://facebook.com/zokascore", icon: 'f' },
-  { name: "Instagram", href: "https://instagram.com/zokascore", icon: '\u25C9' }, // ◉
-  { name: "Telegram", href: "https://t.me/zokascore", icon: '\u2708' }, // ✈
+  { name: "Instagram", href: "https://instagram.com/zokascore", icon: '\u25C9' }, 
+  { name: "Telegram", href: "https://t.me/zokascore", icon: '\u2708' }, 
 ];
+
 export default function Footer() {
   const { data: rawFixtures = [] } = useFixtures(todayStr());
   const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
@@ -61,11 +62,10 @@ export default function Footer() {
   const liveCount = rawFixtures.filter(m => m.isLive).length;
   const todayFixturesCount = rawFixtures.length;
   const dailyStats = {
-  preds: Number(dailyLB?.stats?.preds ?? 0),
-  players: Number(dailyLB?.stats?.players ?? 0),
-};
+    preds: Number(dailyLB?.stats?.preds ?? 0),
+    players: Number(dailyLB?.stats?.players ?? 0),
+  };
 
-  // ★ NEW: Clean Install Logic
   const [isInstalled, setIsInstalled] = useState(false);
   const [canInstall, setCanInstall] = useState(!!window.deferredPrompt);
 
@@ -91,19 +91,19 @@ export default function Footer() {
       <div className="zoka-footer-container flex-col gap-24">
         
         {/* 1. Live Stats Bar */}
-        <div className="glass-card flex-between p-16 gap-12 flex-wrap">
+        <div className="glass-card flex-between p-16 gap-12 flex-wrap" role="group" aria-label="Platform live statistics">
           <div className="flex-center gap-8">
-            <Activity size={16} style={{ color: 'var(--danger)' }} className="anim-live-pulse" />
+            <Activity size={16} style={{ color: 'var(--danger)' }} className="anim-live-pulse" aria-hidden="true" />
             <span className="font-bold text-primary">{liveCount}</span>
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>LIVE MATCHES</span>
           </div>
           <div className="flex-center gap-8">
-            <span style={{ fontSize: 'var(--fs-md)' }}>{'\uD83D\uDCC5'}</span> {/* 📅 */}
+            <span style={{ fontSize: 'var(--fs-md)' }} aria-hidden="true">{'\uD83D\uDCC5'}</span> 
             <span className="font-bold text-primary">{todayFixturesCount}</span>
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>FIXTURES TODAY</span>
           </div>
           <div className="flex-center gap-8">
-            <span style={{ fontSize: 'var(--fs-md)' }}>{'\uD83C\uDFAF'}</span> {/* 🎯 */}
+            <span style={{ fontSize: 'var(--fs-md)' }} aria-hidden="true">{'\uD83C\uDFAF'}</span> 
             <span className="font-bold text-primary">{dailyStats.preds.toLocaleString()}</span>
             <span className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>PREDICTIONS</span>
           </div>
@@ -113,19 +113,20 @@ export default function Footer() {
         <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
           <div className="glass-card flex-col gap-12 p-20">
             <h3 className="text-primary" style={{ fontSize: 'var(--fs-md)' }}>Get Daily Winning Picks</h3>
-            <ul className="flex-col gap-8 text-secondary" style={{ fontSize: 'var(--fs-sm)' }}>
+            <ul className="flex-col gap-8 text-secondary" style={{ fontSize: 'var(--fs-sm)', listStyle: 'none', padding: 0, margin: 0 }}>
               <li>{'\u2714'} Match predictions</li>
               <li>{'\u2714'} Live alerts</li>
               <li>{'\u2714'} Breaking football news</li>
             </ul>
-            <div className="flex gap-8 mt-4">
-              <input type="email" placeholder="Enter your email" className="form-input" style={{ flex: 1 }} />
-              <button className="btn btn-primary">Subscribe</button>
-            </div>
+            <form className="flex gap-8 mt-4" onSubmit={(e) => e.preventDefault()}>
+              <label htmlFor="footer-email" className="sr-only">Email address</label>
+              <input id="footer-email" type="email" placeholder="Enter your email" className="form-input" style={{ flex: 1 }} />
+              <button type="submit" className="btn btn-primary">Subscribe</button>
+            </form>
           </div>
           
           <div className="glass-card flex-col gap-12 p-20 flex-center text-center">
-            <Smartphone size={32} className="text-primary" />
+            <Smartphone size={32} className="text-primary" aria-hidden="true" />
             <h3 className="text-primary" style={{ fontSize: 'var(--fs-md)' }}>Install ZOKASCORE</h3>
             <p className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>Fast, Offline, Notifications.</p>
             {isInstalled ? (
@@ -141,9 +142,9 @@ export default function Footer() {
         </div>
 
         {/* 3. Main Grid */}
-        <div className="grid gap-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }}>
+        <nav className="grid gap-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))' }} aria-label="Footer Navigation">
           <div className="flex-col gap-12">
-            <Link to="/" className="flex-center gap-8">
+            <Link to="/" className="flex-center gap-8" aria-label="ZOKASCORE Home">
               <img src="/icons/icon-192.png" alt="ZOKASCORE" width="40" height="40" style={{ borderRadius: 'var(--r-12)' }} />
               <span className="font-extrabold text-primary" style={{ fontSize: 'var(--fs-lg)' }}>ZOKASCORE</span>
             </Link>
@@ -151,13 +152,12 @@ export default function Footer() {
               The smartest football companion. Live scores, AI-powered predictions, and real-time updates.
             </p>
             
-            {/* Support Numbers */}
             <div className="flex-col gap-4 mt-8">
               <div className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>24/7 SUPPORT</div>
               <div className="flex-center gap-8 text-secondary" style={{ fontSize: 'var(--fs-sm)' }}>
-                <Phone size={14} className="text-primary" />
+                <Phone size={14} className="text-primary" aria-hidden="true" />
                 <a href="tel:0728720281" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: '600' }}>0728720281</a>
-                <span className="text-muted">/</span>
+                <span className="text-muted" aria-hidden="true">/</span>
                 <a href="tel:0721635810" style={{ color: 'var(--text-secondary)', textDecoration: 'none', fontWeight: '600' }}>0721635810</a>
               </div>
             </div>
@@ -174,30 +174,38 @@ export default function Footer() {
           {sections.map((section) => (
             <div key={section.title} className="flex-col gap-8">
               <h4 className="text-secondary font-bold" style={{ fontSize: 'var(--fs-sm)' }}>{section.title}</h4>
-              {section.links.map((link) => (
-                <Link key={link.to} to={link.to} className="text-muted" style={{ fontSize: 'var(--fs-sm)' }}>
-                  {link.label}
-                </Link>
-              ))}
+              <ul className="flex-col gap-8" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {section.links.map((link) => (
+                  <li key={link.to}>
+                    <Link to={link.to} className="text-muted hover:text-primary transition-colors" style={{ fontSize: 'var(--fs-sm)' }}>
+                      {link.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           ))}
-        </div>
+        </nav>
 
         {/* 4. SEO Links Section */}
-        <div className="glass-card p-16 flex-col gap-12">
+        <nav className="glass-card p-16 flex-col gap-12" aria-label="Top Competitions">
           <h5 className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>TOP COMPETITIONS</h5>
-          <div className="flex gap-8 flex-wrap">
-            {topLeagues.map(l => <Link key={l.to} to={l.to} className="badge badge-muted">{l.label}</Link>)}
-          </div>
-        </div>
+          <ul className="flex gap-8 flex-wrap" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {topLeagues.map(l => (
+              <li key={l.to}>
+                <Link to={l.to} className="badge badge-muted hover:badge-primary transition-colors">{l.label}</Link>
+              </li>
+            ))}
+          </ul>
+        </nav>
 
         {/* 5. Bottom Bar */}
         <div className="flex-between p-16 flex-wrap gap-8" style={{ borderTop: '1px solid var(--border)' }}>
           <p className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{'\u00A9'} {year} ZOKASCORE. All rights reserved.</p>
           <div className="flex-center gap-8 text-muted" style={{ fontSize: 'var(--fs-xs)' }}>
-            <ShieldCheck size={12} /> HTTPS Protected 
-            <span style={{ margin: '0 4px' }}>{'\u2022'}</span> 
-            <Lock size={12} /> 18+ Play Responsibly
+            <ShieldCheck size={12} aria-hidden="true" /> HTTPS Protected 
+            <span style={{ margin: '0 4px' }} aria-hidden="true">{'\u2022'}</span> 
+            <Lock size={12} aria-hidden="true" /> 18+ Play Responsibly
           </div>
         </div>
 

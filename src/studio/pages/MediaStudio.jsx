@@ -2,6 +2,20 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Circle, Square, Upload, Download, Camera, Sparkles, Video } from 'lucide-react';
 
+const actionBtnStyle = { 
+  width: '56px', 
+  height: '56px', 
+  borderRadius: '50%', 
+  background: '#1f2937', 
+  border: '1px solid #334155', 
+  color: '#fff', 
+  display: 'flex', 
+  alignItems: 'center', 
+  justifyContent: 'center', 
+  cursor: 'pointer', 
+  transition: 'all 0.2s' 
+};
+
 export default function MediaStudio() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -15,20 +29,28 @@ export default function MediaStudio() {
   const [filter, setFilter] = useState('none');
   const [effect, setEffect] = useState('none');
 
+  const stopCameraStreams = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setCameraOn(false);
+  };
+
   const startCamera = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1080, height: 1920 }, audio: true });
+      stopCameraStreams();
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 1080, height: 1920, facingMode: 'user' }, audio: true });
       streamRef.current = stream;
-      if (videoRef.current) videoRef.current.srcObject = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(e => console.warn("Autoplay blocked", e));
+      }
       setCameraOn(true);
     } catch (err) {
       alert("Camera access denied or not available.");
+      console.error(err);
     }
-  };
-
-  const stopCamera = () => {
-    if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop());
-    setCameraOn(false);
   };
 
   const startRecording = () => {
@@ -39,6 +61,7 @@ export default function MediaStudio() {
     recorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: 'video/webm' });
       setRecordedUrl(URL.createObjectURL(blob));
+      stopCameraStreams();
     };
     recorder.start();
     mediaRecorderRef.current = recorder;
@@ -56,7 +79,7 @@ export default function MediaStudio() {
     const file = e.target.files[0];
     if (file) {
       setRecordedUrl(URL.createObjectURL(file));
-      stopCamera();
+      stopCameraStreams();
     }
   };
 
@@ -69,7 +92,7 @@ export default function MediaStudio() {
   };
 
   useEffect(() => {
-    return () => { if (streamRef.current) streamRef.current.getTracks().forEach(track => track.stop()); };
+    return () => { stopCameraStreams(); };
   }, []);
 
   const filters = [
@@ -175,5 +198,3 @@ export default function MediaStudio() {
     </div>
   );
 }
-
-const actionBtnStyle = { width: '56px', height: '56px', borderRadius: '50%', background: '#1f2937', border: '1px solid #334155', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', transition: 'all 0.2s' };

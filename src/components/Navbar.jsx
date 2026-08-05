@@ -3,7 +3,7 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Menu, X, LogOut, User, Shield, Zap, Home, Search, Bell,
   Target, ChevronRight, ChevronDown, ChevronUp, MoreHorizontal, Command, 
-  Activity, Trophy, Newspaper, Tv, Gamepad2, Building, LifeBuoy, Scale, Info
+  Activity, Trophy, Newspaper, Tv, Gamepad2, Building, LifeBuoy, Scale, Info, Sparkles
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../context/AuthContext';
@@ -44,6 +44,7 @@ function timeAgo(ts) {
   return `${Math.floor(diff / 3600000)}h ago`;
 }
 
+// ★ SEO FIX: Added Studio to Main Desktop Navigation
 const LINKS = [
   { to: '/', label: 'Home', icon: Home },
   { to: '/fixtures', label: 'Fixtures', icon: Activity },
@@ -51,6 +52,7 @@ const LINKS = [
   { to: '/leaderboard', label: 'Ranks', icon: Trophy },
   { to: '/highlights', label: 'News', icon: Newspaper },
   { to: '/livestream', label: 'Stream', icon: Tv, isLive: true },
+  { to: '/studio', label: 'Studio', icon: Sparkles }, 
   { to: '/basketball', label: 'Hoops', icon: Gamepad2 },
 ];
 
@@ -62,7 +64,13 @@ const MOBILE_NAV = [
   { to: '/profile', label: 'Profile', icon: User },
 ];
 
+// ★ SEO FIX: Added Creator Section for Studio & Master Games
 const SYSTEM_LINKS = [
+  { 
+    title: 'Creator', 
+    icon: Sparkles,
+    links: [['Studio', '/studio'], ['Master Games', '/mastergames']] 
+  },
   { 
     title: 'Company', 
     icon: Building,
@@ -113,11 +121,13 @@ const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate
   };
 
   return (
-    <div className="cmd-overlay" onClick={onClose}>
+    <div className="cmd-overlay" onClick={onClose} role="dialog" aria-modal="true" aria-label="Command Palette">
       <div className="cmd-modal" onClick={(e) => e.stopPropagation()}>
         <div className="cmd-input-wrap">
-          <Search size={18} className="text-muted" />
+          <Search size={18} className="text-muted" aria-hidden="true" />
+          <label htmlFor="cmd-search" className="sr-only">Search</label>
           <input
+            id="cmd-search"
             ref={inputRef}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -132,13 +142,17 @@ const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate
               <div className="text-muted font-bold p-8" style={{ fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Matches
               </div>
-              {filteredMatches.map((m) => (
-                <button key={m.id} className="cmd-item" onClick={() => handleNav(buildMatchRoute(m.id, m.homeName, m.awayName))}>
-                  <Activity size={14} className="text-primary" />
-                  <span className="flex-1" style={{ textAlign: 'left' }}>{m.homeName} vs {m.awayName}</span>
-                  {m.isLive && <span className="badge badge-danger">LIVE</span>}
-                </button>
-              ))}
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {filteredMatches.map((m) => (
+                  <li key={m.id}>
+                    <button className="cmd-item" onClick={() => handleNav(buildMatchRoute(m.id, m.homeName, m.awayName))}>
+                      <Activity size={14} className="text-primary" aria-hidden="true" />
+                      <span className="flex-1" style={{ textAlign: 'left' }}>{m.homeName} vs {m.awayName}</span>
+                      {m.isLive && <span className="badge badge-danger">LIVE</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
           <div>
@@ -146,14 +160,18 @@ const CommandPalette = React.memo(({ open, onClose, links, liveMatches, navigate
               Navigation
             </div>
             {filteredLinks.length === 0 ? (
-              <div className="text-muted text-center p-24" style={{ fontSize: 'var(--fs-sm)' }}>No matches for "{searchQuery}"</div>
+              <div className="text-muted text-center p-24" style={{ fontSize: 'var(--fs-sm)' }}>No matches for &quot;{searchQuery}&quot;</div>
             ) : (
-              filteredLinks.map((l) => (
-                <button key={l.to} className="cmd-item" onClick={() => handleNav(l.to)}>
-                  <l.icon size={14} className="text-muted" />
-                  <span>{l.label}</span>
-                </button>
-              ))
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {filteredLinks.map((l) => (
+                  <li key={l.to}>
+                    <button className="cmd-item" onClick={() => handleNav(l.to)}>
+                      <l.icon size={14} className="text-muted" aria-hidden="true" />
+                      <span>{l.label}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
             )}
           </div>
         </div>
@@ -169,11 +187,11 @@ const NotifItem = React.memo(({ n }) => {
   const icon = isExact ? '🎯' : n.type === 'result' ? '👍' : '😔';
 
   return (
-    <div
+    <li
       className="nv-notif-item anim-slide-in"
-      style={{ background: bgColor, borderLeft: `3px solid ${borderColor}` }}
+      style={{ background: bgColor, borderLeft: `3px solid ${borderColor}`, listStyle: 'none' }}
     >
-      <span style={{ fontSize: 'var(--fs-lg)' }}>{icon}</span>
+      <span style={{ fontSize: 'var(--fs-lg)' }} aria-hidden="true">{icon}</span>
       <div className="flex-col flex-1">
         <div className="text-primary font-bold" style={{ fontSize: 'var(--fs-sm)' }}>{n.homeTeam} vs {n.awayTeam}</div>
         <div className="flex gap-8 text-muted" style={{ alignItems: 'center', fontSize: 'var(--fs-xs)' }}>
@@ -185,7 +203,7 @@ const NotifItem = React.memo(({ n }) => {
         {n.points > 0 && <div className="text-gold font-bold" style={{ fontSize: 'var(--fs-md)' }}>+{n.points}</div>}
         <div className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{timeAgo(n.time)}</div>
       </div>
-    </div>
+    </li>
   );
 });
 
@@ -306,20 +324,22 @@ export default function Navbar() {
 
   const renderNotifDropdown = useCallback(
     () => (
-      <div className="nv-notif-dropdown flex-col">
+      <div className="nv-notif-dropdown flex-col" role="menu" aria-label="Notifications">
         <div className="flex-between p-16" style={{ borderBottom: '1px solid var(--border)' }}>
           <span className="text-primary font-bold flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
-            <Bell size={16} /> Notifications
+            <Bell size={16} aria-hidden="true" /> Notifications
           </span>
           {predNotifs.length > 0 && <span className="badge badge-primary">{predNotifs.length} New</span>}
         </div>
         {predNotifs.length === 0 ? (
           <div className="flex-col p-32 text-center" style={{ alignItems: 'center' }}>
-            <Target size={32} className="text-muted mb-12" />
+            <Target size={32} className="text-muted mb-12" aria-hidden="true" />
             <div className="text-secondary font-bold">No results yet</div>
           </div>
         ) : (
-          predNotifs.map((n) => <NotifItem key={n.id} n={n} />)
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            {predNotifs.map((n) => <NotifItem key={n.id} n={n} />)}
+          </ul>
         )}
       </div>
     ),
@@ -336,13 +356,13 @@ export default function Navbar() {
       <CommandPalette open={cmdOpen} onClose={() => setCmdOpen(false)} links={LINKS} liveMatches={liveMatches} navigate={navigate} />
 
       {/* Mobile Drawer Overlay */}
-      <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} />
+      <div className={`nv-mob-overlay ${mobileOpen ? 'open' : ''}`} onClick={() => setMobileOpen(false)} aria-hidden="true" />
 
       {/* Mobile Drawer (Pro Sidebar) */}
-      <aside className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`}>
+      <aside className={`nv-mob-drawer ${mobileOpen ? 'open' : ''}`} role="dialog" aria-modal="true" aria-label="Mobile Navigation">
         <div className="flex-between p-16" style={{ borderBottom: '1px solid var(--border)' }}>
           <span className="font-bold text-primary flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
-            <img src={APP_LOGO} alt="" width="22" height="22" style={{ borderRadius: 'var(--r-8)' }} />
+            <img src={APP_LOGO} alt="" width="22" height="22" style={{ borderRadius: 'var(--r-8)' }} aria-hidden="true" />
             Menu
           </span>
           <button onClick={() => setMobileOpen(false)} className="btn-icon-sm" aria-label="Close menu">
@@ -350,38 +370,43 @@ export default function Navbar() {
           </button>
         </div>
 
-        <div className="p-12 flex-col gap-4">
-          {LINKS.map((link, i) => (
-            <Link
-              key={link.to}
-              to={link.to}
-              onClick={() => setMobileOpen(false)}
-              className={`btn btn-ghost w-full flex-between anim-slide-in ${isActive(link.to) ? 'active' : ''}`}
-              style={{ animationDelay: `${i * 40}ms` }}
-            >
-              <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
-                <link.icon size={16} />
-                <span className="link-text-anim">
-                  {link.label}
-                </span>
-                {link.isLive && <span className="zk-live-pulse-dot" />}
-              </span>
-              {link.badge && <span className="badge badge-primary">{link.badge}</span>}
-            </Link>
-          ))}
+        <nav className="p-12 flex-col gap-4" aria-label="Mobile Links">
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            {LINKS.map((link, i) => (
+              <li key={link.to}>
+                <Link
+                  to={link.to}
+                  onClick={() => setMobileOpen(false)}
+                  className={`btn btn-ghost w-full flex-between anim-slide-in ${isActive(link.to) ? 'active' : ''}`}
+                  style={{ animationDelay: `${i * 40}ms` }}
+                >
+                  <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
+                    <link.icon size={16} aria-hidden="true" />
+                    <span className="link-text-anim">
+                      {link.label}
+                    </span>
+                    {link.isLive && <span className="zk-live-pulse-dot" aria-label="Live" />}
+                  </span>
+                  {link.badge && <span className="badge badge-primary">{link.badge}</span>}
+                </Link>
+              </li>
+            ))}
 
-          {isAdmin && (
-            <Link
-              to={ADMIN_PATH}
-              onClick={() => setMobileOpen(false)}
-              className={`btn btn-ghost w-full flex-between text-gold anim-slide-in ${isActive(ADMIN_PATH) ? 'active' : ''}`}
-              style={{ animationDelay: `${(LINKS.length + 1) * 40}ms` }}
-            >
-              <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}><Shield size={16} /> Admin Panel</span>
-            </Link>
-          )}
+            {isAdmin && (
+              <li>
+                <Link
+                  to={ADMIN_PATH}
+                  onClick={() => setMobileOpen(false)}
+                  className={`btn btn-ghost w-full flex-between text-gold anim-slide-in ${isActive(ADMIN_PATH) ? 'active' : ''}`}
+                  style={{ animationDelay: `${(LINKS.length + 1) * 40}ms` }}
+                >
+                  <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}><Shield size={16} aria-hidden="true" /> Admin Panel</span>
+                </Link>
+              </li>
+            )}
+          </ul>
 
-          <div className="mt-12 mb-12" style={{ height: 1, background: 'var(--border)' }} />
+          <div className="mt-12 mb-12" style={{ height: 1, background: 'var(--border)' }} aria-hidden="true" />
 
           {/* PRO: Auth Section - Sign In/Out Button */}
           <div className="nav-auth-section anim-slide-in" style={{ animationDelay: `${(LINKS.length + 2) * 40}ms` }}>
@@ -391,7 +416,7 @@ export default function Navbar() {
                 className="btn btn-ghost w-full flex-between text-danger"
               >
                 <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
-                  <LogOut size={16} /> Sign Out
+                  <LogOut size={16} aria-hidden="true" /> Sign Out
                 </span>
                 <span className="text-muted" style={{ fontSize: 'var(--fs-xs)' }}>{userProfile?.displayName || 'User'}</span>
               </button>
@@ -402,7 +427,7 @@ export default function Navbar() {
                 className="btn btn-primary w-full flex-center"
                 style={{ gap: 'var(--sp-8)' }}
               >
-                <Zap size={16} /> Sign In
+                <Zap size={16} aria-hidden="true" /> Sign In
               </Link>
             )}
           </div>
@@ -411,49 +436,52 @@ export default function Navbar() {
           {isAdmin && (
             <div className="nav-admin-badge anim-slide-in" style={{ animationDelay: `${(LINKS.length + 3) * 40}ms` }}>
               <div className="flex-center gap-8" style={{ padding: 'var(--sp-12)', background: 'rgba(var(--gold-rgb), 0.1)', borderRadius: 'var(--r-12)', border: '1px solid rgba(var(--gold-rgb), 0.2)' }}>
-                <Shield size={16} className="text-gold" />
+                <Shield size={16} className="text-gold" aria-hidden="true" />
                 <span className="text-gold font-bold" style={{ fontSize: 'var(--fs-xs)' }}>Admin Access Detected</span>
               </div>
             </div>
           )}
 
-          <div className="mt-12 mb-12" style={{ height: 1, background: 'var(--border)' }} />
+          <div className="mt-12 mb-12" style={{ height: 1, background: 'var(--border)' }} aria-hidden="true" />
 
           {/* PRO: System & Info Accordion Button */}
           <button 
             className="btn btn-ghost w-full flex-between anim-slide-in" 
             style={{ animationDelay: `${(LINKS.length + 4) * 40}ms` }}
             onClick={() => setSystemOpen(!systemOpen)}
+            aria-expanded={systemOpen}
+            aria-controls="mobile-system-links"
           >
             <span className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
-              <Info size={16} /> System & Info
+              <Info size={16} aria-hidden="true" /> System & Info
             </span>
-            {systemOpen ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+            {systemOpen ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
           </button>
 
           {/* PRO: Animated Accordion Content */}
-          <div className={`nav-accordion ${systemOpen ? 'open' : ''}`}>
+          <ul id="mobile-system-links" className={`nav-accordion ${systemOpen ? 'open' : ''}`} style={{ listStyle: 'none', padding: 0, margin: 0 }}>
             {SYSTEM_LINKS.map((sec, i) => (
-              <div key={sec.title} className="nav-accordion-section anim-slide-in" style={{ animationDelay: `${i * 50}ms` }}>
+              <li key={sec.title} className="nav-accordion-section anim-slide-in" style={{ animationDelay: `${i * 50}ms` }}>
                 <div className="text-muted font-bold mb-8 flex" style={{ alignItems: 'center', gap: 'var(--sp-8)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  <sec.icon size={12} className="text-primary" /> {sec.title}
+                  <sec.icon size={12} className="text-primary" aria-hidden="true" /> {sec.title}
                 </div>
-                <div className="flex-col gap-4">
+                <ul className="flex-col gap-4" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {sec.links.map(([label, to]) => (
-                    <Link 
-                      key={to} 
-                      to={to} 
-                      onClick={() => { setSystemOpen(false); setMobileOpen(false); }} 
-                      className="btn btn-ghost btn-sm w-full flex-between"
-                    >
-                      {label} <ChevronRight size={14} style={{ opacity: 0.5 }} />
-                    </Link>
+                    <li key={to}>
+                      <Link 
+                        to={to} 
+                        onClick={() => { setSystemOpen(false); setMobileOpen(false); }} 
+                        className="btn btn-ghost btn-sm w-full flex-between"
+                      >
+                        {label} <ChevronRight size={14} style={{ opacity: 0.5 }} aria-hidden="true" />
+                      </Link>
+                    </li>
                   ))}
-                </div>
-              </div>
+                </ul>
+              </li>
             ))}
-          </div>
-        </div>
+          </ul>
+        </nav>
       </aside>
 
       {/* Global Top Bar */}
@@ -461,7 +489,7 @@ export default function Navbar() {
         <div className="nav-top-grid">
           {/* Left: Logo */}
           <div className="nav-top-left">
-            <Link to="/" className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }}>
+            <Link to="/" className="flex" style={{ alignItems: 'center', gap: 'var(--sp-8)' }} aria-label="ZOKASCORE Home">
               <img src={APP_LOGO} alt="ZokaScore Logo" width="32" height="32" style={{ borderRadius: 'var(--r-8)' }} />
               <span className="font-extrabold text-primary hide-mobile" style={{ fontSize: 'var(--fs-md)', letterSpacing: '-0.02em' }}>
                 ZOKASCORE
@@ -470,58 +498,64 @@ export default function Navbar() {
           </div>
 
           {/* Center: Desktop Links */}
-          <nav className="nav-top-center hide-mobile">
-            {LINKS.map((link) => {
-              const active = isActive(link.to);
-              return (
-                <Link key={link.to} to={link.to} className={`nav-link ${active ? 'active' : ''}`}>
-                  <link.icon size={14} style={{ marginRight: '6px' }} />
-                  <span className="link-text-anim">
-                    {link.label}
-                  </span>
-                  {link.isLive && <span className="zk-live-pulse-dot" style={{ marginLeft: 'var(--sp-4)' }} />}
-                  {link.badge && <span className="badge badge-primary" style={{ marginLeft: 'var(--sp-4)' }}>{link.badge}</span>}
-                </Link>
-              );
-            })}
+          <nav className="nav-top-center hide-mobile" aria-label="Main Navigation">
+            <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: '4px' }}>
+              {LINKS.map((link) => {
+                const active = isActive(link.to);
+                return (
+                  <li key={link.to}>
+                    <Link to={link.to} className={`nav-link ${active ? 'active' : ''}`}>
+                      <link.icon size={14} style={{ marginRight: '6px' }} aria-hidden="true" />
+                      <span className="link-text-anim">
+                        {link.label}
+                      </span>
+                      {link.isLive && <span className="zk-live-pulse-dot" style={{ marginLeft: 'var(--sp-4)' }} aria-label="Live" />}
+                      {link.badge && <span className="badge badge-primary" style={{ marginLeft: 'var(--sp-4)' }}>{link.badge}</span>}
+                    </Link>
+                  </li>
+                );
+              })}
 
-            {/* PRO: More Dropdown (Desktop) */}
-            <div ref={moreRef} style={{ position: 'relative' }}>
-              <button onClick={() => setMoreOpen((p) => !p)} className={`nav-link ${moreOpen ? 'active' : ''}`}>
-                <MoreHorizontal size={14} style={{ marginRight: '6px' }} /> More
-              </button>
-              {moreOpen && (
-                <div className="nav-more-dropdown glass-card anim-pop" style={dropdownBase}>
-                  <div className="nav-more-grid">
-                    {SYSTEM_LINKS.map((sec) => (
-                      <div key={sec.title} className="nav-more-col">
-                        <div className="text-muted font-bold mb-12 flex" style={{ alignItems: 'center', gap: 'var(--sp-8)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                          <sec.icon size={14} className="text-primary" /> {sec.title}
+              {/* PRO: More Dropdown (Desktop) */}
+              <li ref={moreRef} style={{ position: 'relative' }}>
+                <button onClick={() => setMoreOpen((p) => !p)} className={`nav-link ${moreOpen ? 'active' : ''}`} aria-expanded={moreOpen} aria-haspopup="true">
+                  <MoreHorizontal size={14} style={{ marginRight: '6px' }} aria-hidden="true" /> More
+                </button>
+                {moreOpen && (
+                  <div className="nav-more-dropdown glass-card anim-pop" style={dropdownBase} role="menu">
+                    <div className="nav-more-grid">
+                      {SYSTEM_LINKS.map((sec) => (
+                        <div key={sec.title} className="nav-more-col">
+                          <div className="text-muted font-bold mb-12 flex" style={{ alignItems: 'center', gap: 'var(--sp-8)', fontSize: 'var(--fs-xs)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            <sec.icon size={14} className="text-primary" aria-hidden="true" /> {sec.title}
+                          </div>
+                          <ul className="flex-col gap-4" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                            {sec.links.map(([label, to]) => (
+                              <li key={to}>
+                                <Link
+                                  to={to}
+                                  onClick={() => setMoreOpen(false)}
+                                  className="nav-more-link"
+                                  role="menuitem"
+                                >
+                                  {label} <ChevronRight size={12} style={{ opacity: 0.4 }} aria-hidden="true" />
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
                         </div>
-                        <div className="flex-col gap-4">
-                          {sec.links.map(([label, to]) => (
-                            <Link
-                              key={to}
-                              to={to}
-                              onClick={() => setMoreOpen(false)}
-                              className="nav-more-link"
-                            >
-                              {label} <ChevronRight size={12} style={{ opacity: 0.4 }} />
-                            </Link>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
+                )}
+              </li>
+            </ul>
           </nav>
 
           {/* Right: Actions */}
           <div className="nav-top-right">
             <button onClick={() => setCmdOpen(true)} className="btn-icon-sm anim-bounce-glow" aria-label="Search">
-              <Command size={18} />
+              <Command size={18} aria-hidden="true" />
             </button>
 
             <ThemeSwitcher />
@@ -532,11 +566,13 @@ export default function Navbar() {
                   onClick={() => setNotifOpen((p) => !p)}
                   className={`btn-icon-sm anim-bounce-glow ${notifOpen ? 'active' : ''}`}
                   aria-label="Notifications"
+                  aria-expanded={notifOpen}
+                  aria-haspopup="true"
                   style={{ position: 'relative' }}
                 >
-                  <Bell size={18} />
+                  <Bell size={18} aria-hidden="true" />
                   {notifCount > 0 && (
-                    <span className="nv-badge-count">
+                    <span className="nv-badge-count" aria-label={`${notifCount} new notifications`}>
                       {notifCount > 9 ? '9+' : notifCount}
                     </span>
                   )}
@@ -546,8 +582,8 @@ export default function Navbar() {
             )}
 
             {isAdmin && (
-              <Link to={ADMIN_PATH} className={`btn-icon-sm ${isActive(ADMIN_PATH) ? 'active' : ''} text-gold`} title="Admin Panel">
-                <Shield size={18} />
+              <Link to={ADMIN_PATH} className={`btn-icon-sm ${isActive(ADMIN_PATH) ? 'active' : ''} text-gold`} title="Admin Panel" aria-label="Admin Panel">
+                <Shield size={18} aria-hidden="true" />
               </Link>
             )}
 
@@ -556,23 +592,24 @@ export default function Navbar() {
               <Link
                 to="/profile"
                 className="nav-profile-block"
+                aria-label="Profile"
                 style={isActive('/profile') ? { borderColor: 'var(--primary)', boxShadow: '0 0 0 3px rgba(var(--primary-rgb), 0.12)' } : undefined}
               >
-                <div className="nav-avatar">{userProfile?.displayName?.[0]?.toUpperCase() || 'U'}</div>
+                <div className="nav-avatar" aria-hidden="true">{userProfile?.displayName?.[0]?.toUpperCase() || 'U'}</div>
                 <span className="text-primary font-bold hide-mobile" style={{ fontSize: 'var(--fs-sm)' }}>
                   {userProfile?.displayName?.split(' ')[0] || 'User'}
                 </span>
               </Link>
             ) : (
               <Link to="/login" className="btn btn-primary btn-sm hide-mobile" title="Sign In">
-                <Zap size={16} /> Sign In
+                <Zap size={16} aria-hidden="true" /> Sign In
               </Link>
             )}
 
             {/* Hamburger */}
-            <button onClick={() => setMobileOpen((p) => !p)} className="btn-icon-sm anim-bounce-glow hide-desktop" aria-label={mobileOpen ? 'Close menu' : 'Open menu'}>
+            <button onClick={() => setMobileOpen((p) => !p)} className="btn-icon-sm anim-bounce-glow hide-desktop" aria-label={mobileOpen ? 'Close menu' : 'Open menu'} aria-expanded={mobileOpen}>
               <span key={mobileOpen ? 'x' : 'menu'} className="anim-pop" style={{ display: 'inline-flex' }}>
-                {mobileOpen ? <X size={18} /> : <Menu size={18} />}
+                {mobileOpen ? <X size={18} aria-hidden="true" /> : <Menu size={18} aria-hidden="true" />}
               </span>
             </button>
           </div>
@@ -580,22 +617,24 @@ export default function Navbar() {
       </header>
 
       {/* Mobile Bottom Nav */}
-      <nav className="nav-bottom hide-desktop">
-        <div className="flex-around" style={{ height: '100%', width: '100%' }}>
+      <nav className="nav-bottom hide-desktop" aria-label="Mobile Bottom Navigation">
+        <ul className="flex-around" style={{ height: '100%', width: '100%', listStyle: 'none', padding: 0, margin: 0 }}>
           {MOBILE_NAV.map((link) => {
             const active = isActive(link.to);
             return (
-              <Link key={link.to} to={link.to} className={`nav-link-bottom ${active ? 'active' : ''}`}>
-                <span className="nav-icon-wrap">
-                  <link.icon size={20} />
-                </span>
-                <span className="link-text-anim">
-                  {link.label}
-                </span>
-              </Link>
+              <li key={link.to}>
+                <Link to={link.to} className={`nav-link-bottom ${active ? 'active' : ''}`}>
+                  <span className="nav-icon-wrap">
+                    <link.icon size={20} aria-hidden="true" />
+                  </span>
+                  <span className="link-text-anim">
+                    {link.label}
+                  </span>
+                </Link>
+              </li>
             );
           })}
-        </div>
+        </ul>
       </nav>
     </>
   );

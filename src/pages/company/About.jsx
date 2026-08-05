@@ -1,6 +1,4 @@
-﻿// footballprediction/src/pages/company/About.jsx
-
-import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate } from 'react-router-dom';
 import {
   Target, Trophy, Users, Globe, Shield, Zap, Star,
   ArrowLeft, Award, Clock, Heart, MessageCircle, Phone, Mail, BarChart3
@@ -32,15 +30,29 @@ const TIMELINE = [
 export default function About() {
   const nav = useNavigate();
 
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ZOKASCORE",
+    "url": "https://zokascore.xyz",
+    "logo": "https://zokascore.xyz/icons/icon-192.png",
+    "description": "ZOKASCORE is a premier football platform where fans compete on daily leaderboards, track match predictions, and experience live scores in real-time.",
+    "sameAs": [
+      "https://twitter.com/zokascore",
+      "https://facebook.com/zokascore"
+    ]
+  };
+
   return (
     <div className="zoka-page">
       <SEO
         title="About ZOKASCORE | Football Predictions, Live Scores & Match Insights"
-        description="Learn about ZOKASCORE, the football platform built for match predictions, live scores, fixtures, standings, and interactive football competitions. Discover our mission and how we're making football more exciting for fans worldwide."
-        keywords="ZOKASCORE, about ZOKASCORE, football predictions, live scores, football fixtures, football standings, football platform, sports community"
+        description="Learn about ZOKASCORE, the football platform built for match predictions, live scores, fixtures, standings, and interactive football competitions."
+        keywords="ZOKASCORE, about ZOKASCORE, football predictions, live scores, football platform, sports community"
         path="/about"
         robots="index,follow"
-         />
+        structuredData={orgSchema}
+      />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">
@@ -50,15 +62,15 @@ export default function About() {
           </div>
         </div>
 
-        <div className="glass-card p-24 mb-16 text-center flex-col items-center gap-12 anim-fade-up">
+        <article className="glass-card p-24 mb-16 text-center flex-col items-center gap-12 anim-fade-up">
           <div className="flex-center text-primary" style={{ width: 72, height: 72, borderRadius: 'var(--r-20)', background: 'rgba(var(--primary-rgb), 0.1)', animation: 'zk-bounce 4s ease-in-out infinite' }}>
             <Target size={32} />
           </div>
           <h1 className="text-primary font-extrabold text-lg">Football Prediction,<br />Reimagined</h1>
           <p className="text-muted text-sm" style={{ maxWidth: 560 }}>ZOKASCORE is a premier football platform where fans compete on daily leaderboards, track match predictions, and experience live scores, fixtures, and standings in real-time.</p>
-        </div>
+        </article>
 
-        <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <section className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           {STATS.map((s, i) => (
             <div key={i} className="glass-card p-16 flex-col items-center gap-4 anim-pop" style={{ animationDelay: `${s.delay}ms` }}>
               <div style={{ color: s.color }}>{s.icon}</div>
@@ -66,49 +78,49 @@ export default function About() {
               <div className="text-muted text-xs font-bold uppercase">{s.l}</div>
             </div>
           ))}
-        </div>
+        </section>
 
-        <div className="glass-card p-24 mb-16 flex-col gap-8 anim-fade-up">
+        <section className="glass-card p-24 mb-16 flex-col gap-8 anim-fade-up">
           <h2 className="text-primary font-bold flex-center gap-8"><Star size={15} className="text-primary" /> Our Mission</h2>
-          <p className="text-secondary text-sm">We believe every football fan deserves a platform that celebrates knowledge of the game â€” not just luck. ZOKASCORE was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
-        </div>
+          <p className="text-secondary text-sm">We believe every football fan deserves a platform that celebrates knowledge of the game — not just luck. ZOKASCORE was built to transform passive match-watching into an engaging, competitive experience where your understanding of teams, form, and tactics directly translates into rankings and recognition.</p>
+        </section>
 
-        <div className="glass-card p-24 mb-16 flex-col gap-12 anim-fade-up">
+        <section className="glass-card p-24 mb-16 flex-col gap-12 anim-fade-up">
           <h2 className="text-primary font-bold flex-center gap-8"><Award size={15} className="text-gold" /> Our Values</h2>
           <div className="grid gap-12" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))' }}>
             {VALUES.map((v, i) => (
               <div key={i} className="glass-card p-16 flex-col gap-8">
                 <div className="flex-center" style={{ width: 40, height: 40, borderRadius: 'var(--r-10)', background: v.bg, color: v.color }}>{v.icon}</div>
-                <h4 className="text-primary font-bold text-sm">{v.title}</h4>
+                <h3 className="text-primary font-bold text-sm">{v.title}</h3>
                 <p className="text-muted text-xs">{v.desc}</p>
               </div>
             ))}
           </div>
-        </div>
+        </section>
 
-        <div className="glass-card p-24 mb-16 flex-col gap-12 anim-fade-up">
+        <section className="glass-card p-24 mb-16 flex-col gap-12 anim-fade-up">
           <h2 className="text-primary font-bold flex-center gap-8"><Clock size={15} className="text-accent" /> Our Journey</h2>
-          <div className="flex-col gap-16 pl-16 relative">
-            <div className="absolute left-2 top-0 bottom-0 w-px bg-border"></div>
+          <ol className="flex-col gap-16 pl-16 relative" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+            <div className="absolute left-2 top-0 bottom-0 w-px bg-border" aria-hidden="true"></div>
             {TIMELINE.map((t, i) => (
-              <div key={i} className="relative pl-16">
-                <div className="absolute left-0 top-4 w-2 h-2 rounded-full bg-primary"></div>
+              <li key={i} className="relative pl-16">
+                <div className="absolute left-0 top-4 w-2 h-2 rounded-full bg-primary" aria-hidden="true"></div>
                 <div className="text-accent text-xs font-bold uppercase">{t.year}</div>
                 <div className="text-primary font-bold text-sm">{t.text}</div>
                 <div className="text-muted text-xs">{t.sub}</div>
-              </div>
+              </li>
             ))}
-          </div>
-        </div>
+          </ol>
+        </section>
 
-        <div className="glass-card p-24 flex-col items-center gap-12 text-center anim-fade-up" style={{ background: 'rgba(var(--primary-rgb), 0.03)', borderColor: 'rgba(var(--primary-rgb), 0.15)' }}>
+        <footer className="glass-card p-24 flex-col items-center gap-12 text-center anim-fade-up" style={{ background: 'rgba(var(--primary-rgb), 0.03)', borderColor: 'rgba(var(--primary-rgb), 0.15)' }}>
           <h3 className="text-primary font-bold">Get In Touch</h3>
           <div className="flex gap-8 flex-wrap justify-center">
             <a href="mailto:streetzoka@gmail.com" className="btn btn-secondary btn-sm"><Mail size={13} /> streetzoka@gmail.com</a>
             <a href="tel:+254721635810" className="btn btn-secondary btn-sm"><Phone size={13} /> +254 721 635 810</a>
             <button className="btn btn-primary btn-sm" onClick={() => nav('/contact')}><MessageCircle size={13} /> Contact Form</button>
           </div>
-        </div>
+        </footer>
       </div>
     </div>
   );

@@ -1,6 +1,4 @@
-﻿// footballprediction/src/pages/company/Contact.jsx
-
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Mail, Phone, MapPin, Send, CheckCircle, MessageCircle, Clock, User, FileText, AlertCircle, Loader } from 'lucide-react';
 import SEO from '../../components/SEO';
@@ -30,15 +28,24 @@ export default function Contact() {
 
   const upd = (k, v) => { setForm(p => ({ ...p, [k]: v })); setError(''); };
 
+  const contactSchema = {
+    "@context": "https://schema.org",
+    "@type": "ContactPage",
+    "name": "Contact ZOKASCORE",
+    "description": "Get in touch with the ZOKASCORE team for support, business partnerships, and feedback.",
+    "url": "https://zokascore.xyz/contact"
+  };
+
   return (
     <div className="zoka-page">
       <SEO
         title="Contact ZOKASCORE | Support, Partnerships & Feedback"
-        description="Get in touch with the ZOKASCORE team for support, business partnerships, advertising inquiries, bug reports, feature suggestions, or general feedback. We're ready to help you improve your football experience."
-        keywords="contact ZOKASCORE, football support, customer support, business partnerships, advertise with ZOKASCORE, bug report, feature request, football platform"
+        description="Get in touch with the ZOKASCORE team for support, business partnerships, advertising inquiries, bug reports, or general feedback."
+        keywords="contact ZOKASCORE, football support, customer support, business partnerships"
         path="/contact"
         robots="index,follow"
-         />
+        structuredData={contactSchema}
+      />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">
@@ -48,12 +55,12 @@ export default function Contact() {
           </div>
         </div>
 
-        <div className="glass-card p-24 mb-24 text-center flex-col items-center gap-8 anim-fade-up">
+        <header className="glass-card p-24 mb-24 text-center flex-col items-center gap-8 anim-fade-up">
           <h1 className="text-primary font-extrabold text-lg">Get In Touch</h1>
           <p className="text-muted text-sm">Have a question, feedback, or business inquiry? We'd love to hear from you.</p>
-        </div>
+        </header>
 
-        <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
+        <section className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
           {[
             { icon: <Mail size={18} />, color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.08)', label: 'Email', val: 'streetzoka@gmail.com' },
             { icon: <Phone size={18} />, color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.08)', label: 'Phone', val: '+254 721 635 810' },
@@ -68,55 +75,56 @@ export default function Contact() {
               </div>
             </div>
           ))}
-        </div>
+        </section>
 
         {sent ? (
           <div className="glass-card p-32 flex-col items-center gap-12 text-center anim-pop" style={{ borderColor: 'rgba(var(--primary-rgb), 0.2)' }}>
             <div className="flex-center text-primary" style={{ width: 56, height: 56, borderRadius: 'var(--r-16)', background: 'rgba(var(--primary-rgb), 0.08)' }}><CheckCircle size={28} /></div>
-            <h3 className="text-primary font-bold text-md">Message Sent!</h3>
+            <h2 className="text-primary font-bold text-md">Message Sent!</h2>
             <p className="text-muted text-sm">Thank you for reaching out. We'll get back to you within 24 hours.</p>
           </div>
         ) : (
           <form className="glass-card p-24 mb-16 flex-col gap-16 anim-fade-up" onSubmit={handleSubmit}>
-            <h3 className="text-primary font-bold flex-center gap-8"><Send size={16} /> Send a Message</h3>
+            <h2 className="text-primary font-bold flex-center gap-8"><Send size={16} /> Send a Message</h2>
             <div className="flex-col gap-8">
-              <label className="text-muted text-xs font-bold uppercase">Name *</label>
-              <input className="form-input" placeholder="Your full name" value={form.name} onChange={e => upd('name', e.target.value)} required />
+              <label htmlFor="contact-name" className="text-muted text-xs font-bold uppercase">Name *</label>
+              <input id="contact-name" className="form-input" placeholder="Your full name" value={form.name} onChange={e => upd('name', e.target.value)} required />
             </div>
             <div className="flex-col gap-8">
-              <label className="text-muted text-xs font-bold uppercase">Email *</label>
-              <input className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => upd('email', e.target.value)} required />
+              <label htmlFor="contact-email" className="text-muted text-xs font-bold uppercase">Email *</label>
+              <input id="contact-email" className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => upd('email', e.target.value)} required />
             </div>
             <div className="flex-col gap-8">
-              <label className="text-muted text-xs font-bold uppercase">Subject</label>
-              <select className="form-input" value={form.subject} onChange={e => upd('subject', e.target.value)}>
+              <label htmlFor="contact-subject" className="text-muted text-xs font-bold uppercase">Subject</label>
+              <select id="contact-subject" className="form-input" value={form.subject} onChange={e => upd('subject', e.target.value)}>
                 <option value="">Select a topic...</option>
                 {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
               </select>
             </div>
             <div className="flex-col gap-8">
-              <label className="text-muted text-xs font-bold uppercase">Message *</label>
-              <textarea className="form-input" placeholder="Tell us what's on your mind..." value={form.message} onChange={e => upd('message', e.target.value)} required style={{ minHeight: 120, resize: 'vertical' }} />
+              <label htmlFor="contact-message" className="text-muted text-xs font-bold uppercase">Message *</label>
+              <textarea id="contact-message" className="form-input" placeholder="Tell us what's on your mind..." value={form.message} onChange={e => upd('message', e.target.value)} required style={{ minHeight: 120, resize: 'vertical' }} />
             </div>
-            {error && <div className="text-danger text-sm flex-center gap-4"><AlertCircle size={14} /> {error}</div>}
+            {error && <div className="text-danger text-sm flex-center gap-4" role="alert"><AlertCircle size={14} /> {error}</div>}
             <button type="submit" className="btn btn-primary w-full" disabled={sending}>
               {sending ? <Loader size={16} className="anim-spin" /> : <Send size={16} />} {sending ? 'Sending...' : 'Send Message'}
             </button>
           </form>
         )}
 
-        <div className="flex-col gap-8">
+        <section className="flex-col gap-8">
+          <h2 className="sr-only">Contact FAQ</h2>
           {[
             { q: 'How quickly do you respond?', a: 'We aim to respond to all inquiries within 24 hours during business days. Urgent issues are prioritized.' },
             { q: 'Can I request a feature?', a: 'Absolutely! Select "Feature Request" as the subject. We review all suggestions and build the most requested features.' },
             { q: 'Found a bug?', a: 'Please select "Bug Report" and include your device, browser, and steps to reproduce. Screenshots help a lot!' },
           ].map((f, i) => (
             <div key={i} className="glass-card p-16 flex-col gap-4 anim-fade-up" style={{ animationDelay: `${i * 50 + 300}ms` }}>
-              <div className="text-primary font-bold text-sm flex-center gap-8"><FileText size={12} /> {f.q}</div>
-              <div className="text-muted text-sm">{f.a}</div>
+              <h3 className="text-primary font-bold text-sm flex-center gap-8"><FileText size={12} /> {f.q}</h3>
+              <p className="text-muted text-sm">{f.a}</p>
             </div>
           ))}
-        </div>
+        </section>
       </div>
     </div>
   );

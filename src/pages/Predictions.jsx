@@ -6,7 +6,7 @@ import {
   Star, Save, Trophy, Lock, LogIn, ChevronDown, ChevronRight,
   ChevronUp, ChevronLeft, Minus, X, ArrowRight, ArrowLeft,
   Plus, CircleX, CircleCheck, ThumbsUp, ThumbsDown,
-  Pencil, Share2, Zap, RefreshCw, Dice5
+  Pencil, Share2, Zap, RefreshCw, Dice5, Brain
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
@@ -17,7 +17,7 @@ import { savePrediction as savePredictionAction, saveZokaVote, removeZokaVote } 
 import { db } from '../utils/firebase';
 import { doc, setDoc, serverTimestamp, getDocs, collection, query, where } from 'firebase/firestore';
 import SEO from '../components/SEO';
-import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
+import AdSlot from '../components/AdSlot'; 
 import { useToast } from '../core/ToastManager';
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
 import { buildTeamRoute, buildLeagueRoute, buildMatchRoute } from '../utils/routes';
@@ -335,7 +335,6 @@ const PredCard = memo(function PredCard({ pred, index, userPred, result, isEditi
   const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || pred.isLive;
   const hasPred = !!userPred;
 
-  // Instant result calculation
   const localResult = useMemo(() => {
     if (isFin && hasPred && pred.homeScore != null) {
       const r = calcPoints(userPred.homeScore, userPred.awayScore, pred.homeScore, pred.awayScore);
@@ -920,7 +919,6 @@ export default function Predictions() {
     return dailyEntries.find(u => u.uid === uid) || null;
   }, [dailyEntries, uid]);
 
-  // Calculate community stats for each match instantly
   const getCommunityStats = useCallback((matchId) => {
     let home = 0, draw = 0, away = 0;
     Object.values(ctxUserPreds).forEach(p => {
@@ -933,14 +931,28 @@ export default function Predictions() {
     return { home, draw, away, total: home + draw + away };
   }, [ctxUserPreds]);
 
+  // ★ SEO GOLD: ItemList Schema for Predictions
+  const itemListSchema = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Daily Football Predictions & Expert Tips",
+    "itemListElement": filteredPreds.slice(0, 20).map((p, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": `${p.homeTeam?.name || 'Home'} vs ${p.awayTeam?.name || 'Away'}`,
+      "url": `${window.location.origin}${buildMatchRoute(p.matchId, p.homeTeam?.name, p.awayTeam?.name)}`
+    }))
+  }), [filteredPreds]);
+
   return (
     <div className="v21-page">
       <SEO
-        title="Predict Matches & Win"
-        description="Predict football matches, climb the leaderboard, and challenge your friends. Expert tips and live scoring."
-        keywords="football predictions, betting tips, match predictions, soccer tips"
+        title="Predict Football Matches, Win Points & Climb Leaderboards | ZOKASCORE"
+        description="Predict exact football match scores, compete against friends, and climb the global leaderboard. Featuring Zoka AI expert picks and real-time community voting."
+        keywords="football predictions, exact score predictions, football tips, soccer predictions, ZOKASCORE leaderboard"
         path="/predictions"
         robots="index,follow"
+        structuredData={itemListSchema}
       />
 
       <div className="v21-hdr">
@@ -962,6 +974,15 @@ export default function Predictions() {
       </div>
 
       <div className="v21-wrap">
+        
+        {/* ★ SEO GOLD: Editorial Context for Googlebot */}
+        <div className="glass-card p-20 mb-24" style={{ borderLeft: '4px solid var(--primary)' }}>
+          <h2 className="text-primary font-bold text-lg mb-8">Master the Art of Football Prediction</h2>
+          <p className="text-secondary text-sm leading-relaxed">
+            Welcome to the ZOKASCORE Prediction Hub. Here, you don't just watch the game—you predict it. Analyze team form, head-to-head records, and our proprietary Zoka AI expert picks to lock in your exact score predictions. Earn 5 points for exact scores and 2 points for correct outcomes. Climb the daily and all-time leaderboards, unlock achievement badges, and prove your football intelligence against a global community of fans.
+          </p>
+        </div>
+
         <div className="v21-joke-box">
           <Zap size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
           <span style={{ fontSize: '.72rem', color: 'var(--text-muted)', flex: 1 }}>{joke}</span>
@@ -1103,7 +1124,6 @@ export default function Predictions() {
                     zokaPick={mergedZoka.find(z => String(z.matchId) === predId)}
                     communityStats={getCommunityStats(predId)}
                   />
-                  {/* ✅ NEW AD PLACEMENT: Every 5 cards */}
                   {(i + 1) % 5 === 0 && <AdSlot id={`pred-list-ad-${i}`} mobile={true} desktop={true} />}
                 </React.Fragment>
               );
