@@ -1,59 +1,86 @@
-﻿// footballprediction/src/pages/FAQ.jsx
-
-import React, { useState } from 'react';
+﻿import React, { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-import { ChevronDown, MessageSquare } from 'lucide-react';
+import { ChevronDown, MessageSquare, HelpCircle } from 'lucide-react';
 import SEO from '../components/SEO';
+import { seoGenerators } from '../utils/seoBuilder';
 
 const faqData = [
-  { question: 'How do football predictions work?', answer: 'Our predictions are based on statistical analysis of team performance, head-to-head records, current form, injury reports, and other key factors. We use advanced algorithms to calculate the probability of different outcomes.' },
-  { question: 'Are the predictions guaranteed?', answer: 'No prediction is 100% guaranteed. Football is unpredictable by nature. Our predictions provide probabilistic insights to help you make informed decisions, but they should not be considered as certain outcomes.' },
-  { question: 'How often are predictions updated?', answer: 'Predictions are updated daily, with last-minute changes (like injury news or lineup changes) reflected as soon as the information becomes available.' },
-  { question: 'Is the app free to use?', answer: 'Yes! We offer free predictions daily. Premium users get access to additional features like detailed analysis, more predictions, and priority notifications.' },
-  { question: 'How do I contact support?', answer: 'You can reach us through the Help Center, email us at streetzoka@gmail.com, or use the contact form available 24/7.' },
-  { question: 'Which leagues are covered?', answer: 'We cover major leagues including the English Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, and many more leagues worldwide.' },
+  { q: 'How do football predictions work on ZOKASCORE?', a: 'Our predictions are powered by a combination of statistical analysis, team form, head-to-head records, injury reports, and our proprietary Zoka AI engine. We calculate the probability of different outcomes to give you the best edge.' },
+  { q: 'Are the football predictions guaranteed?', a: 'No prediction is 100% guaranteed. Football is inherently unpredictable. Our data and AI provide probabilistic insights to help you make informed decisions, but they should be used as part of your own research.' },
+  { q: 'How often are live scores and fixtures updated?', a: 'Live scores update in real-time (every 5-10 seconds) during matches. Fixtures and odds are updated daily, with last-minute changes like lineup drops reflected instantly via our live sync engine.' },
+  { q: 'Is ZOKASCORE free to use?', a: 'Yes! ZOKASCORE is 100% free. You can view live scores, read AI tactical analysis, and make predictions to climb the leaderboard without paying anything.' },
+  { q: 'How do I join the prediction leaderboard?', a: 'Simply create a free account, navigate to the Predictions or Fixtures page, and lock in your score predictions before kickoff. You earn points for exact scores and correct match outcomes.' },
+  { q: 'Which football leagues are covered?', a: 'We cover over 100 leagues worldwide, including the English Premier League, La Liga, Serie A, Bundesliga, Ligue 1, UEFA Champions League, and major international tournaments.' },
+  { q: 'What is Zoka AI?', a: 'Zoka AI (Kim) is our elite football analyst AI. You can ask it for tactical breakdowns, match previews, team form analysis, and personalized insights on any match or team.' },
 ];
 
 export default function FAQ() {
-  const [openIndex, setOpenIndex] = useState(null);
+  const [openIndex, setOpenIndex] = useState(0);
 
   const toggleFAQ = (index) => setOpenIndex(openIndex === index ? null : index);
 
+  // ★ SEO GOLD: Generate FAQPage Schema for Google Rich Snippets
+  const seo = useMemo(() => seoGenerators.faqPage({ 
+    faqs: faqData, 
+    path: '/faq' 
+  }), []);
+
   return (
     <div className="zoka-page">
-      <SEO
-        title="Frequently Asked Questions (FAQ)"
-        description="Browse answers to frequently asked questions about ZOKASCORE, including football predictions, fixtures, live scores, leaderboards, accounts, scoring, and platform features."
-        keywords="ZOKASCORE FAQ, football predictions FAQ, live scores help, fixtures help, leaderboard help, account support, football questions"
-        robots="index,follow"
-        
-      />
+      <SEO {...seo} />
 
       <div className="zoka-wrap">
-        <div className="glass-card p-24 mb-16 text-center">
-          <h1 className="text-primary font-extrabold text-lg">Frequently Asked Questions</h1>
-          <p className="text-muted text-sm mt-4">Find answers to common questions about ZokaPredict</p>
+        <div className="glass-card p-24 mb-24 text-center">
+          <div className="flex-center gap-12 mb-12">
+            <div className="flex-center" style={{ width: 48, height: 48, borderRadius: '50%', background: 'rgba(var(--primary-rgb), 0.1)', color: 'var(--primary)' }}>
+              <HelpCircle size={24} />
+            </div>
+          </div>
+          <h1 className="text-primary font-extrabold text-2xl mb-8">Frequently Asked Questions</h1>
+          <p className="text-muted text-sm max-w-500 mx-auto">
+            Everything you need to know about ZOKASCORE's live scores, AI predictions, leaderboards, and platform features.
+          </p>
         </div>
 
-        <div className="flex-col gap-12">
+        <div className="flex-col gap-12 mb-24">
           {faqData.map((faq, index) => (
-            <div key={index} className="glass-card overflow-hidden">
-              <button className="w-full flex-between p-16 text-left" onClick={() => toggleFAQ(index)}>
-                <span className="text-primary font-bold text-sm pr-16">{faq.question}</span>
-                <ChevronDown size={20} className="text-muted" style={{ transform: openIndex === index ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }} />
+            <div key={index} className="glass-card overflow-hidden transition-all duration-300" style={{ border: openIndex === index ? '1px solid var(--primary)' : '1px solid var(--border)' }}>
+              <button 
+                className="w-full flex-between p-20 text-left" 
+                onClick={() => toggleFAQ(index)}
+                aria-expanded={openIndex === index}
+                aria-controls={`faq-answer-${index}`}
+              >
+                <h2 className="text-primary font-bold text-base pr-16">{faq.q}</h2>
+                <ChevronDown 
+                  size={20} 
+                  className="text-muted flex-shrink-0" 
+                  style={{ 
+                    transform: openIndex === index ? 'rotate(180deg)' : 'rotate(0deg)', 
+                    transition: 'transform 0.3s ease' 
+                  }} 
+                />
               </button>
-              <div className="overflow-hidden transition-all duration-300" style={{ maxHeight: openIndex === index ? '200px' : '0' }}>
-                <p className="text-secondary text-sm p-16 pt-0">{faq.answer}</p>
+              <div 
+                id={`faq-answer-${index}`}
+                className="overflow-hidden transition-all duration-300" 
+                style={{ maxHeight: openIndex === index ? '500px' : '0' }}
+              >
+                <p className="text-secondary text-sm p-20 pt-0 leading-relaxed">{faq.a}</p>
               </div>
             </div>
           ))}
         </div>
 
-        <div className="glass-card flex-col items-center gap-12 p-24 mt-16 text-center">
+        {/* ★ SEO INTERNAL LINKING: Keep Googlebot crawling */}
+        <div className="glass-card flex-col items-center gap-12 p-24 text-center">
           <MessageSquare size={32} className="text-primary" />
-          <h3 className="text-primary font-bold">Still have questions?</h3>
-          <p className="text-muted text-sm">Can't find what you're looking for? We're here to help.</p>
-          <Link to="/help-center" className="btn btn-primary">Visit Help Center â†’</Link>
+          <h3 className="text-primary font-bold text-lg">Still have questions?</h3>
+          <p className="text-muted text-sm max-w-400">Can't find what you're looking for? Our support team and Zoka AI are here to help.</p>
+          <div className="flex gap-12 mt-8 flex-wrap justify-center">
+            <Link to="/help-center" className="btn btn-primary">Visit Help Center</Link>
+            <Link to="/contact" className="btn btn-ghost">Contact Support</Link>
+          </div>
         </div>
       </div>
     </div>

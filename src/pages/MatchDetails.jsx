@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
-  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, AlertCircle
+  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, AlertCircle, Brain
 } from 'lucide-react';
 
 import SEO from '../components/SEO';
-import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
-import { useFixtures, useStandings } from '../hooks/useFixtures';
+import AdSlot from '../components/AdSlot'; 
+import { useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
-import { seoGenerators, buildSEO } from '../utils/seoBuilder';
+import { seoGenerators } from '../utils/seoBuilder';
 
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
@@ -26,7 +27,7 @@ const LEAGUE_BROADCASTERS = {
   '39': [{ name: 'Peacock', color: '#000000', url: 'https://www.peacocktv.com' }, { name: 'Sky Sports', color: '#0072c6', url: 'https://www.skysports.com' }],
   '140': [{ name: 'ESPN+', color: '#d00d1e', url: 'https://www.espn.com' }, { name: 'beIN SPORTS', color: '#fa9000', url: 'https://www.beinsports.com' }],
 };
-const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://www.plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
+const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
 
 const useCountdown = (targetDate) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -74,15 +75,32 @@ export default function MatchDetails() {
   const { matchId } = useParams();
   const now = useNow(10000);
   
-  const { data: todayFx = [] } = useFixtures(todayStr());
-  const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
-  const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
+  const { data: rawMatch, isLoading } = useQuery({
+    queryKey: ['match-detail', matchId],
+    queryFn: async () => {
+      try {
+        const res = await fetch(`/api/v1/match/${matchId}`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.id) return data;
+        }
+      } catch (e) { /* Fallback to daily files */ }
+
+      const dates = [todayStr(), getLocalDateStr(-1), getLocalDateStr(1)];
+      const results = await Promise.all(dates.map(d =>
+        fetch(`/api/v1/data/fixtures/${d}.json`)
+          .then(r => r.ok ? r.json() : { data: [] })
+          .catch(() => ({ data: [] }))
+      ));
+      const allMatches = results.flatMap(r => r.data || []);
+      return allMatches.find(m => String(m.id) === String(matchId)) || null;
+    },
+    staleTime: 1000 * 60 * 5, 
+  });
 
   const match = useMemo(() => {
-    const all = [...todayFx, ...tomFx, ...yestFx];
-    const found = all.find(m => String(m.id) === String(matchId));
-    return found ? applySmartMinute(found, now) : null;
-  }, [todayFx, yestFx, tomFx, matchId, now]);
+    return rawMatch ? applySmartMinute(rawMatch, now) : null;
+  }, [rawMatch, now]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
@@ -108,7 +126,7 @@ export default function MatchDetails() {
   const countdown = useCountdown(match?.isScheduled ? match.utcDate : null);
 
   const seo = useMemo(() => {
-    if (!match) return buildSEO({ title: "Match Details", description: "Loading match details...", path: `/match/${matchId}` });
+    if (!match) return { title: "Match Details", description: "Loading match details...", path: `/match/${matchId}` };
     return seoGenerators.matchPage({
       homeName: match.homeName, awayName: match.awayName, leagueName: match.leagueName,
       date: match.date, venue: match.venue, isLive: match.isLive, isFinished: match.isFinished,
@@ -189,6 +207,17 @@ export default function MatchDetails() {
               </div>
             )}
           </div>
+
+          {match.aiPreview && (
+            <div className="glass-card p-24 mb-24" style={{ borderLeft: '4px solid var(--accent)' }}>
+              <h2 className="text-primary font-bold flex-center gap-8 mb-12" style={{ justifyContent: 'flex-start' }}>
+                <Brain size={18} className="text-accent" /> Zoka AI Tactical Preview
+              </h2>
+              <p className="text-muted text-sm leading-relaxed" style={{ whiteSpace: 'pre-line' }}>
+                {match.aiPreview}
+              </p>
+            </div>
+          )}
 
           <div className="md-pro-grid">
             <div className="glass-card p-20 flex-col gap-12">
@@ -278,7 +307,6 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* ✅ NEW AD PLACEMENT (Never above score/title, safely below stats) */}
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 
           <div className="grid gap-16 mb-24" style={{ gridTemplateColumns: '1fr 1fr' }}>

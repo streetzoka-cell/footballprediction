@@ -158,16 +158,13 @@ export default function Profile() {
 
   const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
 
-  // ★ FIX: Wrap baseProfile in useMemo to stabilize the reference
   const baseProfile = useMemo(() => userProfile || {
     displayName: 'Guest', email: 'Sign in to get started',
     points: 0, predictions: 0, correctScore: 0, correctResult: 0, role: 'user',
   }, [userProfile]);
 
-  // ★ FIX: Wrap dbPoints in useMemo
   const dbPoints = useMemo(() => userPoints || {}, [userPoints]);
 
-  // ★ FIX: Wrap profile in useMemo so it doesn't break dependencies further down
   const profile = useMemo(() => {
     return {
       ...baseProfile,
@@ -203,7 +200,6 @@ export default function Profile() {
     [currentUser]
   );
 
-  // These now safely use the memoized `profile` object without ESLint errors
   const earnedBadges = useMemo(() => ACHIEVEMENTS.filter(b => b.check(profile)), [profile]);
   const lockedBadges = useMemo(() => ACHIEVEMENTS.filter(b => !b.check(profile)), [profile]);
 
@@ -212,14 +208,26 @@ export default function Profile() {
     navigate('/');
   }, [signOut, navigate]);
 
+  // ★ SEO FIX: ProfilePage Schema
+  const profileSchema = {
+    "@context": "https://schema.org",
+    "@type": "ProfilePage",
+    "mainEntity": {
+      "@type": "Person",
+      "name": profile.displayName,
+      "description": `ZOKASCORE Predictor with ${points} points and ${accuracyNum}% accuracy.`
+    }
+  };
+
   return (
     <div className="pro-page">
       <SEO
-        title="My Profile & Account"
+        title="My Profile & Account | ZOKASCORE"
         description="Manage your ZOKASCORE account, update your profile, track your prediction history, monitor your performance, and view your leaderboard progress."
         keywords="ZOKASCORE profile, user account, account settings, prediction history, leaderboard progress, football predictions"
         robots="noindex,nofollow"
-         />
+        structuredData={profileSchema}
+      />
 
       <div className="pro-wrap">
         

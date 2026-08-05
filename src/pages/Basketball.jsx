@@ -1,6 +1,4 @@
-﻿// footballprediction/src/pages/Basketball.jsx
-
-import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   CalendarDays, RefreshCw, WifiOff, Database,
@@ -17,7 +15,7 @@ import { db } from '../utils/firebase';
 import { PATHS, getBasketballLeaguePriority, getLeagueColor, isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { doc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { safeWrite } from '../services/safeWrite'; // â˜… IMPORTED safeWrite
+import { safeWrite } from '../services/safeWrite'; 
 import SEO from '../components/SEO';
 
 function normalizeBasketballGame(raw) {
@@ -381,7 +379,6 @@ export default function Basketball() {
   const handlePredict = useCallback(async (gameId, needsLogin, pick) => {
     if (needsLogin || !currentUser) { setShowLoginModal(true); return; }
     if (!gameId || !pick) return;
-    // â˜… Use safeWrite for offline queue support
     await safeWrite('user_bb_predictions', `${currentUser.uid}_${gameId}`, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
     eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, sport: 'basketball' });
   }, [currentUser]);
@@ -470,24 +467,47 @@ export default function Basketball() {
 
   let sectionIdx = 0;
 
+  // ★ SEO GOLD: ItemList Schema for Basketball Games
+  const itemListSchema = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Basketball Fixtures & Live Scores",
+    "itemListElement": mergedGames.slice(0, 30).map((g, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": `${g.homeTeam?.name} vs ${g.awayTeam?.name}`,
+      "url": `${window.location.origin}/basketball` 
+    }))
+  }), [mergedGames]);
+
   return (
     <div className="zoka-page" style={{ animation: 'zk-fade-up .45s ease' }}>
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO
-        title="Basketball Fixtures, Live Scores & Predictions"
-        description="Follow basketball fixtures, live scores, standings, match insights, and predictions from top competitions around the world on ZOKASCORE."
-        keywords="basketball, basketball fixtures, live basketball scores, basketball predictions, NBA, EuroLeague, standings, ZOKASCORE"
+        title="Basketball Live Scores, Fixtures & Predictions | NBA, EuroLeague"
+        description="Follow live basketball scores, fixtures, quarter-by-quarter stats, and predictions from the NBA, EuroLeague, and top global competitions on ZOKASCORE."
+        keywords="basketball live scores, NBA fixtures, basketball predictions, EuroLeague, ZOKASCORE basketball"
         robots="index,follow"
-        
+        structuredData={itemListSchema}
       />
+
+      {/* ★ SEO GOLD: Editorial Context for Googlebot */}
+      <div className="zoka-wrap pt-16">
+        <div className="glass-card p-20 mb-16" style={{ borderLeft: '4px solid var(--accent)' }}>
+          <h2 className="text-primary font-bold text-lg mb-8">Global Basketball Intelligence</h2>
+          <p className="text-secondary text-sm leading-relaxed">
+            Welcome to ZOKASCORE's Basketball Hub. Track real-time live scores, quarter-by-quarter breakdowns, and game outcomes from the NBA, EuroLeague, FIBA, and top domestic leagues worldwide. Use our data to make informed predictions and climb the basketball leaderboard.
+          </p>
+        </div>
+      </div>
 
       <div className="glass sticky top-0 z-sticky" style={{ borderBottom: '1px solid var(--border)', animation: 'zk-slide-in .4s ease' }}>
         <div className="zoka-wrap flex-between py-12">
           <div className="flex-center gap-10">
             <div className="flex-center font-extrabold text-inverse" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', fontSize: '.72rem' }}>Z</div>
             <span className="text-primary font-extrabold text-sm">zokascore<span className="text-accent">.xyz</span></span>
-            <span style={{ fontSize: 20 }}>ðŸ€</span>
+            <span style={{ fontSize: 20 }}>🏀</span>
           </div>
           <div className="flex-center gap-4">
             {liveCount > 0 && (
@@ -504,10 +524,10 @@ export default function Basketball() {
         <div className="zoka-wrap flex-between py-6">
           <div className="flex gap-4">
             <button className="btn btn-ghost btn-sm" onClick={() => navigate('/fixtures')}>
-              <span style={{ fontSize: '1rem' }}>âš½</span> Football <ChevronRight size={13} className="opacity-50" />
+              <span style={{ fontSize: '1rem' }}>⚽</span> Football <ChevronRight size={13} className="opacity-50" />
             </button>
             <button className="btn btn-primary btn-sm">
-              <span style={{ fontSize: '1rem' }}>ðŸ€</span> Basketball
+              <span style={{ fontSize: '1rem' }}>🏀</span> Basketball
             </button>
           </div>
           <span className="text-muted font-medium flex-center gap-4 text-xs">
@@ -554,7 +574,7 @@ export default function Basketball() {
               <div><SkeletonGroup /><div className="mt-16"><SkeletonGroup /></div></div>
             ) : !error && mergedGames.length === 0 ? (
               <div className="glass-card flex-col items-center p-60 text-center gap-16">
-                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>ðŸ€</div>
+                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>🏀</div>
                 <div className="text-muted font-medium text-sm">No games scheduled for this date</div>
                 <div className="text-muted text-xs">Backend populates yesterday, today, and tomorrow</div>
                 {!windowDates.includes(selectedDate) && (

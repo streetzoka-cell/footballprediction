@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 
 import SEO from "../components/SEO";
-import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
+import AdSlot from '../components/AdSlot'; 
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr } from '../utils/dates';
 import { buildMatchRoute } from '../utils/routes';
@@ -218,13 +218,26 @@ export default function LiveStream() {
 
   const clearAll = useCallback(() => { setSearch(''); setActiveCategory('all'); setSelectedCountry('ALL'); }, []);
 
+  const itemListSchema = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "Legal Football Streaming Services & TV Guide",
+    "itemListElement": filteredServices.slice(0, 20).map((s, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": s.name,
+      "url": s.url
+    }))
+  }), [filteredServices]);
+
   return (
     <div className="zoka-page">
       <SEO
-        title="Live Football Matches, TV Guide & Streaming Information"
+        title="Live Football Matches, TV Guide & Streaming Information | ZOKASCORE"
         description="Follow live football matches, kickoff times, live scores, and official TV and streaming information for major leagues and competitions on ZOKASCORE."
         keywords="live football matches, football TV guide, football streaming information, live soccer, live scores, football fixtures, watch football legally, ZOKASCORE"
         robots="index,follow"
+        structuredData={itemListSchema}
       />
 
       <div className="zoka-wrap">
@@ -234,6 +247,14 @@ export default function LiveStream() {
           </div>
           <h1 className="text-primary font-extrabold">Where to Watch Live Football</h1>
           <p className="text-muted text-sm">Official broadcasters and legal streaming platforms for football worldwide</p>
+        </div>
+
+        {/* ★ SEO GOLD: Editorial Context */}
+        <div className="glass-card p-20 mb-24" style={{ borderLeft: '4px solid var(--primary)' }}>
+          <h2 className="text-primary font-bold text-lg mb-8">The Ultimate Legal Streaming Guide</h2>
+          <p className="text-secondary text-sm leading-relaxed">
+            Finding where to watch your favorite football teams shouldn't be a hassle. ZOKASCORE aggregates official broadcasting rights, free-to-air platforms, and premium sports networks globally. Whether you are looking for UEFA Champions League rights in the US, Premier League coverage in the UK, or free FIFA+ documentaries, our directory ensures you only access safe, legal, and high-definition streams.
+          </p>
         </div>
 
         {isLoading ? (
@@ -272,7 +293,6 @@ export default function LiveStream() {
           </div>
         )}
 
-        {/* ✅ NEW AD PLACEMENT (Only 1 ad as requested for this heavily refreshed page) */}
         <AdSlot id="live-stream-ad-1" mobile={true} desktop={true} />
 
         <div className={`glass-card flex-center gap-12 p-12 mb-16`} style={{ borderColor: searchFocused ? 'var(--primary)' : 'var(--border)', transition: 'border-color 0.2s' }}>

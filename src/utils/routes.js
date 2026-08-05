@@ -1,6 +1,4 @@
-﻿// footballprediction/src/utils/routes.js
-
-import { slugify } from './format';
+﻿import { slugify } from './format';
 
 export const ROUTES = Object.freeze({
   HOME: '/',
@@ -15,6 +13,7 @@ export const ROUTES = Object.freeze({
   LOGIN: '/login',
   PROFILE: '/profile',
   ADMIN: '/zks-admin-8f9x2-control-panel',
+  STUDIO: '/studio', // ★ ADDED STUDIO
   ABOUT: '/about',
   FAQ: '/faq',
   HELP: '/help-center',

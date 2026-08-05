@@ -1,6 +1,4 @@
-﻿// footballprediction/src/pages/company/Partners.jsx
-
-import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Globe, Handshake, Eye, BarChart3, Users, Zap, Mail, Trophy } from 'lucide-react';
 import SEO from '../../components/SEO';
 
@@ -21,15 +19,24 @@ const OPPORTUNITIES = [
 export default function Partners() {
   const nav = useNavigate();
 
+  const orgSchema = {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ZOKASCORE Partnerships",
+    "url": "https://zokascore.xyz/partners",
+    "description": "Partner with ZOKASCORE through sponsorships, advertising, and branded campaigns."
+  };
+
   return (
     <div className="zoka-page">
       <SEO
         title="Partner with ZOKASCORE | Advertising, Sponsorships & Brand Collaborations"
-        description="Partner with ZOKASCORE through sponsorships, advertising, branded campaigns, featured placements, and football marketing opportunities. Connect your brand with passionate football fans."
-        keywords="partner with ZOKASCORE, football sponsorship, sports advertising, football marketing, brand partnerships, display advertising, sponsored content"
+        description="Partner with ZOKASCORE through sponsorships, advertising, branded campaigns, featured placements, and football marketing opportunities."
+        keywords="partner with ZOKASCORE, football sponsorship, sports advertising, brand partnerships"
         path="/partners"
         robots="index,follow"
-         />
+        structuredData={orgSchema}
+      />
 
       <div className="zoka-wrap">
         <div className="glass sticky top-0 z-sticky mb-16">
@@ -39,40 +46,41 @@ export default function Partners() {
           </div>
         </div>
 
-        <div className="glass-card p-24 mb-24 text-center flex-col items-center gap-12 anim-fade-up">
+        <article className="glass-card p-24 mb-24 text-center flex-col items-center gap-12 anim-fade-up">
           <h1 className="text-primary font-extrabold text-lg">Partner With<br /><span className="text-gold">ZOKASCORE</span></h1>
           <p className="text-muted text-sm" style={{ maxWidth: 560 }}>Build meaningful partnerships with one of the fastest-growing football platforms. Promote your brand through sponsorships, featured campaigns, match experiences, and premium advertising placements.</p>
-        </div>
+        </article>
 
-        <div className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <section className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
           {METRICS.map((m, i) => (
             <div key={i} className="glass-card p-16 flex-col items-center gap-4 text-center anim-pop" style={{ animationDelay: `${m.delay + 100}ms` }}>
               <div className="font-extrabold text-md" style={{ color: m.color }}>{m.n}</div>
               <div className="text-muted text-xs font-bold uppercase">{m.l}</div>
             </div>
           ))}
-        </div>
+        </section>
 
-        <div className="text-primary font-extrabold text-sm mb-12">Advertising & Partnership Solutions</div>
+        <h2 className="text-primary font-extrabold text-sm mb-12">Advertising & Partnership Solutions</h2>
 
-        <div className="flex-col gap-12">
+        <section className="flex-col gap-12">
           {OPPORTUNITIES.map((opp, i) => (
-            <div key={i} className="glass-card p-20 flex-col gap-12 anim-fade-up" style={{ animationDelay: `${i * 60 + 200}ms` }}>
+            <article key={i} className="glass-card p-20 flex-col gap-12 anim-fade-up" style={{ animationDelay: `${i * 60 + 200}ms` }}>
               <h3 className="text-primary font-bold text-sm flex-center gap-8">{opp.icon} {opp.title}</h3>
               <p className="text-muted text-sm">{opp.desc}</p>
-              <div className="flex gap-8 flex-wrap">
-                {opp.features.map(f => <span key={f} className="badge badge-muted"><Zap size={8} /> {f}</span>)}
-              </div>
+              <ul className="flex gap-8 flex-wrap" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {opp.features.map(f => <li key={f}><span className="badge badge-muted"><Zap size={8} /> {f}</span></li>)}
+              </ul>
               <a href={`mailto:streetzoka@gmail.com?subject=Partnership: ${opp.title}`} className="btn btn-secondary btn-sm self-start mt-4"><Mail size={13} /> Start Conversation</a>
-            </div>
+            </article>
           ))}
-        </div>
+        </section>
 
-        <div className="glass-card p-24 mt-24 text-center flex-col items-center gap-12 anim-pop" style={{ background: 'rgba(var(--gold-rgb), 0.03)', borderColor: 'rgba(var(--gold-rgb), 0.15)' }}>
+        <footer className="glass-card p-24 mt-24 text-center flex-col items-center gap-12 anim-pop" style={{ background: 'rgba(var(--gold-rgb), 0.03)', borderColor: 'rgba(var(--gold-rgb), 0.15)' }}>
           <h3 className="text-primary font-bold">Grow With ZOKASCORE</h3>
           <p className="text-muted text-sm" style={{ maxWidth: 480 }}>Whether you're a global brand, local business, football organization, media company, or technology partner, we're ready to build impactful campaigns that connect with football fans.</p>
+          {/* ★ FIX: Repaired the broken JSX from the prompt */}
           <a href="mailto:streetzoka@gmail.com?subject=Partnership Inquiry" className="btn btn-primary"><Handshake size={15} /> Become a Partner</a>
-        </div>
+        </footer>
       </div>
     </div>
   );

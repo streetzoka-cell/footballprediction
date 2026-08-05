@@ -1,5 +1,5 @@
 ﻿import { Link } from 'react-router-dom';
-import { ArrowLeft, Loader, Zap, TrendingUp, Camera, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy } from 'lucide-react';
+import { ArrowLeft, Loader, Zap, TrendingUp, Camera, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy, Brain } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
@@ -72,6 +72,18 @@ export default function MasterGames() {
 
   const isEmpty = smartMatchesCount === 0 && !isLoading;
 
+  const itemListSchema = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    "name": "ZOKASCORE Elite Football Picks & Featured Matches",
+    "itemListElement": [...elitePicks, ...featuredMatches].slice(0, 20).map((m, index) => ({
+      "@type": "ListItem",
+      "position": index + 1,
+      "name": `${m.homeName} vs ${m.awayName}`,
+      "url": `${window.location.origin}${buildMatchRoute(m.id, m.homeName, m.awayName)}`
+    }))
+  }), [elitePicks, featuredMatches]);
+
   return (
     <div className="mg-page">
       <SEO
@@ -80,6 +92,7 @@ export default function MasterGames() {
         keywords="ZOKASCORE Intelligence, smart matches, elite picks, featured fixtures, football match rating, today's football, premium fixtures"
         path="/mastergames"
         robots="index,follow"
+        structuredData={itemListSchema}
         breadcrumbs={[
           { name: 'Home', path: '/' },
           { name: 'Master Games', path: '/mastergames' }
@@ -112,13 +125,20 @@ export default function MasterGames() {
           <StatCard icon={<BarChart3 size={18} />} label="Match Rating" value={avgRating ? `${avgRating}%` : '—'} accent="var(--primary)" delay={240} />
         </section>
 
+        {/* ★ SEO GOLD: Proprietary Algorithm Explanation */}
         <section className="mg-info-card">
-          <h2 className="mg-info-title"><Trophy size={20} /> Why ZOKASCORE Intelligence?</h2>
-          <p className="mg-info-text muted">Not every football match deserves your attention.</p>
+          <h2 className="mg-info-title flex-center gap-8" style={{justifyContent: 'flex-start'}}><Brain size={20} /> The ZOKASCORE Intelligence Rating System</h2>
           <p className="mg-info-text">
-            ZOKASCORE Intelligence highlights the most exciting fixtures based on match quality, current form, league importance, team momentum, and overall football interest.
+            Not every football match deserves your attention. Our proprietary algorithm scans hundreds of daily global fixtures and assigns a <strong>Match Rating (0-100%)</strong> based on five critical pillars:
           </p>
-          <p className="mg-info-text muted">Our goal is simple—help you discover the games that matter most.</p>
+          <ul className="flex-col gap-8 text-secondary text-sm pl-20 mt-12 mb-12">
+            <li><strong className="text-primary">League Importance:</strong> Champions League and Title Deciders score higher than mid-table friendlies.</li>
+            <li><strong className="text-primary">Team Momentum:</strong> Matches involving teams on winning streaks or in relegation battles.</li>
+            <li><strong className="text-primary">Derby Factor:</strong> Historical rivalries (e.g., El Clásico, North London Derby) receive automatic boosts.</li>
+            <li><strong className="text-primary">Statistical Variance:</strong> Games featuring high-scoring teams or volatile defensive records.</li>
+            <li><strong className="text-primary">Global Interest:</strong> Real-time search volume and community prediction engagement.</li>
+          </ul>
+          <p className="mg-info-text muted">Our goal is simple—help you discover the games that matter most, filtering out the noise so you can focus on elite football.</p>
         </section>
 
         {isLoading && (
@@ -135,8 +155,8 @@ export default function MasterGames() {
           </div>
         )}
 
-        {elitePicks.length > 0 && <MatchSection title="🔥 Elite Picks" matches={elitePicks} accent="var(--danger)" />}
-        {featuredMatches.length > 0 && <MatchSection title="⭐ Featured Matches" matches={featuredMatches} accent="var(--gold)" />}
+        {elitePicks.length > 0 && <MatchSection title="🔥 Elite Picks (80%+ Rating)" matches={elitePicks} accent="var(--danger)" />}
+        {featuredMatches.length > 0 && <MatchSection title="⭐ Featured Matches (60-79% Rating)" matches={featuredMatches} accent="var(--gold)" />}
         {moreMatches.length > 0 && <MatchSection title="📈 More Matches to Watch" matches={moreMatches} accent="var(--primary)" />}
 
         <footer className="mg-bottom-cta">

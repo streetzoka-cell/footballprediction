@@ -1,9 +1,9 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, startTransition, memo } from 'react';
+﻿import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, startTransition, memo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search, Trophy, TrendingUp, Target, BarChart3,
   X, Crown, Flame, Users, Calendar, Award, ChevronDown, 
-  RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords
+  RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords, Info
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
@@ -255,13 +255,22 @@ export default function Leaderboard() {
     window.location.reload();
   }, []);
 
+  const webPageSchema = {
+    "@context": "https://schema.org",
+    "@type": "WebPage",
+    "name": "ZOKASCORE Prediction Leaderboard & Player Rankings",
+    "description": "Track the top prediction rankings, compare your performance, and compete with football fans worldwide on ZOKASCORE.",
+    "url": "https://zokascore.xyz/leaderboard"
+  };
+
   return (
     <div className="lb-page">
       <SEO
-        title="Prediction Leaderboard & Player Rankings"
+        title="Prediction Leaderboard & Player Rankings | ZOKASCORE"
         description="Track the top prediction rankings, compare your performance, climb the leaderboard, and compete with football fans worldwide on ZOKASCORE."
         keywords="prediction leaderboard, football leaderboard, football rankings, prediction rankings, top predictors, ZOKASCORE leaderboard"
         robots="index,follow"
+        structuredData={webPageSchema}
         breadcrumbs={[{ name: "Home", path: "/" }, { name: "Leaderboard", path: "/leaderboard" }]}
       />
 
@@ -386,6 +395,27 @@ export default function Leaderboard() {
               <button className="lb-cta" onClick={() => nav('/predictions')}><Target size={14} /> Make Predictions <ChevronRight size={13} /></button>
             </div>
           )}
+
+          {/* ★ SEO GOLD: Scoring Rules & Editorial Content */}
+          <section className="glass-card p-24 mt-32" aria-labelledby="scoring-rules-title">
+            <h2 id="scoring-rules-title" className="text-primary font-bold text-lg mb-12 flex-center gap-8" style={{justifyContent: 'flex-start'}}>
+              <Info size={18} /> How ZOKASCORE Scoring Works
+            </h2>
+            <div className="grid gap-16 text-secondary text-sm" style={{gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))'}}>
+              <div>
+                <h3 className="text-primary font-bold mb-4">Exact Score (5 Points)</h3>
+                <p>Predict the precise final scoreline (e.g., 2-1) to earn the maximum 5 points and the 🎯 Sniper badge.</p>
+              </div>
+              <div>
+                <h3 className="text-primary font-bold mb-4">Correct Outcome (2 Points)</h3>
+                <p>Predict the correct match result (Home Win, Draw, or Away Win) but miss the exact score to earn 2 points.</p>
+              </div>
+              <div>
+                <h3 className="text-primary font-bold mb-4">Daily Streaks 🔥</h3>
+                <p>Make at least one correct prediction every day to build your streak. Streaks unlock exclusive profile badges and seasonal rewards.</p>
+              </div>
+            </div>
+          </section>
         </>
       </div>
     </div>

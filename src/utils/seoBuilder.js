@@ -1,5 +1,4 @@
-﻿// footballprediction/src/utils/seoBuilder.js
-// Unified SEO Builder â€” combines seoBuilder + Breadcrumbs logic
+﻿// Unified SEO Builder — combines seoBuilder + Breadcrumbs logic
 
 export const SITE = Object.freeze({
   name: "ZOKASCORE",
@@ -15,7 +14,7 @@ export const SITE = Object.freeze({
   searchUrl: "https://zokascore.xyz/search?q={search_term_string}",
 });
 
-// â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Helpers ───────────────────────────────────────────────────────
 
 const titleCase = (text = "") =>
   decodeURIComponent(text)
@@ -33,7 +32,7 @@ function deduplicateSchemas(schemas) {
   });
 }
 
-// â”€â”€â”€ Breadcrumb Map â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Breadcrumb Map ────────────────────────────────────────────────
 
 const BREADCRUMB_TITLES = Object.freeze({
   fixtures: "Fixtures",
@@ -60,10 +59,6 @@ const BREADCRUMB_TITLES = Object.freeze({
   admin: "Admin",
 });
 
-/**
- * Generate breadcrumbs from a path string.
- * Used by both SEO.jsx and Breadcrumbs.jsx â€” single source of truth.
- */
 export function generateBreadcrumbs(path = "/") {
   if (path === "/") return [{ name: "Home", path: "/" }];
 
@@ -75,36 +70,21 @@ export function generateBreadcrumbs(path = "/") {
     const part = parts[i];
     cumulative += `/${part}`;
 
-    // Dynamic route: /league/:id/:slug
     if (part === "league" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Leagues", path: "/fixtures" });
-      // â˜… FIX: Include ID in the path
       crumbs.push({ name: titleCase(parts[i + 2]), path: `/league/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
-    }
-    // Dynamic route: /team/:id/:slug
-    else if (part === "team" && parts[i + 1] && parts[i + 2]) {
+    } else if (part === "team" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Teams", path: "/fixtures" });
-      // â˜… FIX: Include ID in the path
       crumbs.push({ name: titleCase(parts[i + 2]), path: `/team/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
-    }
-    // Dynamic route: /match/:id/:slug
-    else if (part === "match" && parts[i + 1] && parts[i + 2]) {
+    } else if (part === "match" && parts[i + 1] && parts[i + 2]) {
       crumbs.push({ name: "Fixtures", path: "/fixtures" });
-      // â˜… FIX: Include ID in the path
       crumbs.push({ name: "Match Details", path: `/match/${parts[i + 1]}/${parts[i + 2]}` });
       i += 2;
-    }
-    // Dynamic route: /highlights/:slug
-    else if (part === "highlights" && parts[i + 1]) {
+    } else if (part === "highlights" && parts[i + 1]) {
       crumbs.push({ name: "Highlights", path: "/highlights" });
-      if (parts[i + 1] !== "author") {
-        // Skip adding slug as breadcrumb for cleanliness
-      }
-    }
-    // Static route
-    else {
+    } else {
       crumbs.push({
         name: BREADCRUMB_TITLES[part] || titleCase(part),
         path: cumulative,
@@ -115,7 +95,7 @@ export function generateBreadcrumbs(path = "/") {
   return crumbs;
 }
 
-// â”€â”€â”€ Base Schema Generators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Base Schema Generators ────────────────────────────────────────
 
 export function websiteSchema() {
   return {
@@ -157,7 +137,7 @@ export function breadcrumbSchema(crumbs) {
   };
 }
 
-// â”€â”€â”€ Universal SEO Builder â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Universal SEO Builder ─────────────────────────────────────────
 
 export function buildSEO({
   title,
@@ -174,13 +154,14 @@ export function buildSEO({
   nextPath,
 }) {
   const fullTitle = title ? `${title} | ${SITE.name}` : SITE.name;
-  const url = canonical || `${SITE.url}${path}`;
+  // Ensure no double slashes in canonical URL
+  const cleanPath = path.replace(/\/$/, '') || '/';
+  const url = canonical || `${SITE.url}${cleanPath}`;
   const finalDesc = description || SITE.description;
   const finalImg = image || SITE.image;
   const finalKw = keywords || SITE.keywords;
   const crumbs = generateBreadcrumbs(path);
 
-  // Original behavior: add breadcrumbs internally
   let schemas = [];
   
   const bcSchema = breadcrumbSchema(crumbs);
@@ -209,7 +190,7 @@ export function buildSEO({
   };
 }
 
-// â”€â”€â”€ Specialized SEO Generators â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─── Specialized SEO Generators ────────────────────────────────────
 
 export const seoGenerators = {
   matchPage({

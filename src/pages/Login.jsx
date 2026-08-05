@@ -131,27 +131,27 @@ export default function Login() {
 
   if (authLoading) {
     return (
-      <div className="flex-center" style={{ minHeight: '100vh' }}>
+      <main className="flex-center" style={{ minHeight: '100vh' }}>
         <Loader size={32} className="anim-spin text-primary" />
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="flex-center" style={{ minHeight: '100vh', padding: 'var(--sp-16)', position: 'relative', overflow: 'hidden' }}>
+    <main className="flex-center" style={{ minHeight: '100vh', padding: 'var(--sp-16)', position: 'relative', overflow: 'hidden' }}>
       <SEO
-        title="Sign In to Your ZOKASCORE Account"
+        title="Sign In or Create Account | ZOKASCORE"
         description="Sign in to your ZOKASCORE account to manage your profile, track your prediction progress, view leaderboard rankings, and access your personalized football experience."
         keywords="ZOKASCORE login, sign in, football account, prediction account, user login"
         robots="noindex,nofollow"
-          />
+      />
       
       <div className="glass-card flex-col gap-20 p-24" style={{ width: '100%', maxWidth: '420px', zIndex: 1, opacity: modeTrans ? 0 : 1, transition: 'opacity 0.25s ease' }}>
         <div className="flex-col items-center gap-12">
           <div className="glass-card flex-center" style={{ width: 64, height: 64, borderRadius: 'var(--r-16)', background: 'linear-gradient(135deg, var(--primary), var(--primary-dim))' }}>
             <span className="font-extrabold text-inverse" style={{ fontSize: 'var(--fs-2xl)' }}>Z</span>
           </div>
-          <h2 className="text-primary font-extrabold">{isLogin ? 'Welcome Back' : 'Create Account'}</h2>
+          <h1 className="text-primary font-extrabold text-xl">{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
           <p className="text-muted text-sm">{isLogin ? 'Sign in to track your predictions' : 'Join the prediction community'}</p>
         </div>
 
@@ -203,6 +203,6 @@ export default function Login() {
           </div>
         </div>
       </div>
-    </div>
+    </main>
   );
 }

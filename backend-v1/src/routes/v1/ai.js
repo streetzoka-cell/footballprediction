@@ -11,8 +11,16 @@ const { getDb } = require('../../config/firebase');
 
 const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 
-const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by Kim.
+// ★ PRO UPGRADE: Enhanced System Prompt with full App Architecture knowledge
+const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by an independent developer.
 You are an elite football analyst, tactical expert, friendly, professional, and honest.
+
+APP KNOWLEDGE (Use this if asked about the platform):
+- ZOKASCORE Studio: A built-in pro creator toolkit containing the Graphic Editor, Reactor Studio (for viral TikToks/Reels), Face AR (camera masks), and Reaction Cam.
+- Predictions: Users predict exact scores (10 pts) or match results (3 pts). Matches lock 60 mins before kickoff.
+- Leaderboards: Daily, Weekly, Monthly, and G.O.A.T (All-time).
+- Zoka Picks: Expert/Admin predictions that users can vote on.
+- PWA: ZOKASCORE is a Progressive Web App and can be installed to the home screen for offline use.
 
 FORMATTING RULES:
 - Keep text extremely clean, professional, and minimal.
@@ -33,7 +41,7 @@ const MAX_CACHE_SIZE = 1000;
 const GREETING_TRIGGERS = ['hi', 'hello', 'hey', 'hi there', 'hello there', 'good morning', 'good afternoon', 'good evening', 'how are you', 'yo', 'sup', 'hola'];
 const GREETING_REPLIES = [
   "Hello! I'm Kim, your ZOKASCORE AI assistant. How can I help you dominate the predictions leaderboard today?",
-  "Hi there! Ask me about today's fixtures, tactical breakdowns, or your prediction stats.",
+  "Hi there! Ask me about today's fixtures, tactical breakdowns, or how to use the Studio.",
   "Hey! Ready to analyze some football matches? Ask me anything about today's games.",
   "Greetings! I'm here to give you the edge in your football predictions. What's on your mind?"
 ];
@@ -82,7 +90,6 @@ function normalizeQuery(query) {
   return query.toLowerCase().replace(/[^\w\s]/gi, '').replace(/\s+/g, ' ').trim();
 }
 
-// ★ FIX: Cache key MUST include user UID to prevent data leakage between users
 function getFromCache(cacheKey) {
   const cached = memoryCache.get(cacheKey);
   if (cached && (Date.now() - cached.timestamp < CACHE_TTL_MS)) return cached;
@@ -113,7 +120,6 @@ function sanitizeHistory(history) {
     .map(msg => ({ role: msg.role === 'assistant' ? 'model' : 'user', content: msg.content.substring(0, 1500) }));
 }
 
-// Fetches user data and caches platform data to avoid reading files on every request
 async function fetchSystemContext(uid) {
   const db = getDb();
   const today = new Date().toISOString().split('T')[0];
@@ -122,7 +128,6 @@ async function fetchSystemContext(uid) {
   let platformContext = "";
 
   try {
-    // 1. Fetch User Total Points
     const userDoc = await db.collection('user_points_total').doc(uid).get();
     let userData = null;
     if (userDoc.exists) {
@@ -137,7 +142,6 @@ async function fetchSystemContext(uid) {
       };
     }
 
-    // 2. Fetch Daily Leaderboard Rank
     const dailyUserDoc = await db.collection('daily_leaderboard').doc(today).collection('users').doc(uid).get();
     let dailyRank = 'Unranked';
     let dailyPoints = 0;
@@ -162,7 +166,6 @@ async function fetchSystemContext(uid) {
     logger.warn(`[AI Context] Failed to fetch user data: ${e.message}`);
   }
 
-  // 3. Fetch Platform Data (Cache for 5 minutes to prevent disk spam)
   try {
     const now = Date.now();
     if (!platformDataCache.data || (now - platformDataCache.timestamp > PLATFORM_CACHE_TTL)) {

@@ -1,6 +1,4 @@
-﻿// footballprediction/src/engine/matchEngine.js
-
-import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
+﻿import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -22,7 +20,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let minute = display.minute || raw.minute || 0;
   let isHidden = false;
 
-  // Fallback timestamp calculation from utcDate
   let timestamp = raw.timestamp;
   if (!timestamp) {
     const dateStr = raw.utcDate || raw.date;
@@ -32,7 +29,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  // Hard caps to prevent stuck live matches (3.5 hours max)
   const FT_THRESHOLD_MS = 3.5 * 60 * 60 * 1000; 
   const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000; 
 
@@ -59,7 +55,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   const matchDateStr = raw.dateStr || getLocalDateFromUtc(raw.date || raw.utcDate);
   const kickoffTime = time.kickoffLocal || (raw.utcDate || raw.date ? formatTime(raw.utcDate || raw.date) : 'TBD');
   
-  // ★ FIX: Fallback to Date.now() if updatedAt is missing so applySmartMinute can count forward
   const updatedAt = raw.dataQuality?.lastUpdated || raw.lastUpdated || raw.updatedAt || Date.now();
 
   let statusLabel = '';
@@ -99,23 +94,14 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
       const home = s.home ?? s.homeValue ?? 0;
       const away = s.away ?? s.awayValue ?? 0;
       
-      if (type.includes('possession')) {
-        stats.possession = { home: parseInt(home) || 0, away: parseInt(away) || 0 };
-      } else if (type.includes('shots on goal') || type.includes('shots on target')) {
-        stats.shotsOnTarget = { home, away };
-      } else if (type.includes('total shots') || type === 'shots') {
-        stats.shots = { home, away };
-      } else if (type.includes('corner')) {
-        stats.corners = { home, away };
-      } else if (type.includes('foul')) {
-        stats.fouls = { home, away };
-      } else if (type.includes('yellow card')) {
-        stats.yellowCards = { home, away };
-      } else if (type.includes('red card')) {
-        stats.redCards = { home, away };
-      } else if (type.includes('offside')) {
-        stats.offsides = { home, away };
-      }
+      if (type.includes('possession')) stats.possession = { home: parseInt(home) || 0, away: parseInt(away) || 0 };
+      else if (type.includes('shots on goal') || type.includes('shots on target')) stats.shotsOnTarget = { home, away };
+      else if (type.includes('total shots') || type === 'shots') stats.shots = { home, away };
+      else if (type.includes('corner')) stats.corners = { home, away };
+      else if (type.includes('foul')) stats.fouls = { home, away };
+      else if (type.includes('yellow card')) stats.yellowCards = { home, away };
+      else if (type.includes('red card')) stats.redCards = { home, away };
+      else if (type.includes('offside')) stats.offsides = { home, away };
     });
   }
   
@@ -142,11 +128,9 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     displayMinute: minute,
     updatedAt: updatedAt,
     isHidden: isHidden,
-    
     statusLabel: statusLabel,
     statusClass: statusClass,
     timelineProgress: timelineProgress,
-    
     homeTeamId: raw.homeTeamId,
     homeName: homeName,
     homeTeamName: homeName,
@@ -167,10 +151,8 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     leagueCountry: raw.leagueCountry,
     matchScore: raw.importance || 0,
     category: raw.category || 'NORMAL',
-
     stats, 
     hasRealStats, 
-    
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
     league: { name: leagueName, emblem: leagueLogo, id: raw.leagueId },
@@ -201,18 +183,9 @@ export function applySmartMinute(m, now = Date.now()) {
     let displayMin = m.minute;
     let progress = m.timelineProgress || 0;
     
-    if (status === 'FT' || status === 'AET' || status === 'PEN' || m.isFinished) {
-      displayMin = 90;
-      progress = 100;
-    }
-    if (status === 'HT') {
-      displayMin = 45;
-      progress = 50;
-    }
-    if (status === 'NS' || status === 'TBD' || status === 'PST') {
-      displayMin = 0;
-      progress = 0;
-    }
+    if (status === 'FT' || status === 'AET' || status === 'PEN' || m.isFinished) { displayMin = 90; progress = 100; }
+    if (status === 'HT') { displayMin = 45; progress = 50; }
+    if (status === 'NS' || status === 'TBD' || status === 'PST') { displayMin = 0; progress = 0; }
     
     return { 
       ...m, 
