@@ -12,9 +12,11 @@ import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
+import { buildMatchRoute } from '../utils/routes'; // ★ FIXED IMPORT
 import { Sound } from '../utils/soundEngine';
 import { applySmartMinute } from '../engine/matchEngine'; 
 import MatchCard from '../components/MatchCard';
+import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
 import SEO from '../components/SEO';
 import { ListSkeleton, ErrorState } from '../components/StateFeedback';
 import EmptyState from '../components/EmptyState';
@@ -104,7 +106,8 @@ const ToastContainer = memo(({ toasts }) => {
           );
         }
         return (
-          <div key={t.id} className="zoka-toast goal-toast" onClick={() => window.location.hash = `/match/${t.matchId}`} style={{
+          /* ✅ FIXED: Replaced window.location.hash with proper route build */
+          <div key={t.id} className="zoka-toast goal-toast" onClick={() => window.location.href = buildMatchRoute(t.matchId, t.homeName, t.awayName)} style={{
             background: 'linear-gradient(135deg, var(--primary-dim) 0%, var(--primary) 100%)',
             borderRadius: 'var(--r-12)', padding: '16px', boxShadow: 'var(--shadow-primary)',
             cursor: 'pointer', pointerEvents: 'auto', animation: 'slideInRight 0.3s ease-out',
@@ -135,7 +138,8 @@ const LiveTicker = memo(({ matches }) => {
   return (
     <div className="zoka-live-ticker">
       {matches.map(m => (
-        <Link key={m.id} to={`/match/${m.id}`} className="zoka-ticker-item">
+        /* ✅ FIXED: Broken Links targeting 404 */
+        <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-ticker-item">
           <div className="zoka-ticker-live" />
           <span className="text-muted" style={{fontSize: '10px', fontWeight: 700, minWidth: '28px'}}>{m.displayMinute}'</span>
           <span className="font-bold truncate" style={{maxWidth: '70px'}}>{m.homeName}</span>
@@ -740,6 +744,9 @@ export default function Fixtures() {
                 )}
               </div>
             )}
+            
+            {/* ✅ NEW AD PLACEMENT */}
+            <AdSlot id="fixt-ad-1" mobile={true} desktop={true} />
 
             {fixturesLoading && isPrimaryDate ? (
               <ListSkeleton count={5} />
@@ -775,14 +782,12 @@ export default function Fixtures() {
 
                 <div className="zoka-seo-links">
                   <h3>Today's Match Links</h3>
-                  {displayFixtures.slice(0, 50).map(m => {
-                    const slug = `${slugify(m.homeName)}-vs-${slugify(m.awayName)}`;
-                    return (
-                      <Link key={m.id} to={`/match/${m.id}/${slug}`} className="zoka-seo-link" rel="bookmark">
-                        {m.homeName} vs {m.awayName}
-                      </Link>
-                    );
-                  })}
+                  {displayFixtures.slice(0, 50).map(m => (
+                    /* ✅ FIXED: Broken SEO links targeting 404 */
+                    <Link key={m.id} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link" rel="bookmark">
+                      {m.homeName} vs {m.awayName}
+                    </Link>
+                  ))}
                 </div>
 
                 <div className="zoka-seo-links" style={{ marginTop: '20px' }}>

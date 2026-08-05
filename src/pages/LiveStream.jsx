@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 
 import SEO from "../components/SEO";
+import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr } from '../utils/dates';
 import { buildMatchRoute } from '../utils/routes';
@@ -193,7 +194,6 @@ export default function LiveStream() {
   const [selectedCountry, setSelectedCountry] = useState('ALL');
   const [searchFocused, setSearchFocused] = useState(false);
 
-  // ✅ REAL DATA: Fetch today's fixtures
   const { data: fixtures = [], isLoading } = useFixtures(todayStr());
 
   const liveMatches = useMemo(() => fixtures.filter(m => isLiveStatus(m.status, SPORT.FOOTBALL) || m.isLive), [fixtures]);
@@ -204,7 +204,6 @@ export default function LiveStream() {
       .slice(0, 4);
   }, [fixtures]);
 
-  // Prioritize a live match, otherwise show the next upcoming match
   const featuredMatch = liveMatches.length > 0 ? liveMatches[0] : (upcomingMatches.length > 0 ? upcomingMatches[0] : null);
 
   const filteredServices = useMemo(() => {
@@ -237,7 +236,6 @@ export default function LiveStream() {
           <p className="text-muted text-sm">Official broadcasters and legal streaming platforms for football worldwide</p>
         </div>
 
-        {/* ✅ REAL DATA: Live Match Hero */}
         {isLoading ? (
           <div className="skeleton" style={{ width: '100%', height: 300, borderRadius: 'var(--r-16)', marginBottom: '24px' }} />
         ) : (
@@ -273,6 +271,9 @@ export default function LiveStream() {
              <p className="text-muted text-sm">No upcoming matches scheduled for today.</p>
           </div>
         )}
+
+        {/* ✅ NEW AD PLACEMENT (Only 1 ad as requested for this heavily refreshed page) */}
+        <AdSlot id="live-stream-ad-1" mobile={true} desktop={true} />
 
         <div className={`glass-card flex-center gap-12 p-12 mb-16`} style={{ borderColor: searchFocused ? 'var(--primary)' : 'var(--border)', transition: 'border-color 0.2s' }}>
           <Search size={18} style={{ color: searchFocused ? 'var(--primary)' : 'var(--text-muted)' }} />

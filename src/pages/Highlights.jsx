@@ -7,6 +7,7 @@ import {
   Send, Image as ImageIcon, Loader, Sun, Moon, ArrowLeft, Eye, 
   Bookmark, Share2, Flame, Link as LinkIcon, ArrowUp, ChevronDown
 } from 'lucide-react';
+
 import { useAuth } from '../context/AuthContext';
 import { db } from '../utils/firebase';
 import { 
@@ -18,6 +19,7 @@ import { usePreferencesStore } from '../store/usePreferencesStore';
 import { PATHS } from '../utils/constants';
 import { safeWrite } from '../services/safeWrite';
 import SEO from "../components/SEO";
+import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
 
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 const getSeoImageUrl = (post) => (!post || !post.imageUrl) ? "https://zokascore.xyz/logo.png" : `https://zokascore.xyz/api/og-image/${post.id}`;
@@ -345,16 +347,20 @@ export default function Highlights() {
               <>
                 <div className="flex-col gap-16">
                   {filteredPosts.slice(0, visibleCount).map((post, i) => (
-                    <PostCard 
-                      key={post.id} post={post} index={i} isAdmin={isAdmin} user={user} savedPosts={savedPosts}
-                      onToggleSave={toggleSave} onShare={handleShare} onReaction={handleReaction} 
-                      onEdit={openEdit} onDelete={handleDelete}
-                      onExpand={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
-                      onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
-                      isHero={i === 0 && activeFilter === 'All' && !authorFilter}
-                      comments={comments[post.id] || []} newComments={newComments} setNewComments={setNewComments}
-                      handleComment={handleComment} fetchComments={fetchCommentsForFeed}
-                    />
+                    /* ✅ NEW AD PLACEMENT EVERY 4 ARTICLES */
+                    <div key={post.id} style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                      <PostCard 
+                        post={post} index={i} isAdmin={isAdmin} user={user} savedPosts={savedPosts}
+                        onToggleSave={toggleSave} onShare={handleShare} onReaction={handleReaction} 
+                        onEdit={openEdit} onDelete={handleDelete}
+                        onExpand={(p) => navigate(`/highlights/${slugify(p.title)}-${p.id}`)}
+                        onAuthorClick={() => navigate(`/highlights/author/${post.authorId}`)}
+                        isHero={i === 0 && activeFilter === 'All' && !authorFilter}
+                        comments={comments[post.id] || []} newComments={newComments} setNewComments={setNewComments}
+                        handleComment={handleComment} fetchComments={fetchCommentsForFeed}
+                      />
+                      {(i + 1) % 4 === 0 && <AdSlot id={`news-ad-${i}`} mobile={true} desktop={true} />}
+                    </div>
                   ))}
                 </div>
                 {filteredPosts.length > visibleCount && <button onClick={() => setVisibleCount(c => c + 15)} className="btn btn-secondary w-full mt-16"><ChevronDown size={16} /> Load More Articles</button>}

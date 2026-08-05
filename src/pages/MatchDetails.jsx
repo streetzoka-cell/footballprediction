@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 
 import SEO from '../components/SEO';
+import AdSlot from '../components/AdSlot'; // ★ NEW IMPORT
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
@@ -27,7 +28,6 @@ const LEAGUE_BROADCASTERS = {
 };
 const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://www.plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
 
-// Helper to format countdown
 const useCountdown = (targetDate) => {
   const [timeLeft, setTimeLeft] = useState('');
   useEffect(() => {
@@ -47,7 +47,6 @@ const useCountdown = (targetDate) => {
   return timeLeft;
 };
 
-// Reusable Stat Bar Component
 const StatBar = ({ label, home, away, isPercentage = false }) => {
   if (home == null && away == null) return null;
   const h = Number(home) || 0;
@@ -144,7 +143,6 @@ export default function MatchDetails() {
             <ArrowLeft size={14} /> Back to Fixtures
           </Link>
 
-          {/* Premium Header Card */}
           <div className={`md-header-card ${goalFlash ? 'goal-flash' : ''}`}>
             {goalFlash && (
               <div className="absolute inset-0 flex-center pointer-events-none">
@@ -192,7 +190,6 @@ export default function MatchDetails() {
             )}
           </div>
 
-          {/* Rich Context & Standings Grid */}
           <div className="md-pro-grid">
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><MapPin size={12} /> Match Context</h3>
@@ -242,7 +239,6 @@ export default function MatchDetails() {
             </div>
           </div>
 
-                   {/* Rich Detailed Stats */}
           {match.hasRealStats ? (
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
@@ -258,7 +254,6 @@ export default function MatchDetails() {
             </div>
           ) : (
             <div className="glass-card p-24 mb-24 mt-24 flex-col items-center text-center gap-12" style={{ border: '1px solid rgba(var(--primary-rgb), 0.2)', background: 'linear-gradient(180deg, rgba(var(--primary-rgb), 0.03) 0%, var(--bg-card) 100%)' }}>
-              {/* Glowing Icon Wrapper */}
               <div style={{ position: 'relative', marginBottom: '8px' }}>
                 <div style={{ position: 'absolute', inset: '-8px', background: 'rgba(var(--primary-rgb), 0.15)', borderRadius: '50%', filter: 'blur(12px)' }}></div>
                 <div style={{ position: 'relative', width: '56px', height: '56px', background: 'rgba(var(--primary-rgb), 0.1)', border: '1px solid rgba(var(--primary-rgb), 0.3)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -273,7 +268,6 @@ export default function MatchDetails() {
                  'Stats will appear here once the match begins. Ask Zoka AI for pre-match analysis!'}
               </p>
               
-              {/* Zoka AI CTA */}
               <button 
                 onClick={() => window.dispatchEvent(new CustomEvent('openZokaAI', { detail: { message: `Give me a tactical breakdown and prediction for ${match.homeName} vs ${match.awayName} in the ${match.leagueName}.` } }))} 
                 className="btn btn-primary mt-8 flex-center gap-8"
@@ -284,7 +278,9 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* Watch & React Grid */}
+          {/* ✅ NEW AD PLACEMENT (Never above score/title, safely below stats) */}
+          <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
+
           <div className="grid gap-16 mb-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-primary font-bold flex-center gap-8 mb-8"><Tv size={16} /> Where to Watch</h3>
