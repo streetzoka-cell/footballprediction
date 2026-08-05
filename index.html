@@ -4,83 +4,25 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-  <!-- Content Security Policy -->
-  <meta http-equiv="Content-Security-Policy" content="
-    default-src 'self';
+  <title>ZOKASCORE - Live Football Scores, Fixtures, Predictions & Statistics</title>
 
-    script-src 'self'
-      'unsafe-inline'
-      'unsafe-eval'
-      https://www.googletagmanager.com
-      https://www.google-analytics.com
-      https://*.google-analytics.com
-      https://www.gstatic.com
-      https://apis.google.com
-      https://*.firebaseio.com
-      https://pagead2.googlesyndication.com
-      https://googleads.g.doubleclick.net;
-
-    connect-src
-      'self'
-      https://*.googleapis.com
-      wss://*.firebaseio.com
-      https://*.firebaseio.com
-      https://*.google-analytics.com
-      https://*.analytics.google.com
-      https://www.google-analytics.com
-      https://analytics.google.com
-      https://www.google.com
-      https://stats.g.doubleclick.net
-      https://pagead2.googlesyndication.com
-      https://googleads.g.doubleclick.net
-      https://*.doubleclick.net
-      https://api.zokascore.xyz;
-
-    img-src
-      'self'
-      data:
-      blob:
-      https:;
-
-    media-src
-      'self'
-      data:
-      blob:
-      https:;
-
-    worker-src
-      'self'
-      blob:;
-
-    style-src
-      'self'
-      'unsafe-inline'
-      https://fonts.googleapis.com;
-
-    font-src
-      'self'
-      https://fonts.gstatic.com;
-
-    frame-src
-      'self'
-      https://*.firebaseapp.com
-      https://*.firebaseio.com
-      https://auth.zokascore.xyz
-      https://googleads.g.doubleclick.net
-      https://*.doubleclick.net
-      https://tpc.googlesyndication.com;
-  ">
-
-  <meta name="color-scheme" content="dark light" />
-  <meta name="referrer" content="strict-origin-when-cross-origin" />
-  <meta name="theme-color" content="#05070a" />
+  <meta name="description" content="Live football scores, fixtures, predictions, standings, statistics, and AI-powered football insights from ZOKASCORE." />
+  <meta name="keywords" content="football, live scores, football predictions, fixtures, standings, football statistics, ZOKASCORE, soccer" />
+  <meta name="author" content="ZOKASCORE" />
   <meta name="application-name" content="ZOKASCORE" />
+  <meta name="theme-color" content="#05070a" />
+  <meta name="color-scheme" content="dark light" />
   <meta name="robots" content="index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1" />
+  <meta name="referrer" content="strict-origin-when-cross-origin" />
 
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+
+  <link rel="canonical" href="https://zokascore.xyz/" />
+
+  <link rel="manifest" href="/manifest.json" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -99,7 +41,52 @@
 
   <link rel="preload" href="/loader.css" as="style" />
   <link rel="stylesheet" href="/loader.css" />
+
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- Open Graph -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ZOKASCORE" />
+  <meta property="og:title" content="ZOKASCORE - Live Football Scores, Fixtures & Predictions" />
+  <meta property="og:description" content="Live football scores, fixtures, predictions, standings, statistics, and AI-powered football insights." />
+  <meta property="og:url" content="https://zokascore.xyz/" />
+  <meta property="og:image" content="https://zokascore.xyz/og-image.png" />
+
+  <!-- Twitter -->
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="ZOKASCORE - Live Football Scores, Fixtures & Predictions" />
+  <meta name="twitter:description" content="Live football scores, fixtures, predictions, standings, statistics, and AI-powered football insights." />
+  <meta name="twitter:image" content="https://zokascore.xyz/og-image.png" />
+
+  <!-- Structured Data -->
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"WebSite",
+    "name":"ZOKASCORE",
+    "url":"https://zokascore.xyz",
+    "description":"Live football scores, predictions, fixtures, standings and AI-powered football insights.",
+    "potentialAction":{
+      "@type":"SearchAction",
+      "target":"https://zokascore.xyz/search?q={search_term_string}",
+      "query-input":"required name=search_term_string"
+    }
+  }
+  </script>
+
+  <script type="application/ld+json">
+  {
+    "@context":"https://schema.org",
+    "@type":"Organization",
+    "name":"ZOKASCORE",
+    "url":"https://zokascore.xyz",
+    "logo":"https://zokascore.xyz/icons/icon-192.png",
+    "sameAs":[
+      "https://facebook.com/zokascore",
+      "https://x.com/zokascore"
+    ]
+  }
+  </script>
 
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
@@ -114,8 +101,8 @@
   <script async
     src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820100355705138"
     crossorigin="anonymous"></script>
-
 </head>
+
 <body>
   <noscript>
     <div style="padding:40px;text-align:center;font-family:Inter,system-ui,sans-serif;color:#fff;background:#05070a;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;">
