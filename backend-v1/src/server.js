@@ -1,6 +1,7 @@
 ﻿// backend-v1/src/server.js
 const express = require('express');
 const cors = require('cors');
+const rateLimit = require('express-rate-limit');
 const path = require('path');
 const fs = require('fs');
 
@@ -8,7 +9,7 @@ const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const metricsTracker = require('./middleware/metricsTracker');
 const requestContext = require('./middleware/requestContext');
-const securityHeaders = require('./middleware/securityHeaders');
+const securityHeaders = require('./middleware/securityHeaders'); // Safe helmet fallback
 const auditAdminRequests = require('./middleware/auditLogger');
 const createRateLimit = require('./middleware/simpleRateLimit');
 const { addLog } = require('./utils/logStore');
@@ -34,6 +35,7 @@ const app = express();
 
 app.set('trust proxy', 1);
 
+// 5. Security Headers (Uses safe fallback if helmet is not installed)
 securityHeaders(app);
 
 // ★ FIX: Hardcode allowed origins to prevent CORS failures
@@ -64,7 +66,9 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: '1mb' }));
+// 16. DoS Protection: Limit payload sizes strictly to 10kb
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
 
 app.use(requestContext);
 app.use(metricsTracker);
@@ -78,9 +82,22 @@ app.use((req, res, next) => {
 
 app.disable('x-powered-by');
 
+// 1 & 4. Global Rate Limiter (100 req/min baseline)
+const globalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 100,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { success: false, error: 'Too many requests. Please slow down.' },
+  onLimitReached: (req) => {
+    logger.warn(`[Security] Global rate limit exceeded for IP: ${req.ip}`);
+  }
+});
+app.use(globalLimiter);
+
 const publicWriteLimiter = createRateLimit({
   windowMs: 60 * 1000,
-  max: 180,
+  max: 30,
   keyPrefix: 'api-public-write',
   message: 'Too many write requests. Please slow down.',
 });
@@ -126,15 +143,7 @@ app.use('/api/v1/ai', aiRoutes);
 // ─────────────────────────────────────────────
 
 // Results fallback
-// Returns a clean response when today's results file
-// does not exist yet because no matches have finished.
-
 app.get('/api/v1/data/results/:date.json', (req, res) => {
-  // ★ FIX: Explicitly set CORS header for static file
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type');
-
   const filePath = path.join(
     process.cwd(),
     'public_data',
@@ -155,31 +164,19 @@ app.get('/api/v1/data/results/:date.json', (req, res) => {
   res.sendFile(filePath);
 });
 
-// Serve public_data JSON files
+// Serve public_data JSON files (CORS is handled globally by the cors() middleware)
 app.use(
   '/api/v1/data',
   express.static(
     path.join(process.cwd(), 'public_data'),
     {
       setHeaders: (res, filePath) => {
-        // ★ FIX: Ensure CORS header is set on the actual file response as well
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
+        // Only set cache control headers, do NOT override CORS headers here
         if (filePath.endsWith('.json')) {
-          // Live data changes frequently
           if (filePath.includes('live.json')) {
-            res.setHeader(
-              'Cache-Control',
-              'public, max-age=15'
-            );
+            res.setHeader('Cache-Control', 'public, max-age=15');
           } else {
-            // Fixtures/results snapshots
-            res.setHeader(
-              'Cache-Control',
-              'public, max-age=900'
-            );
+            res.setHeader('Cache-Control', 'public, max-age=900');
           }
         }
       },

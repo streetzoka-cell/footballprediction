@@ -1,4 +1,4 @@
-// backend-v1/src/routes/v1/predictions.js
+﻿// backend-v1/src/routes/v1/predictions.js
 
 const express = require('express');
 const router = express.Router();
@@ -10,29 +10,27 @@ const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
 const createRateLimit = require('../../middleware/simpleRateLimit');
 const { getDateOffset } = require('../../config/constants');
 
+// 4. Endpoint-specific rate limits
 const voteLimiter = createRateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 20, // 20 votes per minute
   keyPrefix: 'prediction-vote',
   message: 'Too many prediction votes. Please slow down.',
 });
 
 const userPredictionLimiter = createRateLimit({
   windowMs: 60 * 1000,
-  max: 30,
+  max: 10, // 10 predictions per minute
   keyPrefix: 'user-prediction',
   message: 'Too many prediction attempts. Please slow down.',
 });
 
 /**
  * POST /api/v1/predictions/vote
- *
- * Match of the Day public vote.
  */
 router.post('/vote', voteLimiter, async (req, res, next) => {
   try {
     const { matchId, choice, voterId } = req.body || {};
-
     const headerVoterId = req.headers['x-voter-id'];
 
     const result = predictionStore.vote({
@@ -74,18 +72,16 @@ router.post('/vote', voteLimiter, async (req, res, next) => {
         error: err.message,
       });
     }
-
     next(err);
   }
 });
 
 /**
  * GET /api/v1/predictions/user?date=YYYY-MM-DD
- *
- * Returns the authenticated user's predictions for a date.
  */
 router.get('/user', authenticateFirebaseUser, async (req, res, next) => {
   try {
+    // 11. IDOR Prevention: Always use req.user.uid from token, never req.query.uid
     const date = String(req.query.date || getDateOffset(0)).trim();
 
     const data = await UserPredictionStore.getUserPredictionsMap(
@@ -106,8 +102,6 @@ router.get('/user', authenticateFirebaseUser, async (req, res, next) => {
 
 /**
  * POST /api/v1/predictions/user
- *
- * Saves an authenticated user's prediction.
  */
 router.post(
   '/user',
@@ -115,6 +109,17 @@ router.post(
   userPredictionLimiter,
   async (req, res, next) => {
     try {
+      // 10. Business Logic Validation: Early check before hitting services
+      const { matchId, homeScore, awayScore } = req.body || {};
+      if (!matchId || !matchId.trim()) {
+        return res.status(400).json({ success: false, error: 'matchId is required' });
+      }
+      if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
+          homeScore < 0 || awayScore < 0 || homeScore > 99 || awayScore > 99) {
+        return res.status(400).json({ success: false, error: 'Invalid score format' });
+      }
+
+      // Pass the secure req.user object. UserPredictionStore will ignore any UID in req.body.
       const result = await UserPredictionStore.savePrediction(
         req.user,
         req.body || {}
@@ -143,8 +148,6 @@ router.post(
 
 /**
  * GET /api/v1/predictions/:matchId
- *
- * Match of the Day vote stats.
  */
 router.get('/:matchId', (req, res, next) => {
   try {
@@ -165,8 +168,6 @@ router.get('/:matchId', (req, res, next) => {
 
 /**
  * GET /api/v1/predictions
- *
- * Optional debug endpoint for match votes.
  */
 router.get('/', (req, res, next) => {
   try {

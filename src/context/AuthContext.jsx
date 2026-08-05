@@ -15,7 +15,7 @@ import {
   browserLocalPersistence
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
-import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
 
 const AuthContext = createContext(null);
 
@@ -49,24 +49,31 @@ export function AuthProvider({ children }) {
     }
 
     let unsubscribed = false;
-    let unsubProfile = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
       setCurrentUser(user);
 
-      if (unsubProfile) {
-        unsubProfile();
-        unsubProfile = null;
-      }
-
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
 
-          // 1. Fetch initial profile or create if missing
+          // 1. Fetch user profile ONCE (No onSnapshot to save Firestore reads)
           const profileDoc = await getDoc(userDocRef);
-          if (!profileDoc.exists()) {
+          
+          if (profileDoc.exists()) {
+            const baseData = profileDoc.data();
+            const role = (baseData.role || 'user').toLowerCase();
+            const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
+            
+            setUserProfile({
+              uid: user.uid,
+              ...baseData,
+              role,
+              isAdmin: isRoleAdmin
+            });
+          } else {
+            // If profile doesn't exist, create it
             const profile = {
               uid: user.uid,
               email: user.email,
@@ -77,40 +84,8 @@ export function AuthProvider({ children }) {
               updatedAt: serverTimestamp(),
             };
             await setDoc(userDocRef, profile);
+            setUserProfile({ ...profile, isAdmin: false });
           }
-
-          // 2. Listen to users collection for profile/role updates
-          // We no longer listen to admin_users to prevent permission-denied errors for normal users.
-          unsubProfile = onSnapshot(userDocRef, (docSnap) => {
-            if (unsubscribed) return;
-            if (docSnap.exists()) {
-              const baseData = docSnap.data();
-              // Normalize role to lowercase to prevent casing issues
-              const role = (baseData.role || 'user').toLowerCase();
-              const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
-              
-              setUserProfile(prev => {
-                return { 
-                  uid: user.uid, 
-                  ...baseData, 
-                  role,
-                  isAdmin: isRoleAdmin 
-                };
-              });
-            } else {
-              setUserProfile(prev => ({ 
-                ...(prev || {}), 
-                uid: user.uid, 
-                role: 'user', 
-                isAdmin: false 
-              }));
-            }
-            setAuthLoading(false);
-          }, (err) => {
-            console.error('[Auth] Profile listener error:', err.message);
-            setAuthLoading(false);
-          });
-
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
           setUserProfile(prev => ({ 
@@ -119,6 +94,7 @@ export function AuthProvider({ children }) {
             role: 'user', 
             isAdmin: false 
           }));
+        } finally {
           setAuthLoading(false);
         }
       } else {
@@ -129,7 +105,6 @@ export function AuthProvider({ children }) {
 
     return () => {
       unsubscribed = true;
-      if (unsubProfile) unsubProfile();
       unsubscribe();
     };
   }, []);
