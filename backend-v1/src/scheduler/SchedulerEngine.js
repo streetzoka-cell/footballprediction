@@ -1,90 +1,258 @@
+﻿// backend-v1/src/scheduler/SchedulerEngine.js
+
 const cron = require('node-cron');
 const logger = require('../utils/logger');
 const metrics = require('./metrics/JobMetrics');
 
+
 class SchedulerEngine {
+
   constructor() {
+
     this.jobs = [];
+
     this.livePollTimer = null;
+
+    this.runningJobs = new Set();
+
   }
 
+
+
   schedule(name, cronExpression, taskFn) {
+
     logger.info(
       `[SchedulerEngine] Registering '${name}' with pattern '${cronExpression}'`
     );
 
+
     const job = cron.schedule(
       cronExpression,
       async () => {
-        await this._runJob(name, taskFn);
+
+        await this._runJob(
+          name,
+          taskFn
+        );
+
       },
-      { timezone: 'UTC' }
+      {
+        timezone: 'UTC'
+      }
     );
 
-    this.jobs.push({ name, job });
+
+    this.jobs.push({
+      name,
+      job
+    });
+
   }
+
+
+
 
   async runManually(name, taskFn) {
-    return this._runJob(name, taskFn);
+
+    return this._runJob(
+      name,
+      taskFn
+    );
+
   }
 
+
+
+
   async _runJob(name, taskFn) {
+
+
+    // Prevent duplicate execution
+    if (this.runningJobs.has(name)) {
+
+      logger.warn(
+        `[SchedulerEngine] Skipping ${name}. Already running.`
+      );
+
+      return {
+        skipped: true,
+        reason: 'RUNNING'
+      };
+
+    }
+
+
+
+    this.runningJobs.add(name);
+
+
     const start = Date.now();
 
+
     try {
-      logger.info(`[SchedulerEngine] → Running: ${name}`);
+
+      logger.info(
+        `[SchedulerEngine] → Running: ${name}`
+      );
+
 
       const result = await taskFn();
 
-      const dur = Date.now() - start;
 
-      metrics.record(name, true, dur);
+      const duration =
+        Date.now() - start;
 
-      logger.info(`[SchedulerEngine] ✓ ${name} completed in ${dur}ms`);
+
+
+      metrics.record(
+        name,
+        true,
+        duration
+      );
+
+
+
+      logger.info(
+        `[SchedulerEngine] ✓ ${name} completed in ${duration}ms`
+      );
+
 
       return result;
-    } catch (err) {
-      const dur = Date.now() - start;
 
-      metrics.record(name, false, dur);
 
-      logger.error(`[SchedulerEngine] ✗ ${name} failed: ${err.message}`);
 
-      throw err;
+    } catch(err) {
+
+
+      const duration =
+        Date.now() - start;
+
+
+
+      metrics.record(
+        name,
+        false,
+        duration
+      );
+
+
+      logger.error(
+        `[SchedulerEngine] ✗ ${name} failed: ${err.message}`
+      );
+
+
+      return {
+        error: err.message
+      };
+
+
+
+    } finally {
+
+
+      this.runningJobs.delete(name);
+
+
     }
+
   }
+
+
+
+
 
   startLivePolling(pollFn) {
+
+
     const poll = async () => {
+
       try {
-        const interval = await pollFn();
 
-        this.livePollTimer = setTimeout(poll, interval || 30000);
-      } catch (err) {
-        logger.error(`[SchedulerEngine] Live polling error: ${err.message}`);
+        const nextInterval =
+          await pollFn();
 
-        this.livePollTimer = setTimeout(poll, 60000);
+
+
+        this.livePollTimer =
+          setTimeout(
+            poll,
+            nextInterval || 30000
+          );
+
+
+
+      } catch(err) {
+
+
+        logger.error(
+          `[SchedulerEngine] Live polling error: ${err.message}`
+        );
+
+
+
+        this.livePollTimer =
+          setTimeout(
+            poll,
+            60000
+          );
+
       }
+
     };
 
+
+
     poll();
+
   }
 
+
+
+
+
   stopAll() {
-    this.jobs.forEach((j) => j.job.stop());
+
+
+    this.jobs.forEach(
+      ({job}) => job.stop()
+    );
+
+
 
     if (this.livePollTimer) {
-      clearTimeout(this.livePollTimer);
+
+      clearTimeout(
+        this.livePollTimer
+      );
+
     }
+
+
 
     this.jobs = [];
 
-    logger.info('[SchedulerEngine] All schedulers stopped.');
+    this.runningJobs.clear();
+
+
+
+    logger.info(
+      '[SchedulerEngine] All schedulers stopped.'
+    );
+
   }
 
+
+
+
+
   getMetrics() {
+
     return metrics.getAll();
+
   }
+
 }
+
+
 
 module.exports = new SchedulerEngine();
