@@ -1,5 +1,4 @@
 // backend-v1/src/services/UserPredictionStore.js
-
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -8,6 +7,7 @@ const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
 const QueueService = require('./QueueService');
 const LocalSnapshotRepository = require('../repositories/LocalSnapshotRepository');
+const StatsEngine = require('./StatsEngine'); // ★ NEW: Import StatsEngine
 const { getDb } = require('../config/firebase');
 const {
   BATCH_MAX_OPS,
@@ -44,25 +44,11 @@ const RETRY_INTERVAL_MS = parseInt(
 );
 
 const LIVE_STATUSES = new Set([
-  '1H',
-  '2H',
-  'HT',
-  'ET',
-  'BT',
-  'P',
-  'LIVE',
-  'IN_PLAY',
-  'PAUSED',
+  '1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED',
 ]);
 
 const FINISHED_STATUSES = new Set([
-  'FT',
-  'AET',
-  'PEN',
-  'FINISHED',
-  'ABD',
-  'AWD',
-  'WO',
+  'FT', 'AET', 'PEN', 'FINISHED', 'ABD', 'AWD', 'WO',
 ]);
 
 let state = readJSONSafeSync(STATE_FILE, {
@@ -77,9 +63,7 @@ function saveState() {
 }
 
 function safeFileId(id) {
-  return String(id)
-    .replace(/[^a-zA-Z0-9_-]/g, '_')
-    .slice(0, 120);
+  return String(id).replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, 120);
 }
 
 function isValidDate(dateStr) {
@@ -91,35 +75,23 @@ function storePath(uid, dateStr) {
 }
 
 function walPath(dateStr) {
-  return path.join(WAL_DIR, `${dateStr}.jsonl`
-  );
+  return path.join(WAL_DIR, `${dateStr}.jsonl`);
 }
 
 function publicPrediction(prediction) {
   if (!prediction) return null;
-
   const { synced, ...rest } = prediction;
-
   return rest;
 }
 
 async function loadUserDate(uid, dateStr) {
   const filePath = storePath(uid, dateStr);
-
   const data = await readJSONSafe(filePath, {
-    uid,
-    date: dateStr,
-    predictions: {},
-    updatedAt: null,
+    uid, date: dateStr, predictions: {}, updatedAt: null,
   });
 
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    return {
-      uid,
-      date: dateStr,
-      predictions: {},
-      updatedAt: null,
-    };
+    return { uid, date: dateStr, predictions: {}, updatedAt: null };
   }
 
   if (!data.predictions || typeof data.predictions !== 'object') {
@@ -130,9 +102,7 @@ async function loadUserDate(uid, dateStr) {
 }
 
 async function saveUserDate(uid, dateStr, payload) {
-  await writeJSONAtomic(storePath(uid, dateStr), payload, {
-    pretty: false,
-  });
+  await writeJSONAtomic(storePath(uid, dateStr), payload, { pretty: false });
 }
 
 async function appendWal(entry) {
@@ -143,35 +113,23 @@ async function appendWal(entry) {
 async function validateMatchNotStarted(matchId, dateStr) {
   try {
     const snapshot = await LocalSnapshotRepository.getFixtureSnapshot(dateStr);
-
-    const all =
-      snapshot.all ||
-      [
-        ...(snapshot.matches || []),
-        ...(snapshot.live || []),
-        ...(snapshot.finished || []),
-      ];
+    const all = snapshot.all || [
+      ...(snapshot.matches || []),
+      ...(snapshot.live || []),
+      ...(snapshot.finished || []),
+    ];
 
     const match = all.find((m) => String(m.id) === String(matchId));
 
-    if (!match) {
-      return {
-        found: false,
-        started: false,
-      };
-    }
+    if (!match) return { found: false, started: false };
 
     const status = String(match.status || '').toUpperCase();
 
     if (LIVE_STATUSES.has(status) || FINISHED_STATUSES.has(status)) {
-      return {
-        found: true,
-        started: true,
-      };
+      return { found: true, started: true };
     }
 
     let kickoffMs = null;
-
     if (match.timestamp) {
       kickoffMs = Number(match.timestamp) * 1000;
     } else if (match.utcDate || match.date) {
@@ -179,39 +137,25 @@ async function validateMatchNotStarted(matchId, dateStr) {
     }
 
     if (kickoffMs && Date.now() > kickoffMs + 5 * 60 * 1000) {
-      return {
-        found: true,
-        started: true,
-      };
+      return { found: true, started: true };
     }
 
-    return {
-      found: true,
-      started: false,
-    };
+    return { found: true, started: false };
   } catch (err) {
-    logger.warn(
-      `[UserPredictionStore] Match validation failed for ${matchId}: ${err.message}`
-    );
-
-    return {
-      found: false,
-      started: false,
-    };
+    logger.warn(`[UserPredictionStore] Match validation failed for ${matchId}: ${err.message}`);
+    return { found: false, started: false };
   }
 }
 
 /**
  * Accepts a user prediction.
- *
  * Safety order:
  * 1. Validate
  * 2. Prevent duplicate
  * 3. Store atomically
- * 4. Append WAL
- * 5. Return accepted
- *
- * Firebase sync happens later in batch.
+ * 4. Update Stats Engine (Local)
+ * 5. Append WAL
+ * 6. Return accepted
  */
 async function savePrediction(user, input = {}) {
   if (!user || !user.uid) {
@@ -219,43 +163,24 @@ async function savePrediction(user, input = {}) {
   }
 
   const uid = String(user.uid);
-
   const matchId = String(input.matchId || '').trim();
   const matchDate = String(input.matchDate || '').trim();
 
-  if (!matchId) {
-    throw ApiError.badRequest('matchId is required');
-  }
-
-  if (!isValidDate(matchDate)) {
-    throw ApiError.badRequest('matchDate must be YYYY-MM-DD');
-  }
-
-  if (input.homeScore === undefined || input.homeScore === null) {
-    throw ApiError.badRequest('homeScore is required');
-  }
-
-  if (input.awayScore === undefined || input.awayScore === null) {
-    throw ApiError.badRequest('awayScore is required');
-  }
+  if (!matchId) throw ApiError.badRequest('matchId is required');
+  if (!isValidDate(matchDate)) throw ApiError.badRequest('matchDate must be YYYY-MM-DD');
+  if (input.homeScore === undefined || input.homeScore === null) throw ApiError.badRequest('homeScore is required');
+  if (input.awayScore === undefined || input.awayScore === null) throw ApiError.badRequest('awayScore is required');
 
   const homeScore = Number(input.homeScore);
   const awayScore = Number(input.awayScore);
 
-  if (!Number.isInteger(homeScore) || homeScore < 0 || homeScore > 99) {
-    throw ApiError.badRequest('homeScore must be an integer between 0 and 99');
-  }
-
-  if (!Number.isInteger(awayScore) || awayScore < 0 || awayScore > 99) {
-    throw ApiError.badRequest('awayScore must be an integer between 0 and 99');
-  }
+  if (!Number.isInteger(homeScore) || homeScore < 0 || homeScore > 99) throw ApiError.badRequest('homeScore must be an integer between 0 and 99');
+  if (!Number.isInteger(awayScore) || awayScore < 0 || awayScore > 99) throw ApiError.badRequest('awayScore must be an integer between 0 and 99');
 
   const matchValidation = await validateMatchNotStarted(matchId, matchDate);
 
   if (matchValidation.found && matchValidation.started) {
-    throw ApiError.conflict(
-      'This match has already started. Predictions are locked.'
-    );
+    throw ApiError.conflict('This match has already started. Predictions are locked.');
   }
 
   const userDateDoc = await loadUserDate(uid, matchDate);
@@ -298,7 +223,12 @@ async function savePrediction(user, input = {}) {
   // 1. Store atomically before responding
   await saveUserDate(uid, matchDate, userDateDoc);
 
-  // 2. Append write-ahead log for batch Firebase sync
+  // 2. Update local stats engine instantly
+  if (status !== 'duplicate') {
+    await StatsEngine.predictionCreated(uid);
+  }
+
+  // 3. Append write-ahead log for batch Firebase sync
   if (status !== 'duplicate') {
     try {
       await appendWal({
@@ -312,11 +242,7 @@ async function savePrediction(user, input = {}) {
         ts: now,
       });
     } catch (walErr) {
-      logger.error(
-        `[UserPredictionStore] WAL append failed for ${prediction.predId}: ${walErr.message}`
-      );
-
-      // Backup: queue directly if WAL append fails
+      logger.error(`[UserPredictionStore] WAL append failed for ${prediction.predId}: ${walErr.message}`);
       try {
         await QueueService.addToQueue({
           collection: 'user_predictions',
@@ -326,16 +252,12 @@ async function savePrediction(user, input = {}) {
           source: 'prediction-store-wal-fallback',
         });
       } catch (queueErr) {
-        logger.error(
-          `[UserPredictionStore] Queue fallback failed for ${prediction.predId}: ${queueErr.message}`
-        );
+        logger.error(`[UserPredictionStore] Queue fallback failed for ${prediction.predId}: ${queueErr.message}`);
       }
     }
   }
 
-  logger.info(
-    `[UserPredictionStore] ${status} prediction uid=${uid} match=${matchId} date=${matchDate} score=${homeScore}-${awayScore}`
-  );
+  logger.info(`[UserPredictionStore] ${status} prediction uid=${uid} match=${matchId} date=${matchDate} score=${homeScore}-${awayScore}`);
 
   return {
     status,
@@ -345,9 +267,7 @@ async function savePrediction(user, input = {}) {
 
 async function getUserPredictionsMap(uid, dateStr) {
   const normalizedDate = String(dateStr || getDateOffset(0)).trim();
-
   const userDateDoc = await loadUserDate(uid, normalizedDate);
-
   const map = {};
 
   for (const [matchId, prediction] of Object.entries(userDateDoc.predictions || {})) {
@@ -359,7 +279,6 @@ async function getUserPredictionsMap(uid, dateStr) {
 
 function readWalEntries(filePath) {
   const raw = fs.readFileSync(filePath, 'utf8');
-
   return raw
     .split('\n')
     .filter(Boolean)
@@ -375,27 +294,21 @@ function readWalEntries(filePath) {
 
 function buildLatestOps(entries) {
   const map = new Map();
-
   for (const entry of entries) {
     if (!entry?.docId || !entry?.data) continue;
-
-    // Latest write wins
     map.set(entry.docId, entry);
   }
-
   return Array.from(map.values());
 }
 
 async function syncWalFile(db, filePath) {
   const entries = readWalEntries(filePath);
-
   if (!entries.length) {
     archiveWalFile(filePath);
     return 0;
   }
 
   const ops = buildLatestOps(entries);
-
   const nowIso = new Date().toISOString();
 
   for (let i = 0; i < ops.length; i += BATCH_MAX_OPS) {
@@ -404,86 +317,52 @@ async function syncWalFile(db, filePath) {
 
     for (const op of chunk) {
       const ref = db.collection('user_predictions').doc(String(op.docId));
-
-      batch.set(
-        ref,
-        {
-          ...op.data,
-          synced: true,
-          syncedAt: nowIso,
-        },
-        { merge: true }
-      );
+      batch.set(ref, {
+        ...op.data,
+        synced: true,
+        syncedAt: nowIso,
+      }, { merge: true });
     }
 
     await Promise.race([
       batch.commit(),
-      new Promise((_, reject) =>
-        setTimeout(
-          () => reject(new Error('Prediction sync batch timeout')),
-          WRITE_TIMEOUT_MS
-        )
-      ),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Prediction sync batch timeout')), WRITE_TIMEOUT_MS)),
     ]);
   }
 
   archiveWalFile(filePath);
-
   return ops.length;
 }
 
 function archiveWalFile(filePath) {
   const base = path.basename(filePath, '.jsonl');
-  const archivedPath = path.join(
-    SYNCED_DIR,
-    `${base}.${Date.now()}.jsonl.synced`
-  );
-
+  const archivedPath = path.join(SYNCED_DIR, `${base}.${Date.now()}.jsonl.synced`);
   fs.renameSync(filePath, archivedPath);
 }
 
 function shouldSync(force = false) {
   if (force) return true;
-
   const now = Date.now();
 
-  if (state.lastFailedAt && now - state.lastFailedAt >= RETRY_INTERVAL_MS) {
-    return true;
-  }
-
-  if (!state.lastSyncAt) {
-    return true;
-  }
-
-  if (now - state.lastSyncAt >= SYNC_INTERVAL_MS) {
-    return true;
-  }
+  if (state.lastFailedAt && now - state.lastFailedAt >= RETRY_INTERVAL_MS) return true;
+  if (!state.lastSyncAt) return true;
+  if (now - state.lastSyncAt >= SYNC_INTERVAL_MS) return true;
 
   return false;
 }
 
 /**
  * Batch sync pending predictions to Firebase.
- *
- * - Runs hourly by default
- * - Retries after 10 minutes on failure
- * - Never deletes unsynced WAL files
+ * Runs hourly by default. Retries after 10 minutes on failure. Never deletes unsynced WAL files.
  */
 async function processPendingSync(force = false) {
   if (!shouldSync(force)) {
-    return {
-      skipped: true,
-      synced: 0,
-    };
+    return { skipped: true, synced: 0 };
   }
 
   let files = [];
-
   try {
-    files = fs
-      .readdirSync(WAL_DIR)
-      .filter((file) => file.endsWith('.jsonl'))
-      .sort();
+    files = fs.readdirSync(WAL_DIR).filter((file) => file.endsWith('.jsonl')).sort();
   } catch {
     files = [];
   }
@@ -493,17 +372,11 @@ async function processPendingSync(force = false) {
     state.lastFailedAt = null;
     state.lastError = null;
     saveState();
-
-    return {
-      skipped: false,
-      synced: 0,
-      pendingFiles: 0,
-    };
+    return { skipped: false, synced: 0, pendingFiles: 0 };
   }
 
   try {
     const db = getDb();
-
     let totalSynced = 0;
 
     for (const file of files) {
@@ -515,46 +388,28 @@ async function processPendingSync(force = false) {
     state.lastFailedAt = null;
     state.lastError = null;
     state.syncedOps = Number(state.syncedOps || 0) + totalSynced;
-
     saveState();
 
     if (totalSynced > 0) {
-      logger.info(
-        `[UserPredictionStore] Synced ${totalSynced} user predictions to Firebase.`
-      );
+      logger.info(`[UserPredictionStore] Synced ${totalSynced} user predictions to Firebase.`);
     }
 
-    return {
-      skipped: false,
-      synced: totalSynced,
-      pendingFiles: 0,
-    };
+    return { skipped: false, synced: totalSynced, pendingFiles: 0 };
   } catch (err) {
     state.lastFailedAt = Date.now();
     state.lastError = err.message;
-
     saveState();
 
-    logger.error(
-      `[UserPredictionStore] Sync failed. Will retry in 10 minutes. Error: ${err.message}`
-    );
+    logger.error(`[UserPredictionStore] Sync failed. Will retry in 10 minutes. Error: ${err.message}`);
 
-    return {
-      skipped: false,
-      synced: 0,
-      error: err.message,
-      pendingFiles: files.length,
-    };
+    return { skipped: false, synced: 0, error: err.message, pendingFiles: files.length };
   }
 }
 
 function getStats() {
   let pendingFiles = 0;
-
   try {
-    pendingFiles = fs
-      .readdirSync(WAL_DIR)
-      .filter((file) => file.endsWith('.jsonl')).length;
+    pendingFiles = fs.readdirSync(WAL_DIR).filter((file) => file.endsWith('.jsonl')).length;
   } catch {
     pendingFiles = 0;
   }

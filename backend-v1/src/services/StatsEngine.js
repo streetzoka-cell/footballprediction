@@ -1,44 +1,104 @@
-const { getDb } = require('../config/firebase');
-const { publishJSON } = require('./StaticFilePublisher');
+// backend-v1/src/services/StatsEngine.js
+const fs = require('fs');
+const fsp = fs.promises;
+const path = require('path');
 const logger = require('../utils/logger');
 
-async function buildGlobalStats() {
-  try {
-    const db = getDb();
-    const today = new Date().toISOString().split('T')[0];
+const STATS_DIR = path.join(process.cwd(), 'public_data', 'stats');
+const GLOBAL_STATS_FILE = path.join(STATS_DIR, 'global.json');
 
-    // 1. Count total registered users
-    const usersSnap = await db.collection('users').count().get();
-    const totalUsers = usersSnap.data().count;
+const DEFAULT_STATS = {
+    totalUsers: 0,
+    totalPlayers: 0,
+    totalPredictions: 0,
+    predictionsToday: 0,
+    activePlayersToday: 0,
+    lastUpdated: null,
+};
 
-    // 2. Count total players who have ever scored points
-    const pointsSnap = await db.collection('user_points_total').count().get();
-    const totalPlayers = pointsSnap.data().count;
+let statsCache = { ...DEFAULT_STATS };
+let isInitialized = false;
+let activeUsersToday = new Set();
 
-    // 3. Count predictions made today
-    const todayPredsSnap = await db.collection('user_predictions').where('matchDate', '==', today).count().get();
-    const predictionsToday = todayPredsSnap.data().count;
-
-    // 4. Count total predictions all-time
-    const totalPredsSnap = await db.collection('prediction_results').count().get();
-    const totalPredictions = totalPredsSnap.data().count;
-
-    const payload = {
-      totalUsers,
-      totalPlayers,
-      predictionsToday,
-      activePlayersToday: predictionsToday, 
-      totalPredictions,
-      lastUpdated: new Date().toISOString()
-    };
-
-    await publishJSON('stats/global.json', payload);
-    logger.info(`[StatsEngine] Global stats updated: ${JSON.stringify(payload)}`);
-    return payload;
-  } catch (err) {
-    logger.error(`[StatsEngine] Failed to build stats: ${err.message}`);
-    throw err;
-  }
+async function initializeCache() {
+    if (isInitialized) return;
+    
+    try {
+        await fsp.mkdir(STATS_DIR, { recursive: true });
+        const raw = await fsp.readFile(GLOBAL_STATS_FILE, 'utf8');
+        statsCache = { ...DEFAULT_STATS, ...JSON.parse(raw) };
+        logger.info('[StatsEngine] Initialized stats cache from local JSON (0 Firestore reads).');
+    } catch (err) {
+        if (err.code === 'ENOENT') {
+            logger.info('[StatsEngine] global.json not found. Creating with defaults.');
+            statsCache = { ...DEFAULT_STATS };
+            await persist();
+        } else {
+            logger.error(`[StatsEngine] Failed to initialize cache: ${err.message}`);
+            statsCache = { ...DEFAULT_STATS };
+        }
+    }
+    
+    isInitialized = true;
 }
 
-module.exports = { buildGlobalStats };
+async function persist() {
+    try {
+        statsCache.lastUpdated = new Date().toISOString();
+        await fsp.mkdir(STATS_DIR, { recursive: true });
+        await fsp.writeFile(GLOBAL_STATS_FILE, JSON.stringify(statsCache, null, 2), 'utf8');
+    } catch (err) {
+        logger.error(`[StatsEngine] Failed to persist global.json: ${err.message}`);
+    }
+}
+
+async function getStats() {
+    if (!isInitialized) await initializeCache();
+    return statsCache;
+}
+
+async function userRegistered() {
+    if (!isInitialized) await initializeCache();
+    statsCache.totalUsers++;
+    await persist();
+}
+
+async function playerActivated() {
+    if (!isInitialized) await initializeCache();
+    statsCache.totalPlayers++;
+    await persist();
+}
+
+async function predictionCreated(uid) {
+    if (!isInitialized) await initializeCache();
+    
+    statsCache.totalPredictions++;
+    statsCache.predictionsToday++;
+    
+    if (uid && !activeUsersToday.has(uid)) {
+        activeUsersToday.add(uid);
+        statsCache.activePlayersToday++;
+    }
+    
+    await persist();
+}
+
+async function resetDailyStats() {
+    if (!isInitialized) await initializeCache();
+    
+    statsCache.predictionsToday = 0;
+    statsCache.activePlayersToday = 0;
+    activeUsersToday.clear();
+    
+    await persist();
+    logger.info('[StatsEngine] Daily stats reset to 0.');
+}
+
+module.exports = {
+    initializeCache,
+    getStats,
+    userRegistered,
+    playerActivated,
+    predictionCreated,
+    resetDailyStats
+};

@@ -1,5 +1,4 @@
-// backend-v1/src/providers/ProviderManager.js
-
+﻿// backend-v1/src/providers/ProviderManager.js
 const { getProvider } = require('./ProviderFactory');
 const logger = require('../utils/logger');
 const circuitBreaker = require('../utils/circuitBreaker');
@@ -14,28 +13,21 @@ const providers = {
 };
 
 const METHOD_PRIORITY = {
-  // Public high-priority frontend data
   getLiveFixtures: ['isports', 'api-football'],
   getFixtures: ['isports', 'api-football'],
   getStandings: ['football-data', 'api-football'],
   getTeams: ['football-data', 'api-football'],
   getTeam: ['api-football', 'sportsdb'],
   getLeague: ['isports', 'sportsdb'],
-
-  // Secondary data
   getTopScorers: ['api-football', 'football-data'],
   getFixture: ['api-football', 'isports'],
   getPlayers: ['api-football'],
   getPlayer: ['api-football', 'sportsdb'],
-
-  // Match details
   getLineups: ['api-football'],
   getStatistics: ['api-football'],
   getPredictions: ['api-football'],
   getOdds: ['api-football'],
   getHeadToHead: ['api-football'],
-
-  // Search/media
   search: ['sportsdb'],
   getVideos: [],
 };
@@ -86,15 +78,11 @@ async function tryChain(method, params = []) {
     if (CRITICAL_METHODS.has(method)) {
       throw new Error('Internet is offline. Skipping API calls.');
     }
-
     return safeEmptyFor(method);
   }
 
   const chain = METHOD_PRIORITY[method] || [];
-
-  if (!chain.length) {
-    return safeEmptyFor(method);
-  }
+  if (!chain.length) return safeEmptyFor(method);
 
   let lastErr = null;
   let lastResult = null;
@@ -102,14 +90,10 @@ async function tryChain(method, params = []) {
   for (const providerName of chain) {
     const provider = providers[providerName];
 
-    if (!provider || typeof provider[method] !== 'function') {
-      continue;
-    }
+    if (!provider || typeof provider[method] !== 'function') continue;
 
     if (await circuitBreaker.isDisabled(providerName)) {
-      logger.info(
-        `[ProviderManager] ${method}: ${providerName} skipped (Circuit Open).`
-      );
+      logger.info(`[ProviderManager] ${method}: ${providerName} skipped (Circuit Open).`);
       continue;
     }
 
@@ -124,36 +108,23 @@ async function tryChain(method, params = []) {
       if (Array.isArray(result)) {
         lastResult = result;
       }
-
       continue;
     } catch (err) {
-      if (err.message === 'Not implemented') {
-        continue;
-      }
+      if (err.message === 'Not implemented') continue;
 
       await circuitBreaker.trip(providerName, err.message);
-
-      logger.warn(
-        `[ProviderManager] ${method}: ${providerName} failed (${err.message}) → trying next`
-      );
-
+      logger.warn(`[ProviderManager] ${method}: ${providerName} failed (${err.message}) → trying next`);
       lastErr = err;
     }
   }
 
-  if (lastResult !== null) {
-    return lastResult;
-  }
-
-  if (lastErr && CRITICAL_METHODS.has(method)) {
-    throw lastErr;
-  }
+  if (lastResult !== null) return lastResult;
+  if (lastErr && CRITICAL_METHODS.has(method)) throw lastErr;
 
   return safeEmptyFor(method);
 }
 
 const exportedMethods = {};
-
 for (const method of Object.keys(METHOD_PRIORITY)) {
   exportedMethods[method] = (...args) => tryChain(method, args);
 }
@@ -163,10 +134,9 @@ async function getHealthStatus() {
 
   for (const [name, provider] of Object.entries(providers)) {
     try {
-      const health =
-        typeof provider.health === 'function'
-          ? await provider.health()
-          : { provider: name, healthy: false };
+      const health = typeof provider.health === 'function'
+        ? await provider.health()
+        : { provider: name, healthy: false };
 
       results[name] = {
         ...health,
@@ -188,18 +158,48 @@ async function getHealthStatus() {
 
 async function getHealthSummary() {
   const providerHealth = await getHealthStatus();
+  
+  let totalBudgetRemaining = 0;
+  const quotaBreakdown = {};
 
-  let budgetRemaining = 0;
-
-  for (const name of ['api-football', 'isports']) {
+  // Aggregate quota for providers that have budget limits
+  for (const name of Object.keys(providers)) {
     const provider = providers[name];
+    const health = providerHealth[name] || {};
 
     if (provider && typeof provider.getRemaining === 'function') {
       try {
-        budgetRemaining += Number(provider.getRemaining()) || 0;
-      } catch {
-        // Ignore provider budget errors
+        const remaining = Number(provider.getRemaining()) || 0;
+        totalBudgetRemaining += remaining;
+        
+        const keysActive = provider.keys ? provider.keys.filter(k => k.remaining > 0).length : (health.keysActive || 0);
+        const totalKeys = provider.keys ? provider.keys.length : 0;
+        
+        // Calculate daily limit based on adapter logic
+        let dailyLimit = 0;
+        if (name === 'api-football') {
+          dailyLimit = totalKeys * (parseInt(process.env.API_FOOTBALL_DAILY_BUDGET || '100', 10));
+        } else if (name === 'isports') {
+          dailyLimit = totalKeys * (parseInt(process.env.ISPORTS_DAILY_BUDGET || '200', 10));
+        }
+
+        quotaBreakdown[name] = {
+          remaining: remaining,
+          dailyLimit: dailyLimit,
+          keysActive: keysActive,
+          totalKeys: totalKeys,
+          circuitOpen: health.circuitOpen || false
+        };
+      } catch (e) {
+        // Ignore quota calculation errors
       }
+    } else if (provider && typeof provider.isBudgetAvailable === 'function') {
+      // For unlimited providers like football-data or sportsdb
+      quotaBreakdown[name] = {
+        remaining: 'unlimited',
+        dailyLimit: 'unlimited',
+        circuitOpen: health.circuitOpen || false
+      };
     }
   }
 
@@ -207,7 +207,8 @@ async function getHealthSummary() {
     status: internetMonitor.isOnline ? 'healthy' : 'offline',
     internet: internetMonitor.isOnline,
     activeProvider: getActiveProviderName(),
-    budgetRemaining,
+    budgetRemaining: totalBudgetRemaining,
+    quota: quotaBreakdown, // ★ NEW: Detailed breakdown for frontend
     providers: providerHealth,
     timestamp: new Date().toISOString(),
   };
