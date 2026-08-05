@@ -1,4 +1,4 @@
-﻿// footballprediction/src/context/AuthContext.jsx
+﻿// src/context/AuthContext.jsx
 
 import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
@@ -50,7 +50,6 @@ export function AuthProvider({ children }) {
 
     let unsubscribed = false;
     let unsubProfile = null;
-    let unsubAdmin = null;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (unsubscribed) return;
@@ -60,17 +59,12 @@ export function AuthProvider({ children }) {
         unsubProfile();
         unsubProfile = null;
       }
-      if (unsubAdmin) {
-        unsubAdmin();
-        unsubAdmin = null;
-      }
 
       if (user) {
         try {
           const userDocRef = doc(db, 'users', user.uid);
-          const adminDocRef = doc(db, 'admin_users', user.uid);
 
-          // 1. Fetch initial profile
+          // 1. Fetch initial profile or create if missing
           const profileDoc = await getDoc(userDocRef);
           if (!profileDoc.exists()) {
             const profile = {
@@ -85,22 +79,22 @@ export function AuthProvider({ children }) {
             await setDoc(userDocRef, profile);
           }
 
-          // 2. Listen to users collection (Role-based Admin)
+          // 2. Listen to users collection for profile/role updates
+          // We no longer listen to admin_users to prevent permission-denied errors for normal users.
           unsubProfile = onSnapshot(userDocRef, (docSnap) => {
             if (unsubscribed) return;
             if (docSnap.exists()) {
               const baseData = docSnap.data();
-              // Normalize role to lowercase to prevent casing issues (e.g., 'Admin' vs 'admin')
+              // Normalize role to lowercase to prevent casing issues
               const role = (baseData.role || 'user').toLowerCase();
-              const isRoleAdmin = role === 'admin' || role === 'staff';
+              const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
               
               setUserProfile(prev => {
-                const isSuperAdmin = prev?.isAdminCollection === true;
                 return { 
-                  uid: user.uid, // Ensure uid is always explicitly set
+                  uid: user.uid, 
                   ...baseData, 
                   role,
-                  isAdmin: isSuperAdmin || isRoleAdmin 
+                  isAdmin: isRoleAdmin 
                 };
               });
             } else {
@@ -115,28 +109,6 @@ export function AuthProvider({ children }) {
           }, (err) => {
             console.error('[Auth] Profile listener error:', err.message);
             setAuthLoading(false);
-          });
-
-          // 3. Listen to admin_users collection (Super Admin)
-          unsubAdmin = onSnapshot(adminDocRef, (adminSnap) => {
-            if (unsubscribed) return;
-            setUserProfile(prev => {
-              const isSuperAdmin = adminSnap.exists();
-              const role = (prev?.role || 'user').toLowerCase();
-              const isRoleAdmin = role === 'admin' || role === 'staff';
-              
-              return {
-                ...prev,
-                uid: user.uid,
-                isAdmin: isSuperAdmin || isRoleAdmin,
-                isAdminCollection: isSuperAdmin
-              };
-            });
-          }, (err) => {
-            // Silently ignore permission-denied for normal users (expected behavior)
-            if (err.code !== 'permission-denied') {
-              console.error('[Auth] Admin listener error:', err.message);
-            }
           });
 
         } catch (err) {
@@ -158,7 +130,6 @@ export function AuthProvider({ children }) {
     return () => {
       unsubscribed = true;
       if (unsubProfile) unsubProfile();
-      if (unsubAdmin) unsubAdmin();
       unsubscribe();
     };
   }, []);

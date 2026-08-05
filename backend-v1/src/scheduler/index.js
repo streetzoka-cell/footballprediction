@@ -1,11 +1,12 @@
-﻿const schedulerEngine = require('./SchedulerEngine');
+﻿// backend-v1/src/scheduler/index.js
+const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
 const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
 const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
 const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
-const leaderboardJob = require('./jobs/leaderboardJob');
+const leaderboardJob = require('./jobs/leaderboardRebuildJob'); // ★ FIX: Added missing import
 const statsJob = require('./jobs/statsJob'); 
 
 const { processQueue } = require('../services/QueueService');
@@ -15,7 +16,7 @@ const logger = require('../utils/logger');
 const CRON = {
   TODAY_FIXTURES: '5 0 * * *',
   TOMORROW_FIXTURES: '10 0 * * *',
-  FINISHED_FIXTURES: '0 */5 * * *', // ★ FIX: Run every 5 hours to save API calls
+  FINISHED_FIXTURES: '0 */5 * * *', 
   STANDINGS: '0 */6 * * *',
 };
 

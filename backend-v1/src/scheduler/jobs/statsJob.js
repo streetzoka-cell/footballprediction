@@ -1,17 +1,24 @@
+// backend-v1/src/jobs/cron/StatsJob.js
+
 const StatsEngine = require('../../services/StatsEngine');
 const logger = require('../../utils/logger');
 
 async function execute() {
   try {
-    logger.info('[Cron] Starting automatic global stats rebuild...');
+    logger.info('[Cron] Manual stats publish...');
+
     await StatsEngine.buildGlobalStats();
-    logger.info('[Cron] Global stats rebuild complete.');
+
+    logger.info('[Cron] Stats publish complete.');
   } catch (err) {
-    logger.error(`[Cron] Global stats rebuild failed: ${err.message}`);
+    logger.error(`[Cron] Stats publish failed: ${err.message}`);
   }
 }
 
 module.exports = {
   execute,
-  schedule: '*/2 * * * *' // Every 2 minutes
+
+  // Disabled.
+  // Stats are maintained by backend events instead of polling.
+  schedule: null,
 };

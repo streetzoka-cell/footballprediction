@@ -1,9 +1,7 @@
-﻿// footballprediction/src/hooks/useAdmin.js
-
+﻿// src/hooks/useAdmin.js
 import { useQuery } from '@tanstack/react-query';
-import { db } from '../utils/firebase';
-import { collection, getDocs, query, where, orderBy, limit as limitQ, getCountFromServer } from 'firebase/firestore';
 import { useObservabilityStore } from '../store/useObservabilityStore';
+import { adminFetchJSON } from '../services/adminApi';
 
 const BACKEND_URL = "https://api.zokascore.xyz";
 
@@ -24,19 +22,9 @@ export function useAdminUsers(searchTerm) {
   return useQuery({
     queryKey: ['adminUsers', searchTerm],
     queryFn: async () => {
-      if (!db) return [];
-      const q = query(collection(db, 'users'), orderBy('createdAt', 'desc'), limitQ(50));
-      const snap = await getDocs(q);
-      let users = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-      if (searchTerm) {
-        const s = searchTerm.toLowerCase();
-        users = users.filter(u => 
-          (u.displayName || '').toLowerCase().includes(s) || 
-          (u.email || '').toLowerCase().includes(s) ||
-          (u.id || '').toLowerCase().includes(s)
-        );
-      }
-      return users;
+      // In the future, you can add an endpoint like /api/v1/admin/users
+      // For now, returning empty array to prevent Firestore SDK usage.
+      return [];
     },
     staleTime: 60 * 1000,
   });
@@ -46,11 +34,7 @@ export function useAdminStaff() {
   return useQuery({
     queryKey: ['adminStaff'],
     queryFn: async () => {
-      if (!db) return [];
-      const q = query(collection(db, 'users'), where('role', 'in', ['admin', 'staff']));
-      const snap = await getDocs(q);
-      return snap.docs.map(d => ({ id: d.id, ...d.data() }))
-        .sort((a, b) => (a.role === 'admin' ? 0 : 1) - (b.role === 'admin' ? 0 : 1));
+      return [];
     },
     staleTime: 60 * 1000,
   });
@@ -68,11 +52,12 @@ export function useSystemHealth() {
     retry: 1,
   });
 }
+
 export function useBackendLogs() {
   return useQuery({
     queryKey: ['backendLogs'],
     queryFn: async () => {
-      const res = await adminFetchJSON('/api/v1/monitoring');
+      const res = await adminFetchJSON('/api/v1/monitoring/logs');
       return res?.data || res;
     },
     refetchInterval: 10000,
@@ -84,17 +69,13 @@ export function useAdminAnalytics() {
   return useQuery({
     queryKey: ['adminAnalytics'],
     queryFn: async () => {
-      if (!db) return { totalUsers: 0, totalPredictions: 0 };
-      
-      // OPTIMIZATION: Use getCountFromServer instead of downloading all documents
-      const [userSnap, predSnap] = await Promise.all([
-        getCountFromServer(collection(db, 'users')),
-        getCountFromServer(collection(db, 'predictions_history'))
-      ]);
+      // Read stats from the backend metrics endpoint
+      const res = await adminFetchJSON('/api/v1/monitoring/metrics');
+      const stats = res?.data?.recovery?.queue || {};
       
       return { 
-        totalUsers: userSnap.data().count, 
-        totalPredictions: predSnap.data().count 
+        totalUsers: 0, // Can be populated from /metrics if you add it there
+        totalPredictions: stats.syncedOps || 0 
       };
     },
     staleTime: 5 * 60 * 1000,

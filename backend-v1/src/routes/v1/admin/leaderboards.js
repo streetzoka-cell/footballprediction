@@ -1,4 +1,4 @@
-﻿// backend-v1/src/routes/admin/ranking.js
+﻿// backend-v1/src/routes/admin/leaderboards.js
 
 const express = require('express');
 const router = express.Router();
