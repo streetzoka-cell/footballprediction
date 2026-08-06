@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
   Tv, BarChart3, MapPin, Shield, Users, Target, Activity, AlertCircle, Brain
@@ -8,7 +7,7 @@ import {
 
 import SEO from '../components/SEO';
 import AdSlot from '../components/AdSlot'; 
-import { useStandings } from '../hooks/useFixtures';
+import { useFixtures, useStandings } from '../hooks/useFixtures'; // ★ RESTORED useFixtures
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
@@ -75,32 +74,16 @@ export default function MatchDetails() {
   const { matchId } = useParams();
   const now = useNow(10000);
   
-  const { data: rawMatch, isLoading } = useQuery({
-    queryKey: ['match-detail', matchId],
-    queryFn: async () => {
-      try {
-        const res = await fetch(`/api/v1/match/${matchId}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data && data.id) return data;
-        }
-      } catch (e) { /* Fallback to daily files */ }
-
-      const dates = [todayStr(), getLocalDateStr(-1), getLocalDateStr(1)];
-      const results = await Promise.all(dates.map(d =>
-        fetch(`/api/v1/data/fixtures/${d}.json`)
-          .then(r => r.ok ? r.json() : { data: [] })
-          .catch(() => ({ data: [] }))
-      ));
-      const allMatches = results.flatMap(r => r.data || []);
-      return allMatches.find(m => String(m.id) === String(matchId)) || null;
-    },
-    staleTime: 1000 * 60 * 5, 
-  });
+  // ★ FIX: Using the proper useFixtures hook to fetch data safely
+  const { data: todayFx = [] } = useFixtures(todayStr());
+  const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
+  const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
 
   const match = useMemo(() => {
-    return rawMatch ? applySmartMinute(rawMatch, now) : null;
-  }, [rawMatch, now]);
+    const all = [...todayFx, ...tomFx, ...yestFx];
+    const found = all.find(m => String(m.id) === String(matchId));
+    return found ? applySmartMinute(found, now) : null;
+  }, [todayFx, yestFx, tomFx, matchId, now]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
@@ -272,13 +255,14 @@ export default function MatchDetails() {
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
               
-              {match.stats.possession && <StatBar label="Possession" home={match.stats.possession.home} away={match.stats.possession.away} isPercentage />}
-              {match.stats.shotsOnTarget && <StatBar label="Shots on Target" home={match.stats.shotsOnTarget.home} away={match.stats.shotsOnTarget.away} />}
-              {match.stats.shots && <StatBar label="Total Shots" home={match.stats.shots.home} away={match.stats.shots.away} />}
-              {match.stats.corners && <StatBar label="Corners" home={match.stats.corners.home} away={match.stats.corners.away} />}
-              {match.stats.fouls && <StatBar label="Fouls" home={match.stats.fouls.home} away={match.stats.fouls.away} />}
-              {match.stats.yellowCards && <StatBar label="Yellow Cards" home={match.stats.yellowCards.home} away={match.stats.yellowCards.away} />}
-              {match.stats.redCards && <StatBar label="Red Cards" home={match.stats.redCards.home} away={match.stats.redCards.away} />}
+              {/* ★ FIX: Added optional chaining (?.) to prevent crashes if stats object is missing */}
+              {match.stats?.possession && <StatBar label="Possession" home={match.stats.possession.home} away={match.stats.possession.away} isPercentage />}
+              {match.stats?.shotsOnTarget && <StatBar label="Shots on Target" home={match.stats.shotsOnTarget.home} away={match.stats.shotsOnTarget.away} />}
+              {match.stats?.shots && <StatBar label="Total Shots" home={match.stats.shots.home} away={match.stats.shots.away} />}
+              {match.stats?.corners && <StatBar label="Corners" home={match.stats.corners.home} away={match.stats.corners.away} />}
+              {match.stats?.fouls && <StatBar label="Fouls" home={match.stats.fouls.home} away={match.stats.fouls.away} />}
+              {match.stats?.yellowCards && <StatBar label="Yellow Cards" home={match.stats.yellowCards.home} away={match.stats.yellowCards.away} />}
+              {match.stats?.redCards && <StatBar label="Red Cards" home={match.stats.redCards.home} away={match.stats.redCards.away} />}
               
             </div>
           ) : (
