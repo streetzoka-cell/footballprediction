@@ -2,16 +2,16 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
-  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, AlertCircle, Brain
+  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, Brain
 } from 'lucide-react';
 
 import SEO from '../components/SEO';
 import AdSlot from '../components/AdSlot'; 
-import { useFixtures, useStandings } from '../hooks/useFixtures'; // ★ RESTORED useFixtures
+import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
-import { seoGenerators } from '../utils/seoBuilder';
+import { seoGenerators, buildSEO } from '../utils/seoBuilder';
 
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
@@ -26,7 +26,7 @@ const LEAGUE_BROADCASTERS = {
   '39': [{ name: 'Peacock', color: '#000000', url: 'https://www.peacocktv.com' }, { name: 'Sky Sports', color: '#0072c6', url: 'https://www.skysports.com' }],
   '140': [{ name: 'ESPN+', color: '#d00d1e', url: 'https://www.espn.com' }, { name: 'beIN SPORTS', color: '#fa9000', url: 'https://www.beinsports.com' }],
 };
-const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
+const FALLBACK_BROADCASTERS = [{ name: 'FIFA+', color: '#dd2848', url: 'https://www.plus.fifa.com' }, { name: 'UEFA.tv', color: '#00349e', url: 'https://www.uefa.tv' }];
 
 const useCountdown = (targetDate) => {
   const [timeLeft, setTimeLeft] = useState('');
@@ -74,7 +74,6 @@ export default function MatchDetails() {
   const { matchId } = useParams();
   const now = useNow(10000);
   
-  // ★ FIX: Using the proper useFixtures hook to fetch data safely
   const { data: todayFx = [] } = useFixtures(todayStr());
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
@@ -109,12 +108,28 @@ export default function MatchDetails() {
   const countdown = useCountdown(match?.isScheduled ? match.utcDate : null);
 
   const seo = useMemo(() => {
-    if (!match) return { title: "Match Details", description: "Loading match details...", path: `/match/${matchId}` };
+    if (!match) {
+      return buildSEO({
+        title: "Match Details",
+        description: "Loading match details...",
+        path: `/match/${matchId}`,
+      });
+    }
     return seoGenerators.matchPage({
-      homeName: match.homeName, awayName: match.awayName, leagueName: match.leagueName,
-      date: match.date, venue: match.venue, isLive: match.isLive, isFinished: match.isFinished,
-      homeScore: match.homeScore, awayScore: match.awayScore, path: matchLink,
-      homeLogo: match.homeLogo, awayLogo: match.awayLogo, leagueLogo: match.leagueLogo, referee: match.referee,
+      homeName: match.homeName,
+      awayName: match.awayName,
+      leagueName: match.leagueName,
+      date: match.date,
+      venue: match.venue,
+      isLive: match.isLive,
+      isFinished: match.isFinished,
+      homeScore: match.homeScore,
+      awayScore: match.awayScore,
+      path: matchLink,
+      homeLogo: match.homeLogo,
+      awayLogo: match.awayLogo,
+      leagueLogo: match.leagueLogo,
+      referee: match.referee,
     });
   }, [match, matchId, matchLink]);
 
@@ -144,6 +159,7 @@ export default function MatchDetails() {
             <ArrowLeft size={14} /> Back to Fixtures
           </Link>
 
+          {/* Premium Header Card */}
           <div className={`md-header-card ${goalFlash ? 'goal-flash' : ''}`}>
             {goalFlash && (
               <div className="absolute inset-0 flex-center pointer-events-none">
@@ -202,6 +218,7 @@ export default function MatchDetails() {
             </div>
           )}
 
+          {/* Match Context & Standings */}
           <div className="md-pro-grid">
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><MapPin size={12} /> Match Context</h3>
@@ -251,11 +268,11 @@ export default function MatchDetails() {
             </div>
           </div>
 
+          {/* Real Stats or AI Fallback */}
           {match.hasRealStats ? (
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
               
-              {/* ★ FIX: Added optional chaining (?.) to prevent crashes if stats object is missing */}
               {match.stats?.possession && <StatBar label="Possession" home={match.stats.possession.home} away={match.stats.possession.away} isPercentage />}
               {match.stats?.shotsOnTarget && <StatBar label="Shots on Target" home={match.stats.shotsOnTarget.home} away={match.stats.shotsOnTarget.away} />}
               {match.stats?.shots && <StatBar label="Total Shots" home={match.stats.shots.home} away={match.stats.shots.away} />}
@@ -291,8 +308,10 @@ export default function MatchDetails() {
             </div>
           )}
 
+          {/* ✅ NEW AD PLACEMENT (Never above score/title, safely below stats) */}
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 
+          {/* Watch & React */}
           <div className="grid gap-16 mb-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-primary font-bold flex-center gap-8 mb-8"><Tv size={16} /> Where to Watch</h3>
