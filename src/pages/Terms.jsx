@@ -27,7 +27,7 @@ export default function Terms() {
 
       <div className="zoka-wrap">
         <Link to="/" className="btn btn-ghost btn-sm mb-20">
-          <ArrowLeft size={16} /> Back to Home
+          <ArrowLeft size={16.01} /> Back to Home
         </Link>
         
         <article className="glass-card p-24 mb-16">
