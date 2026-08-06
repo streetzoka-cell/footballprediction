@@ -11,7 +11,7 @@
       "permanent": true
     }
   ],
-  "rewrites": [
+    "rewrites": [
     {
       "source": "/zokascore-sitemap.xml",
       "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml"
@@ -25,7 +25,7 @@
       "destination": "/index.html"
     }
   ],
-  
+
   "headers": [
     {
       "source": "/(.*)",
