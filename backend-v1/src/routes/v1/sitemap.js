@@ -62,19 +62,19 @@ router.get(["/", "/index.xml"], (req, res) => {
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <sitemap>
-    <loc>${HOST}/sitemap/static.xml</loc>
+    <loc>${HOST}/zokascore-sitemap.xml/static.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>${HOST}/sitemap/leagues.xml</loc>
+    <loc>${HOST}/zokascore-sitemap.xml/leagues.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>${HOST}/sitemap/teams.xml</loc>
+    <loc>${HOST}/zokascore-sitemap.xml/teams.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
   <sitemap>
-    <loc>${HOST}/sitemap/matches.xml</loc>
+    <loc>${HOST}/zokascore-sitemap.xml/matches.xml</loc>
     <lastmod>${now}</lastmod>
   </sitemap>
 </sitemapindex>`;
@@ -89,7 +89,7 @@ router.get(["/", "/index.xml"], (req, res) => {
 // 2. STATIC PAGES (Core Routes)
 // ==========================================
 router.get("/static.xml", (req, res) => {
-    const staticPages = [
+  const staticPages = [
     { path: "/", priority: "1.0", changefreq: "hourly" },
     { path: "/fixtures", priority: "0.9", changefreq: "hourly" },
     { path: "/predictions", priority: "0.9", changefreq: "daily" },
@@ -98,22 +98,13 @@ router.get("/static.xml", (req, res) => {
     { path: "/highlights", priority: "0.8", changefreq: "hourly" },
     { path: "/livestream", priority: "0.7", changefreq: "daily" },
     { path: "/basketball", priority: "0.7", changefreq: "daily" },
-    
-    // ★ SEO FIX: Added Studio Pages for Indexing
-    { path: "/studio", priority: "0.8", changefreq: "weekly" },
-    { path: "/studio/templates", priority: "0.7", changefreq: "monthly" },
-    { path: "/studio/reactor", priority: "0.8", changefreq: "monthly" },
-    { path: "/studio/media", priority: "0.7", changefreq: "monthly" },
-    { path: "/studio/face-ar", priority: "0.7", changefreq: "monthly" },
-    { path: "/studio/web-showcase", priority: "0.7", changefreq: "monthly" },
-
     { path: "/about", priority: "0.5", changefreq: "monthly" },
     { path: "/faq", priority: "0.5", changefreq: "monthly" },
     { path: "/help-center", priority: "0.5", changefreq: "monthly" },
     { path: "/privacy", priority: "0.3", changefreq: "yearly" },
     { path: "/terms", priority: "0.3", changefreq: "yearly" }
   ];
-  
+
   const urls = staticPages.map(page => 
     `<url><loc>${HOST}${page.path}</loc><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`
   );
