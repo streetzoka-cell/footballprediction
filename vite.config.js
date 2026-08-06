@@ -57,17 +57,16 @@ export default defineConfig({
           '**/*.{js,css,html,ico,png,svg,woff2}'
         ],
 
-        navigateFallbackDenylist: [
+                navigateFallbackDenylist: [
           /^\/robots\.txt$/,
           /^\/ads\.txt$/,
-          /^\/zokascore-sitemap\.xml$/,
-          /^\/sitemap\.xml$/,
-          /^\/sitemap-index\.xml$/,
+          /^\/zokascore-sitemap\.xml/,  // ★ REMOVED $ — Now catches /static.xml, /matches.xml, etc.
+          /^\/sitemap\.xml/,            // ★ REMOVED $
+          /^\/sitemap\//,               // ★ Catches /sitemap/anything
           /^\/api\/.*/,
           /^\/opensearch\.xml$/,
           /^\/google.*/
         ],
-
         runtimeCaching: [
           {
             urlPattern: ({ url }) =>
