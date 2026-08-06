@@ -1,7 +1,7 @@
 ﻿const express = require("express");
-const router = express.Router();
 const fs = require("fs");
 const path = require("path");
+const router = express.Router();
 
 const HOST = "https://zokascore.xyz";
 
@@ -14,7 +14,7 @@ const createSlug = (str) =>
     .replace(/[^a-z0-9]+/g, "-")
     .replace(/^-+|-+$/g, "");
 
-// ★ XML Escaping to prevent broken sitemaps
+// ★ XML Escaping
 const escapeXml = (unsafe) =>
   String(unsafe || "")
     .replace(/&/g, "&amp;")
@@ -29,7 +29,7 @@ const getOffsetDate = (offset = 0) => {
   return d.toISOString().split("T")[0];
 };
 
-// ★ High-Performance Local Snapshot Reader (No HTTP overhead)
+// ★ High-Performance Local Snapshot Reader
 const getFixturesData = async () => {
   const datesToFetch = [getOffsetDate(-1), getOffsetDate(0), getOffsetDate(1)];
   const publicDir = path.join(process.cwd(), "public_data", "fixtures");
@@ -54,116 +54,58 @@ const getFixturesData = async () => {
 };
 
 // ==========================================
-// 1. SITEMAP INDEX (The Master Map)
+// UNIFIED SITEMAP.XML (Fastest for Googlebot)
 // ==========================================
-router.get(["/", "/index.xml"], (req, res) => {
-  const now = new Date().toISOString();
-  
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <sitemap>
-    <loc>${HOST}/zokascore-sitemap.xml/static.xml</loc>
-    <lastmod>${now}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${HOST}/zokascore-sitemap.xml/leagues.xml</loc>
-    <lastmod>${now}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${HOST}/zokascore-sitemap.xml/teams.xml</loc>
-    <lastmod>${now}</lastmod>
-  </sitemap>
-  <sitemap>
-    <loc>${HOST}/zokascore-sitemap.xml/matches.xml</loc>
-    <lastmod>${now}</lastmod>
-  </sitemap>
-</sitemapindex>`;
-
-  res.header("Content-Type", "application/xml");
-  // Cache the index for 1 hour. Googlebot will check it regularly.
-  res.header("Cache-Control", "public, s-maxage=3600, max-age=3600"); 
-  res.send(xml);
-});
-
-// ==========================================
-// 2. STATIC PAGES (Core Routes)
-// ==========================================
-router.get("/static.xml", (req, res) => {
-  const staticPages = [
-    { path: "/", priority: "1.0", changefreq: "hourly" },
-    { path: "/fixtures", priority: "0.9", changefreq: "hourly" },
-    { path: "/predictions", priority: "0.9", changefreq: "daily" },
-    { path: "/leaderboard", priority: "0.8", changefreq: "hourly" },
-    { path: "/mastergames", priority: "0.8", changefreq: "daily" },
-    { path: "/highlights", priority: "0.8", changefreq: "hourly" },
-    { path: "/livestream", priority: "0.7", changefreq: "daily" },
-    { path: "/basketball", priority: "0.7", changefreq: "daily" },
-    { path: "/about", priority: "0.5", changefreq: "monthly" },
-    { path: "/faq", priority: "0.5", changefreq: "monthly" },
-    { path: "/help-center", priority: "0.5", changefreq: "monthly" },
-    { path: "/privacy", priority: "0.3", changefreq: "yearly" },
-    { path: "/terms", priority: "0.3", changefreq: "yearly" }
-  ];
-
-  const urls = staticPages.map(page => 
-    `<url><loc>${HOST}${page.path}</loc><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`
-  );
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join("\n")}
-</urlset>`;
-
-  res.header("Content-Type", "application/xml");
-  // Static pages rarely change. Cache for 24 hours to save server resources.
-  res.header("Cache-Control", "public, s-maxage=86400, max-age=86400"); 
-  res.send(xml);
-});
-
-// ==========================================
-// 3. LEAGUES (Dynamic Extraction)
-// ==========================================
-router.get("/leagues.xml", async (req, res) => {
+router.get(["/", "/index.xml", "/sitemap.xml"], async (req, res) => {
   try {
-    const allMatches = await getFixturesData();
-    const seenLeagues = new Set();
+    const now = new Date().toISOString();
     const urls = [];
 
+    // 1. Static Pages
+    const staticPages = [
+      { path: "/", priority: "1.0", changefreq: "hourly" },
+      { path: "/fixtures", priority: "0.9", changefreq: "hourly" },
+      { path: "/predictions", priority: "0.9", changefreq: "daily" },
+      { path: "/leaderboard", priority: "0.8", changefreq: "hourly" },
+      { path: "/mastergames", priority: "0.8", changefreq: "daily" },
+      { path: "/highlights", priority: "0.8", changefreq: "hourly" },
+      { path: "/livestream", priority: "0.7", changefreq: "daily" },
+      { path: "/basketball", priority: "0.7", changefreq: "daily" },
+      { path: "/about", priority: "0.5", changefreq: "monthly" },
+      { path: "/faq", priority: "0.5", changefreq: "monthly" },
+      { path: "/help-center", priority: "0.5", changefreq: "monthly" },
+      { path: "/privacy", priority: "0.3", changefreq: "yearly" },
+      { path: "/terms", priority: "0.3", changefreq: "yearly" }
+    ];
+
+    staticPages.forEach(page => {
+      urls.push(`<url><loc>${HOST}${page.path}</loc><lastmod>${now}</lastmod><changefreq>${page.changefreq}</changefreq><priority>${page.priority}</priority></url>`);
+    });
+
+    // 2. Dynamic Matches, Leagues, and Teams
+    const allMatches = await getFixturesData();
+    const seenLeagues = new Set();
+    const seenTeams = new Set();
+
     allMatches.forEach(match => {
+      // Matches
+      if (match.id) {
+        const homeSlug = createSlug(match.homeName || match.homeTeam?.name || "home");
+        const awaySlug = createSlug(match.awayName || match.awayTeam?.name || "away");
+        const matchUrl = `${HOST}/match/${match.id}/${homeSlug}-vs-${awaySlug}`;
+        urls.push(`<url><loc>${escapeXml(matchUrl)}</loc><lastmod>${now}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>`);
+      }
+
+      // Leagues
       const leagueId = match.league?.id || match.leagueId;
       const leagueName = match.league?.name || match.leagueName;
-      
       if (leagueId && !seenLeagues.has(String(leagueId))) {
         seenLeagues.add(String(leagueId));
         const leagueSlug = createSlug(leagueName);
         urls.push(`<url><loc>${HOST}/league/${leagueId}/${leagueSlug}</loc><changefreq>daily</changefreq><priority>0.8</priority></url>`);
       }
-    });
 
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join("\n")}
-</urlset>`;
-
-    res.header("Content-Type", "application/xml");
-    res.header("Cache-Control", "public, s-maxage=3600, max-age=3600"); // 1 Hour
-    res.send(xml);
-  } catch (err) {
-    console.error("[Sitemap] Leagues generation failed:", err);
-    res.status(500).send("Sitemap generation failed.");
-  }
-});
-
-// ==========================================
-// 4. TEAMS (Dynamic Extraction)
-// ==========================================
-router.get("/teams.xml", async (req, res) => {
-  try {
-    const allMatches = await getFixturesData();
-    const seenTeams = new Set();
-    const urls = [];
-
-    allMatches.forEach(match => {
+      // Teams
       const homeId = match.homeTeam?.id || match.homeTeamId;
       const homeName = match.homeTeam?.name || match.homeName;
       const awayId = match.awayTeam?.id || match.awayTeamId;
@@ -184,47 +126,15 @@ router.get("/teams.xml", async (req, res) => {
 
     const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join("\n")}
+ ${urls.join("\n")}
 </urlset>`;
 
     res.header("Content-Type", "application/xml");
-    res.header("Cache-Control", "public, s-maxage=3600, max-age=3600"); // 1 Hour
+    // Cache for 1 hour on Cloudflare/Vercel
+    res.header("Cache-Control", "public, s-maxage=3600, max-age=3600"); 
     res.send(xml);
   } catch (err) {
-    console.error("[Sitemap] Teams generation failed:", err);
-    res.status(500).send("Sitemap generation failed.");
-  }
-});
-
-// ==========================================
-// 5. MATCHES (High-Frequency Updates)
-// ==========================================
-router.get("/matches.xml", async (req, res) => {
-  try {
-    const allMatches = await getFixturesData();
-    const urls = [];
-
-    allMatches.forEach(match => {
-      if (!match.id) return;
-      
-      const homeSlug = createSlug(match.homeName || match.homeTeam?.name || "home");
-      const awaySlug = createSlug(match.awayName || match.awayTeam?.name || "away");
-      const matchUrl = `${HOST}/match/${match.id}/${homeSlug}-vs-${awaySlug}`;
-      
-      urls.push(`<url><loc>${escapeXml(matchUrl)}</loc><lastmod>${new Date().toISOString()}</lastmod><changefreq>hourly</changefreq><priority>0.9</priority></url>`);
-    });
-
-    const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${urls.join("\n")}
-</urlset>`;
-
-    res.header("Content-Type", "application/xml");
-    // Matches change constantly. Cache for only 5 minutes.
-    res.header("Cache-Control", "public, s-maxage=300, max-age=300"); 
-    res.send(xml);
-  } catch (err) {
-    console.error("[Sitemap] Matches generation failed:", err);
+    console.error("[Sitemap] Generation failed:", err);
     res.status(500).send("Sitemap generation failed.");
   }
 });
