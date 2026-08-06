@@ -1,7 +1,7 @@
 import { useParams, Link } from 'react-router-dom';
 import { useMemo } from 'react'; 
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Calendar, Brain, Stadium, Trophy } from 'lucide-react';
+import { ArrowLeft, Calendar, Brain, Building2, Trophy } from "lucide-react";
 import SEO from '../components/SEO';
 import { buildMatchRoute, buildLeagueRoute } from '../utils/routes';
 import { seoGenerators } from '../utils/seoBuilder'; 
@@ -61,8 +61,9 @@ export default function TeamPage() {
             <div>
               <h1 className="text-primary font-extrabold text-2xl">{teamName}</h1>
               <div className="flex gap-12 mt-4 text-muted text-sm">
-                {teamData?.country && <span className="flex-center gap-4"><Stadium size={14}/> {teamData.country}</span>}
-                {teamData?.venue && <span className="flex-center gap-4"><Stadium size={14}/> {teamData.venue}</span>}
+                {/* ★ FIX: Changed Stadium to Building2 */}
+                {teamData?.country && <span className="flex-center gap-4"><Building2 size={14}/> {teamData.country}</span>}
+                {teamData?.venue && <span className="flex-center gap-4"><Building2 size={14}/> {teamData.venue}</span>}
               </div>
             </div>
           </div>
