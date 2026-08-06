@@ -151,7 +151,11 @@ export function useStandings(leagueId) {
     enabled: !!leagueId,
     staleTime: 10 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
-    retry: 1,
+    // ★ FIX: Stop retrying 404s to prevent console spam for obscure leagues
+    retry: (failureCount, error) => {
+      if (error?.message?.includes('Not Found') || error?.message?.includes('404')) return false;
+      return failureCount < 1;
+    },
   });
 }
 
@@ -166,7 +170,10 @@ export function useTopScorers(leagueId) {
     enabled: !!leagueId,
     staleTime: 60 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
-    retry: 1,
+    retry: (failureCount, error) => {
+      if (error?.message?.includes('Not Found') || error?.message?.includes('404')) return false;
+      return failureCount < 1;
+    },
   });
 }
 
@@ -181,6 +188,9 @@ export function useTeams(leagueId) {
     enabled: !!leagueId,
     staleTime: 60 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
-    retry: 1,
+    retry: (failureCount, error) => {
+      if (error?.message?.includes('Not Found') || error?.message?.includes('404')) return false;
+      return failureCount < 1;
+    },
   });
 }

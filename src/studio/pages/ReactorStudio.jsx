@@ -2,7 +2,7 @@ import React, { useReducer, useRef, useEffect, useMemo, useCallback, useState } 
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX,
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, ChevronDown, ChevronUp, Maximize2, Minimize2, Cloud, Eye, EyeOff, Smile, Keyboard, Rewind, FastForward, Check, AlertTriangle, Info, ChevronRight, ChevronLeft
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, ChevronDown, ChevronUp, Maximize2, Minimize2, Cloud, Eye, EyeOff, Smile, Keyboard, Rewind, FastForward, Check, AlertTriangle, Info, ChevronRight, ChevronLeft, ArrowLeftRight
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════
@@ -52,7 +52,7 @@ const fixWebmDuration = async (blob, durationMs) => {
 };
 
 // ═══════════════════════════════════════════════════════════
-// HELPER: IndexedDB (Offline Storage for Heavy Media Blobs)
+// HELPER: IndexedDB (Offline Storage)
 // ═══════════════════════════════════════════════════════════
 const DB_NAME = 'ReactorStudioDB';
 const STORE_NAME = 'Assets';
@@ -67,7 +67,7 @@ const idbGet = async (k) => new Promise(async (res, rej) => { const tx = (await 
 const idbClear = async () => new Promise(async (res, rej) => { const tx = (await openDB()).transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
 
 // ═══════════════════════════════════════════════════════════
-// HELPER: Misc Utilities
+// HELPER: Canvas & Utilities
 // ═══════════════════════════════════════════════════════════
 const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
@@ -87,7 +87,32 @@ const haptic = (type = 'light') => {
   }
 };
 
-// Toast System
+const drawAvatarShape = (ctx, x, y, r, shape) => {
+  ctx.beginPath();
+  if (shape === 'square') {
+    ctx.rect(x - r, y - r, r * 2, r * 2);
+  } else if (shape === 'hexagon') {
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i - Math.PI / 2;
+      const px = x + r * Math.cos(angle);
+      const py = y + r * Math.sin(angle);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  } else if (shape === 'star') {
+    for (let i = 0; i < 10; i++) {
+      const angle = (Math.PI / 5) * i - Math.PI / 2;
+      const rad = i % 2 === 0 ? r : r * 0.5;
+      const px = x + rad * Math.cos(angle);
+      const py = y + rad * Math.sin(angle);
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  } else {
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+  }
+};
+
 const ToastContext = React.createContext(null);
 const useToast = () => React.useContext(ToastContext);
 
@@ -116,7 +141,6 @@ const ToastProvider = ({ children }) => {
   );
 };
 
-// Gamification
 const ACHIEVEMENTS = [
   { id: 'first_export', name: 'First Cut', desc: 'Export your first video', icon: '🎬', xp: 50 },
   { id: 'five_exports', name: 'Serial Creator', desc: 'Export 5 videos', icon: '🔥', xp: 100 },
@@ -139,7 +163,6 @@ const saveGameState = (state) => localStorage.setItem('reactor-game-state', JSON
 const getLevel = (xp) => Math.floor(xp / 200) + 1;
 const getLevelProgress = (xp) => (xp % 200) / 200;
 
-// Stickers
 const STICKERS = [
   { id: 'fire', emoji: '🔥', name: 'Fire' }, { id: 'heart', emoji: '❤️', name: 'Heart' },
   { id: 'star', emoji: '⭐', name: 'Star' }, { id: 'crown', emoji: '👑', name: 'Crown' },
@@ -149,11 +172,24 @@ const STICKERS = [
   { id: 'clap', emoji: '👏', name: 'Clap' }, { id: 'goat', emoji: '🐐', name: 'GOAT' },
   { id: 'cold', emoji: '🥶', name: 'Cold' }, { id: 'boom', emoji: '💥', name: 'Boom' },
   { id: 'target', emoji: '🎯', name: 'Target' }, { id: 'muscle', emoji: '💪', name: 'Muscle' },
+  { id: '100', emoji: '💯', name: '100' }, { id: 'angry', emoji: '😠', name: 'Angry' },
+  { id: 'cry', emoji: '😭', name: 'Cry' }, { id: 'joy', emoji: '😂', name: 'Joy' },
+  { id: 'shock', emoji: '😱', name: 'Shock' }, { id: 'cool', emoji: '😎', name: 'Cool' },
+  { id: 'think', emoji: '🤔', name: 'Think' }, { id: 'sleep', emoji: '😴', name: 'Sleep' },
+  { id: 'vip', emoji: '💎', name: 'VIP' }, { id: 'check', emoji: '✅', name: 'Check' },
+  { id: 'cross', emoji: '❌', name: 'Cross' }, { id: 'arrow', emoji: '➡️', name: 'Arrow' },
+  { id: 'up', emoji: '⬆️', name: 'Up' }, { id: 'down', emoji: '⬇️', name: 'Down' },
 ];
 
-// ═══════════════════════════════════════════════════════════
-// TEMPLATES & CONFIG DATA
-// ═══════════════════════════════════════════════════════════
+const AVATAR_SHAPES = [
+  { id: 'circle', name: 'Circle' }, { id: 'square', name: 'Square' },
+  { id: 'hexagon', name: 'Hexagon' }, { id: 'star', name: 'Star' }
+];
+
+const AVATAR_ANIMS = [
+  { id: 'none', name: 'None' }, { id: 'pulse', name: 'Pulse' }, { id: 'rotate', name: 'Rotate' }
+];
+
 const TEMPLATES = [
   { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: { x: 0, y: 0, w: 720, h: 1280 }, bg: '#000', preview: { bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro' }, isPro: true },
   { id: 'pro_goal', title: 'Pro: Goal Machine', category: 'Pro', tags: ['viral', 'goal', 'intro'], pip: false, video: { x: 0, y: 0, w: 720, h: 1280 }, bg: '#000', preview: { bg: 'linear-gradient(135deg, #dc2626, #000)', layout: 'pro' }, isPro: true },
@@ -215,7 +251,11 @@ const FILTERS = [
   { id: 'invert(1)', name: 'Invert', icon: '◍' }, { id: 'blur(2px)', name: 'Blur', icon: '◎' },
   { id: 'brightness(1.4) saturate(0.8)', name: 'Warm', icon: '☀' }, { id: 'brightness(0.8) saturate(1.5) hue-rotate(200deg)', name: 'Cool', icon: '❄' },
   { id: 'contrast(1.5) brightness(1.1) sepia(0.3)', name: 'Vintage', icon: '◬' }, { id: 'saturate(0.5) brightness(1.2) contrast(1.1)', name: 'Matte', icon: '▣' },
-  { id: 'hue-rotate(90deg) saturate(1.5)', name: 'Alien', icon: '◈' }, { id: 'contrast(2) brightness(0.7)', name: 'Drama', icon: '◉' }
+  { id: 'hue-rotate(90deg) saturate(1.5)', name: 'Alien', icon: '◈' }, { id: 'contrast(2) brightness(0.7)', name: 'Drama', icon: '◉' },
+  { id: 'grayscale(1) contrast(1.8) brightness(1.2)', name: 'Noir', icon: '■' },
+  { id: 'sepia(0.5) hue-rotate(300deg) saturate(1.8)', name: 'Dreamy', icon: '☽' },
+  { id: 'contrast(0.8) brightness(1.2) saturate(0.8)', name: 'Faded', icon: '□' },
+  { id: 'hue-rotate(180deg) invert(0.2) saturate(2)', name: 'Cyber', icon: '⬡' }
 ];
 
 const VIDEO_EFFECTS = [
@@ -223,7 +263,9 @@ const VIDEO_EFFECTS = [
   { id: 'shake', name: 'Shake' }, { id: 'pulse', name: 'Pulse' },
   { id: 'ken_burns', name: 'Ken Burns' }, { id: 'glitch', name: 'Glitch' },
   { id: 'rgb_split', name: 'RGB Split' }, { id: 'flash', name: 'Flash' },
-  { id: 'vhs', name: 'VHS' }, { id: 'bounce', name: 'Bounce' }
+  { id: 'vhs', name: 'VHS' }, { id: 'bounce', name: 'Bounce' },
+  { id: 'mirror', name: 'Mirror' }, { id: 'wave', name: 'Wave' },
+  { id: 'static', name: 'Static' }, { id: 'posterize', name: 'Posterize' }
 ];
 
 const SLIDESHOW_TRANSITIONS = [
@@ -289,6 +331,7 @@ const initialState = {
     homeLogoUrl: '', awayLogoUrl: '', homeScore: 0, awayScore: 0,
     isMuted: false, filter: 'none', fadeIn: false,
     pipPos: { x: 410, y: 830, w: 280, h: 380 }, pipScale: 1.0, pipFrameStyle: 'accent', profilePos: { x: 50, y: 70, r: 35 },
+    avatarShape: 'circle', avatarAnim: 'none', swapPip: false,
     introEnabled: true, introStyle: 'glitch_reveal', introWatermark: true,
     videoZoom: 1, videoPanX: 0, videoPanY: 0, playbackRate: 1.0,
     mode: 'video', slideshowSpeed: 3, slideshowTransition: 'fade',
@@ -377,6 +420,7 @@ function ReactorStudioInner() {
   const renderOverlayRef = useRef(() => {});
   const mediaRecorderRef = useRef(null);
   const autoSaveTimerRef = useRef(null);
+  const currentExportClipRef = useRef(0);
 
   const { media, editor, slideshow, timeline, ui, history } = state;
   const templateMap = useMemo(() => Object.fromEntries(TEMPLATES.map(t => [t.id, t])), []);
@@ -520,7 +564,7 @@ function ReactorStudioInner() {
   }, []);
 
   const togglePreview = useCallback(() => {
-    if (editor.mode === 'video') {
+    if (editor.mode === 'video' && media.sourceLoaded) {
       const vid = sourceVideoRef.current;
       if (!vid || !activeClip) return;
       if (timeline.isPlaying) { vid.pause(); dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } }); }
@@ -532,7 +576,7 @@ function ReactorStudioInner() {
       dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: !timeline.isPlaying } });
     }
     haptic('light');
-  }, [editor.mode, activeClip, timeline.isPlaying, dispatch]);
+  }, [editor.mode, media.sourceLoaded, activeClip, timeline.isPlaying, dispatch]);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -571,8 +615,7 @@ function ReactorStudioInner() {
       } else if (type === 'broll') {
         await idbSet('broll_video', file);
         brollVideoRef.current.src = url; brollVideoRef.current.loop = true; brollVideoRef.current.muted = true;
-        brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play(); dispatch({ type: 'SET_MEDIA', payload: { brollLoaded: true } }); unlockAchievement('pip_pro'); addToast('B-Roll added!', 'success'); };
-      } else if (type === 'image') {
+        brollVideoRef.current.onloadedmetadata = () => { brollVideoRef.current.play().catch(() => {}); dispatch({ type: 'SET_MEDIA', payload: { brollLoaded: true, cameraOn: false } }); unlockAchievement('pip_pro'); addToast('B-Roll added!', 'success'); };      } else if (type === 'image') {
         await idbSet('profile_image', file);
         const src = URL.createObjectURL(file); profileImgRef.current.src = src;
         dispatch({ type: 'SET_MEDIA', payload: { profileSrc: src } });
@@ -618,13 +661,19 @@ function ReactorStudioInner() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 1280, facingMode: 'user' }, audio: true });
       streamRef.current = stream;
-      webcamVideoRef.current.srcObject = stream; webcamVideoRef.current.play();
-      dispatch({ type: 'SET_MEDIA', payload: { cameraOn: true, brollLoaded: false } });
-      brollVideoRef.current.removeAttribute('src');
+      webcamVideoRef.current.srcObject = stream; webcamVideoRef.current.play().catch(() => {});      
+      // If no main video, switch to Camera Solo Mode
+      if (!media.sourceLoaded) {
+        dispatch({ type: 'SET_EDITOR', payload: { mode: 'camera' } });
+        dispatch({ type: 'SET_TIMELINE', payload: { duration: 30, clips: [{ id: 'clip1', start: 0, end: 30 }] } });
+      } else {
+        dispatch({ type: 'SET_MEDIA', payload: { cameraOn: true, brollLoaded: false } });
+        brollVideoRef.current.removeAttribute('src');
+      }
       unlockAchievement('pip_pro');
       addToast('Camera activated!', 'success');
     } catch { addToast("Camera access denied.", 'error'); }
-  }, [addToast, unlockAchievement, dispatch]);
+  }, [addToast, unlockAchievement, dispatch, media.sourceLoaded]);
 
   const drawCover = (ctx, media, dx, dy, dw, dh, crop = { x: 0, y: 0, w: 1, h: 1 }) => {
     const vw = media.videoWidth || media.width, vh = media.videoHeight || media.height;
@@ -684,9 +733,31 @@ function ReactorStudioInner() {
 
     const p = (activeTemplate.isCustom || editor.editMode) ? editor.profilePos : activeTemplate.profile;
     if (profileImgRef.current.src && p && ui.layers.profile) {
-      ctx.save(); ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.closePath(); ctx.clip();
-      ctx.drawImage(profileImgRef.current, p.x - p.r, p.y - p.r, p.r * 2, p.r * 2); ctx.restore();
-      if (p.ring) { ctx.strokeStyle = p.ring === 'accent' ? editor.accentColor : p.ring; ctx.lineWidth = 4; ctx.beginPath(); ctx.arc(p.x, p.y, p.r + 1, 0, Math.PI * 2); ctx.stroke(); }
+      ctx.save();
+      let animScale = 1, animRot = 0;
+      if (editor.avatarAnim === 'pulse') animScale = 1 + Math.sin(cTime * 4) * 0.05;
+      if (editor.avatarAnim === 'rotate') animRot = cTime * 0.5;
+
+      ctx.translate(p.x, p.y);
+      ctx.rotate(animRot);
+      ctx.scale(animScale, animScale);
+
+      drawAvatarShape(ctx, 0, 0, p.r, editor.avatarShape || 'circle');
+      ctx.clip();
+      ctx.drawImage(profileImgRef.current, -p.r, -p.r, p.r * 2, p.r * 2);
+      ctx.restore();
+
+      if (p.ring) {
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(animRot);
+        ctx.scale(animScale, animScale);
+        ctx.strokeStyle = p.ring === 'accent' ? editor.accentColor : p.ring;
+        ctx.lineWidth = 4;
+        drawAvatarShape(ctx, 0, 0, p.r + 1, editor.avatarShape || 'circle');
+        ctx.stroke();
+        ctx.restore();
+      }
     }
 
     if (activeTemplate.nameEl && activeTemplate.handleEl) {
@@ -786,56 +857,110 @@ function ReactorStudioInner() {
         else { drawCover(ctx, nextImg, 0, 0, W, H); }
         ctx.globalAlpha = 1;
       }
+    } else if (editor.mode === 'camera' && media.cameraOn) {
+      // Camera Solo Mode
+      const aPiPVid = webcamVideoRef.current;
+      if (aPiPVid && aPiPVid.videoWidth) {
+        ctx.save();
+        ctx.scale(-1, 1); ctx.translate(-W, 0);
+        drawCover(ctx, aPiPVid, 0, 0, W, H);
+        ctx.restore();
+      }
     } else if (media.sourceLoaded && sourceVideoRef.current) {
       currentTimeRef.current = sourceVideoRef.current.currentTime;
-      if (Math.abs(sourceVideoRef.current.currentTime - timeline.currentTime) > 0.3) dispatch({ type: 'SET_TIMELINE', payload: { currentTime: sourceVideoRef.current.currentTime } });
-      if (activeClip) {
+      
+      // Multi-clip sequencing logic for export
+      if (ui.isExporting && timeline.clips.length > 1) {
+        const c = timeline.clips[currentExportClipRef.current];
+        if (c && sourceVideoRef.current.currentTime >= c.end - 0.05) {
+          currentExportClipRef.current++;
+          if (currentExportClipRef.current < timeline.clips.length) {
+            sourceVideoRef.current.currentTime = timeline.clips[currentExportClipRef.current].start;
+            sourceVideoRef.current.play().catch(() => {});          } else {
+            if (mediaRecorderRef.current && mediaRecorderRef.current.state !== 'inactive') mediaRecorderRef.current.stop();
+          }
+        }
+      } else if (activeClip) {
         if (sourceVideoRef.current.currentTime < activeClip.start) sourceVideoRef.current.currentTime = activeClip.start;
-        if (timeline.isPlaying && sourceVideoRef.current.currentTime >= activeClip.end - 0.05) { sourceVideoRef.current.pause(); sourceVideoRef.current.currentTime = activeClip.start; sourceVideoRef.current.play(); }
+        if (timeline.isPlaying && sourceVideoRef.current.currentTime >= activeClip.end - 0.05) { 
+          sourceVideoRef.current.pause(); sourceVideoRef.current.currentTime = activeClip.start; sourceVideoRef.current.play(); 
+        }
       }
+
+      const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip; 
+      const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
+      
       if (ui.layers.video) {
-        ctx.save(); const v = activeTemplate.video; const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
+        const v = activeTemplate.video; 
+        const aProg = activeClip ? Math.min((cTime - activeClip.start) / (activeClip.end - activeClip.start), 1) : 0;
+        
+        ctx.save(); 
         if (editor.videoEffect === 'zoom_in') { const s = 1 + aProg * 0.3; ctx.translate(v.x + v.w / 2, v.y + v.h / 2); ctx.scale(s, s); ctx.translate(-(v.x + v.w / 2), -(v.y + v.h / 2)); }
         else if (editor.videoEffect === 'shake') ctx.translate((Math.random() - 0.5) * 15, (Math.random() - 0.5) * 15);
         else if (editor.videoEffect === 'pulse') { const s = 1 + Math.sin(cTime * 8) * 0.04; ctx.translate(v.x + v.w / 2, v.y + v.h / 2); ctx.scale(s, s); ctx.translate(-(v.x + v.w / 2), -(v.y + v.h / 2)); }
         else if (editor.videoEffect === 'ken_burns') { const s = 1 + aProg * 0.15; const tx = aProg * 30; ctx.translate(v.x + v.w / 2 - tx, v.y + v.h / 2); ctx.scale(s, s); ctx.translate(-(v.x + v.w / 2), -(v.y + v.h / 2)); }
         else if (editor.videoEffect === 'bounce') { const bounce = Math.abs(Math.sin(cTime * 4)) * 20; ctx.translate(0, -bounce); }
         else if (editor.videoEffect === 'vhs') { ctx.translate((Math.random() - 0.5) * 4, 0); }
+        else if (editor.videoEffect === 'mirror') { ctx.translate(v.x + v.w, 0); ctx.scale(-1, 1); }
+        else if (editor.videoEffect === 'wave') { ctx.translate(0, Math.sin(cTime * 10) * 10); }
+        
         ctx.filter = editor.filter;
         const zoom = editor.videoZoom || 1; const panX = editor.videoPanX || 0; const panY = editor.videoPanY || 0;
         const cropW = 1 / zoom; const cropH = 1 / zoom; const cropX = (1 - cropW) / 2 + (panX * (1 - cropW) / 2); const cropY = (1 - cropH) / 2 + (panY * (1 - cropH) / 2);
         const mainCrop = { x: cropX, y: cropY, w: cropW, h: cropH };
-        if (editor.videoEffect === 'glitch' || editor.videoEffect === 'rgb_split') {
-          ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x + (Math.random() * 10), v.y, v.w, v.h, mainCrop);
-          ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x - (Math.random() * 10), v.y, v.w, v.h, mainCrop); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
-        } else { drawCover(ctx, sourceVideoRef.current, v.x, v.y, v.w, v.h, mainCrop); }
-        if (editor.videoEffect === 'vhs') {
-          ctx.fillStyle = `rgba(255,0,0,${Math.random() * 0.03})`; ctx.fillRect(0, Math.random() * H, W, 2);
-          ctx.fillStyle = `rgba(0,255,0,${Math.random() * 0.02})`; ctx.fillRect(0, Math.random() * H, W, 1);
+        
+        if (editor.swapPip && aPiPVid && showPiP) {
+          // Swap logic: Draw PiP as Main
+          ctx.filter = 'none';
+          ctx.save();
+          if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); }
+          drawCover(ctx, aPiPVid, v.x, v.y, v.w, v.h, mainCrop);
+          ctx.restore();
+        } else {
+          if (editor.videoEffect === 'glitch' || editor.videoEffect === 'rgb_split') {
+            ctx.globalCompositeOperation = 'screen'; ctx.fillStyle = 'red'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x + (Math.random() * 10), v.y, v.w, v.h, mainCrop);
+            ctx.fillStyle = 'cyan'; ctx.globalAlpha = 0.8; drawCover(ctx, sourceVideoRef.current, v.x - (Math.random() * 10), v.y, v.w, v.h, mainCrop); ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = 1;
+          } else { drawCover(ctx, sourceVideoRef.current, v.x, v.y, v.w, v.h, mainCrop); }
+          if (editor.videoEffect === 'vhs') {
+            ctx.fillStyle = `rgba(255,0,0,${Math.random() * 0.03})`; ctx.fillRect(0, Math.random() * H, W, 2);
+            ctx.fillStyle = `rgba(0,255,0,${Math.random() * 0.02})`; ctx.fillRect(0, Math.random() * H, W, 1);
+          }
         }
         ctx.filter = 'none'; ctx.restore();
+        
         if (editor.videoEffect === 'flash' && cTime < (activeClip?.start || 0) + 0.5) { ctx.fillStyle = `rgba(255,255,255,${1 - (cTime - (activeClip?.start || 0)) * 2})`; ctx.fillRect(0, 0, W, H); }
         if (editor.fadeIn && cTime < (activeClip?.start || 0) + 1) { ctx.fillStyle = `rgba(0,0,0,${1 - (cTime - (activeClip?.start || 0))})`; ctx.fillRect(0, 0, W, H); }
       }
-      const showPiP = (media.cameraOn || media.brollLoaded) && ui.layers.pip; const aPiPVid = media.brollLoaded ? brollVideoRef.current : webcamVideoRef.current;
+
       if (aPiPVid && showPiP) {
         const baseP = editor.pipPos; const scale = editor.pipScale || 1.0; const pW = Math.round(baseP.w * scale); const pH = Math.round(baseP.h * scale); const pX = Math.round(baseP.x + (baseP.w - pW) / 2); const pY = Math.round(baseP.y + (baseP.h - pH) / 2);
         const frameStyle = editor.pipFrameStyle || 'accent'; const radius = 16; const vw = aPiPVid.videoWidth, vh = aPiPVid.videoHeight;
-        ctx.save();
-        if (frameStyle === 'accent') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = editor.accentColor; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
-        else if (frameStyle === 'white') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = '#fff'; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
-        else if (frameStyle === 'glow') { ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 30; ctx.strokeStyle = editor.accentColor; ctx.lineWidth = 3; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.stroke(); }
-        else if (frameStyle === 'minimal') { ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2; ctx.fillStyle = 'rgba(0,0,0,0.3)'; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.fill(); }
-        ctx.restore();
-        ctx.save(); roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.clip();
-        if (vw && vh) { if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); drawCover(ctx, aPiPVid, W - pX - pW, pY, pW, pH); } else { drawCover(ctx, aPiPVid, pX, pY, pW, pH); } }
-        ctx.restore();
+        
+        if (editor.swapPip) {
+          // Draw Main Video as PiP
+          const v = activeTemplate.video;
+          ctx.save();
+          roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.clip();
+          drawCover(ctx, sourceVideoRef.current, pX, pY, pW, pH);
+          ctx.restore();
+        } else {
+          // Normal PiP
+          ctx.save();
+          if (frameStyle === 'accent') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = editor.accentColor; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
+          else if (frameStyle === 'white') { ctx.shadowColor = 'rgba(0,0,0,0.5)'; ctx.shadowBlur = 15; ctx.shadowOffsetY = 4; ctx.fillStyle = '#fff'; roundRectPath(ctx, pX - 4, pY - 4, pW + 8, pH + 8, radius + 4); ctx.fill(); }
+          else if (frameStyle === 'glow') { ctx.shadowColor = editor.accentColor; ctx.shadowBlur = 30; ctx.strokeStyle = editor.accentColor; ctx.lineWidth = 3; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.stroke(); }
+          else if (frameStyle === 'minimal') { ctx.shadowColor = 'rgba(0,0,0,0.4)'; ctx.shadowBlur = 10; ctx.shadowOffsetY = 2; ctx.fillStyle = 'rgba(0,0,0,0.3)'; roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.fill(); }
+          ctx.restore();
+          ctx.save(); roundRectPath(ctx, pX, pY, pW, pH, radius); ctx.clip();
+          if (vw && vh) { if (!media.brollLoaded) { ctx.scale(-1, 1); ctx.translate(-W, 0); drawCover(ctx, aPiPVid, W - pX - pW, pY, pW, pH); } else { drawCover(ctx, aPiPVid, pX, pY, pW, pH); } }
+          ctx.restore();
+        }
       }
     }
 
     renderOverlayRef.current(); if (overlayCanvasRef.current) ctx.drawImage(overlayCanvasRef.current, 0, 0);
 
-    if (editor.introEnabled && activeClip && editor.mode === 'video') {
+    if (editor.introEnabled && activeClip && editor.mode !== 'camera') {
       const introDur = 3.0; const introP = Math.min((currentTimeRef.current - activeClip.start) / introDur, 1.0);
       if (introP < 1.0) {
         ctx.fillStyle = `rgba(0,0,0,${1 - Math.pow(introP, 3)})`; ctx.fillRect(0, 0, W, H);
@@ -949,7 +1074,7 @@ function ReactorStudioInner() {
     const { format, fps, bitrate } = preset;
     const vid = sourceVideoRef.current;
     if (!canvasRef.current || ui.isExporting) return;
-    if (editor.mode === 'video' && (!vid || !activeClip)) return;
+    if (editor.mode === 'video' && !media.sourceLoaded) return;
     if (editor.mode === 'slideshow' && slideshow.images.length === 0) return;
 
     const exportC = document.createElement('canvas');
@@ -961,17 +1086,15 @@ function ReactorStudioInner() {
     let exportDuration = 0;
     let fileExt = format === 'mp4' ? 'mp4' : 'webm';
 
-    if (editor.mode === 'video') {
-      vid.pause(); vid.currentTime = activeClip.start;
+    if (editor.mode === 'video' && media.sourceLoaded) {
+      exportDuration = timeline.clips.reduce((sum, c) => sum + (c.end - c.start), 0);
+      currentExportClipRef.current = 0;
+      vid.pause(); 
+      vid.currentTime = timeline.clips[0].start;
       await new Promise(r => setTimeout(r, 200));
-      let trueDur = vid.duration;
-      if (!isFinite(trueDur)) { vid.currentTime = 1e101; await new Promise(r => setTimeout(r, 200)); trueDur = vid.duration; vid.currentTime = activeClip.start; await new Promise(r => setTimeout(r, 200)); }
-      let end = activeClip.end && isFinite(activeClip.end) ? activeClip.end : trueDur;
-      if (end > trueDur) end = trueDur;
-      if (activeClip.start >= end - 0.1) { addToast("Invalid clip duration.", 'error'); dispatch({ type: 'SET_UI', payload: { isExporting: false, exportFormat: null, exportFps: null } }); exportCanvasRef.current = null; return; }
-      exportDuration = end - activeClip.start;
-      currentTimeRef.current = activeClip.start;
       vid.muted = false; vid.volume = 0;
+    } else if (editor.mode === 'camera' && media.cameraOn) {
+      exportDuration = 30; // Limit camera solo export to 30s
     } else {
       exportDuration = slideshow.duration;
       currentTimeRef.current = 0;
@@ -986,8 +1109,8 @@ function ReactorStudioInner() {
       if (aC.state === 'suspended') await aC.resume();
       const aD = aC.createMediaStreamDestination();
       if (streamRef.current && streamRef.current.getAudioTracks().length > 0) { aC.createMediaStreamSource(new MediaStream(streamRef.current.getAudioTracks())).connect(aD); }
-      if (vid && vid.captureStream) { try { const vS = vid.captureStream(); if (vS.getAudioTracks().length > 0) { aC.createMediaStreamSource(vS).connect(aD); } } catch { } }
-      if (audioRef.current.src) { try { audioRef.current.play(); const aS = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); if (aS.getAudioTracks().length > 0) { aC.createMediaStreamSource(aS).connect(aD); } } catch { } }
+      if (vid && vid.captureStream && media.sourceLoaded) { try { const vS = vid.captureStream(); if (vS.getAudioTracks().length > 0) { aC.createMediaStreamSource(vS).connect(aD); } } catch { } }
+     if (audioRef.current.src) { try { audioRef.current.play().catch(() => {}); const aS = audioRef.current.captureStream ? audioRef.current.captureStream() : audioRef.current.mozCaptureStream(); if (aS.getAudioTracks().length > 0) { aC.createMediaStreamSource(aS).connect(aD); } } catch { } }
       const o = aC.createOscillator(); const g = aC.createGain(); g.gain.value = 0.0; o.connect(g); g.connect(aD); g.connect(aC.destination); o.start();
       aD.stream.getAudioTracks().forEach(t => cS.addTrack(t));
     } catch (e) { }
@@ -998,7 +1121,7 @@ function ReactorStudioInner() {
       const mp4Codecs = ['video/mp4;codecs=avc1.640029,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.42E01E,mp4a.40.2', 'video/mp4;codecs=h264', 'video/mp4'];
       mT = mp4Codecs.find(c => MediaRecorder.isTypeSupported(c));
       if (mT) fileExt = 'mp4';
-      else { mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm;codecs=vp8'; fileExt = 'webm'; addToast("Browser限制: Exporting as WebM instead.", 'info'); }
+      else { mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm;codecs=vp8'; fileExt = 'webm'; addToast("Browser limited: Exporting as WebM instead.", 'info'); }
     } else {
       mT = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : MediaRecorder.isTypeSupported('video/webm;codecs=vp8') ? 'video/webm;codecs=vp8' : 'video/webm';
       fileExt = 'webm';
@@ -1031,22 +1154,24 @@ function ReactorStudioInner() {
     };
 
     const progressInterval = setInterval(() => {
-      if (currentTimeRef.current > 0 && exportDuration > 0) {
-        const prog = Math.min((currentTimeRef.current / exportDuration) * 100, 99);
+      if (exportDuration > 0) {
+        let prog = 0;
+        if (editor.mode === 'video' && media.sourceLoaded) {
+          let compDur = 0;
+          for(let i=0; i<currentExportClipRef.current; i++) compDur += (timeline.clips[i].end - timeline.clips[i].start);
+          const c = timeline.clips[currentExportClipRef.current];
+          const currProg = c ? Math.max(0, vid.currentTime - c.start) : 0;
+          prog = Math.min(((compDur + currProg) / exportDuration) * 100, 99);
+        } else {
+          prog = Math.min((currentTimeRef.current / exportDuration) * 100, 99);
+        }
         dispatch({ type: 'SET_UI', payload: { exportProgress: Math.round(prog) } });
       }
     }, 200);
 
-    const cI = setInterval(() => {
-      if (currentTimeRef.current >= exportDuration - 0.05) {
-        clearInterval(cI); clearInterval(progressInterval);
-        if (r.state !== 'inactive') r.stop();
-        dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: false } });
-      }
-    }, 50);
-
     r.start(100);
-    if (editor.mode === 'video') { try { await vid.play(); } catch { } }
+    if (editor.mode === 'video' && media.sourceLoaded) { try { await vid.play().catch(() => {}); } catch { } }
+    else if (editor.mode === 'camera') { dispatch({ type: 'SET_TIMELINE', payload: { isPlaying: true } }); }
   };
 
   const cancelExport = () => {
@@ -1113,7 +1238,7 @@ function ReactorStudioInner() {
       { id: 'avatar', icon: <User size={20} />, label: 'Avatar', onClick: () => fileInputRefs.current.image?.click() },
       { id: 'logo', icon: <ImageIcon size={20} />, label: 'Logo', active: !!media.logoSrc, onClick: () => fileInputRefs.current.logo?.click() },
     ];
-    if (editor.mode === 'video') {
+    if (editor.mode === 'video' || editor.mode === 'camera') {
       tools.push(
         { id: 'broll', icon: <Film size={20} />, label: 'B-Roll', active: media.brollLoaded, onClick: () => fileInputRefs.current.broll?.click() },
         { id: 'camera', icon: <Camera size={20} />, label: 'Camera', active: media.cameraOn, onClick: startCamera }
@@ -1185,7 +1310,7 @@ function ReactorStudioInner() {
             onMouseDown={handlePointerDown} onMouseMove={handlePointerMove} onMouseUp={handlePointerUp} onMouseLeave={handlePointerUp}
             onTouchStart={handlePointerDown} onTouchMove={handlePointerMove} onTouchEnd={handlePointerUp}>
             <canvas ref={canvasRef} className="rs-canvas" />
-            {!media.sourceLoaded && editor.mode === 'video' && !ui.recordedUrl && slideshow.images.length === 0 && (
+            {!media.sourceLoaded && editor.mode === 'video' && !ui.recordedUrl && slideshow.images.length === 0 && !media.cameraOn && (
               <div className="rs-canvas-empty" onClick={() => fileInputRefs.current.video?.click()}>
                 <Upload size={40} style={{ marginBottom: '12px' }} /><p style={{ fontWeight: 700 }}>Import Main Video</p>
                 <button onClick={(e) => { e.stopPropagation(); fileInputRefs.current.images?.click(); }} className="rs-btn-sm rs-btn-blue" style={{ marginTop: '16px' }}>
@@ -1210,7 +1335,7 @@ function ReactorStudioInner() {
         </div>
       </div>
 
-      {(media.sourceLoaded || slideshow.images.length > 0) && (
+      {(media.sourceLoaded || slideshow.images.length > 0 || media.cameraOn) && (
         <div className="rs-bottom-controls">
           <div className="rs-playback-row">
             <button onClick={() => { if (sourceVideoRef.current) sourceVideoRef.current.currentTime = Math.max(0, sourceVideoRef.current.currentTime - 5); }} className="rs-action-btn" title="Back 5s"><Rewind size={16} /></button>
@@ -1218,7 +1343,7 @@ function ReactorStudioInner() {
             <button onClick={togglePreview} disabled={ui.isExporting || ui.recordedUrl} className="rs-play-btn" title="Play/Pause (Space)">
               {timeline.isPlaying ? <Pause size={28} fill="var(--rs-bg-card)" /> : <Play size={28} fill="var(--rs-bg-card)" />}
             </button>
-            {editor.mode === 'video' && (
+            {editor.mode === 'video' && media.sourceLoaded && (
               <button onClick={() => {
                 const vid = sourceVideoRef.current; if (!vid || !activeClip) return;
                 const t = vid.currentTime; const idx = timeline.clips.findIndex(c => c.id === timeline.activeClipId); const c = timeline.clips[idx];
@@ -1365,7 +1490,7 @@ function ReactorStudioInner() {
                   <Grid3x3 size={12} /> Guides: {ui.showGuides ? 'On' : 'Off'}
                 </button>
               </div>
-              {(media.brollLoaded || media.cameraOn) && editor.mode === 'video' && (
+              {(media.brollLoaded || media.cameraOn) && (editor.mode === 'video' || editor.mode === 'camera') && (
                 <div className="rs-panel-box">
                   <h4 className="rs-box-title"><Film size={12} /> PIP Controls</h4>
                   <label className="rs-label">PIP Size: {Math.round((editor.pipScale || 1) * 100)}%</label>
@@ -1385,6 +1510,11 @@ function ReactorStudioInner() {
                   <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '8px' }}>
                     {[{ id: 'accent', name: 'Accent' }, { id: 'white', name: 'White' }, { id: 'glow', name: 'Glow' }, { id: 'minimal', name: 'Minimal' }].map(s => <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { pipFrameStyle: s.id } })} className={`rs-btn-sm ${(editor.pipFrameStyle || 'accent') === s.id ? 'active' : ''}`}>{s.name}</button>)}
                   </div>
+                  {media.sourceLoaded && (
+                    <button onClick={() => dispatch({ type: 'SET_EDITOR', payload: { swapPip: !editor.swapPip } })} className={`rs-btn-sm ${editor.swapPip ? 'active' : ''}`} style={{ width: '100%', marginTop: '8px' }}>
+                      <ArrowLeftRight size={12} /> {editor.swapPip ? 'Main Screen Active' : 'Swap to Main Screen'}
+                    </button>
+                  )}
                 </div>
               )}
               <div className="rs-panel-box">
@@ -1417,6 +1547,18 @@ function ReactorStudioInner() {
                   <input type="number" value={editor.captionSize || ''} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { captionSize: e.target.value ? parseInt(e.target.value) : null } })} placeholder="Size" className="rs-input" style={{ width: '80px' }} />
                 </div>
               </div>
+              
+              <div className="rs-panel-box">
+                <h4 className="rs-box-title"><User size={12} /> Avatar Style</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
+                  {AVATAR_SHAPES.map(s => <button key={s.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { avatarShape: s.id } })} className={`rs-btn-sm ${editor.avatarShape === s.id ? 'active' : ''}`}>{s.name}</button>)}
+                </div>
+                <h4 className="rs-box-title"><Sparkles size={12} /> Avatar Animation</h4>
+                <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                  {AVATAR_ANIMS.map(a => <button key={a.id} onClick={() => dispatch({ type: 'SET_EDITOR', payload: { avatarAnim: a.id } })} className={`rs-btn-sm ${editor.avatarAnim === a.id ? 'active' : ''}`}>{a.name}</button>)}
+                </div>
+              </div>
+
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Palette size={12} /> Brand Kit & Fonts</h4>
                 <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '8px' }}>
