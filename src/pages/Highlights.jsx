@@ -628,7 +628,6 @@ function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPost
     </article>
   );
 }
-
 function CommentSection({ postId, comments, newComments, setNewComments, handleComment }) {
   return (
     <div className="mt-16 flex-col gap-12">
