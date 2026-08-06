@@ -1,5 +1,3 @@
-// backend-v1/src/services/UserPredictionStore.js
-
 const path = require('path');
 const fs = require('fs');
 const fsp = fs.promises;
@@ -35,16 +33,14 @@ ensureDirSync(WAL_DIR);
 ensureDirSync(SYNCED_DIR);
 
 const SYNC_INTERVAL_MS = parseInt(
-  process.env.USER_PREDICTION_SYNC_INTERVAL_MS || String(30 * 60 * 1000), // ★ Changed to 30 mins
-  10
+  process.env.USER_PREDICTION_SYNC_INTERVAL_MS || String(30 * 60 * 1000), 10
 );
 
 const RETRY_INTERVAL_MS = parseInt(
-  process.env.USER_PREDICTION_RETRY_INTERVAL_MS || String(10 * 60 * 1000),
-  10
+  process.env.USER_PREDICTION_RETRY_INTERVAL_MS || String(10 * 60 * 1000), 10
 );
 
-const SYNC_SIZE_THRESHOLD = 500; // ★ NEW: Sync if WAL hits 500 ops
+const SYNC_SIZE_THRESHOLD = 500;
 
 const LIVE_STATUSES = new Set([
   '1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED',
@@ -139,7 +135,8 @@ async function validateMatchNotStarted(matchId, dateStr) {
       kickoffMs = Date.parse(match.utcDate || match.date);
     }
 
-    if (kickoffMs && Date.now() > kickoffMs + 5 * 60 * 1000) {
+    // Allow predictions up to 2 minutes after kickoff (was 5 - too strict)
+    if (kickoffMs && Date.now() > kickoffMs + 2 * 60 * 1000) {
       return { found: true, started: true };
     }
 
@@ -161,15 +158,25 @@ async function savePrediction(user, input = {}) {
 
   if (!matchId) throw ApiError.badRequest('matchId is required');
   if (!isValidDate(matchDate)) throw ApiError.badRequest('matchDate must be YYYY-MM-DD');
-  if (input.homeScore === undefined || input.homeScore === null) throw ApiError.badRequest('homeScore is required');
-  if (input.awayScore === undefined || input.awayScore === null) throw ApiError.badRequest('awayScore is required');
+
+  if (input.homeScore === undefined || input.homeScore === null) {
+    throw ApiError.badRequest('homeScore is required');
+  }
+  if (input.awayScore === undefined || input.awayScore === null) {
+    throw ApiError.badRequest('awayScore is required');
+  }
 
   const homeScore = Number(input.homeScore);
   const awayScore = Number(input.awayScore);
 
-  if (!Number.isInteger(homeScore) || homeScore < 0 || homeScore > 99) throw ApiError.badRequest('homeScore must be an integer between 0 and 99');
-  if (!Number.isInteger(awayScore) || awayScore < 0 || awayScore > 99) throw ApiError.badRequest('awayScore must be an integer between 0 and 99');
+  if (!Number.isInteger(homeScore) || homeScore < 0 || homeScore > 99) {
+    throw ApiError.badRequest('homeScore must be an integer between 0 and 99');
+  }
+  if (!Number.isInteger(awayScore) || awayScore < 0 || awayScore > 99) {
+    throw ApiError.badRequest('awayScore must be an integer between 0 and 99');
+  }
 
+  // Validate match hasn't started
   const matchValidation = await validateMatchNotStarted(matchId, matchDate);
 
   if (matchValidation.found && matchValidation.started) {
@@ -194,6 +201,7 @@ async function savePrediction(user, input = {}) {
   const prediction = {
     userId: uid,
     displayName: String(input.displayName || 'Player'),
+    photoURL: input.photoURL || null,
     matchId,
     predId: `${uid}_${matchId}`,
     homeScore,
@@ -218,7 +226,11 @@ async function savePrediction(user, input = {}) {
 
   // 2. Update local stats engine instantly
   if (status !== 'duplicate') {
-    await StatsEngine.predictionCreated(uid);
+    try {
+      await StatsEngine.predictionCreated(uid);
+    } catch (statsErr) {
+      logger.warn(`[UserPredictionStore] Stats update failed: ${statsErr.message}`);
+    }
   }
 
   // 3. Append write-ahead log for batch Firebase sync
@@ -236,6 +248,7 @@ async function savePrediction(user, input = {}) {
       });
     } catch (walErr) {
       logger.error(`[UserPredictionStore] WAL append failed for ${prediction.predId}: ${walErr.message}`);
+      // Fallback to direct queue
       try {
         await QueueService.addToQueue({
           collection: 'user_predictions',
@@ -250,7 +263,9 @@ async function savePrediction(user, input = {}) {
     }
   }
 
-  logger.info(`[UserPredictionStore] ${status} prediction uid=${uid} match=${matchId} date=${matchDate} score=${homeScore}-${awayScore}`);
+  logger.info(
+    `[UserPredictionStore] ${status} prediction uid=${uid} match=${matchId} date=${matchDate} score=${homeScore}-${awayScore}`
+  );
 
   return {
     status,
@@ -276,11 +291,7 @@ function readWalEntries(filePath) {
     .split('\n')
     .filter(Boolean)
     .map((line) => {
-      try {
-        return JSON.parse(line);
-      } catch {
-        return null;
-      }
+      try { return JSON.parse(line); } catch { return null; }
     })
     .filter(Boolean);
 }
@@ -319,7 +330,9 @@ async function syncWalFile(db, filePath) {
 
     await Promise.race([
       batch.commit(),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Prediction sync batch timeout')), WRITE_TIMEOUT_MS)),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Prediction sync batch timeout')), WRITE_TIMEOUT_MS)
+      ),
     ]);
   }
 
@@ -333,12 +346,10 @@ function archiveWalFile(filePath) {
   fs.renameSync(filePath, archivedPath);
 }
 
-// ★ NEW: Adaptive Sync Logic
 function shouldSync(force = false) {
   if (force) return true;
   const now = Date.now();
 
-  // 1. Check if WAL file size exceeds threshold
   try {
     const files = fs.readdirSync(WAL_DIR).filter(file => file.endsWith('.jsonl'));
     let totalOps = 0;
@@ -347,12 +358,9 @@ function shouldSync(force = false) {
       totalOps += content.split('\n').filter(Boolean).length;
       if (totalOps >= SYNC_SIZE_THRESHOLD) return true;
     }
-  } catch (e) { /* Ignore read errors */ }
+  } catch { /* Ignore read errors */ }
 
-  // 2. Check retry interval (10 mins)
   if (state.lastFailedAt && now - state.lastFailedAt >= RETRY_INTERVAL_MS) return true;
-  
-  // 3. Check standard interval (30 mins)
   if (!state.lastSyncAt) return true;
   if (now - state.lastSyncAt >= SYNC_INTERVAL_MS) return true;
 
@@ -430,7 +438,7 @@ function getStats() {
     pendingOps,
     syncIntervalMs: SYNC_INTERVAL_MS,
     retryIntervalMs: RETRY_INTERVAL_MS,
-    syncSizeThreshold: SYNC_SIZE_THRESHOLD
+    syncSizeThreshold: SYNC_SIZE_THRESHOLD,
   };
 }
 
@@ -440,6 +448,3 @@ module.exports = {
   processPendingSync,
   getStats,
 };
-
-
-

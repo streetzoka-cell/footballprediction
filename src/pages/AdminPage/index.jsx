@@ -3,19 +3,15 @@ import { useNavigate } from 'react-router-dom';
 import {
   ShieldAlert, Star, Radio, Trophy, Megaphone, UserCog, Users, Activity,
   LayoutDashboard, BarChart3, ScrollText, ArrowLeft, ChevronUp, ChevronDown,
-  Plus, Trash2, Zap, Check, Copy, CheckCircle2, TrendingUp, XCircle, Loader2,
+  Zap, Check, Copy, CheckCircle2, TrendingUp, XCircle, Loader2,
   Cpu, AlertTriangle, Terminal, X, Wifi, Ban, Search, RefreshCw, History, Save, Send, Pencil, CalendarDays
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
 import { useFixtures, useLiveMatches } from '../../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
-import { db } from '../../utils/firebase';
 import { todayStr, getLocalDateStr } from '../../utils/dates';
 import { eventBus, EVENT } from '../../utils/eventBus';
-import { PATHS } from '../../utils/constants';
-import { doc, deleteDoc } from 'firebase/firestore';
-import { safeWrite } from '../../services/safeWrite';
 import { footballApi } from '../../services/footballApi';
 
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
@@ -27,7 +23,7 @@ import AnalyticsTab from './components/AnalyticsTab';
 import LogsTab from './components/LogsTab';
 import ZokaTab from './components/ZokaTab';
 import FeaturedTab from './components/FeaturedTab';
-import ResultsTab from './components/ResultsTab'; 
+import ResultsTab from './components/ResultsTab';
 import BroadcastTab from './components/BroadcastTab';
 import StaffTab from './components/StaffTab';
 import UsersTab from './components/UsersTab';
@@ -39,7 +35,7 @@ const TABS = [
   { key: 'logs', label: 'NOC & Logs', icon: ScrollText },
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
   { key: 'featured', label: 'Featured', icon: Radio },
-  { key: 'results', label: 'Results', icon: Trophy }, 
+  { key: 'results', label: 'Results', icon: Trophy },
   { key: 'broadcast', label: 'Broadcast', icon: Megaphone },
   { key: 'staff', label: 'Staff', icon: UserCog },
   { key: 'users', label: 'Users', icon: Users },
@@ -96,61 +92,75 @@ export default function AdminPage() {
   const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
   const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
 
+  // ★ FIXED: Use backend API instead of safeWrite for Zoka operations
   const handleZokaSaveDraft = useCallback(async (data) => {
-    if (!db) return;
-    const payload = { ...cleanObj(data), updatedAt: new Date().toISOString() };
-    await safeWrite(PATHS.ZOKA_PICKS, date, payload, { merge: true });
-    queryClient.invalidateQueries(['zokaPicks', date]);
-    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  }, [date, queryClient]);
+    try {
+      await footballApi.adminZokaSaveDraft(date, { payload: data });
+      queryClient.invalidateQueries(['zokaPicks', date]);
+      eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+    } catch (e) {
+      showToast('Failed to save draft: ' + (e.friendlyMessage || e.message), 'er');
+      throw e;
+    }
+  }, [date, queryClient, showToast]);
 
   const handleZokaPublish = useCallback(async (data) => {
-    if (!db) return;
-    const payload = { ...cleanObj(data), isDraft: false, publishedAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-    await safeWrite(PATHS.ZOKA_PICKS, date, payload, { merge: true });
-    queryClient.invalidateQueries(['zokaPicks', date]);
-    eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
-  }, [date, queryClient]);
+    try {
+      await footballApi.adminZokaPublish(date, { payload: data });
+      queryClient.invalidateQueries(['zokaPicks', date]);
+      eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: data });
+    } catch (e) {
+      showToast('Failed to publish: ' + (e.friendlyMessage || e.message), 'er');
+      throw e;
+    }
+  }, [date, queryClient, showToast]);
 
   const handleZokaUnpublish = useCallback(async () => {
-    if (!db || !pubPicks) return;
+    if (!pubPicks) return;
     setConfirm({
       title: 'Unpublish All Zoka Picks?',
       msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
       onYes: async () => {
         try {
-          await deleteDoc(doc(db, PATHS.ZOKA_PICKS, date));
+          // ★ FIXED: Use backend API instead of deleteDoc
+          await footballApi.adminZokaUnpublish(date);
           queryClient.invalidateQueries(['zokaPicks', date]);
           eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
+          showToast('Zoka Picks unpublished', 'ok');
         } catch (e) {
-          showToast('Failed to unpublish. Quota might be exceeded.', 'er');
+          showToast('Failed to unpublish: ' + (e.friendlyMessage || e.message), 'er');
         }
         setConfirm(null);
       },
     });
-  }, [db, pubPicks, date, queryClient, showToast]);
+  }, [pubPicks, date, queryClient, showToast]);
 
+  // ★ FIXED: Use backend API instead of safeWrite for Featured operations
   const handleFeaturedAdd = useCallback(async (m) => {
-    const predId = `feat_${date}_${m.id}`;
-    const pred = {
-      id: predId, matchId: String(m.id), matchDate: date,
-      homeTeam: m.homeTeam, awayTeam: m.awayTeam,
-      homeLogo: m.homeTeam?.crest || null, awayLogo: m.awayTeam?.crest || null,
-      league: m.competition || m.league, 
+    const match = {
+      matchId: String(m.id),
+      homeTeam: m.homeTeam,
+      awayTeam: m.awayTeam,
+      homeLogo: m.homeTeam?.crest || null,
+      awayLogo: m.awayTeam?.crest || null,
+      league: m.competition || m.league,
       kickoff: m.utcDate || m.kickoffUtc || m.date,
-      status: m.status || 'NS', homeScore: null, awayScore: null, priority: (preds?.length || 0) + 1,
+      status: m.status || 'NS',
+      priority: (preds?.length || 0) + 1,
     };
-    
+
+    // Optimistic update
     await queryClient.cancelQueries(['activePredictions', date]);
     const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
+    const predId = `feat_${date}_${m.id}`;
+    const pred = { ...match, id: predId, matchDate: date, homeScore: null, awayScore: null };
     const updatedPreds = [...previousPreds, pred];
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
-    
+
     try {
-      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { ...cleanObj(pred), createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() });
-      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updatedPreds), updatedAt: new Date().toISOString() }, { merge: true });
+      await footballApi.adminFeaturedAdd(date, match);
     } catch (e) {
-      showToast('Failed to save match', 'er');
+      showToast('Failed to add match: ' + (e.friendlyMessage || e.message), 'er');
       queryClient.setQueryData(['activePredictions', date], previousPreds);
     } finally {
       queryClient.invalidateQueries(['activePredictions', date]);
@@ -158,77 +168,88 @@ export default function AdminPage() {
   }, [date, preds, queryClient, showToast]);
 
   const handleFeaturedRemove = useCallback(async (p) => {
-    const predId = p.id || `feat_${date}_${p.matchId}`;
+    const matchId = String(p.matchId || p.id);
+
     await queryClient.cancelQueries(['activePredictions', date]);
     const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
-    const updatedPreds = previousPreds.filter(pr => String(pr.matchId) !== String(p.matchId));
+    const updatedPreds = previousPreds.filter(pr => String(pr.matchId) !== matchId);
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
-    
+
     try {
-      try { await deleteDoc(doc(db, PATHS.ACTIVE_PREDICTIONS, predId)); } catch {}
-      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updatedPreds), updatedAt: new Date().toISOString() }, { merge: true });
+      // ★ FIXED: Use backend API instead of deleteDoc
+      await footballApi.adminFeaturedRemove(date, matchId);
     } catch (e) {
-      showToast('Failed to remove match', 'er');
+      showToast('Failed to remove match: ' + (e.friendlyMessage || e.message), 'er');
       queryClient.setQueryData(['activePredictions', date], previousPreds);
     } finally {
       queryClient.invalidateQueries(['activePredictions', date]);
     }
   }, [date, queryClient, showToast]);
+
+  // ★ FIXED: No more race conditions - just call backend directly
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
-    const predId = pred.id || `feat_${date}_${matchId}`;
-    
-    try {
-      // 1. Optimistically update the UI and active_predictions doc
-      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, status: 'finished', isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
-      const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true } : p);
-      queryClient.setQueryData(['activePredictions', date], updated);
-      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
 
-      // 2. Trigger the Backend Resolution Engine (Handles all users safely)
-      await footballApi.adminResolveMatch({
+    try {
+      // Optimistic UI update only (no Firestore writes)
+      const updated = preds.map(p =>
+        String(p.matchId) === matchId
+          ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true }
+          : p
+      );
+      queryClient.setQueryData(['activePredictions', date], updated);
+
+      // Call backend - it handles everything: active_predictions, leaderboard, zoka_picks, resolution status
+      const result = await footballApi.adminResolveMatch({
         matchId,
         matchDate: date,
         homeScore: h,
-        awayScore: a
+        awayScore: a,
       });
 
-      // 3. Update UI state & INVALIDATE ALL RELEVANT CACHES
+      // Invalidate all relevant caches
       queryClient.invalidateQueries(['activePredictions']);
-      // ★ FIX: Invalidate ALL leaderboards and user points globally
-      queryClient.invalidateQueries({ queryKey: ['leaderboard'] }); 
+      queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['userPoints'] });
       queryClient.invalidateQueries({ queryKey: ['userPredictions'] });
-      
+      queryClient.invalidateQueries(['zokaPicks', date]);
+
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
-      
-      if (!isAuto) showToast(`Resolved: ${pred.homeTeam?.shortName} ${h}-${a} ${pred.awayTeam?.shortName}`, 'ok');
+
+      if (!isAuto) {
+        const msg = result?.data?.result?.users != null
+          ? `Resolved: ${pred.homeTeam?.shortName || pred.homeTeam?.name} ${h}-${a} ${pred.awayTeam?.shortName || pred.awayTeam?.name} (${result.data.result.users} users scored)`
+          : `Resolved: ${pred.homeTeam?.shortName || pred.homeTeam?.name} ${h}-${a} ${pred.awayTeam?.shortName || pred.awayTeam?.name}`;
+        showToast(msg, 'ok');
+      }
     } catch (e) {
-      showToast('Failed to resolve. Check backend permissions.', 'er');
+      // Revert optimistic update on failure
+      queryClient.invalidateQueries(['activePredictions', date]);
+      showToast('Failed to resolve: ' + (e.friendlyMessage || e.message), 'er');
       console.error('[Admin] Resolve err:', e);
     }
   }, [preds, date, showToast, queryClient]);
 
   const handleOverride = useCallback(async (pred, h, a) => {
     const matchId = String(pred.matchId || pred.id);
-    const predId = pred.id || `feat_${date}_${matchId}`;
+
     try {
-      // 1. Update the active_predictions doc with new scores
-      await safeWrite(PATHS.ACTIVE_PREDICTIONS, predId, { homeScore: h, awayScore: a, isResolved: true, updatedAt: new Date().toISOString() }, { merge: true });
-      const updated = preds.map(p => String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p);
+      // Optimistic UI update only
+      const updated = preds.map(p =>
+        String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p
+      );
       queryClient.setQueryData(['activePredictions', date], updated);
-      await safeWrite(PATHS.PREDICTION_SNAPSHOTS, date, { predictions: cleanObj(updated), updatedAt: new Date().toISOString() }, { merge: true });
-      
-      // 2. Trigger backend to recalculate points for all users
+
+      // Call backend to handle everything
       await footballApi.adminResolveMatch({
         matchId,
         matchDate: date,
         homeScore: h,
-        awayScore: a
+        awayScore: a,
       });
 
-      // 3. INVALIDATE ALL RELEVANT CACHES
+      // Invalidate all caches
       queryClient.invalidateQueries(['activePredictions']);
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['userPoints'] });
@@ -236,34 +257,40 @@ export default function AdminPage() {
 
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
+
+      showToast('Score overridden and recalculated', 'ok');
     } catch (e) {
-      showToast('Failed to override. Check backend permissions.', 'er');
+      queryClient.invalidateQueries(['activePredictions', date]);
+      showToast('Failed to override: ' + (e.friendlyMessage || e.message), 'er');
       console.error('[Admin] Override err:', e);
     }
   }, [preds, date, queryClient, showToast]);
 
-  
-   const handleRebuild = useCallback(async (period) => {
+  const handleRebuild = useCallback(async (period) => {
     setRebuilding(period);
     try {
       if (period === 'fixtures') {
         await footballApi.adminLeaderboardRebuild('fixtures', date);
-        showToast('Finished matches refreshed successfully!', 'ok');
-        queryClient.invalidateQueries(['fixtures', date]);
-        queryClient.invalidateQueries(['results', date]);
+        showToast('Finished matches refresh started in background!', 'ok');
+        // Delay invalidation to allow background job to complete
+        setTimeout(() => {
+          queryClient.invalidateQueries(['fixtures', date]);
+          queryClient.invalidateQueries(['results', date]);
+        }, 5000);
       } else {
         await footballApi.adminLeaderboardRebuild(period, date);
         showToast(`${period.toUpperCase()} rebuild complete!`, 'ok');
-        queryClient.invalidateQueries(['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard']);
+        queryClient.invalidateQueries({
+          queryKey: ['leaderboard', 'dailyLeaderboard', 'weeklyLeaderboard', 'monthlyLeaderboard', 'goatLeaderboard'],
+        });
       }
-    } catch (e) { 
-      console.error('[Admin] Rebuild err:', e); 
+    } catch (e) {
+      console.error('[Admin] Rebuild err:', e);
       showToast(e.friendlyMessage || 'Rebuild failed. Check permissions.', 'er');
     }
     setRebuilding(null);
   }, [date, showToast, queryClient]);
 
-  
   if (!mounted) return null;
 
   return (
@@ -273,7 +300,9 @@ export default function AdminPage() {
         <div className="glass-card p-16 mb-16 flex-between items-center">
           <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}><ArrowLeft size={14} /> Back</button>
           <div className="text-center">
-            <h1 className="text-primary font-extrabold text-md flex-center gap-8"><ShieldAlert size={14} className="text-gold" /> Admin Control Room</h1>
+            <h1 className="text-primary font-extrabold text-md flex-center gap-8">
+              <ShieldAlert size={14} className="text-gold" /> Admin Control Room
+            </h1>
             <div className="text-muted text-xs">{userProfile?.displayName || 'Staff'} · {dateLabel(date)}</div>
           </div>
           <div className="w-8"></div>
@@ -289,13 +318,17 @@ export default function AdminPage() {
 
         <div className="glass-card flex gap-8 p-8 mb-16 overflow-x-auto">
           {defaultDates.map(d => (
-            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
+            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>
+              {dateLabel(d)}
+            </button>
           ))}
           <button className="btn btn-sm btn-secondary" onClick={() => setShowMoreDates(p => !p)}>
             {showMoreDates ? <ChevronUp size={12} /> : <ChevronDown size={12} />} {showMoreDates ? 'Less' : 'More'}
           </button>
           {showMoreDates && extraDates.map(d => (
-            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>{dateLabel(d)}</button>
+            <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>
+              {dateLabel(d)}
+            </button>
           ))}
         </div>
 

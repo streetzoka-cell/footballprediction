@@ -1,6 +1,4 @@
-﻿// src/context/AuthContext.jsx
-
-import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+﻿import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import {
   onAuthStateChanged,
   signOut as fbSignOut,
@@ -12,10 +10,11 @@ import {
   getRedirectResult,
   GoogleAuthProvider,
   setPersistence,
-  browserLocalPersistence
+  browserLocalPersistence,
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
+import { clearCachedToken } from '../services/backendAuth';
 
 const AuthContext = createContext(null);
 
@@ -55,6 +54,9 @@ export function AuthProvider({ children }) {
       if (unsubscribed) return;
       setCurrentUser(user);
 
+      // Clear cached token when user changes
+      clearCachedToken();
+
       if (unsubProfile) {
         unsubProfile();
         unsubProfile = null;
@@ -80,42 +82,51 @@ export function AuthProvider({ children }) {
           }
 
           // 2. Listen to users collection for instant profile/role updates
-          // This restores the "smooth" feel
           unsubProfile = onSnapshot(userDocRef, (docSnap) => {
             if (unsubscribed) return;
             if (docSnap.exists()) {
               const baseData = docSnap.data();
-              const role = (baseData.role || 'user').toLowerCase();
+              const role = String(baseData.role || 'user').toLowerCase();
               const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
-              
+
               setUserProfile({
                 uid: user.uid,
                 ...baseData,
                 role,
-                isAdmin: isRoleAdmin
+                isAdmin: isRoleAdmin,
               });
             } else {
-              setUserProfile(prev => ({ 
-                ...(prev || {}), 
-                uid: user.uid, 
-                role: 'user', 
-                isAdmin: false 
+              setUserProfile(prev => ({
+                ...(prev || {}),
+                uid: user.uid,
+                role: 'user',
+                isAdmin: false,
               }));
             }
             setAuthLoading(false);
           }, (err) => {
             console.error('[Auth] Profile listener error:', err.message);
+            // Fallback: set basic profile without Firestore data
+            setUserProfile({
+              uid: user.uid,
+              email: user.email,
+              displayName: user.displayName || user.email?.split('@')[0] || 'Player',
+              photoURL: user.photoURL || null,
+              role: 'user',
+              isAdmin: false,
+            });
             setAuthLoading(false);
           });
-
         } catch (err) {
           console.error('[Auth] Failed to load profile:', err.message);
-          setUserProfile(prev => ({ 
-            ...(prev || {}), 
-            uid: user.uid, 
-            role: 'user', 
-            isAdmin: false 
-          }));
+          setUserProfile({
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || user.email?.split('@')[0] || 'Player',
+            photoURL: user.photoURL || null,
+            role: 'user',
+            isAdmin: false,
+          });
           setAuthLoading(false);
         }
       } else {
@@ -141,7 +152,7 @@ export function AuthProvider({ children }) {
     if (!auth) throw new Error('Auth not initialized');
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     if (displayName) await fbUpdateProfile(cred.user, { displayName });
-    
+
     const profile = {
       uid: cred.user.uid,
       email: cred.user.email,
@@ -152,7 +163,7 @@ export function AuthProvider({ children }) {
       updatedAt: serverTimestamp(),
     };
     await setDoc(doc(db, 'users', cred.user.uid), profile);
-    setUserProfile(profile);
+    setUserProfile({ ...profile, role: 'user', isAdmin: false });
     return cred.user;
   }, []);
 
@@ -174,6 +185,7 @@ export function AuthProvider({ children }) {
   const signOut = useCallback(async () => {
     if (!auth) throw new Error('Auth not initialized');
     try {
+      clearCachedToken();
       await fbSignOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
@@ -195,7 +207,7 @@ export function AuthProvider({ children }) {
 
     const profileUpdates = { ...updates, updatedAt: serverTimestamp() };
     delete profileUpdates.uid;
-    delete profileUpdates.role; // Prevent accidental role escalation from client
+    delete profileUpdates.role;
     delete profileUpdates.isAdmin;
 
     await setDoc(doc(db, 'users', currentUser.uid), profileUpdates, { merge: true });

@@ -1,6 +1,4 @@
-﻿// backend-v1/src/routes/v1/predictions.js
-
-const express = require('express');
+﻿const express = require('express');
 const router = express.Router();
 
 const logger = require('../../utils/logger');
@@ -62,15 +60,23 @@ router.get('/user', authenticateFirebaseUser, async (req, res, next) => {
 
 router.post('/user', authenticateFirebaseUser, userPredictionLimiter, async (req, res, next) => {
   try {
-    const { matchId, homeScore, awayScore } = req.body || {};
-    
-    // Early validation
-    if (!matchId || !matchId.trim()) {
+    const { matchId, homeScore, awayScore, matchDate } = req.body || {};
+
+    // Validate matchId
+    if (!matchId || !String(matchId).trim()) {
       return res.status(400).json({ success: false, error: 'matchId is required' });
     }
-    if (typeof homeScore !== 'number' || typeof awayScore !== 'number' || 
+
+    // Validate matchDate (CRITICAL - was missing)
+    const dateStr = String(matchDate || '').trim();
+    if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      return res.status(400).json({ success: false, error: 'matchDate is required in YYYY-MM-DD format' });
+    }
+
+    // Validate scores
+    if (typeof homeScore !== 'number' || typeof awayScore !== 'number' ||
         homeScore < 0 || awayScore < 0 || homeScore > 99 || awayScore > 99) {
-      return res.status(400).json({ success: false, error: 'Invalid score format' });
+      return res.status(400).json({ success: false, error: 'Invalid score format. Scores must be integers 0-99.' });
     }
 
     const result = await UserPredictionStore.savePrediction(req.user, req.body || {});
@@ -86,6 +92,14 @@ router.post('/user', authenticateFirebaseUser, userPredictionLimiter, async (req
     });
   } catch (err) {
     logger.error(`[Predictions Route] Save failed: ${err.message}`);
+
+    // Return proper error codes
+    if (err.statusCode === 409) {
+      return res.status(409).json({ success: false, error: err.message });
+    }
+    if (err.statusCode === 400) {
+      return res.status(400).json({ success: false, error: err.message });
+    }
     next(err);
   }
 });

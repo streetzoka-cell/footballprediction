@@ -1,5 +1,3 @@
-// backend-v1/src/routes/v1/zokaPicks.js
-
 const express = require('express');
 const router = express.Router();
 
@@ -11,9 +9,7 @@ const ApiError = require('../../utils/ApiError');
 
 /**
  * GET /api/v1/zoka-picks?date=YYYY-MM-DD
- *
- * Public endpoint.
- * Returns only published picks.
+ * Public endpoint - returns only published picks
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -48,6 +44,7 @@ router.get('/', async (req, res, next) => {
 
 /**
  * GET /api/v1/zoka-picks/draft?date=YYYY-MM-DD
+ * Admin only
  */
 router.get('/draft', adminAuth, async (req, res, next) => {
   try {
@@ -58,8 +55,21 @@ router.get('/draft', adminAuth, async (req, res, next) => {
     }
 
     const draft = await ZokaPicksStore.getDraft(date);
-
     ApiResponse.success(res, draft);
+  } catch (err) {
+    next(err);
+  }
+});
+
+/**
+ * GET /api/v1/zoka-picks/history?days=7
+ * Admin only - reads from local JSON files (no Firestore reads)
+ */
+router.get('/history', adminAuth, async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days, 10) || 7, 1), 30);
+    const history = await ZokaPicksStore.getHistory(days);
+    ApiResponse.success(res, history);
   } catch (err) {
     next(err);
   }
@@ -78,7 +88,6 @@ router.post('/admin/save-draft', adminAuth, async (req, res, next) => {
     }
 
     const saved = await ZokaPicksStore.saveDraft(date, payload);
-
     ApiResponse.success(res, saved);
   } catch (err) {
     next(err);
@@ -98,7 +107,6 @@ router.post('/admin/publish', adminAuth, async (req, res, next) => {
     }
 
     const published = await ZokaPicksStore.publish(date, payload);
-
     ApiResponse.success(res, published);
   } catch (err) {
     next(err);
@@ -117,7 +125,6 @@ router.post('/admin/unpublish', adminAuth, async (req, res, next) => {
     }
 
     const result = await ZokaPicksStore.unpublish(date);
-
     ApiResponse.success(res, result);
   } catch (err) {
     next(err);
@@ -126,14 +133,6 @@ router.post('/admin/unpublish', adminAuth, async (req, res, next) => {
 
 /**
  * POST /api/v1/zoka-picks/admin/import
- *
- * Copies existing Firebase Zoka Picks into the backend store.
- * Safe to run multiple times.
- *
- * Body:
- * {
- *   "date": "2026-08-02"
- * }
  */
 router.post('/admin/import', adminAuth, async (req, res, next) => {
   try {
@@ -144,7 +143,6 @@ router.post('/admin/import', adminAuth, async (req, res, next) => {
     }
 
     const result = await ContentMigrationService.importZokaPicksFromFirebase(date);
-
     ApiResponse.success(res, result);
   } catch (err) {
     next(err);

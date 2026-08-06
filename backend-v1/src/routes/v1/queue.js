@@ -1,4 +1,4 @@
-// backend-v1/src/routes/v1/queue.js
+﻿// backend-v1/src/routes/v1/queue.js
 
 const express = require('express');
 const router = express.Router();
@@ -18,6 +18,16 @@ const publicQueueLimiter = createRateLimit({
   keyPrefix: 'queue-public',
   message: 'Too many queue requests.',
 });
+
+const ADMIN_COLLECTIONS = new Set([
+  'active_predictions',
+  'prediction_snapshots',
+  'zoka_picks',
+  'zoka_vote_stats',
+  'match_resolution_status',
+  'daily_leaderboard',
+  'leaderboard_summaries',
+]);
 
 const USER_ALLOWED_COLLECTIONS = new Set([
   'user_predictions',
@@ -58,17 +68,6 @@ function validateUserOwnership(req, collection, docId, data) {
 
 /**
  * POST /api/v1/queue/add
- *
- * Secure behavior:
- *
- * Admin:
- *   - can queue all whitelisted collections
- *
- * Firebase user:
- *   - can queue only user-owned collections
- *
- * Public:
- *   - disabled unless ENABLE_PUBLIC_QUEUE=true
  */
 router.post('/add', publicQueueLimiter, optionalFirebaseUser, async (req, res, next) => {
   try {
@@ -81,9 +80,20 @@ router.post('/add', publicQueueLimiter, optionalFirebaseUser, async (req, res, n
       type,
     } = req.body || {};
 
-    const admin = await adminAuth.verifyAdminRequest(req);
+    const normalizedCollection = String(collection || '').trim();
 
-    if (admin) {
+    if (!normalizedCollection) {
+      throw ApiError.badRequest('Collection is required');
+    }
+
+    // 1. Check if it's an Admin Collection
+    if (ADMIN_COLLECTIONS.has(normalizedCollection)) {
+      const isAdmin = await adminAuth.verifyAdminRequest(req);
+      
+      if (!isAdmin) {
+        throw ApiError.forbidden('Admin access required for this collection');
+      }
+
       await QueueService.addToQueue({
         collection,
         docId,
@@ -100,9 +110,8 @@ router.post('/add', publicQueueLimiter, optionalFirebaseUser, async (req, res, n
       });
     }
 
+    // 2. Check if it's a User Collection
     if (req.user) {
-      const normalizedCollection = String(collection || '').trim();
-
       if (!USER_ALLOWED_COLLECTIONS.has(normalizedCollection)) {
         throw ApiError.forbidden('Collection not allowed for user queue');
       }
@@ -125,9 +134,8 @@ router.post('/add', publicQueueLimiter, optionalFirebaseUser, async (req, res, n
       });
     }
 
+    // 3. Check if Public Queue is enabled
     if (publicQueueEnabled) {
-      const normalizedCollection = String(collection || '').trim();
-
       if (!PUBLIC_ALLOWED_COLLECTIONS.has(normalizedCollection)) {
         throw ApiError.forbidden('Public queue collection not allowed');
       }

@@ -1,5 +1,3 @@
-// backend-v1/src/services/FeaturedStore.js
-
 const path = require('path');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
@@ -10,6 +8,7 @@ const {
   readJSONSafe,
   ensureDir,
 } = require('../utils/atomicWriter');
+
 const DATA_DIR = path.join(process.cwd(), 'data', 'featured');
 const PUBLIC_DIR = path.join(process.cwd(), 'public_data', 'featured');
 
@@ -30,8 +29,11 @@ function normalizeDate(dateStr) {
   if (!dateStr) {
     throw ApiError.badRequest('date is required');
   }
-
-  return String(dateStr).trim();
+  const trimmed = String(dateStr).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw ApiError.badRequest('date must be in YYYY-MM-DD format');
+  }
+  return trimmed;
 }
 
 function sanitizeMatch(match, date) {
@@ -53,21 +55,9 @@ function sanitizeMatch(match, date) {
     awayTeam: match.awayTeam || {
       name: match.awayTeamName || match.awayName || 'Away',
     },
-    homeLogo:
-      match.homeLogo ??
-      match.homeTeam?.crest ??
-      match.homeTeam?.logo ??
-      null,
-    awayLogo:
-      match.awayLogo ??
-      match.awayTeam?.crest ??
-      match.awayTeam?.logo ??
-      null,
-    league:
-      match.league ||
-      match.competition || {
-        name: match.leagueName || 'Other',
-      },
+    homeLogo: match.homeLogo ?? match.homeTeam?.crest ?? match.homeTeam?.logo ?? null,
+    awayLogo: match.awayLogo ?? match.awayTeam?.crest ?? match.awayTeam?.logo ?? null,
+    league: match.league || match.competition || { name: match.leagueName || 'Other' },
     kickoff: match.kickoff || match.utcDate || match.date || null,
     status: match.status || 'NS',
     homeScore: match.homeScore ?? null,
@@ -109,27 +99,7 @@ async function publishPublic(date, matches) {
 async function queueFirebaseSync(date, matches, removedIds = []) {
   const now = new Date().toISOString();
 
-  for (const match of matches) {
-    await QueueService.addToQueue({
-      collection: 'active_predictions',
-      docId: match.id || `feat_${date}_${match.matchId}`,
-      type: 'set',
-      data: match,
-      priority: 'high',
-      source: 'featured-store',
-    });
-  }
-
-  for (const id of removedIds) {
-    await QueueService.addToQueue({
-      collection: 'active_predictions',
-      docId: id,
-      type: 'delete',
-      priority: 'high',
-      source: 'featured-store',
-    });
-  }
-
+  // Queue snapshot update
   await QueueService.addToQueue({
     collection: 'prediction_snapshots',
     docId: date,
@@ -141,13 +111,33 @@ async function queueFirebaseSync(date, matches, removedIds = []) {
     priority: 'high',
     source: 'featured-store',
   });
+
+  // Queue individual match updates
+  for (const match of matches) {
+    await QueueService.addToQueue({
+      collection: 'active_predictions',
+      docId: match.id || `feat_${date}_${match.matchId}`,
+      type: 'set',
+      data: match,
+      priority: 'high',
+      source: 'featured-store',
+    });
+  }
+
+  // Queue removals
+  for (const id of removedIds) {
+    await QueueService.addToQueue({
+      collection: 'active_predictions',
+      docId: id,
+      type: 'delete',
+      priority: 'high',
+      source: 'featured-store',
+    });
+  }
 }
 
 async function save(date, matches, options = {}) {
-  const {
-    publish = true,
-    syncFirebase = true,
-  } = options;
+  const { publish = true, syncFirebase = true } = options;
 
   const normalizedDate = normalizeDate(date);
 
@@ -170,9 +160,7 @@ async function save(date, matches, options = {}) {
     updatedAt: new Date().toISOString(),
   };
 
-  await writeJSONAtomic(dataFile(normalizedDate), payload, {
-    pretty: true,
-  });
+  await writeJSONAtomic(dataFile(normalizedDate), payload, { pretty: true });
 
   if (publish) {
     await publishPublic(normalizedDate, matches);
@@ -200,6 +188,8 @@ async function add(date, match) {
   );
 
   if (existingIndex >= 0) {
+    // Preserve createdAt when updating
+    sanitized.createdAt = matches[existingIndex].createdAt;
     matches[existingIndex] = sanitized;
   } else {
     if (matches.length >= FEATURED_MAX) {
@@ -209,7 +199,6 @@ async function add(date, match) {
         `Featured list is full. Maximum allowed: ${FEATURED_MAX}`
       );
     }
-
     matches.push(sanitized);
   }
 
@@ -225,18 +214,15 @@ async function remove(date, matchId) {
 
   const matches = await list(normalizedDate);
 
-  const removed = matches.find(
-    (m) => String(m.matchId) === String(matchId)
-  );
+  const removed = matches.find((m) => String(m.matchId) === String(matchId));
 
-  const next = matches.filter(
-    (m) => String(m.matchId) !== String(matchId)
-  );
+  const next = matches.filter((m) => String(m.matchId) !== String(matchId));
 
   await save(normalizedDate, next);
 
   return removed || null;
 }
+
 async function replace(date, matches, options = {}) {
   const normalizedDate = normalizeDate(date);
 
@@ -246,9 +232,7 @@ async function replace(date, matches, options = {}) {
     try {
       sanitized.push(sanitizeMatch(match, normalizedDate));
     } catch (err) {
-      logger.warn(
-        `[FeaturedStore] Skipping invalid match during replace: ${err.message}`
-      );
+      logger.warn(`[FeaturedStore] Skipping invalid match during replace: ${err.message}`);
     }
   }
 
