@@ -2,10 +2,11 @@ import React, { useReducer, useRef, useEffect, useMemo, useCallback, useState } 
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   ArrowLeft, Download, Upload, Camera, Music, User, Volume2, VolumeX,
-  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, Clock, ChevronDown, ChevronUp, Maximize2, Minimize2, RotateCcw, Save, Cloud, Lock, Unlock, Award, Target, TrendingUp, Eye, EyeOff, Copy, Check, AlertTriangle, Info, Smile, Sticker, Timer, Repeat, SkipBack, SkipForward, FastForward, Rewind, Sun, Moon, Contrast, Droplets, Wind, Heart, MessageCircle, Share2, Bookmark, MoreHorizontal, Settings, HelpCircle, Keyboard, MousePointer, Hand, Pin, PinOff, ArrowUp, ArrowDown, ArrowLeftRight, ArrowUpDown, CornerDownLeft, CornerUpRight, RefreshCw, History, GitBranch, CircleDot, Square, Hexagon, Triangle, Pentagon, ChevronRight, ChevronLeft
+  Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, ChevronDown, ChevronUp, Maximize2, Minimize2, Cloud, Eye, EyeOff, Smile, Keyboard, Rewind, FastForward, Check, AlertTriangle, Info, ChevronRight, ChevronLeft
 } from 'lucide-react';
 
-// Import your CSS file here (e.g., import './ReactorStudio.css';)
+// Import your CSS file here
+// import './ReactorStudio.css';
 
 // ═══════════════════════════════════════════════════════════
 // HELPER: WebM Duration Metadata Fixer (Crucial for iOS/WhatsApp playback)
@@ -69,7 +70,7 @@ const idbGet = async (k) => new Promise(async (res, rej) => { const tx = (await 
 const idbClear = async () => new Promise(async (res, rej) => { const tx = (await openDB()).transaction(STORE_NAME, 'readwrite'); const r = tx.objectStore(STORE_NAME).clear(); r.onsuccess = () => res(); r.onerror = () => rej(r.error); });
 
 // ═══════════════════════════════════════════════════════════
-// HELPER: Draw ZOKA Logo Vector Fallback
+// HELPER: Misc Utilities
 // ═══════════════════════════════════════════════════════════
 const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.save(); ctx.translate(x, y); ctx.fillStyle = color;
@@ -80,9 +81,6 @@ const drawZokaLogo = (ctx, x, y, size, color = '#10b981') => {
   ctx.lineTo(-size / 2, -size / 4); ctx.closePath(); ctx.fill(); ctx.restore();
 };
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Haptic Feedback (Mobile)
-// ═══════════════════════════════════════════════════════════
 const haptic = (type = 'light') => {
   if (navigator.vibrate) {
     if (type === 'light') navigator.vibrate(10);
@@ -92,9 +90,7 @@ const haptic = (type = 'light') => {
   }
 };
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Toast Notification System
-// ═══════════════════════════════════════════════════════════
+// Toast System
 const ToastContext = React.createContext(null);
 const useToast = () => React.useContext(ToastContext);
 
@@ -123,9 +119,7 @@ const ToastProvider = ({ children }) => {
   );
 };
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Achievement / Gamification System
-// ═══════════════════════════════════════════════════════════
+// Gamification
 const ACHIEVEMENTS = [
   { id: 'first_export', name: 'First Cut', desc: 'Export your first video', icon: '🎬', xp: 50 },
   { id: 'five_exports', name: 'Serial Creator', desc: 'Export 5 videos', icon: '🔥', xp: 100 },
@@ -144,14 +138,11 @@ const getGameState = () => {
     return JSON.parse(localStorage.getItem('reactor-game-state')) || { xp: 0, level: 1, achievements: [], streak: 0, lastActive: null, totalExports: 0, templatesUsed: [], effectsUsed: [], undoCount: 0 };
   } catch { return { xp: 0, level: 1, achievements: [], streak: 0, lastActive: null, totalExports: 0, templatesUsed: [], effectsUsed: [], undoCount: 0 }; }
 };
-
 const saveGameState = (state) => localStorage.setItem('reactor-game-state', JSON.stringify(state));
 const getLevel = (xp) => Math.floor(xp / 200) + 1;
 const getLevelProgress = (xp) => (xp % 200) / 200;
 
-// ═══════════════════════════════════════════════════════════
-// HELPER: Sticker System
-// ═══════════════════════════════════════════════════════════
+// Stickers
 const STICKERS = [
   { id: 'fire', emoji: '🔥', name: 'Fire' }, { id: 'heart', emoji: '❤️', name: 'Heart' },
   { id: 'star', emoji: '⭐', name: 'Star' }, { id: 'crown', emoji: '👑', name: 'Crown' },
@@ -164,7 +155,7 @@ const STICKERS = [
 ];
 
 // ═══════════════════════════════════════════════════════════
-// 1. MASSIVE TEMPLATE ENGINE
+// TEMPLATES & CONFIG DATA
 // ═══════════════════════════════════════════════════════════
 const TEMPLATES = [
   { id: 'pro_aura', title: 'Pro: Aura Maximus', category: 'Pro', tags: ['viral', 'cinematic', 'intro'], pip: false, video: { x: 0, y: 0, w: 720, h: 1280 }, bg: '#000', preview: { bg: 'linear-gradient(135deg, #000, #333)', layout: 'pro' }, isPro: true },
@@ -289,6 +280,9 @@ const roundRectPath = (ctx, x, y, w, h, r) => {
   ctx.closePath();
 };
 
+// ═══════════════════════════════════════════════════════════
+// STATE & REDUCER
+// ═══════════════════════════════════════════════════════════
 const initialState = {
   media: { sourceLoaded: false, brollLoaded: false, cameraOn: false, profileSrc: null, logoSrc: null, audioName: '' },
   editor: {
@@ -350,6 +344,9 @@ function studioReducer(state, action) {
   }
 }
 
+// ═══════════════════════════════════════════════════════════
+// MAIN COMPONENT
+// ═══════════════════════════════════════════════════════════
 function ReactorStudioInner() {
   const navigate = useNavigate();
   const location = useLocation();
