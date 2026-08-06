@@ -11,16 +11,16 @@
       "permanent": true
     }
   ],
-  "rewrites": [
-    {
-      "source": "/sitemap/:path*",
-      "destination": "https://api.zokascore.xyz/sitemap/:path*"
-    },
-    {
-      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap/).*)",
-      "destination": "/index.html"
+    "rewrites": [
+    { "source": "/sitemap.xml", "destination": "https://api.zokascore.xyz/sitemap/index.xml" },
+    { "source": "/zokascore-sitemap.xml", "destination": "https://api.zokascore.xyz/sitemap/index.xml" },
+    { "source": "/sitemap/:path*", "destination": "https://api.zokascore.xyz/sitemap/:path*" },
+    { 
+      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap\\.xml|zokascore-sitemap\\.xml|sitemap/).*)", 
+      "destination": "/index.html" 
     }
   ],
+  
   "headers": [
     {
       "source": "/(.*)",
