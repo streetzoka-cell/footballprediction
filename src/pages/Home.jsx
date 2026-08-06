@@ -1,663 +1,961 @@
-﻿import React, { useState, useEffect, useMemo, useCallback, useRef, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+﻿import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import {
-  CalendarDays, RefreshCw, WifiOff, Database,
-  ChevronDown, ChevronRight,
-  Lock, LogIn, CheckCircle2, Sparkles, Flame,
+  Zap, Trophy, Flame, ChevronDown, WifiOff, LogIn, Star, CheckCircle2,
+  Lock, Crown, XCircle, ArrowUpRight, Sun, Moon, CloudSun, Radar, Timer,
+  ChevronRight, Newspaper, Target, TrendingUp, Activity as LiveIcon, Sparkles, Gamepad2
 } from 'lucide-react';
 
 import { useAuth } from '../context/AuthContext';
-import { useFixtures, useLiveMatches } from '../hooks/useFixtures';
-import { useQueryClient } from '@tanstack/react-query';
-import { getDateRange, todayStr as getTodayStr, getLocalDateStr, formatTime } from '../utils/dates';
+import { useFixtures } from '../hooks/useFixtures';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks } from '../hooks/useUserData';
 
-import { db } from '../utils/firebase';
-import { PATHS, getBasketballLeaguePriority, getLeagueColor, isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
-import { eventBus, EVENT } from '../utils/eventBus';
-import { doc, deleteDoc, collection, query, where, onSnapshot } from 'firebase/firestore';
-import { safeWrite } from '../services/safeWrite'; 
+import { isLiveStatus, isFinishedStatus, SPORT } from '../utils/constants';
+import { todayStr } from '../utils/dates';
+
+import { buildMatchRoute, buildLeagueRoute, buildTeamRoute, buildHighlightRoute } from '../utils/routes';
 import SEO from '../components/SEO';
+import AdSlot from '../components/AdSlot';
+import { ListSkeleton } from '../components/StateFeedback';
+import { applySmartMinute } from '../engine/matchEngine';
 
-function normalizeBasketballGame(raw) {
-  if (!raw) return null;
-  const status = raw.status || '';
-  const isLive = isLiveStatus(status, SPORT.BASKETBALL);
-  const isFinished = isFinishedStatus(status, SPORT.BASKETBALL);
+import { useGlobalStats } from '../hooks/useGlobalStats';
+
+// ═══════════════════════════════════════════════════════════
+// HELPER HOOKS & COMPONENTS
+// ═══════════════════════════════════════════════════════════
+function useNow(interval = 10000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), interval);
+    return () => clearInterval(id);
+  }, [interval]);
+  return now;
+}
+
+const getGreeting = () => {
+  const h = new Date().getHours();
+  if (h < 5) return { text: 'Burning the midnight oil', emoji: '🦉' };
+  if (h < 12) return { text: 'Good morning', emoji: '☀️' };
+  if (h < 17) return { text: 'Good afternoon', emoji: '🌤️' };
+  if (h < 21) return { text: 'Good evening', emoji: '🌆' };
+  return { text: 'Good night', emoji: '🦉' };
+};
+
+const parseKickoff = (m) => {
+  if (!m.date) return null;
+  const d = new Date(m.date);
+  if (isNaN(d.getTime())) return null;
+  if (m.kickoff && /^\d{1,2}:\d{2}/.test(m.kickoff) && d.getHours() === 0 && d.getMinutes() === 0) {
+    const [h, mi] = m.kickoff.split(':').map(Number);
+    d.setHours(h, mi, 0, 0);
+  }
+  return d.getTime();
+};
+
+const AnimNum = React.memo(({ value, duration = 800, delay = 0, suffix = '' }) => {
+  const [display, setDisplay] = useState(0);
+  const raf = useRef(null);
+  const target = Number(value) || 0;
+
+  useEffect(() => {
+    if (target === 0) { setDisplay(0); return; }
+    const start = performance.now() + delay;
+    const run = (now) => {
+      if (now < start) { raf.current = requestAnimationFrame(run); return; }
+      const p = Math.min((now - start) / duration, 1);
+      const currentVal = Math.round((1 - Math.pow(1 - p, 4)) * target);
+      setDisplay(currentVal);
+      if (p < 1) raf.current = requestAnimationFrame(run);
+    };
+    raf.current = requestAnimationFrame(run);
+    return () => { if (raf.current) cancelAnimationFrame(raf.current); };
+  }, [target, duration, delay]);
   
-  return {
-    id: String(raw.id),
-    status,
-    isLive,
-    isFinished,
-    isScheduled: !isLive && !isFinished,
-    date: raw.date,
-    kickoff: raw.date ? formatTime(raw.date) : '',
-    league: { 
-      name: raw.leagueName || 'Other', 
-      emblem: raw.leagueLogo, 
-      color: getLeagueColor(raw.leagueId),
-      country: raw.leagueCountry 
-    },
-    leagueKey: String(raw.leagueId),
-    homeTeam: { name: raw.homeTeamName, logo: raw.homeTeamLogo },
-    awayTeam: { name: raw.awayTeamName, logo: raw.awayTeamLogo },
-    homeLogo: raw.homeTeamLogo,
-    awayLogo: raw.awayTeamLogo,
-    homeScore: raw.pointsHome ?? raw.homeScore,
-    awayScore: raw.pointsAway ?? raw.awayScore,
-    minute: raw.elapsed,
-    score: {
-      q1: { home: raw.q1Home, away: raw.q1Away },
-      q2: { home: raw.q2Home, away: raw.q2Away },
-      q3: { home: raw.q3Home, away: raw.q3Away },
-      q4: { home: raw.q4Home, away: raw.q4Away },
-      ot: { home: raw.otHome, away: raw.otAway },
-    }
-  };
-}
+  const safeDisplay = Number(display) || 0;
+  return <span>{safeDisplay.toLocaleString()}{suffix}</span>;
+});
 
-function gamePriorityScore(g) {
-  const base = getBasketballLeaguePriority(g.leagueKey) || 0;
-  const liveBoost = g.isLive ? 50 : 0;
-  const scheduledBoost = g.isScheduled ? 10 : 0;
-  return base + liveBoost + scheduledBoost;
-}
+const LiveClock = React.memo(() => {
+  const [now, setNow] = useState(new Date());
+  useEffect(() => {
+    const id = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <span className="z-clock">{now.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>;
+});
 
-function getTopPredictGames(gamesList, count = 10) {
-  if (!gamesList || !gamesList.length) return [];
-  const eligible = gamesList.filter(g => g.isScheduled);
-  const scored = eligible.map(g => ({ ...g, _priority: gamePriorityScore(g) }));
-  scored.sort((a, b) => b._priority - a._priority);
-  return scored.slice(0, count);
-}
-
-const SkeletonCard = memo(({ delay = 0 }) => (
-  <div className="glass-card p-16 mb-8" style={{ animation: `zk-fade-up .35s ease ${delay}ms both` }}>
-    <div className="flex-center gap-10 p-4">
-      <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
-      <div className="skeleton" style={{ width: '55%', height: 14, flex: 1 }} />
-      <div className="skeleton" style={{ width: 28, height: 20 }} />
-    </div>
-    <div className="flex-center gap-10 p-4 mt-6">
-      <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
-      <div className="skeleton" style={{ width: '45%', height: 14, flex: 1 }} />
-      <div className="skeleton" style={{ width: 28, height: 20 }} />
-    </div>
-  </div>
-));
-
-const SkeletonGroup = memo(() => (
-  <div>
-    <div className="flex-center gap-10 p-8">
-      <div className="skeleton" style={{ width: 22, height: 22, borderRadius: 5 }} />
-      <div className="skeleton" style={{ width: 140, height: 14, flex: 1 }} />
-    </div>
-    {[0, 1, 2].map(i => <SkeletonCard key={i} delay={i * 80} />)}
-  </div>
-));
-
-const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
-  const cfg = {
-    NETWORK: { icon: <WifiOff size={24} />, bg: 'rgba(var(--danger-rgb),.1)', color: 'var(--danger)', t: 'Connection error', d: 'Could not reach Firestore. Check your internet connection.' },
-    NO_DB: { icon: <Database size={24} />, bg: 'rgba(var(--gold-rgb),.1)', color: 'var(--gold)', t: 'No database', d: 'Firebase is not configured.' },
-  };
-  const c = cfg[error] || cfg.NETWORK;
+const HeroTicker = React.memo(({ matches }) => {
+  if (!matches || matches.length === 0) return null;
+  const loop = matches.concat(matches);
   return (
-    <div className="glass-card flex-col items-center gap-12 p-32 text-center">
-      <div className="flex-center" style={{ width: 52, height: 52, borderRadius: '50%', background: c.bg, color: c.color }}>{c.icon}</div>
-      <div className="text-primary font-bold">{c.t}</div>
-      <div className="text-muted text-sm" style={{ maxWidth: 360 }}>{c.d}</div>
-      <button className="btn btn-primary" onClick={onRetry}>
-        <RefreshCw size={14} /> Retry
+    <div className="z-ticker-wrap" role="marquee" aria-label="Live matches ticker">
+      <div className="z-ticker-track">
+        {loop.map((m, i) => (
+          <Link key={(m.id || i) + '-' + i} to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="z-tk">
+            {m.isLive ? (
+              <><span className="z-ldot" /><span className="live">{m.displayMinute != null ? m.displayMinute + "'" : 'LIVE'}</span></>
+            ) : (
+              <span className="ko">{m.kickoff || 'VS'}</span>
+            )}
+            <b>{m.homeName}</b>
+            <span className="sc">{m.homeScore != null ? m.homeScore + '-' + m.awayScore : 'v'}</span>
+            <b>{m.awayName}</b>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+});
+
+const KickoffCountdown = React.memo(({ match }) => {
+  const target = useMemo(() => (match ? parseKickoff(match) : null), [match]);
+  const [left, setLeft] = useState(null);
+  useEffect(() => {
+    if (!target) return;
+    const tick = () => setLeft(Math.max(0, target - Date.now()));
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [target]);
+  if (!target || left == null || left <= 0) return null;
+  const s = Math.floor(left / 1000);
+  const hh = String(Math.floor(s / 3600)).padStart(2, '0');
+  const mm = String(Math.floor((s % 3600) / 60)).padStart(2, '0');
+  const ss = String(s % 60).padStart(2, '0');
+  return (
+    <Link to={buildMatchRoute(match.id, match.homeName, match.awayName)} className="z-countdown">
+      <span className="z-cd-left">
+        <Timer size={14} style={{ color: 'var(--gold)', flexShrink: 0 }} />
+        <span className="z-cd-teams">Next kickoff: {match.homeName} <em>vs</em> {match.awayName}</span>
+      </span>
+      <span className="z-cd-timer">
+        <span className="z-cd-seg">{hh}</span>:<span className="z-cd-seg">{mm}</span>:<span className="z-cd-seg">{ss}</span>
+      </span>
+    </Link>
+  );
+});
+
+const StreakBadge = React.memo(({ streak }) => {
+  if (!streak || streak < 2) return null;
+  return (
+    <div className="z-streak-badge">
+      <Flame size={16} fill="var(--danger)" color="var(--danger)" className="z-streak-fire" />
+      <span className="z-streak-text">{streak} Day Streak!</span>
+    </div>
+  );
+});
+
+const DailyChallenge = React.memo(({ match, isLoggedIn, onPredict }) => {
+  if (!match) return null;
+  return (
+    <div className="z-daily-challenge">
+      <div className="z-dc-glow" />
+      <div className="z-dc-header">
+        <span className="z-dc-badge"><Sparkles size={12} /> Daily Challenge</span>
+        <span className="z-dc-bonus">+50 Bonus PTS</span>
+      </div>
+      <div className="z-dc-match">
+        <div className="z-dc-team">
+          <img src={match.homeLogo} alt={match.homeName} width="32" height="32" loading="lazy" />
+          <span>{match.homeName}</span>
+        </div>
+        <div className="z-dc-vs">VS</div>
+        <div className="z-dc-team">
+          <img src={match.awayLogo} alt={match.awayName} width="32" height="32" loading="lazy" />
+          <span>{match.awayName}</span>
+        </div>
+      </div>
+      <button className="z-dc-btn" onClick={onPredict} disabled={!isLoggedIn}>
+        {isLoggedIn ? <><Gamepad2 size={14} /> Predict Now</> : <><Lock size={14} /> Login to Play</>}
       </button>
     </div>
   );
 });
 
-const TeamLogo = memo(({ src, name }) => {
-  if (!src) return (
-    <div className="flex-center bg-elevated text-muted font-bold" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>
-      {(name || '?')[0]}
-    </div>
-  );
-  return <img src={src} alt={name} style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
+const ZokaBadge = React.memo(({ pick }) => {
+  if (!pick || !pick.adminPick || pick.status !== 'finished') return null;
+  const home = pick.adminPick.home;
+  const away = pick.adminPick.away;
+  const ph = pick.homeScore;
+  const pa = pick.awayScore;
+  if (ph == null || pa == null) return <span className="badge badge-muted">Pending</span>;
+  if (home === ph && away === pa) return <span className="badge badge-primary"><CheckCircle2 size={10} /> Exact</span>;
+  const predOutcome = home > away ? 'H' : home < away ? 'A' : 'D';
+  const realOutcome = ph > pa ? 'H' : ph < pa ? 'A' : 'D';
+  if (predOutcome === realOutcome) return <span className="badge badge-gold"><TrendingUp size={10} /> Result</span>;
+  return <span className="badge badge-danger"><XCircle size={10} /> Miss</span>;
 });
 
-const StatusBadge = memo(({ game }) => {
-  const s = game.status;
-  let bg = 'var(--bg-elevated)', color = 'var(--text-muted)', label = s;
-
-  if (game.isLive) { bg = 'rgba(var(--danger-rgb),.15)'; color = 'var(--danger)'; label = game.minute || s; }
-  else if (game.isFinished) { bg = 'rgba(var(--primary-rgb),.1)'; color = 'var(--primary)'; label = s === 'AOT' ? 'OT' : 'FT'; }
-  else if (s === 'SUSP') { bg = 'rgba(var(--gold-rgb),.1)'; color = 'var(--gold)'; label = 'SUSP'; }
-  else if (s === 'POST') { bg = 'rgba(var(--gold-rgb),.1)'; color = 'var(--gold)'; label = 'POSTP'; }
-  else if (s === 'CANC') { bg = 'rgba(var(--danger-rgb),.1)'; color = 'var(--danger)'; label = 'CANC'; }
-
-  return <span className="badge" style={{ background: bg, color, border: 'none', animation: 'zk-pop .35s ease' }}>{label}</span>;
-});
-
-const ScoreDisplay = memo(({ score, isLive }) => {
-  const baseStyle = { fontSize: 18, fontWeight: 800, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums', transition: 'color .3s' };
-  if (!isLive) return <span style={{ ...baseStyle, color: 'var(--text-primary)' }}>{score ?? '-'}</span>;
+const MiniPodium = React.memo(({ entries }) => {
+  const top3 = entries.slice(0, 3);
+  if (top3.length === 0) return null;
+  const order = [1, 0, 2];
+  const cfg = [
+    { h: 90, border: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.08)', color: 'var(--gold)', sz: 52, fs: '.95rem', glitter: true },
+    { h: 64, border: 'var(--text-muted)', bg: 'rgba(var(--text-muted),.06)', color: 'var(--text-muted)', sz: 42, fs: '.8rem', glitter: false },
+    { h: 52, border: 'var(--bronze)', bg: 'rgba(var(--bronze),.06)', color: 'var(--bronze)', sz: 36, fs: '.72rem', glitter: false },
+  ];
   return (
-    <span key={score} style={{ ...baseStyle, color: 'var(--danger)', textShadow: '0 0 12px rgba(var(--danger-rgb),.4)', display: 'inline-block', animation: 'zk-score-pop .5s ease' }}>
-      {score ?? '-'}
-    </span>
-  );
-});
-
-const GameCard = memo(function GameCard({ game, index = 0 }) {
-  const hasQuarters = game.score?.q1?.home !== null && game.score?.q1?.home !== undefined;
-  const showQuarters = hasQuarters && (game.isLive || game.isFinished);
-  const homeWin = game.isFinished && (game.homeScore ?? 0) > (game.awayScore ?? 0);
-  const awayWin = game.isFinished && (game.awayScore ?? 0) < (game.homeScore ?? 0);
-
-  const quarters = ['Q1', 'Q2', 'Q3', 'Q4'];
-  const qKeys = ['q1', 'q2', 'q3', 'q4'];
-  if (game.score?.ot?.home !== null && game.score?.ot?.home !== undefined) {
-    quarters.push('OT');
-    qKeys.push('ot');
-  }
-  const qCount = quarters.length;
-
-  const teamNameStyle = (isWinner) => {
-    if (isWinner === true) return { flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-    if (isWinner === false) return { flex: 1, fontSize: 14, fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-    return { flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-  };
-
-  return (
-    <div className="glass-card p-16 mb-8" style={{
-      border: game.isLive ? '1px solid rgba(var(--danger-rgb),.2)' : '1px solid var(--border)',
-      animation: `zk-fade-up .35s ease ${index * 50}ms both${game.isLive ? ', zk-live-glow 2.5s ease-in-out infinite' : ''}`,
-    }}>
-      {game.isLive && (
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'linear-gradient(180deg, var(--danger), var(--danger-dim))', borderRadius: '0 2px 2px 0' }} />
-      )}
-
-      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
-        <TeamLogo src={game.homeLogo} name={game.homeTeam?.name} />
-        <span style={teamNameStyle(game.isFinished ? homeWin : undefined)}>{game.homeTeam?.name || 'TBD'}</span>
-        {game.isScheduled
-          ? <span className="text-secondary font-bold text-sm">{game.kickoff}</span>
-          : <ScoreDisplay score={game.homeScore} isLive={game.isLive} />
-        }
-      </div>
-
-      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
-        <TeamLogo src={game.awayLogo} name={game.awayTeam?.name} />
-        <span style={teamNameStyle(game.isFinished ? awayWin : undefined)}>{game.awayTeam?.name || 'TBD'}</span>
-        {game.isScheduled
-          ? <StatusBadge game={game} />
-          : <ScoreDisplay score={game.awayScore} isLive={game.isLive} />
-        }
-      </div>
-
-      {!game.isScheduled && (
-        <div className="flex justify-end mt-4 pr-2">
-          <StatusBadge game={game} />
-        </div>
-      )}
-
-      {showQuarters && (
-        <div className="grid gap-0 mt-10 pt-8 border-t" style={{ gridTemplateColumns: `repeat(${qCount + 1}, 1fr)`, animation: `zk-fade-up .3s ease ${index * 50 + 150}ms both` }}>
-          {quarters.map(q => <span key={q} className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>{q}</span>)}
-          <span className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>TOT</span>
-          {qKeys.map((key) => (
-            <span key={`h_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
-              {game.score?.[key]?.home ?? '-'}
-            </span>
-          ))}
-          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.homeScore ?? '-'}</span>
-          {qKeys.map((key) => (
-            <span key={`a_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
-              {game.score?.[key]?.away ?? '-'}
-            </span>
-          ))}
-          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.awayScore ?? '-'}</span>
-        </div>
-      )}
-    </div>
-  );
-});
-
-const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex = 0 }) {
-  return (
-    <div style={{ animation: `zk-slide-in .4s ease ${sectionIndex * 80}ms both` }}>
-      <div className="flex-center gap-10 py-8 px-8 border-b mb-6 relative">
-        <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0' }} />
-        {league.emblem && <img src={league.emblem} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} loading="lazy" />}
-        {!league.emblem && <div style={{ width: 22, height: 22, borderRadius: 5, background: league.color }} />}
-        <span className="text-secondary font-bold flex-1" style={{ fontSize: 13 }}>{league.name}</span>
-        {league.country && <span className="text-muted text-xs">{league.country}</span>}
-      </div>
-      {games.map((g, i) => <GameCard key={g.id} game={g} index={i} />)}
-    </div>
-  );
-});
-
-const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onRemove, loggedIn, index }) {
-  const isLive = game.isLive;
-  const isFinished = game.isFinished;
-  const currentPick = prediction?.pick || null;
-  const kickOff = game.kickoff || '';
-
-  const pickLabels = { home: game.homeTeam?.name || 'Home', away: game.awayTeam?.name || 'Away' };
-  const pickColors = {
-    home: { bg: currentPick === 'home' ? 'rgba(var(--accent-rgb),.18)' : 'var(--bg-elevated)', border: currentPick === 'home' ? 'var(--accent)' : 'var(--border)', color: currentPick === 'home' ? 'var(--accent)' : 'var(--text-secondary)' },
-    away: { bg: currentPick === 'away' ? 'rgba(var(--danger-rgb),.12)' : 'var(--bg-elevated)', border: currentPick === 'away' ? 'var(--danger)' : 'var(--border)', color: currentPick === 'away' ? 'var(--danger)' : 'var(--text-secondary)' },
-  };
-
-  const handlePick = useCallback((pick) => {
-    if (!loggedIn) { onPredict(null, true); return; }
-    if (currentPick === pick) { onRemove(String(game.id)); } else { onPredict(String(game.id), false, pick); }
-  }, [loggedIn, onPredict, currentPick, onRemove, game.id]);
-
-  return (
-    <div className="glass-card p-16 mb-8" style={{ border: `1px solid ${isLive ? 'rgba(var(--danger-rgb),.25)' : 'var(--border)'}`, animation: `zk-pop .35s ease ${index * 60}ms both` }}>
-      {isLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--danger), var(--warning))', animation: 'zk-live-glow 2s ease-in-out infinite' }} />}
-      <div className="flex-center gap-6 mb-10">
-        {game.league?.emblem && <img src={game.league.emblem} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />}
-        <span className="text-muted font-bold flex-1" style={{ fontSize: '.66rem' }}>{game.league?.name || ''}</span>
-        <span className="text-muted font-bold flex-center gap-4" style={{ fontSize: '.64rem', color: isLive ? 'var(--danger)' : 'var(--text-muted)' }}>
-          {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', animation: 'zk-pulse 1.5s ease-in-out infinite' }} />}
-          {isLive ? 'LIVE' : kickOff}
-        </span>
-      </div>
-      <div className="flex-between gap-10 mb-12">
-        <div className="flex-center gap-8 flex-1 min-w-0">
-          <TeamLogo src={game.homeLogo} name={game.homeTeam?.name} />
-          <span className="text-primary font-bold truncate" style={{ fontSize: '.82rem' }}>{game.homeTeam?.name}</span>
-        </div>
-        {game.isScheduled ? (
-          <div className="badge badge-muted">VS</div>
-        ) : (
-          <div className="flex-center gap-5 px-14 py-4 rounded-md font-extrabold text-primary" style={{ background: isLive ? 'rgba(var(--danger-rgb),.08)' : 'var(--bg-elevated)', fontSize: '1.1rem', letterSpacing: 2 }}>
-            {game.homeScore ?? '-'} <span className="text-muted font-normal">-</span> {game.awayScore ?? '-'}
+    <div className="z-podium">
+      {order.map((pos) => {
+        const u = top3[pos];
+        if (!u) return <div key={pos} style={{ flex: 1, maxWidth: 120 }} />;
+        const c = cfg[pos];
+        return (
+          <div key={u.uid} className="z-pod-u" style={{ animationDelay: pos * 100 + 'ms' }}>
+            <div className="z-pod-info">
+              {pos === 0 && <Crown size={18} style={{ color: 'var(--gold)', marginBottom: 2, filter: 'drop-shadow(0 0 4px rgba(var(--gold-rgb),.4))' }} />}
+              <div className="z-pod-avatar" style={{ width: c.sz, height: c.sz, background: c.bg, border: `2px solid ${c.border}`, fontSize: c.fs, color: c.color }}>
+                {(u.displayName || '??').slice(0, 2).toUpperCase()}
+              </div>
+              <div className="z-pod-name">{u.displayName}</div>
+              <div className={'z-pod-pts' + (c.glitter ? ' gold-text' : '')} style={{ color: c.color }}>{u.points} pts</div>
+            </div>
+            <div className="z-pod-bar" style={{ height: c.h, background: c.bg, border: `1px solid ${c.border}33`, borderTop: `3px solid ${c.border}` }}>
+              <span className={'z-pod-num' + (c.glitter ? ' gold-text' : '')} style={{ color: c.color }}>#{pos + 1}</span>
+            </div>
           </div>
+        );
+      })}
+    </div>
+  );
+});
+
+const LiveStripLoader = React.memo(() => (
+  <div className="z-live-loader">
+    <div className="z-loader-radar" />
+    <div className="z-loader-text"><Radar size={12} /> Scanning Pitches...</div>
+  </div>
+));
+
+const LiveMini = React.memo(({ match, index }) => {
+  const min = match.displayMinute;
+  const isLive = match.isLive;
+  const hasScore = match.homeScore != null && match.awayScore != null;
+  const matchLink = buildMatchRoute(match.id, match.homeName, match.awayName);
+  return (
+    <Link to={matchLink} className="z-livemini" style={{ animationDelay: index * 60 + 'ms', borderColor: isLive ? 'rgba(var(--danger-rgb),.3)' : 'var(--border)' }} title={`${match.homeName} vs ${match.awayName}`}>
+      <div className="z-lm-top">
+        <span className="z-lm-league">{match.leagueName}</span>
+        {isLive && min != null ? (
+          <div className="z-lm-status live">
+            <span className="z-ldot" />
+            <span style={{ fontSize: '.65rem', fontWeight: 800, color: 'var(--danger)' }}>{min}&apos;</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{match.kickoff || 'VS'}</div>
         )}
-        <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
-          <span className="text-primary font-bold truncate text-right" style={{ fontSize: '.82rem' }}>{game.awayTeam?.name}</span>
-          <TeamLogo src={game.awayLogo} name={game.awayTeam?.name} />
-        </div>
       </div>
-      {!isFinished && (
-        <div className="flex gap-8">
-          {['home', 'away'].map((pick) => (
-            <button key={pick} className="btn flex-1" onClick={() => handlePick(pick)}
-              style={{ background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: '.72rem' }}>
-              {pickLabels[pick]}
-              {currentPick === pick && <CheckCircle2 size={13} className="ml-3" />}
-              {!loggedIn && <Lock size={10} style={{ position: 'absolute', top: 4, right: 5, opacity: .4 }} />}
-            </button>
-          ))}
-        </div>
-      )}
-      {isFinished && currentPick && (
-        <div className="flex-center justify-center gap-6 py-6 text-muted font-bold" style={{ fontSize: '.72rem' }}>
-          <span>Your pick:</span>
-          <span style={{ color: pickColors[currentPick]?.color || 'var(--accent)' }}>{pickLabels[currentPick]}</span>
-        </div>
-      )}
-    </div>
+      <div className="z-lm-row">
+        <span className="z-lm-name">{match.homeName}</span>
+        <span className="z-lm-score" style={{ color: isLive ? 'var(--danger)' : 'var(--text-primary)' }}>{hasScore ? match.homeScore : '-'}</span>
+      </div>
+      <div className="z-lm-row">
+        <span className="z-lm-name">{match.awayName}</span>
+        <span className="z-lm-score" style={{ color: isLive ? 'var(--danger)' : 'var(--text-primary)' }}>{hasScore ? match.awayScore : '-'}</span>
+      </div>
+    </Link>
   );
 });
 
-const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
+const FeaturedRow = React.memo(({ pred, userPred, isLoggedIn }) => {
+  const isFin = isFinishedStatus(pred.status, SPORT.FOOTBALL) || !!pred.isFinished;
+  const isLive = isLiveStatus(pred.status, SPORT.FOOTBALL) || !!pred.isLive;
+  const isHT = pred.status === 'ht' || pred.status === 'HT';
+  const hasScore = pred.homeScore != null && pred.awayScore != null;
+  const isPredicted = !!userPred;
+
+  let border = 'var(--border)';
+  if (isLive || isHT) border = 'var(--danger)';
+  else if (isFin) border = 'rgba(var(--primary-rgb),.2)';
+  else if (isPredicted) border = 'var(--primary)';
+
+  let sLabel = pred.kickoff || 'VS';
+  let sColor = 'var(--text-muted)';
+  let sBg = 'var(--bg-card)';
+  if (isLive) { sLabel = pred.minute != null ? pred.minute + "'" : 'LIVE'; sColor = 'var(--danger)'; sBg = 'rgba(var(--danger-rgb),.12)'; }
+  else if (isHT) { sLabel = 'HT'; sColor = 'var(--gold)'; sBg = 'rgba(var(--gold-rgb),.12)'; }
+  else if (isFin) { sLabel = 'FT'; sColor = 'var(--primary)'; sBg = 'rgba(var(--primary-rgb),.1)'; }
+
+  let cls = 'z-mc';
+  if (isLive) cls += ' live';
+  if (isFin) cls += ' ft';
+  if (isFin && !isPredicted) cls += ' dim';
+
+  const mid = pred.id || pred.matchId;
+
+  let actionContent = null;
+  if (isPredicted) {
+    actionContent = <Link to="/predictions" className="btn btn-outline btn-sm"><CheckCircle2 size={12} /> Locked</Link>;
+  } else if (isLoggedIn) {
+    actionContent = <Link to={'/predictions?match=' + mid} className="btn btn-primary btn-sm"><Target size={12} /> Predict</Link>;
+  } else {
+    actionContent = <Link to="/login" className="btn btn-ghost btn-sm"><Lock size={12} /> Login</Link>;
+  }
+
+  const scoreContent = hasScore ? (
+    <span className="flex-center gap-8">
+      <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.homeScore}</span>
+      <span className="z-sep">-</span>
+      <span className={'z-sn ' + (isLive ? 'r' : 'g')}>{pred.awayScore}</span>
+    </span>
+  ) : <span className="z-vs">VS</span>;
+
+  let sbCls = 'z-sb';
+  if (isLive) sbCls += ' lv';
+  if (isFin) sbCls += ' ft';
+
+  const homeName = pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home';
+  const awayName = pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away';
+  const leagueName = pred.league?.name || 'Featured';
+
   return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/60 flex-center z-max p-20" style={{ backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} className="glass-card flex-col p-32 text-center max-w-380 w-full">
-        <div className="glass-card flex-center mb-16 mx-auto" style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(var(--accent-rgb),.12)', color: 'var(--accent)' }}>
-          <Lock size={24} />
+    <div className={cls} style={{ borderLeft: '3px solid ' + border }}>
+      <div className="z-mh">
+        <div className="z-ml">
+          {pred.league && pred.league.emblem && <img src={pred.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildLeagueRoute(pred.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
         </div>
-        <div className="text-primary font-extrabold mb-8">Login to Predict</div>
-        <div className="text-muted text-sm leading-relaxed mb-20">Sign in to start making basketball predictions and compete on the leaderboard.</div>
-        <button className="btn btn-primary w-full mb-10" onClick={() => window.location.href = '/login'}>
-          <LogIn size={16} /> Sign In
-        </button>
-        <button className="btn btn-ghost w-full" onClick={onClose}>Maybe Later</button>
+        <div className="flex-center gap-4">
+          {isLive && <span className="z-ldot" />}
+          <span className="z-st" style={{ color: sColor, background: sBg }}>{sLabel}</span>
+        </div>
+      </div>
+      <div className="z-tm">
+        <div className="z-te">
+          {pred.homeLogo && <img src={pred.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildTeamRoute(pred.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+        </div>
+        <div className={sbCls}>{scoreContent}</div>
+        <div className="z-te aw">
+          {pred.awayLogo && <img src={pred.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildTeamRoute(pred.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+        </div>
+      </div>
+      <div className="z-ma">{actionContent}</div>
+    </div>
+  );
+});
+
+const ZokaRow = React.memo(({ pick }) => {
+  const isFin = isFinishedStatus(pick.status, SPORT.FOOTBALL);
+  const koRaw = pick.kickoff || '';
+  const todayDateStr = todayStr();
+  let ko = 'TBD';
+  if (koRaw) {
+    try {
+      const dateStr = koRaw.includes('T') ? koRaw : (pick.matchDate || todayDateStr) + 'T' + koRaw + ':00';
+      ko = new Date(dateStr).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+    } catch (e) { ko = 'TBD'; }
+  }
+  const predH = pick.adminPick ? pick.adminPick.home : null;
+  const predA = pick.adminPick ? pick.adminPick.away : null;
+
+  const scoreContent = isFin && pick.homeScore != null ? (
+    <span className="flex-center gap-8">
+      <span className="z-sn g">{pick.homeScore}</span>
+      <span className="z-sep">-</span>
+      <span className="z-sn g">{pick.awayScore}</span>
+    </span>
+  ) : <span className="z-sn gd">{predH != null ? predH : '?'}-{predA != null ? predA : '?'}</span>;
+
+  let sbCls = 'z-sb';
+  if (isFin) sbCls += ' ft'; else sbCls += ' zk';
+
+  const homeName = pick.homeTeam?.shortName || pick.homeTeam?.name || '?';
+  const awayName = pick.awayTeam?.shortName || pick.awayTeam?.name || '?';
+  const leagueName = pick.league?.name || 'Zoka';
+
+  return (
+    <div className="z-mc zoka">
+      <div className="z-mh">
+        <div className="z-ml">
+          {pick.league && pick.league.emblem && <img src={pick.league.emblem} alt={`${leagueName} logo`} width="14" height="14" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildLeagueRoute(pick.league?.id, leagueName)} style={{ textDecoration: 'none', color: 'inherit' }}>{leagueName}</Link>
+        </div>
+        <span className="z-st" style={{ color: isFin ? 'var(--primary)' : 'var(--text-muted)', background: isFin ? 'rgba(var(--primary-rgb),.1)' : 'var(--bg-card)' }}>{isFin ? 'FT' : ko}</span>
+      </div>
+      <div className="z-tm">
+        <div className="z-te">
+          {pick.homeLogo && <img src={pick.homeLogo} alt={`${homeName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildTeamRoute(pick.homeTeam?.id, homeName)} style={{ textDecoration: 'none', color: 'inherit' }}>{homeName}</Link>
+        </div>
+        <div className={sbCls}>{scoreContent}</div>
+        <div className="z-te aw">
+          {pick.awayLogo && <img src={pick.awayLogo} alt={`${awayName} logo`} width="24" height="24" loading="lazy" style={{ objectFit: 'contain' }} onError={e => { e.target.style.display = 'none'; }} />}
+          <Link to={buildTeamRoute(pick.awayTeam?.id, awayName)} style={{ textDecoration: 'none', color: 'inherit' }}>{awayName}</Link>
+        </div>
+      </div>
+      <div className="z-ma">
+        {isFin ? <ZokaBadge pick={pick} /> : <span className="badge badge-gold"><Star size={10} fill="currentColor" /> Prediction</span>}
       </div>
     </div>
   );
 });
 
-export default function Basketball() {
-  const { currentUser } = useAuth();
+const LB_COLORS = ['var(--danger)', 'var(--gold)', 'var(--bronze)', 'var(--primary)', 'var(--accent)', 'var(--accent)', 'var(--text-muted)', 'var(--text-muted)'];
+
+const LbRow = React.memo(({ u, index, isLoggedIn, uid }) => {
+  const isMe = isLoggedIn && u.uid === uid;
+  const rank = u.rank || (index + 4);
+  const color = LB_COLORS[(rank - 1) % LB_COLORS.length];
+  return (
+    <div className={'z-lbrow' + (isMe ? ' me' : '')}>
+      <span className="z-lb-rank" style={{ color: rank <= 3 ? color : 'var(--text-muted)', fontWeight: rank <= 10 ? 800 : 600 }}>#{rank}</span>
+      <div className="z-lb-avatar" style={{ background: color + '20', color: color, border: `1px solid ${color}40` }}>{(u.displayName || '??').slice(0, 2).toUpperCase()}</div>
+      <div className="z-lb-info">
+        <div className="z-lb-name">{u.displayName} {isMe && <span className="z-me-badge">YOU</span>}</div>
+        <div className="z-lb-sub">{u.exact || 0} exact · {u.result || 0} results</div>
+      </div>
+      <span className="z-lb-pts">{u.points || 0}</span>
+    </div>
+  );
+});
+
+// ═══════════════════════════════════════════════════════════
+// MAIN HOME COMPONENT
+// ═══════════════════════════════════════════════════════════
+export default function Home() {
+  const { activePlayersToday, predictionsToday, totalPlayers, totalPredictions } = useGlobalStats();
+  const { currentUser, userProfile } = useAuth();
   const navigate = useNavigate();
-  const queryClient = useQueryClient();
+  const isLoggedIn = !!currentUser;
+  const uid = currentUser ? currentUser.uid : null;
+  const greeting = useMemo(() => getGreeting(), []);
+  const now = useNow(10000);
 
-  const dates = useMemo(() => getDateRange(9, -1), []);
-  const todayStr = useMemo(() => getTodayStr(), []);
-  const yesterdayStr = useMemo(() => getLocalDateStr(-1), []);
-  const tomorrowStr = useMemo(() => getLocalDateStr(1), []);
+  const { data: rawFixtures = [], isLoading: homeLoading } = useFixtures(todayStr());
+  const { data: activePredictions = [] } = useActivePredictions(todayStr());
+  const { data: userPredictions = {} } = useUserPredictions(uid, todayStr());
+  const { data: dailyLB = null } = useDailyLeaderboard(todayStr());
+  const { data: zokaPicksData = null } = useZokaPicks(todayStr());
 
-  const windowDates = useMemo(() => [yesterdayStr, todayStr, tomorrowStr], [yesterdayStr, todayStr, tomorrowStr]);
+  const [offline, setOffline] = useState(!navigator.onLine);
+  const [ui, setUI] = useState({ showFeat: false, showZoka: false, showLB: false });
+  const [newsPosts, setNewsPosts] = useState([]);
+  const [heroGoalFlash, setHeroGoalFlash] = useState(false);
 
-  const [selectedDate, setSelectedDate] = useState(todayStr);
-  
-  const { data: rawFixtures = [], isLoading: loading } = useFixtures(selectedDate, 'basketball');
-  const { data: rawLive = [] } = useLiveMatches('basketball');
-  
-  const gamesByDate = useMemo(() => ({ [selectedDate]: rawFixtures.map(normalizeBasketballGame) }), [rawFixtures, selectedDate]);
-  const liveGames = useMemo(() => rawLive.map(normalizeBasketballGame), [rawLive]);
-  
-  const [error, setError] = useState(null);
-  const [refreshing, setRefreshing] = useState(false);
-
-  const [viewMode, setViewMode] = useState('fixtures');
-  const [predictions, setPredictions] = useState({});
-  const [showLoginModal, setShowLoginModal] = useState(false);
-  const loggedIn = !!currentUser;
-  const [predictDay, setPredictDay] = useState('today');
-  const [upcomingOpen, setUpcomingOpen] = useState(false);
-
-  const dateScrollRef = useRef(null);
-
-  const currentGames = gamesByDate[selectedDate] || [];
+  const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
   useEffect(() => {
-    if (!currentUser) { setPredictions({}); return; }
-    const q = query(collection(db, 'user_bb_predictions'), where('userId', '==', currentUser.uid));
-    
-    const unsub = onSnapshot(q, (snap) => {
-      const userPreds = {};
-      snap.docs.forEach(d => {
-        const data = d.data();
-        userPreds[data.gameId] = { pick: data.pick, timestamp: data.timestamp };
+    const onLine = () => setOffline(false);
+    const offLine = () => setOffline(true);
+    window.addEventListener('online', onLine);
+    window.addEventListener('offline', offLine);
+    return () => {
+      window.removeEventListener('online', onLine);
+      window.removeEventListener('offline', offLine);
+    };
+  }, []);
+
+  useEffect(() => {
+    import('../utils/firebase').then(({ db }) => {
+      if (!db) return;
+      import('firebase/firestore').then(({ collection, query, limit, getDocs, orderBy }) => {
+        const q = query(collection(db, 'news_posts'), orderBy('createdAt', 'desc'), limit(8));
+        getDocs(q).then(snap => {
+          setNewsPosts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+        }).catch(err => console.error("News fetch error:", err));
       });
-      setPredictions(prev => {
-        if (Object.keys(prev).length !== Object.keys(userPreds).length) return userPreds;
-        for (const k in userPreds) {
-          if (prev[k]?.pick !== userPreds[k].pick) return userPreds;
+    });
+  }, []);
+
+  const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
+  const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
+  const featuredMatches = useMemo(() => allFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10), [allFixtures]);
+  const upcomingMatches = useMemo(() => allFixtures.filter(m => !m.isLive && !m.isFinished && m.display?.isUpcoming).slice(0, 10), [allFixtures]);
+
+  const heroMatch = useMemo(() => {
+    if (liveMatches.length > 0) return liveMatches[0];
+    if (featuredMatches.length > 0) return featuredMatches[0];
+    return null;
+  }, [liveMatches, featuredMatches]);
+
+  const nextKickoff = useMemo(() => {
+    const cands = upcomingMatches
+      .map(m => ({ m, t: parseKickoff(m) }))
+      .filter(x => x.t != null && x.t > Date.now())
+      .sort((a, b) => a.t - b.t);
+    return cands.length > 0 ? cands[0].m : null;
+  }, [upcomingMatches, now]);
+
+  const prevHeroScore = useRef({ h: heroMatch?.homeScore, a: heroMatch?.awayScore });
+  useEffect(() => {
+    if (heroMatch && heroMatch.homeScore != null && heroMatch.awayScore != null) {
+      if (heroMatch.homeScore !== prevHeroScore.current.h || heroMatch.awayScore !== prevHeroScore.current.a) {
+        if (prevHeroScore.current.h != null) {
+          setHeroGoalFlash(true);
+          const t = setTimeout(() => setHeroGoalFlash(false), 2500);
+          prevHeroScore.current = { h: heroMatch.homeScore, a: heroMatch.awayScore };
+          return () => clearTimeout(t);
         }
-        return prev;
-      });
-    }, (err) => console.error("Pred fetch error:", err));
-    return () => unsub();
-  }, [currentUser]);
-
-  const handlePredict = useCallback(async (gameId, needsLogin, pick) => {
-    if (needsLogin || !currentUser) { setShowLoginModal(true); return; }
-    if (!gameId || !pick) return;
-    await safeWrite('user_bb_predictions', `${currentUser.uid}_${gameId}`, { userId: currentUser.uid, gameId: String(gameId), pick, timestamp: Date.now() });
-    eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, sport: 'basketball' });
-  }, [currentUser]);
-
-  const handleRemovePredict = useCallback(async (gameId) => {
-    if (!currentUser) return;
-    const predRef = doc(db, 'user_bb_predictions', `${currentUser.uid}_${gameId}`);
-    await deleteDoc(predRef);
-    eventBus.emit(EVENT.USER_PREDICTION_SAVED, { uid: currentUser.uid, matchId: gameId, removed: true, sport: 'basketball' });
-  }, [currentUser]);
-
-  const handleRefresh = useCallback(() => {
-    if (refreshing) return;
-    setRefreshing(true);
-    setError(null);
-    queryClient.invalidateQueries(['fixtures', selectedDate]);
-    queryClient.invalidateQueries(['liveMatches']);
-    setTimeout(() => setRefreshing(false), 500);
-  }, [refreshing, selectedDate, queryClient]);
-
-  const mergedGames = useMemo(() => {
-    if (!liveGames.length) return currentGames;
-    const liveMap = new Map(liveGames.map(g => [String(g.id), g]));
-    let changed = false;
-    const next = currentGames.map(g => {
-      const live = liveMap.get(String(g.id));
-      if (live && (g.homeScore !== live.homeScore || g.awayScore !== live.awayScore || g.status !== live.status || g.minute !== live.minute)) {
-        changed = true;
-        return { ...g, ...live };
+        prevHeroScore.current = { h: heroMatch.homeScore, a: heroMatch.awayScore };
       }
-      return g;
-    });
-    return changed ? next : currentGames;
-  }, [currentGames, liveGames]);
-
-  const grouped = useMemo(() => {
-    const map = new Map();
-    mergedGames.forEach(g => {
-      if (!map.has(g.leagueKey)) {
-        map.set(g.leagueKey, { key: g.leagueKey, ...g.league, games: [] });
-      }
-      map.get(g.leagueKey).games.push(g);
-    });
-    const arr = Array.from(map.values());
-    arr.sort((a, b) => {
-      const aLive = a.games.some(g => g.isLive);
-      const bLive = b.games.some(g => g.isLive);
-      if (aLive && !bLive) return -1;
-      if (!aLive && bLive) return 1;
-      return a.name.localeCompare(b.name);
-    });
-    return arr;
-  }, [mergedGames]);
-
-  const liveCount = liveGames.length;
-  const totalLiveInDate = mergedGames.filter(g => g.isLive).length;
-
-  const liveLeagues = grouped.filter(l => l.games.some(g => g.isLive));
-  const scheduledLeagues = grouped.filter(l => l.games.some(g => g.isScheduled));
-  const finishedLeagues = grouped.filter(l => l.games.every(g => g.isFinished));
-
-  const gameCounts = useMemo(() => {
-    const counts = {};
-    Object.entries(gamesByDate).forEach(([date, games]) => {
-      counts[date] = games.length;
-    });
-    return counts;
-  }, [gamesByDate]);
-
-  const todayPredictGames = useMemo(() => getTopPredictGames(gamesByDate[todayStr] || [], 10), [gamesByDate, todayStr]);
-  const tomorrowPredictGames = useMemo(() => getTopPredictGames(gamesByDate[tomorrowStr] || [], 10), [gamesByDate, tomorrowStr]);
-
-  const upcomingPredictGames = useMemo(() => {
-    if (!upcomingOpen || !predictDay || predictDay === 'today' || predictDay === tomorrowStr) return [];
-    return getTopPredictGames(gamesByDate[predictDay] || [], 10);
-  }, [gamesByDate, predictDay, upcomingOpen, tomorrowStr]);
-
-  const predictViewDates = useMemo(() => dates.filter(d => d.date > tomorrowStr).slice(0, 7), [dates, tomorrowStr]);
-
-  useEffect(() => {
-    if (dateScrollRef.current) {
-      const todayEl = dateScrollRef.current.querySelector('[data-date="' + todayStr + '"]');
-      if (todayEl) todayEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
     }
-  }, [todayStr]);
+  }, [heroMatch]);
 
-  let sectionIdx = 0;
+  const liveStats = useMemo(() => {
+    let goals = 0;
+    let liveCount = 0;
+    allFixtures.forEach(m => {
+      if (m.isLive) liveCount++;
+      if (m.isLive || m.isFinished) goals += (m.homeScore || 0) + (m.awayScore || 0);
+    });
+    return { goals, liveCount };
+  }, [allFixtures]);
 
-  // ★ SEO GOLD: ItemList Schema for Basketball Games
-  const itemListSchema = useMemo(() => ({
+  const uniqueLeaguesCount = useMemo(() => {
+    const ids = new Set();
+    allFixtures.forEach(m => { if (m.leagueId) ids.add(String(m.leagueId)); });
+    return ids.size;
+  }, [allFixtures]);
+
+  const stripMatches = liveMatches.length > 0 ? liveMatches : (featuredMatches.length > 0 ? featuredMatches : upcomingMatches);
+  const tickerMatches = stripMatches.slice(0, 10);
+
+  const dailyEntries = dailyLB?.entries || [];
+  const dailyStats = dailyLB?.stats || { avg: '0.0', preds: 0, exact: 0, players: 0 };
+  const zokaFlat = zokaPicksData?.matches || [];
+
+  const myEntry = useMemo(() => {
+    if (!isLoggedIn || !dailyEntries) return null;
+    return dailyEntries.find(u => u.uid === uid) || null;
+  }, [dailyEntries, uid, isLoggedIn]);
+
+  const myPoints = myEntry?.points || 0;
+  const myRank = myEntry?.rank || null;
+  const userStreak = myEntry?.streak || userProfile?.streak || 0;
+
+  const totalPredictors = dailyStats.players || 0;
+  const totalPredictionsMade = dailyStats.preds || 0;
+  const avgAccuracy = dailyStats.avg ? parseFloat(dailyStats.avg) : 0;
+  const ctxLoading = homeLoading;
+
+  const zokaVis = ui.showZoka ? zokaFlat : zokaFlat.slice(0, 4);
+  const zokaHidden = Math.max(0, zokaFlat.length - 4);
+
+  const featFlat = activePredictions || [];
+  const featVis = ui.showFeat ? featFlat : featFlat.slice(0, 5);
+  const featHidden = Math.max(0, featFlat.length - 5);
+
+  const lbVis = ui.showLB ? dailyEntries : dailyEntries.slice(0, 5);
+  const lbHidden = Math.max(0, dailyEntries.length - 5);
+
+  const userPredMap = useMemo(() => {
+    const m = {};
+    if (userPredictions) {
+      Object.values(userPredictions).forEach(p => {
+        if (p.predId) m[p.predId] = p;
+        if (p.matchId) m[String(p.matchId)] = p;
+      });
+    }
+    return m;
+  }, [userPredictions]);
+
+  const myPredicted = useMemo(() => {
+    if (!activePredictions) return 0;
+    return activePredictions.filter(p => userPredMap[String(p.matchId)]).length;
+  }, [activePredictions, userPredMap]);
+
+  const displayName = userProfile && userProfile.displayName ? userProfile.displayName.split(' ')[0] : '';
+
+  const heroGradient = heroMatch?.isLive
+    ? 'radial-gradient(circle at 50% -20%, rgba(var(--danger-rgb), 0.15) 0%, transparent 60%)'
+    : 'radial-gradient(circle at 50% -20%, rgba(var(--primary-rgb), 0.12) 0%, transparent 60%)';
+
+  // ═══════════════════════════════════════════════════════════
+  // ★ SEO UPGRADES: Schema Generators
+  // ═══════════════════════════════════════════════════════════
+  const generateItemListSchema = () => {
+    if (!tickerMatches || tickerMatches.length === 0) return null;
+    return {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      "name": "Today's Live & Upcoming Football Matches",
+      "description": "Real-time football fixtures, live scores, and kickoff times on ZOKASCORE.",
+      "numberOfItems": tickerMatches.length,
+      "itemListElement": tickerMatches.slice(0, 10).map((m, i) => ({
+        "@type": "ListItem",
+        "position": i + 1,
+        "url": `https://zokascore.xyz${buildMatchRoute(m.id, m.homeName, m.awayName)}`,
+        "name": `${m.homeName} vs ${m.awayName}`,
+        "description": m.isLive 
+          ? `LIVE ${m.displayMinute || 0}' - Score: ${m.homeScore || 0}-${m.awayScore || 0}` 
+          : `Kickoff at ${m.kickoff || 'TBD'}`
+      }))
+    };
+  };
+
+  const generateOrganizationSchema = () => ({
     "@context": "https://schema.org",
-    "@type": "ItemList",
-    "name": "Basketball Fixtures & Live Scores",
-    "itemListElement": mergedGames.slice(0, 30).map((g, index) => ({
-      "@type": "ListItem",
-      "position": index + 1,
-      "name": `${g.homeTeam?.name} vs ${g.awayTeam?.name}`,
-      "url": `${window.location.origin}/basketball` 
-    }))
-  }), [mergedGames]);
+    "@type": "Organization",
+    "name": "ZOKASCORE",
+    "url": "https://zokascore.xyz",
+    "logo": "https://zokascore.xyz/logo.png",
+    "description": "ZOKASCORE is the ultimate football intelligence platform offering live scores, AI-driven predictions, interactive leaderboards, and breaking football news.",
+    "sameAs": [
+      "https://twitter.com/zokascore",
+      "https://facebook.com/zokascore"
+    ],
+    "contactPoint": {
+      "@type": "ContactPoint",
+      "email": "streetzoka@gmail.com",
+      "contactType": "Customer Support"
+    }
+  });
+
+  const structuredData = [generateItemListSchema(), generateOrganizationSchema()].filter(Boolean);
 
   return (
-    <div className="zoka-page" style={{ animation: 'zk-fade-up .45s ease' }}>
-      {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
-
+    <div className={`zoka-home ${heroGoalFlash ? 'goal-flash-active' : ''}`}>
       <SEO
-        title="Basketball Live Scores, Fixtures & Predictions | NBA, EuroLeague"
-        description="Follow live basketball scores, fixtures, quarter-by-quarter stats, and predictions from the NBA, EuroLeague, and top global competitions on ZOKASCORE."
-        keywords="basketball live scores, NBA fixtures, basketball predictions, EuroLeague, ZOKASCORE basketball"
-        robots="index,follow"
-        structuredData={itemListSchema}
+        title="Live Football Scores, AI Predictions & Leaderboards | ZOKASCORE"
+        description="Track today's football fixtures, make AI-powered predictions, compete on daily leaderboards, and follow live scores from leagues worldwide. ZOKASCORE — your ultimate football companion."
+        keywords="football predictions, live scores, football fixtures, AI predictions, match analysis, league standings, football results, ZOKASCORE, Premier League, La Liga, Champions League"
+        path="/"
+        robots="index,follow,max-image-preview:large"
+        structuredData={structuredData}
+        includeBreadcrumbs={false}
       />
 
-      {/* ★ SEO GOLD: Editorial Context for Googlebot */}
-      <div className="zoka-wrap pt-16">
-        <div className="glass-card p-20 mb-16" style={{ borderLeft: '4px solid var(--accent)' }}>
-          <h2 className="text-primary font-bold text-lg mb-8">Global Basketball Intelligence</h2>
-          <p className="text-secondary text-sm leading-relaxed">
-            Welcome to ZOKASCORE's Basketball Hub. Track real-time live scores, quarter-by-quarter breakdowns, and game outcomes from the NBA, EuroLeague, FIBA, and top domestic leagues worldwide. Use our data to make informed predictions and climb the basketball leaderboard.
-          </p>
-        </div>
-      </div>
+      {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
-      <div className="glass sticky top-0 z-sticky" style={{ borderBottom: '1px solid var(--border)', animation: 'zk-slide-in .4s ease' }}>
-        <div className="zoka-wrap flex-between py-12">
-          <div className="flex-center gap-10">
-            <div className="flex-center font-extrabold text-inverse" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', fontSize: '.72rem' }}>Z</div>
-            <span className="text-primary font-extrabold text-sm">zokascore<span className="text-accent">.xyz</span></span>
-            <span style={{ fontSize: 20 }}>🏀</span>
+      <div className="zoka-home-wrap">
+        <section className="z-hero-pro compact-hero" style={{ background: heroGradient }}>
+          <div className="z-aurora" aria-hidden="true" />
+
+          <div className="z-hero-top-row z-hero-alive">
+            <div className="z-hello">
+              <span className="z-hello-emoji">{greeting.emoji}</span>
+              <div className="z-hello-txt">
+                <strong>{greeting.text}, {displayName || 'Manager'}.</strong>
+                <span className="z-hello-sub">
+                  {new Date(now).toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'short' })}
+                  · <LiveClock />
+                </span>
+              </div>
+            </div>
+            <StreakBadge streak={userStreak} />
           </div>
-          <div className="flex-center gap-4">
-            {liveCount > 0 && (
-              <div className="badge badge-danger anim-live-pulse">
-                <span className="zk-live-pulse-dot mr-2" /> LIVE {liveCount}
+
+          <div className="z-hero-content">
+            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+            <p className="z-sub">Live scores, AI predictions & leaderboards — updated in real time.</p>
+          </div>
+
+          {tickerMatches.length > 0 && <HeroTicker matches={tickerMatches} />}
+
+          <div className="z-pulse-bar">
+            <div className={'z-pb-item' + (liveStats.liveCount > 0 ? ' hot' : '')}>
+              <span className="z-pb-val" style={{ color: liveStats.liveCount > 0 ? 'var(--danger)' : 'var(--text-primary)' }}>
+                <AnimNum value={liveStats.liveCount} />
+              </span>
+              <span className="z-pb-lbl">Live Now</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={liveStats.goals} delay={80} /></span>
+              <span className="z-pb-lbl">Goals</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={totalPredictionsMade || predictionsToday} delay={160} /></span>
+              <span className="z-pb-lbl">Predictions</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={activePlayersToday || totalPredictors} delay={240} /></span>
+              <span className="z-pb-lbl">Players</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val"><AnimNum value={uniqueLeaguesCount} delay={320} /></span>
+              <span className="z-pb-lbl">Leagues</span>
+            </div>
+            <div className="z-pb-item">
+              <span className="z-pb-val" style={{ color: 'var(--primary)' }}><AnimNum value={Math.round(avgAccuracy)} delay={400} suffix="%" /></span>
+              <span className="z-pb-lbl">Accuracy</span>
+            </div>
+            {isLoggedIn && (
+              <div className="z-pb-item me">
+                <span className="z-pb-val" style={{ color: 'var(--primary)' }}><AnimNum value={myPoints} delay={480} /></span>
+                <span className="z-pb-lbl">My Pts{myRank ? ' · #' + myRank : ''}</span>
               </div>
             )}
-            <button className="btn-icon" onClick={handleRefresh} disabled={refreshing}>
-              <RefreshCw size={15} className={refreshing ? 'anim-spin' : ''} />
-            </button>
           </div>
-        </div>
+        </section>
 
-        <div className="zoka-wrap flex-between py-6">
-          <div className="flex gap-4">
-            <button className="btn btn-ghost btn-sm" onClick={() => navigate('/fixtures')}>
-              <span style={{ fontSize: '1rem' }}>⚽</span> Football <ChevronRight size={13} className="opacity-50" />
-            </button>
-            <button className="btn btn-primary btn-sm">
-              <span style={{ fontSize: '1rem' }}>🏀</span> Basketball
-            </button>
-          </div>
-          <span className="text-muted font-medium flex-center gap-4 text-xs">
-            <Database size={10} /> Firestore
-          </span>
-        </div>
-
-        <div className="zoka-wrap flex gap-4 py-6">
-          <button className={`btn flex-1 ${viewMode === 'fixtures' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('fixtures')}>
-            <CalendarDays size={14} /> Fixtures
-          </button>
-          <button className={`btn flex-1 ${viewMode === 'predict' ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setViewMode('predict')}>
-            <Sparkles size={14} /> Predict
-            {Object.keys(predictions).length > 0 && <span className="badge badge-muted ml-2">{Object.keys(predictions).length}</span>}
-          </button>
-        </div>
-
-        {viewMode === 'fixtures' && (
-          <div ref={dateScrollRef} className="zoka-wrap flex gap-4 py-10 overflow-x-auto">
-            {dates.map((d, i) => {
-              const isActive = d.date === selectedDate;
-              const isToday = d.isToday;
-              const inWindow = windowDates.includes(d.date);
-              const count = gameCounts[d.date];
-              return (
-                <button key={d.date} data-date={d.date} className={`btn flex-col min-w-52 ${isActive ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedDate(d.date)} style={{ animation: `zk-fade-up .3s ease ${i * 25}ms both`, position: 'relative' }}>
-                  <span className="text-xs font-bold opacity-70 uppercase">{d.day}</span>
-                  <span className="font-extrabold text-md">{d.num}</span>
-                  <span className="text-xs font-semibold opacity-50">{d.month}</span>
-                  {inWindow && count > 0 && <span className="absolute -top-3 -right-3 badge badge-primary">{count}</span>}
-                </button>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      <div className="zoka-wrap py-12 pb-80">
-        {viewMode === 'fixtures' && (
-          <>
-            {error && !loading && <ErrorScreen error={error} onRetry={() => { setError(null); handleRefresh(); }} />}
-
-            {loading && !error ? (
-              <div><SkeletonGroup /><div className="mt-16"><SkeletonGroup /></div></div>
-            ) : !error && mergedGames.length === 0 ? (
-              <div className="glass-card flex-col items-center p-60 text-center gap-16">
-                <div style={{ fontSize: 48, animation: 'zk-bounce 4s ease-in-out infinite' }}>🏀</div>
-                <div className="text-muted font-medium text-sm">No games scheduled for this date</div>
-                <div className="text-muted text-xs">Backend populates yesterday, today, and tomorrow</div>
-                {!windowDates.includes(selectedDate) && (
-                  <button className="btn btn-secondary mt-16" onClick={() => setSelectedDate(todayStr)}>Go to Today</button>
-                )}
+        {heroMatch && (
+          <Link to={buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName)} className={`z-hero-match ${heroGoalFlash ? 'goal-flash' : ''} ${heroMatch.isLive ? 'live' : ''}`}>
+            <div className="z-hero-top">
+              <div className="z-hero-league">
+                {heroMatch.leagueLogo && <img src={heroMatch.leagueLogo} alt="League" width="16" height="16" />}
+                <span>{heroMatch.leagueName}</span>
               </div>
-            ) : !error && (
-              <div key={selectedDate}>
-                {liveLeagues.length > 0 && (
-                  <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div className="zk-live-pulse-dot" /> LIVE ({totalLiveInDate})
-                    </div>
-                    {liveLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`live-${l.key}`} league={l} games={l.games.filter(g => g.isLive)} sectionIndex={idx} />; })}
-                  </>
-                )}
-                {scheduledLeagues.length > 0 && (
-                  <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /> SCHEDULED
-                    </div>
-                    {scheduledLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`sched-${l.key}`} league={l} games={l.games.filter(g => g.isScheduled)} sectionIndex={idx} />; })}
-                  </>
-                )}
-                {finishedLeagues.length > 0 && (
-                  <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
-                      <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)' }} /> FINISHED
-                    </div>
-                    {finishedLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`fin-${l.key}`} league={l} games={l.games.filter(g => g.isFinished)} sectionIndex={idx} />; })}
-                  </>
-                )}
-              </div>
-            )}
-          </>
-        )}
-
-        {viewMode === 'predict' && (
-          <div className="anim-fade-up">
-            <div className="flex-center gap-10 mb-16">
-              <div className="glass-card flex-center text-accent" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(var(--accent-rgb),.1)' }}>
-                <Flame size={18} />
-              </div>
-              <div>
-                <div className="text-primary font-extrabold">Predict & Win</div>
-                <div className="text-muted text-xs">Pick basketball game outcomes</div>
-              </div>
-              {!loggedIn && <button className="btn btn-secondary btn-sm ml-auto" onClick={() => setShowLoginModal(true)}><Lock size={12} /> Sign in</button>}
-              {loggedIn && Object.keys(predictions).length > 0 && <div className="badge badge-accent ml-auto"><CheckCircle2 size={12} /> {Object.keys(predictions).length} Picked</div>}
-            </div>
-
-            <div className="mb-24">
-              <div className="flex-center gap-8 mb-12 text-primary font-bold text-sm"><CalendarDays size={14} className="text-accent" /> Today's Games</div>
-              {todayPredictGames.length > 0 ? todayPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">No predictions available for today.</div>}
-            </div>
-
-            <div className="mb-24">
-              <div className="flex-center gap-8 mb-12 text-primary font-bold text-sm"><CalendarDays size={14} className="text-gold" /> Tomorrow's Games</div>
-              {tomorrowPredictGames.length > 0 ? tomorrowPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">No predictions available for tomorrow.</div>}
-            </div>
-
-            <div className="mb-24">
-              <button className="btn btn-secondary w-full flex-between" onClick={() => setUpcomingOpen(!upcomingOpen)}>
-                <span className="flex-center gap-8"><ChevronDown size={14} className="text-muted" /> Upcoming Games</span>
-                <ChevronRight size={14} className="text-muted" style={{ transform: upcomingOpen ? 'rotate(90deg)' : 'none', transition: 'transform .2s' }} />
-              </button>
-              
-              {upcomingOpen && (
-                <div className="mt-12">
-                  <div className="flex gap-8 overflow-x-auto pb-8 mb-12">
-                    {predictViewDates.map(d => (
-                      <button key={d.date} onClick={() => setPredictDay(d.date)} className={`btn btn-sm ${predictDay === d.date ? 'btn-primary' : 'btn-secondary'}`}>
-                        {d.day} {d.num}
-                      </button>
-                    ))}
-                  </div>
-                  
-                  {upcomingPredictGames.length > 0 ? upcomingPredictGames.map((g, i) => <PredictCard key={g.id} game={g} index={i} prediction={predictions[g.id]} onPredict={handlePredict} onRemove={handleRemovePredict} loggedIn={loggedIn} />) : <div className="text-center p-20 text-muted text-sm">{predictDay ? `No games scheduled for ${predictDay}.` : 'Select a date to view upcoming games.'}</div>}
+              {heroMatch.isLive && (
+                <div className="z-hero-badge live">
+                  <span className="live-pulse-dot"></span>
+                  LIVE {heroMatch.displayMinute || 0}&apos;
                 </div>
               )}
+              {heroMatch.isFinished && <div className="z-hero-badge ft">FULL TIME</div>}
+              {!heroMatch.isLive && !heroMatch.isFinished && <div className="z-hero-badge sched">{heroMatch.kickoff}</div>}
+            </div>
+
+            <div className="z-hero-teams">
+              <div className="z-hero-team">
+                {heroMatch.homeLogo && <img src={heroMatch.homeLogo} alt={heroMatch.homeName} />}
+                <span>{heroMatch.homeName}</span>
+              </div>
+              <div className="z-hero-score">
+                {(heroMatch.isLive || heroMatch.isFinished) ? (
+                  <span className="z-hero-score-num">{heroMatch.homeScore} <span className="sep">-</span> {heroMatch.awayScore}</span>
+                ) : (
+                  <span className="z-hero-vs">VS</span>
+                )}
+              </div>
+              <div className="z-hero-team">
+                {heroMatch.awayLogo && <img src={heroMatch.awayLogo} alt={heroMatch.awayName} />}
+                <span>{heroMatch.awayName}</span>
+              </div>
+            </div>
+
+            {heroMatch.stats && (heroMatch.stats.possession || heroMatch.stats.shots || heroMatch.stats.corners) ? (
+              <div className="z-hero-stats-grid">
+                {heroMatch.stats.possession && (
+                  <div className="z-hs-item"><span className="lbl">POSS</span><span className="val">{heroMatch.stats.possession.home || 0}% - {heroMatch.stats.possession.away || 0}%</span></div>
+                )}
+                {heroMatch.stats.shots && (
+                  <div className="z-hs-item"><span className="lbl">SHOTS</span><span className="val">{heroMatch.stats.shots.home || 0} - {heroMatch.stats.shots.away || 0}</span></div>
+                )}
+                {heroMatch.stats.corners && (
+                  <div className="z-hs-item"><span className="lbl">CORNERS</span><span className="val">{heroMatch.stats.corners.home || 0} - {heroMatch.stats.corners.away || 0}</span></div>
+                )}
+              </div>
+            ) : (
+              <div className="glass-card flex-between mt-16" style={{ padding: '10px 14px' }}>
+                <span className="text-muted font-bold text-sm">{heroMatch.date ? new Date(heroMatch.date).toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : 'Scheduled'}</span>
+                <span className="text-muted font-bold text-sm">{heroMatch.venue?.name || heroMatch.leagueName}</span>
+              </div>
+            )}
+
+            <div className="z-hero-actions" onClick={(e) => e.preventDefault()}>
+              <button className="z-ha-btn primary" onClick={() => navigate(buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName))}>View Match</button>
+              <button className="z-ha-btn" onClick={() => navigate('/predictions')}>Predictions</button>
+              <button className="z-ha-btn" onClick={() => navigate(buildMatchRoute(heroMatch.id, heroMatch.homeName, heroMatch.awayName))}>Statistics</button>
+            </div>
+          </Link>
+        )}
+
+        {!ctxLoading && nextKickoff && <KickoffCountdown match={nextKickoff} />}
+
+        {!ctxLoading && isLoggedIn && upcomingMatches.length > 0 && (
+          <DailyChallenge
+            match={upcomingMatches[0]}
+            isLoggedIn={isLoggedIn}
+            onPredict={() => navigate(`/predictions?match=${upcomingMatches[0].id}`)}
+          />
+        )}
+
+        <div className="mt-16">
+          <div className="z-strip-header">
+            {liveMatches.length > 0 ? (
+              <span className="flex-center gap-4">
+                <span className="z-ldot" />
+                <span className="z-strip-title" style={{ color: 'var(--danger)' }}>{liveMatches.length} LIVE</span>
+              </span>
+            ) : (
+              <span className="z-strip-title" style={{ color: 'var(--text-muted)' }}>TODAY&apos;S MATCHES</span>
+            )}
+            <div className="z-sech-line" />
+            <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={12} /></Link>
+          </div>
+          <div className="z-livestrip">
+            {ctxLoading && stripMatches.length === 0 ? (
+              <React.Fragment><LiveStripLoader /><LiveStripLoader /><LiveStripLoader /></React.Fragment>
+            ) : stripMatches.length > 0 ? (
+              stripMatches.map((m, i) => <LiveMini key={m.id || i} match={m} index={i} />)
+            ) : (
+              <div className="z-live-loader" style={{ width: '100%', maxWidth: 'none', height: '80px' }}>
+                <div className="z-loader-text" style={{ color: 'var(--text-muted)' }}>No matches scheduled today</div>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {newsPosts.length > 0 && (
+          <div className="z-news-marquee-wrap">
+            <div className="z-strip-header">
+              <Newspaper size={14} style={{ color: 'var(--primary)' }} />
+              <span className="z-strip-title">LATEST NEWS</span>
+              <div className="z-sech-line" />
+              <Link to="/highlights" className="z-strip-link">Hub <ChevronRight size={12} /></Link>
+            </div>
+            <div className="z-news-marquee">
+              {newsPosts.concat(newsPosts).map((post, i) => (
+                <Link to={buildHighlightRoute(post.id, post.title)} key={post.id + '-' + i} className="z-newsmini">
+                  {post.imageUrl ? (
+                    <img src={post.imageUrl} alt={post.title} width="80" height="80" className="z-news-img" style={{ objectFit: 'cover' }} loading="lazy" />
+                  ) : (
+                    <div className="z-news-img-ph"><Newspaper size={18} /></div>
+                  )}
+                  <div className="z-news-body">
+                    <span className="z-news-cat">{post.category}</span>
+                    <h4 className="z-news-title">{post.title}</h4>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         )}
+
+        <AdSlot id="home-ad-1" mobile={true} desktop={true} />
+
+        {!ctxLoading && zokaFlat.length > 0 && (
+          <div className="z-sec">
+            <div className="z-sech">
+              <Star size={14} style={{ color: 'var(--gold)' }} />
+              <h2 className="gold-text">Zoka Picks</h2>
+              <span className="z-sech-badge" style={{ background: 'rgba(var(--gold-rgb),.1)', color: 'var(--gold)', border: '1px solid rgba(var(--gold-rgb),.3)' }}>{zokaFlat.length}</span>
+              <div className="z-sech-line" />
+            </div>
+            <div className="z-zoka-wrap">
+              {zokaVis.map((p, i) => <ZokaRow key={p.matchId || i} pick={p} />)}
+            </div>
+            {zokaHidden > 0 && (
+              <button className={'z-toggle' + (ui.showZoka ? ' open' : '')} onClick={() => toggleUI('showZoka')}>
+                {ui.showZoka ? 'Show less' : 'Show ' + zokaHidden + ' more'} <ChevronDown size={13} />
+              </button>
+            )}
+          </div>
+        )}
+
+        <div className="z-sec">
+          <div className="z-sech">
+            <Target size={14} style={{ color: 'var(--primary)' }} />
+            <h2>Featured - Compete</h2>
+            <span className="z-sech-badge" style={{ background: 'rgba(var(--primary-rgb),.1)', color: 'var(--primary)', border: '1px solid rgba(var(--primary-rgb),.3)' }}>{featFlat.length}</span>
+            {isLoggedIn && <span style={{ fontSize: '.65rem', fontWeight: 700, color: 'var(--text-muted)' }}>{myPredicted}/{featFlat.length} predicted</span>}
+            <div className="z-sech-line" />
+          </div>
+          {ctxLoading ? (
+            <ListSkeleton count={4} />
+          ) : featVis.length > 0 ? (
+            featVis.map((p, i) => (
+              <FeaturedRow key={p.id || String(p.matchId) || i} pred={p} userPred={userPredMap[String(p.matchId)]} isLoggedIn={isLoggedIn} />
+            ))
+          ) : (
+            <div className="glass-card flex-col items-center p-32 gap-8 text-center">
+              <div className="text-muted font-bold text-sm">No featured matches right now</div>
+              <div className="text-muted text-xs">Check back later or go to Predictions</div>
+            </div>
+          )}
+          {featHidden > 0 && (
+            <button className={'z-toggle' + (ui.showFeat ? ' open' : '')} onClick={() => toggleUI('showFeat')}>
+              {ui.showFeat ? 'Show less' : 'Show ' + featHidden + ' more'} <ChevronDown size={13} />
+            </button>
+          )}
+        </div>
+
+        <div className="z-sec">
+          <div className="z-sech">
+            <Trophy size={14} style={{ color: 'var(--primary)' }} />
+            <h2>Daily Leaderboard</h2>
+            <div className="z-sech-line" />
+            <Link to="/leaderboard" className="z-strip-link">Full <ArrowUpRight size={12} /></Link>
+          </div>
+          {ctxLoading ? (
+            <ListSkeleton count={5} />
+          ) : dailyEntries && dailyEntries.length > 0 ? (
+            <div>
+              <MiniPodium entries={dailyEntries} />
+              <div className="mt-12">
+                {lbVis.slice(3).map((u, i) => (
+                  <LbRow key={u.uid} u={u} index={i} isLoggedIn={isLoggedIn} uid={uid} />
+                ))}
+              </div>
+              {lbHidden > 0 && (
+                <button className={'z-toggle' + (ui.showLB ? ' open' : '')} onClick={() => toggleUI('showLB')}>
+                  {ui.showLB ? 'Show less' : 'Show ' + lbHidden + ' more'} <ChevronDown size={13} />
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="glass-card flex-col items-center p-32 gap-8 text-center">
+              <Trophy size={24} style={{ color: 'var(--text-muted)', opacity: 0.3 }} />
+              <div className="text-muted font-bold text-sm">No predictions yet today</div>
+              <div className="text-muted text-xs">Be the first to claim the top spot!</div>
+            </div>
+          )}
+        </div>
+
+        <AdSlot id="home-ad-2" mobile={true} desktop={true} />
+
+        <div className="z-sec">
+          <div className="z-sech">
+            <Zap size={14} style={{ color: 'var(--primary)' }} />
+            <h2>Explore</h2>
+            <div className="z-sech-line" />
+          </div>
+          <div className="z-explore">
+            <Link to="/fixtures" className="z-ecard">
+              <div className="z-ecard-accent" style={{ background: 'var(--primary)' }} />
+              <LiveIcon size={20} style={{ color: 'var(--primary)' }} />
+              <div className="z-ecard-title">Fixtures & Live</div>
+              <div className="z-ecard-sub">Real-time scores, all leagues</div>
+            </Link>
+            <Link to="/predictions" className="z-ecard">
+              <div className="z-ecard-accent" style={{ background: 'var(--gold)' }} />
+              <Target size={20} style={{ color: 'var(--gold)' }} />
+              <div className="z-ecard-title">Predict & Win</div>
+              <div className="z-ecard-sub">Score predictions, earn points</div>
+            </Link>
+            <Link to="/leaderboard" className="z-ecard">
+              <div className="z-ecard-accent" style={{ background: 'var(--gold)' }} />
+              <Trophy size={20} style={{ color: 'var(--gold)' }} />
+              <div className="z-ecard-title">Leaderboard</div>
+              <div className="z-ecard-sub">Daily & weekly rankings</div>
+            </Link>
+            <Link to="/highlights" className="z-ecard">
+              <div className="z-ecard-accent" style={{ background: 'var(--accent)' }} />
+              <Newspaper size={20} style={{ color: 'var(--accent)' }} />
+              <div className="z-ecard-title">News & Highlights</div>
+              <div className="z-ecard-sub">Latest football stories</div>
+            </Link>
+          </div>
+        </div>
+
+        {!isLoggedIn && (
+          <div className="mt-8 mb-32">
+            <Link to="/login" className="z-cta">
+              <LogIn size={18} /> Join ZOKA - Predict and Compete
+            </Link>
+          </div>
+        )}
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ★ SEO KNOWLEDGE GRAPH FOOTER — Visible to Googlebot        */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <footer className="zoka-seo-footer" style={{ marginTop: '32px', padding: '24px 16px', borderTop: '1px solid var(--border)', textAlign: 'center' }}>
+          <h3 style={{ fontSize: '12px', fontWeight: 800, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: '16px' }}>
+            ZOKASCORE Platform
+          </h3>
+          <nav aria-label="Platform Directory" style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: '8px', marginBottom: '16px' }}>
+            <Link to="/fixtures" className="zoka-seo-link">Football Fixtures</Link>
+            <Link to="/predictions" className="zoka-seo-link">Predictions Hub</Link>
+            <Link to="/leaderboard" className="zoka-seo-link">Leaderboards</Link>
+            <Link to="/highlights" className="zoka-seo-link">Football News</Link>
+            <Link to="/master-games" className="zoka-seo-link">Master Games</Link>
+            <Link to="/basketball" className="zoka-seo-link">Basketball</Link>
+            <Link to="/studio" className="zoka-seo-link">Creator Studio</Link>
+            <Link to="/faq" className="zoka-seo-link">FAQ</Link>
+            <Link to="/help-center" className="zoka-seo-link">Help Center</Link>
+            <Link to="/contact" className="zoka-seo-link">Contact</Link>
+          </nav>
+          <p style={{ fontSize: '11px', color: 'var(--text-muted)', maxWidth: '600px', margin: '0 auto 8px', lineHeight: 1.6 }}>
+            ZOKASCORE is the premier football intelligence platform providing real-time live scores, AI-driven match predictions, daily competitive leaderboards, and breaking football news from the Premier League, La Liga, Serie A, Bundesliga, Ligue 1, Champions League, and leagues worldwide.
+          </p>
+          <p style={{ fontSize: '10px', color: 'var(--text-muted)', opacity: 0.6 }}>
+            © {new Date().getFullYear()} ZOKASCORE. All rights reserved. Data refreshes automatically · Scores protected by FT Shield
+          </p>
+        </footer>
       </div>
     </div>
   );
