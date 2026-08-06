@@ -5,9 +5,6 @@ import {
   Sliders, Move, Palette, Search, Star, LayoutGrid, Layers, Type, Grid3x3, X, Film, Shield, Play, Pause, Loader, Trash2, BadgeCheck, Sparkles, Eraser, Scissors, Cpu, Image as ImageIcon, Crop, Wand2, Images, Gauge, Undo2, Redo2, Zap, Trophy, Flame, ChevronDown, ChevronUp, Maximize2, Minimize2, Cloud, Eye, EyeOff, Smile, Keyboard, Rewind, FastForward, Check, AlertTriangle, Info, ChevronRight, ChevronLeft
 } from 'lucide-react';
 
-// Import your CSS file here
-// import './ReactorStudio.css';
-
 // ═══════════════════════════════════════════════════════════
 // HELPER: WebM Duration Metadata Fixer (Crucial for iOS/WhatsApp playback)
 // ═══════════════════════════════════════════════════════════
@@ -1144,7 +1141,7 @@ function ReactorStudioInner() {
       <div className="rs-header">
         <div className="rs-header-left">
           <button onClick={() => navigate('/studio')} className="rs-top-btn"><ArrowLeft size={18} /></button>
-          <h1 className="rs-header-title"><Cpu size={18} color="var(--accent)" /> Reactor Pro</h1>
+          <h1 className="rs-header-title"><Cpu size={18} color="var(--rs-accent)" /> Reactor Pro</h1>
           <div className="rs-autosave-indicator" title={ui.autoSaveStatus === 'saving' ? 'Saving...' : 'Saved'}>
             <Cloud size={12} className={ui.autoSaveStatus === 'saving' ? 'rs-pulse' : ''} />
           </div>
@@ -1279,7 +1276,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'templates' && (
             <div>
-              <h3 className="rs-panel-title"><LayoutGrid size={14} color="var(--accent)" /> Templates</h3>
+              <h3 className="rs-panel-title"><LayoutGrid size={14} color="var(--rs-accent)" /> Templates</h3>
               <div className="rs-search-box">
                 <Search size={14} />
                 <input type="text" value={ui.searchQuery} onChange={(e) => dispatch({ type: 'SET_UI', payload: { searchQuery: e.target.value } })} placeholder="Search templates..." className="rs-search-input" />
@@ -1312,7 +1309,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'edit' && (
             <div>
-              <h3 className="rs-panel-title"><Layers size={14} color="var(--accent)" /> Edit & Layers</h3>
+              <h3 className="rs-panel-title"><Layers size={14} color="var(--rs-accent)" /> Edit & Layers</h3>
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><Crop size={12} /> Aspect Ratio</h4>
                 <div style={{ display: 'flex', gap: '8px' }}>
@@ -1404,7 +1401,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'text' && (
             <div>
-              <h3 className="rs-panel-title"><Type size={14} color="var(--accent)" /> Text & Social</h3>
+              <h3 className="rs-panel-title"><Type size={14} color="var(--rs-accent)" /> Text & Social</h3>
               <div className="rs-panel-box">
                 <h4 className="rs-box-title"><User size={12} /> Social Details</h4>
                 <input type="text" value={editor.displayName} onChange={(e) => dispatch({ type: 'SET_EDITOR', payload: { displayName: e.target.value }, trackHistory: false })} placeholder="Display Name" className="rs-input" />
@@ -1452,7 +1449,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'effects' && (
             <div>
-              <h3 className="rs-panel-title"><Wand2 size={14} color="var(--accent)" /> Effects & Filters</h3>
+              <h3 className="rs-panel-title"><Wand2 size={14} color="var(--rs-accent)" /> Effects & Filters</h3>
               {editor.mode === 'video' && (
                 <div className="rs-panel-box">
                   <h4 className="rs-box-title"><Wand2 size={12} /> Video Effects</h4>
@@ -1485,7 +1482,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'stickers' && (
             <div>
-              <h3 className="rs-panel-title"><Smile size={14} color="var(--accent)" /> Stickers</h3>
+              <h3 className="rs-panel-title"><Smile size={14} color="var(--rs-accent)" /> Stickers</h3>
               <div className="rs-panel-box">
                 <div className="rs-stickers-grid">
                   {STICKERS.map(s => (
@@ -1506,7 +1503,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'audio' && (
             <div>
-              <h3 className="rs-panel-title"><Music size={14} color="var(--accent)" /> Audio Controls</h3>
+              <h3 className="rs-panel-title"><Music size={14} color="var(--rs-accent)" /> Audio Controls</h3>
               <div className="rs-panel-box">
                 <button onClick={() => fileInputRefs.current.audio?.click()} className="rs-btn-sm" style={{ width: '100%', marginBottom: '8px' }}>
                   <Music size={12} /> {media.audioName ? `♫ ${media.audioName}` : 'Import Audio Track'}
@@ -1523,7 +1520,7 @@ function ReactorStudioInner() {
 
           {ui.activePanel === 'export' && (
             <div>
-              <h3 className="rs-panel-title"><Download size={14} color="var(--accent)" /> Export Presets</h3>
+              <h3 className="rs-panel-title"><Download size={14} color="var(--rs-accent)" /> Export Presets</h3>
               <div className="rs-export-presets">
                 {EXPORT_PRESETS.map(p => (
                   <button key={p.id} onClick={() => { handleExportVideo(p); dispatch({ type: 'SET_UI', payload: { activePanel: null } }); }} className="rs-export-preset-btn"
@@ -1541,7 +1538,7 @@ function ReactorStudioInner() {
       {ui.showShortcuts && (
         <div className="rs-modal-overlay" onClick={() => dispatch({ type: 'SET_UI', payload: { showShortcuts: false } })}>
           <div className="rs-modal" onClick={e => e.stopPropagation()}>
-            <h3 className="rs-panel-title"><Keyboard size={14} color="var(--accent)" /> Shortcuts</h3>
+            <h3 className="rs-panel-title"><Keyboard size={14} color="var(--rs-accent)" /> Shortcuts</h3>
             <div className="rs-shortcuts-list">
               {[['Space', 'Play / Pause'], ['Ctrl+Z', 'Undo'], ['Ctrl+Shift+Z', 'Redo'], ['M', 'Mute'], ['G', 'Toggle Guides'], ['E', 'Edit Mode'], ['F', 'Fullscreen'], ['?', 'This Panel'], ['Esc', 'Close Panel']].map(([key, desc]) => (
                 <div key={key} className="rs-shortcut-row"><kbd>{key}</kbd><span>{desc}</span></div>
