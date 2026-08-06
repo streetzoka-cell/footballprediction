@@ -1,5 +1,4 @@
-﻿// src/services/predictions.js
-import { todayStr } from '../utils/dates';
+﻿import { todayStr } from '../utils/dates';
 import { eventBus, EVENT } from '../utils/eventBus';
 import { footballApi } from './footballApi';
 import { safeWrite } from './safeWrite';
@@ -10,9 +9,17 @@ export async function savePrediction(uid, displayName, pred, h, a) {
   const dateStr = pred.matchDate || pred._dateStr || todayStr();
   const predId = `${uid}_${matchId}`;
 
-  const homeTeamName = typeof pred.homeTeam === 'object' ? pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home' : pred.homeTeam || 'Home';
-  const awayTeamName = typeof pred.awayTeam === 'object' ? pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away' : pred.awayTeam || 'Away';
-  const leagueName = typeof pred.league === 'object' ? pred.league?.name || 'Other' : pred.league || 'Other';
+  const homeTeamName = typeof pred.homeTeam === 'object'
+    ? pred.homeTeam?.shortName || pred.homeTeam?.name || 'Home'
+    : pred.homeTeam || 'Home';
+
+  const awayTeamName = typeof pred.awayTeam === 'object'
+    ? pred.awayTeam?.shortName || pred.awayTeam?.name || 'Away'
+    : pred.awayTeam || 'Away';
+
+  const leagueName = typeof pred.league === 'object'
+    ? pred.league?.name || 'Other'
+    : pred.league || 'Other';
 
   const payload = {
     userId: uid,
@@ -27,12 +34,11 @@ export async function savePrediction(uid, displayName, pred, h, a) {
     homeLogo: pred.homeLogo || pred.homeTeam?.crest || pred.homeTeam?.logo || null,
     awayLogo: pred.awayLogo || pred.awayTeam?.crest || pred.awayTeam?.logo || null,
     league: leagueName,
-    kickoff: pred.kickoff || null,
+    kickoff: pred.kickoff || pred.utcDate || null,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
 
-  // Send to backend (Backend saves locally, updates stats, and queues for Firestore)
   const res = await footballApi.saveUserPrediction(payload);
 
   if (res?.success) {
@@ -58,33 +64,39 @@ export async function savePrediction(uid, displayName, pred, h, a) {
 
 export async function saveZokaVote(uid, matchId, vote) {
   const dateStr = todayStr();
-  const fieldPath = `stats.${matchId}`;
-  
-  // Route through backend queue
+  const now = new Date().toISOString();
+
+  // Route through backend queue with proper field structure
   await safeWrite(PATHS.ZOKA_VOTE_STATS, dateStr, {
-    [`${fieldPath}.agree`]: vote === 'agree' ? 1 : 0,
-    [`${fieldPath}.disagree`]: vote === 'disagree' ? 1 : 0,
-    [`${fieldPath}.total`]: 1,
-    updatedAt: new Date().toISOString(),
+    [`stats.${matchId}.agree`]: vote === 'agree' ? 1 : 0,
+    [`stats.${matchId}.disagree`]: vote === 'disagree' ? 1 : 0,
+    [`stats.${matchId}.total`]: 1,
+    [`stats.${matchId}.lastVote`]: vote,
+    [`stats.${matchId}.voter`]: uid,
+    updatedAt: now,
     date: dateStr,
   }, { merge: true });
-  
-  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr });
+
+  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote, dateStr, uid });
 }
 
 export async function removeZokaVote(uid, matchId, newVote) {
   const dateStr = todayStr();
-  const matchStats = { agree: 0, disagree: 0, total: 0 };
-  
-  // This logic is simplified for the queue; backend should ideally handle vote transitions atomically.
-  // But for now, we just send the delta.
-  if (newVote === 'agree') { matchStats.agree += 1; matchStats.total += 1; }
-  else if (newVote === 'disagree') { matchStats.disagree += 1; matchStats.total += 1; }
-  
-  await safeWrite(PATHS.ZOKA_VOTE_STATS, dateStr, { 
-    stats: { [matchId]: matchStats }, 
-    updatedAt: new Date().toISOString() 
+  const now = new Date().toISOString();
+
+  // Send delta for vote transition
+  const delta = {
+    agree: newVote === 'agree' ? 1 : 0,
+    disagree: newVote === 'disagree' ? 1 : 0,
+    total: 1,
+    lastVote: newVote,
+    voter: uid,
+  };
+
+  await safeWrite(PATHS.ZOKA_VOTE_STATS, dateStr, {
+    [`stats.${matchId}`]: delta,
+    updatedAt: now,
   }, { merge: true });
-  
-  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote: newVote, dateStr });
+
+  eventBus.emit(EVENT.ZOKA_VOTE_CAST, { matchId, vote: newVote, dateStr, uid });
 }

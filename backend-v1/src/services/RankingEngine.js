@@ -1,13 +1,11 @@
-// backend-v1/src/services/RankingEngine.js
-
 const admin = require('firebase-admin');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
 const ApiError = require('../utils/ApiError');
-const { WRITE_TIMEOUT_MS } = require('../config/constants');
 const { publishJSON } = require('./StaticFilePublisher');
 const QueueService = require('./QueueService');
-const fs = require('fs');
+const ZokaPicksStore = require('./ZokaPicksStore');
+const { readJSONSafe } = require('../utils/atomicWriter');
 const path = require('path');
 
 const _resolving = new Set();
@@ -45,36 +43,49 @@ async function alreadyResolved(db, matchDate, matchId) {
 
 async function updateZokaPicksForMatch(date, matchId, homeScore, awayScore) {
   try {
-    const db = getDb();
-    const snap = await db.collection('zoka_picks').doc(String(date)).get();
-    if (!snap.exists) return false;
+    const published = await ZokaPicksStore.getPublished(date);
 
-    const data = snap.data() || {};
-    const matches = Array.isArray(data.matches) ? data.matches : [];
+    if (!published || !Array.isArray(published.matches)) return false;
+
     let changed = false;
-
-    const updated = matches.map(match => {
+    const updatedMatches = published.matches.map(match => {
       if (String(match.matchId) === String(matchId) && match.status !== 'finished') {
         changed = true;
-        return { ...match, homeScore, awayScore, status: 'finished', updatedAt: new Date().toISOString() };
+        return {
+          ...match,
+          homeScore,
+          awayScore,
+          status: 'finished',
+          updatedAt: new Date().toISOString(),
+        };
       }
       return match;
     });
 
     if (!changed) return false;
 
-    // Queue the update instead of direct write
+    const updatedPayload = {
+      ...published,
+      matches: updatedMatches,
+      totalMatches: updatedMatches.length,
+      updatedAt: new Date().toISOString(),
+    };
+
+    await publishJSON(`zokapicks/${date}.json`, {
+      data: updatedMatches,
+      ...updatedPayload,
+    });
+
     await QueueService.addToQueue({
       collection: 'zoka_picks',
       docId: String(date),
       type: 'set',
-      data: { date, matches: updated, totalMatches: updated.length, isDraft: false, updatedAt: new Date().toISOString() },
+      data: updatedPayload,
       priority: 'high',
-      source: 'ranking-engine'
+      source: 'ranking-engine',
     });
 
-    await publishJSON(`zokapicks/${date}.json`, { data: updated, date, matches: updated });
-    logger.info(`[RankingEngine] Updated Zoka Picks ${matchId}`);
+    logger.info(`[RankingEngine] Updated Zoka Picks for match ${matchId}`);
     return true;
   } catch (err) {
     logger.warn(`[RankingEngine] Zoka Picks update failed: ${err.message}`);
@@ -82,30 +93,43 @@ async function updateZokaPicksForMatch(date, matchId, homeScore, awayScore) {
   }
 }
 
-// ★ NEW: Updates local leaderboard JSON instantly, queues lightweight backup
 async function updateLocalLeaderboard(matchDate, operations) {
   const filePath = path.join(process.cwd(), 'public_data', 'leaderboard', 'daily', `${matchDate}.json`);
-  
+
   let entries = [];
   try {
-    if (fs.existsSync(filePath)) {
-      const raw = fs.readFileSync(filePath, 'utf8');
-      entries = JSON.parse(raw).entries || [];
+    const local = await readJSONSafe(filePath, null);
+    if (local && Array.isArray(local.entries)) {
+      entries = local.entries;
     }
-  } catch (e) { /* File doesn't exist yet */ }
+  } catch {
+    // File doesn't exist yet
+  }
 
-  const userMap = new Map(entries.map(u => [u.uid, u]));
+  const userMap = new Map(entries.map(u => [u.uid, { ...u }]));
 
   for (const op of operations) {
     if (!userMap.has(op.uid)) {
       userMap.set(op.uid, {
         uid: op.uid,
-        displayName: op.prediction.displayName || 'Player',
-        points: 0, predictions: 0, exact: 0, result: 0, miss: 0, resolved: 0, streak: 0
+        displayName: op.displayName || 'Player',
+        photoURL: op.photoURL || null,
+        points: 0,
+        predictions: 0,
+        exact: 0,
+        result: 0,
+        miss: 0,
+        resolved: 0,
+        streak: 0,
+        maxStreak: 0,
       });
     }
-    
+
     const u = userMap.get(op.uid);
+
+    if (op.displayName) u.displayName = op.displayName;
+    if (op.photoURL) u.photoURL = op.photoURL;
+
     u.predictions += 1;
     u.resolved += 1;
     u.points += op.points;
@@ -113,9 +137,11 @@ async function updateLocalLeaderboard(matchDate, operations) {
     if (op.resultType === 'exact') {
       u.exact += 1;
       u.streak += 1;
+      u.maxStreak = Math.max(u.maxStreak || 0, u.streak);
     } else if (op.resultType === 'result') {
       u.result += 1;
       u.streak += 1;
+      u.maxStreak = Math.max(u.maxStreak || 0, u.streak);
     } else {
       u.miss += 1;
       u.streak = 0;
@@ -125,28 +151,46 @@ async function updateLocalLeaderboard(matchDate, operations) {
   const sorted = Array.from(userMap.values()).sort((a, b) => {
     if (b.points !== a.points) return b.points - a.points;
     if (b.exact !== a.exact) return b.exact - a.exact;
-    return a.miss - b.miss;
-  }).map((u, i) => ({ ...u, rank: i + 1 }));
+    if (b.result !== a.result) return b.result - a.result;
+    return (a.miss || 0) - (b.miss || 0);
+  }).map((u, i) => ({
+    ...u,
+    rank: i + 1,
+    accuracy: u.resolved > 0 ? Math.round(((u.exact + u.result) / u.resolved) * 100) : 0,
+  }));
 
-  // Publish to local JSON instantly
-  await publishJSON(`leaderboard/daily/${matchDate}.json`, {
+  const result = {
     date: matchDate,
     entries: sorted,
     top3: sorted.slice(0, 3),
     rest: sorted.slice(3),
+    stats: {
+      avg: sorted.length > 0 ? (sorted.reduce((s, u) => s + (u.accuracy || 0), 0) / sorted.length).toFixed(1) : '0.0',
+      preds: sorted.reduce((s, u) => s + (u.predictions || 0), 0),
+      exact: sorted.reduce((s, u) => s + (u.exact || 0), 0),
+      players: sorted.length,
+    },
     count: sorted.length,
-    lastUpdated: new Date().toISOString()
-  });
+    lastUpdated: new Date().toISOString(),
+  };
 
-  // Queue a lightweight backup of just the summary
+  await publishJSON(`leaderboard/daily/${matchDate}.json`, result);
+
   await QueueService.addToQueue({
     collection: 'daily_leaderboard',
     docId: matchDate,
     type: 'set',
-    data: { entries: sorted, updatedAt: new Date().toISOString() },
-    priority: 'low',
-    source: 'ranking-engine'
+    data: {
+      entries: sorted,
+      stats: result.stats,
+      count: result.count,
+      updatedAt: result.lastUpdated,
+    },
+    priority: 'normal',
+    source: 'ranking-engine',
   });
+
+  return result;
 }
 
 async function resolveMatch(input = {}) {
@@ -175,13 +219,19 @@ async function resolveMatch(input = {}) {
 
   try {
     const processed = new Set();
-    const processedSnap = await db.collection('prediction_results').where('matchId', '==', String(matchId)).select('userId').get();
+    const processedSnap = await db.collection('prediction_results')
+      .where('matchId', '==', String(matchId))
+      .get();
+
     processedSnap.forEach(doc => {
       const uid = doc.get('userId');
       if (uid) processed.add(String(uid));
     });
 
-    const predsSnap = await db.collection('user_predictions').where('matchId', '==', String(matchId)).get();
+    const predsSnap = await db.collection('user_predictions')
+      .where('matchId', '==', String(matchId))
+      .get();
+
     const operations = [];
 
     predsSnap.forEach(doc => {
@@ -194,13 +244,21 @@ async function resolveMatch(input = {}) {
       if (!Number.isInteger(predictedHome) || !Number.isInteger(predictedAway)) return;
 
       const result = calculatePoints(predictedHome, predictedAway, homeScore, awayScore);
-      operations.push({ prediction, uid, points: result.points, resultType: result.resultType });
+      operations.push({
+        uid,
+        displayName: prediction.displayName || 'Player',
+        photoURL: prediction.photoURL || null,
+        prediction,
+        points: result.points,
+        resultType: result.resultType,
+      });
     });
 
-    // 1. Update Local Leaderboard & Queue Backup (Replaces heavy batch writes)
+    // 1. Update local leaderboard immediately + queue backup
     await updateLocalLeaderboard(matchDate, operations);
 
-    // 2. Queue individual results for Firestore backup
+    // 2. Queue individual results with HIGH priority (was 'low' - caused data loss)
+    const now = new Date().toISOString();
     for (const op of operations) {
       await QueueService.addToQueue({
         collection: 'prediction_results',
@@ -208,7 +266,8 @@ async function resolveMatch(input = {}) {
         type: 'set',
         data: {
           userId: op.uid,
-          displayName: op.prediction.displayName || 'Player',
+          displayName: op.displayName,
+          photoURL: op.photoURL,
           matchId: String(matchId),
           matchDate: op.prediction.matchDate || matchDate,
           predictedHome: Number(op.prediction.homeScore),
@@ -217,41 +276,53 @@ async function resolveMatch(input = {}) {
           actualAway: awayScore,
           points: op.points,
           resultType: op.resultType,
-          resolvedAt: new Date().toISOString()
+          resolvedAt: now,
         },
-        priority: 'low',
-        source: 'ranking-engine'
+        priority: 'high',
+        source: 'ranking-engine',
       });
     }
 
-    // 3. Mark featured prediction as finished
+    // 3. Update featured prediction status
     const predId = `feat_${matchDate}_${matchId}`;
     await QueueService.addToQueue({
       collection: 'active_predictions',
       docId: predId,
       type: 'set',
       data: {
-        homeScore, awayScore, status: 'FT', isFinished: true, isResolved: true,
-        'display.isFinished': true, 'display.isLive': false,
-        'display.score.home': homeScore, 'display.score.away': awayScore,
-        updatedAt: new Date().toISOString()
+        homeScore,
+        awayScore,
+        status: 'FT',
+        isFinished: true,
+        isResolved: true,
+        'display.isFinished': true,
+        'display.isLive': false,
+        'display.score.home': homeScore,
+        'display.score.away': awayScore,
+        updatedAt: now,
       },
       priority: 'high',
-      source: 'ranking-engine'
+      source: 'ranking-engine',
     });
 
-    // 4. Mark match resolved
+    // 4. Mark match as resolved (direct write - critical for preventing reprocessing)
     await db.collection('match_resolution_status').doc(matchDate).set({
       resolvedMatches: admin.firestore.FieldValue.arrayUnion(String(matchId)),
-      updatedAt: admin.firestore.FieldValue.serverTimestamp()
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // 5. Update published Zoka Picks
+    // 5. Update published Zoka Picks (reads from LOCAL JSON, not Firestore)
     await updateZokaPicksForMatch(matchDate, matchId, homeScore, awayScore);
 
-    logger.info(`[RankingEngine] Match ${matchId} resolved. Applied ${operations.length} users.`);
-    return { resolved: true, matchId, matchDate, users: operations.length, skipped: processed.size, leaderboardUpdateRequired: true };
-
+    logger.info(`[RankingEngine] Match ${matchId} resolved. Applied ${operations.length} users. Skipped ${processed.size}.`);
+    return {
+      resolved: true,
+      matchId,
+      matchDate,
+      users: operations.length,
+      skipped: processed.size,
+      leaderboardUpdateRequired: true,
+    };
   } finally {
     _resolving.delete(key);
   }
@@ -260,5 +331,5 @@ async function resolveMatch(input = {}) {
 module.exports = {
   resolveMatch,
   calculatePoints,
-  alreadyResolved
+  alreadyResolved,
 };

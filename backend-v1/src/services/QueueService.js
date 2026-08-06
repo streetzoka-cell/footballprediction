@@ -1,7 +1,4 @@
-// backend-v1/src/services/QueueService.js
-
-const path = require('path');
-const fs = require('fs');
+﻿const path = require('path');
 const { randomUUID } = require('crypto');
 
 const { getDb } = require('../config/firebase');
@@ -80,12 +77,8 @@ function saveState() {
 
 function loadState() {
   const state = readJSONSafeSync(STATE_FILE, null);
-
   if (state && state.stats) {
-    stats = {
-      ...stats,
-      ...state.stats,
-    };
+    stats = { ...stats, ...state.stats };
   }
 }
 
@@ -113,8 +106,7 @@ function sanitizeOp(op) {
     }
   }
 
-  const priority =
-    PRIORITY_WEIGHT[op.priority] !== undefined ? op.priority : 'normal';
+  const priority = PRIORITY_WEIGHT[op.priority] !== undefined ? op.priority : 'normal';
 
   return {
     id: op.id || `${collection}_${docId}_${randomUUID()}`,
@@ -122,10 +114,7 @@ function sanitizeOp(op) {
     collection,
     docId,
     data: type === 'delete' ? null : op.data,
-    options:
-      op.options && typeof op.options === 'object'
-        ? op.options
-        : { merge: true },
+    options: op.options && typeof op.options === 'object' ? op.options : { merge: true },
     priority,
     source: op.source || 'backend',
     createdAt: op.createdAt || new Date().toISOString(),
@@ -140,30 +129,23 @@ function sanitizeOp(op) {
 
 function migrateLegacyQueue() {
   try {
+    const fs = require('fs');
     if (!fs.existsSync(LEGACY_QUEUE_FILE)) return;
 
     const current = readPending();
     if (current.length > 0) return;
 
     const legacy = readJSONSafeSync(LEGACY_QUEUE_FILE, []);
-
     if (!Array.isArray(legacy) || legacy.length === 0) return;
 
     const sanitized = [];
-
     for (const op of legacy) {
-      try {
-        sanitized.push(sanitizeOp(op));
-      } catch {
-        // Skip invalid legacy op
-      }
+      try { sanitized.push(sanitizeOp(op)); } catch { /* Skip invalid */ }
     }
 
     if (sanitized.length > 0) {
       writePending(sanitized);
-      logger.info(
-        `[QueueService] Migrated ${sanitized.length} legacy queue operations.`
-      );
+      logger.info(`[QueueService] Migrated ${sanitized.length} legacy queue operations.`);
     }
 
     fs.renameSync(LEGACY_QUEUE_FILE, `${LEGACY_QUEUE_FILE}.migrated.bak`);
@@ -185,11 +167,12 @@ async function addToQueue(op) {
   if (existingIndex >= 0) {
     const existing = pending[existingIndex];
 
-    if (existing.type === 'set' && sanitized.type === 'set') {
-      existing.data = {
-        ...existing.data,
-        ...sanitized.data,
-      };
+    // FIXED: Better merge logic - 'set' merges data, 'delete' overrides
+    if (existing.type === 'delete' && sanitized.type !== 'delete') {
+      // Was deleted, now setting again - replace entirely
+      pending[existingIndex] = sanitized;
+    } else if (existing.type === 'set' && sanitized.type === 'set') {
+      existing.data = { ...existing.data, ...sanitized.data };
     } else {
       existing.type = sanitized.type;
       existing.data = sanitized.data;
@@ -197,6 +180,7 @@ async function addToQueue(op) {
 
     existing.options = sanitized.options;
 
+    // Take the higher priority
     existing.priority =
       PRIORITY_WEIGHT[sanitized.priority] < PRIORITY_WEIGHT[existing.priority]
         ? sanitized.priority
@@ -206,9 +190,6 @@ async function addToQueue(op) {
     existing.nextRetryAt = 0;
 
     writePending(pending);
-
-    logger.info(`[QueueService] Merged queued operation: ${key}`);
-
     return existing;
   }
 
@@ -223,14 +204,9 @@ async function addToQueue(op) {
 }
 
 function calculateNextRetry(op, quotaError) {
-  const baseMinutes = quotaError ? 10 : 10;
+  const baseMinutes = quotaError ? 10 : 5;
   const maxMinutes = 60;
-
-  const backoffMinutes = Math.min(
-    maxMinutes,
-    baseMinutes * Math.max(1, op.attempts)
-  );
-
+  const backoffMinutes = Math.min(maxMinutes, baseMinutes * Math.max(1, op.attempts));
   return Date.now() + backoffMinutes * 60 * 1000;
 }
 
@@ -244,12 +220,14 @@ async function applyOp(db, op) {
         setTimeout(() => reject(new Error('Queue delete timeout')), WRITE_TIMEOUT_MS)
       ),
     ]);
-
     return;
   }
 
+  // Clean data - remove any undefined values that Firestore rejects
+  const cleanData = JSON.parse(JSON.stringify(op.data));
+
   await Promise.race([
-    ref.set(op.data, op.options || { merge: true }),
+    ref.set(cleanData, op.options || { merge: true }),
     new Promise((_, reject) =>
       setTimeout(() => reject(new Error('Queue write timeout')), WRITE_TIMEOUT_MS)
     ),
@@ -265,7 +243,9 @@ async function commitChunk(db, chunk) {
     if (op.type === 'delete') {
       batch.delete(ref);
     } else {
-      batch.set(ref, op.data, op.options || { merge: true });
+      // Clean data for Firestore
+      const cleanData = JSON.parse(JSON.stringify(op.data));
+      batch.set(ref, cleanData, op.options || { merge: true });
     }
   }
 
@@ -278,10 +258,7 @@ async function commitChunk(db, chunk) {
 }
 
 async function retryIndividually(db, chunk) {
-  const results = {
-    processed: 0,
-    failedOps: [],
-  };
+  const results = { processed: 0, failedOps: [] };
 
   for (const op of chunk) {
     try {
@@ -298,11 +275,7 @@ async function retryIndividually(db, chunk) {
 
 async function processQueue() {
   if (processing) {
-    return {
-      processed: 0,
-      skipped: true,
-      reason: 'already-processing',
-    };
+    return { processed: 0, skipped: true, reason: 'already-processing' };
   }
 
   processing = true;
@@ -313,44 +286,29 @@ async function processQueue() {
     if (!pending.length) {
       stats.lastRun = new Date().toISOString();
       saveState();
-
-      return {
-        processed: 0,
-        pending: 0,
-      };
+      return { processed: 0, pending: 0 };
     }
 
     const db = getDb();
     const now = Date.now();
 
-    const due = pending.filter(
-      (op) => !op.nextRetryAt || op.nextRetryAt <= now
-    );
+    const due = pending.filter((op) => !op.nextRetryAt || op.nextRetryAt <= now);
 
     if (!due.length) {
       stats.lastRun = new Date().toISOString();
       saveState();
-
-      return {
-        processed: 0,
-        pending: pending.length,
-        waiting: pending.length,
-      };
+      return { processed: 0, pending: pending.length, waiting: pending.length };
     }
 
     due.sort((a, b) => {
       const priorityDiff =
-        (PRIORITY_WEIGHT[a.priority] ?? 1) -
-        (PRIORITY_WEIGHT[b.priority] ?? 1);
-
+        (PRIORITY_WEIGHT[a.priority] ?? 1) - (PRIORITY_WEIGHT[b.priority] ?? 1);
       if (priorityDiff !== 0) return priorityDiff;
-
       return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
     });
 
     const remainingById = new Map(pending.map((op) => [op.id, op]));
     const dead = [];
-
     let processed = 0;
 
     for (let i = 0; i < due.length; i += BATCH_MAX_OPS) {
@@ -404,7 +362,6 @@ async function processQueue() {
     }
 
     const remaining = Array.from(remainingById.values());
-
     writePending(remaining);
 
     if (dead.length > 0) {
@@ -414,32 +371,22 @@ async function processQueue() {
 
     stats.lastRun = new Date().toISOString();
     stats.lastError = null;
-
     saveState();
 
     if (processed > 0) {
       logger.info(
-        `[QueueService] Processed ${processed} operations. Pending: ${remaining.length}. Dead-letter: ${dead.length}.`
+        `[QueueService] Processed ${processed} ops. Pending: ${remaining.length}. Dead-letter: ${dead.length}.`
       );
     }
 
-    return {
-      processed,
-      pending: remaining.length,
-      dead: dead.length,
-    };
+    return { processed, pending: remaining.length, dead: dead.length };
   } catch (err) {
     stats.lastError = err.message;
     stats.lastRun = new Date().toISOString();
-
     saveState();
 
     logger.error(`[QueueService] processQueue failed: ${err.message}`);
-
-    return {
-      processed: 0,
-      error: err.message,
-    };
+    return { processed: 0, error: err.message };
   } finally {
     processing = false;
   }
@@ -455,15 +402,9 @@ function getStats() {
   };
 }
 
-function getPending() {
-  return readPending();
-}
+function getPending() { return readPending(); }
+function getDeadLetter() { return readDeadLetter(); }
 
-function getDeadLetter() {
-  return readDeadLetter();
-}
-
-// Initialize
 loadState();
 migrateLegacyQueue();
 

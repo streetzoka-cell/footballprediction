@@ -9,7 +9,11 @@ const logger = require('../../utils/logger');
 const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
 const { getDb } = require('../../config/firebase');
 
-const ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+// ★ FIX: Initialize safely to prevent crash if API key is missing
+let ai = null;
+if (env.GEMINI_API_KEY) {
+  ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
+}
 
 // ★ PRO UPGRADE: Enhanced System Prompt with full App Architecture knowledge
 const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by an independent developer.
@@ -142,12 +146,23 @@ async function fetchSystemContext(uid) {
       };
     }
 
-    const dailyUserDoc = await db.collection('daily_leaderboard').doc(today).collection('users').doc(uid).get();
     let dailyRank = 'Unranked';
     let dailyPoints = 0;
-    if (dailyUserDoc.exists) {
-      dailyRank = dailyUserDoc.data().rank || 'Unranked';
-      dailyPoints = dailyUserDoc.data().points || 0;
+
+    // ★ FIX: Read from local JSON file instead of non-existent Firestore subcollection
+    const dailyBoardPath = path.join(process.cwd(), 'public_data', 'leaderboard', 'daily', `${today}.json`);
+    if (fs.existsSync(dailyBoardPath)) {
+      try {
+        const boardData = JSON.parse(fs.readFileSync(dailyBoardPath, 'utf8'));
+        const entries = boardData.entries || [];
+        const userEntry = entries.find(e => e.uid === uid);
+        if (userEntry) {
+          dailyRank = userEntry.rank || 'Unranked';
+          dailyPoints = userEntry.points || 0;
+        }
+      } catch (e) {
+        logger.warn(`[AI Context] Failed to read daily leaderboard JSON: ${e.message}`);
+      }
     }
 
     if (userData) {
@@ -238,7 +253,9 @@ async function generateWithFallback(contents) {
     try {
       const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), 12000));
       const generationPromise = ai.models.generateContent({
-        model, contents, systemInstruction: SYSTEM_PROMPT,
+        model, 
+        contents, 
+        systemInstruction: SYSTEM_PROMPT,
         generationConfig: { temperature: 0.45, topP: 0.9, topK: 32, maxOutputTokens: 600 }
       });
       const response = await Promise.race([generationPromise, timeoutPromise]);
@@ -266,7 +283,7 @@ async function generateWithFallback(contents) {
 // Route: POST /api/v1/ai/zoka
 router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
   try {
-    if (!env.GEMINI_API_KEY) return res.status(500).json({ success: false, error: "AI service misconfigured.", model: "none" });
+    if (!ai) return res.status(500).json({ success: false, error: "AI service misconfigured.", model: "none" });
     
     const validation = validateRequest(req.body);
     if (!validation.valid) return res.status(400).json({ success: false, error: validation.error, model: "none" });
