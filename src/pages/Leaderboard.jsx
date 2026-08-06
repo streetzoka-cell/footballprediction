@@ -403,12 +403,12 @@ export default function Leaderboard() {
             </h2>
             <div className="grid gap-16 text-secondary text-sm" style={{gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))'}}>
               <div>
-                <h3 className="text-primary font-bold mb-4">Exact Score (5 Points)</h3>
-                <p>Predict the precise final scoreline (e.g., 2-1) to earn the maximum 5 points and the 🎯 Sniper badge.</p>
+                <h3 className="text-primary font-bold mb-4">Exact Score (10 points)</h3>
+                <p>Predict the precise final scoreline (e.g., 2-1) to earn the maximum 10 points and the 🎯 Sniper badge.</p>
               </div>
               <div>
-                <h3 className="text-primary font-bold mb-4">Correct Outcome (2 Points)</h3>
-                <p>Predict the correct match result (Home Win, Draw, or Away Win) but miss the exact score to earn 2 points.</p>
+                <h3 className="text-primary font-bold mb-4">Correct Outcome (3 points)</h3>
+                <p>Predict the correct match result (Home Win, Draw, or Away Win) but miss the exact score to earn 3 points.</p>
               </div>
               <div>
                 <h3 className="text-primary font-bold mb-4">Daily Streaks 🔥</h3>
