@@ -1,5 +1,4 @@
-﻿// backend-v1/src/server.js
-const express = require('express');
+﻿const express = require('express');
 const cors = require('cors');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
@@ -88,10 +87,8 @@ const globalLimiter = rateLimit({
   max: 100,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { success: false, error: 'Too many requests. Please slow down.' },
-  onLimitReached: (req) => {
-    logger.warn(`[Security] Global rate limit exceeded for IP: ${req.ip}`);
-  }
+  message: { success: false, error: 'Too many requests. Please slow down.' }
+  // ★ FIX: Removed deprecated onLimitReached (causes crash warnings in v7)
 });
 app.use(globalLimiter);
 
