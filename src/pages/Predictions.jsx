@@ -979,7 +979,7 @@ export default function Predictions() {
         <div className="glass-card p-20 mb-24" style={{ borderLeft: '4px solid var(--primary)' }}>
           <h2 className="text-primary font-bold text-lg mb-8">Master the Art of Football Prediction</h2>
           <p className="text-secondary text-sm leading-relaxed">
-            Welcome to the ZOKASCORE Prediction Hub. Here, you don't just watch the game—you predict it. Analyze team form, head-to-head records, and our proprietary Zoka AI expert picks to lock in your exact score predictions. Earn 5 points for exact scores and 2 points for correct outcomes. Climb the daily and all-time leaderboards, unlock achievement badges, and prove your football intelligence against a global community of fans.
+            Welcome to the ZOKASCORE Prediction Hub. Here, you don't just watch the game—you predict it. Analyze team form, head-to-head records, and our proprietary Zoka AI expert picks to lock in your exact score predictions. Earn 10 points for exact scores and 3 points for correct outcomes. Climb the daily and all-time leaderboards, unlock achievement badges, and prove your football intelligence against a global community of fans.
           </p>
         </div>
 
