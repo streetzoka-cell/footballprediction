@@ -1,4 +1,5 @@
-﻿import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
+﻿
+}import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   Newspaper, X, Clock, Heart, MessageCircle, Plus, Pencil, Trash2, 
@@ -654,3 +655,4 @@ function CommentSection({ postId, comments, newComments, setNewComments, handleC
       </div>
     </div>
   );
+}
