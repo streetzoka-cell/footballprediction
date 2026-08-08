@@ -318,5 +318,10 @@
     "reply": "The match between **Vancouver Whitecaps** and **FC Juarez** has concluded. \n\n**Final Score:**\n*   **Vancouver Whitecaps** 1 - 3 **FC Juarez** (Full Time)",
     "model": "gemini-gemini-3.5-flash",
     "timestamp": 1786191537339
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:uventus vs inter milan": {
+    "reply": "The match between **Juventus and Inter Milan** was scheduled to kick off today (August 8, 2026) at **11:00 AM UTC**. \n\nCurrently, I do not have the live or final score update for this match in my database (though for comparison, today's other early match, Chelsea vs. AC Milan, has finished 0-0). \n\nTo get the exact score and match events for Juventus vs. Inter Milan, please check a live sports tracking service or the clubs' official channels!",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786193077131
   }
 }
