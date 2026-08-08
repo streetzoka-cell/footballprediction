@@ -9,6 +9,7 @@ import {
   Search, Login, Profile, Admin, About, PrivacyPolicy, Terms, Team, Careers,
   Contact, Partners, Advertise, FAQ, HelpCenter, NotFound, StudioHome,
   StudioEditor, StudioTemplates, MediaStudio, FaceARStudio, WebShowcaseStudio,
+  FootballKnowledge, // ★ NEW IMPORT
 } from "./routes";
 
 function Animated({ children }) {
@@ -55,6 +56,10 @@ export default function AppRoutes() {
       <Route path={ROUTES.FAQ} element={<Animated><FAQ /></Animated>} />
       <Route path={ROUTES.HELP} element={<Animated><HelpCenter /></Animated>} />
       
+      {/* ★ NEW KNOWLEDGE ROUTES */}
+      <Route path="/football-knowledge" element={<Animated><FootballKnowledge /></Animated>} />
+      <Route path="/football-knowledge/laws/:lawId" element={<Animated><FootballKnowledge /></Animated>} />
+
       <Route path={ROUTES.PRIVACY} element={<Animated><PrivacyPolicy /></Animated>} />
       <Route path={ROUTES.TERMS} element={<Animated><Terms /></Animated>} />
 
