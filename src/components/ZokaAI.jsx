@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
-  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock
+  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock, WifiOff
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../services/backendAuth';
@@ -9,7 +9,7 @@ import { getAuthHeaders } from '../services/backendAuth';
 const BACKEND_URL = 'https://api.zokascore.xyz'; 
 
 // ═══════════════════════════════════════════════════════════
-// LOCAL INTENT ENGINE (Saves API Calls & Gives Instant Answers)
+// LOCAL INTENT ENGINE (Only for static app guides, NOT live data)
 // ═══════════════════════════════════════════════════════════
 const APP_KNOWLEDGE_BASE = [
   {
@@ -29,10 +29,6 @@ const APP_KNOWLEDGE_BASE = [
     response: `# Zoka Picks\nThese are the premium, expert predictions made by the ZOKASCORE team. You can find them on the Predictions page. You can also vote "Agree" or "Disagree" on them to see how the community feels and join the debate!`
   },
   {
-    keywords: ['live', 'score', 'fixture', 'match', 'today', 'where', 'find'],
-    response: `# Live Scores & Fixtures\nTo see today's matches, tap the **Fixtures** or **Activity** icon in the navigation. Live matches will pulse with a red dot and update in real-time with possession stats and timelines!`
-  },
-  {
     keywords: ['offline', 'pwa', 'install', 'app', 'download', 'home screen'],
     response: `# Install the App\nZOKASCORE is a Progressive Web App (PWA)! You can install it directly to your home screen for an offline-capable, native app experience.\n\nScroll to the bottom of the page and tap **"Install App"**, or use your browser's "Add to Home Screen" option.`
   },
@@ -48,6 +44,7 @@ const APP_KNOWLEDGE_BASE = [
     keywords: ['mastergames', 'master games', 'game', 'play'],
     response: `# Master Games\nMaster Games is our premium arcade section where you can play football-themed mini-games to test your reflexes and earn bonus bragging rights! Check the main menu to start playing.`
   }
+  // Note: Removed 'live', 'match', 'today', 'fixture' so the backend can fetch real data for those!
 ];
 
 function interceptLocalQuery(query) {
@@ -139,6 +136,7 @@ export default function ZokaAI({ isOpen, onClose }) {
   const [showSidebar, setShowSidebar] = useState(false);
   const [error, setError] = useState(null);
   const [typingMessageId, setTypingMessageId] = useState(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
   
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
@@ -146,6 +144,18 @@ export default function ZokaAI({ isOpen, onClose }) {
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
+
+  // ★ PRO: Track internet connection status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
 
   useEffect(() => {
     localStorage.setItem('kim_chats', JSON.stringify(chats));
@@ -196,6 +206,8 @@ export default function ZokaAI({ isOpen, onClose }) {
 
   const sendMessageToBackend = async (currentInput, chatId) => {
     try {
+      if (!isOnline) throw new Error("You are offline. Please check your connection.");
+      
       const currentMessages = chats.find(c => c.id === chatId)?.messages || [];
       const history = currentMessages.filter(m => !m.isError).map(m => ({ role: m.role, content: m.content }));
       
@@ -281,7 +293,7 @@ export default function ZokaAI({ isOpen, onClose }) {
 
     // If not a simple app question, call the backend Gemini API
     await sendMessageToBackend(currentInput, newChatId);
-  }, [input, loading, currentUser, activeChatId, chats]);
+  }, [input, loading, currentUser, activeChatId, chats, isOnline]);
 
   // Keep ref updated to prevent stale closures in external event listeners
   useEffect(() => {
@@ -349,7 +361,9 @@ export default function ZokaAI({ isOpen, onClose }) {
                 </div>
                 <div>
                   <h2 className="kim-name">Kim</h2>
-                  <span className="kim-status">Football Intelligence</span>
+                  <span className="kim-status flex items-center gap-1">
+                    {!isOnline ? <><WifiOff size={10} /> Offline Mode</> : "Football Intelligence"}
+                  </span>
                 </div>
               </div>
             </div>

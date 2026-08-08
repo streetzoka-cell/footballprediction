@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
-import { ArrowLeft, Brain, BookOpen, AlertTriangle, Lightbulb, ChevronRight, Scale } from 'lucide-react';
+import { ArrowLeft, Brain, BookOpen, AlertTriangle, Lightbulb, ChevronRight, Scale, WifiOff } from 'lucide-react';
+
 const BACKEND_URL = 'https://api.zokascore.xyz'; // Match your existing config
 
 export default function FootballKnowledge() {
@@ -9,15 +10,20 @@ export default function FootballKnowledge() {
   const [law, setLaw] = useState(null);
   const [lawsList, setLawsList] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    // If lawId exists, fetch the specific law. Otherwise, fetch the directory list.
+    setLoading(true);
+    setError(null);
     const fetchUrl = lawId 
       ? `${BACKEND_URL}/api/v1/knowledge/laws/${lawId}`
       : `${BACKEND_URL}/api/v1/knowledge/laws`;
       
     fetch(fetchUrl)
-      .then(res => res.json())
+      .then(res => {
+        if (!res.ok) throw new Error("Failed to connect to the server.");
+        return res.json();
+      })
       .then(data => {
         if (lawId) {
           setLaw(data.law);
@@ -26,15 +32,28 @@ export default function FootballKnowledge() {
         }
         setLoading(false);
       })
-      .catch(() => setLoading(false));
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
   }, [lawId]);
 
   const handleAskKim = (scenarioQuestion) => {
-    // Dispatches the event to open the Kim AI widget globally
     window.dispatchEvent(new CustomEvent('openZokaAI', { detail: { message: scenarioQuestion } }));
   };
 
   if (loading) return <div className="min-h-screen bg-base-200 flex items-center justify-center">Loading Knowledge...</div>;
+  
+  if (error) {
+    return (
+      <div className="min-h-screen bg-base-200 flex flex-col items-center justify-center p-4">
+        <WifiOff size={48} className="text-error mb-4" />
+        <h2 className="text-xl font-bold mb-2">Connection Error</h2>
+        <p className="text-sm opacity-70 mb-4 text-center">Could not load football knowledge. The backend server might be offline or updating.</p>
+        <button onClick={() => navigate(-1)} className="btn btn-primary">Go Back</button>
+      </div>
+    );
+  }
 
   // --- LAW DETAIL PAGE ---
   if (lawId && law) {
@@ -170,6 +189,6 @@ export default function FootballKnowledge() {
           ))}
         </div>
       </div>
-    </div>
+  fg  </div>
   );
 }

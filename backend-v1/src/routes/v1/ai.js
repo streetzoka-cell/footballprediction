@@ -9,7 +9,7 @@ const logger = require('../../utils/logger');
 const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
 const { getDb } = require('../../config/firebase');
 
-// ★ NEW: Import the Local Reasoning Engine
+// ★ PRO: Import the Local Reasoning Engine
 const kimEngine = require('../../services/KimLocalEngine');
 
 // ★ FIX: Initialize safely to prevent crash if API key is missing
@@ -18,7 +18,7 @@ if (env.GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 }
 
-// ★ PRO UPGRADE: Enhanced System Prompt with full App Architecture knowledge
+// ★ PRO UPGRADE: Enhanced System Prompt
 const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by an independent developer.
 You are an elite football analyst, tactical expert, friendly, professional, and honest.
 
@@ -39,7 +39,7 @@ FORMATTING RULES:
 - Represent the brand professionally.
 - If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE] provided. If it's missing, tell them to make a prediction first.
 - If a user asks about today's matches or Zoka Picks, refer to the [PLATFORM DATA] provided.
-- If a user asks about football rules or laws, refer strictly to the [FOOTBALL LAWS CONTEXT] provided. Apply the 3-layer logic (Authoritative Law -> Explanation -> Application).`;
+- If a user asks about football rules, laws, or tactics, refer strictly to the [FOOTBALL LAWS CONTEXT] provided. Apply the 3-layer logic (Authoritative Law -> Explanation -> Application).`;
 
 const MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-3.5-flash"];
 const FALLBACK_CODES = [429, 404, 503];
@@ -153,7 +153,6 @@ async function fetchSystemContext(uid) {
     let dailyRank = 'Unranked';
     let dailyPoints = 0;
 
-    // ★ FIX: Read from local JSON file instead of non-existent Firestore subcollection
     const dailyBoardPath = path.join(process.cwd(), 'public_data', 'leaderboard', 'daily', `${today}.json`);
     if (fs.existsSync(dailyBoardPath)) {
       try {
@@ -223,7 +222,6 @@ Zoka AI Picks: ${zokaPicks.map(p => `${p.homeTeam?.name || 'Home'} vs ${p.awayTe
   return { userContext, platformContext };
 }
 
-// ★ UPDATED: Build Prompt now accepts pre-fetched law knowledge directly
 async function buildPrompt({ message, history, context, lawKnowledge }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
@@ -287,6 +285,9 @@ async function generateWithFallback(contents, systemOverride = null) {
   return { success: false, error: "Our AI is currently experiencing high demand. Please try again in a moment.", model: "fallback_failed" };
 }
 
+// ★ PRO: Ultimate Graceful Fallback Reply
+const GRACEFUL_FALLBACK_REPLY = "I'm currently experiencing high traffic and couldn't process that through my advanced engine. However, based on general knowledge, please try rephrasing or ask again in a moment.";
+
 // Route: POST /api/v1/ai/zoka
 router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
   try {
@@ -298,13 +299,13 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     const { message, history = [] } = req.body;
     const normalizedQuery = normalizeQuery(message);
 
-    // 1. Instant Greeting Response (No user data leakage, safe to cache globally)
+    // 1. Instant Greeting Response
     if (GREETING_TRIGGERS.includes(normalizedQuery)) {
       const reply = GREETING_REPLIES[Math.floor(Math.random() * GREETING_REPLIES.length)];
       return res.status(200).json({ success: true, model: "instant-greeting", reply, responseTime: "1ms" });
     }
 
-    // 2. Check Cache (Include UID in key to prevent user data leakage)
+    // 2. Check Cache
     const cacheKey = `${req.user.uid}:${normalizedQuery}`;
     const cachedResponse = getFromCache(cacheKey);
     if (cachedResponse) {
@@ -315,21 +316,26 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     // 3. Fetch all context securely on the backend
     const context = await fetchSystemContext(req.user.uid);
 
-    // 4. ★ NEW: Local Reasoning & Gemini Gate ★
-    const localResult = await kimEngine.resolveQuery(message);
+    // 4. ★ PRO: Local Reasoning & Gemini Gate (with Engine Isolation) ★
+    let localResult = { status: "UNCERTAIN", evidence: [], confidence: 0, routedKnowledge: [] };
+    try {
+      localResult = await kimEngine.resolveQuery(message);
+    } catch (err) {
+      logger.warn('[ZOKASCORE AI] Local engine failed, falling back to Gemini directly:', err.message);
+    }
 
     if (localResult.status === "ANSWERED_LOCALLY") {
         // GEMINI GATE: BLOCKED. We answer locally with 0 API calls.
-        logger.info(`[ZOKASCORE AI] Answered locally (0 API calls). Confidence: ${localResult.confidence.toFixed(2)}. Laws: ${localResult.routedLaws.join(',')}`);
+        // ★ PRO: Safe join to prevent crashes if routedKnowledge is missing
+        logger.info(`[ZOKASCORE AI] Answered locally (0 API calls). Confidence: ${localResult.confidence.toFixed(2)}. Knowledge: ${(localResult.routedKnowledge || []).join(',')}`);
         
-        // Format the local evidence as Kim's reply
         const reply = `According to the Laws of the Game:\n\n${localResult.evidence}`;
         
         addToCache(cacheKey, reply, "local-engine");
         return res.status(200).json({ success: true, model: "local-engine", reply, responseTime: "1ms" });
     } else {
         // GEMINI GATE: OPEN. Uncertain query, fallback to Gemini with evidence attached.
-        logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Confidence: ${localResult.confidence.toFixed(2)}. Laws: ${localResult.routedLaws.join(',')}`);
+        logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Confidence: ${localResult.confidence.toFixed(2)}. Knowledge: ${(localResult.routedKnowledge || []).join(',')}`);
         
         const contents = await buildPrompt({ message, history, context, lawKnowledge: localResult.evidence });
         const result = await generateWithFallback(contents);
@@ -338,12 +344,24 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
           addToCache(cacheKey, result.reply, `gemini-${result.model}`);
           return res.status(200).json(result);
         } else {
-          return res.status(503).json(result);
+          // ★ PRO: If Gemini fails, return a graceful 200 response instead of a 503 error to keep UI stable
+          return res.status(200).json({ 
+            success: true, 
+            model: "graceful-fallback", 
+            reply: GRACEFUL_FALLBACK_REPLY,
+            responseTime: "1ms"
+          });
         }
     }
   } catch (err) {
     logger.error('[ZOKASCORE AI] Unhandled route error:', err);
-    return res.status(500).json({ success: false, error: "An unexpected error occurred.", model: "unknown" });
+    // ★ PRO: Ultimate fallback to prevent 500 errors from breaking the frontend UI
+    return res.status(200).json({ 
+      success: true, 
+      model: "emergency-fallback", 
+      reply: "I encountered an unexpected error while processing that. Please try asking a different question.",
+      responseTime: "1ms"
+    });
   }
 });
 

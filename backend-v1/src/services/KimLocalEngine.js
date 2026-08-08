@@ -3,9 +3,11 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 const LAWS_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'laws');
+const TACTICS_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'tactics');
 
-// The exact same dictionary that scored 34/34
-const LAW_KEYWORDS = {
+// ★ UPDATED: Dictionary now includes Laws (1-17) and Tactics (tactic_01...)
+const KNOWLEDGE_KEYWORDS = {
+  // Laws (1-17)
   1: ['pitch', 'field of play', 'dimensions', 'markings', 'goal area', 'crossbar', 'goalpost', 'touchline', 'goal line'],
   2: ['defective ball', 'ball bursts', 'ball pressure', 'ball weight', 'circumference', 'football weigh'],
   3: ['number of players', 'substitute', 'substitution', 'captain', 'extra person', 'minimum players', 'enter the pitch'],
@@ -22,71 +24,106 @@ const LAW_KEYWORDS = {
   14: ['penalty kick', 'penalty spot', 'encroachment', 'goalkeeper line', 'penalty mark', 'penalty taker', 'saves the penalty'],
   15: ['throw-in', 'throw in', 'throwin'],
   16: ['goal kick', 'goalkick'],
-  17: ['corner kick', 'corner arc', 'corner flag', 'cornerkick']
+  17: ['corner kick', 'corner arc', 'corner flag', 'cornerkick'],
+  
+  // Tactics 01 - Foundations
+  'tactic_01': [
+    'width', 'depth', 'stretch the pitch', 'compactness', 'compact', 'shrink the pitch', 
+    'numerical superiority', 'overload', 'between the lines', 'half-spaces', 'half space', 
+    'foundational principle', 'tactical foundation'
+  ]
 };
 
 // Cache laws in memory
-let ALL_LAWS_CACHE = null;
-function loadAllLaws() {
-  if (ALL_LAWS_CACHE) return ALL_LAWS_CACHE;
-  if (!fs.existsSync(LAWS_DIR)) return [];
-  ALL_LAWS_CACHE = fs.readdirSync(LAWS_DIR)
-    .filter(f => f.endsWith('.json'))
-    .map(f => {
-      try {
-        let c = fs.readFileSync(path.join(LAWS_DIR, f), 'utf8').trim();
-        if (c.charCodeAt(0) === 0xFEFF) c = c.slice(1);
-        return JSON.parse(c);
-      } catch { return null; }
-    })
-    .filter(Boolean);
-  return ALL_LAWS_CACHE;
+let ALL_KNOWLEDGE_CACHE = null;
+function loadAllKnowledge() {
+  if (ALL_KNOWLEDGE_CACHE) return ALL_KNOWLEDGE_CACHE;
+  
+  ALL_KNOWLEDGE_CACHE = [];
+  
+  // Helper to read and parse JSON safely
+  const safeReadJSON = (filePath) => {
+    try {
+      let c = fs.readFileSync(filePath, 'utf8').trim();
+      if (c.charCodeAt(0) === 0xFEFF) c = c.slice(1);
+      return JSON.parse(c);
+    } catch { return null; }
+  };
+
+  // Load Laws
+  if (fs.existsSync(LAWS_DIR)) {
+    ALL_KNOWLEDGE_CACHE.push(...fs.readdirSync(LAWS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => safeReadJSON(path.join(LAWS_DIR, f))));
+  }
+  
+  // Load Tactics
+  if (fs.existsSync(TACTICS_DIR)) {
+    ALL_KNOWLEDGE_CACHE.push(...fs.readdirSync(TACTICS_DIR)
+      .filter(f => f.endsWith('.json'))
+      .map(f => safeReadJSON(path.join(TACTICS_DIR, f))));
+  }
+  
+  ALL_KNOWLEDGE_CACHE = ALL_KNOWLEDGE_CACHE.filter(Boolean);
+  return ALL_KNOWLEDGE_CACHE;
 }
 
 class KimLocalEngine {
   constructor() {
-    this.laws = loadAllLaws();
+    this.knowledgeBase = loadAllKnowledge();
   }
 
   // Phase 2: Intent Analyzer
   analyzeIntent(message) {
     const msg = message.toLowerCase();
-    let routedLawNumbers = new Set();
-    for (const [lawNum, keywords] of Object.entries(LAW_KEYWORDS)) {
+    let routedIds = new Set();
+    
+    for (const [id, keywords] of Object.entries(KNOWLEDGE_KEYWORDS)) {
       if (keywords.some(keyword => msg.includes(keyword))) {
-        routedLawNumbers.add(Number(lawNum));
+        // For Laws, convert back to number. For Tactics, keep as string ID.
+        routedIds.add(id.startsWith('tactic_') ? id : Number(id));
       }
     }
-    return Array.from(routedLawNumbers);
+    return Array.from(routedIds);
   }
 
   // Phase 3 & 5: Evidence Retriever
-  retrieveEvidence(message, routedLawNumbers) {
+  retrieveEvidence(message, routedIds) {
     const msg = message.toLowerCase();
     let evidenceChunks = [];
 
-    for (const law of this.laws) {
-      if (routedLawNumbers.includes(law.lawNumber)) {
+    for (const item of this.knowledgeBase) {
+      // Match either lawNumber (number) or id (string for tactics)
+      const itemId = item.id ? item.id : item.lawNumber;
+      
+      if (routedIds.includes(itemId)) {
         // Add overview
-        evidenceChunks.push({ law: law.lawNumber, type: 'overview', text: law.overview, weight: 1.0 });
+        evidenceChunks.push({ id: itemId, type: 'overview', text: item.overview, weight: 1.0 });
         
         // Add sections
-        for (const key in law.sections) {
-          const sec = law.sections[key];
-          evidenceChunks.push({ law: law.lawNumber, type: 'section', title: sec.title, text: sec.plain_english, weight: 1.5 });
+        for (const key in item.sections) {
+          const sec = item.sections[key];
+          let sectionText = `${sec.title}:\n${sec.plain_english}`;
+          
+          // Include trade-offs if they exist (for Tactics)
+          if (sec.trade_offs) {
+            sectionText += `\nTrade-offs: ${sec.trade_offs}`;
+          }
+          
+          evidenceChunks.push({ id: itemId, type: 'section', title: sec.title, text: sectionText, weight: 1.5 });
         }
 
         // Add scenarios (High weight)
-        if (law.scenarios) {
-          law.scenarios.forEach(s => {
-            evidenceChunks.push({ law: law.lawNumber, type: 'scenario', text: `Scenario: ${s.scenario} Question: ${s.question} Answer: ${s.answer}`, weight: 2.0 });
+        if (item.scenarios) {
+          item.scenarios.forEach(s => {
+            evidenceChunks.push({ id: itemId, type: 'scenario', text: `Scenario: ${s.scenario} Question: ${s.question} Answer: ${s.answer}`, weight: 2.0 });
           });
         }
 
-        // Add misconceptions
-        if (law.misconceptions) {
-          law.misconceptions.forEach(m => {
-            evidenceChunks.push({ law: law.lawNumber, type: 'misconception', text: `Myth: ${m.myth} Fact: ${m.fact}`, weight: 1.8 });
+        // Add misconceptions (If they exist, mainly for Laws)
+        if (item.misconceptions) {
+          item.misconceptions.forEach(m => {
+            evidenceChunks.push({ id: itemId, type: 'misconception', text: `Myth: ${m.myth} Fact: ${m.fact}`, weight: 1.8 });
           });
         }
       }
@@ -137,7 +174,6 @@ class KimLocalEngine {
     const confidence = this.calculateConfidence(message, evidence);
 
     // If we have strong evidence and multiple matching keywords, we can answer locally
-    // For this phase, we require confidence >= 0.15 (due to how word overlap works) OR exact scenario match
     const hasStrongEvidence = confidence >= 0.15 || evidence.some(e => e.type === 'scenario' && message.toLowerCase().includes(e.text.toLowerCase().split(' ')[5]));
 
     if (hasStrongEvidence) {
@@ -147,7 +183,7 @@ class KimLocalEngine {
         status: "ANSWERED_LOCALLY", 
         evidence: contextStr, 
         confidence,
-        routedLaws: intent
+        routedKnowledge: intent
       };
     } else {
       // Weak match, send to Gemini Gate
@@ -155,7 +191,7 @@ class KimLocalEngine {
         status: "UNCERTAIN", 
         evidence: evidence.map(e => e.text).join('\n\n'), 
         confidence,
-        routedLaws: intent
+        routedKnowledge: intent
       };
     }
   }
