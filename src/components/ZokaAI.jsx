@@ -9,46 +9,70 @@ import { getAuthHeaders } from '../services/backendAuth';
 const BACKEND_URL = 'https://api.zokascore.xyz'; 
 
 // ═══════════════════════════════════════════════════════════
-// LOCAL INTENT ENGINE (Only for static app guides, NOT live data)
+// LOCAL INTENT ENGINE (Strict multi-word phrases ONLY)
 // ═══════════════════════════════════════════════════════════
 const APP_KNOWLEDGE_BASE = [
   {
-    keywords: ['predict', 'how to predict', 'make prediction', 'points', 'scoring', 'exact', 'result', 'miss'],
+    // Removed: 'predict', 'points', 'scoring', 'exact', 'result', 'miss'
+    keywords: ['how to predict', 'make a prediction', 'how do i get points', 'what are points', 'scoring system', 'prediction lock', 'how to play'],
     response: `# How Predictions Work\nMaking a prediction is easy! Go to the **Predictions** tab and enter your expected score before the match locks.\n\n- **Exact Score:** 10 Points 🎯\n- **Correct Result (Win/Draw/Loss):** 3 Points 📈\n- **Miss:** 0 Points\n\n*Note: Matches lock 60 minutes before kickoff to ensure fair play!*`
   },
   {
-    keywords: ['studio', 'edit', 'video', 'image', 'reactor', 'face ar', 'create', 'graphic', 'template'],
+    // Removed: 'edit', 'video', 'image', 'create', 'graphic', 'template'
+    keywords: ['zokascore studio', 'how to use the studio', 'reactor studio', 'face ar', 'graphic editor', 'reaction cam'],
     response: `# ZOKASCORE Studio\nThe Studio is our built-in pro creator toolkit! Access it from the main menu.\n\n- **Graphic Editor:** Build custom scoreboards and news cards.\n- **Reactor Studio:** Create viral TikTok/Reels templates with effects.\n- **Face AR:** Apply football masks and filters to your camera.\n- **Reaction Cam:** Record your match reactions in 9:16 format.`
   },
   {
-    keywords: ['leaderboard', 'rank', 'goat', 'weekly', 'daily', 'monthly', 'compete'],
+    // Removed: 'rank', 'weekly', 'daily', 'monthly', 'compete'
+    keywords: ['leaderboard', 'how do i rank', 'goat rank', 'weekly leaderboard', 'daily leaderboard', 'monthly leaderboard', 'hall of fame'],
     response: `# Leaderboards & Ranks\nCompete against fans worldwide!\n\n- **Daily:** Resets every 24 hours.\n- **Weekly & Monthly:** Cumulative points for the week/month.\n- **G.O.A.T:** The all-time hall of fame.\n\nCheck your rank by tapping the **Trophy** icon in the navbar!`
   },
   {
-    keywords: ['zoka picks', 'admin picks', 'expert', 'best pick', 'vote'],
+    // Removed: 'expert', 'best pick', 'vote'
+    keywords: ['zoka picks', 'admin picks', 'what are zoka picks', 'expert picks'],
     response: `# Zoka Picks\nThese are the premium, expert predictions made by the ZOKASCORE team. You can find them on the Predictions page. You can also vote "Agree" or "Disagree" on them to see how the community feels and join the debate!`
   },
   {
-    keywords: ['offline', 'pwa', 'install', 'app', 'download', 'home screen'],
+    // Removed: 'offline', 'pwa', 'install', 'app', 'download', 'home screen'
+    keywords: ['install zokascore', 'download the app', 'install app', 'pwa', 'add to home screen', 'offline mode'],
     response: `# Install the App\nZOKASCORE is a Progressive Web App (PWA)! You can install it directly to your home screen for an offline-capable, native app experience.\n\nScroll to the bottom of the page and tap **"Install App"**, or use your browser's "Add to Home Screen" option.`
   },
   {
-    keywords: ['who made', 'developer', 'creator', 'built', 'team', 'company'],
+    // Removed: 'developer', 'creator', 'built', 'team', 'company'
+    keywords: ['who made zokascore', 'who built zokascore', 'zokascore developer', 'zokascore creator', 'about the creator', 'who made this'],
     response: `# About the Creator\nZOKASCORE is 100% independently designed, developed, and maintained by a single passionate developer. No big corporate teams, just pure love for football and clean code! ⚽`
   },
   {
-    keywords: ['help', 'support', 'contact', 'bug', 'report', 'email'],
+    // Removed: 'help', 'support', 'contact', 'bug', 'report', 'email'
+    keywords: ['contact support', 'report a bug', 'zokascore email', 'help center', 'how to contact'],
     response: `# Need Help?\nIf you found a bug or need support, head over to the **Contact** page in the footer. You can also email us directly at **streetzoka@gmail.com**. We usually reply within 24 hours!`
   },
   {
-    keywords: ['mastergames', 'master games', 'game', 'play'],
+    // Removed: 'game', 'play'
+    keywords: ['mastergames', 'master games', 'play mini games', 'arcade'],
     response: `# Master Games\nMaster Games is our premium arcade section where you can play football-themed mini-games to test your reflexes and earn bonus bragging rights! Check the main menu to start playing.`
   }
-  // Note: Removed 'live', 'match', 'today', 'fixture' so the backend can fetch real data for those!
+];
+
+// ★ GENIUS FIX: Football Safety Net
+// If the user mentions ANY of these words, we immediately step aside 
+// and let the Backend Kim Engine handle it.
+const FOOTBALL_TRIGGERS = [
+  'world cup', 'offside', 'foul', 'penalty', 'kick', 'tactic', 'formation', 
+  'gegenpress', 'low block', 'match', 'score', 'goal', 'win', 'loss', 'draw', 
+  'referee', 'var', '2014', '2018', '2022', '1930', 'champion', 'host', 
+  'teams', 'played', 'final', 'most', 'who won', 'build-up', 'false 9'
 ];
 
 function interceptLocalQuery(query) {
   const q = query.toLowerCase();
+  
+  // 1. Safety Check: If it looks like a football question, DO NOT intercept.
+  if (FOOTBALL_TRIGGERS.some(kw => q.includes(kw))) {
+    return null; 
+  }
+
+  // 2. Strict Phrase Match: Only intercept if exact multi-word app phrases are used.
   for (const item of APP_KNOWLEDGE_BASE) {
     if (item.keywords.some(kw => q.includes(kw))) {
       return item.response;
