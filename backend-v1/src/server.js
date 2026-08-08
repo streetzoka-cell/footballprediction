@@ -31,6 +31,7 @@ const leaderboardRoute = require('./routes/v1/leaderboard');
 const aiRoutes = require('./routes/v1/ai');
 
 const knowledgeRoutes = require('./routes/v1/knowledge');
+const kimGapsRoutes = require('./routes/v1/admin/kimGaps');
 
 const app = express();
 
@@ -138,6 +139,8 @@ app.use('/zokascore-sitemap.xml', sitemapRoute);
 app.use('/api/v1/ai', aiRoutes);
 
 app.use('/api/v1/knowledge', knowledgeRoutes);
+
+app.use('/api/v1/admin/kim', kimGapsRoutes);
 
 // ─────────────────────────────────────────────
 // Static public JSON data

@@ -2,196 +2,395 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 
-const LAWS_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'laws');
-const TACTICS_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'tactics');
+const KNOWLEDGE_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football');
+const GAPS_LOG_PATH = path.join(process.cwd(), 'logs', 'kim_knowledge_gaps.json');
 
-// ★ UPDATED: Dictionary now includes Laws (1-17) and Tactics (tactic_01...)
-const KNOWLEDGE_KEYWORDS = {
-  // Laws (1-17)
-  1: ['pitch', 'field of play', 'dimensions', 'markings', 'goal area', 'crossbar', 'goalpost', 'touchline', 'goal line'],
-  2: ['defective ball', 'ball bursts', 'ball pressure', 'ball weight', 'circumference', 'football weigh'],
-  3: ['number of players', 'substitute', 'substitution', 'captain', 'extra person', 'minimum players', 'enter the pitch'],
-  4: ['equipment', 'jewelry', 'shinguard', 'kit', 'shirt', 'ring', 'tape', 'socks', 'shorts', 'footwear', 'compulsory items'],
-  5: ['referee', 'advantage', 'whistle', 'injury', 'caution', 'sent off', 'disciplinary', 'change a decision'],
-  6: ['var', 'assistant referee', 'linesman', 'fourth official', 'match official', 'video assistant'],
-  7: ['duration', 'half time', 'stoppage time', 'added time', 'abandoned', 'time lost', 'extra time'],
-  8: ['kick-off', 'kickoff', 'dropped ball', 'restart of play', 'start of play'],
-  9: ['out of play', 'in play', 'wholly crossed', 'touchline', 'goal line', 'referee contact', 'deflects off the referee'],
-  10: ['goal scored', 'winning team', 'draw', 'penalty shootout', 'kicks from the penalty mark', 'outcome of the match', 'shootout', 'scoring team'],
-  11: ['offside', 'active play', 'deliberate play', 'deflection', 'interfere', 'gaining an advantage'],
-  12: ['handball', 'foul', 'misconduct', 'red card', 'yellow card', 'dogso', 'dangerous play', 'tackle', 'strikes', 'kicks', 'sanction', "striker's arm"],
-  13: ['free kick', 'direct free kick', 'indirect free kick', 'wall', '10 yards', 'retake'],
-  14: ['penalty kick', 'penalty spot', 'encroachment', 'goalkeeper line', 'penalty mark', 'penalty taker', 'saves the penalty'],
-  15: ['throw-in', 'throw in', 'throwin'],
-  16: ['goal kick', 'goalkick'],
-  17: ['corner kick', 'corner arc', 'corner flag', 'cornerkick'],
-  
-  // Tactics 01 - Foundations
-  'tactic_01': [
-    'width', 'depth', 'stretch the pitch', 'compactness', 'compact', 'shrink the pitch', 
-    'numerical superiority', 'overload', 'between the lines', 'half-spaces', 'half space', 
-    'foundational principle', 'tactical foundation'
-  ]
-};
+let KNOWLEDGE_GRAPH_CACHE = null;
 
-// Cache laws in memory
-let ALL_KNOWLEDGE_CACHE = null;
-function loadAllKnowledge() {
-  if (ALL_KNOWLEDGE_CACHE) return ALL_KNOWLEDGE_CACHE;
+function loadKnowledgeGraph() {
+  if (KNOWLEDGE_GRAPH_CACHE) return KNOWLEDGE_GRAPH_CACHE;
   
-  ALL_KNOWLEDGE_CACHE = [];
-  
-  // Helper to read and parse JSON safely
-  const safeReadJSON = (filePath) => {
-    try {
-      let c = fs.readFileSync(filePath, 'utf8').trim();
-      if (c.charCodeAt(0) === 0xFEFF) c = c.slice(1);
-      return JSON.parse(c);
-    } catch { return null; }
+  KNOWLEDGE_GRAPH_CACHE = [];
+  if (!fs.existsSync(KNOWLEDGE_DIR)) return KNOWLEDGE_GRAPH_CACHE;
+
+  const readDirRecursive = (dir) => {
+    fs.readdirSync(dir).forEach(file => {
+      const fullPath = path.join(dir, file);
+      if (fs.statSync(fullPath).isDirectory()) {
+        readDirRecursive(fullPath);
+      } else if (file.endsWith('.json')) {
+        try {
+          let c = fs.readFileSync(fullPath, 'utf8').trim();
+          if (c.charCodeAt(0) === 0xFEFF) c = c.slice(1);
+          const data = JSON.parse(c);
+          if (data.id || data.lawNumber) KNOWLEDGE_GRAPH_CACHE.push(data);
+        } catch (e) {
+          logger.warn(`[KimEngine] Failed to parse ${file}: ${e.message}`);
+        }
+      }
+    });
   };
 
-  // Load Laws
-  if (fs.existsSync(LAWS_DIR)) {
-    ALL_KNOWLEDGE_CACHE.push(...fs.readdirSync(LAWS_DIR)
-      .filter(f => f.endsWith('.json'))
-      .map(f => safeReadJSON(path.join(LAWS_DIR, f))));
-  }
-  
-  // Load Tactics
-  if (fs.existsSync(TACTICS_DIR)) {
-    ALL_KNOWLEDGE_CACHE.push(...fs.readdirSync(TACTICS_DIR)
-      .filter(f => f.endsWith('.json'))
-      .map(f => safeReadJSON(path.join(TACTICS_DIR, f))));
-  }
-  
-  ALL_KNOWLEDGE_CACHE = ALL_KNOWLEDGE_CACHE.filter(Boolean);
-  return ALL_KNOWLEDGE_CACHE;
+  readDirRecursive(KNOWLEDGE_DIR);
+  logger.info(`[KimEngine] Loaded ${KNOWLEDGE_GRAPH_CACHE.length} concepts into Knowledge Graph.`);
+  return KNOWLEDGE_GRAPH_CACHE;
 }
 
 class KimLocalEngine {
   constructor() {
-    this.knowledgeBase = loadAllKnowledge();
+    this.graph = loadKnowledgeGraph();
   }
 
-  // Phase 2: Intent Analyzer
-  analyzeIntent(message) {
-    const msg = message.toLowerCase();
-    let routedIds = new Set();
+  normalizeText(text) {
+    return text.toLowerCase().replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  containsPhrase(text, phrase) {
+    const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
+  }
+
+  // 1. Upgraded Intent Detection (Regex-based, finds anywhere in sentence)
+  detectIntent(message) {
+    const msg = this.normalizeText(message);
+
+    if (/\b(vs|versus|difference between|compare|comparison)\b/.test(msg)) return 'comparison';
     
-    for (const [id, keywords] of Object.entries(KNOWLEDGE_KEYWORDS)) {
-      if (keywords.some(keyword => msg.includes(keyword))) {
-        // For Laws, convert back to number. For Tactics, keep as string ID.
-        routedIds.add(id.startsWith('tactic_') ? id : Number(id));
+    // Historical/Competition Intents
+    if (/\b(top scorer|golden boot|top goalscorer)\b/.test(msg)) return 'top_scorers';
+    if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
+    if (/\b(how many teams|number of teams)\b/.test(msg)) return 'teams';
+    if (/\b(attendance|spectators|crowd)\b/.test(msg)) return 'attendance';
+    if (/\b(most titles|most wins|most championships|most world cups)\b/.test(msg)) return 'records';
+    if (/\b(most goals|most goals in a tournament|record goals)\b/.test(msg)) return 'records';
+    if (/\b(who won|winner of|who hosted|history of|historical)\b/.test(msg) || /\b(19\d{2}|20\d{2})\b/.test(msg)) {
+      if (msg.includes('world cup') || msg.includes('champions league') || msg.includes('euros') || msg.includes('copa america')) {
+        return 'historical_fact';
       }
     }
-    return Array.from(routedIds);
+
+    if (/\b(what is|what's|whats|define|definition|meaning of|explain)\b/.test(msg)) return 'definition';
+    if (/\b(how does|how do|how is|how are|how works|how does it work|how to)\b/.test(msg)) return 'how_it_works';
+    if (/\b(why|advantage|advantages|benefit|benefits|purpose|used for)\b/.test(msg)) return 'advantages';
+    if (/\b(weakness|weaknesses|flaw|flaws|risk|risks|danger|disadvantage|disadvantages|problem)\b/.test(msg)) return 'weaknesses';
+    if (/\b(when should|when to|when do|when is|when would)\b/.test(msg)) return 'when_to_use';
+    
+    return 'general';
   }
 
-  // Phase 3 & 5: Evidence Retriever
-  retrieveEvidence(message, routedIds) {
-    const msg = message.toLowerCase();
-    let evidenceChunks = [];
+  // 2. Section-Aware Detection for Laws
+  detectLawSection(message, concept) {
+    const msg = this.normalizeText(message);
 
-    for (const item of this.knowledgeBase) {
-      // Match either lawNumber (number) or id (string for tactics)
-      const itemId = item.id ? item.id : item.lawNumber;
+    if (/\b(goal|score|own goal|goalkeeper|handle|pick up)\b/.test(msg)) {
+      if (concept.sections?.scoring_and_goalkeepers) return 'scoring_and_goalkeepers';
+      if (concept.sections?.scoring) return 'scoring';
+    }
+    if (/\b(take|procedure|how|feet|distance|position|placed)\b/.test(msg)) {
+      if (concept.sections?.procedure) return 'procedure';
+    }
+    if (/\b(foul|offence|infringement|touch twice|second touch|retake|illegal)\b/.test(msg)) {
+      if (concept.sections?.infringements) return 'infringements';
+    }
+
+    return null;
+  }
+
+  // 3. Upgraded Semantic Concept Scorer (Phrase boundaries)
+  scoreConcept(message, concept) {
+    const msg = this.normalizeText(message);
+    let score = 0;
+
+    const name = this.normalizeText(concept.name || concept.title || '');
+    const aliases = (concept.aliases || []).map(a => this.normalizeText(a));
+    const keywords = concept.keywords || []; 
+    
+    if (this.containsPhrase(msg, name)) score += 100;
+    if (aliases.some(a => this.containsPhrase(msg, a))) score += 80;
+    if (keywords.some(k => this.containsPhrase(msg, this.normalizeText(k)))) score += 30;
+    if (concept.category && this.containsPhrase(msg, concept.category)) score += 30;
+
+    // Secondary signal: generic word overlap (lower weight)
+    const textBlob = this.normalizeText(JSON.stringify(concept));
+    const msgWords = msg.split(' ');
+    msgWords.forEach(word => {
+      if (word.length > 3 && textBlob.includes(word)) score += 2; // Reduced from 5 to 2
+    });
+
+    return score;
+  }
+
+    // 4. Upgraded Answer Builder (Section-aware + Intent mapping)
+  buildAnswer(intent, concept, message) {
+    let response = `**${concept.name || concept.title}**\n\n`;
+
+    // Logic for Competitions / History
+    if (concept.tournaments || concept.records || concept.finals || concept.matches) {
+      const msg = this.normalizeText(message);
       
-      if (routedIds.includes(itemId)) {
-        // Add overview
-        evidenceChunks.push({ id: itemId, type: 'overview', text: item.overview, weight: 1.0 });
+      // Handle records queries
+      if (intent === 'records' && concept.records) {
+        let recResponse = `**${concept.name}**\n\n`;
+        let foundSpecific = false;
         
-        // Add sections
-        for (const key in item.sections) {
-          const sec = item.sections[key];
-          let sectionText = `${sec.title}:\n${sec.plain_english}`;
-          
-          // Include trade-offs if they exist (for Tactics)
-          if (sec.trade_offs) {
-            sectionText += `\nTrade-offs: ${sec.trade_offs}`;
+        for (const [key, value] of Object.entries(concept.records)) {
+          const keyPhrase = key.replace(/_/g, ' ');
+          if (msg.includes(keyPhrase) || (msg.includes('most') && key.includes('most'))) {
+            recResponse += `**${keyPhrase.toUpperCase()}:**\n${JSON.stringify(value, null, 2)}\n\n`;
+            foundSpecific = true;
           }
+        }
+        
+        if (!foundSpecific) {
+          recResponse += `Here are the key records:\n\n`;
+          for (const [key, value] of Object.entries(concept.records)) {
+            recResponse += `**${key.replace(/_/g, ' ').toUpperCase()}:** ${JSON.stringify(value)}\n`;
+          }
+        }
+        return recResponse;
+      }
+      
+      // Handle tournament queries
+      if (concept.tournaments) {
+        const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
+        
+        if (yearMatch) {
+          const year = parseInt(yearMatch[0]);
+          const tournament = concept.tournaments.find(t => t.year === year);
           
-          evidenceChunks.push({ id: itemId, type: 'section', title: sec.title, text: sectionText, weight: 1.5 });
+          if (tournament) {
+            let tResponse = `**${year} ${concept.name}**\n\n`;
+            
+            if (intent === 'top_scorers' || msg.includes('top scorer') || msg.includes('golden boot')) {
+              tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)`;
+            } else if (intent === 'hosts' || msg.includes('host')) {
+              tResponse += `**Host:** ${tournament.host}`;
+            } else if (intent === 'teams' || msg.includes('how many teams')) {
+              tResponse += `**Teams:** ${tournament.teams}\n**Matches:** ${tournament.matches}`;
+            } else if (intent === 'attendance') {
+              tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
+            } else {
+              // General info / Winners
+              tResponse += `**Host:** ${tournament.host}\n`;
+              tResponse += `**Champion:** ${tournament.champion}\n`;
+              tResponse += `**Runner-up:** ${tournament.runner_up}\n`;
+              tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)\n`;
+              tResponse += `**Teams:** ${tournament.teams}\n`;
+              tResponse += `**Matches:** ${tournament.matches}\n`;
+              tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
+            }
+            return tResponse;
+          } else {
+            return `I don't have a record of a ${concept.name} in ${year}.`;
+          }
+        } else {
+          // No year specified - show summary
+          const recent = concept.tournaments[0];
+          let tResponse = `**${concept.name}**\n\n`;
+          tResponse += `I have data for ${concept.tournaments.length} tournaments.\n\n`;
+          tResponse += `**Most Recent (${recent.year}):**\n`;
+          tResponse += `Host: ${recent.host}\n`;
+          tResponse += `Champion: ${recent.champion}\n`;
+          tResponse += `Runner-up: ${recent.runner_up}\n\n`;
+          tResponse += `Ask me about a specific year (e.g., "Who won in 2014?")`;
+          return tResponse;
         }
+      }
 
-        // Add scenarios (High weight)
-        if (item.scenarios) {
-          item.scenarios.forEach(s => {
-            evidenceChunks.push({ id: itemId, type: 'scenario', text: `Scenario: ${s.scenario} Question: ${s.question} Answer: ${s.answer}`, weight: 2.0 });
-          });
+      // Handle finals queries
+      if (concept.finals) {
+        const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
+        if (yearMatch) {
+          const year = parseInt(yearMatch[0]);
+          const final = concept.finals.find(f => f.year === year);
+          if (final) {
+            let fResponse = `**${year} World Cup Final**\n\n`;
+            fResponse += `**Winner:** ${final.winner}\n`;
+            fResponse += `**Runner-up:** ${final.runner_up}\n`;
+            fResponse += `**Score:** ${final.score}\n`;
+            if (final.shootout) fResponse += `**Penalties:** ${final.shootout}\n`;
+            fResponse += `**Venue:** ${final.venue}`;
+            return fResponse;
+          }
         }
+      }
 
-        // Add misconceptions (If they exist, mainly for Laws)
-        if (item.misconceptions) {
-          item.misconceptions.forEach(m => {
-            evidenceChunks.push({ id: itemId, type: 'misconception', text: `Myth: ${m.myth} Fact: ${m.fact}`, weight: 1.8 });
-          });
+      // Handle matches queries (Head-to-Head)
+      if (concept.matches) {
+        const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
+        const teamsMentioned = [];
+        // Simple check for team names in the message (requires a team dictionary for full accuracy, but works for basic queries)
+        // For now, we'll just search by year if no specific final is found.
+        
+        if (msg.includes('play') || msg.includes('meet') || msg.includes('face')) {
+           // A real implementation would parse team names here.
+           // For now, returning a general message if no year/final is matched.
         }
       }
     }
-    return evidenceChunks;
-  }
 
-  // Phase 4: Confidence Scoring
-  calculateConfidence(message, evidenceChunks) {
-    if (evidenceChunks.length === 0) return 0;
-    
-    const msg = message.toLowerCase();
-    const msgWords = msg.match(/\b(\w+)\b/g) || [];
-    let totalScore = 0;
-    let maxPossibleScore = 0;
+    // Logic for Laws (Section-based knowledge)
+    if (concept.sections) {
+      const sectionKey = this.detectLawSection(message, concept);
 
-    for (const chunk of evidenceChunks) {
-      let chunkScore = 0;
-      const chunkText = chunk.text.toLowerCase();
-      
-      // Calculate word overlap
-      msgWords.forEach(word => {
-        if (word.length > 3 && chunkText.includes(word)) {
-          chunkScore += 0.1;
+      if (sectionKey) {
+        const section = concept.sections[sectionKey];
+        response += section.plain_english || section.authoritative || '';
+
+        if (section.authoritative && section.plain_english && section.authoritative !== section.plain_english) {
+          response += `\n\n**Law:** ${section.authoritative}`;
         }
-      });
-
-      // Boost score based on chunk type weight
-      totalScore += chunkScore * chunk.weight;
-      maxPossibleScore += (msgWords.length * 0.1) * chunk.weight;
+        return response;
+      }
+      
+      // Fallback to overview if no specific section matched
+      response += concept.overview || '';
+      return response;
     }
 
-    // Normalize score to 0.0 - 1.0
-    let confidence = maxPossibleScore > 0 ? totalScore / maxPossibleScore : 0;
+    // Logic for Tactics/Formations (Intent-based knowledge)
+    const supportedIntents = concept.intents || ['definition'];
+    const actualIntent = supportedIntents.includes(intent) ? intent : 'general';
+
+    if (actualIntent === 'definition' || actualIntent === 'general') {
+      response += concept.definition || concept.overview || '';
+      if (concept.core_principle) response += `\n\n**Core Principle:** ${concept.core_principle}`;
+    } else if (actualIntent === 'how_it_works') {
+      response += concept.core_principle || concept.definition || '';
+      if (concept.triggers) response += `\n\n**Triggers:** ${concept.triggers.join(', ')}`;
+      if (concept.common_patterns) response += `\n\n**Common Patterns:**\n- ${concept.common_patterns.join('\n- ')}`;
+    } else if (actualIntent === 'advantages' || actualIntent === 'purpose') {
+      response += concept.advantages ? `**Advantages:**\n- ${concept.advantages.join('\n- ')}` : 'No specific advantages listed.';
+      if (concept.objectives) response += `\n\n**Objectives:**\n- ${concept.objectives.join('\n- ')}`;
+    } else if (actualIntent === 'weaknesses') {
+      response += concept.weaknesses ? `**Weaknesses & Risks:**\n- ${concept.weaknesses.join('\n- ')}` : 'No specific weaknesses listed.';
+    } else if (actualIntent === 'when_to_use') {
+      response += concept.triggers ? `**Best used when:**\n- ${concept.triggers.join('\n- ')}` : 'No specific triggers listed.';
+    } else {
+      response = concept.overview || concept.definition || '';
+    }
+
+    return response;
+  }
+
+  
+  // 5. Comparison Builder
+  buildComparisonAnswer(concept1, concept2) {
+    let response = `**Tactical Comparison: ${concept1.name} vs ${concept2.name}**\n\n`;
     
-    // Cap at 1.0
-    return Math.min(confidence, 1.0);
+    response += `**${concept1.name}:**\n`;
+    response += `${concept1.definition || concept1.overview || ''}\n`;
+    if (concept1.advantages) response += `*Strengths:* ${concept1.advantages.join(', ')}\n`;
+    if (concept1.weaknesses) response += `*Weaknesses:* ${concept1.weaknesses.join(', ')}\n\n`;
+    
+    response += `**${concept2.name}:**\n`;
+    response += `${concept2.definition || concept2.overview || ''}\n`;
+    if (concept2.advantages) response += `*Strengths:* ${concept2.advantages.join(', ')}\n`;
+    if (concept2.weaknesses) response += `*Weaknesses:* ${concept2.weaknesses.join(', ')}\n\n`;
+    
+    response += `**Key Difference:**\n`;
+    response += `${concept1.name} primarily relies on ${concept1.core_principle || 'its structural framework'}, whereas ${concept2.name} relies on ${concept2.core_principle || 'its structural framework'}.`;
+    
+    return response;
+  }
+
+  // 6. Knowledge Gap Recorder
+  recordKnowledgeGap(message, bestScore) {
+    try {
+      let gaps = [];
+      if (fs.existsSync(GAPS_LOG_PATH)) {
+        gaps = JSON.parse(fs.readFileSync(GAPS_LOG_PATH, 'utf8'));
+      }
+      gaps.push({ question: message, timestamp: new Date().toISOString(), confidence: bestScore });
+      if (gaps.length > 100) gaps = gaps.slice(-100);
+      fs.writeFileSync(GAPS_LOG_PATH, JSON.stringify(gaps, null, 2));
+    } catch (e) {
+      logger.warn('[KimEngine] Failed to record gap:', e.message);
+    }
   }
 
   // Main entry point
   async resolveQuery(message) {
-    const intent = this.analyzeIntent(message);
-    if (intent.length === 0) {
-      return { status: "UNCERTAIN", evidence: [], confidence: 0 };
+    const intent = this.detectIntent(message);
+    
+    // Handle Comparisons (Strict parsing)
+    if (intent === 'comparison') {
+      let parts = [];
+      
+      if (message.toLowerCase().includes('difference between')) {
+        let cleanMsg = this.normalizeText(message).replace('difference between', '').replace('what is the', '');
+        parts = cleanMsg.split(/\s+and\s+/i);
+      } else if (message.toLowerCase().includes('compare')) {
+        let cleanMsg = this.normalizeText(message).replace('compare', '').replace('with', 'and');
+        parts = cleanMsg.split(/\s+and\s+/i);
+      } else {
+        parts = this.normalizeText(message).split(/\s+vs\s+|\s+versus\s+/i);
+      }
+      
+      if (parts.length >= 2) {
+        const subject1 = parts[0].trim();
+        const subject2 = parts[1].trim();
+        
+        let match1 = null, score1 = 0;
+        let match2 = null, score2 = 0;
+        
+        for (const concept of this.graph) {
+          const s1 = this.scoreConcept(subject1, concept);
+          const s2 = this.scoreConcept(subject2, concept);
+          if (s1 > score1) { score1 = s1; match1 = concept; }
+          if (s2 > score2) { score2 = s2; match2 = concept; }
+        }
+        
+        if (score1 >= 80 && score2 >= 80 && match1.id !== match2.id) {
+          const answer = this.buildComparisonAnswer(match1, match2);
+          return { status: "ANSWERED_LOCALLY", evidence: answer, confidence: 1.0, routedKnowledge: [match1.id, match2.id] };
+        }
+      }
     }
 
-    const evidence = this.retrieveEvidence(message, intent);
-    const confidence = this.calculateConfidence(message, evidence);
+    // Standard Single-Concept Resolution
+    let bestMatch = null;
+    let bestScore = 0;
+    let secondBestScore = 0;
 
-    // If we have strong evidence and multiple matching keywords, we can answer locally
-    const hasStrongEvidence = confidence >= 0.15 || evidence.some(e => e.type === 'scenario' && message.toLowerCase().includes(e.text.toLowerCase().split(' ')[5]));
+    for (const concept of this.graph) {
+      const score = this.scoreConcept(message, concept);
+      if (score > bestScore) {
+        secondBestScore = bestScore;
+        bestScore = score;
+        bestMatch = concept;
+      } else if (score > secondBestScore) {
+        secondBestScore = score;
+      }
+    }
 
-    if (hasStrongEvidence) {
-      // Format local answer
-      const contextStr = evidence.map(e => e.text).join('\n\n');
-      return { 
-        status: "ANSWERED_LOCALLY", 
-        evidence: contextStr, 
-        confidence,
-        routedKnowledge: intent
+    // Confidence Gate: Require strong score AND a clear margin from the second-best match
+    const LOCAL_THRESHOLD = 80;
+    const MIN_SCORE_MARGIN = 20;
+    
+    // Allow historical/competition intents to bypass strict intent list checking if concept matches
+    const isHistoryOrComp = bestMatch && (bestMatch.tournaments || bestMatch.records);
+    const canAnswer = 
+      bestScore >= LOCAL_THRESHOLD && 
+      (bestScore - secondBestScore >= MIN_SCORE_MARGIN) &&
+      (intent === 'general' || isHistoryOrComp || bestMatch.intents?.includes(intent) || bestMatch.sections);
+
+    if (canAnswer) {
+      const answer = this.buildAnswer(intent, bestMatch, message);
+      return {
+        status: "ANSWERED_LOCALLY",
+        evidence: answer,
+        confidence: Math.min(bestScore / 100, 1.0), // Capped at 1.0
+        routedKnowledge: [bestMatch.id || bestMatch.lawNumber]
       };
     } else {
-      // Weak match, send to Gemini Gate
-      return { 
-        status: "UNCERTAIN", 
-        evidence: evidence.map(e => e.text).join('\n\n'), 
-        confidence,
-        routedKnowledge: intent
+      this.recordKnowledgeGap(message, bestScore);
+      
+      return {
+        status: "UNCERTAIN",
+        evidence: bestMatch && bestScore >= 60 ? this.buildAnswer('general', bestMatch, message) : "",
+        confidence: Math.min(bestScore / 100, 1.0),
+        routedKnowledge: bestMatch ? [bestMatch.id || bestMatch.lawNumber] : []
       };
     }
   }

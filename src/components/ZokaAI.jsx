@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
-  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock, WifiOff
+  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock, WifiOff, Activity, Target
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../services/backendAuth';
@@ -56,6 +56,21 @@ function interceptLocalQuery(query) {
   }
   return null;
 }
+
+// ═══════════════════════════════════════════════════════════
+// HELPER: Engine Badge Mapper
+// ═══════════════════════════════════════════════════════════
+const getEngineBadge = (model) => {
+  if (!model) return null;
+  
+  if (model.includes('local-engine') || model.includes('local-app')) return { icon: Brain, text: 'Verified Knowledge', color: 'text-primary' };
+  if (model.includes('match-engine')) return { icon: Activity, text: 'Live Match Data', color: 'text-success' };
+  if (model.includes('prediction-engine')) return { icon: Target, text: 'Tactical Prediction', color: 'text-warning' };
+  if (model.includes('gemini')) return { icon: Sparkles, text: 'AI Analysis', color: 'text-secondary' };
+  if (model.includes('cached')) return { icon: Activity, text: 'Cached Response', color: 'text-base-300' };
+  
+  return null;
+};
 
 // ═══════════════════════════════════════════════════════════
 // TYPEWRITER COMPONENT
@@ -221,7 +236,8 @@ export default function ZokaAI({ isOpen, onClose }) {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to get response');
       
-      const aiMsg = { role: 'assistant', content: data.reply, id: Date.now() + 1 };
+      // ★ NEW: Store the model string to render the badge
+      const aiMsg = { role: 'assistant', content: data.reply, model: data.model, id: Date.now() + 1 };
       setTypingMessageId(aiMsg.id);
       
       setChats(prev => prev.map(c => {
@@ -277,7 +293,8 @@ export default function ZokaAI({ isOpen, onClose }) {
     if (localReply) {
       // Simulate AI "thinking" for 800ms so the typewriter feels natural
       setTimeout(() => {
-        const aiMsg = { role: 'assistant', content: localReply, id: Date.now() + 1 };
+        // ★ NEW: Assign 'local-app' model to local app knowledge
+        const aiMsg = { role: 'assistant', content: localReply, model: 'local-app', id: Date.now() + 1 };
         setTypingMessageId(aiMsg.id);
         setChats(prev => prev.map(c => {
           if (c.id === newChatId) {
@@ -379,35 +396,47 @@ export default function ZokaAI({ isOpen, onClose }) {
               </div>
             )}
             
-            {messages.map((msg, i) => (
-              <div key={msg.id || i} className={`kim-msg-row ${msg.role === 'user' ? 'user' : 'ai'}`}>
-                {msg.role !== 'user' && (
-                  <div className="kim-msg-avatar">
-                    <Sparkles size={14} color="#fff" />
-                  </div>
-                )}
-                <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'} ${msg.isError ? 'error' : ''}`}>
-                  {msg.isError ? (
-                    <div className="flex items-center gap-2">
-                      <AlertCircle size={14} />
-                      <span>{msg.content}</span>
-                      <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1 hover:text-white transition-colors">
-                        <RefreshCw size={12} /> Retry
-                      </button>
+            {messages.map((msg, i) => {
+              const badge = msg.role === 'assistant' ? getEngineBadge(msg.model) : null;
+              const BadgeIcon = badge?.icon;
+              
+              return (
+                <div key={msg.id || i} className={`kim-msg-row ${msg.role === 'user' ? 'user' : 'ai'}`}>
+                  {msg.role !== 'user' && (
+                    <div className="kim-msg-avatar">
+                      <Sparkles size={14} color="#fff" />
                     </div>
-                  ) : msg.role === 'assistant' ? (
-                    <TypewriterText text={msg.content} isActive={msg.id === typingMessageId} onComplete={() => setTypingMessageId(null)} />
-                  ) : (
-                    <div className="text-sm leading-relaxed">{msg.content}</div>
+                  )}
+                  <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'} ${msg.isError ? 'error' : ''}`}>
+                    {/* ★ NEW: Reasoning Badge */}
+                    {badge && !msg.isError && (
+                      <div className={`flex items-center gap-1 mb-2 text-[10px] font-bold uppercase tracking-wider ${badge.color}`}>
+                        <BadgeIcon size={10} /> {badge.text}
+                      </div>
+                    )}
+                    
+                    {msg.isError ? (
+                      <div className="flex items-center gap-2">
+                        <AlertCircle size={14} />
+                        <span>{msg.content}</span>
+                        <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1 hover:text-white transition-colors">
+                          <RefreshCw size={12} /> Retry
+                        </button>
+                      </div>
+                    ) : msg.role === 'assistant' ? (
+                      <TypewriterText text={msg.content} isActive={msg.id === typingMessageId} onComplete={() => setTypingMessageId(null)} />
+                    ) : (
+                      <div className="text-sm leading-relaxed">{msg.content}</div>
+                    )}
+                  </div>
+                  {msg.role === 'user' && (
+                    <div className="kim-msg-avatar user">
+                      <User size={14} color="#fff" />
+                    </div>
                   )}
                 </div>
-                {msg.role === 'user' && (
-                  <div className="kim-msg-avatar user">
-                    <User size={14} color="#fff" />
-                  </div>
-                )}
-              </div>
-            ))}
+              );
+            })}
             
             {loading && !typingMessageId && (
               <div className="kim-msg-row ai">
