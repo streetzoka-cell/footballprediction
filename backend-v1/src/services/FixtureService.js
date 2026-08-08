@@ -225,11 +225,26 @@ async function forceRefreshFinishedMatches(dateStr) {
   return finished; // Return the array
 }
 
+
+async function refreshFinishedMatches() {
+  const today = getDateOffset(0);
+  const yesterday = getDateOffset(-1);
+
+  const todayFinished = await forceRefreshFinishedMatches(today);
+  const yesterdayFinished = await forceRefreshFinishedMatches(yesterday);
+
+  return [
+    ...(todayFinished || []),
+    ...(yesterdayFinished || [])
+  ];
+}
+
 module.exports = {
   syncTodayFixtures,
   syncTomorrowFixtures,
   syncYesterdayResults,
   syncFinishedFixtures,
   syncRecentFinishedFixtures,
-  forceRefreshFinishedMatches
-}
+  forceRefreshFinishedMatches,
+  refreshFinishedMatches
+};

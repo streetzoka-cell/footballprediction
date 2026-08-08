@@ -30,6 +30,8 @@ const zokaPicksRoute = require('./routes/v1/zokaPicks');
 const leaderboardRoute = require('./routes/v1/leaderboard');
 const aiRoutes = require('./routes/v1/ai');
 
+const knowledgeRoutes = require('./routes/v1/knowledge');
+
 const app = express();
 
 app.set('trust proxy', 1);
@@ -134,6 +136,8 @@ app.use('/api/v1/admin/monitoring', monitoringDashboard);
 app.use('/zokascore-sitemap.xml', sitemapRoute);
 
 app.use('/api/v1/ai', aiRoutes);
+
+app.use('/api/v1/knowledge', knowledgeRoutes);
 
 // ─────────────────────────────────────────────
 // Static public JSON data

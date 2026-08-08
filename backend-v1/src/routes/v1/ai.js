@@ -9,6 +9,9 @@ const logger = require('../../utils/logger');
 const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
 const { getDb } = require('../../config/firebase');
 
+// ★ NEW: Import the Local Reasoning Engine
+const kimEngine = require('../../services/KimLocalEngine');
+
 // ★ FIX: Initialize safely to prevent crash if API key is missing
 let ai = null;
 if (env.GEMINI_API_KEY) {
@@ -34,8 +37,9 @@ FORMATTING RULES:
 - Never invent facts, hallucinate scores, or pretend to know unavailable live data.
 - Explain reasoning clearly and concisely.
 - Represent the brand professionally.
-- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE] provided. If it's missing, tell them to make predictions first.
-- If a user asks about today's matches or Zoka Picks, refer to the [PLATFORM DATA] provided.`;
+- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE] provided. If it's missing, tell them to make a prediction first.
+- If a user asks about today's matches or Zoka Picks, refer to the [PLATFORM DATA] provided.
+- If a user asks about football rules or laws, refer strictly to the [FOOTBALL LAWS CONTEXT] provided. Apply the 3-layer logic (Authoritative Law -> Explanation -> Application).`;
 
 const MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-3.5-flash"];
 const FALLBACK_CODES = [429, 404, 503];
@@ -219,14 +223,16 @@ Zoka AI Picks: ${zokaPicks.map(p => `${p.homeTeam?.name || 'Home'} vs ${p.awayTe
   return { userContext, platformContext };
 }
 
-async function buildPrompt({ message, history, context }) {
+// ★ UPDATED: Build Prompt now accepts pre-fetched law knowledge directly
+async function buildPrompt({ message, history, context, lawKnowledge }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
   for (const msg of sanitizedHistory) {
     contents.push({ role: msg.role, parts: [{ text: msg.content }] });
   }
   
-  const finalUserMessage = `${context.userContext}\n${context.platformContext}\nUser Query: ${message}`;
+  const lawContext = lawKnowledge ? `\n[FOOTBALL LAWS CONTEXT]\n${lawKnowledge}\n` : "";
+  const finalUserMessage = `${context.userContext}\n${context.platformContext}\n${lawContext}\nUser Query: ${message}`;
   contents.push({ role: 'user', parts: [{ text: finalUserMessage }] });
   return contents;
 }
@@ -247,7 +253,8 @@ function handleGeminiError(err, model) {
   return { success: false, error: clientError, model: model || "unknown" };
 }
 
-async function generateWithFallback(contents) {
+async function generateWithFallback(contents, systemOverride = null) {
+  const sysPrompt = systemOverride || SYSTEM_PROMPT;
   for (const model of MODELS) {
     const startTime = Date.now();
     try {
@@ -255,7 +262,7 @@ async function generateWithFallback(contents) {
       const generationPromise = ai.models.generateContent({
         model, 
         contents, 
-        systemInstruction: SYSTEM_PROMPT,
+        systemInstruction: sysPrompt,
         generationConfig: { temperature: 0.45, topP: 0.9, topK: 32, maxOutputTokens: 600 }
       });
       const response = await Promise.race([generationPromise, timeoutPromise]);
@@ -308,15 +315,31 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     // 3. Fetch all context securely on the backend
     const context = await fetchSystemContext(req.user.uid);
 
-    // 4. Generate AI Response
-    const contents = await buildPrompt({ message, history, context });
-    const result = await generateWithFallback(contents);
+    // 4. ★ NEW: Local Reasoning & Gemini Gate ★
+    const localResult = await kimEngine.resolveQuery(message);
 
-    if (result.success) {
-      addToCache(cacheKey, result.reply, result.model);
-      return res.status(200).json(result);
+    if (localResult.status === "ANSWERED_LOCALLY") {
+        // GEMINI GATE: BLOCKED. We answer locally with 0 API calls.
+        logger.info(`[ZOKASCORE AI] Answered locally (0 API calls). Confidence: ${localResult.confidence.toFixed(2)}. Laws: ${localResult.routedLaws.join(',')}`);
+        
+        // Format the local evidence as Kim's reply
+        const reply = `According to the Laws of the Game:\n\n${localResult.evidence}`;
+        
+        addToCache(cacheKey, reply, "local-engine");
+        return res.status(200).json({ success: true, model: "local-engine", reply, responseTime: "1ms" });
     } else {
-      return res.status(503).json(result);
+        // GEMINI GATE: OPEN. Uncertain query, fallback to Gemini with evidence attached.
+        logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Confidence: ${localResult.confidence.toFixed(2)}. Laws: ${localResult.routedLaws.join(',')}`);
+        
+        const contents = await buildPrompt({ message, history, context, lawKnowledge: localResult.evidence });
+        const result = await generateWithFallback(contents);
+        
+        if (result.success) {
+          addToCache(cacheKey, result.reply, `gemini-${result.model}`);
+          return res.status(200).json(result);
+        } else {
+          return res.status(503).json(result);
+        }
     }
   } catch (err) {
     logger.error('[ZOKASCORE AI] Unhandled route error:', err);

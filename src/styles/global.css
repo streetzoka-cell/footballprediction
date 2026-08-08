@@ -2497,6 +2497,8 @@ earlier-only properties preserved.
    REACTOR STUDIO PRO (rs-*) — COMPLETE & VERIFIED
    All keyframes, all classes, all breakpoints.
    Matches every className in ReactorStudioInner.
+   + Camera Recorder Page
+   + Professional Enhancement Panel
 ============================================================ */
 
 :root {
@@ -2516,7 +2518,7 @@ earlier-only properties preserved.
   --rs-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
-/* ── KEYFRAMES (ALL 12 — previously missing) ─────────────── */
+/* ── KEYFRAMES (ALL 14 — Added 2 new) ────────────────────── */
 
 @keyframes rs-pulse-anim {
   0%, 100% { opacity: 1; }
@@ -2576,6 +2578,18 @@ earlier-only properties preserved.
 @keyframes rs-slide-in {
   from { transform: translateX(105%); }
   to { transform: translateX(0); }
+}
+
+/* NEW: Recording pulse animation */
+@keyframes rs-recording-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.6; transform: scale(1.1); }
+}
+
+/* NEW: Enhancement glow animation */
+@keyframes rs-enhancement-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(16,185,129,0.3); }
+  50% { box-shadow: 0 0 30px rgba(16,185,129,0.6); }
 }
 
 /* ── CONTAINER ───────────────────────────────────────────── */
@@ -2660,6 +2674,31 @@ earlier-only properties preserved.
 .rs-export-progress-text {
   position: absolute; inset: 0; display: flex; align-items: center;
   justify-content: center; font-size: 0.7rem; font-weight: 700; color: #fff;
+}
+
+/* ── ENHANCEMENT PROGRESS BAR ────────────────────────────── */
+
+.rs-enhancement-progress {
+  flex-shrink: 0; position: relative; height: 32px;
+  background: var(--rs-bg-elevated); overflow: hidden;
+  border-bottom: 1px solid var(--rs-border);
+  padding: 4px 12px;
+  display: flex; align-items: center;
+}
+.rs-enhancement-bar {
+  flex: 1; position: relative; height: 8px;
+  background: rgba(255,255,255,0.1); border-radius: 4px;
+  overflow: hidden;
+}
+.rs-enhancement-fill {
+  height: 100%; background: linear-gradient(90deg, var(--rs-accent), var(--rs-gold));
+  transition: width 0.3s ease; border-radius: 4px;
+  animation: rs-enhancement-glow 1.5s infinite;
+}
+.rs-enhancement-text {
+  position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
+  font-size: 0.7rem; font-weight: 700; color: var(--rs-accent);
+  white-space: nowrap;
 }
 
 /* ── MAIN CANVAS ─────────────────────────────────────────── */
@@ -2907,6 +2946,185 @@ earlier-only properties preserved.
 .rs-export-preset-name { font-size: 0.85rem; font-weight: 700; color: var(--rs-text-primary); }
 .rs-export-preset-desc { font-size: 0.7rem; color: var(--rs-text-muted); }
 
+/* ── ENHANCEMENT PRESETS ─────────────────────────────────── */
+
+.rs-enhancement-presets { display: flex; flex-direction: column; gap: 8px; }
+.rs-enhancement-btn {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+  padding: 14px 16px; border-radius: var(--rs-radius); background: var(--rs-bg-deep);
+  border: 2px solid var(--rs-border); cursor: pointer; transition: var(--rs-transition);
+  text-align: left; width: 100%;
+}
+.rs-enhancement-btn:hover:not(:disabled) { 
+  border-color: var(--rs-accent); 
+  background: rgba(16,185,129,0.05);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 15px rgba(16,185,129,0.2);
+}
+.rs-enhancement-btn.active { 
+  border-color: var(--rs-accent); 
+  background: rgba(16,185,129,0.1);
+  box-shadow: 0 0 20px rgba(16,185,129,0.3);
+}
+.rs-enhancement-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+.rs-enhancement-name { 
+  font-size: 0.9rem; font-weight: 700; color: var(--rs-text-primary);
+  display: flex; align-items: center; gap: 8px;
+}
+.rs-enhancement-desc { font-size: 0.75rem; color: var(--rs-text-muted); line-height: 1.4; }
+.rs-enhancement-specs { 
+  display: flex; gap: 12px; font-size: 0.65rem; color: var(--rs-text-muted);
+  font-weight: 600; margin-top: 4px;
+}
+.rs-enhancement-specs span {
+  padding: 2px 8px; background: rgba(255,255,255,0.05);
+  border-radius: 4px; border: 1px solid var(--rs-border);
+}
+.rs-ai-badge {
+  background: linear-gradient(135deg, var(--rs-accent), var(--rs-blue)) !important;
+  color: #fff !important; border: none !important;
+  font-size: 0.6rem; padding: 2px 6px; border-radius: 4px;
+  font-weight: 800; text-transform: uppercase;
+}
+
+/* ── CAMERA RECORDER PAGE ────────────────────────────────── */
+
+.rs-camera-page {
+  position: fixed; inset: 0; z-index: 10000;
+  background: var(--rs-bg-deep);
+  display: flex; flex-direction: column;
+  animation: rs-fade-in 0.3s ease both;
+}
+.rs-camera-header {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 16px 20px; padding-top: max(16px, env(safe-area-inset-top));
+  background: rgba(17,24,39,0.95);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--rs-border);
+  z-index: 50;
+}
+.rs-camera-header h2 {
+  font-size: 1.1rem; font-weight: 800; color: var(--rs-text-primary);
+  margin: 0; display: flex; align-items: center; gap: 8px;
+}
+.rs-camera-close {
+  width: 36px; height: 36px; border-radius: var(--rs-radius-sm);
+  background: var(--rs-bg-elevated); border: 1px solid var(--rs-border);
+  color: var(--rs-text-muted); cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: var(--rs-transition);
+}
+.rs-camera-close:hover { background: var(--rs-danger); color: #fff; border-color: var(--rs-danger); }
+.rs-camera-timer {
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.9rem; font-weight: 700; color: var(--rs-text-primary);
+  font-family: 'Courier New', monospace;
+}
+.rs-recording-indicator {
+  display: flex; align-items: center; gap: 6px;
+  color: var(--rs-danger); font-size: 0.75rem; font-weight: 800;
+  animation: rs-recording-pulse 1.5s infinite;
+}
+.rs-camera-preview {
+  flex: 1; position: relative; display: flex; align-items: center; justify-content: center;
+  background: #000; overflow: hidden; min-height: 0;
+}
+.rs-camera-preview[data-ratio="9:16"] { aspect-ratio: 9 / 16; max-height: 100%; }
+.rs-camera-preview[data-ratio="16:9"] { aspect-ratio: 16 / 9; max-width: 100%; }
+.rs-camera-preview[data-ratio="1:1"] { aspect-ratio: 1 / 1; max-height: 100%; max-width: 100%; }
+.rs-camera-preview[data-ratio="4:5"] { aspect-ratio: 4 / 5; max-height: 100%; }
+.rs-camera-video, .rs-camera-canvas {
+  width: 100%; height: 100%; object-fit: cover;
+}
+.rs-camera-grid {
+  position: absolute; inset: 0; pointer-events: none;
+  display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr;
+  gap: 1px; padding: 10%;
+}
+.rs-grid-line {
+  border: 1px solid rgba(255,255,255,0.3);
+}
+.rs-camera-recording-overlay {
+  position: absolute; top: 20px; left: 20px;
+  display: flex; align-items: center; gap: 8px;
+  background: rgba(239,68,68,0.9); padding: 8px 16px;
+  border-radius: 20px; font-size: 0.75rem; font-weight: 700;
+  color: #fff; animation: rs-recording-pulse 1.5s infinite;
+}
+.rs-recording-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: #fff; animation: rs-recording-pulse 1s infinite;
+}
+
+.rs-camera-controls {
+  flex-shrink: 0; background: rgba(17,24,39,0.95);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rs-border);
+  padding: 16px; max-height: 40vh; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.rs-camera-filters, .rs-camera-effects {
+  margin-bottom: 16px;
+}
+.rs-camera-filters h4, .rs-camera-effects h4 {
+  font-size: 0.75rem; font-weight: 700; color: var(--rs-text-muted);
+  text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px;
+}
+.rs-filter-scroll {
+  display: flex; gap: 8px; overflow-x: auto; padding-bottom: 4px;
+  scrollbar-width: none; -ms-overflow-style: none;
+}
+.rs-filter-scroll::-webkit-scrollbar { display: none; }
+.rs-camera-options {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;
+}
+.rs-option-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 4px;
+  padding: 10px 16px; border-radius: var(--rs-radius-sm);
+  background: var(--rs-bg-elevated); border: 1px solid var(--rs-border);
+  color: var(--rs-text-muted); cursor: pointer; transition: var(--rs-transition);
+  font-size: 0.7rem; font-weight: 600; min-width: 70px;
+}
+.rs-option-btn:hover { background: #374151; border-color: var(--rs-border-hover); color: #fff; }
+.rs-option-btn.active { 
+  background: var(--rs-accent); color: #fff; 
+  border-color: var(--rs-accent); box-shadow: 0 4px 12px rgba(16,185,129,0.3);
+}
+.rs-option-select {
+  padding: 10px 12px; border-radius: var(--rs-radius-sm);
+  background: var(--rs-bg-elevated); border: 1px solid var(--rs-border);
+  color: var(--rs-text-primary); font-size: 0.75rem; font-weight: 600;
+  cursor: pointer; outline: none; flex: 1;
+}
+.rs-option-select:focus { border-color: var(--rs-accent); }
+
+.rs-camera-actions {
+  display: flex; justify-content: center; align-items: center; gap: 16px;
+  padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom));
+  background: rgba(17,24,39,0.95);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-top: 1px solid var(--rs-border);
+}
+.rs-record-btn {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 16px 32px; border-radius: 50px;
+  background: var(--rs-danger); border: none; color: #fff;
+  font-size: 0.85rem; font-weight: 700; cursor: pointer;
+  box-shadow: 0 4px 20px rgba(239,68,68,0.4);
+  transition: var(--rs-transition);
+}
+.rs-record-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+.rs-record-btn:active { transform: scale(0.95); }
+.rs-stop-btn {
+  display: flex; align-items: center; gap: 8px;
+  padding: 12px 24px; border-radius: var(--rs-radius);
+  background: var(--rs-danger); border: none; color: #fff;
+  font-size: 0.8rem; font-weight: 700; cursor: pointer;
+  transition: var(--rs-transition);
+}
+.rs-stop-btn:hover { filter: brightness(1.1); }
+.rs-stop-btn:active { transform: scale(0.95); }
+
 /* ── TOASTS ──────────────────────────────────────────────── */
 
 .rs-toast-container {
@@ -3007,6 +3225,13 @@ earlier-only properties preserved.
     padding-bottom: max(16px, env(safe-area-inset-bottom));
   }
   .rs-controls-panel.open { transform: translateY(0); }
+  
+  .rs-camera-header { padding: 12px 16px; padding-top: max(12px, env(safe-area-inset-top)); }
+  .rs-camera-header h2 { font-size: 0.95rem; }
+  .rs-camera-timer { font-size: 0.8rem; }
+  .rs-camera-controls { max-height: 50vh; padding: 12px; }
+  .rs-option-btn { min-width: 60px; padding: 8px 12px; font-size: 0.65rem; }
+  .rs-record-btn { padding: 14px 28px; font-size: 0.8rem; }
 }
 
 /* ============================================================
