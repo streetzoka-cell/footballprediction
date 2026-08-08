@@ -47,11 +47,7 @@ const APP_KNOWLEDGE_BASE = [
     keywords: ['contact support', 'report a bug', 'zokascore email', 'help center', 'how to contact'],
     response: `# Need Help?\nIf you found a bug or need support, head over to the **Contact** page in the footer. You can also email us directly at **streetzoka@gmail.com**. We usually reply within 24 hours!`
   },
-  {
-    // Removed: 'game', 'play'
-    keywords: ['mastergames', 'master games', 'play mini games', 'arcade'],
-    response: `# Master Games\nMaster Games is our premium arcade section where you can play football-themed mini-games to test your reflexes and earn bonus bragging rights! Check the main menu to start playing.`
-  }
+  
 ];
 
 // ★ GENIUS FIX: Football Safety Net
