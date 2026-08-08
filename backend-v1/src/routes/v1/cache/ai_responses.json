@@ -209,19 +209,114 @@
     "model": "gemini-gemini-3.5-flash",
     "timestamp": 1786176641258
   },
-  "PrJH43f046P1YMaNKVXDDqFj3n22:who won the 2014 world cup": {
-    "reply": "**FIFA World Cup**\n\nThe FIFA World Cup is the premier international football tournament, contested by the senior men's national teams of the member associations of FIFA. It is the most widely viewed and followed single sporting event in the world.",
-    "model": "local-engine",
-    "timestamp": 1786183072371
-  },
   "PrJH43f046P1YMaNKVXDDqFj3n22:who won the worldcup 2014": {
     "reply": "**2014 FIFA World Cup Tournaments**\n\n**Host:** Brazil\n**Champion:** Germany\n**Runner-up:** Argentina\n**Top Scorer:** James Rodríguez (6 goals)\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,429,873",
     "model": "local-engine",
     "timestamp": 1786183985944
   },
-  "PrJH43f046P1YMaNKVXDDqFj3n22:who has won the world cup most": {
-    "reply": "**Brazil** has won the FIFA World Cup the most times, with a record **5 titles**. \n\nHere is the breakdown of their championship years:\n* **Winning Years:** 1958, 1962, 1970, 1994, 2002\n\n### Most FIFA World Cup Titles (Men's):\n1. **Brazil** – 5 titles (1958, 1962, 1970, 1994, 2002)\n2. **Germany** – 4 titles (1954, 1974, 1990, 2014)\n3. **Italy** – 4 titles (1934, 1938, 1982, 2006)\n4. **Argentina** – 3 titles (1978, 1986, 2022)\n5. **France** – 2 titles (1998, 2018)\n6. **Uruguay** – 2 titles (1930, 1950)\n7. **England** – 1 title (1966)\n8. **Spain** – 1 title (2010)",
+  "PrJH43f046P1YMaNKVXDDqFj3n22:how many matches were played in 2022": {
+    "reply": "**2022 FIFA World Cup Tournaments**\n\n**Host:** Qatar\n**Champion:** Argentina\n**Runner-up:** France\n**Top Scorer:** Kylian Mbappé (8 goals)\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,404,252",
+    "model": "local-engine",
+    "timestamp": 1786186663135
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:how many matches were played in 2018": {
+    "reply": "**2018 FIFA World Cup Tournaments**\n\n**Host:** Russia\n**Champion:** France\n**Runner-up:** Croatia\n**Top Scorer:** Harry Kane (6 goals)\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,031,768",
+    "model": "local-engine",
+    "timestamp": 1786186715481
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:world cup 2014": {
+    "reply": "**2014 FIFA World Cup Tournaments**\n\n**Host:** Brazil\n**Champion:** Germany\n**Runner-up:** Argentina\n**Top Scorer:** James Rodríguez (6 goals)\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,429,873",
+    "model": "local-engine",
+    "timestamp": 1786186743095
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:worldcup": {
+    "reply": "**2010 FIFA World Cup Tournaments**\n\n**Host:** South Africa\n**Champion:** Spain\n**Runner-up:** Netherlands\n**Top Scorer:** Thomas Müller (5 goals)*\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,178,856\n\n*(Note: Thomas Müller, Diego Forlán, Wesley Sneijder, and David Villa all scored 5 goals, but Müller won the Golden Boot award due to having the most assists).*\n\n***\n\nWhich World Cup year would you like to look at next? I can provide details for **2006**, **2002**, or any other tournament you'd like!",
     "model": "gemini-gemini-3.5-flash",
-    "timestamp": 1786184129661
+    "timestamp": 1786186766642
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:what is a target man": {
+    "reply": "**Target Man**\n\nA type of striker whose primary role is to win aerial duels, hold up the ball under pressure, and act as a focal point for the team's attacks.\n\n**Core Principle:** The Target Man uses physical strength to receive long passes, shield the ball from center-backs, and lay it off to onrushing midfielders or wingers.",
+    "model": "local-engine",
+    "timestamp": 1786187194702
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:who hosted the 2018 world cup": {
+    "reply": "**2018 FIFA World Cup Tournaments**\n\n**Host:** Russia",
+    "model": "local-engine",
+    "timestamp": 1786187456995
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:how many teams played in the 1998 world cup": {
+    "reply": "**32 teams** played in the 1998 FIFA World Cup.",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786187485277
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:who won the first world cup": {
+    "reply": "**Uruguay** won the first FIFA World Cup in **1930**. \n\n* **Host Country:** Uruguay\n* **Runner-up:** Argentina\n* **Final Score:** Uruguay 4–2 Argentina",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786187506008
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:who won the 2014 world cup": {
+    "reply": "**2014 FIFA World Cup Tournaments**\n\n**Host:** Brazil\n**Champion:** Germany\n**Runner-up:** Argentina\n**Top Scorer:** James Rodríguez (6 goals)\n**Teams:** 32\n**Matches:** 64\n**Attendance:** 3,429,873",
+    "model": "local-engine",
+    "timestamp": 1786187807253
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:what was the 2022 world cup final score": {
+    "reply": "**2022 FIFA World Cup Final**\n\n* **Score:** 3–3 (after extra time)\n* **Penalties:** Argentina 4–2 France\n* **Winner:** France\n* **Runner-up:** Argentina\n* **Venue:** Lusail Iconic Stadium, Lusail",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786187856511
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:who has won the world cup most": {
+    "reply": "**FIFA World Cup Records**\n\n**MOST TITLES:**\n{\n  \"team\": \"Brazil\",\n  \"count\": 5,\n  \"years\": [\n    2002,\n    1994,\n    1970,\n    1962,\n    1958\n  ]\n}\n\n**MOST APPEARANCES:**\n{\n  \"team\": \"Brazil\",\n  \"count\": 22,\n  \"note\": \"Only team to appear in all 22 tournaments\"\n}\n\n",
+    "model": "local-engine",
+    "timestamp": 1786187863909
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:who did argentina beat in the 2022 final": {
+    "reply": "Based on the provided data for this session, **France** is listed as the winner and **Argentina** as the runner-up (despite the penalty shootout being recorded as Argentina 4–2 France). \n\n*(Note: In real-world football history, **Argentina** defeated **France** in the 2022 World Cup final, winning 4–2 on penalties after a 3–3 draw).*",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786187880490
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:why is a low block useful": {
+    "reply": "**Low Block**\n\n**Advantages:**\n- Extremely difficult to penetrate through the center\n- Forces the opponent into low-percentage crosses from wide areas\n- Eliminates space for opposing attackers to run in behind",
+    "model": "local-engine",
+    "timestamp": 1786191229027
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:what is compactness": {
+    "reply": "**Compactness**\n\nCompactness refers to the horizontal and vertical tightening of a team's block. A compact team reduces the space between its defensive, midfield, and forward lines, suffocating the opponent's central attacking spaces.\n\n**Core Principle:** When defending, a team wants to 'shrink' the pitch. By pushing all players close together, they leave no room for the opponent to play through the middle.",
+    "model": "local-engine",
+    "timestamp": 1786191260180
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:433 vs 4231": {
+    "reply": "**Tactical Comparison: 4-3-3 Formation vs 4-2-3-1 Formation**\n\n**4-3-3 Formation:**\nA formation with 4 defenders, 3 central midfielders, and 3 forwards (usually a striker and two wingers).\n*Strengths:* Natural width in attack via wingers, Strong central presence with 3 midfielders, Perfect shape for high pressing (3 forwards can pressure the opponent's defense directly), Allows full-backs to overlap or invert\n*Weaknesses:* Can be overrun in midfield against a 4-5-1 or 3-5-2 if the single defensive pivot is isolated, Requires highly athletic wingers who can track back defensively, The striker can become isolated if the midfield doesn't push up to support\n\n**4-2-3-1 Formation:**\nA formation with 4 defenders, 2 defensive midfielders (the 'double pivot'), 3 attacking midfielders, and 1 lone striker.\n*Strengths:* Extremely solid defensive base with the double pivot, Allows the #10 (attacking midfielder) to operate in the half-spaces without defensive responsibility, Very difficult to counter-attack against because of the 2 holding midfielders\n*Weaknesses:* Can become too sterile and predictable if the #10 is marked out of the game, The lone striker can be isolated if the wingers drop too deep, Can concede territorial control if the double pivot sits too deep\n\n**Key Difference:**\n4-3-3 Formation primarily relies on Designed for dominance. The three forwards provide natural width to stretch the defense, while the three midfielders (usually a defensive pivot and two 8s) control the center, allowing the team to press high and dominate possession., whereas 4-2-3-1 Formation relies on Balance. The double pivot provides a solid defensive shield, while the 3 attacking midfielders (wingers and a #10) support the lone striker. It allows a team to be extremely solid defensively while having numbers in the final third..",
+    "model": "local-engine",
+    "timestamp": 1786191271852
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:what is ppda": {
+    "reply": "**PPDA (Passes Per Defensive Action)**\n\nA metric used to measure the intensity of a team's high press. It calculates the number of passes the opponent makes outside of their own defensive third for every defensive action (tackle, interception, foul) the pressing team makes.\n\n**Core Principle:** A lower PPDA number indicates a higher pressing intensity. If a team allows the opponent only 5 passes before making a defensive action (PPDA = 5.0), they are pressing much more aggressively than a team that allows 15 passes (PPDA = 15.0).",
+    "model": "local-engine",
+    "timestamp": 1786191295171
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:whats the score in international club friendly juventus vs inter milan": {
+    "reply": "I found multiple matches for that team today (Juventus vs Inter Milan or Chelsea vs AC Milan or Juventus vs Inter Milan or Chelsea vs AC Milan). Which specific match are you asking about?",
+    "model": "match-engine",
+    "timestamp": 1786191383843
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:juventus vs inter milan": {
+    "reply": "I found multiple matches for that team today (Juventus vs Inter Milan or Chelsea vs AC Milan or Juventus vs Inter Milan or Chelsea vs AC Milan). Which specific match are you asking about?",
+    "model": "match-engine",
+    "timestamp": 1786191435821
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:what are the current scores": {
+    "reply": "Here is the schedule for today's featured friendly matches (**August 8, 2026**). \n\n*Please note: While I have the kickoff schedule, I do not have access to real-time live score updates. You will need to check a live sports streaming or tracking service for the live, in-game scores.*\n\n### **Today's Match Schedule (UTC)**\n\n*   **Juventus vs. Inter Milan** – 11:00 AM\n*   **Chelsea vs. AC Milan** – 12:00 PM\n*   **Tottenham Hotspur vs. Getafe** – 2:00 PM\n*   **Brighton vs. AS Roma** – 2:00 PM\n*   **Manchester United vs. Paris Saint-Germain** – 3:00 PM\n*   **Sporting Gijon vs. Real Valladolid** – 3:00 PM\n*   **Romanija Pale vs. UNIS Vogosca** – 4:00 PM\n*   **Ferencvarosi TC vs. Real Madrid** – 5:00 PM\n*   **Sporting West Harelbeke vs. RAEC Mons** – 5:00 PM\n*   **Racing de Ferrol vs. Real Madrid Castilla** – 5:00 PM",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786191469512
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:whats the score in canada u20 vs mexico u20": {
+    "reply": "[LIVE MATCH DATA]\nCanada U20 1 - 2 Mexico U20\nStatus: 0' FT",
+    "model": "match-engine",
+    "timestamp": 1786191498319
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:whats happening in vancouver whitecaps vs fc juarez": {
+    "reply": "The match between **Vancouver Whitecaps** and **FC Juarez** has concluded. \n\n**Final Score:**\n*   **Vancouver Whitecaps** 1 - 3 **FC Juarez** (Full Time)",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1786191537339
   }
 }
