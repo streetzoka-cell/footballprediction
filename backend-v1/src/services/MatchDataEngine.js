@@ -153,7 +153,7 @@ class MatchDataEngine {
       const msg = message.toLowerCase();
       
       // If user asks for score/status, answer locally
-      if (msg.includes('score') || msg.includes('status') || msg.includes('how is') || msg.includes('what is happening') || msg.includes('doing')) {
+      if (msg.includes('score') || msg.includes('status') || msg.includes('how is') || msg.includes('happening') || msg.includes('doing') || msg.includes('what s going')) {
         return { status: "ANSWERED_LOCALLY", evidence: formattedData, confidence: 1.0 };
       }
       

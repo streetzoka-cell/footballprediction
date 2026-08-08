@@ -59,11 +59,11 @@ class KimLocalEngine {
     // Historical/Competition Intents
     if (/\b(top scorer|golden boot|top goalscorer)\b/.test(msg)) return 'top_scorers';
     if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
-    if (/\b(how many teams|number of teams)\b/.test(msg)) return 'teams';
+    if (/\b(how many teams|number of teams|teams played)\b/.test(msg)) return 'teams';
     if (/\b(attendance|spectators|crowd)\b/.test(msg)) return 'attendance';
-        if (/\b(most titles|most wins|most championships|most world cups|won the.*most|most world)\b/.test(msg)) return 'records';
+    if (/\b(most titles|most wins|most championships|most world cups|won the.*most|most world|who has won the most)\b/.test(msg)) return 'records';
     if (/\b(most goals|most goals in a tournament|record goals)\b/.test(msg)) return 'records';
-    if (/\b(who won|winner of|who hosted|history of|historical)\b/.test(msg) || /\b(19\d{2}|20\d{2})\b/.test(msg)) {
+    if (/\b(who won|winner of|who hosted|history of|historical|first world cup)\b/.test(msg) || /\b(19\d{2}|20\d{2})\b/.test(msg)) {
       if (msg.includes('world cup') || msg.includes('champions league') || msg.includes('euros') || msg.includes('copa america')) {
         return 'historical_fact';
       }
@@ -82,21 +82,24 @@ class KimLocalEngine {
   detectLawSection(message, concept) {
     const msg = this.normalizeText(message);
 
-    if (/\b(goal|score|own goal|goalkeeper|handle|pick up)\b/.test(msg)) {
+    if (/\b(goal|score|own goal|goalkeeper|handle|pick up|tape|wedding ring|jewelry)\b/.test(msg)) {
       if (concept.sections?.scoring_and_goalkeepers) return 'scoring_and_goalkeepers';
       if (concept.sections?.scoring) return 'scoring';
+      if (concept.sections?.jewelry_and_safety) return 'jewelry_and_safety';
     }
-    if (/\b(take|procedure|how|feet|distance|position|placed)\b/.test(msg)) {
+    if (/\b(take|procedure|how|feet|distance|position|placed|offside rule|offside position)\b/.test(msg)) {
       if (concept.sections?.procedure) return 'procedure';
+      if (concept.sections?.offside_position) return 'offside_position';
     }
-    if (/\b(foul|offence|infringement|touch twice|second touch|retake|illegal)\b/.test(msg)) {
+    if (/\b(foul|offence|infringement|touch twice|second touch|retake|illegal|bursts|defective|penalty kick)\b/.test(msg)) {
       if (concept.sections?.infringements) return 'infringements';
+      if (concept.sections?.replacement_of_a_defective_ball) return 'replacement_of_a_defective_ball';
     }
 
     return null;
   }
 
-      // 3. Upgraded Semantic Concept Scorer (Phrase boundaries + Contextual Boosts)
+  // 3. Upgraded Semantic Concept Scorer (Phrase boundaries + Contextual Boosts)
   scoreConcept(message, concept) {
     const msg = this.normalizeText(message);
     let score = 0;
@@ -123,33 +126,43 @@ class KimLocalEngine {
     
     // If user asks for a year, boost the tournaments/finals files
     if (hasYear) {
-      if (id === 'world_cup_finals' && msg.includes('final')) score += 500; // "2022 final score"
-      else if (id === 'world_cup_tournaments') score += 500; // "Who won in 2014"
+      if (id === 'world_cup_finals' && msg.includes('final')) score += 1000; // "2022 final score"
+      else if (id === 'world_cup_tournaments') score += 1000; // "Who won in 2014" or "How many teams in 1998"
+    }
+    
+    // If user asks for "first" or "last" World Cup, boost tournaments
+    if (id === 'world_cup_tournaments' && (msg.includes('first') || msg.includes('last') || msg.includes('recent'))) {
+      score += 1000;
     }
     
     // If user asks for "most" or "records", boost the records file
     if (id === 'world_cup_records' && (msg.includes('most') || msg.includes('record') || msg.includes('best'))) {
-      score += 500;
+      score += 1000;
     }
     
-    // If user asks for format/teams, boost the format file
-    if (id === 'world_cup_format' && (msg.includes('format') || msg.includes('structure') || msg.includes('how many teams'))) {
-      score += 500;
+    // If user asks for format/teams (without a year), boost the format file
+    if (id === 'world_cup_format' && (msg.includes('format') || msg.includes('structure') || (msg.includes('how many teams') && !hasYear))) {
+      score += 1000;
+    }
+
+    // ★ NEW: Massive Boost for Laws (Ensure they win when their alias is mentioned)
+    if (concept.sections && (aliases.some(a => this.containsPhrase(msg, a)) || this.containsPhrase(msg, name))) {
+      score += 1000;
     }
 
     return score;
   }
   
-    // 4. Upgraded Answer Builder (Section-aware + Intent mapping)
+  // 4. Upgraded Answer Builder (Section-aware + Intent mapping)
   buildAnswer(intent, concept, message) {
     let response = `**${concept.name || concept.title}**\n\n`;
 
     // Logic for Competitions / History
-    if (concept.tournaments || concept.records || concept.finals || concept.matches) {
+    if (concept.tournaments || concept.records || concept.finals || concept.matches || concept.format) {
       const msg = this.normalizeText(message);
       
       // Handle records queries
-            if ((intent === 'records' || msg.includes('most') || msg.includes('record')) && concept.records) {
+      if ((intent === 'records' || msg.includes('most') || msg.includes('record')) && concept.records) {
         let recResponse = `**${concept.name}**\n\n`;
         let foundSpecific = false;
         
@@ -172,10 +185,19 @@ class KimLocalEngine {
       
       // Handle tournament queries
       if (concept.tournaments) {
+        let yearToFind = null;
         const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
         
         if (yearMatch) {
-          const year = parseInt(yearMatch[0]);
+          yearToFind = parseInt(yearMatch[0]);
+        } else if (msg.includes('first')) {
+          yearToFind = 1930; // First World Cup
+        } else if (msg.includes('last') || msg.includes('latest') || msg.includes('recent')) {
+          yearToFind = concept.tournaments[0].year; // Most recent
+        }
+        
+        if (yearToFind) {
+          const year = yearToFind;
           const tournament = concept.tournaments.find(t => t.year === year);
           
           if (tournament) {
@@ -185,7 +207,7 @@ class KimLocalEngine {
               tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)`;
             } else if (intent === 'hosts' || msg.includes('host')) {
               tResponse += `**Host:** ${tournament.host}`;
-            } else if (intent === 'teams' || msg.includes('how many teams')) {
+            } else if (intent === 'teams' || msg.includes('how many teams') || msg.includes('teams played')) {
               tResponse += `**Teams:** ${tournament.teams}\n**Matches:** ${tournament.matches}`;
             } else if (intent === 'attendance') {
               tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
@@ -235,17 +257,17 @@ class KimLocalEngine {
         }
       }
 
-      // Handle matches queries (Head-to-Head)
-      if (concept.matches) {
-        const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
-        const teamsMentioned = [];
-        // Simple check for team names in the message (requires a team dictionary for full accuracy, but works for basic queries)
-        // For now, we'll just search by year if no specific final is found.
-        
-        if (msg.includes('play') || msg.includes('meet') || msg.includes('face')) {
-           // A real implementation would parse team names here.
-           // For now, returning a general message if no year/final is matched.
+      // Handle format queries
+      if (concept.format) {
+        let fResponse = `**${concept.name}**\n\n`;
+        fResponse += `${concept.definition}\n\n`;
+        if (concept.history && concept.history.length > 0) {
+          fResponse += `**Historical Formats:**\n`;
+          concept.history.forEach(h => {
+            fResponse += `- ${h.era}: ${h.format}\n`;
+          });
         }
+        return fResponse;
       }
     }
 
@@ -292,7 +314,6 @@ class KimLocalEngine {
 
     return response;
   }
-
 
   // 5. Comparison Builder
   buildComparisonAnswer(concept1, concept2) {
@@ -384,16 +405,22 @@ class KimLocalEngine {
       }
     }
 
-    // Confidence Gate: Require strong score AND a clear margin from the second-best match
+        // Confidence Gate: Require strong score AND a clear margin from the second-best match
     const LOCAL_THRESHOLD = 80;
     const MIN_SCORE_MARGIN = 20;
     
     // Allow historical/competition intents to bypass strict intent list checking if concept matches
-    const isHistoryOrComp = bestMatch && (bestMatch.tournaments || bestMatch.records);
+    const isHistoryOrComp = bestMatch && (bestMatch.tournaments || bestMatch.records || bestMatch.finals || bestMatch.matches || bestMatch.format);
+    
+    // ★ BULLETPROOF FIX: If a Law's alias is mentioned, force it to answer locally.
+    const msgNorm = this.normalizeText(message);
+    const isLawWithAlias = bestMatch && bestMatch.sections && (bestMatch.aliases || []).some(a => this.containsPhrase(msgNorm, a));
+    
     const canAnswer = 
-      bestScore >= LOCAL_THRESHOLD && 
+      isLawWithAlias || // Force Laws to answer if their alias is mentioned
+      (bestScore >= LOCAL_THRESHOLD && 
       (bestScore - secondBestScore >= MIN_SCORE_MARGIN) &&
-      (intent === 'general' || isHistoryOrComp || bestMatch.intents?.includes(intent) || bestMatch.sections);
+      (intent === 'general' || isHistoryOrComp || bestMatch.intents?.includes(intent) || bestMatch.sections));
 
     if (canAnswer) {
       const answer = this.buildAnswer(intent, bestMatch, message);
