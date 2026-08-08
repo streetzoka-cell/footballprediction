@@ -3927,3 +3927,7 @@ into the global design system. Identical duplicates
     radial-gradient(26% 26% at 50% 50%, rgba(var(--gold-rgb), 0.03), transparent 60%);
   animation: z-aurora 16s ease-in-out infinite alternate;
 }
+
+.text-success { color: #10b981; } /* Green for Live Data */
+.text-warning { color: #f59e0b; } /* Amber for Predictions */
+.text-secondary { color: #8b5cf6; } /* Purple for Gemini */
