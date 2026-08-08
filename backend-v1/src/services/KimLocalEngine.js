@@ -61,7 +61,7 @@ class KimLocalEngine {
     if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
     if (/\b(how many teams|number of teams)\b/.test(msg)) return 'teams';
     if (/\b(attendance|spectators|crowd)\b/.test(msg)) return 'attendance';
-    if (/\b(most titles|most wins|most championships|most world cups)\b/.test(msg)) return 'records';
+        if (/\b(most titles|most wins|most championships|most world cups|won the.*most|most world)\b/.test(msg)) return 'records';
     if (/\b(most goals|most goals in a tournament|record goals)\b/.test(msg)) return 'records';
     if (/\b(who won|winner of|who hosted|history of|historical)\b/.test(msg) || /\b(19\d{2}|20\d{2})\b/.test(msg)) {
       if (msg.includes('world cup') || msg.includes('champions league') || msg.includes('euros') || msg.includes('copa america')) {
@@ -96,7 +96,7 @@ class KimLocalEngine {
     return null;
   }
 
-  // 3. Upgraded Semantic Concept Scorer (Phrase boundaries)
+      // 3. Upgraded Semantic Concept Scorer (Phrase boundaries + Contextual Boosts)
   scoreConcept(message, concept) {
     const msg = this.normalizeText(message);
     let score = 0;
@@ -114,12 +114,32 @@ class KimLocalEngine {
     const textBlob = this.normalizeText(JSON.stringify(concept));
     const msgWords = msg.split(' ');
     msgWords.forEach(word => {
-      if (word.length > 3 && textBlob.includes(word)) score += 2; // Reduced from 5 to 2
+      if (word.length > 3 && textBlob.includes(word)) score += 2;
     });
+
+    // ★ NEW: Contextual Boosts for Historical/Competition Data (ID-Specific)
+    const hasYear = /\b(19\d{2}|20\d{2})\b/.test(msg);
+    const id = concept.id || '';
+    
+    // If user asks for a year, boost the tournaments/finals files
+    if (hasYear) {
+      if (id === 'world_cup_finals' && msg.includes('final')) score += 500; // "2022 final score"
+      else if (id === 'world_cup_tournaments') score += 500; // "Who won in 2014"
+    }
+    
+    // If user asks for "most" or "records", boost the records file
+    if (id === 'world_cup_records' && (msg.includes('most') || msg.includes('record') || msg.includes('best'))) {
+      score += 500;
+    }
+    
+    // If user asks for format/teams, boost the format file
+    if (id === 'world_cup_format' && (msg.includes('format') || msg.includes('structure') || msg.includes('how many teams'))) {
+      score += 500;
+    }
 
     return score;
   }
-
+  
     // 4. Upgraded Answer Builder (Section-aware + Intent mapping)
   buildAnswer(intent, concept, message) {
     let response = `**${concept.name || concept.title}**\n\n`;
@@ -129,7 +149,7 @@ class KimLocalEngine {
       const msg = this.normalizeText(message);
       
       // Handle records queries
-      if (intent === 'records' && concept.records) {
+            if ((intent === 'records' || msg.includes('most') || msg.includes('record')) && concept.records) {
         let recResponse = `**${concept.name}**\n\n`;
         let foundSpecific = false;
         
@@ -273,7 +293,7 @@ class KimLocalEngine {
     return response;
   }
 
-  
+
   // 5. Comparison Builder
   buildComparisonAnswer(concept1, concept2) {
     let response = `**Tactical Comparison: ${concept1.name} vs ${concept2.name}**\n\n`;
