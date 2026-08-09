@@ -2,7 +2,7 @@
 const fs = require('fs');
 const path = require('path');
 
-export default async function handler(req, res) => {
+export default async function handler(req, res) {
   try {
     // 1. Read the built index.html
     let html = '';
