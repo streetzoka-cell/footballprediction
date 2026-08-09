@@ -1,9 +1,4 @@
 {
-  "functions": {
-    "api/ssr.js": {
-      "maxDuration": 10
-    }
-  },
   "rewrites": [
     {
       "source": "/sitemap.xml",
