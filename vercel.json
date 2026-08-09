@@ -1,4 +1,11 @@
 {
+  "functions": [
+    {
+      "source": "api/ssr.js",
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  ],
   "redirects": [
     {
       "source": "/prediction",
