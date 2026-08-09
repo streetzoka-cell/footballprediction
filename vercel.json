@@ -22,19 +22,19 @@
     },
     {
       "source": "/match/:matchId/:slug*",
-      "destination": "/api/ssr"
+      "destination": "/api/ssr.cjs"
     },
     {
       "source": "/match/:matchId",
-      "destination": "/api/ssr"
+      "destination": "/api/ssr.cjs"
     },
     {
       "source": "/team/:teamId/:slug*",
-      "destination": "/api/ssr"
+      "destination": "/api/ssr.cjs"
     },
     {
       "source": "/league/:leagueId/:slug*",
-      "destination": "/api/ssr"
+      "destination": "/api/ssr.cjs"
     },
     {
       "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap\\.xml|sitemaps/|api/|match/|team/|league/).*)",
