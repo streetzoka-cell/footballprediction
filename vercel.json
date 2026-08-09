@@ -11,7 +11,7 @@
       "permanent": true
     }
   ],
-       "rewrites": [
+    "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "https://api.zokascore.xyz/sitemap.xml"
@@ -29,7 +29,15 @@
       "destination": "/api/ssr"
     },
     {
-      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap\\.xml|sitemaps/|api/|match/).*)",
+      "source": "/team/:teamId/:slug*",
+      "destination": "/api/ssr"
+    },
+    {
+      "source": "/league/:leagueId/:slug*",
+      "destination": "/api/ssr"
+    },
+    {
+      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap\\.xml|sitemaps/|api/|match/|team/|league/).*)",
       "destination": "/index.html"
     }
   ],

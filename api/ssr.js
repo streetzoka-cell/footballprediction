@@ -16,17 +16,21 @@ export default async function handler(req, res) {
     }
 
     // 2. Extract parameters
-    const { matchId, slug } = req.query;
+    const { matchId, slug, teamId, leagueId } = req.query;
     
     let title = 'ZOKASCORE | Football Predictions, Live Scores & Fixtures';
     let description = 'Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.';
     let canonicalUrl = `https://zokascore.xyz${req.url}`;
     let jsonLd = null;
+    let is404 = false;
 
-    // 3. Fetch match data if it's a match route
+    const BASE_API = "https://api.zokascore.xyz/api/v1";
+
+    // 3. MATCH PAGE
     if (matchId) {
       try {
-        const r = await fetch(`https://api.zokascore.xyz/api/v1/matches/${matchId}`);
+        const r = await fetch(`${BASE_API}/matches/${matchId}`);
+        if (r.status === 404) is404 = true;
         const data = await r.json();
         if (data.success && data.data) {
           const m = data.data;
@@ -52,12 +56,62 @@ export default async function handler(req, res) {
             "superEvent": { "@type": "SportsLeague", "name": leagueName }
           };
         }
-      } catch (e) {
-        console.error("SSR Data fetch failed, serving default HTML:", e.message);
-      }
+      } catch (e) { console.error("SSR Match fetch failed:", e.message); }
     }
 
-    // 4. Construct the SEO tags
+    // 4. TEAM PAGE
+    if (teamId) {
+      try {
+        const r = await fetch(`${BASE_API}/teams/${teamId}`);
+        if (r.status === 404) is404 = true;
+        const data = await r.json();
+        if (data.success && data.data) {
+          const t = data.data;
+          title = `${t.name} Fixtures, Results & Live Scores | ZOKASCORE`;
+          description = `Latest fixtures, form, results and statistics for ${t.name}.`;
+          canonicalUrl = `https://zokascore.xyz/team/${teamId}/${slug || ''}`;
+          jsonLd = {
+            "@context": "https://schema.org",
+            "@type": "SportsTeam",
+            "name": t.name,
+            "sport": "Football",
+            "logo": t.logo,
+            "url": canonicalUrl
+          };
+        }
+      } catch (e) { console.error("SSR Team fetch failed:", e.message); }
+    }
+
+    // 5. LEAGUE PAGE
+    if (leagueId) {
+      try {
+        const r = await fetch(`${BASE_API}/leagues/${leagueId}`);
+        if (r.status === 404) is404 = true;
+        const data = await r.json();
+        if (data.success && data.data) {
+          const l = data.data;
+          title = `${l.name} Table, Fixtures & Standings | ZOKASCORE`;
+          description = `Live ${l.name} standings, fixtures, results and statistics.`;
+          canonicalUrl = `https://zokascore.xyz/league/${leagueId}/${slug || ''}`;
+          jsonLd = {
+            "@context": "https://schema.org",
+            "@type": "SportsLeague",
+            "name": l.name,
+            "sport": "Football",
+            "logo": l.logo,
+            "url": canonicalUrl
+          };
+        }
+      } catch (e) { console.error("SSR League fetch failed:", e.message); }
+    }
+
+    // 6. HANDLE 404 (SOFT 404 PREVENTION)
+    if (is404) {
+      // Return an actual 404 status so Google doesn't index dead pages
+      return res.status(404).send('Match or Entity not found');
+    }
+
+    // 7. Construct the SEO tags
     const seoTags = `
       <title>${title}</title>
       <meta name="description" content="${description}" />
@@ -69,7 +123,7 @@ export default async function handler(req, res) {
       ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>` : ''}
     `;
 
-    // 5. Inject tags right before </head>
+    // 8. Inject tags right before </head>
     html = html.replace('</head>', `${seoTags}</head>`);
 
     res.setHeader('Content-Type', 'text/html');
