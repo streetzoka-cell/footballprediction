@@ -1,9 +1,6 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  
-  
-  
   "redirects": [
     {
       "source": "/prediction",
@@ -16,7 +13,7 @@
       "permanent": true
     }
   ],
-    "rewrites": [
+  "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "https://api.zokascore.xyz/sitemap.xml"
