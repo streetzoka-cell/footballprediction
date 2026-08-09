@@ -1,4 +1,3 @@
-// api/ssr.js
 import https from 'https';
 
 const fetchUrl = (url) => {
@@ -31,7 +30,7 @@ export default async function handler(req, res) {
       return res.status(500).send('Failed to load base HTML');
     }
 
-    // 2. Extract parameters
+    // 2. Extract parameters (Vercel populates these from the folder names [matchId], [teamId], etc.)
     const { matchId, slug, teamId, leagueId } = req.query;
     
     let title = 'ZOKASCORE | Football Predictions, Live Scores & Fixtures';
@@ -39,7 +38,7 @@ export default async function handler(req, res) {
     let canonicalUrl = `${host}${req.url}`;
     let jsonLd = null;
 
-    // 3. MATCH PAGE (Generate SEO directly from the URL slug!)
+    // 3. MATCH PAGE
     if (matchId && slug) {
       const parts = slug.split('-vs-');
       if (parts.length === 2) {
