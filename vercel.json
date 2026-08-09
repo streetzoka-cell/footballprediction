@@ -1,4 +1,6 @@
 {
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "functions": {
     "api/ssr.js": {
       "memory": 1024,
@@ -17,7 +19,7 @@
       "permanent": true
     }
   ],
-    "rewrites": [
+  "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "https://api.zokascore.xyz/sitemap.xml"
@@ -51,8 +53,6 @@
       "destination": "/index.html"
     }
   ],
-
-  
   "headers": [
     {
       "source": "/(.*)",
