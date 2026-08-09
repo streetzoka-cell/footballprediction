@@ -15,6 +15,10 @@ const fetchUrl = (url) => {
   });
 };
 
+const formatName = (slugPart) => {
+  return slugPart.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+};
+
 export default async function handler(req, res) {
   try {
     const host = req.headers.host ? `https://${req.headers.host}` : 'https://zokascore.xyz';
@@ -35,93 +39,59 @@ export default async function handler(req, res) {
     let canonicalUrl = `${host}${req.url}`;
     let jsonLd = null;
 
-    const BASE_API = "https://api.zokascore.xyz/api/v1";
-
-    // 3. MATCH PAGE
-    if (matchId) {
-      try {
-        // Try plural first, fallback to singular
-        let r = await fetchUrl(`${BASE_API}/matches/${matchId}`);
-        if (r.status !== 200) {
-          r = await fetchUrl(`${BASE_API}/match/${matchId}`);
-        }
+    // 3. MATCH PAGE (Generate SEO directly from the URL slug!)
+    if (matchId && slug) {
+      const parts = slug.split('-vs-');
+      if (parts.length === 2) {
+        const homeName = formatName(parts[0]);
+        const awayName = formatName(parts[1]);
         
-        if (r.status === 200) {
-          const data = JSON.parse(r.data);
-          if (data.success && data.data) {
-            const m = data.data;
-            const homeName = m.homeName || m.homeTeam?.name || 'Home';
-            const awayName = m.awayName || m.awayTeam?.name || 'Away';
-            const leagueName = m.leagueName || m.league?.name || 'Football';
-            
-            title = `${homeName} vs ${awayName} Prediction, Live Score & H2H | ZOKASCORE`;
-            description = `${homeName} vs ${awayName} live score, prediction, statistics, H2H and match analysis. ${leagueName} match.`;
-            canonicalUrl = `${host}/match/${matchId}/${slug || ''}`;
-            
-            jsonLd = {
-              "@context": "https://schema.org",
-              "@type": "SportsEvent",
-              "name": `${homeName} vs ${awayName}`,
-              "sport": "Football",
-              "startDate": m.date,
-              "eventStatus": m.isFinished ? "https://schema.org/EventCompleted" : "https://schema.org/EventScheduled",
-              "competitor": [
-                { "@type": "SportsTeam", "name": homeName, "logo": m.homeLogo },
-                { "@type": "SportsTeam", "name": awayName, "logo": m.awayLogo }
-              ],
-              "superEvent": { "@type": "SportsLeague", "name": leagueName }
-            };
-          }
-        }
-      } catch (e) { console.error("Match fetch failed", e.message); }
+        title = `${homeName} vs ${awayName} Prediction, Live Score & H2H | ZOKASCORE`;
+        description = `${homeName} vs ${awayName} live score, prediction, statistics, H2H and match analysis.`;
+        canonicalUrl = `${host}/match/${matchId}/${slug}`;
+        
+        jsonLd = {
+          "@context": "https://schema.org",
+          "@type": "SportsEvent",
+          "name": `${homeName} vs ${awayName}`,
+          "sport": "Football",
+          "eventStatus": "https://schema.org/EventScheduled",
+          "competitor": [
+            { "@type": "SportsTeam", "name": homeName },
+            { "@type": "SportsTeam", "name": awayName }
+          ]
+        };
+      }
     }
 
     // 4. TEAM PAGE
-    if (teamId) {
-      try {
-        const r = await fetchUrl(`${BASE_API}/teams/${teamId}`);
-        if (r.status === 200) {
-          const data = JSON.parse(r.data);
-          if (data.success && data.data) {
-            const t = data.data;
-            title = `${t.name} Fixtures, Results & Live Scores | ZOKASCORE`;
-            description = `Latest fixtures, form, results and statistics for ${t.name}.`;
-            canonicalUrl = `${host}/team/${teamId}/${slug || ''}`;
-            jsonLd = {
-              "@context": "https://schema.org",
-              "@type": "SportsTeam",
-              "name": t.name,
-              "sport": "Football",
-              "logo": t.logo,
-              "url": canonicalUrl
-            };
-          }
-        }
-      } catch (e) { console.error("Team fetch failed", e.message); }
+    if (teamId && slug) {
+      const teamName = formatName(slug);
+      title = `${teamName} Fixtures, Results & Live Scores | ZOKASCORE`;
+      description = `Latest fixtures, form, results and statistics for ${teamName}.`;
+      canonicalUrl = `${host}/team/${teamId}/${slug}`;
+      jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "SportsTeam",
+        "name": teamName,
+        "sport": "Football",
+        "url": canonicalUrl
+      };
     }
 
     // 5. LEAGUE PAGE
-    if (leagueId) {
-      try {
-        const r = await fetchUrl(`${BASE_API}/leagues/${leagueId}`);
-        if (r.status === 200) {
-          const data = JSON.parse(r.data);
-          if (data.success && data.data) {
-            const l = data.data;
-            title = `${l.name} Table, Fixtures & Standings | ZOKASCORE`;
-            description = `Live ${l.name} standings, fixtures, results and statistics.`;
-            canonicalUrl = `${host}/league/${leagueId}/${slug || ''}`;
-            jsonLd = {
-              "@context": "https://schema.org",
-              "@type": "SportsLeague",
-              "name": l.name,
-              "sport": "Football",
-              "logo": l.logo,
-              "url": canonicalUrl
-            };
-          }
-        }
-      } catch (e) { console.error("League fetch failed", e.message); }
+    if (leagueId && slug) {
+      const leagueName = formatName(slug);
+      title = `${leagueName} Table, Fixtures & Standings | ZOKASCORE`;
+      description = `Live ${leagueName} standings, fixtures, results and statistics.`;
+      canonicalUrl = `${host}/league/${leagueId}/${slug}`;
+      jsonLd = {
+        "@context": "https://schema.org",
+        "@type": "SportsLeague",
+        "name": leagueName,
+        "sport": "Football",
+        "url": canonicalUrl
+      };
     }
 
     // 6. Construct the SEO tags
