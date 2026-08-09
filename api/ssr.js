@@ -1,36 +1,39 @@
 // api/ssr.js
-const fs = require('fs');
-const path = require('path');
+const https = require('https');
+
+// Native Node.js fetch to avoid Vercel dependency issues
+const fetchUrl = (url) => {
+  return new Promise((resolve, reject) => {
+    https.get(url, (res) => {
+      let data = '';
+      res.on('data', (chunk) => { data += chunk; });
+      res.on('end', () => {
+        resolve({ status: res.statusCode, data });
+      });
+    }).on('error', (err) => {
+      reject(err);
+    });
+  });
+};
 
 module.exports = async (req, res) => {
   try {
-    // 1. Robustly locate the built index.html
-    let html = '';
-    const possiblePaths = [
-      path.join(process.cwd(), 'index.html'),
-      path.join(process.cwd(), 'dist', 'index.html'),
-      path.join(__dirname, '..', 'index.html'),
-      path.join(__dirname, '..', '..', 'index.html')
-    ];
+    const host = req.headers.host ? `https://${req.headers.host}` : 'https://zokascore.xyz';
+    
+    // 1. Fetch the base HTML shell from the live site
+    const htmlRes = await fetchUrl(`${host}/index.html`);
+    let html = htmlRes.data;
 
-    for (const p of possiblePaths) {
-      if (fs.existsSync(p)) {
-        html = fs.readFileSync(p, 'utf8');
-        break;
-      }
+    if (!html || htmlRes.status !== 200) {
+      return res.status(500).send('Failed to load base HTML');
     }
 
-    if (!html) {
-      console.error("SSR Error: index.html not found in paths:", possiblePaths);
-      return res.status(500).send('HTML template not found');
-    }
-
-    // 2. Extract parameters from Vercel query
+    // 2. Extract parameters
     const { matchId, slug, teamId, leagueId } = req.query;
     
     let title = 'ZOKASCORE | Football Predictions, Live Scores & Fixtures';
     let description = 'Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.';
-    let canonicalUrl = `https://zokascore.xyz${req.url}`;
+    let canonicalUrl = `${host}${req.url}`;
     let jsonLd = null;
     let is404 = false;
 
@@ -39,9 +42,9 @@ module.exports = async (req, res) => {
     // 3. MATCH PAGE
     if (matchId) {
       try {
-        const r = await fetch(`${BASE_API}/matches/${matchId}`);
+        const r = await fetchUrl(`${BASE_API}/matches/${matchId}`);
         if (r.status === 404) is404 = true;
-        const data = await r.json();
+        const data = JSON.parse(r.data);
         if (data.success && data.data) {
           const m = data.data;
           const homeName = m.homeName || m.homeTeam?.name || 'Home';
@@ -50,7 +53,7 @@ module.exports = async (req, res) => {
           
           title = `${homeName} vs ${awayName} Prediction, Live Score & H2H | ZOKASCORE`;
           description = `${homeName} vs ${awayName} live score, prediction, statistics, H2H and match analysis. ${leagueName} match.`;
-          canonicalUrl = `https://zokascore.xyz/match/${matchId}/${slug || ''}`;
+          canonicalUrl = `${host}/match/${matchId}/${slug || ''}`;
           
           jsonLd = {
             "@context": "https://schema.org",
@@ -66,22 +69,20 @@ module.exports = async (req, res) => {
             "superEvent": { "@type": "SportsLeague", "name": leagueName }
           };
         }
-      } catch (e) {
-        console.error("SSR Match fetch failed:", e.message);
-      }
+      } catch (e) { console.error("Match fetch failed", e.message); }
     }
 
     // 4. TEAM PAGE
     if (teamId) {
       try {
-        const r = await fetch(`${BASE_API}/teams/${teamId}`);
+        const r = await fetchUrl(`${BASE_API}/teams/${teamId}`);
         if (r.status === 404) is404 = true;
-        const data = await r.json();
+        const data = JSON.parse(r.data);
         if (data.success && data.data) {
           const t = data.data;
           title = `${t.name} Fixtures, Results & Live Scores | ZOKASCORE`;
           description = `Latest fixtures, form, results and statistics for ${t.name}.`;
-          canonicalUrl = `https://zokascore.xyz/team/${teamId}/${slug || ''}`;
+          canonicalUrl = `${host}/team/${teamId}/${slug || ''}`;
           jsonLd = {
             "@context": "https://schema.org",
             "@type": "SportsTeam",
@@ -91,22 +92,20 @@ module.exports = async (req, res) => {
             "url": canonicalUrl
           };
         }
-      } catch (e) {
-        console.error("SSR Team fetch failed:", e.message);
-      }
+      } catch (e) { console.error("Team fetch failed", e.message); }
     }
 
     // 5. LEAGUE PAGE
     if (leagueId) {
       try {
-        const r = await fetch(`${BASE_API}/leagues/${leagueId}`);
+        const r = await fetchUrl(`${BASE_API}/leagues/${leagueId}`);
         if (r.status === 404) is404 = true;
-        const data = await r.json();
+        const data = JSON.parse(r.data);
         if (data.success && data.data) {
           const l = data.data;
           title = `${l.name} Table, Fixtures & Standings | ZOKASCORE`;
           description = `Live ${l.name} standings, fixtures, results and statistics.`;
-          canonicalUrl = `https://zokascore.xyz/league/${leagueId}/${slug || ''}`;
+          canonicalUrl = `${host}/league/${leagueId}/${slug || ''}`;
           jsonLd = {
             "@context": "https://schema.org",
             "@type": "SportsLeague",
@@ -116,17 +115,14 @@ module.exports = async (req, res) => {
             "url": canonicalUrl
           };
         }
-      } catch (e) {
-        console.error("SSR League fetch failed:", e.message);
-      }
+      } catch (e) { console.error("League fetch failed", e.message); }
     }
 
-    // 6. HANDLE 404 (SOFT 404 PREVENTION)
     if (is404) {
       return res.status(404).send('Match or Entity not found');
     }
 
-    // 7. Construct the SEO tags
+    // 6. Construct the SEO tags
     const seoTags = `
       <title>${title}</title>
       <meta name="description" content="${description}" />
@@ -138,7 +134,7 @@ module.exports = async (req, res) => {
       ${jsonLd ? `<script type="application/ld+json">${JSON.stringify(jsonLd)}</script>` : ''}
     `;
 
-    // 8. Inject tags right before </head>
+    // 7. Inject tags right before </head>
     html = html.replace('</head>', `${seoTags}</head>`);
 
     res.setHeader('Content-Type', 'text/html');
