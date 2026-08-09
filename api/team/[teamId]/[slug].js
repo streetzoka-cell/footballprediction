@@ -30,12 +30,29 @@ export default async function handler(req, res) {
       return res.status(500).send('Failed to load base HTML');
     }
 
-    // 2. Extract parameters (Vercel populates these from the folder names [matchId], [teamId], etc.)
-    const { matchId, slug, teamId, leagueId } = req.query;
+    // 2. Extract parameters directly from req.url to avoid Vercel query bugs
+    // req.url will look like "/api/match/143432039/fc-porto-vs-alverca"
+    const pathParts = req.url.split('?')[0].split('/').filter(Boolean);
+    
+    let matchId = null;
+    let teamId = null;
+    let leagueId = null;
+    let slug = null;
+
+    // Parse /api/match/:id/:slug
+    if (pathParts.length >= 4 && pathParts[0] === 'api') {
+      const type = pathParts[1];
+      const id = pathParts[2];
+      slug = pathParts.slice(3).join('/');
+      
+      if (type === 'match') matchId = id;
+      if (type === 'team') teamId = id;
+      if (type === 'league') leagueId = id;
+    }
     
     let title = 'ZOKASCORE | Football Predictions, Live Scores & Fixtures';
     let description = 'Get football predictions, match analysis, fixtures, live scores, and football statistics from leagues around the world.';
-    let canonicalUrl = `${host}${req.url}`;
+    let canonicalUrl = `${host}/match/${matchId || ''}/${slug || ''}`;
     let jsonLd = null;
 
     // 3. MATCH PAGE
