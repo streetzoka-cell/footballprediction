@@ -134,7 +134,7 @@ app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
 app.use('/api/v1/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/monitoring', monitoringDashboard);
 
-app.use(['/', '/sitemap.xml', '/zokascore-sitemap.xml', '/sitemaps'], sitemapRoute);
+app.use(['/sitemap.xml', '/zokascore-sitemap.xml', '/sitemaps'], sitemapRoute);
 
 app.use('/api/v1/ai', aiRoutes);
 
