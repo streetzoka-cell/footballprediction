@@ -2,20 +2,30 @@
 const fs = require('fs');
 const path = require('path');
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
-    // 1. Read the built index.html
+    // 1. Robustly locate the built index.html
     let html = '';
-    const distPath = path.join(process.cwd(), 'dist', 'index.html');
-    const rootPath = path.join(process.cwd(), 'index.html');
-    
-    if (fs.existsSync(distPath)) html = fs.readFileSync(distPath, 'utf8');
-    else if (fs.existsSync(rootPath)) html = fs.readFileSync(rootPath, 'utf8');
-    else {
-      return res.status(404).send('HTML template not found');
+    const possiblePaths = [
+      path.join(process.cwd(), 'index.html'),
+      path.join(process.cwd(), 'dist', 'index.html'),
+      path.join(__dirname, '..', 'index.html'),
+      path.join(__dirname, '..', '..', 'index.html')
+    ];
+
+    for (const p of possiblePaths) {
+      if (fs.existsSync(p)) {
+        html = fs.readFileSync(p, 'utf8');
+        break;
+      }
     }
 
-    // 2. Extract parameters
+    if (!html) {
+      console.error("SSR Error: index.html not found in paths:", possiblePaths);
+      return res.status(500).send('HTML template not found');
+    }
+
+    // 2. Extract parameters from Vercel query
     const { matchId, slug, teamId, leagueId } = req.query;
     
     let title = 'ZOKASCORE | Football Predictions, Live Scores & Fixtures';
@@ -56,7 +66,9 @@ export default async function handler(req, res) {
             "superEvent": { "@type": "SportsLeague", "name": leagueName }
           };
         }
-      } catch (e) { console.error("SSR Match fetch failed:", e.message); }
+      } catch (e) {
+        console.error("SSR Match fetch failed:", e.message);
+      }
     }
 
     // 4. TEAM PAGE
@@ -79,7 +91,9 @@ export default async function handler(req, res) {
             "url": canonicalUrl
           };
         }
-      } catch (e) { console.error("SSR Team fetch failed:", e.message); }
+      } catch (e) {
+        console.error("SSR Team fetch failed:", e.message);
+      }
     }
 
     // 5. LEAGUE PAGE
@@ -102,12 +116,13 @@ export default async function handler(req, res) {
             "url": canonicalUrl
           };
         }
-      } catch (e) { console.error("SSR League fetch failed:", e.message); }
+      } catch (e) {
+        console.error("SSR League fetch failed:", e.message);
+      }
     }
 
     // 6. HANDLE 404 (SOFT 404 PREVENTION)
     if (is404) {
-      // Return an actual 404 status so Google doesn't index dead pages
       return res.status(404).send('Match or Entity not found');
     }
 
@@ -134,4 +149,4 @@ export default async function handler(req, res) {
     console.error("SSR Fatal Error:", err);
     return res.status(500).send('Internal Server Error');
   }
-}
+};
