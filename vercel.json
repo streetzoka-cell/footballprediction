@@ -1,12 +1,9 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
-  "functions": {
-    "api/ssr.js": {
-      "memory": 1024,
-      "maxDuration": 10
-    }
-  },
+  
+  
+  
   "redirects": [
     {
       "source": "/prediction",
