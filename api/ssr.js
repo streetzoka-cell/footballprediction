@@ -1,4 +1,4 @@
-// api/ssr.cjs
+// api/ssr.js
 const https = require('https');
 
 // Native Node.js fetch to avoid Vercel dependency issues
