@@ -11,17 +11,25 @@
       "permanent": true
     }
   ],
-    "rewrites": [
+       "rewrites": [
     {
-      "source": "/zokascore-sitemap.xml",
-      "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml"
+      "source": "/sitemap.xml",
+      "destination": "https://api.zokascore.xyz/sitemap.xml"
     },
     {
-      "source": "/zokascore-sitemap.xml/:path*",
-      "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml/:path*"
+      "source": "/sitemaps/:type*",
+      "destination": "https://api.zokascore.xyz/sitemaps/:type*"
     },
     {
-      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js).*)",
+      "source": "/match/:matchId/:slug*",
+      "destination": "/api/ssr"
+    },
+    {
+      "source": "/match/:matchId",
+      "destination": "/api/ssr"
+    },
+    {
+      "source": "/((?!robots\\.txt|favicon\\.ico|manifest\\.json|icons/|assets/|img/|sw\\.js|sitemap\\.xml|sitemaps/|api/|match/).*)",
       "destination": "/index.html"
     }
   ],
