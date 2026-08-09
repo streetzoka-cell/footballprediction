@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Brain, Send, Loader, X, Plus, MessageSquare, Trash2, 
-  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock, WifiOff, Activity, Target
+  Menu, User, Sparkles, AlertCircle, RefreshCw, Lock, WifiOff, Activity, Target, Zap, ChevronRight
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { getAuthHeaders } from '../services/backendAuth';
@@ -9,95 +9,110 @@ import { getAuthHeaders } from '../services/backendAuth';
 const BACKEND_URL = 'https://api.zokascore.xyz'; 
 
 // ═══════════════════════════════════════════════════════════
-// LOCAL INTENT ENGINE (Strict multi-word phrases ONLY)
+// LOCAL INTENT ENGINE
 // ═══════════════════════════════════════════════════════════
 const APP_KNOWLEDGE_BASE = [
   {
-    // Removed: 'predict', 'points', 'scoring', 'exact', 'result', 'miss'
     keywords: ['how to predict', 'make a prediction', 'how do i get points', 'what are points', 'scoring system', 'prediction lock', 'how to play'],
     response: `# How Predictions Work\nMaking a prediction is easy! Go to the **Predictions** tab and enter your expected score before the match locks.\n\n- **Exact Score:** 10 Points 🎯\n- **Correct Result (Win/Draw/Loss):** 3 Points 📈\n- **Miss:** 0 Points\n\n*Note: Matches lock 60 minutes before kickoff to ensure fair play!*`
   },
   {
-    // Removed: 'edit', 'video', 'image', 'create', 'graphic', 'template'
     keywords: ['zokascore studio', 'how to use the studio', 'reactor studio', 'face ar', 'graphic editor', 'reaction cam'],
     response: `# ZOKASCORE Studio\nThe Studio is our built-in pro creator toolkit! Access it from the main menu.\n\n- **Graphic Editor:** Build custom scoreboards and news cards.\n- **Reactor Studio:** Create viral TikTok/Reels templates with effects.\n- **Face AR:** Apply football masks and filters to your camera.\n- **Reaction Cam:** Record your match reactions in 9:16 format.`
   },
   {
-    // Removed: 'rank', 'weekly', 'daily', 'monthly', 'compete'
     keywords: ['leaderboard', 'how do i rank', 'goat rank', 'weekly leaderboard', 'daily leaderboard', 'monthly leaderboard', 'hall of fame'],
     response: `# Leaderboards & Ranks\nCompete against fans worldwide!\n\n- **Daily:** Resets every 24 hours.\n- **Weekly & Monthly:** Cumulative points for the week/month.\n- **G.O.A.T:** The all-time hall of fame.\n\nCheck your rank by tapping the **Trophy** icon in the navbar!`
   },
   {
-    // Removed: 'expert', 'best pick', 'vote'
     keywords: ['zoka picks', 'admin picks', 'what are zoka picks', 'expert picks'],
     response: `# Zoka Picks\nThese are the premium, expert predictions made by the ZOKASCORE team. You can find them on the Predictions page. You can also vote "Agree" or "Disagree" on them to see how the community feels and join the debate!`
   },
   {
-    // Removed: 'offline', 'pwa', 'install', 'app', 'download', 'home screen'
     keywords: ['install zokascore', 'download the app', 'install app', 'pwa', 'add to home screen', 'offline mode'],
     response: `# Install the App\nZOKASCORE is a Progressive Web App (PWA)! You can install it directly to your home screen for an offline-capable, native app experience.\n\nScroll to the bottom of the page and tap **"Install App"**, or use your browser's "Add to Home Screen" option.`
   },
   {
-    // Removed: 'developer', 'creator', 'built', 'team', 'company'
     keywords: ['who made zokascore', 'who built zokascore', 'zokascore developer', 'zokascore creator', 'about the creator', 'who made this'],
     response: `# About the Creator\nZOKASCORE is 100% independently designed, developed, and maintained by a single passionate developer. No big corporate teams, just pure love for football and clean code! ⚽`
   },
   {
-    // Removed: 'help', 'support', 'contact', 'bug', 'report', 'email'
     keywords: ['contact support', 'report a bug', 'zokascore email', 'help center', 'how to contact'],
     response: `# Need Help?\nIf you found a bug or need support, head over to the **Contact** page in the footer. You can also email us directly at **streetzoka@gmail.com**. We usually reply within 24 hours!`
   },
-  
 ];
 
-// ★ GENIUS FIX: Football Safety Net
-// If the user mentions ANY of these words, we immediately step aside 
-// and let the Backend Kim Engine handle it.
 const FOOTBALL_TRIGGERS = [
-  'world cup', 'offside', 'foul', 'penalty', 'kick', 'tactic', 'formation', 
-  'gegenpress', 'low block', 'match', 'score', 'goal', 'win', 'loss', 'draw', 
-  'referee', 'var', '2014', '2018', '2022', '1930', 'champion', 'host', 
-  'teams', 'played', 'final', 'most', 'who won', 'build-up', 'false 9'
+  'world cup', 'offside rule', 'foul play', 'penalty kick', 'tactical analysis', 
+  'football formation', 'gegenpress', 'low block', 'match result', 'who won', 
+  'who hosted', '2014 world cup', '2018 world cup', '2022 world cup', 'champion of',
+  'final match', 'build-up play', 'false 9', 'var check'
 ];
 
 function interceptLocalQuery(query) {
   const q = query.toLowerCase();
-  
-  // 1. Safety Check: If it looks like a football question, DO NOT intercept.
-  if (FOOTBALL_TRIGGERS.some(kw => q.includes(kw))) {
-    return null; 
-  }
-
-  // 2. Strict Phrase Match: Only intercept if exact multi-word app phrases are used.
+  if (FOOTBALL_TRIGGERS.some(kw => q.includes(kw))) return null; 
   for (const item of APP_KNOWLEDGE_BASE) {
-    if (item.keywords.some(kw => q.includes(kw))) {
-      return item.response;
-    }
+    if (item.keywords.some(kw => q.includes(kw))) return item.response;
   }
   return null;
 }
 
 // ═══════════════════════════════════════════════════════════
-// HELPER: Engine Badge Mapper
+// HELPER FUNCTIONS
 // ═══════════════════════════════════════════════════════════
+const generateChatTitle = (text) => {
+  return text.replace(/[?.!]/g, '').trim().split(/\s+/).slice(0, 5).join(' ') || 'New Chat';
+};
+
+const inferLoadingState = (query) => {
+  const q = query.toLowerCase();
+  if (/(predict|vs|versus|analyze|analysis)/i.test(q)) return "Analyzing the matchup...";
+  if (/(today|fixture|live|score|playing)/i.test(q)) return "Fetching live match data...";
+  if (/(win|lost|history|who|when|what is|rule|law)/i.test(q)) return "Checking football knowledge...";
+  return "Thinking...";
+};
+
 const getEngineBadge = (model) => {
   if (!model) return null;
-  
-  if (model.includes('local-engine') || model.includes('local-app')) return { icon: Brain, text: 'Verified Knowledge', color: 'text-primary' };
-  if (model.includes('match-engine')) return { icon: Activity, text: 'Live Match Data', color: 'text-success' };
-  if (model.includes('prediction-engine')) return { icon: Target, text: 'Tactical Prediction', color: 'text-warning' };
-  if (model.includes('gemini')) return { icon: Sparkles, text: 'AI Analysis', color: 'text-secondary' };
-  if (model.includes('cached')) return { icon: Activity, text: 'Cached Response', color: 'text-base-300' };
-  
+  if (model.includes('local-engine') || model.includes('local-app')) return { icon: Brain, text: 'Verified Knowledge', cls: 'badge-local' };
+  if (model.includes('match-engine')) return { icon: Activity, text: 'Live Match Data', cls: 'badge-match' };
+  if (model.includes('prediction-engine')) return { icon: Target, text: 'Match Prediction', cls: 'badge-prediction' };
+  if (model.includes('gemini')) return { icon: Sparkles, text: 'AI Analysis', cls: 'badge-ai' };
+  if (model.includes('cached')) return { icon: Zap, text: 'Cached Response', cls: 'badge-cached' };
   return null;
 };
 
+const groupChatsByDate = (chats) => {
+  const now = new Date();
+  const today = []; const yesterday = []; const earlier = [];
+
+  chats.forEach(chat => {
+    if (!chat.createdAt) {
+      earlier.push(chat);
+      return;
+    }
+    const diffDays = Math.floor((now - new Date(chat.createdAt)) / (1000 * 60 * 60 * 24));
+    if (diffDays === 0) today.push(chat);
+    else if (diffDays === 1) yesterday.push(chat);
+    else earlier.push(chat);
+  });
+
+  return { today, yesterday, earlier };
+};
+
 // ═══════════════════════════════════════════════════════════
-// TYPEWRITER COMPONENT
+// TYPEWRITER COMPONENT (Adaptive Speed & Smooth Scroll)
 // ═══════════════════════════════════════════════════════════
 const TypewriterText = ({ text, isActive, onComplete }) => {
   const [displayed, setDisplayed] = useState('');
   const containerRef = useRef(null);
+
+  const getTypingSpeed = (length) => {
+    if (length < 150) return 15;
+    if (length < 400) return 8;
+    return 4;
+  };
 
   useEffect(() => {
     if (!isActive) {
@@ -107,6 +122,8 @@ const TypewriterText = ({ text, isActive, onComplete }) => {
     }
     setDisplayed('');
     let i = 0;
+    const speed = getTypingSpeed(text.length);
+    
     const timer = setInterval(() => {
       setDisplayed(text.substring(0, i));
       i++;
@@ -114,13 +131,13 @@ const TypewriterText = ({ text, isActive, onComplete }) => {
         clearInterval(timer);
         if (onComplete) onComplete();
       }
-    }, 12);
+    }, speed);
     return () => clearInterval(timer);
   }, [text, isActive, onComplete]);
 
   useEffect(() => {
     if (isActive && containerRef.current) {
-      containerRef.current.scrollIntoView({ behavior: "smooth", block: "end" });
+      containerRef.current.scrollIntoView({ behavior: "auto", block: "end" });
     }
   }, [displayed, isActive]);
 
@@ -131,20 +148,20 @@ const TypewriterText = ({ text, isActive, onComplete }) => {
       if (trimmed === '') return <br key={idx} />;
       if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
         return (
-          <div key={idx} className="flex items-start gap-2 ml-1 my-1">
-            <span className="text-primary mt-1.5 text-[10px]">●</span>
-            <span className="text-sm opacity-90 leading-relaxed">{trimmed.substring(2)}</span>
+          <div key={idx} className="kim-bullet-item">
+            <span className="kim-bullet-dot">●</span>
+            <span className="kim-bullet-text">{trimmed.substring(2)}</span>
           </div>
         );
       }
       if (trimmed.match(/^#{1,3}\s+(.*)/)) {
         return (
-          <h4 key={idx} className="font-semibold text-primary mt-3 mb-1 text-sm uppercase tracking-wide">
+          <h4 key={idx} className="kim-text-heading">
             {trimmed.replace(/^#{1,3}\s+/, '')}
           </h4>
         );
       }
-      return <p key={idx} className="text-sm leading-relaxed mb-1 opacity-90">{trimmed}</p>;
+      return <p key={idx} className="kim-text-para">{trimmed}</p>;
     });
   };
 
@@ -168,19 +185,21 @@ export default function ZokaAI({ isOpen, onClose }) {
   const [activeChatId, setActiveChatId] = useState(null);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [loadingText, setLoadingText] = useState("Thinking...");
   const [showSidebar, setShowSidebar] = useState(false);
   const [error, setError] = useState(null);
   const [typingMessageId, setTypingMessageId] = useState(null);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [matchContext, setMatchContext] = useState(null);
   
   const chatEndRef = useRef(null);
   const inputRef = useRef(null);
-  const handleSendRef = useRef(null); // Prevent stale closures in external triggers
+  const handleSendRef = useRef(null); 
 
   const activeChat = chats.find(c => c.id === activeChatId);
   const messages = activeChat?.messages || [];
+  const groupedChats = groupChatsByDate(chats);
 
-  // ★ PRO: Track internet connection status
   useEffect(() => {
     const handleOnline = () => setIsOnline(true);
     const handleOffline = () => setIsOnline(false);
@@ -198,7 +217,7 @@ export default function ZokaAI({ isOpen, onClose }) {
 
   useEffect(() => {
     if (!typingMessageId) {
-      chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      chatEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [messages, loading, typingMessageId]);
 
@@ -209,6 +228,7 @@ export default function ZokaAI({ isOpen, onClose }) {
       setShowSidebar(false);
       setError(null);
       setTypingMessageId(null);
+      setMatchContext(null);
     }
   }, [isOpen]);
 
@@ -217,6 +237,7 @@ export default function ZokaAI({ isOpen, onClose }) {
     setInput("");
     setError(null);
     setTypingMessageId(null);
+    setMatchContext(null);
     setShowSidebar(false);
     inputRef.current?.focus();
   };
@@ -256,8 +277,15 @@ export default function ZokaAI({ isOpen, onClose }) {
       const data = await response.json();
       if (!response.ok || !data.success) throw new Error(data.error || 'Failed to get response');
       
-      // ★ NEW: Store the model string to render the badge
-      const aiMsg = { role: 'assistant', content: data.reply, model: data.model, id: Date.now() + 1 };
+      const aiMsg = { 
+        role: 'assistant', 
+        content: data.reply, 
+        model: data.model, 
+        type: data.type || 'knowledge', 
+        data: data.data || null,
+        id: Date.now() + 1 
+      };
+      
       setTypingMessageId(aiMsg.id);
       
       setChats(prev => prev.map(c => {
@@ -291,9 +319,12 @@ export default function ZokaAI({ isOpen, onClose }) {
     setInput("");
     setError(null);
     setTypingMessageId(null);
+    setMatchContext(null);
+    
+    setLoadingText(inferLoadingState(currentInput));
     
     const newChatId = activeChatId || Date.now().toString();
-    const chatTitle = currentInput.substring(0, 30) + (currentInput.length > 30 ? '...' : '');
+    const chatTitle = generateChatTitle(currentInput);
     const userMsg = { role: 'user', content: currentInput, id: Date.now() };
 
     setChats(prev => {
@@ -301,58 +332,87 @@ export default function ZokaAI({ isOpen, onClose }) {
       if (existing) {
         return prev.map(c => c.id === newChatId ? { ...c, messages: [...c.messages, userMsg] } : c);
       } else {
-        return [{ id: newChatId, title: chatTitle, messages: [userMsg] }, ...prev];
+        return [{ id: newChatId, title: chatTitle, createdAt: Date.now(), messages: [userMsg] }, ...prev];
       }
     });
     setActiveChatId(newChatId);
     setLoading(true);
 
-    // ★ PRO UPGRADE: Intercept simple app questions locally to save API calls
     const localReply = interceptLocalQuery(currentInput);
     
     if (localReply) {
-      // Simulate AI "thinking" for 800ms so the typewriter feels natural
-      setTimeout(() => {
-        // ★ NEW: Assign 'local-app' model to local app knowledge
-        const aiMsg = { role: 'assistant', content: localReply, model: 'local-app', id: Date.now() + 1 };
-        setTypingMessageId(aiMsg.id);
-        setChats(prev => prev.map(c => {
-          if (c.id === newChatId) {
-            const cleanMessages = c.messages.filter(m => !m.isError && m.id !== userMsg.id);
-            return { ...c, messages: [...cleanMessages, userMsg, aiMsg] };
-          }
-          return c;
-        }));
-        setLoading(false);
-      }, 800);
-      return; // Stop execution, do not call backend
+      const aiMsg = { role: 'assistant', content: localReply, model: 'local-app', type: 'knowledge', id: Date.now() + 1 };
+      setTypingMessageId(aiMsg.id);
+      setChats(prev => prev.map(c => {
+        if (c.id === newChatId) {
+          const cleanMessages = c.messages.filter(m => !m.isError && m.id !== userMsg.id);
+          return { ...c, messages: [...cleanMessages, userMsg, aiMsg] };
+        }
+        return c;
+      }));
+      setLoading(false);
+      return; 
     }
 
-    // If not a simple app question, call the backend Gemini API
     await sendMessageToBackend(currentInput, newChatId);
   }, [input, loading, currentUser, activeChatId, chats, isOnline]);
 
-  // Keep ref updated to prevent stale closures in external event listeners
   useEffect(() => {
     handleSendRef.current = handleSend;
   }, [handleSend]);
 
-  // Listen for external triggers (e.g., from TeamPage or MatchPage)
   useEffect(() => {
     const handleExternalOpen = (e) => {
       const promptMessage = e.detail?.message;
+      const context = e.detail?.matchContext;
+      
+      if (context) setMatchContext(context);
+      
       if (promptMessage && isOpen) {
-        setTimeout(() => {
-          handleSendRef.current(promptMessage); 
-        }, 400);
+        setTimeout(() => handleSendRef.current(promptMessage), 400);
       }
     };
-    
     window.addEventListener('openZokaAI', handleExternalOpen);
     return () => window.removeEventListener('openZokaAI', handleExternalOpen);
   }, [isOpen]);
 
   if (!isOpen) return null;
+
+  const renderChatGroup = (title, chatsInGroup) => {
+    if (chatsInGroup.length === 0) return null;
+    return (
+      <div className="kim-sidebar-group">
+        <div className="kim-sidebar-group-title">{title}</div>
+        {chatsInGroup.map(chat => (
+          <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); setError(null); setTypingMessageId(null); }} className={`kim-chat-item ${activeChatId === chat.id ? 'active' : ''}`}>
+            <div className="kim-chat-item-info">
+              <MessageSquare size={14} />
+              <span className="kim-chat-title-text">{chat.title}</span>
+            </div>
+            <button onClick={(e) => deleteChat(chat.id, e)} className="kim-chat-delete" title="Delete chat">
+              <Trash2 size={12} />
+            </button>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderMessageContent = (msg) => {
+    if (msg.data?.type === 'match' || msg.data?.type === 'prediction') {
+      return (
+        <div>
+          <TypewriterText text={msg.content} isActive={msg.id === typingMessageId} onComplete={() => setTypingMessageId(null)} />
+          <div className="kim-action-row">
+            <button className="kim-action-link">
+              View Match <ChevronRight size={12} />
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return <TypewriterText text={msg.content} isActive={msg.id === typingMessageId} onComplete={() => setTypingMessageId(null)} />;
+  };
 
   return (
     <>
@@ -362,27 +422,19 @@ export default function ZokaAI({ isOpen, onClose }) {
         
         <div className={`kim-sidebar ${showSidebar ? 'open' : ''}`}>
           <div className="kim-sidebar-header">
-            <span className="kim-sidebar-title">Chat History</span>
+            <span className="kim-sidebar-title">KIM</span>
             <button onClick={() => setShowSidebar(false)} className="btn-icon btn-ghost"><X size={18} /></button>
           </div>
           <div className="kim-sidebar-actions">
-            <button onClick={startNewChat} className="btn btn-primary w-full flex-center gap-2">
-              <Plus size={16} /> New Chat
+            <button onClick={startNewChat} className="btn btn-primary">
+              <Plus size={16} /> New chat
             </button>
           </div>
           <div className="kim-sidebar-list">
             {chats.length === 0 && <div className="kim-sidebar-empty">No recent chats.</div>}
-            {chats.map(chat => (
-              <div key={chat.id} onClick={() => { setActiveChatId(chat.id); setShowSidebar(false); setError(null); setTypingMessageId(null); }} className={`kim-chat-item ${activeChatId === chat.id ? 'active' : ''}`}>
-                <div className="kim-chat-item-info">
-                  <MessageSquare size={14} />
-                  <span className="truncate">{chat.title}</span>
-                </div>
-                <button onClick={(e) => deleteChat(chat.id, e)} className="kim-chat-delete" title="Delete chat">
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
+            {renderChatGroup("TODAY", groupedChats.today)}
+            {renderChatGroup("YESTERDAY", groupedChats.yesterday)}
+            {renderChatGroup("EARLIER", groupedChats.earlier)}
           </div>
         </div>
 
@@ -398,8 +450,8 @@ export default function ZokaAI({ isOpen, onClose }) {
                 </div>
                 <div>
                   <h2 className="kim-name">Kim</h2>
-                  <span className="kim-status flex items-center gap-1">
-                    {!isOnline ? <><WifiOff size={10} /> Offline Mode</> : "Football Intelligence"}
+                  <span className="kim-status">
+                    {!isOnline ? <><WifiOff size={10} /> Offline</> : "ZOKASCORE Intelligence"}
                   </span>
                 </div>
               </div>
@@ -410,9 +462,45 @@ export default function ZokaAI({ isOpen, onClose }) {
           <div className="kim-body">
             {messages.length === 0 && (
               <div className="kim-empty-state">
-                <Brain size={48} className="text-primary mb-4" style={{ opacity: 0.5 }} />
-                <h3>Chat with Kim</h3>
-                <p>Ask me about today's matches, how to use the Studio, or your prediction stats.</p>
+                <div className="kim-empty-icon">
+                  <Sparkles size={28} color="#fff" />
+                </div>
+                <h3>Ask Kim</h3>
+                <p>{matchContext ? `${matchContext.home} vs ${matchContext.away}` : "Football intelligence built into ZOKASCORE"}</p>
+                
+                <div className="kim-starters-grid">
+                  {matchContext ? (
+                    <>
+                      <button onClick={() => handleSend(`Analyze ${matchContext.home} vs ${matchContext.away}`)} className="kim-starter-btn">
+                        <span className="kim-starter-icon">🔮</span> Analyze this match
+                      </button>
+                      <button onClick={() => handleSend(`Predict ${matchContext.home} vs ${matchContext.away}`)} className="kim-starter-btn">
+                        <span className="kim-starter-icon">📊</span> Give me a prediction
+                      </button>
+                      <button onClick={() => handleSend(`Who is likely to score in ${matchContext.home} vs ${matchContext.away}?`)} className="kim-starter-btn">
+                        <span className="kim-starter-icon">⚽</span> Who will score?
+                      </button>
+                      <button onClick={() => handleSend(`Compare recent form for ${matchContext.home} and ${matchContext.away}`)} className="kim-starter-btn">
+                        <span className="kim-starter-icon">📈</span> Compare form
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button onClick={() => handleSend("What matches are playing today?")} className="kim-starter-btn">
+                        <span className="kim-starter-icon">⚽</span> Today's matches
+                      </button>
+                      <button onClick={() => handleSend("What are my prediction stats?")} className="kim-starter-btn">
+                        <span className="kim-starter-icon">📊</span> My prediction stats
+                      </button>
+                      <button onClick={() => handleSend("Explain the offside rule")} className="kim-starter-btn">
+                        <span className="kim-starter-icon">🧠</span> Ask about football
+                      </button>
+                      <button onClick={() => handleSend("Analyze Arsenal vs Chelsea")} className="kim-starter-btn">
+                        <span className="kim-starter-icon">🔮</span> Analyze a match
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
             )}
             
@@ -428,25 +516,24 @@ export default function ZokaAI({ isOpen, onClose }) {
                     </div>
                   )}
                   <div className={`kim-bubble ${msg.role === 'user' ? 'user' : 'ai'} ${msg.isError ? 'error' : ''}`}>
-                    {/* ★ NEW: Reasoning Badge */}
                     {badge && !msg.isError && (
-                      <div className={`flex items-center gap-1 mb-2 text-[10px] font-bold uppercase tracking-wider ${badge.color}`}>
-                        <BadgeIcon size={10} /> {badge.text}
+                      <div className={`kim-engine-badge ${badge.cls}`}>
+                        <BadgeIcon size={9} /> {badge.text}
                       </div>
                     )}
                     
                     {msg.isError ? (
-                      <div className="flex items-center gap-2">
+                      <div className="kim-error-content">
                         <AlertCircle size={14} />
                         <span>{msg.content}</span>
-                        <button onClick={handleRetry} className="ml-2 text-xs underline flex items-center gap-1 hover:text-white transition-colors">
+                        <button onClick={handleRetry} className="kim-retry-btn">
                           <RefreshCw size={12} /> Retry
                         </button>
                       </div>
                     ) : msg.role === 'assistant' ? (
-                      <TypewriterText text={msg.content} isActive={msg.id === typingMessageId} onComplete={() => setTypingMessageId(null)} />
+                      renderMessageContent(msg)
                     ) : (
-                      <div className="text-sm leading-relaxed">{msg.content}</div>
+                      <div className="kim-user-text">{msg.content}</div>
                     )}
                   </div>
                   {msg.role === 'user' && (
@@ -464,7 +551,7 @@ export default function ZokaAI({ isOpen, onClose }) {
                   <Sparkles size={14} color="#fff" />
                 </div>
                 <div className="kim-bubble ai loading">
-                  <Loader size={14} className="anim-spin" /> <span>Analyzing tactics...</span>
+                  <Loader size={14} className="anim-spin" /> <span>{loadingText}</span>
                 </div>
               </div>
             )}
@@ -483,7 +570,7 @@ export default function ZokaAI({ isOpen, onClose }) {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && handleSend()}
-                placeholder={currentUser ? "Message Kim..." : "Log in to chat..."}
+                placeholder={loading ? "Kim is thinking..." : !isOnline ? "You're offline" : "Ask Kim anything about football..."}
                 className="kim-input"
                 disabled={loading || !currentUser}
               />

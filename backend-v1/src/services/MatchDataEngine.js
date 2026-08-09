@@ -17,7 +17,7 @@ class MatchDataEngine {
     return lower.replace(/\bfc\b|\bafc\b|\bcf\b|\bsc\b/g, '').trim();
   }
 
-  loadTodaysMatches() {
+    loadTodaysMatches() {
     const now = Date.now();
     if (matchDataCache.data && (now - matchDataCache.timestamp < MATCH_CACHE_TTL)) {
       return matchDataCache.data;
@@ -25,27 +25,50 @@ class MatchDataEngine {
 
     const today = new Date().toISOString().split('T')[0];
     const fixturesPath = path.join(PUBLIC_DATA_DIR, 'fixtures', `${today}.json`);
-    const livePath = path.join(PUBLIC_DATA_DIR, 'live.json`);
+    const livePath = path.join(PUBLIC_DATA_DIR, 'live.json');
     const resultsPath = path.join(PUBLIC_DATA_DIR, 'results', `${today}.json`);
 
-    let matches = [];
+    let rawMatches = [];
+    let uniqueMatches = []; // ★ NEW: Deduplication array
 
     try {
       if (fs.existsSync(livePath)) {
         const liveData = JSON.parse(fs.readFileSync(livePath, 'utf8'));
-        matches.push(...(liveData.matches || liveData.data || []));
+        rawMatches.push(...(liveData.matches || liveData.data || []));
       }
       if (fs.existsSync(fixturesPath)) {
         const fixData = JSON.parse(fs.readFileSync(fixturesPath, 'utf8'));
-        matches.push(...(fixData.matches || fixData.data || []));
+        rawMatches.push(...(fixData.matches || fixData.data || []));
       }
       if (fs.existsSync(resultsPath)) {
         const resData = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-        matches.push(...(resData.matches || resData.data || []));
+        rawMatches.push(...(resData.matches || resData.data || []));
       }
 
-      matchDataCache = { data: matches, timestamp: now };
-      return matches;
+      // ★ NEW: Deduplicate by Match ID or Team Names
+      const seenIds = new Set();
+      const seenMatchups = new Set();
+
+      for (const m of rawMatches) {
+        const id = m.id || m.matchId;
+        const homeName = this.normalizeTeamName(m.homeName || m.homeTeam?.name);
+        const awayName = this.normalizeTeamName(m.awayName || m.awayTeam?.name);
+        const matchupKey = `${homeName}_vs_${awayName}`;
+
+        // If we have an ID and haven't seen it, add it
+        if (id && !seenIds.has(id)) {
+          seenIds.add(id);
+          uniqueMatches.push(m);
+        } 
+        // If no ID, use the matchup key
+        else if (!id && !seenMatchups.has(matchupKey)) {
+          seenMatchups.add(matchupKey);
+          uniqueMatches.push(m);
+        }
+      }
+
+      matchDataCache = { data: uniqueMatches, timestamp: now };
+      return uniqueMatches;
     } catch (e) {
       logger.warn('[MatchDataEngine] Failed to load matches:', e.message);
       return [];
@@ -172,13 +195,18 @@ class MatchDataEngine {
       };
     }
 
-    const match = result.match;
+        const match = result.match;
     if (match) {
       const formattedData = this.formatMatchData(match);
       const msg = this.normalizeTeamName(message);
       
       // Check if the user is just asking for the score/status
       if (msg.includes('score') || msg.includes('status') || msg.includes('how is') || msg.includes('happening') || msg.includes('doing') || msg.includes('what s going')) {
+        return { status: "ANSWERED_LOCALLY", evidence: formattedData, confidence: 1.0 };
+      }
+      
+      // ★ NEW: If the user just types the team names (e.g., "Juventus vs Inter Milan"), return the score locally!
+      if (msg.includes(' vs ') || msg.includes(' v ') || msg.includes(' versus ')) {
         return { status: "ANSWERED_LOCALLY", evidence: formattedData, confidence: 1.0 };
       }
       

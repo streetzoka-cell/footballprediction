@@ -50,13 +50,10 @@ class KimLocalEngine {
     return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
   }
 
-  // 1. Upgraded Intent Detection (Regex-based, finds anywhere in sentence)
   detectIntent(message) {
     const msg = this.normalizeText(message);
 
     if (/\b(vs|versus|difference between|compare|comparison)\b/.test(msg)) return 'comparison';
-    
-    // Historical/Competition Intents
     if (/\b(top scorer|golden boot|top goalscorer)\b/.test(msg)) return 'top_scorers';
     if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
     if (/\b(how many teams|number of teams|teams played)\b/.test(msg)) return 'teams';
@@ -78,7 +75,6 @@ class KimLocalEngine {
     return 'general';
   }
 
-  // 2. Section-Aware Detection for Laws
   detectLawSection(message, concept) {
     const msg = this.normalizeText(message);
 
@@ -95,77 +91,72 @@ class KimLocalEngine {
       if (concept.sections?.infringements) return 'infringements';
       if (concept.sections?.replacement_of_a_defective_ball) return 'replacement_of_a_defective_ball';
     }
-
     return null;
   }
 
-  // 3. Upgraded Semantic Concept Scorer (Phrase boundaries + Contextual Boosts)
+  // ★ NEW WEIGHTED SCORING ALGORITHM ★
   scoreConcept(message, concept) {
     const msg = this.normalizeText(message);
     let score = 0;
+    let matchCount = 0;
 
     const name = this.normalizeText(concept.name || concept.title || '');
     const aliases = (concept.aliases || []).map(a => this.normalizeText(a));
-    const keywords = concept.keywords || []; 
+    const keywords = (concept.keywords || []).map(k => this.normalizeText(k));
     
-    if (this.containsPhrase(msg, name)) score += 100;
-    if (aliases.some(a => this.containsPhrase(msg, a))) score += 80;
-    if (keywords.some(k => this.containsPhrase(msg, this.normalizeText(k)))) score += 30;
-    if (concept.category && this.containsPhrase(msg, concept.category)) score += 30;
-
-    // Secondary signal: generic word overlap (lower weight)
-    const textBlob = this.normalizeText(JSON.stringify(concept));
-    const msgWords = msg.split(' ');
-    msgWords.forEach(word => {
-      if (word.length > 3 && textBlob.includes(word)) score += 2;
+    // 1. Exact Name Match (+100)
+    if (name && this.containsPhrase(msg, name)) {
+      score += 100;
+      matchCount++;
+    }
+    
+    // 2. Keyword Matches (+80 each)
+    keywords.forEach(k => {
+      if (k && this.containsPhrase(msg, k)) {
+        score += 80;
+        matchCount++;
+      }
     });
 
-    // ★ NEW: Contextual Boosts for Historical/Competition Data (ID-Specific)
+    // 3. Alias Matches (+60 each)
+    aliases.forEach(a => {
+      if (a && this.containsPhrase(msg, a)) {
+        score += 60;
+        matchCount++;
+      }
+    });
+
+    // 4. Contextual & Intent Boosts
     const hasYear = /\b(19\d{2}|20\d{2})\b/.test(msg);
     const id = concept.id || '';
     
-    // If user asks for a year, boost the tournaments/finals files
     if (hasYear) {
-      if (id === 'world_cup_finals' && msg.includes('final')) score += 1000; // "2022 final score"
-      else if (id === 'world_cup_tournaments') score += 1000; // "Who won in 2014" or "How many teams in 1998"
+      if (id === 'world_cup_finals' && msg.includes('final')) score += 50;
+      else if (id === 'world_cup_tournaments') score += 50;
     }
+    if (id === 'world_cup_tournaments' && (msg.includes('first') || msg.includes('last') || msg.includes('recent'))) score += 50;
+    if (id === 'world_cup_records' && (msg.includes('most') || msg.includes('record') || msg.includes('best'))) score += 50;
     
-    // If user asks for "first" or "last" World Cup, boost tournaments
-    if (id === 'world_cup_tournaments' && (msg.includes('first') || msg.includes('last') || msg.includes('recent'))) {
-      score += 1000;
-    }
-    
-    // If user asks for "most" or "records", boost the records file
-    if (id === 'world_cup_records' && (msg.includes('most') || msg.includes('record') || msg.includes('best'))) {
-      score += 1000;
-    }
-    
-    // If user asks for format/teams (without a year), boost the format file
-    if (id === 'world_cup_format' && (msg.includes('format') || msg.includes('structure') || (msg.includes('how many teams') && !hasYear))) {
-      score += 1000;
+    if (id === 'world_cup_format' && (/\bformat\b/.test(msg) || msg.includes('structure') || (msg.includes('how many teams') && !hasYear))) {
+      score += 50;
     }
 
-    // ★ NEW: Massive Boost for Laws (Ensure they win when their alias is mentioned)
-    if (concept.sections && (aliases.some(a => this.containsPhrase(msg, a)) || this.containsPhrase(msg, name))) {
-      score += 1000;
+    // 5. Penalize vague matches (if it only matched one generic word, lower the score)
+    if (matchCount === 1 && score < 80) {
+      score = score / 2; 
     }
 
     return score;
   }
   
-  // 4. Upgraded Answer Builder (Section-aware + Intent mapping)
   buildAnswer(intent, concept, message) {
     let response = `**${concept.name || concept.title}**\n\n`;
 
-    // Logic for Competitions / History
     if (concept.tournaments || concept.records || concept.finals || concept.matches || concept.format) {
       const msg = this.normalizeText(message);
-      
-      // Handle records queries
       if ((intent === 'records' || msg.includes('most') || msg.includes('record')) && concept.records) {
         let recResponse = `**${concept.name}**\n\n`;
         let foundSpecific = false;
-        
         for (const [key, value] of Object.entries(concept.records)) {
           const keyPhrase = key.replace(/_/g, ' ');
           if (msg.includes(keyPhrase) || (msg.includes('most') && key.includes('most'))) {
@@ -173,7 +164,6 @@ class KimLocalEngine {
             foundSpecific = true;
           }
         }
-        
         if (!foundSpecific) {
           recResponse += `Here are the key records:\n\n`;
           for (const [key, value] of Object.entries(concept.records)) {
@@ -182,115 +172,70 @@ class KimLocalEngine {
         }
         return recResponse;
       }
-      
-      // Handle tournament queries
       if (concept.tournaments) {
         let yearToFind = null;
         const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
-        
-        if (yearMatch) {
-          yearToFind = parseInt(yearMatch[0]);
-        } else if (msg.includes('first')) {
-          yearToFind = 1930; // First World Cup
-        } else if (msg.includes('last') || msg.includes('latest') || msg.includes('recent')) {
-          yearToFind = concept.tournaments[0].year; // Most recent
-        }
+        if (yearMatch) yearToFind = parseInt(yearMatch[0]);
+        else if (msg.includes('first')) yearToFind = 1930;
+        else if (msg.includes('last') || msg.includes('latest') || msg.includes('recent')) yearToFind = concept.tournaments[0].year;
         
         if (yearToFind) {
           const year = yearToFind;
           const tournament = concept.tournaments.find(t => t.year === year);
-          
           if (tournament) {
             let tResponse = `**${year} ${concept.name}**\n\n`;
-            
-            if (intent === 'top_scorers' || msg.includes('top scorer') || msg.includes('golden boot')) {
-              tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)`;
-            } else if (intent === 'hosts' || msg.includes('host')) {
-              tResponse += `**Host:** ${tournament.host}`;
-            } else if (intent === 'teams' || msg.includes('how many teams') || msg.includes('teams played')) {
-              tResponse += `**Teams:** ${tournament.teams}\n**Matches:** ${tournament.matches}`;
-            } else if (intent === 'attendance') {
-              tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
-            } else {
-              // General info / Winners
-              tResponse += `**Host:** ${tournament.host}\n`;
-              tResponse += `**Champion:** ${tournament.champion}\n`;
-              tResponse += `**Runner-up:** ${tournament.runner_up}\n`;
-              tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)\n`;
-              tResponse += `**Teams:** ${tournament.teams}\n`;
-              tResponse += `**Matches:** ${tournament.matches}\n`;
-              tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
+            if (intent === 'top_scorers' || msg.includes('top scorer') || msg.includes('golden boot')) tResponse += `**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)`;
+            else if (intent === 'hosts' || msg.includes('host')) tResponse += `**Host:** ${tournament.host}`;
+            else if (intent === 'teams' || msg.includes('how many teams') || msg.includes('teams played')) tResponse += `**Teams:** ${tournament.teams}\n**Matches:** ${tournament.matches}`;
+            else if (intent === 'attendance') tResponse += `**Attendance:** ${tournament.attendance.toLocaleString()}`;
+            else {
+              tResponse += `**Host:** ${tournament.host}\n**Champion:** ${tournament.champion}\n**Runner-up:** ${tournament.runner_up}\n**Top Scorer:** ${tournament.top_scorer} (${tournament.top_scorer_goals} goals)\n**Teams:** ${tournament.teams}\n**Matches:** ${tournament.matches}\n**Attendance:** ${tournament.attendance.toLocaleString()}`;
             }
             return tResponse;
-          } else {
-            return `I don't have a record of a ${concept.name} in ${year}.`;
-          }
+          } else return `I don't have a record of a ${concept.name} in ${year}.`;
         } else {
-          // No year specified - show summary
           const recent = concept.tournaments[0];
-          let tResponse = `**${concept.name}**\n\n`;
-          tResponse += `I have data for ${concept.tournaments.length} tournaments.\n\n`;
-          tResponse += `**Most Recent (${recent.year}):**\n`;
-          tResponse += `Host: ${recent.host}\n`;
-          tResponse += `Champion: ${recent.champion}\n`;
-          tResponse += `Runner-up: ${recent.runner_up}\n\n`;
-          tResponse += `Ask me about a specific year (e.g., "Who won in 2014?")`;
+          let tResponse = `**${concept.name}**\n\nI have data for ${concept.tournaments.length} tournaments.\n\n**Most Recent (${recent.year}):**\nHost: ${recent.host}\nChampion: ${recent.champion}\nRunner-up: ${recent.runner_up}\n\nAsk me about a specific year (e.g., "Who won in 2014?")`;
           return tResponse;
         }
       }
-
-      // Handle finals queries
       if (concept.finals) {
         const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
         if (yearMatch) {
           const year = parseInt(yearMatch[0]);
           const final = concept.finals.find(f => f.year === year);
           if (final) {
-            let fResponse = `**${year} World Cup Final**\n\n`;
-            fResponse += `**Winner:** ${final.winner}\n`;
-            fResponse += `**Runner-up:** ${final.runner_up}\n`;
-            fResponse += `**Score:** ${final.score}\n`;
+            let fResponse = `**${year} World Cup Final**\n\n**Winner:** ${final.winner}\n**Runner-up:** ${final.runner_up}\n**Score:** ${final.score}\n`;
             if (final.shootout) fResponse += `**Penalties:** ${final.shootout}\n`;
             fResponse += `**Venue:** ${final.venue}`;
             return fResponse;
           }
         }
       }
-
-      // Handle format queries
       if (concept.format) {
-        let fResponse = `**${concept.name}**\n\n`;
-        fResponse += `${concept.definition}\n\n`;
+        let fResponse = `**${concept.name}**\n\n${concept.definition}\n\n`;
         if (concept.history && concept.history.length > 0) {
           fResponse += `**Historical Formats:**\n`;
-          concept.history.forEach(h => {
-            fResponse += `- ${h.era}: ${h.format}\n`;
-          });
+          concept.history.forEach(h => { fResponse += `- ${h.era}: ${h.format}\n`; });
         }
         return fResponse;
       }
     }
 
-    // Logic for Laws (Section-based knowledge)
     if (concept.sections) {
       const sectionKey = this.detectLawSection(message, concept);
-
       if (sectionKey) {
         const section = concept.sections[sectionKey];
         response += section.plain_english || section.authoritative || '';
-
         if (section.authoritative && section.plain_english && section.authoritative !== section.plain_english) {
           response += `\n\n**Law:** ${section.authoritative}`;
         }
         return response;
       }
-      
-      // Fallback to overview if no specific section matched
       response += concept.overview || '';
       return response;
     }
 
-    // Logic for Tactics/Formations (Intent-based knowledge)
     const supportedIntents = concept.intents || ['definition'];
     const actualIntent = supportedIntents.includes(intent) ? intent : 'general';
 
@@ -311,53 +256,49 @@ class KimLocalEngine {
     } else {
       response = concept.overview || concept.definition || '';
     }
-
     return response;
   }
 
-  // 5. Comparison Builder
   buildComparisonAnswer(concept1, concept2) {
     let response = `**Tactical Comparison: ${concept1.name} vs ${concept2.name}**\n\n`;
-    
-    response += `**${concept1.name}:**\n`;
-    response += `${concept1.definition || concept1.overview || ''}\n`;
+    response += `**${concept1.name}:**\n${concept1.definition || concept1.overview || ''}\n`;
     if (concept1.advantages) response += `*Strengths:* ${concept1.advantages.join(', ')}\n`;
     if (concept1.weaknesses) response += `*Weaknesses:* ${concept1.weaknesses.join(', ')}\n\n`;
-    
-    response += `**${concept2.name}:**\n`;
-    response += `${concept2.definition || concept2.overview || ''}\n`;
+    response += `**${concept2.name}:**\n${concept2.definition || concept2.overview || ''}\n`;
     if (concept2.advantages) response += `*Strengths:* ${concept2.advantages.join(', ')}\n`;
     if (concept2.weaknesses) response += `*Weaknesses:* ${concept2.weaknesses.join(', ')}\n\n`;
-    
-    response += `**Key Difference:**\n`;
-    response += `${concept1.name} primarily relies on ${concept1.core_principle || 'its structural framework'}, whereas ${concept2.name} relies on ${concept2.core_principle || 'its structural framework'}.`;
-    
+    response += `**Key Difference:**\n${concept1.name} primarily relies on ${concept1.core_principle || 'its structural framework'}, whereas ${concept2.name} relies on ${concept2.core_principle || 'its structural framework'}.`;
     return response;
   }
 
-  // 6. Knowledge Gap Recorder
-  recordKnowledgeGap(message, bestScore) {
+  // ★ ENHANCED KNOWLEDGE GAP LOGGER (TRAINING QUEUE) ★
+  recordKnowledgeGap(message, bestScore, intent, entities = []) {
     try {
       let gaps = [];
-      if (fs.existsSync(GAPS_LOG_PATH)) {
-        gaps = JSON.parse(fs.readFileSync(GAPS_LOG_PATH, 'utf8'));
-      }
-      gaps.push({ question: message, timestamp: new Date().toISOString(), confidence: bestScore });
-      if (gaps.length > 100) gaps = gaps.slice(-100);
+      if (fs.existsSync(GAPS_LOG_PATH)) gaps = JSON.parse(fs.readFileSync(GAPS_LOG_PATH, 'utf8'));
+      
+      gaps.push({
+        question: message,
+        timestamp: new Date().toISOString(),
+        intent: intent,
+        entities: entities, 
+        matchScore: bestScore,
+        answer_status: "UNKNOWN",
+        reason: bestScore < 80 ? "missing_knowledge_concept" : "low_confidence_margin"
+      });
+      
+      if (gaps.length > 500) gaps = gaps.slice(-500);
       fs.writeFileSync(GAPS_LOG_PATH, JSON.stringify(gaps, null, 2));
     } catch (e) {
       logger.warn('[KimEngine] Failed to record gap:', e.message);
     }
   }
 
-  // Main entry point
   async resolveQuery(message) {
     const intent = this.detectIntent(message);
     
-    // Handle Comparisons (Strict parsing)
     if (intent === 'comparison') {
       let parts = [];
-      
       if (message.toLowerCase().includes('difference between')) {
         let cleanMsg = this.normalizeText(message).replace('difference between', '').replace('what is the', '');
         parts = cleanMsg.split(/\s+and\s+/i);
@@ -367,21 +308,17 @@ class KimLocalEngine {
       } else {
         parts = this.normalizeText(message).split(/\s+vs\s+|\s+versus\s+/i);
       }
-      
       if (parts.length >= 2) {
         const subject1 = parts[0].trim();
         const subject2 = parts[1].trim();
-        
         let match1 = null, score1 = 0;
         let match2 = null, score2 = 0;
-        
         for (const concept of this.graph) {
           const s1 = this.scoreConcept(subject1, concept);
           const s2 = this.scoreConcept(subject2, concept);
           if (s1 > score1) { score1 = s1; match1 = concept; }
           if (s2 > score2) { score2 = s2; match2 = concept; }
         }
-        
         if (score1 >= 80 && score2 >= 80 && match1.id !== match2.id) {
           const answer = this.buildComparisonAnswer(match1, match2);
           return { status: "ANSWERED_LOCALLY", evidence: answer, confidence: 1.0, routedKnowledge: [match1.id, match2.id] };
@@ -389,7 +326,6 @@ class KimLocalEngine {
       }
     }
 
-    // Standard Single-Concept Resolution
     let bestMatch = null;
     let bestScore = 0;
     let secondBestScore = 0;
@@ -405,39 +341,43 @@ class KimLocalEngine {
       }
     }
 
-        // Confidence Gate: Require strong score AND a clear margin from the second-best match
-    const LOCAL_THRESHOLD = 80;
-    const MIN_SCORE_MARGIN = 20;
+    // ★ NEW CONFIDENCE & ROUTING LOGIC ★
+    const SCORE_THRESHOLD = 80;
+    const MARGIN_THRESHOLD = 20;
     
-    // Allow historical/competition intents to bypass strict intent list checking if concept matches
-    const isHistoryOrComp = bestMatch && (bestMatch.tournaments || bestMatch.records || bestMatch.finals || bestMatch.matches || bestMatch.format);
-    
-    // ★ BULLETPROOF FIX: If a Law's alias is mentioned, force it to answer locally.
-    const msgNorm = this.normalizeText(message);
-    const isLawWithAlias = bestMatch && bestMatch.sections && (bestMatch.aliases || []).some(a => this.containsPhrase(msgNorm, a));
-    
-    const canAnswer = 
-      isLawWithAlias || // Force Laws to answer if their alias is mentioned
-      (bestScore >= LOCAL_THRESHOLD && 
-      (bestScore - secondBestScore >= MIN_SCORE_MARGIN) &&
-      (intent === 'general' || isHistoryOrComp || bestMatch.intents?.includes(intent) || bestMatch.sections));
+    // Require a minimum base score, AND a clear margin over the second-best match
+    const canAnswer = bestScore >= SCORE_THRESHOLD && (bestScore - secondBestScore) >= MARGIN_THRESHOLD;
+
+    // Real confidence calculation based on score and margin
+    const confidence = canAnswer 
+      ? Math.min(((bestScore - secondBestScore) / 100) + (bestScore / 200), 1.0) 
+      : Math.min(bestScore / 200, 0.5);
 
     if (canAnswer) {
       const answer = this.buildAnswer(intent, bestMatch, message);
-      return {
-        status: "ANSWERED_LOCALLY",
-        evidence: answer,
-        confidence: Math.min(bestScore / 100, 1.0), // Capped at 1.0
-        routedKnowledge: [bestMatch.id || bestMatch.lawNumber]
+      return { 
+        status: "ANSWERED_LOCALLY", 
+        evidence: answer, 
+        confidence, 
+        routedKnowledge: [bestMatch.id || bestMatch.lawNumber] 
       };
     } else {
-      this.recordKnowledgeGap(message, bestScore);
+      // If it's close but ambiguous, ask for clarification instead of guessing
+      if (bestScore >= SCORE_THRESHOLD && (bestScore - secondBestScore) < MARGIN_THRESHOLD) {
+        return {
+          status: "CLARIFICATION_REQUIRED",
+          evidence: "I found multiple possible matches for your question. Could you provide a bit more detail (like a year or specific team)?",
+          confidence: 0.5,
+          routedKnowledge: []
+        };
+      }
       
-      return {
-        status: "UNCERTAIN",
-        evidence: bestMatch && bestScore >= 60 ? this.buildAnswer('general', bestMatch, message) : "",
-        confidence: Math.min(bestScore / 100, 1.0),
-        routedKnowledge: bestMatch ? [bestMatch.id || bestMatch.lawNumber] : []
+      this.recordKnowledgeGap(message, bestScore, intent);
+      return { 
+        status: "UNCERTAIN", 
+        evidence: bestMatch && bestScore >= 60 ? this.buildAnswer('general', bestMatch, message) : "", 
+        confidence, 
+        routedKnowledge: bestMatch ? [bestMatch.id || bestMatch.lawNumber] : [] 
       };
     }
   }

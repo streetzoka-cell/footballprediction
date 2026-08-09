@@ -18,8 +18,15 @@ if (env.GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 }
 
+// ★ ENHANCED SYSTEM PROMPT: Enforces the "Data proves, Gemini explains" philosophy
 const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by an independent developer.
 You are an elite football analyst, tactical expert, friendly, professional, and honest.
+
+CRITICAL ARCHITECTURE RULES:
+- ZOKASCORE DATA PROVES, YOU EXPLAIN. You must rely strictly on the [EVIDENCE] provided in the prompt.
+- NEVER invent facts, hallucinate scores, or pretend to know unavailable live data.
+- If [EVIDENCE] is missing or doesn't contain the answer, explicitly state: "I don't have verified data for that right now."
+- Do not guess match results or player statistics from your general memory. Always defer to the provided context.
 
 APP KNOWLEDGE (Use this if asked about the platform):
 - ZOKASCORE Studio: A built-in pro creator toolkit containing the Graphic Editor, Reactor Studio (for viral TikToks/Reels), Face AR (camera masks), and Reaction Cam.
@@ -33,12 +40,7 @@ FORMATTING RULES:
 - NEVER use bold text (asterisks) around the word ZOKASCORE. Just write it normally.
 - Avoid excessive markdown or cluttered formatting.
 - Use simple, clean bullet points and short paragraphs.
-- Never invent facts, hallucinate scores, or pretend to know unavailable live data.
-- Explain reasoning clearly and concisely.
-- Represent the brand professionally.
-- If a user asks about their points, rank, or predictions, refer strictly to the [USER PROFILE] provided. If it's missing, tell them to make a prediction first.
-- If a user asks about today's matches or Zoka Picks, refer to the [PLATFORM DATA] provided.
-- If a user asks about football rules, laws, or tactics, refer strictly to the [FOOTBALL LAWS CONTEXT] provided. Apply the 3-layer logic (Authoritative Law -> Explanation -> Application).`;
+- Explain reasoning clearly and concisely based ONLY on the provided evidence.`;
 
 const MODELS = ["gemini-2.0-flash-lite", "gemini-2.5-flash-lite", "gemini-3.5-flash"];
 const FALLBACK_CODES = [429, 404, 503];
@@ -220,15 +222,18 @@ Zoka AI Picks: ${zokaPicks.map(p => `${p.homeTeam?.name || 'Home'} vs ${p.awayTe
   return { userContext, platformContext };
 }
 
-async function buildPrompt({ message, history, context, lawKnowledge }) {
+// ★ ENHANCED PROMPT BUILDER: Strict Evidence Packaging
+async function buildPrompt({ message, history, context, evidence }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
   for (const msg of sanitizedHistory) {
     contents.push({ role: msg.role, parts: [{ text: msg.content }] });
   }
   
-  const lawContext = lawKnowledge ? `\n[FOOTBALL LAWS CONTEXT]\n${lawKnowledge}\n` : "";
-  const finalUserMessage = `${context.userContext}\n${context.platformContext}\n${lawContext}\nUser Query: ${message}`;
+  // Package evidence strictly so Gemini knows what it is allowed to say
+  const evidenceBlock = evidence ? `\n[EVIDENCE - STRICTLY USE THIS]\n${evidence}\n` : "\n[EVIDENCE - STRICTLY USE THIS]\nNo specific evidence retrieved. Rely on platform knowledge or ask for clarification.\n";
+  
+  const finalUserMessage = `${context.userContext}\n${context.platformContext}\n${evidenceBlock}\nUser Query: ${message}`;
   contents.push({ role: 'user', parts: [{ text: finalUserMessage }] });
   return contents;
 }
@@ -321,6 +326,17 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
         addToCache(cacheKey, localResult.evidence, "local-engine");
         return res.status(200).json({ success: true, model: "local-engine", reply: localResult.evidence, responseTime: "1ms" });
     } 
+    
+    // ★ NEW: Handle Ambiguous Queries (Clarification required)
+    if (localResult.status === "CLARIFICATION_REQUIRED") {
+      logger.info(`[ZOKASCORE AI] Ambiguous query intercepted. Asking user for clarification.`);
+      return res.status(200).json({ 
+        success: true, 
+        model: "local-clarify", 
+        reply: localResult.evidence, 
+        responseTime: "1ms" 
+      });
+    }
 
     // 4. MATCH DATA ENGINE (Dynamic Data: Scores, Fixtures, Stats)
     let matchResult = { status: "NO_DATA_FOUND" };
@@ -373,7 +389,7 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     
     logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Confidence: ${localResult.confidence.toFixed(2)}.`);
     
-    const contents = await buildPrompt({ message, history, context, lawKnowledge: combinedEvidence });
+    const contents = await buildPrompt({ message, history, context, evidence: combinedEvidence });
     const result = await generateWithFallback(contents);
     
     if (result.success) {
