@@ -1,6 +1,12 @@
 {
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
+  "functions": {
+    "api/**/*.js": {
+      "memory": 1024,
+      "maxDuration": 10
+    }
+  },
   "redirects": [
     {
       "source": "/prediction",
@@ -13,7 +19,7 @@
       "permanent": true
     }
   ],
-     "rewrites": [
+  "rewrites": [
     {
       "source": "/sitemap.xml",
       "destination": "https://api.zokascore.xyz/sitemap.xml"
@@ -43,7 +49,6 @@
       "destination": "/index.html"
     }
   ],
-  
   "headers": [
     {
       "source": "/(.*)",
