@@ -4,5 +4,5 @@ Disallow: /admin
 Disallow: /api/
 Disallow: /search?
 
-# ★ Enterprise Sitemap Index
-Sitemap: https://zokascore.xyz/zokascore-sitemap.xml
+# Canonical Sitemap Index
+Sitemap: https://zokascore.xyz/sitemap.xml
