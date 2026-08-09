@@ -1,5 +1,5 @@
-// api/ssr.js
-import https from 'https';
+// api/ssr.cjs
+const https = require('https');
 
 // Native Node.js fetch to avoid Vercel dependency issues
 const fetchUrl = (url) => {
@@ -16,7 +16,7 @@ const fetchUrl = (url) => {
   });
 };
 
-export default async function handler(req, res) {
+module.exports = async (req, res) => {
   try {
     const host = req.headers.host ? `https://${req.headers.host}` : 'https://zokascore.xyz';
     
@@ -145,4 +145,4 @@ export default async function handler(req, res) {
     console.error("SSR Fatal Error:", err);
     return res.status(500).send('Internal Server Error');
   }
-}
+};
