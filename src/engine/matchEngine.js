@@ -1,4 +1,5 @@
-﻿import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
+﻿// src/engine/matchEngine.js
+import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -37,12 +38,16 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     const matchStartTime = timestamp * 1000;
     const elapsed = now - matchStartTime;
 
-    if (elapsed > HIDE_THRESHOLD_MS && (isLive || status === '90' || status === '2H')) {
+    // Hide matches older than 24 hours (unless they are already safely finished)
+    if (elapsed > HIDE_THRESHOLD_MS && !isFinished) {
       isHidden = true;
       isLive = false;
       isFinished = false;
       status = 'HIDDEN';
-    } else if (elapsed > FT_THRESHOLD_MS && isLive) {
+    } 
+    // ★ FIX: Force match to FT after 3 hours, EVEN IF it was never marked live
+    // This prevents lower-tier matches from getting stuck in "Starting soon..."
+    else if (elapsed > FT_THRESHOLD_MS && !isFinished) {
       isLive = false;
       isFinished = true;
       status = 'FT';

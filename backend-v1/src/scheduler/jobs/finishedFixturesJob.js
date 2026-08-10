@@ -1,4 +1,5 @@
-﻿const fixtureService = require('../../services/FixtureService');
+﻿// backend-v1/src/scheduler/jobs/finishedFixturesJob.js
+const fixtureService = require('../../services/FixtureService');
 const { resolveMatch, rebuildDailyLeaderboard } = require('./resolvePredictionsJob');
 const { submitUrl } = require('../../services/IndexNowService');
 const logger = require('../../utils/logger');
@@ -36,9 +37,13 @@ async function execute(forceFetch = false) {
         const matchDate = match.dateStr || match.date?.split('T')[0];
         if (!matchDate) continue;
 
-        const result = await resolveMatch({
-          matchId: match.id, matchDate, homeScore: match.homeScore, awayScore: match.awayScore
-        });
+        // ★ FIX: Reverted to positional arguments so the resolver doesn't break
+        const result = await resolveMatch(
+          match.id,
+          match.homeScore,
+          match.awayScore,
+          matchDate
+        );
 
         if (result && result.leaderboardUpdateRequired) {
           resolvedCount++;
@@ -50,10 +55,8 @@ async function execute(forceFetch = false) {
             const awaySlug = createSlug(match.awayName || match.awayTeam?.name);
             const leagueSlug = createSlug(match.leagueName || match.league?.name);
             
-            // Ping the Match URL
             submitUrl(`/match/${match.id}/${homeSlug}-vs-${awaySlug}`);
             
-            // ★ Ping Team & League URLs because their stats/results just updated!
             if (match.homeTeam?.id) submitUrl(`/team/${match.homeTeam.id}/${homeSlug}`);
             if (match.awayTeam?.id) submitUrl(`/team/${match.awayTeam.id}/${awaySlug}`);
             if (match.league?.id) submitUrl(`/league/${match.league.id}/${leagueSlug}`);
