@@ -3,7 +3,7 @@ import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
-  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, Brain, HelpCircle // ★ Added HelpCircle
+  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, Brain, HelpCircle 
 } from 'lucide-react';
 
 import SEO from '../components/SEO';
@@ -11,8 +11,8 @@ import AdSlot from '../components/AdSlot';
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
-import { applySmartMinute } from '../engine/matchEngine'; 
-import { seoGenerators, buildSEO, howToSchema } from '../utils/seoBuilder'; // ★ Added howToSchema
+import { applySmartMinute, normalizeMatch } from '../engine/matchEngine'; 
+import { seoGenerators, buildSEO, howToSchema } from '../utils/seoBuilder';
 import { footballApi } from '../services/footballApi';
 
 function useNow(interval = 10000) {
@@ -80,11 +80,23 @@ export default function MatchDetails() {
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
 
+  // ★ FIX: Fallback to fetching directly from API if match is older than 1 day
+  const { data: fallbackMatchData } = useQuery({
+    queryKey: ['match-details-fallback', matchId],
+    queryFn: () => footballApi.getMatchDetails(matchId).then(res => res?.data || null),
+    enabled: !!matchId,
+    staleTime: 1000 * 60 * 60,
+  });
+
   const match = useMemo(() => {
     const all = [...todayFx, ...tomFx, ...yestFx];
     const found = all.find(m => String(m.id) === String(matchId));
-    return found ? applySmartMinute(found, now) : null;
-  }, [todayFx, yestFx, tomFx, matchId, now]);
+    
+    if (found) return applySmartMinute(found, now);
+    if (fallbackMatchData) return normalizeMatch(fallbackMatchData, true, now); // Normalize backend data
+    
+    return null;
+  }, [todayFx, yestFx, tomFx, matchId, now, fallbackMatchData]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
@@ -93,7 +105,6 @@ export default function MatchDetails() {
   const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
   const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
 
-  // ★ PHASE 13: Fetch H2H Data
   const { data: h2hData } = useQuery({
     queryKey: ['h2h', homeTeamId, awayTeamId],
     queryFn: () => footballApi.getH2H(homeTeamId, awayTeamId),
@@ -101,7 +112,6 @@ export default function MatchDetails() {
     staleTime: 1000 * 60 * 60 * 24,
   });
 
-  // ★ PHASE 13: Fetch Home Team Recent Results
   const { data: homeResults = [] } = useQuery({
     queryKey: ['team-results', homeTeamId],
     queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 5 }).then(res => res.data || []),
@@ -109,7 +119,6 @@ export default function MatchDetails() {
     staleTime: 1000 * 60 * 60,
   });
 
-  // ★ PHASE 13: Fetch Away Team Recent Results
   const { data: awayResults = [] } = useQuery({
     queryKey: ['team-results', awayTeamId],
     queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 5 }).then(res => res.data || []),
@@ -141,7 +150,6 @@ export default function MatchDetails() {
       return buildSEO({ title: "Match Details", description: "Loading match details...", path: `/match/${matchId}` });
     }
     
-    // ★ PHASE 12: Inject HowTo Schema for Rich Snippets
     const howTo = howToSchema({
       title: `How to Predict & Analyze ${match.homeName} vs ${match.awayName}`,
       description: `Step-by-step guide to analyzing the ${match.leagueName} match between ${match.homeName} and ${match.awayName}.`,
@@ -162,7 +170,6 @@ export default function MatchDetails() {
       homeId: homeTeamId, awayId: awayTeamId, leagueId: match.leagueId,
     });
 
-    // Merge HowTo into the structured data array
     baseSeo.structuredData = [...(baseSeo.structuredData || []), howTo];
     return baseSeo;
 
@@ -172,7 +179,6 @@ export default function MatchDetails() {
     <div className="md-page">
       <SEO {...seo} />
       
-      {/* ★ SEO FIX: Proper H1 for the page (Visually hidden but crawlable) */}
       {match && (
         <h1 style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: 0 }}>
           {match.homeName} vs {match.awayName} - {match.leagueName} Live Score & Statistics
@@ -215,7 +221,6 @@ export default function MatchDetails() {
             </div>
             
             <div className="md-teams">
-              {/* ★ SEO FIX: Changed H1 to H2 to prevent Multiple H1 penalty */}
               <Link to={buildTeamRoute(homeTeamId, match.homeName)} className="md-team">
                 {match.homeLogo && <img src={match.homeLogo} alt={match.homeName} />}
                 <h2 className="md-team-name">{match.homeName}</h2>
@@ -346,9 +351,6 @@ export default function MatchDetails() {
 
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 
-          {/* ═══════════════════════════════════════════════════════════ */}
-          {/* ★ PHASE 12: STATIC HOW-TO SECTION (Guarantees Rich Snippet) */}
-          {/* ═══════════════════════════════════════════════════════════ */}
           <div className="glass-card p-24 mb-24 mt-24">
             <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
               <HelpCircle size={18} /> How to Predict & Analyze This Match
@@ -361,9 +363,6 @@ export default function MatchDetails() {
             </ol>
           </div>
 
-          {/* ═══════════════════════════════════════════════════════════ */}
-          {/* ★ PHASE 13: INTERNAL LINKING WEB (H2H & Recent Form)       */}
-          {/* ═══════════════════════════════════════════════════════════ */}
           <div className="glass-card p-24 mb-24 mt-24">
             <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
               <TrendingUp size={18} /> Head-to-Head & Recent Form

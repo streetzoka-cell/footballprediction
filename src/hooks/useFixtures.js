@@ -1,4 +1,5 @@
-﻿import { useQuery, keepPreviousData } from '@tanstack/react-query';
+﻿// src/hooks/useFixtures.js
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
@@ -68,10 +69,11 @@ export function useFixtures(dateStr, sport = 'football') {
         }
       });
 
+      // ★ FIX: Ensure live matches only overwrite if they share the same dateStr
       live.forEach(m => {
         const existing = findExisting(m);
-        if (existing && existing.display?.isFinished && !m.display?.isFinished) return;
-        if (existing) {
+        if (existing && existing.dateStr === m.dateStr) {
+          if (existing.display?.isFinished && !m.display?.isFinished) return;
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else if (m.dateStr === dateStr) {
           map.set(String(m.id), m);
@@ -151,7 +153,6 @@ export function useStandings(leagueId) {
     enabled: !!leagueId,
     staleTime: 10 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
-    // ★ FIX: Stop retrying 404s to prevent console spam for obscure leagues
     retry: (failureCount, error) => {
       if (error?.message?.includes('Not Found') || error?.message?.includes('404')) return false;
       return failureCount < 1;

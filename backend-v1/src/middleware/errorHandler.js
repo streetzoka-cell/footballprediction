@@ -5,11 +5,8 @@ function notFound(req, res) {
   const requestId = res.locals?.requestId || 'req_unknown';
   logger.warn(`[404] [${requestId}] ${req.method} ${req.originalUrl}`);
   
-  // ★ FIX: Ensure CORS headers are sent even on 404 errors
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-api-key');
-
+  // ★ FIX: Removed manual CORS headers. 
+  // The `cors` package handles attaching the correct Origin dynamically.
   res.status(404).json({
     success: false,
     error: { code: 'NOT_FOUND', message: 'The requested resource was not found.' },
@@ -38,11 +35,7 @@ function errorHandler(err, req, res, next) {
     ? 'Something went wrong. Please try again later.'
     : err.message || 'Request failed.';
 
-  // ★ FIX: Ensure CORS headers are sent even on 500 errors
-  res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, PATCH, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-admin-api-key');
-
+  // ★ FIX: Removed manual CORS headers.
   res.status(status).json({
     success: false,
     error: { code, message: publicMessage, details: process.env.NODE_ENV === 'production' ? [] : (err.details || []) },

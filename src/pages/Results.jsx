@@ -17,7 +17,8 @@ export default function Results() {
     queryFn: async () => {
       const params = selectedDate ? { date: selectedDate, limit: 50 } : { limit: 50 };
       const res = await footballApi.getResults(params);
-      return res.data?.data || [];
+      // ★ FIX: res.data is the array. res.data.data is undefined.
+      return res.data || [];
     },
     staleTime: 5 * 60 * 1000,
   });

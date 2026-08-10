@@ -1,23 +1,25 @@
 // backend-v1/src/services/MatchRankingService.js
 
+// ★ FIX: Define normalize BEFORE using it in arrays
+const normalize = (str) => String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+
 // ★ PHASE 15: Top Leagues (API-Football IDs)
 const TIER_1_LEAGUES = [39, 140, 135, 78, 61, 2, 3]; // EPL, La Liga, Serie A, Bund, Ligue 1, UCL, UEL
 const TIER_2_LEAGUES = [253, 848, 94, 143, 71]; // Championship, Conf League, Eredivisie, Liga Portugal, Brasileirão
 
-// ★ PHASE 15: Global Club Keywords (Normalized)
+// ★ FIX: Normalize keywords so they match normalized team names
 const GLOBAL_CLUBS = [
   'real madrid', 'barcelona', 'atletico madrid',
   'manchester united', 'manchester city', 'liverpool', 'arsenal', 'chelsea', 'tottenham',
   'bayern munich', 'borussia dortmund', 'bayer leverkusen',
-  'psg', 'paris saint-germain',
+  'psg', 'paris saint germain',
   'juventus', 'ac milan', 'inter milan', 'napoli',
   'ajax', 'benfica', 'porto'
+].map(normalize);
+
+const RIVALRY_KEYWORDS = [
+  'elclasico', 'derby', 'oldfirm', 'superclasico', 'northlondon', 'manchesterderby', 'milanderby'
 ];
-
-// ★ PHASE 15: Derby Keywords
-const RIVALRY_KEYWORDS = ['el clasico', 'derby', 'old firm', 'superclasico', 'north london', 'manchester derby', 'milan derby'];
-
-const normalize = (str) => String(str || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 /**
  * Calculates a "Heat Score" for a match.

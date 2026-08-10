@@ -9,28 +9,25 @@ import { footballApi } from '../services/footballApi';
 
 export default function TeamPage() {
   const { teamId, slug } = useParams();
-  
+
   const { data: teamData, isLoading: teamLoading } = useQuery({
     queryKey: ['team-meta', teamId],
-    queryFn: async () => {
-      const res = await fetch(`/api/v1/teams/${teamId}`);
-      if (!res.ok) return null;
-      return res.json();
-    },
+    queryFn: () => footballApi.getTeam(teamId).then(res => res?.data || res || null),
+    enabled: !!teamId,
     staleTime: 7 * 24 * 60 * 60 * 1000,
   });
 
+  // ★ FIX: Actually call the dedicated backend route for team fixtures
   const { data: fixtures = [], isLoading: fixturesLoading } = useQuery({
     queryKey: ['team-fixtures', teamId],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/teams/${teamId}/fixtures`);
-      if (!res.ok) return [];
-      return res.json();
+      const res = await footballApi.getTeamFixtures(teamId);
+      return res?.data || [];
     },
+    enabled: !!teamId,
     staleTime: 1000 * 60 * 10,
   });
 
-  // ★ PHASE 8: Fetch Historical Results for this Team
   const { data: historicalResults = [] } = useQuery({
     queryKey: ['team-historical-results', teamId],
     queryFn: () => footballApi.getResults({ teamId, limit: 10 }).then(res => res.data || []),
@@ -40,7 +37,7 @@ export default function TeamPage() {
 
   const teamName = teamData?.name || (slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'Team');
   const teamPath = `/team/${teamId}/${slug || teamName.toLowerCase().replace(/\s+/g, "-")}`;
-  
+
   const seo = useMemo(() => (
     seoGenerators.teamPage({
       teamName,
@@ -111,9 +108,6 @@ export default function TeamPage() {
           )}
         </div>
 
-        {/* ═══════════════════════════════════════════════════════════ */}
-        {/* ★ PHASE 8: HISTORICAL RESULTS ARCHIVE                     */}
-        {/* ═══════════════════════════════════════════════════════════ */}
         <h2 className="text-primary font-bold mb-12 mt-24 flex-center gap-8" style={{justifyContent: 'flex-start'}}>
           <Calendar size={18} /> Recent Results Archive
         </h2>
