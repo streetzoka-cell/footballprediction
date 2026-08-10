@@ -179,7 +179,7 @@ const ensureSitemapCache = async () => {
   }
 };
 
-router.get(["/", "/sitemap.xml"], async (req, res) => {
+router.get(["/", "/sitemap.xml", "/zokascore-sitemap.xml"], async (req, res) => {
   try {
     await ensureSitemapCache(); 
     const lastmod = new Date(sitemapCache.lastUpdated).toISOString();
