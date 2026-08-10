@@ -1,10 +1,4 @@
 {
-  "functions": {
-    "api/ssr.js": {
-      "runtime": "@vercel/node",
-      "maxDuration": 10
-    }
-  },
   "rewrites": [
     {
       "source": "/sitemap.xml",
