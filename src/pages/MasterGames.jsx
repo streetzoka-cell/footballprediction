@@ -1,5 +1,5 @@
 ﻿import { Link } from 'react-router-dom';
-import { ArrowLeft, Loader, Zap, TrendingUp, Camera, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy, Brain } from 'lucide-react';
+import { ArrowLeft, Zap, Clock, Sparkles, Flame, Star, BarChart3, Target, Trophy, Brain, Calendar } from 'lucide-react';
 import SEO from '../components/SEO';
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
@@ -25,22 +25,24 @@ export default function MasterGames() {
   const all = useMemo(() => [...yestFx, ...todayFx, ...tomFx], [yestFx, todayFx, tomFx]);
   const enriched = useMemo(() => all.map(m => applySmartMinute(m, now)), [all, now]);
 
+  // ★ FIX: Use safe local dateStr to prevent timezone mismatch drops
   const todayMatches = useMemo(
-    () => enriched.filter(m => m?.date && todayStr() === (m.date?.slice(0, 10))),
+    () => enriched.filter(m => m?.dateStr && todayStr() === m.dateStr),
     [enriched]
   );
 
   const { elitePicks, featuredMatches, moreMatches } = useMemo(() => {
+    // ★ FIX: Added m.matchScore fallback as the engine uses it for importance
     const isElite = (m) => {
       const c = String(m?.category || '').toUpperCase();
       const conf = String(m?.confidence || '').toUpperCase();
-      const rating = Number(m?.rating ?? m?.matchRating ?? 0);
+      const rating = Number(m?.rating ?? m?.matchRating ?? m?.matchScore ?? 0);
       return c === 'FEATURED' || c === 'HIGH' || c === 'ELITE' || conf === 'HIGH' || rating >= 80;
     };
     const isFeatured = (m) => {
       const c = String(m?.category || '').toUpperCase();
       const conf = String(m?.confidence || '').toUpperCase();
-      const rating = Number(m?.rating ?? m?.matchRating ?? 0);
+      const rating = Number(m?.rating ?? m?.matchRating ?? m?.matchScore ?? 0);
       return c === 'MEDIUM' || conf === 'MEDIUM' || (rating >= 60 && rating < 80);
     };
 
@@ -64,7 +66,7 @@ export default function MasterGames() {
 
   const avgRating = useMemo(() => {
     const rated = todayMatches
-      .map(m => Number(m?.rating ?? m?.matchRating ?? 0))
+      .map(m => Number(m?.rating ?? m?.matchRating ?? m?.matchScore ?? 0))
       .filter(r => !isNaN(r) && r > 0);
     if (!rated.length) return 0;
     return Math.round(rated.reduce((a, b) => a + b, 0) / rated.length);
@@ -200,11 +202,11 @@ function MasterMatchCard({ match, accent, index }) {
     id, homeName, awayName, homeLogo, awayLogo,
     leagueName, leagueLogo, leagueId, date, kickoff,
     status, isLive, isFinished, isHT, displayMinute, minute,
-    homeScore, awayScore, rating, matchRating
+    homeScore, awayScore, rating, matchRating, matchScore
   } = match;
 
   const matchLink = buildMatchRoute(id, homeName, awayName);
-  const ratingVal = Number(rating ?? matchRating ?? 0);
+  const ratingVal = Number(rating ?? matchRating ?? matchScore ?? 0);
 
   const matchStatus = (status || '').toUpperCase();
   const isPostponed = matchStatus === 'PST' || matchStatus === 'POSTP';
@@ -276,6 +278,7 @@ function MasterMatchCard({ match, accent, index }) {
       <div className="mg-card-footer">
         {date && (
           <span className="mg-date-text">
+            {/* ★ FIX: Calendar icon is now properly imported and won't crash the page */}
             <Calendar size={11} /> {new Date(date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} · {formatTime(date)}
           </span>
         )}

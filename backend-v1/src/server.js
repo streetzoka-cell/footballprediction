@@ -413,14 +413,8 @@ app.use(
  * ============================================================
  */
 
-app.use(
-  [
-    '/sitemap.xml',
-    '/zokascore-sitemap.xml',
-    '/sitemaps',
-  ],
-  sitemapRoute
-);
+// ★ FIX: Mount at root '/' so the router can properly match /sitemap.xml and /sitemaps/:type
+app.use(sitemapRoute);
 
 /*
  * ============================================================

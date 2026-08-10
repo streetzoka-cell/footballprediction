@@ -7,16 +7,11 @@ export default defineConfig({
   plugins: [
     react(),
     
-    // ★ REMOVED vite-plugin-prerender: It has a known ESM bug (require is not defined) 
-    // that crashes Vite builds in "type": "module" projects. 
-    // Your Vercel SSR function (api/ssr.js) already handles the critical SEO rendering 
-    // for /match/, /team/, and /league/ pages!
-
     // ★ CORE WEB VITALS: Brotli Compression (Reduces JS/CSS payload by ~70%)
     viteCompression({
       algorithm: 'brotliCompress',
       ext: '.br',
-      threshold: 1024, 
+      threshold: 10240, // 10kb threshold
       deleteOriginFile: false
     }),
     
@@ -24,13 +19,13 @@ export default defineConfig({
     viteCompression({
       algorithm: 'gzip',
       ext: '.gz',
-      threshold: 1024,
+      threshold: 10240,
       deleteOriginFile: false
     }),
 
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'robots.txt', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'],
+      includeAssets: ['favicon.svg', 'robots.txt', 'ads.txt', 'icons/apple-touch-icon.png', 'icons/icon-192.png', 'icons/icon-512.png'],
       manifest: {
         id: '/?source=pwa', 
         name: 'ZOKASCORE', 
@@ -53,12 +48,14 @@ export default defineConfig({
         cleanupOutdatedCaches: true,
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        
+        // ★ FIX: Corrected regex to catch /sitemaps/ (plural)
         navigateFallbackDenylist: [
           /^\/robots\.txt$/, 
           /^\/ads\.txt$/, 
           /^\/zokascore-sitemap\.xml/, 
           /^\/sitemap\.xml/,
-          /^\/sitemap\//, 
+          /^\/sitemaps\//,  // ★ FIX: Added 's' to match /sitemaps/static.xml
           /^\/api\/.*/, 
           /^\/opensearch\.xml$/, 
           /^\/google.*/
@@ -74,12 +71,18 @@ export default defineConfig({
             handler: 'CacheFirst', 
             options: { cacheName: 'google-fonts-cache', expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 } } 
           },
+          
+          // Strict NetworkOnly for API & Live Data (Never cache dynamic scores)
           { urlPattern: /^https:\/\/api\.zokascore\.xyz\/.*/i, handler: 'NetworkOnly' },
           { urlPattern: /^\/api\/.*/i, handler: 'NetworkOnly' },
+          
+          // Google/Ads Network Only
           { urlPattern: /^https:\/\/.*\.googleapis\.com\/.*/i, handler: 'NetworkOnly' },
           { urlPattern: /^https:\/\/.*\.googlesyndication\.com\/.*/i, handler: 'NetworkOnly' },
           { urlPattern: /^https:\/\/.*\.doubleclick\.net\/.*/i, handler: 'NetworkOnly' },
           { urlPattern: /^https:\/\/.*\.adtrafficquality\.google\/.*/i, handler: 'NetworkOnly' },
+          
+          // Static Assets Cache
           { 
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp|ico|woff2)$/i, 
             handler: 'CacheFirst', 
@@ -111,7 +114,6 @@ export default defineConfig({
           if (id.includes('lucide-react')) return 'icons-vendor'; 
           if (id.includes('framer-motion')) return 'animation-vendor';
           if (id.includes('@tanstack')) return 'query-vendor';
-          if (id.includes('axios')) return 'network-vendor';
         }
       }
     }
