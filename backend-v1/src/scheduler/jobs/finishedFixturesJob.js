@@ -5,9 +5,17 @@ const {
   resolveMatch,
   rebuildDailyLeaderboard,
 } = require('./resolvePredictionsJob');
-const { submitUrl } = require('../../services/IndexNowService'); // ★ INJECTED
-const { createSlug } = require('../../utils/format'); // ★ INJECTED (Assuming you have a slug util, or use the one from sitemap)
+const { submitUrl } = require('../../services/IndexNowService');
 const logger = require('../../utils/logger');
+
+// ★ FIX: Defined locally to prevent Module Not Found crash
+const createSlug = (str) =>
+  String(str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 function getDateOffset(offset) {
   const d = new Date();
@@ -60,14 +68,12 @@ async function execute(forceFetch = false) {
           resolvedCount++;
           rebuildDates.add(matchDate);
 
-          // ★ PING INDEXNOW: Tell Bing this match page has materially changed (FT score added)
+          // ★ PING INDEXNOW
           try {
             const homeSlug = createSlug(match.homeName || match.homeTeam?.name);
             const awaySlug = createSlug(match.awayName || match.awayTeam?.name);
             submitUrl(`/match/${match.id}/${homeSlug}-vs-${awaySlug}`);
-          } catch (e) {
-            // Fail silently, SEO update is not critical to the core job
-          }
+          } catch (e) { /* Fail silently */ }
         }
 
       } catch (err) {

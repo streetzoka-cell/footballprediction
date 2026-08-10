@@ -4,8 +4,16 @@ const liveService = require('../../services/LiveMatchService');
 const QuotaManager = require('../../services/QuotaManager');
 const logger = require('../../utils/logger');
 const fixtureService = require('../../services/FixtureService');
-const { submitUrl } = require('../../services/IndexNowService'); // ★ INJECTED
-const { createSlug } = require('../../utils/format'); // ★ INJECTED
+const { submitUrl } = require('../../services/IndexNowService');
+
+// ★ FIX: Defined locally to prevent Module Not Found crash
+const createSlug = (str) =>
+  String(str || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 
 let prevLiveIds = new Set();
 
@@ -50,7 +58,6 @@ async function execute() {
         logger.info(`[LiveJob] ${finishedIds.length} match(es) finished. Fetching FT results.`);
         await fixtureService.refreshFinishedMatches();
         QuotaManager.recordFTCall();
-        // Note: The actual FT ping is handled by finishedFixturesJob.js above
       }
     }
 
