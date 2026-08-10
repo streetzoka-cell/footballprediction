@@ -1,6 +1,6 @@
 ﻿// backend-v1/src/routes/v1/sitemap.js
 const express = require("express");
-const fs = require("fs").promises; // ★ FIX: Use async fs.promises
+const fs = require("fs").promises; 
 const path = require("path");
 
 const router = express.Router();
@@ -11,7 +11,7 @@ const MAX_URLS_PER_SITEMAP = 40000;
 const CACHE_TTL = 6 * 60 * 60 * 1000;
 
 let sitemapCache = { static: null, matches: null, teams: null, leagues: null, lastUpdated: 0 };
-let isRebuilding = false; // ★ FIX: Prevent thundering herd during cache rebuild
+let isRebuilding = false; 
 
 const createSlug = (value) =>
   String(value || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
@@ -29,13 +29,11 @@ const chunkArray = (array, size) => {
 
 const buildUrlset = (urls) => `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:image="http://www.google.com/schemas/sitemap-image/1.1">\n${urls.join("\n")}\n</urlset>`;
 
-// ★ FIX: Made async
 const readJsonFiles = async (directory) => {
   try {
-    // ★ FIX: Async directory check
     await fs.access(directory);
   } catch (e) {
-    return []; // Directory doesn't exist
+    return []; 
   }
   
   const files = (await fs.readdir(directory)).filter((file) => file.endsWith(".json"));
@@ -43,7 +41,6 @@ const readJsonFiles = async (directory) => {
   
   for (const file of files) {
     try {
-      // ★ FIX: Async file read
       const raw = await fs.readFile(path.join(directory, file), "utf8");
       const parsed = JSON.parse(raw);
       const records = Array.isArray(parsed?.matches) ? parsed.matches : Array.isArray(parsed?.data) ? parsed.data : [];
@@ -90,7 +87,6 @@ const buildLeagueUrl = (id, name, logo) => {
   return `<url>\n  <loc>${escapeXml(url)}</loc>\n  <changefreq>daily</changefreq>\n  <priority>0.8</priority>${imageXml}\n</url>`;
 };
 
-// ★ FIX: Made async
 const rebuildSitemapCache = async () => {
   if (isRebuilding) return;
   isRebuilding = true;
@@ -138,12 +134,32 @@ const rebuildSitemapCache = async () => {
       }
     }
 
+    // ★ FIX: Added all static routes from AppRoutes.jsx
     const staticPages = [
-      { path: "/", priority: "1.0", changefreq: "hourly" }, { path: "/fixtures", priority: "0.9", changefreq: "hourly" },
-      { path: "/predictions", priority: "0.9", changefreq: "daily" }, { path: "/leaderboard", priority: "0.8", changefreq: "hourly" },
-      { path: "/highlights", priority: "0.8", changefreq: "daily" }, { path: "/about", priority: "0.5", changefreq: "monthly" },
-      { path: "/faq", priority: "0.5", changefreq: "monthly" }
+      { path: "/", priority: "1.0", changefreq: "hourly" }, 
+      { path: "/fixtures", priority: "0.9", changefreq: "hourly" },
+      { path: "/results", priority: "0.9", changefreq: "daily" },
+      { path: "/predictions", priority: "0.9", changefreq: "daily" }, 
+      { path: "/leaderboard", priority: "0.8", changefreq: "hourly" },
+      { path: "/mastergames", priority: "0.8", changefreq: "daily" },
+      { path: "/highlights", priority: "0.8", changefreq: "daily" }, 
+      { path: "/livestream", priority: "0.8", changefreq: "daily" },
+      { path: "/basketball", priority: "0.7", changefreq: "daily" },
+      { path: "/studio", priority: "0.6", changefreq: "weekly" },
+      { path: "/search", priority: "0.6", changefreq: "weekly" },
+      { path: "/football-knowledge", priority: "0.6", changefreq: "weekly" },
+      { path: "/about", priority: "0.5", changefreq: "monthly" },
+      { path: "/faq", priority: "0.5", changefreq: "monthly" },
+      { path: "/help-center", priority: "0.5", changefreq: "monthly" },
+      { path: "/contact", priority: "0.5", changefreq: "monthly" },
+      { path: "/careers", priority: "0.5", changefreq: "monthly" },
+      { path: "/partners", priority: "0.5", changefreq: "monthly" },
+      { path: "/advertise", priority: "0.5", changefreq: "monthly" },
+      { path: "/team", priority: "0.5", changefreq: "monthly" },
+      { path: "/privacy", priority: "0.3", changefreq: "yearly" },
+      { path: "/terms", priority: "0.3", changefreq: "yearly" }
     ];
+
     sitemapCache.static = buildUrlset(staticPages.map(p => `<url>\n  <loc>${escapeXml(`${HOST}${p.path}`)}</loc>\n  <changefreq>${p.changefreq}</changefreq>\n  <priority>${p.priority}</priority>\n</url>`));
     sitemapCache.matches = chunkArray(matchUrls, MAX_URLS_PER_SITEMAP).map(buildUrlset);
     sitemapCache.teams = chunkArray(teamUrls, MAX_URLS_PER_SITEMAP).map(buildUrlset);
@@ -157,7 +173,6 @@ const rebuildSitemapCache = async () => {
   }
 };
 
-// ★ FIX: Made async
 const ensureSitemapCache = async () => {
   if (Date.now() - sitemapCache.lastUpdated > CACHE_TTL || !sitemapCache.static) {
     await rebuildSitemapCache();
@@ -166,7 +181,7 @@ const ensureSitemapCache = async () => {
 
 router.get(["/", "/sitemap.xml"], async (req, res) => {
   try {
-    await ensureSitemapCache(); // ★ FIX: Await cache loading
+    await ensureSitemapCache(); 
     const lastmod = new Date(sitemapCache.lastUpdated).toISOString();
     const entries = [`\n  <sitemap>\n    <loc>${escapeXml(`${HOST}/sitemaps/static.xml`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>`];
     sitemapCache.matches.forEach((_, i) => entries.push(`\n  <sitemap>\n    <loc>${escapeXml(`${HOST}/sitemaps/matches-${i + 1}.xml`)}</loc>\n    <lastmod>${lastmod}</lastmod>\n  </sitemap>`));
@@ -181,7 +196,7 @@ router.get(["/", "/sitemap.xml"], async (req, res) => {
 
 router.get("/sitemaps/:type", async (req, res) => {
   try {
-    await ensureSitemapCache(); // ★ FIX: Await cache loading
+    await ensureSitemapCache(); 
     const type = req.params.type;
     let xml = type === "static.xml" ? sitemapCache.static : null;
     if (!xml) {
