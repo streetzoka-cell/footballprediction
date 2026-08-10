@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "functions": {
     "api/ssr.js": {
+      "runtime": "@vercel/node@3.2.4",
       "maxDuration": 10
     }
   },
