@@ -9,6 +9,9 @@ export const Highlights = lazy(() => import("../pages/Highlights"));
 export const LiveStream = lazy(() => import("../pages/LiveStream"));
 export const Leaderboard = lazy(() => import("../pages/Leaderboard"));
 
+// ★ PHASE 8: Added Historical Results Archive
+export const Results = lazy(() => import("../pages/Results"));
+
 export const MatchDetails = lazy(() => import("../pages/MatchDetails"));
 export const Search = lazy(() => import("../pages/Search"));
 

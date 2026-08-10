@@ -1,17 +1,22 @@
 ﻿// footballprediction/src/utils/format.js
 
 /**
- * Standard URL slug generator.
+ * Standard URL slug generator (SEO Optimized).
+ * Transliterates accented characters (é -> e, ñ -> n) instead of dropping them.
  * @param {string} text 
  * @returns {string}
  */
 export const slugify = (text) => {
+  if (!text) return '';
   return String(text)
+    .normalize("NFD")                   // ★ PHASE 11: Split accented characters
+    .replace(/[\u0300-\u036f]/g, "")    // ★ PHASE 11: Strip the accent marks
     .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')       // Remove remaining non-alphanumeric chars
     .trim()
-    .replace(/\s+/g, '-')
-    .substring(0, 60);
+    .replace(/\s+/g, '-')               // Replace spaces with hyphens
+    .replace(/-+/g, '-')                // Collapse multiple hyphens
+    .substring(0, 60);                  // Cap length for URL limits
 };
 
 /**

@@ -6,6 +6,7 @@ import SEO from '../components/SEO';
 import { useStandings } from '../hooks/useFixtures';
 import { buildTeamRoute, buildMatchRoute } from '../utils/routes';
 import { seoGenerators } from '../utils/seoBuilder'; 
+import { footballApi } from '../services/footballApi';
 
 export default function LeaguePage() {
   const { leagueId, slug } = useParams();
@@ -14,7 +15,6 @@ export default function LeaguePage() {
   const leagueName = slug ? slug.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase()) : 'League';
   const standingsTable = standingsData?.standings?.[0] || [];
 
-  // Fetch upcoming fixtures for this specific league
   const { data: leagueFixtures = [] } = useQuery({
     queryKey: ['league-fixtures', leagueId],
     queryFn: async () => {
@@ -23,6 +23,14 @@ export default function LeaguePage() {
       return res.json();
     },
     staleTime: 1000 * 60 * 10,
+  });
+
+  // ★ PHASE 8: Fetch Historical Results for this League
+  const { data: recentResults = [] } = useQuery({
+    queryKey: ['league-results', leagueId],
+    queryFn: () => footballApi.getResults({ leagueId, limit: 10 }).then(res => res.data || []),
+    enabled: !!leagueId,
+    staleTime: 1000 * 60 * 30,
   });
 
   const leaguePath = `/league/${leagueId}/${slug || leagueName.toLowerCase().replace(/\s+/g, "-")}`;
@@ -51,7 +59,6 @@ export default function LeaguePage() {
             <h1 className="text-primary font-extrabold text-2xl">{leagueName}</h1>
           </div>
           
-          {/* ★ SEO GOLD: AI League Insights */}
           <button 
             onClick={() => window.dispatchEvent(new CustomEvent('openZokaAI', { detail: { message: aiPrompt } }))} 
             className="btn btn-primary w-full flex-center gap-8"
@@ -61,7 +68,6 @@ export default function LeaguePage() {
           </button>
         </div>
 
-        {/* ★ SEO INTERNAL LINKING: Upcoming League Fixtures */}
         {leagueFixtures.length > 0 && (
           <>
             <h2 className="text-primary font-bold mb-12 flex-center gap-8" style={{justifyContent: 'flex-start'}}>
@@ -70,7 +76,7 @@ export default function LeaguePage() {
             <div className="glass-card p-20 mb-24">
               <div className="flex-col gap-8">
                 {leagueFixtures.slice(0, 5).map(m => (
-                  <Link to={buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name)} key={m.id} className="flex-between items-center p-12 bg-surface rounded-md border hover:border-primary transition-colors">
+                  <Link to={buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name)} key={m.id} className="flex-between items-center p-12 bg-surface rounded-md border hover:border-primary transition-colors" style={{textDecoration: 'none', color: 'inherit'}}>
                     <div className="flex-center gap-8 font-bold text-sm text-primary">
                       <span>{m.homeName || m.homeTeam?.name}</span>
                       <span className="text-muted text-xs">vs</span>
@@ -110,7 +116,7 @@ export default function LeaguePage() {
               {standingsTable.map((team, i) => (
                 <div key={team.team?.id || team.rank} className="grid gap-8 items-center p-8 hover:bg-card-hover rounded-md" style={{ gridTemplateColumns: '30px 1fr 40px 40px 40px 40px 50px' }}>
                   <span className="text-muted font-bold text-sm">{team.rank || i + 1}</span>
-                  <Link to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-center gap-8 text-primary font-bold text-sm hover:underline">
+                  <Link to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-center gap-8 text-primary font-bold text-sm hover:underline" style={{textDecoration: 'none', color: 'inherit'}}>
                     {team.team?.logo && <img src={team.team?.logo} alt={team.team?.name} width="18" height="18" onError={(e) => e.target.style.display='none'} />}
                     <span className="truncate">{team.team?.name || 'TBD'}</span>
                   </Link>
@@ -123,6 +129,31 @@ export default function LeaguePage() {
               ))}
             </div>
           )}
+        </div>
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ★ PHASE 8: HISTORICAL RESULTS ARCHIVE                     */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <h2 className="text-primary font-bold mb-12 mt-24 flex-center gap-8" style={{justifyContent: 'flex-start'}}>
+          <Calendar size={18} /> Recent {leagueName} Results
+        </h2>
+        <div className="glass-card p-20 mb-24">
+          <div className="flex-col gap-8">
+            {recentResults.length > 0 ? recentResults.slice(0, 10).map(m => (
+              <Link to={buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name)} key={m.id} className="flex-between items-center p-12 bg-surface rounded-md border hover:border-primary transition-colors" style={{textDecoration: 'none', color: 'inherit'}}>
+                <div className="flex-center gap-8 font-bold text-sm text-primary">
+                  <span>{m.homeName || m.homeTeam?.name}</span>
+                  <span className="text-primary font-extrabold mx-4">{m.homeScore} - {m.awayScore}</span>
+                  <span>{m.awayName || m.awayTeam?.name}</span>
+                </div>
+                <span className="text-muted text-xs">
+                  {m.date ? new Date(m.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }) : 'FT'} 
+                </span>
+              </Link>
+            )) : (
+              <div className="text-muted text-center p-20">No recent results found for this league.</div>
+            )}
+          </div>
         </div>
       </div>
     </div>

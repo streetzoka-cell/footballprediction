@@ -8,7 +8,7 @@ const logger = require('./utils/logger');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
 const metricsTracker = require('./middleware/metricsTracker');
 const requestContext = require('./middleware/requestContext');
-const securityHeaders = require('./middleware/securityHeaders'); // Safe helmet fallback
+const securityHeaders = require('./middleware/securityHeaders');
 const auditAdminRequests = require('./middleware/auditLogger');
 const createRateLimit = require('./middleware/simpleRateLimit');
 const { addLog } = require('./utils/logStore');
@@ -29,9 +29,11 @@ const featuredRoute = require('./routes/v1/featured');
 const zokaPicksRoute = require('./routes/v1/zokaPicks');
 const leaderboardRoute = require('./routes/v1/leaderboard');
 const aiRoutes = require('./routes/v1/ai');
-
 const knowledgeRoutes = require('./routes/v1/knowledge');
 const kimGapsRoutes = require('./routes/v1/admin/kimGaps');
+
+// ★ PHASE 8: Import the new Historical Results Engine
+const resultsRoute = require('./routes/v1/results');
 
 const app = express();
 
@@ -52,9 +54,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (like mobile apps, curl, or server-to-server)
       if (!origin) return callback(null, true);
-      
       if (allowedOrigins.includes(origin)) {
         callback(null, true);
       } else {
@@ -91,7 +91,6 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests. Please slow down.' }
-  // ★ FIX: Removed deprecated onLimitReached (causes crash warnings in v7)
 });
 app.use(globalLimiter);
 
@@ -103,14 +102,8 @@ const publicWriteLimiter = createRateLimit({
 });
 
 app.use('/api/v1', (req, res, next) => {
-  if (req.originalUrl.includes('/admin')) {
-    return next();
-  }
-
-  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
-    return publicWriteLimiter(req, res, next);
-  }
-
+  if (req.originalUrl.includes('/admin')) return next();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return publicWriteLimiter(req, res, next);
   next();
 });
 
@@ -128,64 +121,42 @@ app.use('/api/v1/featured', featuredRoute);
 app.use('/api/v1/zoka-picks', zokaPicksRoute);
 app.use('/api/v1/leaderboard', leaderboardRoute);
 
+// ★ PHASE 8: Mount Historical Results API
+app.use('/api/v1/results', resultsRoute);
+
 app.use('/api/v1/admin/schedulers', adminSchedulers);
 app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
-
 app.use('/api/v1/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/monitoring', monitoringDashboard);
-
 app.use(['/sitemap.xml', '/zokascore-sitemap.xml', '/sitemaps'], sitemapRoute);
-
 app.use('/api/v1/ai', aiRoutes);
-
 app.use('/api/v1/knowledge', knowledgeRoutes);
-
 app.use('/api/v1/admin/kim', kimGapsRoutes);
 
 // ─────────────────────────────────────────────
 // Static public JSON data
 // ─────────────────────────────────────────────
-
-// Results fallback
 app.get('/api/v1/data/results/:date.json', (req, res) => {
-  const filePath = path.join(
-    process.cwd(),
-    'public_data',
-    'results',
-    `${req.params.date}.json`
-  );
-
+  const filePath = path.join(process.cwd(), 'public_data', 'results', `${req.params.date}.json`);
   if (!fs.existsSync(filePath)) {
-    return res.json({
-      success: true,
-      data: [],
-      count: 0,
-      date: req.params.date,
-      message: 'No finished matches yet'
-    });
+    return res.json({ success: true, data: [], count: 0, date: req.params.date, message: 'No finished matches yet' });
   }
-
   res.sendFile(filePath);
 });
 
-// Serve public_data JSON files (CORS is handled globally by the cors() middleware)
 app.use(
   '/api/v1/data',
-  express.static(
-    path.join(process.cwd(), 'public_data'),
-    {
-      setHeaders: (res, filePath) => {
-        // Only set cache control headers, do NOT override CORS headers here
-        if (filePath.endsWith('.json')) {
-          if (filePath.includes('live.json')) {
-            res.setHeader('Cache-Control', 'public, max-age=15');
-          } else {
-            res.setHeader('Cache-Control', 'public, max-age=900');
-          }
+  express.static(path.join(process.cwd(), 'public_data'), {
+    setHeaders: (res, filePath) => {
+      if (filePath.endsWith('.json')) {
+        if (filePath.includes('live.json')) {
+          res.setHeader('Cache-Control', 'public, max-age=15');
+        } else {
+          res.setHeader('Cache-Control', 'public, max-age=900');
         }
-      },
-    }
-  )
+      }
+    },
+  })
 );
 
 app.use(notFound);

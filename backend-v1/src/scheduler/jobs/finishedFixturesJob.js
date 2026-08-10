@@ -1,21 +1,11 @@
-﻿// backend-v1/src/scheduler/jobs/finishedFixturesJob.js
-
-const fixtureService = require('../../services/FixtureService');
-const {
-  resolveMatch,
-  rebuildDailyLeaderboard,
-} = require('./resolvePredictionsJob');
+﻿const fixtureService = require('../../services/FixtureService');
+const { resolveMatch, rebuildDailyLeaderboard } = require('./resolvePredictionsJob');
 const { submitUrl } = require('../../services/IndexNowService');
 const logger = require('../../utils/logger');
 
-// ★ FIX: Defined locally to prevent Module Not Found crash
 const createSlug = (str) =>
-  String(str || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
+  String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 function getDateOffset(offset) {
   const d = new Date();
@@ -27,7 +17,6 @@ async function execute(forceFetch = false) {
   try {
     const today = getDateOffset(0);
     const yesterday = getDateOffset(-1);
-
     logger.info('[FinishedFixturesJob] Checking finished fixtures...');
 
     const [todayMatches, yesterdayMatches] = await Promise.all([
@@ -35,47 +24,41 @@ async function execute(forceFetch = false) {
       fixtureService.syncFinishedFixtures(forceFetch, -1)
     ]);
 
-    const matches = [
-      ...(todayMatches || []),
-      ...(yesterdayMatches || [])
-    ];
-
-    if (!matches.length) {
-      logger.info('[FinishedFixturesJob] No finished matches.');
-      return { count: 0, resolved: 0 };
-    }
+    const matches = [...(todayMatches || []), ...(yesterdayMatches || [])];
+    if (!matches.length) return { count: 0, resolved: 0 };
 
     let resolvedCount = 0;
     const rebuildDates = new Set();
 
     for (const match of matches) {
       try {
-        if (match.homeScore == null || match.awayScore == null) {
-          continue;
-        }
-
+        if (match.homeScore == null || match.awayScore == null) continue;
         const matchDate = match.dateStr || match.date?.split('T')[0];
         if (!matchDate) continue;
 
-        const result = await resolveMatch(
-          match.id,
-          match.homeScore,
-          match.awayScore,
-          matchDate
-        );
+        const result = await resolveMatch({
+          matchId: match.id, matchDate, homeScore: match.homeScore, awayScore: match.awayScore
+        });
 
         if (result && result.leaderboardUpdateRequired) {
           resolvedCount++;
           rebuildDates.add(matchDate);
 
-          // ★ PING INDEXNOW
+          // ★ PHASE 15: INDEXNOW CASCADE PING
           try {
             const homeSlug = createSlug(match.homeName || match.homeTeam?.name);
             const awaySlug = createSlug(match.awayName || match.awayTeam?.name);
+            const leagueSlug = createSlug(match.leagueName || match.league?.name);
+            
+            // Ping the Match URL
             submitUrl(`/match/${match.id}/${homeSlug}-vs-${awaySlug}`);
+            
+            // ★ Ping Team & League URLs because their stats/results just updated!
+            if (match.homeTeam?.id) submitUrl(`/team/${match.homeTeam.id}/${homeSlug}`);
+            if (match.awayTeam?.id) submitUrl(`/team/${match.awayTeam.id}/${awaySlug}`);
+            if (match.league?.id) submitUrl(`/league/${match.league.id}/${leagueSlug}`);
           } catch (e) { /* Fail silently */ }
         }
-
       } catch (err) {
         logger.error(`[FinishedFixturesJob] Match ${match.id} failed: ${err.message}`);
       }
@@ -86,12 +69,7 @@ async function execute(forceFetch = false) {
       await rebuildDailyLeaderboard(date);
     }
 
-    return {
-      count: matches.length,
-      resolved: resolvedCount,
-      rebuilt: [...rebuildDates]
-    };
-
+    return { count: matches.length, resolved: resolvedCount, rebuilt: [...rebuildDates] };
   } catch (err) {
     logger.error(`[FinishedFixturesJob] Failed: ${err.message}`);
     return { count: 0, resolved: 0, error: err.message };

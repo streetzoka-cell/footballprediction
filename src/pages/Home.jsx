@@ -463,7 +463,10 @@ export default function Home() {
 
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
-  const featuredMatches = useMemo(() => allFixtures.filter(m => m.category === 'FEATURED' || m.category === 'IMPORTANT').slice(0, 10), [allFixtures]);
+  const featuredMatches = useMemo(() => 
+  allFixtures.filter(m => m.category === 'FEATURED' || m.importance >= 8), 
+[allFixtures]);
+
   const upcomingMatches = useMemo(() => allFixtures.filter(m => !m.isLive && !m.isFinished && m.display?.isUpcoming).slice(0, 10), [allFixtures]);
 
   const heroMatch = useMemo(() => {
@@ -619,6 +622,11 @@ export default function Home() {
         includeBreadcrumbs={false}
       />
 
+      {/* ★ PHASE 1: PROPER H1 (Visually hidden but readable by Google) */}
+      <h1 style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: 0 }}>
+        Live Football Scores, Fixtures, Results &amp; Predictions
+      </h1>
+
       {offline && (<div className="z-offline"><WifiOff size={14} /> You are offline - showing cached data</div>)}
 
       <div className="zoka-home-wrap">
@@ -640,7 +648,7 @@ export default function Home() {
           </div>
 
           <div className="z-hero-content">
-            <h1 className="z-title">ZOKA<span>SCORE</span></h1>
+            <h2 className="z-title">ZOKA<span>SCORE</span></h2>
             <p className="z-sub">Live scores, AI predictions & leaderboards — updated in real time.</p>
           </div>
 
@@ -827,6 +835,25 @@ export default function Home() {
           </div>
         )}
 
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ★ PHASE 2 & 3: TODAY'S TOP MATCHES (Semantic H2)            */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {!ctxLoading && upcomingMatches.length > 0 && (
+          <section className="z-sec" aria-labelledby="top-matches-heading">
+            <div className="z-sech">
+              <Flame size={14} style={{ color: 'var(--danger)' }} />
+              <h2 id="top-matches-heading" style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>🔥 Today's Top Matches</h2>
+              <div className="z-sech-line" />
+              <Link to="/fixtures" className="z-strip-link">View all <ChevronRight size={12} /></Link>
+            </div>
+            <div className="z-zoka-wrap">
+              {featuredMatches.slice(0, 3).map((m, i) => (
+                <FeaturedRow key={m.id || i} pred={m} userPred={userPredMap[String(m.id)]} isLoggedIn={isLoggedIn} />
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="z-sec">
           <div className="z-sech">
             <Target size={14} style={{ color: 'var(--primary)' }} />
@@ -887,6 +914,37 @@ export default function Home() {
         </div>
 
         <AdSlot id="home-ad-2" mobile={true} desktop={true} />
+
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ★ PHASE 4: FOOTBALL DISCOVERY (Standard <a> tags for SEO)  */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <section className="z-sec" aria-labelledby="discovery-heading" style={{ marginTop: '32px' }}>
+          <div className="z-sech">
+            <Trophy size={14} style={{ color: 'var(--primary)' }} />
+            <h2 id="discovery-heading" style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Popular Competitions</h2>
+            <div className="z-sech-line" />
+          </div>
+          <div className="z-explore" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            <a href="/league/39/premier-league" className="z-ecard"><div className="z-ecard-title">Premier League</div></a>
+            <a href="/league/140/la-liga" className="z-ecard"><div className="z-ecard-title">La Liga</div></a>
+            <a href="/league/135/serie-a" className="z-ecard"><div className="z-ecard-title">Serie A</div></a>
+            <a href="/league/78/bundesliga" className="z-ecard"><div className="z-ecard-title">Bundesliga</div></a>
+            <a href="/league/2/champions-league" className="z-ecard"><div className="z-ecard-title">Champions League</div></a>
+          </div>
+
+          <div className="z-sech mt-24">
+            <Target size={14} style={{ color: 'var(--gold)' }} />
+            <h2 style={{ fontSize: '1.1rem', fontWeight: 700, margin: 0 }}>Popular Teams</h2>
+            <div className="z-sech-line" />
+          </div>
+          <div className="z-explore" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
+            <a href="/team/33/manchester-united" className="z-ecard"><div className="z-ecard-title">Man Utd</div></a>
+            <a href="/team/40/liverpool" className="z-ecard"><div className="z-ecard-title">Liverpool</div></a>
+            <a href="/team/42/arsenal" className="z-ecard"><div className="z-ecard-title">Arsenal</div></a>
+            <a href="/team/541/real-madrid" className="z-ecard"><div className="z-ecard-title">Real Madrid</div></a>
+            <a href="/team/529/barcelona" className="z-ecard"><div className="z-ecard-title">Barcelona</div></a>
+          </div>
+        </section>
 
         <div className="z-sec">
           <div className="z-sech">

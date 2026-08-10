@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { 
   ArrowLeft, Calendar, Zap, TrendingUp, Camera, Clock, Trophy, 
-  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, Brain
+  Tv, BarChart3, MapPin, Shield, Users, Target, Activity, Brain, HelpCircle // ★ Added HelpCircle
 } from 'lucide-react';
 
 import SEO from '../components/SEO';
@@ -11,7 +12,8 @@ import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
 import { applySmartMinute } from '../engine/matchEngine'; 
-import { seoGenerators, buildSEO } from '../utils/seoBuilder';
+import { seoGenerators, buildSEO, howToSchema } from '../utils/seoBuilder'; // ★ Added howToSchema
+import { footballApi } from '../services/footballApi';
 
 function useNow(interval = 10000) {
   const [now, setNow] = useState(Date.now());
@@ -88,6 +90,33 @@ export default function MatchDetails() {
   const { data: standingsData } = useStandings(standingsLeagueId);
   const standingsTable = standingsData?.standings?.[0] || [];
 
+  const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
+  const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
+
+  // ★ PHASE 13: Fetch H2H Data
+  const { data: h2hData } = useQuery({
+    queryKey: ['h2h', homeTeamId, awayTeamId],
+    queryFn: () => footballApi.getH2H(homeTeamId, awayTeamId),
+    enabled: !!homeTeamId && !!awayTeamId,
+    staleTime: 1000 * 60 * 60 * 24,
+  });
+
+  // ★ PHASE 13: Fetch Home Team Recent Results
+  const { data: homeResults = [] } = useQuery({
+    queryKey: ['team-results', homeTeamId],
+    queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 5 }).then(res => res.data || []),
+    enabled: !!homeTeamId,
+    staleTime: 1000 * 60 * 60,
+  });
+
+  // ★ PHASE 13: Fetch Away Team Recent Results
+  const { data: awayResults = [] } = useQuery({
+    queryKey: ['team-results', awayTeamId],
+    queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 5 }).then(res => res.data || []),
+    enabled: !!awayTeamId,
+    staleTime: 1000 * 60 * 60,
+  });
+
   const [goalFlash, setGoalFlash] = useState(false);
   const prevScore = useRef({ home: match?.homeScore, away: match?.awayScore });
 
@@ -109,34 +138,47 @@ export default function MatchDetails() {
 
   const seo = useMemo(() => {
     if (!match) {
-      return buildSEO({
-        title: "Match Details",
-        description: "Loading match details...",
-        path: `/match/${matchId}`,
-      });
+      return buildSEO({ title: "Match Details", description: "Loading match details...", path: `/match/${matchId}` });
     }
-    return seoGenerators.matchPage({
-      homeName: match.homeName,
-      awayName: match.awayName,
-      leagueName: match.leagueName,
-      date: match.date,
-      venue: match.venue,
-      isLive: match.isLive,
-      isFinished: match.isFinished,
-      homeScore: match.homeScore,
-      awayScore: match.awayScore,
-      path: matchLink,
-      homeLogo: match.homeLogo,
-      awayLogo: match.awayLogo,
-      leagueLogo: match.leagueLogo,
-      referee: match.referee,
+    
+    // ★ PHASE 12: Inject HowTo Schema for Rich Snippets
+    const howTo = howToSchema({
+      title: `How to Predict & Analyze ${match.homeName} vs ${match.awayName}`,
+      description: `Step-by-step guide to analyzing the ${match.leagueName} match between ${match.homeName} and ${match.awayName}.`,
+      image: match.homeLogo || match.awayLogo,
+      steps: [
+        { name: "Check Head-to-Head", text: `Review the historical results and recent form of ${match.homeName} and ${match.awayName}.` },
+        { name: "Analyze Tactics", text: "Use the Zoka AI button to generate a tactical breakdown of team formations and key player matchups." },
+        { name: "Monitor Live Stats", text: "Once the match starts, track possession, shots on target, and momentum shifts in real-time." },
+        { name: "Lock Your Prediction", text: "Head to the Predictions hub to submit your exact score prediction and earn leaderboard points." }
+      ]
     });
-  }, [match, matchId, matchLink]);
+
+    const baseSeo = seoGenerators.matchPage({
+      homeName: match.homeName, awayName: match.awayName, leagueName: match.leagueName,
+      date: match.date, venue: match.venue, isLive: match.isLive, isFinished: match.isFinished,
+      homeScore: match.homeScore, awayScore: match.awayScore, path: matchLink,
+      homeLogo: match.homeLogo, awayLogo: match.awayLogo, leagueLogo: match.leagueLogo, referee: match.referee,
+      homeId: homeTeamId, awayId: awayTeamId, leagueId: match.leagueId,
+    });
+
+    // Merge HowTo into the structured data array
+    baseSeo.structuredData = [...(baseSeo.structuredData || []), howTo];
+    return baseSeo;
+
+  }, [match, matchId, matchLink, homeTeamId, awayTeamId]);
 
   return (
     <div className="md-page">
       <SEO {...seo} />
       
+      {/* ★ SEO FIX: Proper H1 for the page (Visually hidden but crawlable) */}
+      {match && (
+        <h1 style={{ position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px', overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', borderWidth: 0 }}>
+          {match.homeName} vs {match.awayName} - {match.leagueName} Live Score & Statistics
+        </h1>
+      )}
+
       {match?.isHidden ? (
         <div className="zoka-page flex-center p-32">
           <div className="glass-card flex-col items-center text-center p-32 gap-12">
@@ -159,7 +201,6 @@ export default function MatchDetails() {
             <ArrowLeft size={14} /> Back to Fixtures
           </Link>
 
-          {/* Premium Header Card */}
           <div className={`md-header-card ${goalFlash ? 'goal-flash' : ''}`}>
             {goalFlash && (
               <div className="absolute inset-0 flex-center pointer-events-none">
@@ -174,9 +215,10 @@ export default function MatchDetails() {
             </div>
             
             <div className="md-teams">
-              <Link to={buildTeamRoute(match.homeTeamId, match.homeName)} className="md-team">
+              {/* ★ SEO FIX: Changed H1 to H2 to prevent Multiple H1 penalty */}
+              <Link to={buildTeamRoute(homeTeamId, match.homeName)} className="md-team">
                 {match.homeLogo && <img src={match.homeLogo} alt={match.homeName} />}
-                <h1 className="md-team-name">{match.homeName}</h1>
+                <h2 className="md-team-name">{match.homeName}</h2>
               </Link>
               
               <div className="md-score-block">
@@ -189,9 +231,9 @@ export default function MatchDetails() {
                 </div>
               </div>
 
-              <Link to={buildTeamRoute(match.awayTeamId, match.awayName)} className="md-team">
+              <Link to={buildTeamRoute(awayTeamId, match.awayName)} className="md-team">
                 {match.awayLogo && <img src={match.awayLogo} alt={match.awayName} />}
-                <h1 className="md-team-name">{match.awayName}</h1>
+                <h2 className="md-team-name">{match.awayName}</h2>
               </Link>
             </div>
 
@@ -218,7 +260,6 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* Match Context & Standings */}
           <div className="md-pro-grid">
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><MapPin size={12} /> Match Context</h3>
@@ -268,11 +309,9 @@ export default function MatchDetails() {
             </div>
           </div>
 
-          {/* Real Stats or AI Fallback */}
           {match.hasRealStats ? (
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
-              
               {match.stats?.possession && <StatBar label="Possession" home={match.stats.possession.home} away={match.stats.possession.away} isPercentage />}
               {match.stats?.shotsOnTarget && <StatBar label="Shots on Target" home={match.stats.shotsOnTarget.home} away={match.stats.shotsOnTarget.away} />}
               {match.stats?.shots && <StatBar label="Total Shots" home={match.stats.shots.home} away={match.stats.shots.away} />}
@@ -280,7 +319,6 @@ export default function MatchDetails() {
               {match.stats?.fouls && <StatBar label="Fouls" home={match.stats.fouls.home} away={match.stats.fouls.away} />}
               {match.stats?.yellowCards && <StatBar label="Yellow Cards" home={match.stats.yellowCards.home} away={match.stats.yellowCards.away} />}
               {match.stats?.redCards && <StatBar label="Red Cards" home={match.stats.redCards.home} away={match.stats.redCards.away} />}
-              
             </div>
           ) : (
             <div className="glass-card p-24 mb-24 mt-24 flex-col items-center text-center gap-12" style={{ border: '1px solid rgba(var(--primary-rgb), 0.2)', background: 'linear-gradient(180deg, rgba(var(--primary-rgb), 0.03) 0%, var(--bg-card) 100%)' }}>
@@ -290,14 +328,12 @@ export default function MatchDetails() {
                   <Activity size={24} className="text-primary" />
                 </div>
               </div>
-              
               <h3 className="text-primary font-extrabold text-lg">Tactical Insight Pending</h3>
               <p className="text-muted text-sm max-w-400">
                 {match.isLive ? 'Live stats are being tracked. While we wait, ask our AI for tactical insights on this match!' :
                  match.isFinished ? 'Stats data for this match is still syncing. Ask Zoka AI for a full breakdown!' :
                  'Stats will appear here once the match begins. Ask Zoka AI for pre-match analysis!'}
               </p>
-              
               <button 
                 onClick={() => window.dispatchEvent(new CustomEvent('openZokaAI', { detail: { message: `Give me a tactical breakdown and prediction for ${match.homeName} vs ${match.awayName} in the ${match.leagueName}.` } }))} 
                 className="btn btn-primary mt-8 flex-center gap-8"
@@ -308,10 +344,76 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* ✅ NEW AD PLACEMENT (Never above score/title, safely below stats) */}
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 
-          {/* Watch & React */}
+          {/* ═══════════════════════════════════════════════════════════ */}
+          {/* ★ PHASE 12: STATIC HOW-TO SECTION (Guarantees Rich Snippet) */}
+          {/* ═══════════════════════════════════════════════════════════ */}
+          <div className="glass-card p-24 mb-24 mt-24">
+            <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
+              <HelpCircle size={18} /> How to Predict & Analyze This Match
+            </h2>
+            <ol className="flex-col gap-12 text-secondary text-sm pl-16" style={{listStyle: 'decimal'}}>
+              <li><strong className="text-primary">Check Head-to-Head:</strong> Review the historical results and recent form of {match.homeName} and {match.awayName} below.</li>
+              <li><strong className="text-primary">Analyze Tactics:</strong> Use the Zoka AI button to generate a tactical breakdown of team formations and key player matchups.</li>
+              <li><strong className="text-primary">Monitor Live Stats:</strong> Once the match starts, track possession, shots on target, and momentum shifts in real-time.</li>
+              <li><strong className="text-primary">Lock Your Prediction:</strong> Head to the Predictions hub to submit your exact score prediction and earn leaderboard points.</li>
+            </ol>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════ */}
+          {/* ★ PHASE 13: INTERNAL LINKING WEB (H2H & Recent Form)       */}
+          {/* ═══════════════════════════════════════════════════════════ */}
+          <div className="glass-card p-24 mb-24 mt-24">
+            <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
+              <TrendingUp size={18} /> Head-to-Head & Recent Form
+            </h2>
+            
+            <div className="grid gap-24" style={{gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))'}}>
+              <div>
+                <h3 className="text-muted text-xs font-bold uppercase mb-12 flex-center gap-4">
+                  {match.homeLogo && <img src={match.homeLogo} alt="" width="14" height="14" />}
+                  {match.homeName} - Last 5 Matches
+                </h3>
+                <ul className="flex-col gap-8" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                  {homeResults.length > 0 ? homeResults.map(m => (
+                    <li key={m.id}>
+                      <Link to={buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name)} className="flex-between items-center p-8 bg-surface rounded-md border hover:border-primary transition-colors text-sm" style={{textDecoration: 'none', color: 'inherit'}}>
+                        <span className="truncate pr-8">
+                          <span className="font-bold">{m.homeName || m.homeTeam?.name}</span>
+                          <span className="text-muted mx-4">vs</span>
+                          <span className="font-bold">{m.awayName || m.awayTeam?.name}</span>
+                        </span>
+                        <span className="text-primary font-extrabold whitespace-nowrap">{m.homeScore} - {m.awayScore}</span>
+                      </Link>
+                    </li>
+                  )) : <li className="text-muted text-sm">No recent results found.</li>}
+                </ul>
+              </div>
+
+              <div>
+                <h3 className="text-muted text-xs font-bold uppercase mb-12 flex-center gap-4">
+                  {match.awayLogo && <img src={match.awayLogo} alt="" width="14" height="14" />}
+                  {match.awayName} - Last 5 Matches
+                </h3>
+                <ul className="flex-col gap-8" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                  {awayResults.length > 0 ? awayResults.map(m => (
+                    <li key={m.id}>
+                      <Link to={buildMatchRoute(m.id, m.homeName || m.homeTeam?.name, m.awayName || m.awayTeam?.name)} className="flex-between items-center p-8 bg-surface rounded-md border hover:border-primary transition-colors text-sm" style={{textDecoration: 'none', color: 'inherit'}}>
+                        <span className="truncate pr-8">
+                          <span className="font-bold">{m.homeName || m.homeTeam?.name}</span>
+                          <span className="text-muted mx-4">vs</span>
+                          <span className="font-bold">{m.awayName || m.awayTeam?.name}</span>
+                        </span>
+                        <span className="text-primary font-extrabold whitespace-nowrap">{m.homeScore} - {m.awayScore}</span>
+                      </Link>
+                    </li>
+                  )) : <li className="text-muted text-sm">No recent results found.</li>}
+                </ul>
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-16 mb-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-primary font-bold flex-center gap-8 mb-8"><Tv size={16} /> Where to Watch</h3>

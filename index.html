@@ -4,10 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
-  <!-- ★ SEO FIX: All Title, Meta, Canonical, and OG tags removed from here. 
-       React Helmet (SEO.jsx) will inject them dynamically per route to prevent 
-       the "Crawled - Currently Not Indexed" duplicate content trap. -->
-
   <meta name="application-name" content="ZOKASCORE" />
   <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark light" />
@@ -27,6 +23,9 @@
   <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="ZOKASCORE" />
   <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
 
+  <!-- ★ CORE WEB VITALS: Preload Critical Font & API DNS -->
+  <link rel="preload" href="https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2" as="font" type="font/woff2" crossorigin />
+  
   <link rel="dns-prefetch" href="//fonts.googleapis.com" />
   <link rel="dns-prefetch" href="//fonts.gstatic.com" />
   <link rel="dns-prefetch" href="//api.zokascore.xyz" />
@@ -39,6 +38,22 @@
   <link rel="stylesheet" href="/loader.css" />
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- ★ VALIDATION FIX: Default JSON-LD to satisfy validate-deployment.js -->
+  <!-- React Helmet will inject page-specific schemas, but this prevents the build warning -->
+  <script type="application/ld+json" id="default-schema">
+    {
+      "@context": "https://schema.org",
+      "@type": "WebSite",
+      "name": "ZOKASCORE",
+      "url": "https://zokascore.xyz",
+      "potentialAction": {
+        "@type": "SearchAction",
+        "target": "https://zokascore.xyz/search?q={search_term_string}",
+        "query-input": "required name=search_term_string"
+      }
+    }
+  </script>
 
   <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
@@ -71,7 +86,25 @@
     <div id="loader-status-text" class="loader-status-text">Initializing...</div>
   </div>
 
+  <!-- ★ VALIDATION FIX: Exact empty root div to satisfy validate-deployment.js -->
   <div id="root"></div>
+
+  <!-- ★ PHASE 9: SEO Fallback for non-JS crawlers (Safe inside noscript) -->
+  <noscript>
+    <div style="padding: 20px; font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; color: #ffffff; background: #05070a;">
+      <h1 style="font-size: 24px; margin-bottom: 10px;">Live Football Scores, Fixtures, Results & Predictions</h1>
+      <p style="color: #94a3b8; margin-bottom: 20px;">Welcome to ZOKASCORE. Track today's football fixtures, make AI-powered predictions, and follow live scores from leagues worldwide.</p>
+      <nav aria-label="Primary Navigation" style="display: flex; gap: 15px; flex-wrap: wrap;">
+        <a href="/fixtures" style="color: #16c784; font-weight: bold;">Today's Fixtures</a>
+        <a href="/predictions" style="color: #16c784; font-weight: bold;">Match Predictions</a>
+        <a href="/league/39/premier-league" style="color: #16c784;">Premier League</a>
+        <a href="/league/140/la-liga" style="color: #16c784;">La Liga</a>
+        <a href="/league/2/champions-league" style="color: #16c784;">Champions League</a>
+        <a href="/team/33/manchester-united" style="color: #16c784;">Manchester United</a>
+        <a href="/team/541/real-madrid" style="color: #16c784;">Real Madrid</a>
+      </nav>
+    </div>
+  </noscript>
 
   <script>
     (function() {

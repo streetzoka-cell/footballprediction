@@ -3,6 +3,7 @@
 export const ROUTES = Object.freeze({
   HOME: '/',
   FIXTURES: '/fixtures',
+  RESULTS: '/results', // ★ PHASE 8: Added Results Archive
   PREDICTIONS: '/predictions',
   MASTERGAMES: '/mastergames',
   BASKETBALL: '/basketball',
@@ -13,7 +14,7 @@ export const ROUTES = Object.freeze({
   LOGIN: '/login',
   PROFILE: '/profile',
   ADMIN: '/zks-admin-8f9x2-control-panel',
-  STUDIO: '/studio', // ★ ADDED STUDIO
+  STUDIO: '/studio',
   ABOUT: '/about',
   FAQ: '/faq',
   HELP: '/help-center',
@@ -34,6 +35,10 @@ export const buildTeamRoute = (teamId, teamName) =>
 
 export const buildLeagueRoute = (leagueId, leagueName) => 
   `/league/${leagueId}/${slugify(leagueName)}`;
+
+// ★ PHASE 7: Added /competition/ route builder
+export const buildCompetitionRoute = (leagueId, leagueName) => 
+  `/competition/${leagueId}/${slugify(leagueName)}`;
 
 export const buildHighlightRoute = (postId, title) => 
   `/highlights/${slugify(title)}-${postId}`;

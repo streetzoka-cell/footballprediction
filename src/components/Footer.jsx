@@ -16,7 +16,7 @@ const sections = [
       { label: "Leaderboard", to: "/leaderboard" },
       { label: "Highlights", to: "/highlights" },
       { label: "Live Stream", to: "/livestream" },
-      { label: "Creator Studio", to: "/studio" }, // ★ ADDED STUDIO
+      { label: "Creator Studio", to: "/studio" },
     ],
   },
   {
@@ -71,7 +71,6 @@ export default function Footer() {
 
   useEffect(() => {
     if (window.matchMedia('(display-mode: standalone)').matches) setIsInstalled(true);
-    
     const onInstallable = () => setCanInstall(true);
     window.addEventListener('pwaInstallable', onInstallable);
     return () => window.removeEventListener('pwaInstallable', onInstallable);
@@ -187,16 +186,50 @@ export default function Footer() {
           ))}
         </nav>
 
-        {/* 4. SEO Links Section */}
-        <nav className="glass-card p-16 flex-col gap-12" aria-label="Top Competitions">
-          <h5 className="text-muted font-bold" style={{ fontSize: 'var(--fs-xs)' }}>TOP COMPETITIONS</h5>
-          <ul className="flex gap-8 flex-wrap" style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {topLeagues.map(l => (
-              <li key={l.to}>
-                <Link to={l.to} className="badge badge-muted hover:badge-primary transition-colors">{l.label}</Link>
-              </li>
-            ))}
-          </ul>
+        {/* ═══════════════════════════════════════════════════════════ */}
+        {/* ★ PHASE 16: EXPLORE ZOKASCORE (Semantic Mega-Directory)    */}
+        {/* Uses standard <a> tags for maximum SEO link equity transfer */}
+        {/* ═══════════════════════════════════════════════════════════ */}
+        <nav className="glass-card p-20 mb-24" aria-label="Explore ZOKASCORE Directory">
+          <h3 className="text-primary font-bold text-lg mb-16 text-center">Explore ZOKASCORE</h3>
+          <div className="grid gap-16" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))' }}>
+             <div>
+               <h4 className="text-muted text-xs font-bold uppercase mb-8">Live Data</h4>
+               <ul className="flex-col gap-4 text-sm" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                 <li><a href="/fixtures" className="text-secondary hover:text-primary">Live Scores</a></li>
+                 <li><a href="/results" className="text-secondary hover:text-primary">Historical Results</a></li>
+                 <li><a href="/predictions" className="text-secondary hover:text-primary">AI Predictions</a></li>
+                 <li><a href="/leaderboard" className="text-secondary hover:text-primary">Leaderboards</a></li>
+               </ul>
+             </div>
+             <div>
+               <h4 className="text-muted text-xs font-bold uppercase mb-8">Top Leagues</h4>
+               <ul className="flex-col gap-4 text-sm" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                 <li><a href="/league/39/premier-league" className="text-secondary hover:text-primary">Premier League</a></li>
+                 <li><a href="/league/140/la-liga" className="text-secondary hover:text-primary">La Liga</a></li>
+                 <li><a href="/league/2/uefa-champions-league" className="text-secondary hover:text-primary">Champions League</a></li>
+                 <li><a href="/league/135/serie-a" className="text-secondary hover:text-primary">Serie A</a></li>
+               </ul>
+             </div>
+             <div>
+               <h4 className="text-muted text-xs font-bold uppercase mb-8">Popular Teams</h4>
+               <ul className="flex-col gap-4 text-sm" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                 <li><a href="/team/33/manchester-united" className="text-secondary hover:text-primary">Man Utd</a></li>
+                 <li><a href="/team/40/liverpool" className="text-secondary hover:text-primary">Liverpool</a></li>
+                 <li><a href="/team/541/real-madrid" className="text-secondary hover:text-primary">Real Madrid</a></li>
+                 <li><a href="/team/529/barcelona" className="text-secondary hover:text-primary">Barcelona</a></li>
+               </ul>
+             </div>
+             <div>
+               <h4 className="text-muted text-xs font-bold uppercase mb-8">Tools & Knowledge</h4>
+               <ul className="flex-col gap-4 text-sm" style={{listStyle: 'none', padding: 0, margin: 0}}>
+                 <li><a href="/studio" className="text-secondary hover:text-primary">Creator Studio</a></li>
+                 <li><a href="/football-knowledge" className="text-secondary hover:text-primary">Football Laws</a></li>
+                 <li><a href="/faq" className="text-secondary hover:text-primary">FAQ</a></li>
+                 <li><a href="/highlights" className="text-secondary hover:text-primary">News & Highlights</a></li>
+               </ul>
+             </div>
+          </div>
         </nav>
 
         {/* 5. Bottom Bar */}
