@@ -1,7 +1,4 @@
 {
-  "functions": {
-    "api/ssr.js": {}
-  },
   "rewrites": [
     {
       "source": "/sitemap.xml",
