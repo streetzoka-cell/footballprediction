@@ -156,6 +156,10 @@ export const footballApi = {
     return fetchJSON(`${API_BASE}/results${query ? `?${query}` : ''}`);
   }),
 
+    // ★ NEW: AI Lab & ML Triggers
+  adminTriggerFeatureGen: () => monitorApiCall('POST /admin/ai-lab/generate-features', () => authFetchJSON(`${API_BASE}/admin/ai-lab/generate-features`, { method: 'POST' })),
+  
+
   getFeatured: (date) => monitorApiCall(`GET /featured?date=${date}`, () => fetchJSON(`${API_BASE}/featured?date=${encodeURIComponent(date)}`)),
   getZokaPicks: (date) => monitorApiCall(`GET /zoka-picks?date=${date}`, () => fetchJSON(`${API_BASE}/zoka-picks?date=${encodeURIComponent(date)}`)),
 

@@ -332,7 +332,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} />}
+                {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} toast={showToast} />}
         {tab === 'analytics' && <AnalyticsTab toast={showToast} />}
         {tab === 'logs' && <LogsTab />}
         {tab === 'zoka' && <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />}
