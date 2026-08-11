@@ -106,12 +106,7 @@ export default function MatchDetails() {
   const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
   const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
 
-  const { data: h2hData } = useQuery({
-    queryKey: ['h2h', homeTeamId, awayTeamId],
-    queryFn: () => footballApi.getH2H(homeTeamId, awayTeamId),
-    enabled: !!homeTeamId && !!awayTeamId,
-    staleTime: 1000 * 60 * 60 * 24,
-  });
+
 
   const { data: homeResults = [] } = useQuery({
     queryKey: ['team-results', homeTeamId],
