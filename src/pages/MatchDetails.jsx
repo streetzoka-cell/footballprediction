@@ -81,7 +81,7 @@ export default function MatchDetails() {
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
 
-  // ★ FIX: Fallback to fetching directly from API if match is older than 1 day
+  // Fallback to fetching directly from API if match is older than 1 day
   const { data: fallbackMatchData } = useQuery({
     queryKey: ['match-details-fallback', matchId],
     queryFn: () => footballApi.getMatchDetails(matchId).then(res => res?.data || null),
@@ -106,23 +106,21 @@ export default function MatchDetails() {
   const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
   const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
 
-
-
   const { data: homeResults = [] } = useQuery({
     queryKey: ['team-results', homeTeamId],
-    queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 6 }).then(res => res.data || []),
+    queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 5 }).then(res => res.data || []),
     enabled: !!homeTeamId,
     staleTime: 1000 * 60 * 60,
   });
 
   const { data: awayResults = [] } = useQuery({
     queryKey: ['team-results', awayTeamId],
-    queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 6 }).then(res => res.data || []),
+    queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 5 }).then(res => res.data || []),
     enabled: !!awayTeamId,
     staleTime: 1000 * 60 * 60,
   });
 
-  // ★ NEW: Fetch Deep Match Intelligence
+  // Fetch Deep Match Intelligence (Elo, Form, Goal Patterns, H2H history, Strong Pick)
   const { data: intelData } = useQuery({
     queryKey: ['match-intel', match?.homeName, match?.awayName],
     queryFn: () => footballApi.getMatchIntelligence(match.homeName, match.awayName).then(res => res?.data || null),
@@ -270,7 +268,8 @@ export default function MatchDetails() {
             </div>
           )}
 
-          <div className="md-pro-grid">
+          {/* Match Context Only (Standings moved to bottom) */}
+          <div className="md-pro-grid" style={{ gridTemplateColumns: '1fr' }}>
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><MapPin size={12} /> Match Context</h3>
               <div className="flex-col gap-12">
@@ -297,28 +296,9 @@ export default function MatchDetails() {
                 )}
               </div>
             </div>
-            
-            <div className="glass-card p-20 flex-col gap-12">
-              <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><Users size={12} /> League Standing</h3>
-              {standingsTable.length > 0 ? (
-                <div className="flex-col gap-4">
-                  {standingsTable.slice(0, 5).map((team, i) => (
-                    <Link key={team.team?.id || i} to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-between items-center p-8 hover:bg-card-hover rounded-md transition-colors" style={{ textDecoration: 'none', color: 'inherit' }}>
-                      <span className="text-muted font-bold w-6 text-center">{team.rank || i + 1}</span>
-                      <div className="flex-center gap-8 flex-1 min-w-0">
-                        {team.team?.logo && <img src={team.team?.logo} alt="" width="18" height="18" />}
-                        <span className="text-primary font-bold text-sm truncate">{team.team?.name || 'TBD'}</span>
-                      </div>
-                      <span className="text-primary font-extrabold text-sm">{team.points} <small className="text-muted font-normal">pts</small></span>
-                    </Link>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-muted text-sm text-center py-8">Standings data loading...</div>
-              )}
-            </div>
           </div>
 
+          {/* Match Statistics / Pending */}
           {match.hasRealStats ? (
             <div className="glass-card p-24 mb-24 mt-24">
               <h2 className="text-primary font-bold flex-center gap-8 mb-24"><BarChart3 size={18} /> Match Statistics</h2>
@@ -354,10 +334,10 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* ★ NEW: ZOKA MATCH INTELLIGENCE (Elo, Form, Goal Patterns, H2H History) */}
+          {/* ZOKA MATCH INTELLIGENCE (Includes Strong Pick, Elo, Form, Goal Patterns, H2H summary) */}
           <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} />
 
-          {/* ★ NEW: DEDICATED ODDS SECTION (With Fallbacks) */}
+          {/* DEDICATED ODDS SECTION (With Fallbacks) */}
           <div className="glass-card p-24 mb-24 mt-24">
             <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
               <Shield size={18} /> Betting Odds & Markets
@@ -394,18 +374,28 @@ export default function MatchDetails() {
 
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 
-          <div className="glass-card p-24 mb-24 mt-24">
-            <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
-              <HelpCircle size={18} /> How to Predict & Analyze This Match
-            </h2>
-            <ol className="flex-col gap-12 text-secondary text-sm pl-16" style={{listStyle: 'decimal'}}>
-              <li><strong className="text-primary">Check Head-to-Head:</strong> Review the historical results and recent form of {match.homeName} and {match.awayName} below.</li>
-              <li><strong className="text-primary">Analyze Tactics:</strong> Use the Zoka AI button to generate a tactical breakdown of team formations and key player matchups.</li>
-              <li><strong className="text-primary">Monitor Live Stats:</strong> Once the match starts, track possession, shots on target, and momentum shifts in real-time.</li>
-              <li><strong className="text-primary">Lock Your Prediction:</strong> Head to the Predictions hub to submit your exact score prediction and earn leaderboard points.</li>
-            </ol>
+          {/* ★ MOVED: LEAGUE STANDING TO BOTTOM */}
+          <div className="glass-card p-20 flex-col gap-12 mb-24 mt-24">
+            <h3 className="text-muted text-xs font-bold uppercase flex-center gap-4 mb-8"><Users size={12} /> League Standing</h3>
+            {standingsTable.length > 0 ? (
+              <div className="flex-col gap-4">
+                {standingsTable.slice(0, 5).map((team, i) => (
+                  <Link key={team.team?.id || i} to={buildTeamRoute(team.team?.id, team.team?.name)} className="flex-between items-center p-8 hover:bg-card-hover rounded-md transition-colors" style={{ textDecoration: 'none', color: 'inherit' }}>
+                    <span className="text-muted font-bold w-6 text-center">{team.rank || i + 1}</span>
+                    <div className="flex-center gap-8 flex-1 min-w-0">
+                      {team.team?.logo && <img src={team.team?.logo} alt="" width="18" height="18" />}
+                      <span className="text-primary font-bold text-sm truncate">{team.team?.name || 'TBD'}</span>
+                    </div>
+                    <span className="text-primary font-extrabold text-sm">{team.points} <small className="text-muted font-normal">pts</small></span>
+                  </Link>
+                ))}
+              </div>
+            ) : (
+              <div className="text-muted text-sm text-center py-8">Standings data loading...</div>
+            )}
           </div>
 
+          {/* H2H & Recent Form (Full List) */}
           <div className="glass-card p-24 mb-24 mt-24">
             <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
               <TrendingUp size={18} /> Head-to-Head & Recent Form
@@ -456,6 +446,20 @@ export default function MatchDetails() {
             </div>
           </div>
 
+          {/* How to Predict Guide */}
+          <div className="glass-card p-24 mb-24 mt-24">
+            <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
+              <HelpCircle size={18} /> How to Predict & Analyze This Match
+            </h2>
+            <ol className="flex-col gap-12 text-secondary text-sm pl-16" style={{listStyle: 'decimal'}}>
+              <li><strong className="text-primary">Check Head-to-Head:</strong> Review the historical results and recent form of {match.homeName} and {match.awayName} above.</li>
+              <li><strong className="text-primary">Analyze Tactics:</strong> Use the Zoka AI button to generate a tactical breakdown of team formations and key player matchups.</li>
+              <li><strong className="text-primary">Monitor Live Stats:</strong> Once the match starts, track possession, shots on target, and momentum shifts in real-time.</li>
+              <li><strong className="text-primary">Lock Your Prediction:</strong> Head to the Predictions hub to submit your exact score prediction and earn leaderboard points.</li>
+            </ol>
+          </div>
+
+          {/* Where to Watch / CTA */}
           <div className="grid gap-16 mb-24" style={{ gridTemplateColumns: '1fr 1fr' }}>
             <div className="glass-card p-20 flex-col gap-12">
               <h3 className="text-primary font-bold flex-center gap-8 mb-8"><Tv size={16} /> Where to Watch</h3>

@@ -108,16 +108,18 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   const hasRealStats = !!(stats.possession || stats.shots || stats.shotsOnTarget || stats.corners);
 
-  // ★ NEW: Safely extract Odds
-  const rawOdds = raw.odds || raw.bookmakers?.[0]?.bets?.find(b => b.id === 1)?.values || null;
-  const odds = rawOdds && rawOdds.home ? {
-    home: rawOdds.home,
-    draw: rawOdds.draw,
-    away: rawOdds.away,
-    over25: rawOdds.over_25 || rawOdds.over25,
-    under25: rawOdds.under_25 || rawOdds.under25
+    // ★ FIX: Robustly extract Odds from various API payload shapes
+  const rawOdds = raw.odds || raw.bookmakers?.[0]?.bets?.find(b => b.id === 1)?.values || raw.bets?.find(b => b.id === 1)?.values || null;
+  
+  const odds = rawOdds ? {
+    home: rawOdds.find(v => v.value === 'Home')?.odd || rawOdds.home,
+    draw: rawOdds.find(v => v.value === 'Draw')?.odd || rawOdds.draw,
+    away: rawOdds.find(v => v.value === 'Away')?.odd || rawOdds.away,
+    over25: raw.odds?.over_25 || raw.odds?.over25,
+    under25: raw.odds?.under_25 || raw.odds?.under25
   } : null;
 
+  
   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',

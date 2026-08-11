@@ -1,14 +1,14 @@
 import React from 'react';
-import { Brain, TrendingUp, BarChart2, Swords, Shield } from 'lucide-react';
+import { Brain, TrendingUp, BarChart2, Swords, Shield, Zap, Target } from 'lucide-react';
 
 const FormGuide = ({ form }) => {
   if (!form || form.length === 0) return <span className="text-muted text-sm">No recent form</span>;
   return (
-    <div className="flex gap-4">
+    <div className="flex gap-4 flex-wrap">
       {form.map((m, i) => {
         const color = m.res === 'W' ? 'var(--success)' : m.res === 'D' ? 'var(--gold)' : 'var(--danger)';
         return (
-          <div key={i} style={{ background: color, width: '20px', height: '20px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px', fontWeight: 'bold' }}>
+          <div key={i} style={{ background: color, width: '24px', height: '24px', borderRadius: '4px', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '11px', fontWeight: 'bold' }}>
             {m.res}
           </div>
         );
@@ -32,7 +32,7 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
     );
   }
 
-  const { home, away, h2h } = data;
+  const { home, away, h2h, zokaPick } = data;
 
   // Calculate Win Probability Bar (Simple Elo conversion for visual)
   const totalElo = (home?.elo || 1500) + (away?.elo || 1500);
@@ -45,6 +45,21 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
         <Brain size={20} className="text-primary" aria-hidden="true" />
         <h3 id="match-intel-title" className="text-primary font-bold text-md">Match Intelligence</h3>
       </div>
+
+      {/* ★ NEW: ZOKA STRONG PICK BANNER */}
+      {zokaPick && (
+        <div className="glass-card p-16 flex-col gap-8" style={{ background: 'linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--accent-rgb), 0.05))', border: '1px solid rgba(var(--primary-rgb), 0.2)' }}>
+          <div className="flex-center gap-8 text-primary font-bold text-sm uppercase">
+            <Zap size={14} fill="currentColor" /> Zoka Strong Pick
+          </div>
+          <div className="flex-between items-center">
+            <span className="text-primary font-extrabold text-lg">{zokaPick.market}</span>
+            <span className={`badge ${zokaPick.confidence === 'HIGH' ? 'badge-primary' : zokaPick.confidence === 'MEDIUM' ? 'badge-gold' : 'badge-muted'}`}>
+              {zokaPick.confidence} ({zokaPick.rating}%)
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* Elo & Win Probability */}
       <div className="flex-col gap-8">
