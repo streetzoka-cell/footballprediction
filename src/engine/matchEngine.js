@@ -1,5 +1,4 @@
-﻿// src/engine/matchEngine.js
-import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
+﻿import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -30,24 +29,19 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  // FIXED: More conservative thresholds
-  const FT_THRESHOLD_MS = 3 * 60 * 60 * 1000; // 3 hours
-  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const FT_THRESHOLD_MS = 3 * 60 * 60 * 1000; 
+  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000; 
 
   if (timestamp) {
     const matchStartTime = timestamp * 1000;
     const elapsed = now - matchStartTime;
 
-    // Hide matches older than 24 hours (unless they are already safely finished)
     if (elapsed > HIDE_THRESHOLD_MS && !isFinished) {
       isHidden = true;
       isLive = false;
       isFinished = false;
       status = 'HIDDEN';
-    } 
-    // ★ FIX: Force match to FT after 3 hours, EVEN IF it was never marked live
-    // This prevents lower-tier matches from getting stuck in "Starting soon..."
-    else if (elapsed > FT_THRESHOLD_MS && !isFinished) {
+    } else if (elapsed > FT_THRESHOLD_MS && !isFinished) {
       isLive = false;
       isFinished = true;
       status = 'FT';
@@ -114,6 +108,16 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   const hasRealStats = !!(stats.possession || stats.shots || stats.shotsOnTarget || stats.corners);
 
+  // ★ NEW: Safely extract Odds
+  const rawOdds = raw.odds || raw.bookmakers?.[0]?.bets?.find(b => b.id === 1)?.values || null;
+  const odds = rawOdds && rawOdds.home ? {
+    home: rawOdds.home,
+    draw: rawOdds.draw,
+    away: rawOdds.away,
+    over25: rawOdds.over_25 || rawOdds.over25,
+    under25: rawOdds.under_25 || rawOdds.under25
+  } : null;
+
   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
@@ -160,6 +164,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     category: raw.category || 'NORMAL',
     stats,
     hasRealStats,
+    odds, // ★ NEW: Attach parsed odds
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
     league: { name: leagueName, emblem: leagueLogo, id: raw.leagueId },
@@ -181,7 +186,6 @@ export function formatMinute(min, status) {
   return `${min}'`;
 }
 
-// FIXED: Better smart minute calculation - only extrapolate if data is fresh
 export function applySmartMinute(m, now = Date.now()) {
   if (!m) return m;
   const status = String(m.status || '').toUpperCase();
@@ -208,12 +212,10 @@ export function applySmartMinute(m, now = Date.now()) {
   const apiMinute = m.minute || 0;
   let smartMinute = apiMinute;
 
-  // Only extrapolate if last update is recent (within 2 minutes)
   if (m.updatedAt) {
     const lastUpdateTime = new Date(m.updatedAt).getTime();
     if (!isNaN(lastUpdateTime) && lastUpdateTime > 0) {
       const elapsedSinceUpdateMs = now - lastUpdateTime;
-      // Only extrapolate if update is fresh
       if (elapsedSinceUpdateMs > 0 && elapsedSinceUpdateMs < 120000) {
         const elapsedMins = Math.floor(elapsedSinceUpdateMs / 60000);
         smartMinute = apiMinute + elapsedMins;
@@ -221,7 +223,6 @@ export function applySmartMinute(m, now = Date.now()) {
     }
   }
 
-  // Cap at period limits
   if (status === '1H') smartMinute = Math.min(smartMinute, 50);
   else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 95);
   else if (status === 'ET') smartMinute = Math.min(smartMinute, 125);

@@ -103,8 +103,9 @@ router.get('/', async (req, res) => {
       matches = resultsCache.byTeam[teamId];
     } else if (leagueId && resultsCache.byLeague[leagueId]) {
       matches = resultsCache.byLeague[leagueId];
-    } else {
-      // Default: Last 7 days of all global results
+    } else if (!teamId && !leagueId && !date) {
+      // ★ FIX: Only return global results if NO teamId, leagueId, or date is requested.
+      // If a teamId was requested but not found in cache, return empty [] instead of random global matches!
       const dates = Object.keys(resultsCache.byDate).sort().reverse().slice(0, 7);
       for (const d of dates) matches = matches.concat(resultsCache.byDate[d]);
       matches.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0));

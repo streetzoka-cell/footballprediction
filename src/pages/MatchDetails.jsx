@@ -8,6 +8,7 @@ import {
 
 import SEO from '../components/SEO';
 import AdSlot from '../components/AdSlot'; 
+import MatchIntelligence from '../components/MatchIntelligence';
 import { useFixtures, useStandings } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr, formatTime } from '../utils/dates';
 import { buildMatchRoute, buildTeamRoute, buildLeagueRoute } from '../utils/routes';
@@ -93,7 +94,7 @@ export default function MatchDetails() {
     const found = all.find(m => String(m.id) === String(matchId));
     
     if (found) return applySmartMinute(found, now);
-    if (fallbackMatchData) return normalizeMatch(fallbackMatchData, true, now); // Normalize backend data
+    if (fallbackMatchData) return normalizeMatch(fallbackMatchData, true, now); 
     
     return null;
   }, [todayFx, yestFx, tomFx, matchId, now, fallbackMatchData]);
@@ -114,16 +115,25 @@ export default function MatchDetails() {
 
   const { data: homeResults = [] } = useQuery({
     queryKey: ['team-results', homeTeamId],
-    queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 5 }).then(res => res.data || []),
+    queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 6 }).then(res => res.data || []),
     enabled: !!homeTeamId,
     staleTime: 1000 * 60 * 60,
   });
 
   const { data: awayResults = [] } = useQuery({
     queryKey: ['team-results', awayTeamId],
-    queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 5 }).then(res => res.data || []),
+    queryFn: () => footballApi.getResults({ teamId: awayTeamId, limit: 6 }).then(res => res.data || []),
     enabled: !!awayTeamId,
     staleTime: 1000 * 60 * 60,
+  });
+
+  // ★ NEW: Fetch Deep Match Intelligence
+  const { data: intelData } = useQuery({
+    queryKey: ['match-intel', match?.homeName, match?.awayName],
+    queryFn: () => footballApi.getMatchIntelligence(match.homeName, match.awayName).then(res => res?.data || null),
+    enabled: !!match?.homeName && !!match?.awayName,
+    staleTime: 1000 * 60 * 60,
+    retry: 1,
   });
 
   const [goalFlash, setGoalFlash] = useState(false);
@@ -348,6 +358,44 @@ export default function MatchDetails() {
               </button>
             </div>
           )}
+
+          {/* ★ NEW: ZOKA MATCH INTELLIGENCE (Elo, Form, Goal Patterns, H2H History) */}
+          <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} />
+
+          {/* ★ NEW: DEDICATED ODDS SECTION (With Fallbacks) */}
+          <div className="glass-card p-24 mb-24 mt-24">
+            <h2 className="text-primary font-bold flex-center gap-8 mb-16" style={{justifyContent: 'flex-start'}}>
+              <Shield size={18} /> Betting Odds & Markets
+            </h2>
+            
+            {match.odds && (match.odds.home || match.odds.away) ? (
+              <div className="grid gap-12" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                <div className="text-center p-12 rounded-md" style={{ background: 'rgba(var(--primary-rgb), 0.05)', border: '1px solid rgba(var(--primary-rgb), 0.1)' }}>
+                  <div className="text-muted text-xs font-bold uppercase mb-4">Home Win</div>
+                  <div className="text-primary font-extrabold text-lg">{match.odds.home || '-'}</div>
+                </div>
+                <div className="text-center p-12 rounded-md" style={{ background: 'rgba(var(--gold-rgb), 0.05)', border: '1px solid rgba(var(--gold-rgb), 0.1)' }}>
+                  <div className="text-muted text-xs font-bold uppercase mb-4">Draw</div>
+                  <div className="text-gold font-extrabold text-lg">{match.odds.draw || '-'}</div>
+                </div>
+                <div className="text-center p-12 rounded-md" style={{ background: 'rgba(var(--danger-rgb), 0.05)', border: '1px solid rgba(var(--danger-rgb), 0.1)' }}>
+                  <div className="text-muted text-xs font-bold uppercase mb-4">Away Win</div>
+                  <div className="text-danger font-extrabold text-lg">{match.odds.away || '-'}</div>
+                </div>
+                
+                {/* Over/Under Fallbacks */}
+                <div className="text-center p-8 col-span-3 mt-8 border-t border-border pt-12 flex justify-around text-sm text-muted">
+                  <span>Over 2.5: <strong className="text-secondary">{match.odds.over25 || 'N/A'}</strong></span>
+                  <span>Under 2.5: <strong className="text-secondary">{match.odds.under25 || 'N/A'}</strong></span>
+                </div>
+              </div>
+            ) : (
+              <div className="text-muted text-sm text-center py-12 flex-col gap-8 flex-center">
+                <Shield size={20} className="text-muted opacity-50" />
+                <span>Odds data is currently unavailable for this match.</span>
+              </div>
+            )}
+          </div>
 
           <AdSlot id="match-details-ad-1" mobile={true} desktop={true} />
 

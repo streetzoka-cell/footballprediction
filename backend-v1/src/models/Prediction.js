@@ -1,3 +1,5 @@
+// footballprediction\backend-v1\src\models\Prediction.js
+
 /**
  * @typedef {Object} Prediction
  * @property {string} id

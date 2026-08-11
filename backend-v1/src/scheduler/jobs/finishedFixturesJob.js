@@ -1,7 +1,7 @@
-﻿// backend-v1/src/scheduler/jobs/finishedFixturesJob.js
-const fixtureService = require('../../services/FixtureService');
+﻿const fixtureService = require('../../services/FixtureService');
 const { resolveMatch, rebuildDailyLeaderboard } = require('./resolvePredictionsJob');
 const { submitUrl } = require('../../services/IndexNowService');
+const { archiveMatch } = require('../../services/HistoricalArchiveService'); // ★ NEW IMPORT
 const logger = require('../../utils/logger');
 
 const createSlug = (str) =>
@@ -37,7 +37,7 @@ async function execute(forceFetch = false) {
         const matchDate = match.dateStr || match.date?.split('T')[0];
         if (!matchDate) continue;
 
-        // ★ FIX: Reverted to positional arguments so the resolver doesn't break
+        // 1. Resolve user predictions
         const result = await resolveMatch(
           match.id,
           match.homeScore,
@@ -49,18 +49,20 @@ async function execute(forceFetch = false) {
           resolvedCount++;
           rebuildDates.add(matchDate);
 
-          // ★ PHASE 15: INDEXNOW CASCADE PING
+          // 2. Ping IndexNow
           try {
             const homeSlug = createSlug(match.homeName || match.homeTeam?.name);
             const awaySlug = createSlug(match.awayName || match.awayTeam?.name);
             const leagueSlug = createSlug(match.leagueName || match.league?.name);
             
             submitUrl(`/match/${match.id}/${homeSlug}-vs-${awaySlug}`);
-            
             if (match.homeTeam?.id) submitUrl(`/team/${match.homeTeam.id}/${homeSlug}`);
             if (match.awayTeam?.id) submitUrl(`/team/${match.awayTeam.id}/${awaySlug}`);
             if (match.league?.id) submitUrl(`/league/${match.league.id}/${leagueSlug}`);
           } catch (e) { /* Fail silently */ }
+
+          // ★ NEW: 3. Archive to Historical Database
+          await archiveMatch(match);
         }
       } catch (err) {
         logger.error(`[FinishedFixturesJob] Match ${match.id} failed: ${err.message}`);

@@ -38,10 +38,12 @@ const aiRoutes = require('./routes/v1/ai');
 const knowledgeRoutes = require('./routes/v1/knowledge');
 const kimGapsRoutes = require('./routes/v1/admin/kimGaps');
 
-/*
- * PHASE 8:
- * Historical results archive.
- */
+// ★ NEW INTELLIGENCE & AI LAB ROUTES
+const intelligenceRoutes = require('./routes/v1/intelligence');
+const modelLabRoutes = require('./routes/v1/modelLab');
+const aiLabRoutes = require('./routes/v1/admin/aiLab');
+const MatchIntelligenceService = require('./services/MatchIntelligenceService');
+
 const resultsRoute = require('./routes/v1/results');
 
 const app = express();
@@ -59,9 +61,6 @@ app.disable('x-powered-by');
  * ============================================================
  * SECURITY HEADERS
  * ============================================================
- *
- * This does NOT handle CORS.
- * CORS is configured separately below.
  */
 securityHeaders(app);
 
@@ -75,220 +74,78 @@ const allowedOrigins = new Set([
   'https://zokascore.xyz',
   'https://www.zokascore.xyz',
   'https://zokascore.vercel.app',
-
-  /*
-   * Local development.
-   */
   'http://localhost:5173',
   'http://localhost:3000',
 ]);
 
 const corsOptions = {
   origin(origin, callback) {
-    /*
-     * Requests without Origin:
-     *
-     * - server-to-server
-     * - curl
-     * - health checks
-     * - some native clients
-     *
-     * should still be allowed.
-     */
-    if (!origin) {
-      return callback(null, true);
-    }
-
-    if (allowedOrigins.has(origin)) {
-      return callback(null, true);
-    }
-
+    if (!origin) return callback(null, true);
+    if (allowedOrigins.has(origin)) return callback(null, true);
     logger.warn?.(`[CORS] Blocked origin: ${origin}`);
     console.warn(`[CORS] Blocked origin: ${origin}`);
-
-    /*
-     * Returning an error intentionally blocks unknown origins.
-     */
-    return callback(
-      new Error('Not allowed by CORS')
-    );
+    return callback(new Error('Not allowed by CORS'));
   },
-
   credentials: true,
-
-  methods: [
-    'GET',
-    'POST',
-    'PUT',
-    'PATCH',
-    'DELETE',
-    'OPTIONS',
-  ],
-
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'x-admin-api-key',
-  ],
-
-  exposedHeaders: [
-    'RateLimit-Limit',
-    'RateLimit-Remaining',
-    'RateLimit-Reset',
-  ],
-
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'x-admin-api-key'],
+  exposedHeaders: ['RateLimit-Limit', 'RateLimit-Remaining', 'RateLimit-Reset'],
   optionsSuccessStatus: 204,
 };
 
-/*
- * IMPORTANT:
- *
- * CORS is intentionally registered BEFORE:
- *
- * - rate limiting
- * - API routes
- * - notFound
- * - errorHandler
- *
- * This guarantees that successful API responses and
- * preflight OPTIONS requests receive CORS headers.
- */
 app.use(cors(corsOptions));
-
-/*
- * Explicit OPTIONS handling.
- *
- * The cors middleware normally handles this already, but
- * keeping this explicit makes the API behaviour predictable
- * across reverse proxies and deployments.
- */
 app.options('*', cors(corsOptions));
 
 /*
  * ============================================================
- * REQUEST BODY LIMITS
+ * REQUEST BODY LIMITS & CONTEXT
  * ============================================================
  */
 
-app.use(
-  express.json({
-    limit: '10kb',
-  })
-);
-
-app.use(
-  express.urlencoded({
-    limit: '10kb',
-    extended: true,
-  })
-);
-
-/*
- * ============================================================
- * REQUEST CONTEXT / METRICS
- * ============================================================
- */
-
+app.use(express.json({ limit: '10kb' }));
+app.use(express.urlencoded({ limit: '10kb', extended: true }));
 app.use(requestContext);
 app.use(metricsTracker);
 
-/*
- * ============================================================
- * GATEWAY REQUEST LOGGING
- * ============================================================
- */
-
 app.use((req, res, next) => {
-  const requestId =
-    res.locals.requestId || 'req_unknown';
-
-  const logMsg =
-    `[Gateway] [${requestId}] ` +
-    `${req.method} ${req.originalUrl}`;
-
+  const requestId = res.locals.requestId || 'req_unknown';
+  const logMsg = `[Gateway] [${requestId}] ${req.method} ${req.originalUrl}`;
   logger.info(logMsg);
   addLog(logMsg);
-
   next();
 });
 
 /*
  * ============================================================
- * GLOBAL RATE LIMITER
+ * GLOBAL RATE LIMITERS
  * ============================================================
- *
- * 100 requests/minute/IP baseline.
- *
- * CORS is already installed above, so even rate-limit
- * responses generated here can retain the correct CORS
- * headers for allowed browser origins.
  */
+
 const globalLimiter = rateLimit({
   windowMs: 60 * 1000,
-
   max: 100,
-
   standardHeaders: true,
-
   legacyHeaders: false,
-
-  message: {
-    success: false,
-    error: 'Too many requests. Please slow down.',
-  },
+  message: { success: false, error: 'Too many requests. Please slow down.' },
 });
-
 app.use(globalLimiter);
-
-/*
- * ============================================================
- * PUBLIC WRITE LIMITER
- * ============================================================
- */
 
 const publicWriteLimiter = createRateLimit({
   windowMs: 60 * 1000,
-
   max: 30,
-
   keyPrefix: 'api-public-write',
-
-  message:
-    'Too many write requests. Please slow down.',
+  message: 'Too many write requests. Please slow down.',
 });
 
 app.use('/api/v1', (req, res, next) => {
-  /*
-   * Admin requests use their own auditing/security path.
-   */
-  if (req.originalUrl.includes('/admin')) {
-    return next();
-  }
-
-  /*
-   * Only write operations consume this additional limiter.
-   */
-  if (
-    ['POST', 'PUT', 'PATCH', 'DELETE'].includes(
-      req.method
-    )
-  ) {
+  if (req.originalUrl.includes('/admin')) return next();
+  if (['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) {
     return publicWriteLimiter(req, res, next);
   }
-
   next();
 });
 
-/*
- * ============================================================
- * ADMIN AUDIT LOGGING
- * ============================================================
- */
-
-app.use(
-  '/api/v1/admin',
-  auditAdminRequests
-);
+app.use('/api/v1/admin', auditAdminRequests);
 
 /*
  * ============================================================
@@ -296,69 +153,38 @@ app.use(
  * ============================================================
  */
 
-app.use(
-  '/api/v1/health',
-  healthRoute
-);
+app.use('/api/v1/health', healthRoute);
+app.use('/api/v1/matches', matchesRoute);
+app.use('/api/v1/match', matchRoute);
+app.use('/api/v1/teams', teamsRoute);
+app.use('/api/v1/standings', standingsRoute);
+app.use('/api/v1/leagues', leaguesRoute);
+app.use('/api/v1/predictions', predictionsRoute);
+app.use('/api/v1/queue', queueRoute);
+app.use('/api/v1/featured', featuredRoute);
+app.use('/api/v1/zoka-picks', zokaPicksRoute);
+app.use('/api/v1/leaderboard', leaderboardRoute);
+app.use('/api/v1/results', resultsRoute);
 
-app.use(
-  '/api/v1/matches',
-  matchesRoute
-);
+// ★ MOUNT INTELLIGENCE & MODEL LAB ROUTES
+app.use('/api/v1/intelligence', intelligenceRoutes);
+app.use('/api/v1/models', modelLabRoutes);
 
-app.use(
-  '/api/v1/match',
-  matchRoute
-);
-
-app.use(
-  '/api/v1/teams',
-  teamsRoute
-);
-
-app.use(
-  '/api/v1/standings',
-  standingsRoute
-);
-
-app.use(
-  '/api/v1/leagues',
-  leaguesRoute
-);
-
-app.use(
-  '/api/v1/predictions',
-  predictionsRoute
-);
-
-app.use(
-  '/api/v1/queue',
-  queueRoute
-);
-
-app.use(
-  '/api/v1/featured',
-  featuredRoute
-);
-
-app.use(
-  '/api/v1/zoka-picks',
-  zokaPicksRoute
-);
-
-app.use(
-  '/api/v1/leaderboard',
-  leaderboardRoute
-);
-
-/*
- * PHASE 8:
- * Historical results API.
- */
-app.use(
-  '/api/v1/results',
-  resultsRoute
-);
+// ★ MOUNT DYNAMIC MATCH INTELLIGENCE ENDPOINT
+// This serves deep H2H, Form, Goal Patterns, and Elo for any fixture
+app.get('/api/v1/match-intelligence', async (req, res) => {
+  try {
+    const { home, away } = req.query;
+    if (!home || !away) {
+      return res.status(400).json({ success: false, error: 'Home and Away team names are required.' });
+    }
+    const intel = await MatchIntelligenceService.getMatchIntelligence(home, away);
+    res.json({ success: true, data: intel });
+  } catch (err) {
+    logger.error(`[Match Intel Route] Error: ${err.message}`);
+    res.status(500).json({ success: false, error: 'Failed to load match intelligence.' });
+  }
+});
 
 /*
  * ============================================================
@@ -366,30 +192,12 @@ app.use(
  * ============================================================
  */
 
-app.use(
-  '/api/v1/admin/schedulers',
-  adminSchedulers
-);
-
-app.use(
-  '/api/v1/admin/leaderboards',
-  leaderboardRoutes
-);
-
-app.use(
-  '/api/v1/monitoring',
-  monitoringDashboard
-);
-
-app.use(
-  '/api/v1/admin/monitoring',
-  monitoringDashboard
-);
-
-app.use(
-  '/api/v1/admin/kim',
-  kimGapsRoutes
-);
+app.use('/api/v1/admin/schedulers', adminSchedulers);
+app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
+app.use('/api/v1/admin/monitoring', monitoringDashboard);
+app.use('/api/v1/admin/kim', kimGapsRoutes);
+app.use('/api/v1/admin/ai-lab', aiLabRoutes); // ★ MOUNT AI LAB
+app.use('/api/v1/monitoring', monitoringDashboard);
 
 /*
  * ============================================================
@@ -397,118 +205,47 @@ app.use(
  * ============================================================
  */
 
-app.use(
-  '/api/v1/ai',
-  aiRoutes
-);
-
-app.use(
-  '/api/v1/knowledge',
-  knowledgeRoutes
-);
+app.use('/api/v1/ai', aiRoutes);
+app.use('/api/v1/knowledge', knowledgeRoutes);
 
 /*
  * ============================================================
- * SITEMAPS
+ * SITEMAPS & STATIC DATA
  * ============================================================
  */
 
-// ★ FIX: Mount at root '/' so the router can properly match /sitemap.xml and /sitemaps/:type
 app.use(sitemapRoute);
 
-/*
- * ============================================================
- * STATIC PUBLIC JSON DATA
- * ============================================================
- *
- * Keep the explicit results route BEFORE express.static().
- * This allows the backend to return a valid empty response
- * when the requested results file doesn't exist.
- */
-
-app.get(
-  '/api/v1/data/results/:date.json',
-  (req, res) => {
-    const date = req.params.date;
-
-    const filePath = path.join(
-      process.cwd(),
-      'public_data',
-      'results',
-      `${date}.json`
-    );
-
-    if (!fs.existsSync(filePath)) {
-      return res.json({
-        success: true,
-        data: [],
-        count: 0,
-        date,
-        message: 'No finished matches yet',
-      });
-    }
-
-    return res.sendFile(filePath);
+app.get('/api/v1/data/results/:date.json', (req, res) => {
+  const date = req.params.date;
+  const filePath = path.join(process.cwd(), 'public_data', 'results', `${date}.json`);
+  if (!fs.existsSync(filePath)) {
+    return res.json({ success: true, data: [], count: 0, date, message: 'No finished matches yet' });
   }
-);
+  return res.sendFile(filePath);
+});
 
-/*
- * Static JSON data.
- */
 app.use(
   '/api/v1/data',
-  express.static(
-    path.join(
-      process.cwd(),
-      'public_data'
-    ),
-    {
-      setHeaders: (res, filePath) => {
-        if (!filePath.endsWith('.json')) {
-          return;
-        }
-
-        /*
-         * Live data needs very short caching because
-         * scores change frequently.
-         */
-        if (
-          filePath.endsWith('live.json')
-        ) {
-          res.setHeader(
-            'Cache-Control',
-            'public, max-age=15'
-          );
-
-          return;
-        }
-
-        /*
-         * Fixtures/results/etc can be cached longer.
-         */
-        res.setHeader(
-          'Cache-Control',
-          'public, max-age=900'
-        );
-      },
-    }
-  )
+  express.static(path.join(process.cwd(), 'public_data'), {
+    setHeaders: (res, filePath) => {
+      if (!filePath.endsWith('.json')) return;
+      if (filePath.endsWith('live.json')) {
+        res.setHeader('Cache-Control', 'public, max-age=15');
+        return;
+      }
+      res.setHeader('Cache-Control', 'public, max-age=900');
+    },
+  })
 );
 
 /*
  * ============================================================
- * 404
+ * 404 & ERROR HANDLER (MUST BE LAST)
  * ============================================================
  */
 
 app.use(notFound);
-
-/*
- * ============================================================
- * GLOBAL ERROR HANDLER
- * ============================================================
- */
-
 app.use(errorHandler);
 
 module.exports = app;

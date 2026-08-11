@@ -3,9 +3,12 @@ const path = require('path');
 const logger = require('../utils/logger');
 
 const KNOWLEDGE_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football');
+const ENTITIES_DIR = path.join(KNOWLEDGE_DIR, 'entities');
 const GAPS_LOG_PATH = path.join(process.cwd(), 'logs', 'kim_knowledge_gaps.json');
 
 let KNOWLEDGE_GRAPH_CACHE = null;
+let TEAM_INTEL_CACHE = null;
+let RECORDS_CACHE = null;
 
 function loadKnowledgeGraph() {
   if (KNOWLEDGE_GRAPH_CACHE) return KNOWLEDGE_GRAPH_CACHE;
@@ -32,8 +35,32 @@ function loadKnowledgeGraph() {
   };
 
   readDirRecursive(KNOWLEDGE_DIR);
-  logger.info(`[KimEngine] Loaded ${KNOWLEDGE_GRAPH_CACHE.length} concepts into Knowledge Graph.`);
+  logger.info(`[KimEngine] Loaded ${KNOWLEDGE_GRAPH_CACHE.length} core concepts into Knowledge Graph.`);
   return KNOWLEDGE_GRAPH_CACHE;
+}
+
+// ★ NEW: Load Team Intelligence and Records dynamically
+function loadTeamIntel(teamSlug) {
+  if (!fs.existsSync(ENTITIES_DIR)) return null;
+  const filePath = path.join(ENTITIES_DIR, 'team_intelligence', `${teamSlug}.json`);
+  if (fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (e) { return null; }
+  }
+  return null;
+}
+
+function loadH2H(teamASlug, teamBSlug) {
+  if (!fs.existsSync(ENTITIES_DIR)) return null;
+  const teams = [teamASlug, teamBSlug].sort();
+  const filePath = path.join(ENTITIES_DIR, 'h2h', `${teams[0]}_${teams[1]}.json`);
+  if (fs.existsSync(filePath)) {
+    try {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    } catch (e) { return null; }
+  }
+  return null;
 }
 
 class KimLocalEngine {
@@ -45,6 +72,10 @@ class KimLocalEngine {
     return text.toLowerCase().replace(/[^\w\s]/gi, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  slugify(text) {
+    return this.normalizeText(text).replace(/\s+/g, '_');
+  }
+
   containsPhrase(text, phrase) {
     const escaped = phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
@@ -53,8 +84,12 @@ class KimLocalEngine {
   detectIntent(message) {
     const msg = this.normalizeText(message);
 
+    if (/\b(vs|versus|head to head|h2h)\b/.test(msg)) return 'h2h';
+    if (/\b(top scorer|golden boot|top goalscorer|all time top)\b/.test(msg)) return 'top_scorers_competition';
+    if (/\b(form|recent results|last 5|last 10|how are they doing)\b/.test(msg)) return 'team_form';
+    if (/\b(elo|strength|how good are|win rate|stats|home record|away record|goal patterns|over 2 5|btts|comebacks|resilience)\b/.test(msg)) return 'team_stats';
+    
     if (/\b(vs|versus|difference between|compare|comparison)\b/.test(msg)) return 'comparison';
-    if (/\b(top scorer|golden boot|top goalscorer)\b/.test(msg)) return 'top_scorers';
     if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
     if (/\b(how many teams|number of teams|teams played)\b/.test(msg)) return 'teams';
     if (/\b(attendance|spectators|crowd)\b/.test(msg)) return 'attendance';
@@ -75,26 +110,24 @@ class KimLocalEngine {
     return 'general';
   }
 
-  detectLawSection(message, concept) {
+  // ★ NEW: Extract team names from message to find intel files
+  extractTeamNames(message) {
     const msg = this.normalizeText(message);
-
-    if (/\b(goal|score|own goal|goalkeeper|handle|pick up|tape|wedding ring|jewelry)\b/.test(msg)) {
-      if (concept.sections?.scoring_and_goalkeepers) return 'scoring_and_goalkeepers';
-      if (concept.sections?.scoring) return 'scoring';
-      if (concept.sections?.jewelry_and_safety) return 'jewelry_and_safety';
+    let parts = [];
+    if (msg.includes(' vs ') || msg.includes(' v ') || msg.includes(' versus ')) {
+      parts = msg.split(/\s+vs\s+|\s+v\s+|\s+versus\s+/i);
+    } else if (msg.includes(' and ')) {
+      parts = msg.split(/\s+and\s+/i);
     }
-    if (/\b(take|procedure|how|feet|distance|position|placed|offside rule|offside position)\b/.test(msg)) {
-      if (concept.sections?.procedure) return 'procedure';
-      if (concept.sections?.offside_position) return 'offside_position';
+    
+    if (parts.length >= 2) {
+      // Clean up trailing words like "history", "stats", "form"
+      const cleanPart = (p) => p.replace(/\b(history|stats|form|record|h2h|head to head|elo|strength)\b/g, '').trim();
+      return [cleanPart(parts[0]), cleanPart(parts[1])];
     }
-    if (/\b(foul|offence|infringement|touch twice|second touch|retake|illegal|bursts|defective|penalty kick)\b/.test(msg)) {
-      if (concept.sections?.infringements) return 'infringements';
-      if (concept.sections?.replacement_of_a_defective_ball) return 'replacement_of_a_defective_ball';
-    }
-    return null;
+    return [];
   }
 
-  // ★ NEW WEIGHTED SCORING ALGORITHM ★
   scoreConcept(message, concept) {
     const msg = this.normalizeText(message);
     let score = 0;
@@ -104,29 +137,13 @@ class KimLocalEngine {
     const aliases = (concept.aliases || []).map(a => this.normalizeText(a));
     const keywords = (concept.keywords || []).map(k => this.normalizeText(k));
     
-    // 1. Exact Name Match (+100)
     if (name && this.containsPhrase(msg, name)) {
       score += 100;
       matchCount++;
     }
-    
-    // 2. Keyword Matches (+80 each)
-    keywords.forEach(k => {
-      if (k && this.containsPhrase(msg, k)) {
-        score += 80;
-        matchCount++;
-      }
-    });
+    keywords.forEach(k => { if (k && this.containsPhrase(msg, k)) { score += 80; matchCount++; } });
+    aliases.forEach(a => { if (a && this.containsPhrase(msg, a)) { score += 60; matchCount++; } });
 
-    // 3. Alias Matches (+60 each)
-    aliases.forEach(a => {
-      if (a && this.containsPhrase(msg, a)) {
-        score += 60;
-        matchCount++;
-      }
-    });
-
-    // 4. Contextual & Intent Boosts
     const hasYear = /\b(19\d{2}|20\d{2})\b/.test(msg);
     const id = concept.id || '';
     
@@ -136,16 +153,9 @@ class KimLocalEngine {
     }
     if (id === 'world_cup_tournaments' && (msg.includes('first') || msg.includes('last') || msg.includes('recent'))) score += 50;
     if (id === 'world_cup_records' && (msg.includes('most') || msg.includes('record') || msg.includes('best'))) score += 50;
-    
-    if (id === 'world_cup_format' && (/\bformat\b/.test(msg) || msg.includes('structure') || (msg.includes('how many teams') && !hasYear))) {
-      score += 50;
-    }
+    if (id === 'world_cup_format' && (/\bformat\b/.test(msg) || msg.includes('structure') || (msg.includes('how many teams') && !hasYear))) score += 50;
 
-    // 5. Penalize vague matches (if it only matched one generic word, lower the score)
-    if (matchCount === 1 && score < 80) {
-      score = score / 2; 
-    }
-
+    if (matchCount === 1 && score < 80) score = score / 2; 
     return score;
   }
   
@@ -259,6 +269,51 @@ class KimLocalEngine {
     return response;
   }
 
+  // ★ NEW: Build Team Intelligence Answer
+  buildTeamIntelAnswer(intent, teamIntel) {
+    let res = `**${teamIntel.name} Intelligence**\n\n`;
+    
+    if (intent === 'team_form') {
+      res += `**Recent Form (Last 10):**\n`;
+      teamIntel.recent_form.slice(-5).forEach(m => {
+        res += `- ${m.date}: ${m.opp} (${m.venue}) ${m.gf}-${m.ga} -> ${m.res}\n`;
+      });
+    } else if (intent === 'team_stats') {
+      res += `**Overall:** ${teamIntel.overall.win}W ${teamIntel.overall.draw}D ${teamIntel.overall.loss}L\n`;
+      res += `**Home:** ${teamIntel.home.win}W ${teamIntel.home.draw}D ${teamIntel.home.loss}L (Win Rate: ${((teamIntel.home.win/teamIntel.home.played)*100).toFixed(1)}%)\n`;
+      res += `**Away:** ${teamIntel.away.win}W ${teamIntel.away.draw}D ${teamIntel.away.loss}L (Win Rate: ${((teamIntel.away.win/teamIntel.away.played)*100).toFixed(1)}%)\n`;
+      if (teamIntel.goal_patterns) {
+        res += `\n**Goal Patterns:**\n`;
+        res += `- Over 2.5: ${teamIntel.goal_patterns.overall.over_2_5_pct}%\n`;
+        res += `- BTTS: ${teamIntel.goal_patterns.overall.btts_pct}%\n`;
+      }
+      if (teamIntel.resilience) {
+        res += `\n**Resilience:**\n- Comeback Wins: ${teamIntel.resilience.comeback_wins}\n- Lead Protection Rate: ${teamIntel.resilience.lead_protection_rate}%\n`;
+      }
+    } else {
+      res += `**Overall Record:** ${teamIntel.overall.played} played, ${teamIntel.overall.win} wins, ${teamIntel.overall.draw} draws, ${teamIntel.overall.loss} losses.`;
+    }
+    return res;
+  }
+
+  // ★ NEW: Build H2H Answer
+  buildH2HAnswer(h2h) {
+    let res = `**Head-to-Head: ${h2h.teamA.replace(/_/g, ' ')} vs ${h2h.teamB.replace(/_/g, ' ')}**\n\n`;
+    res += `**Total Meetings:** ${h2h.meetings}\n`;
+    res += `**${h2h.teamA.replace(/_/g, ' ')} Wins:** ${h2h.teamA_wins}\n`;
+    res += `**${h2h.teamB.replace(/_/g, ' ')} Wins:** ${h2h.teamB_wins}\n`;
+    res += `**Draws:** ${h2h.draws}\n`;
+    res += `\n**Goal Markets:**\n- Over 2.5: ${h2h.over_2_5_pct}%\n- BTTS: ${h2h.btts_pct}%\n`;
+    
+    if (h2h.last_5 && h2h.last_5.length > 0) {
+      res += `\n**Last 5 Meetings:**\n`;
+      h2h.last_5.slice(0, 5).forEach(m => {
+        res += `- ${m.date}: ${m.teamA.replace(/_/g, ' ')} ${m.teamA_score} - ${m.teamB_score} ${m.teamB.replace(/_/g, ' ')}\n`;
+      });
+    }
+    return res;
+  }
+
   buildComparisonAnswer(concept1, concept2) {
     let response = `**Tactical Comparison: ${concept1.name} vs ${concept2.name}**\n\n`;
     response += `**${concept1.name}:**\n${concept1.definition || concept1.overview || ''}\n`;
@@ -271,7 +326,6 @@ class KimLocalEngine {
     return response;
   }
 
-  // ★ ENHANCED KNOWLEDGE GAP LOGGER (TRAINING QUEUE) ★
   recordKnowledgeGap(message, bestScore, intent, entities = []) {
     try {
       let gaps = [];
@@ -296,17 +350,36 @@ class KimLocalEngine {
 
   async resolveQuery(message) {
     const intent = this.detectIntent(message);
+    const msg = this.normalizeText(message);
+
+    // ★ NEW: Team Intelligence & H2H Resolution
+    const teams = this.extractTeamNames(msg);
     
+    if (intent === 'h2h' && teams.length >= 2) {
+      const h2h = loadH2H(this.slugify(teams[0]), this.slugify(teams[1]));
+      if (h2h) {
+        return { status: "ANSWERED_LOCALLY", evidence: this.buildH2HAnswer(h2h), confidence: 1.0, routedKnowledge: [h2h.id] };
+      }
+    }
+
+    if ((intent === 'team_form' || intent === 'team_stats') && teams.length >= 1) {
+      const teamIntel = loadTeamIntel(this.slugify(teams[0]));
+      if (teamIntel) {
+        return { status: "ANSWERED_LOCALLY", evidence: this.buildTeamIntelAnswer(intent, teamIntel), confidence: 1.0, routedKnowledge: [teamIntel.id] };
+      }
+    }
+
+    // Existing Concept Graph Resolution
     if (intent === 'comparison') {
       let parts = [];
-      if (message.toLowerCase().includes('difference between')) {
-        let cleanMsg = this.normalizeText(message).replace('difference between', '').replace('what is the', '');
+      if (msg.includes('difference between')) {
+        let cleanMsg = msg.replace('difference between', '').replace('what is the', '');
         parts = cleanMsg.split(/\s+and\s+/i);
-      } else if (message.toLowerCase().includes('compare')) {
-        let cleanMsg = this.normalizeText(message).replace('compare', '').replace('with', 'and');
+      } else if (msg.includes('compare')) {
+        let cleanMsg = msg.replace('compare', '').replace('with', 'and');
         parts = cleanMsg.split(/\s+and\s+/i);
       } else {
-        parts = this.normalizeText(message).split(/\s+vs\s+|\s+versus\s+/i);
+        parts = msg.split(/\s+vs\s+|\s+versus\s+/i);
       }
       if (parts.length >= 2) {
         const subject1 = parts[0].trim();
@@ -341,17 +414,10 @@ class KimLocalEngine {
       }
     }
 
-    // ★ NEW CONFIDENCE & ROUTING LOGIC ★
     const SCORE_THRESHOLD = 80;
     const MARGIN_THRESHOLD = 20;
-    
-    // Require a minimum base score, AND a clear margin over the second-best match
     const canAnswer = bestScore >= SCORE_THRESHOLD && (bestScore - secondBestScore) >= MARGIN_THRESHOLD;
-
-    // Real confidence calculation based on score and margin
-    const confidence = canAnswer 
-      ? Math.min(((bestScore - secondBestScore) / 100) + (bestScore / 200), 1.0) 
-      : Math.min(bestScore / 200, 0.5);
+    const confidence = canAnswer ? Math.min(((bestScore - secondBestScore) / 100) + (bestScore / 200), 1.0) : Math.min(bestScore / 200, 0.5);
 
     if (canAnswer) {
       const answer = this.buildAnswer(intent, bestMatch, message);
@@ -362,7 +428,6 @@ class KimLocalEngine {
         routedKnowledge: [bestMatch.id || bestMatch.lawNumber] 
       };
     } else {
-      // If it's close but ambiguous, ask for clarification instead of guessing
       if (bestScore >= SCORE_THRESHOLD && (bestScore - secondBestScore) < MARGIN_THRESHOLD) {
         return {
           status: "CLARIFICATION_REQUIRED",

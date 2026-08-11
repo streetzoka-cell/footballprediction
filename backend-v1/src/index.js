@@ -21,20 +21,9 @@ async function bootstrap() {
     logger.info('  ZOKASCORE Backend v1 Booting Up...   ');
     logger.info('========================================');
 
-    /*
-     * --------------------------------------------------------
-     * FIREBASE
-     * --------------------------------------------------------
-     */
     initializeFirebase();
 
-    /*
-     * --------------------------------------------------------
-     * STARTUP RECOVERY
-     * --------------------------------------------------------
-     */
-    const recoveryStatus =
-      await RecoveryService.runStartupChecks();
+    const recoveryStatus = await RecoveryService.runStartupChecks();
 
     logger.info(
       `[Boot] Recovery status: ` +
@@ -44,165 +33,63 @@ async function bootstrap() {
       `zokaSnapshots=${recoveryStatus.snapshots.zokaFiles}`
     );
 
-    /*
-     * --------------------------------------------------------
-     * SCHEDULER
-     * --------------------------------------------------------
-     */
     startScheduler();
 
-    /*
-     * --------------------------------------------------------
-     * HTTP SERVER
-     * --------------------------------------------------------
-     */
-    const server = app.listen(
-      env.PORT,
-      () => {
-        logger.info(
-          `🚀 Server listening on port ${env.PORT}`
-        );
+    const server = app.listen(env.PORT, () => {
+      logger.info(`🚀 Server listening on port ${env.PORT}`);
+      logger.info('🛡️  Active Provider Engine:');
+      logger.info('   Live Scores : iSports → API-Football');
+      logger.info('   Fixtures    : iSports → API-Football');
+      logger.info('   Results     : iSports → API-Football (Phase 8 Archive Active)');
+      logger.info('   Leagues     : iSports → SportsDB');
+      logger.info('   Standings   : Football-Data → API-Football');
+      logger.info('   Teams       : API-Football → Football-Data');
+      logger.info('   Media/Logos : SportsDB');
+      logger.info('🧠 AI Engine   : Zoka V1 (Model Lab & Intelligence API Active)');
+      logger.info('========================================');
+    });
 
-        logger.info(
-          '🛡️  Active Provider Engine:'
-        );
+    server.keepAliveTimeout = 120 * 1000;
+    server.headersTimeout = 125 * 1000;
 
-        logger.info(
-          '   Live Scores : iSports → API-Football'
-        );
-
-        logger.info(
-          '   Fixtures    : iSports → API-Football'
-        );
-
-        logger.info(
-          '   Results     : iSports → API-Football (Phase 8 Archive Active)'
-        );
-
-        logger.info(
-          '   Leagues     : iSports → SportsDB'
-        );
-
-        logger.info(
-          '   Standings   : Football-Data → API-Football'
-        );
-
-        logger.info(
-          '   Teams       : API-Football → Football-Data'
-        );
-
-        logger.info(
-          '   Media/Logos : SportsDB'
-        );
-
-        logger.info(
-          '========================================'
-        );
-      }
-    );
-
-    /*
-     * --------------------------------------------------------
-     * CONNECTION TIMEOUTS
-     * --------------------------------------------------------
-     */
-    server.keepAliveTimeout =
-      120 * 1000;
-
-    server.headersTimeout =
-      125 * 1000;
-
-    /*
-     * --------------------------------------------------------
-     * GRACEFUL SHUTDOWN
-     * --------------------------------------------------------
-     */
     let shuttingDown = false;
 
     const shutdown = async (signal) => {
-      if (shuttingDown) {
-        return;
-      }
-
+      if (shuttingDown) return;
       shuttingDown = true;
-
-      logger.info(
-        `\n[${signal}] Received. Shutting down gracefully...`
-      );
+      logger.info(`\n[${signal}] Received. Shutting down gracefully...`);
 
       server.close(() => {
-        logger.info(
-          '[Shutdown] HTTP server closed.'
-        );
+        logger.info('[Shutdown] HTTP server closed.');
       });
 
       try {
-        logger.info(
-          '[Shutdown] Flushing WAL and Queue to Firestore...'
-        );
-
-        await UserPredictionStore
-          .processPendingSync(true);
-
+        logger.info('[Shutdown] Flushing WAL and Queue to Firestore...');
+        await UserPredictionStore.processPendingSync(true);
         await QueueService.processQueue();
-
-        logger.info(
-          '[Shutdown] Backup sync complete. Exiting.'
-        );
-
+        logger.info('[Shutdown] Backup sync complete. Exiting.');
         process.exit(0);
       } catch (err) {
-        logger.error(
-          `[Shutdown] Failed to flush data: ${err.message}`
-        );
-
+        logger.error(`[Shutdown] Failed to flush data: ${err.message}`);
         process.exit(1);
       }
     };
 
-    process.on(
-      'SIGINT',
-      () => shutdown('SIGINT')
-    );
-
-    process.on(
-      'SIGTERM',
-      () => shutdown('SIGTERM')
-    );
+    process.on('SIGINT', () => shutdown('SIGINT'));
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
 
   } catch (err) {
-    logger.error(
-      `Fatal boot error: ${err.stack}`
-    );
-
+    logger.error(`Fatal boot error: ${err.stack}`);
     process.exit(1);
   }
 }
 
-/*
- * ------------------------------------------------------------
- * PROCESS-LEVEL ERROR HANDLING
- * ------------------------------------------------------------
- */
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+});
 
-process.on(
-  'uncaughtException',
-  (err) => {
-    logger.error(
-      'Uncaught Exception:',
-      err
-    );
-  }
-);
-
-process.on(
-  'unhandledRejection',
-  (reason) => {
-    logger.error(
-      'Unhandled Rejection:',
-      reason
-    );
-  }
-);
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection:', reason);
+});
 
 bootstrap();
