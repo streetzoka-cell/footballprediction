@@ -31,10 +31,18 @@ odds_df = pd.json_normalize(df['odds'])
 odds_df.columns = [f'odds.{col}' for col in odds_df.columns]
 df = pd.concat([df.drop(columns=['features', 'odds']), features_df, odds_df], axis=1)
 
+# ★ FIX: STRICT DATE FILTER BEFORE ANY MERGES
+df['date'] = pd.to_datetime(df['date'])
+df = df[df['date'] >= '2024-01-01'].copy()
+print(f"[Audit] Strictly analyzing {len(df)} matches (Out-of-Sample: 2024 onwards)...")
+
 goals_df = pd.DataFrame([{
     'date': r['date'], 'home_team': r['home_team'], 'away_team': r['away_team'],
     'actual_total_goals': r['target']['total_goals']
 } for r in pred_data])
+
+# ★ FIX: Convert goals_df date to datetime to match the main dataframe
+goals_df['date'] = pd.to_datetime(goals_df['date'])
 
 df = pd.merge(df, goals_df, on=['date', 'home_team', 'away_team'])
 df['date'] = pd.to_datetime(df['date'])

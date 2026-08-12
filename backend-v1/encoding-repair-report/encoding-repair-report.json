@@ -1,0 +1,15 @@
+{
+  "startedAt": "2026-08-12T08:19:37.854Z",
+  "filesScanned": 96899,
+  "filesChanged": 0,
+  "filesSkipped": 96899,
+  "filesFailed": 0,
+  "bytesScanned": 1827543476,
+  "bytesWritten": 0,
+  "replacements": 0,
+  "suspiciousBefore": 0,
+  "suspiciousAfter": 0,
+  "backupsCreated": 0,
+  "examples": [],
+  "finishedAt": "2026-08-12T08:24:34.999Z"
+}

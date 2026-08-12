@@ -1,0 +1,31 @@
+{
+  "id": "world_cup_records",
+  "name": "FIFA World Cup Records",
+  "aliases": [
+    "world cup records",
+    "world cup most",
+    "world cup best"
+  ],
+  "category": "history",
+  "intents": [
+    "definition"
+  ],
+  "records": {
+    "most_titles": {
+      "team": "Brazil",
+      "count": 5,
+      "years": [
+        2002,
+        1994,
+        1970,
+        1962,
+        1958
+      ]
+    },
+    "most_appearances": {
+      "team": "Brazil",
+      "count": 22,
+      "note": "Only team to appear in all 22 tournaments"
+    }
+  }
+}

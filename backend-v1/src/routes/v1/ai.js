@@ -6,38 +6,29 @@ const router = express.Router();
 const { GoogleGenAI } = require('@google/genai');
 const env = require('../../config/env');
 const logger = require('../../utils/logger');
-const { authenticateFirebaseUser } = require('../../middleware/firebaseAuth');
+const { optionalFirebaseUser } = require('../../middleware/firebaseAuth');
 const { getDb } = require('../../config/firebase');
 
-const kimEngine = require('../../services/KimLocalEngine');
-const matchDataEngine = require('../../services/MatchDataEngine');
-const predictionEngine = require('../../services/PredictionEngine');
+// ★ NEW: Import the Master Orchestrator
+const KimOrchestrator = require('../../kim/KimOrchestrator');
 
 let ai = null;
 if (env.GEMINI_API_KEY) {
   ai = new GoogleGenAI({ apiKey: env.GEMINI_API_KEY });
 }
 
-// ★ ENHANCED SYSTEM PROMPT: Enforces the "Data proves, Gemini explains" philosophy
 const SYSTEM_PROMPT = `You are Kim, the official AI of ZOKASCORE. You were built by an independent developer.
 You are an elite football analyst, tactical expert, friendly, professional, and honest.
 
-CRITICAL ARCHITECTURE RULES:
-- ZOKASCORE DATA PROVES, YOU EXPLAIN. You must rely strictly on the [EVIDENCE] provided in the prompt.
-- NEVER invent facts, hallucinate scores, or pretend to know unavailable live data.
-- If [EVIDENCE] is missing or doesn't contain the answer, explicitly state: "I don't have verified data for that right now."
-- Do not guess match results or player statistics from your general memory. Always defer to the provided context.
-
-APP KNOWLEDGE (Use this if asked about the platform):
-- ZOKASCORE Studio: A built-in pro creator toolkit containing the Graphic Editor, Reactor Studio (for viral TikToks/Reels), Face AR (camera masks), and Reaction Cam.
-- Predictions: Users predict exact scores (10 pts) or match results (3 pts). Matches lock 60 mins before kickoff.
-- Leaderboards: Daily, Weekly, Monthly, and G.O.A.T (All-time).
-- Zoka Picks: Expert/Admin predictions that users can vote on.
-- PWA: ZOKASCORE is a Progressive Web App and can be installed to the home screen for offline use.
+CRITICAL ARCHITECTURE RULES (ZERO HALLUCINATION):
+- ZOKASCORE DATA PROVES, YOU EXPLAIN. You must rely STRICTLY on the [EVIDENCE] provided in the prompt.
+- NEVER invent match scores, fixture lists, or player statistics. 
+- If [EVIDENCE] does not contain a match prediction or live score, you CANNOT create one. 
+- If asked about a match that is not in the [EVIDENCE], explicitly state: "I don't have verified live data or historical stats for that match right now."
+- You MAY use your general football knowledge for rules, history, tactics, and concepts (e.g., "What is a false 9?"), but NEVER for match predictions.
 
 FORMATTING RULES:
 - Keep text extremely clean, professional, and minimal.
-- NEVER use bold text (asterisks) around the word ZOKASCORE. Just write it normally.
 - Avoid excessive markdown or cluttered formatting.
 - Use simple, clean bullet points and short paragraphs.
 - Explain reasoning clearly and concisely based ONLY on the provided evidence.`;
@@ -222,7 +213,6 @@ Zoka AI Picks: ${zokaPicks.map(p => `${p.homeTeam?.name || 'Home'} vs ${p.awayTe
   return { userContext, platformContext };
 }
 
-// ★ ENHANCED PROMPT BUILDER: Strict Evidence Packaging
 async function buildPrompt({ message, history, context, evidence }) {
   const contents = [];
   const sanitizedHistory = sanitizeHistory(history);
@@ -230,8 +220,7 @@ async function buildPrompt({ message, history, context, evidence }) {
     contents.push({ role: msg.role, parts: [{ text: msg.content }] });
   }
   
-  // Package evidence strictly so Gemini knows what it is allowed to say
-  const evidenceBlock = evidence ? `\n[EVIDENCE - STRICTLY USE THIS]\n${evidence}\n` : "\n[EVIDENCE - STRICTLY USE THIS]\nNo specific evidence retrieved. Rely on platform knowledge or ask for clarification.\n";
+  const evidenceBlock = evidence ? `\n[EVIDENCE - STRICTLY USE THIS]\n${evidence}\n` : "\n[EVIDENCE - STRICTLY USE THIS]\nNo specific match data or local evidence was found. You may answer general football questions, but you MUST NOT invent match predictions.\n";
   
   const finalUserMessage = `${context.userContext}\n${context.platformContext}\n${evidenceBlock}\nUser Query: ${message}`;
   contents.push({ role: 'user', parts: [{ text: finalUserMessage }] });
@@ -291,7 +280,7 @@ async function generateWithFallback(contents, systemOverride = null) {
 const GRACEFUL_FALLBACK_REPLY = "I'm currently experiencing high traffic and couldn't process that through my advanced engine. However, based on general knowledge, please try rephrasing or ask again in a moment.";
 
 // Route: POST /api/v1/ai/zoka
-router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
+router.post('/zoka', optionalFirebaseUser, async (req, res) => {
   try {    
     const validation = validateRequest(req.body);
     if (!validation.valid) return res.status(400).json({ success: false, error: validation.error, model: "none" });
@@ -306,69 +295,51 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
     }
 
     // 2. Check Cache (Fast path)
-    const cacheKey = `${req.user.uid}:${normalizedQuery}`;
+    const uid = req.user ? req.user.uid : 'guest';
+    const cacheKey = `${uid}:${normalizedQuery}`;
     const cachedResponse = getFromCache(cacheKey);
     if (cachedResponse) {
-      logger.info(`[ZOKASCORE AI] Cache hit for user ${req.user.uid}`);
+      logger.info(`[ZOKASCORE AI] Cache hit for user ${uid}`);
       return res.status(200).json({ success: true, model: `${cachedResponse.model} (cached)`, reply: cachedResponse.reply, responseTime: "0ms" });
     }
 
-    // 3. LOCAL KIM ENGINE (Static Knowledge: Laws, Tactics, Formations, History)
-    let localResult = { status: "UNCERTAIN", evidence: [], confidence: 0, routedKnowledge: [] };
+    // 3. KIM MASTER ORCHESTRATOR (The Zero-Hallucination Brain)
+    let localResult = { status: "UNCERTAIN", evidence: "", confidence: 0 };
+    let context;
     try {
-      localResult = await kimEngine.resolveQuery(message);
+      context = await fetchSystemContext(uid); // Fetch context (handles guests gracefully)
+      
+      // Call the unified KimOrchestrator.process() method
+      const kimResult = await KimOrchestrator.process({ 
+        uid, 
+        message, 
+        data: null // External data like live match intel can be passed here if needed
+      });
+      
+      localResult = { 
+        status: kimResult.ok ? "ANSWERED_LOCALLY" : "UNCERTAIN", 
+        evidence: kimResult.response, 
+        confidence: kimResult.confidence || 0.5 
+      };
     } catch (err) {
-      logger.warn('[ZOKASCORE AI] Local engine failed:', err.message);
+      logger.warn('[ZOKASCORE AI] KimOrchestrator failed:', err.message);
     }
 
     if (localResult.status === "ANSWERED_LOCALLY") {
-        logger.info(`[ZOKASCORE AI] Answered locally (0 API calls). Confidence: ${localResult.confidence.toFixed(2)}.`);
-        addToCache(cacheKey, localResult.evidence, "local-engine");
-        return res.status(200).json({ success: true, model: "local-engine", reply: localResult.evidence, responseTime: "1ms" });
-    } 
-    
-    // ★ NEW: Handle Ambiguous Queries (Clarification required)
-    if (localResult.status === "CLARIFICATION_REQUIRED") {
-      logger.info(`[ZOKASCORE AI] Ambiguous query intercepted. Asking user for clarification.`);
-      return res.status(200).json({ 
-        success: true, 
-        model: "local-clarify", 
-        reply: localResult.evidence, 
-        responseTime: "1ms" 
-      });
+        logger.info(`[ZOKASCORE AI] Answered locally (0 API calls). Intent resolved.`);
+        addToCache(cacheKey, localResult.evidence, "kim-orchestrator");
+        return res.status(200).json({ success: true, model: "kim-orchestrator", reply: localResult.evidence, responseTime: "1ms" });
     }
 
-    // 4. MATCH DATA ENGINE (Dynamic Data: Scores, Fixtures, Stats)
-    let matchResult = { status: "NO_DATA_FOUND" };
-    try {
-      matchResult = await matchDataEngine.resolveQuery(message);
-    } catch (err) {
-      logger.warn('[ZOKASCORE AI] Match data engine failed:', err.message);
+    // 4. STRICT INTERCEPTION (Zero Hallucination Guard)
+    const isMatchQuery = /(predict|vs|versus|analyze|analysis|who will win|score|match)/i.test(message);
+    if (isMatchQuery && localResult.status !== "ANSWERED_LOCALLY") {
+      const strictReply = "I don't have verified live data or historical stats for that specific match right now. I can only provide predictions and analysis for matches that are actively tracked in the ZOKASCORE database. Please try asking about a different match!";
+      logger.info(`[ZOKASCORE AI] Strict Interception: Blocked potential hallucination for missing match.`);
+      return res.status(200).json({ success: true, model: "strict-block", reply: strictReply, responseTime: "1ms" });
     }
 
-    if (matchResult.status === "ANSWERED_LOCALLY") {
-      logger.info(`[ZOKASCORE AI] Answered locally via Match Data Engine (0 API calls).`);
-      addToCache(cacheKey, matchResult.evidence, "match-engine");
-      return res.status(200).json({ success: true, model: "match-engine", reply: matchResult.evidence, responseTime: "10ms" });
-    }
-
-    // 5. PREDICTION ENGINE (Deterministic Match Predictions)
-    if (matchResult.status === "DYNAMIC_DATA_FOUND") {
-      let predResult = { status: "NO_PREDICTION" };
-      try {
-        predResult = await predictionEngine.resolveQuery(message, matchResult.match);
-      } catch (e) {
-        logger.warn('[ZOKASCORE AI] Prediction engine failed:', e.message);
-      }
-
-      if (predResult.status === "ANSWERED_LOCALLY") {
-        logger.info(`[ZOKASCORE AI] Answered locally via Prediction Engine (0 API calls).`);
-        addToCache(cacheKey, predResult.evidence, "prediction-engine");
-        return res.status(200).json({ success: true, model: "prediction-engine", reply: predResult.evidence, responseTime: "10ms" });
-      }
-    }
-
-    // 6. GEMINI GATE (Fallback for Analysis or Unknowns)
+    // 5. GEMINI GATE (Fallback for General Conversation)
     if (!ai) {
       return res.status(200).json({
         success: true,
@@ -377,17 +348,11 @@ router.post('/zoka', authenticateFirebaseUser, async (req, res) => {
         responseTime: "1ms"
       });
     }
-
-    // Fetch Firebase/Platform context ONLY when Gemini is needed
-    const context = await fetchSystemContext(req.user.uid);
     
-    // Combine Local Knowledge evidence + Match Data evidence for Gemini
     let combinedEvidence = localResult.evidence || "";
-    if (matchResult.status === "DYNAMIC_DATA_FOUND") {
-      combinedEvidence += `\n${matchResult.evidence}`;
-    }
+    if (localResult.status === "UNCERTAIN") combinedEvidence = ""; 
     
-    logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Confidence: ${localResult.confidence.toFixed(2)}.`);
+    logger.info(`[ZOKASCORE AI] Gemini Gate triggered. Passing to LLM with strict rules.`);
     
     const contents = await buildPrompt({ message, history, context, evidence: combinedEvidence });
     const result = await generateWithFallback(contents);

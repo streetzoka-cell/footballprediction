@@ -1,14 +1,15 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
+const { getCanonicalSlug } = require('./TeamMatcherService');
+const { getMatchIntelligence } = require('./MatchIntelligenceService');
 
 const KNOWLEDGE_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football');
 const ENTITIES_DIR = path.join(KNOWLEDGE_DIR, 'entities');
+const PUBLIC_DATA_DIR = path.join(process.cwd(), 'public_data');
 const GAPS_LOG_PATH = path.join(process.cwd(), 'logs', 'kim_knowledge_gaps.json');
 
 let KNOWLEDGE_GRAPH_CACHE = null;
-let TEAM_INTEL_CACHE = null;
-let RECORDS_CACHE = null;
 
 function loadKnowledgeGraph() {
   if (KNOWLEDGE_GRAPH_CACHE) return KNOWLEDGE_GRAPH_CACHE;
@@ -39,26 +40,31 @@ function loadKnowledgeGraph() {
   return KNOWLEDGE_GRAPH_CACHE;
 }
 
-// ★ NEW: Load Team Intelligence and Records dynamically
-function loadTeamIntel(teamSlug) {
+function loadJson(filePath) {
+  try {
+    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) {}
+  return null;
+}
+
+function loadTeamIntel(teamName) {
   if (!fs.existsSync(ENTITIES_DIR)) return null;
+  const teamSlug = getCanonicalSlug(teamName);
   const filePath = path.join(ENTITIES_DIR, 'team_intelligence', `${teamSlug}.json`);
   if (fs.existsSync(filePath)) {
-    try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch (e) { return null; }
+    try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { return null; }
   }
   return null;
 }
 
-function loadH2H(teamASlug, teamBSlug) {
+function loadH2H(teamAName, teamBName) {
   if (!fs.existsSync(ENTITIES_DIR)) return null;
-  const teams = [teamASlug, teamBSlug].sort();
+  const slugA = getCanonicalSlug(teamAName);
+  const slugB = getCanonicalSlug(teamBName);
+  const teams = [slugA, slugB].sort();
   const filePath = path.join(ENTITIES_DIR, 'h2h', `${teams[0]}_${teams[1]}.json`);
   if (fs.existsSync(filePath)) {
-    try {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    } catch (e) { return null; }
+    try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { return null; }
   }
   return null;
 }
@@ -81,36 +87,43 @@ class KimLocalEngine {
     return new RegExp(`\\b${escaped}\\b`, 'i').test(text);
   }
 
+  // ★ THE MASTER INTENT DETECTOR
   detectIntent(message) {
     const msg = this.normalizeText(message);
 
-    if (/\b(vs|versus|head to head|h2h)\b/.test(msg)) return 'h2h';
-    if (/\b(top scorer|golden boot|top goalscorer|all time top)\b/.test(msg)) return 'top_scorers_competition';
-    if (/\b(form|recent results|last 5|last 10|how are they doing)\b/.test(msg)) return 'team_form';
-    if (/\b(elo|strength|how good are|win rate|stats|home record|away record|goal patterns|over 2 5|btts|comebacks|resilience)\b/.test(msg)) return 'team_stats';
+    // 1. Greetings & Casual
+    if (/\b(hi|hello|hey|yo|sasa|niaje|what's up|how are you|good morning|good evening)\b/.test(msg)) return 'greeting';
     
-    if (/\b(vs|versus|difference between|compare|comparison)\b/.test(msg)) return 'comparison';
-    if (/\b(host|hosted|hosting)\b/.test(msg)) return 'hosts';
-    if (/\b(how many teams|number of teams|teams played)\b/.test(msg)) return 'teams';
-    if (/\b(attendance|spectators|crowd)\b/.test(msg)) return 'attendance';
-    if (/\b(most titles|most wins|most championships|most world cups|won the.*most|most world|who has won the most)\b/.test(msg)) return 'records';
-    if (/\b(most goals|most goals in a tournament|record goals)\b/.test(msg)) return 'records';
-    if (/\b(who won|winner of|who hosted|history of|historical|first world cup)\b/.test(msg) || /\b(19\d{2}|20\d{2})\b/.test(msg)) {
-      if (msg.includes('world cup') || msg.includes('champions league') || msg.includes('euros') || msg.includes('copa america')) {
-        return 'historical_fact';
-      }
-    }
+    // 2. Identity & Capabilities
+    if (/\b(who are you|what are you|who made you|who created you|are you ai|are you chatgpt|what can you do)\b/.test(msg)) return 'identity';
+    
+    // 3. Banter & Slang (Kenyan/Sheng)
+    if (/\b(niaje|sasa|bro|maze|bana|wueh|eish|aki|kumbe|amechoma|amecook|ni noma|gari imeenda|amebeba|roast|joke|funny|bottled|cooked)\b/.test(msg)) return 'banter';
 
-    if (/\b(what is|what's|whats|define|definition|meaning of|explain)\b/.test(msg)) return 'definition';
-    if (/\b(how does|how do|how is|how are|how works|how does it work|how to)\b/.test(msg)) return 'how_it_works';
-    if (/\b(why|advantage|advantages|benefit|benefits|purpose|used for)\b/.test(msg)) return 'advantages';
-    if (/\b(weakness|weaknesses|flaw|flaws|risk|risks|danger|disadvantage|disadvantages|problem)\b/.test(msg)) return 'weaknesses';
-    if (/\b(when should|when to|when do|when is|when would)\b/.test(msg)) return 'when_to_use';
-    
+    // 4. User Profile & ZOKASCORE
+    if (/\b(my points|my rank|my predictions|my stats|my streak|how am i doing|profile|leaderboard)\b/.test(msg)) return 'user_profile';
+
+    // 5. Live Matches & Fixtures
+    if (/\b(live|score|whats happening|minute|who scored|possession|momentum)\b/.test(msg)) return 'live_match';
+    if (/\b(today|tomorrow|tonight|fixtures|who is playing|next game|kickoff)\b/.test(msg)) return 'fixtures';
+
+    // 6. Standings & Tables
+    if (/\b(table|standings|rank|first place|second|bottom|relegated|qualified|points)\b/.test(msg)) return 'standings';
+
+    // 7. Match Analysis & Predictions
+    if (/\b(predict|who will win|analyze|analysis|preview|breakdown|advantage)\b/.test(msg)) return 'match_analysis';
+    if (/\b(vs|versus|head to head|h2h)\b/.test(msg)) return 'h2h';
+
+    // 8. Team/Player Stats & Form
+    if (/\b(form|recent results|last 5|last 10)\b/.test(msg)) return 'team_form';
+    if (/\b(elo|strength|how good are|win rate|stats|home record|away record|goal patterns|over 2 5|btts|resilience)\b/.test(msg)) return 'team_stats';
+
+    // 9. General Football Knowledge (Tactics, Rules, History)
+    if (/\b(what is|explain|define|offside|var|penalty|formation|gegenpress|tiki taka|false 9|history|who won|world cup)\b/.test(msg)) return 'football_knowledge';
+
     return 'general';
   }
 
-  // ★ NEW: Extract team names from message to find intel files
   extractTeamNames(message) {
     const msg = this.normalizeText(message);
     let parts = [];
@@ -119,10 +132,8 @@ class KimLocalEngine {
     } else if (msg.includes(' and ')) {
       parts = msg.split(/\s+and\s+/i);
     }
-    
     if (parts.length >= 2) {
-      // Clean up trailing words like "history", "stats", "form"
-      const cleanPart = (p) => p.replace(/\b(history|stats|form|record|h2h|head to head|elo|strength)\b/g, '').trim();
+      const cleanPart = (p) => p.replace(/\b(analyze|analysis|predict|who will win|history|stats|form|record|h2h|head to head|elo|strength|preview|breakdown)\b/g, '').trim();
       return [cleanPart(parts[0]), cleanPart(parts[1])];
     }
     return [];
@@ -137,10 +148,7 @@ class KimLocalEngine {
     const aliases = (concept.aliases || []).map(a => this.normalizeText(a));
     const keywords = (concept.keywords || []).map(k => this.normalizeText(k));
     
-    if (name && this.containsPhrase(msg, name)) {
-      score += 100;
-      matchCount++;
-    }
+    if (name && this.containsPhrase(msg, name)) { score += 100; matchCount++; }
     keywords.forEach(k => { if (k && this.containsPhrase(msg, k)) { score += 80; matchCount++; } });
     aliases.forEach(a => { if (a && this.containsPhrase(msg, a)) { score += 60; matchCount++; } });
 
@@ -159,6 +167,60 @@ class KimLocalEngine {
     return score;
   }
   
+  // ★ ZERO-HALLUCINATION MATCH ANALYSIS SYNTHESIS
+  async buildMatchAnalysis(homeTeam, awayTeam) {
+    try {
+      const intel = await getMatchIntelligence(homeTeam, awayTeam);
+      
+      const homeElo = intel.home.elo || 1500;
+      const awayElo = intel.away.elo || 1500;
+      const eloDiff = homeElo - awayElo;
+      
+      let edge = "Closely matched";
+      if (eloDiff > 100) edge = `${homeTeam} has a strong home advantage`;
+      else if (eloDiff < -100) edge = `${awayTeam} looks stronger on paper`;
+      
+      const homeForm = intel.home.form.slice(-5).map(m => m.res).join('-') || 'N/A';
+      const awayForm = intel.away.form.slice(-5).map(m => m.res).join('-') || 'N/A';
+      
+      const h2h = intel.h2h;
+      let h2hSummary = "No historical meetings found.";
+      if (h2h && h2h.meetings > 0) {
+        h2hSummary = `${h2h.meetings} meetings. ${h2h.teamA.replace(/_/g, ' ')} won ${h2h.teamA_wins}, ${h2h.teamB.replace(/_/g, ' ')} won ${h2h.teamB_wins}, ${h2h.draws} draws.`;
+      }
+      
+      const homeOver25 = intel.home.goalPatterns?.overall?.over_2_5_pct || 0;
+      const awayOver25 = intel.away.goalPatterns?.overall?.over_2_5_pct || 0;
+      const avgOver25 = ((homeOver25 + awayOver25) / 2).toFixed(0);
+      
+      const zokaPick = intel.zokaPick;
+
+      let response = `# Match Analysis: ${homeTeam} vs ${awayTeam}\n\n`;
+      response += `**Tactical Edge:** ${edge} (Elo: ${homeElo} vs ${awayElo}).\n\n`;
+      response += `**Recent Form:**\n`;
+      response += `- ${homeTeam} (Last 5): ${homeForm}\n`;
+      response += `- ${awayTeam} (Last 5): ${awayForm}\n\n`;
+      response += `**Head-to-Head:**\n${h2hSummary}\n\n`;
+      response += `**Goal Expectancy:**\nBoth teams average a ${avgOver25}% rate for Over 2.5 goals. `;
+      
+      if (zokaPick.market.includes('OVER 2.5')) {
+        response += `Expect goals in this fixture.\n\n`;
+      } else if (zokaPick.market.includes('WIN')) {
+        response += `This match likely leans towards a winner rather than a shootout.\n\n`;
+      } else {
+        response += `This could be a tight, tactical battle.\n\n`;
+      }
+      
+      response += `**ZOKASCORE AI Prediction:** ${zokaPick.market} (Confidence: ${zokaPick.confidence})\n\n`;
+      response += `⚠️ Prediction isn't certainty. Football has a PhD in ruining predictions.`;
+
+      return response;
+    } catch (e) {
+      logger.warn(`[KimEngine] Match analysis failed: ${e.message}`);
+      return null;
+    }
+  }
+
   buildAnswer(intent, concept, message) {
     let response = `**${concept.name || concept.title}**\n\n`;
 
@@ -269,12 +331,11 @@ class KimLocalEngine {
     return response;
   }
 
-  // ★ NEW: Build Team Intelligence Answer
   buildTeamIntelAnswer(intent, teamIntel) {
     let res = `**${teamIntel.name} Intelligence**\n\n`;
     
     if (intent === 'team_form') {
-      res += `**Recent Form (Last 10):**\n`;
+      res += `**Recent Form (Last 5):**\n`;
       teamIntel.recent_form.slice(-5).forEach(m => {
         res += `- ${m.date}: ${m.opp} (${m.venue}) ${m.gf}-${m.ga} -> ${m.res}\n`;
       });
@@ -296,7 +357,6 @@ class KimLocalEngine {
     return res;
   }
 
-  // ★ NEW: Build H2H Answer
   buildH2HAnswer(h2h) {
     let res = `**Head-to-Head: ${h2h.teamA.replace(/_/g, ' ')} vs ${h2h.teamB.replace(/_/g, ' ')}**\n\n`;
     res += `**Total Meetings:** ${h2h.meetings}\n`;
@@ -348,57 +408,107 @@ class KimLocalEngine {
     }
   }
 
-  async resolveQuery(message) {
+  // ★ THE MASTER RESOLVER (Zero Hallucination)
+  async resolveQuery(message, userContext = null) {
     const intent = this.detectIntent(message);
     const msg = this.normalizeText(message);
 
-    // ★ NEW: Team Intelligence & H2H Resolution
+    // --- 1. GREETING ---
+    if (intent === 'greeting') {
+      const reply = "Hey! 👋 Kim is online. What are we doing today — checking football, analyzing a match, hunting predictions, or causing unnecessary football arguments? 😂⚽";
+      return { status: "ANSWERED_LOCALLY", evidence: reply, confidence: 1.0, routedKnowledge: ["greeting"] };
+    }
+
+    // --- 2. IDENTITY ---
+    if (intent === 'identity') {
+      const reply = "I'm KIM — the football intelligence inside ZOKASCORE. ⚽🧠\n\nI can work with live matches, fixtures, results, statistics, predictions, standings and football knowledge.\n\nBasically, you bring the football question. I bring the data, analysis… and occasionally unnecessary banter. 😂";
+      return { status: "ANSWERED_LOCALLY", evidence: reply, confidence: 1.0, routedKnowledge: ["identity"] };
+    }
+
+    // --- 3. BANTER & SLANG ---
+    if (intent === 'banter') {
+      const replies = [
+        "Bro, football is 90 minutes of pure chaos controlled by a spreadsheet 😂. What match are we looking at?",
+        "Wueh! Some defenses just donate goals. What's on your mind?",
+        "Aki, this game loves embarrassing predictions. What do you need?"
+      ];
+      return { status: "ANSWERED_LOCALLY", evidence: replies[Math.floor(Math.random() * replies.length)], confidence: 1.0, routedKnowledge: ["banter"] };
+    }
+
+    // --- 4. USER PROFILE ---
+    if (intent === 'user_profile' && userContext) {
+      let res = `**Your ZOKASCORE Profile**\n\n`;
+      res += `- **Points:** ${userContext.totalPoints}\n`;
+      res += `- **Rank:** #${userContext.dailyRank} today\n`;
+      res += `- **Exact Scores Hit:** ${userContext.exact}\n`;
+      res += `- **Current Streak:** ${userContext.streak} days 🔥\n\n`;
+      res += `You're not quite at the top yet… But #${userContext.dailyRank - 1} should probably start checking over their shoulder. 😂`;
+      return { status: "ANSWERED_LOCALLY", evidence: res, confidence: 1.0, routedKnowledge: ["user_profile"] };
+    }
+
+    // --- 5. LIVE MATCH & FIXTURES ---
+    if (intent === 'live_match' || intent === 'fixtures') {
+      const today = new Date().toISOString().split('T')[0];
+      const liveData = loadJson(path.join(PUBLIC_DATA_DIR, 'live.json'));
+      const fixtureData = loadJson(path.join(PUBLIC_DATA_DIR, 'fixtures', `${today}.json`));
+      
+      let liveMatches = liveData?.matches || [];
+      let upcoming = fixtureData?.matches || [];
+
+      if (liveMatches.length > 0) {
+        let res = `🔴 **LIVE NOW (${liveMatches.length} matches)**\n\n`;
+        liveMatches.slice(0, 5).forEach(m => {
+          res += `- ${m.homeTeam?.name} ${m.homeScore} - ${m.awayScore} ${m.awayTeam?.name} (${m.display?.minute || 0}')\n`;
+        });
+        res += `\nWant me to break down the biggest game?`;
+        return { status: "ANSWERED_LOCALLY", evidence: res, confidence: 1.0, routedKnowledge: ["live_data"] };
+      } else if (upcoming.length > 0) {
+        let res = `📅 **TODAY'S FIXTURES (${upcoming.length} matches)**\n\n`;
+        upcoming.slice(0, 5).forEach(m => {
+          res += `- ${m.homeTeam?.name} vs ${m.awayTeam?.name} (${m.kickoff || 'TBD'})\n`;
+        });
+        return { status: "ANSWERED_LOCALLY", evidence: res, confidence: 1.0, routedKnowledge: ["fixture_data"] };
+      }
+    }
+
+    // --- 6. STANDINGS ---
+    if (intent === 'standings') {
+      const standingsData = loadJson(path.join(PUBLIC_DATA_DIR, 'standings.json'));
+      if (standingsData && standingsData.length > 0) {
+        let res = `📊 **League Standings**\n\n`;
+        standingsData.slice(0, 5).forEach((team, idx) => {
+          res += `${idx + 1}. ${team.team} - ${team.points} pts (${team.win}W ${team.draw}D ${team.loss}L)\n`;
+        });
+        return { status: "ANSWERED_LOCALLY", evidence: res, confidence: 1.0, routedKnowledge: ["standings_data"] };
+      }
+    }
+
+    // --- 7. MATCH ANALYSIS & H2H (The Heavy Artillery) ---
     const teams = this.extractTeamNames(msg);
     
-    if (intent === 'h2h' && teams.length >= 2) {
-      const h2h = loadH2H(this.slugify(teams[0]), this.slugify(teams[1]));
+    if ((intent === 'match_analysis' || intent === 'h2h') && teams.length >= 2) {
+      if (intent === 'match_analysis') {
+        const analysis = await this.buildMatchAnalysis(teams[0], teams[1]);
+        if (analysis) {
+          return { status: "ANSWERED_LOCALLY", evidence: analysis, confidence: 1.0, routedKnowledge: ["match_intelligence"] };
+        }
+      }
+      
+      const h2h = loadH2H(teams[0], teams[1]);
       if (h2h) {
         return { status: "ANSWERED_LOCALLY", evidence: this.buildH2HAnswer(h2h), confidence: 1.0, routedKnowledge: [h2h.id] };
       }
     }
 
+    // --- 8. TEAM FORM & STATS ---
     if ((intent === 'team_form' || intent === 'team_stats') && teams.length >= 1) {
-      const teamIntel = loadTeamIntel(this.slugify(teams[0]));
+      const teamIntel = loadTeamIntel(teams[0]);
       if (teamIntel) {
         return { status: "ANSWERED_LOCALLY", evidence: this.buildTeamIntelAnswer(intent, teamIntel), confidence: 1.0, routedKnowledge: [teamIntel.id] };
       }
     }
 
-    // Existing Concept Graph Resolution
-    if (intent === 'comparison') {
-      let parts = [];
-      if (msg.includes('difference between')) {
-        let cleanMsg = msg.replace('difference between', '').replace('what is the', '');
-        parts = cleanMsg.split(/\s+and\s+/i);
-      } else if (msg.includes('compare')) {
-        let cleanMsg = msg.replace('compare', '').replace('with', 'and');
-        parts = cleanMsg.split(/\s+and\s+/i);
-      } else {
-        parts = msg.split(/\s+vs\s+|\s+versus\s+/i);
-      }
-      if (parts.length >= 2) {
-        const subject1 = parts[0].trim();
-        const subject2 = parts[1].trim();
-        let match1 = null, score1 = 0;
-        let match2 = null, score2 = 0;
-        for (const concept of this.graph) {
-          const s1 = this.scoreConcept(subject1, concept);
-          const s2 = this.scoreConcept(subject2, concept);
-          if (s1 > score1) { score1 = s1; match1 = concept; }
-          if (s2 > score2) { score2 = s2; match2 = concept; }
-        }
-        if (score1 >= 80 && score2 >= 80 && match1.id !== match2.id) {
-          const answer = this.buildComparisonAnswer(match1, match2);
-          return { status: "ANSWERED_LOCALLY", evidence: answer, confidence: 1.0, routedKnowledge: [match1.id, match2.id] };
-        }
-      }
-    }
-
+    // --- 9. GENERAL FOOTBALL KNOWLEDGE (Concept Graph) ---
     let bestMatch = null;
     let bestScore = 0;
     let secondBestScore = 0;
@@ -440,9 +550,9 @@ class KimLocalEngine {
       this.recordKnowledgeGap(message, bestScore, intent);
       return { 
         status: "UNCERTAIN", 
-        evidence: bestMatch && bestScore >= 60 ? this.buildAnswer('general', bestMatch, message) : "", 
-        confidence, 
-        routedKnowledge: bestMatch ? [bestMatch.id || bestMatch.lawNumber] : [] 
+        evidence: "I don't have reliable data for that one yet. I’d rather tell you that than manufacture a football fact out of thin air. 😄", 
+        confidence: 0, 
+        routedKnowledge: [] 
       };
     }
   }

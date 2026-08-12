@@ -1,0 +1,346 @@
+============================================================
+ZOKASCORE — DANGEROUS TEAM IDENTITY REVIEW
+============================================================
+
+Total conflicts: 34
+
+------------------------------------------------------------
+CONFLICT #1
+------------------------------------------------------------
+Historical Name: FC Rubin Kazan
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #2
+------------------------------------------------------------
+Historical Name: Sibir Novosibirsk (- 2019)
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #3
+------------------------------------------------------------
+Historical Name: Rotor Volgograd
+Message: Reserve/senior identity conflict
+Matcher Type: REVIEW
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #4
+------------------------------------------------------------
+Historical Name: Málaga CF
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #5
+------------------------------------------------------------
+Historical Name: Real Madrid
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #6
+------------------------------------------------------------
+Historical Name: Sevilla FC
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #7
+------------------------------------------------------------
+Historical Name: FC Barcelona
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #8
+------------------------------------------------------------
+Historical Name: Ath Bilbao
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 
+
+------------------------------------------------------------
+CONFLICT #9
+------------------------------------------------------------
+Historical Name: Chelsea FC
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 3173
+
+------------------------------------------------------------
+CONFLICT #10
+------------------------------------------------------------
+Historical Name: Liverpool FC
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 6204
+
+------------------------------------------------------------
+CONFLICT #11
+------------------------------------------------------------
+Historical Name: Sheffield United
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 16291
+
+------------------------------------------------------------
+CONFLICT #12
+------------------------------------------------------------
+Historical Name: Newcastle
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 7366
+
+------------------------------------------------------------
+CONFLICT #13
+------------------------------------------------------------
+Historical Name: Everton FC
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 3168
+
+------------------------------------------------------------
+CONFLICT #14
+------------------------------------------------------------
+Historical Name: Borussia Dortmund
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 74343
+
+------------------------------------------------------------
+CONFLICT #15
+------------------------------------------------------------
+Historical Name: Heerenveen
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 7132
+
+------------------------------------------------------------
+CONFLICT #16
+------------------------------------------------------------
+Historical Name: Real Madrid
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 30603
+
+------------------------------------------------------------
+CONFLICT #17
+------------------------------------------------------------
+Historical Name: Sevilla FC
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 6711
+
+------------------------------------------------------------
+CONFLICT #18
+------------------------------------------------------------
+Historical Name: ACF Fiorentina
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 18690
+
+------------------------------------------------------------
+CONFLICT #19
+------------------------------------------------------------
+Historical Name: Manchester City
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 7380
+
+------------------------------------------------------------
+CONFLICT #20
+------------------------------------------------------------
+Historical Name: Canada
+Message: Youth/senior identity conflict
+Matcher Type: STRONG
+Identity Type: YOUTH
+Resolved Type: SENIOR
+Provider IDs: 2189
+
+------------------------------------------------------------
+CONFLICT #21
+------------------------------------------------------------
+Historical Name: Mexico
+Message: Youth/senior identity conflict
+Matcher Type: STRONG
+Identity Type: YOUTH
+Resolved Type: SENIOR
+Provider IDs: 1999
+
+------------------------------------------------------------
+CONFLICT #22
+------------------------------------------------------------
+Historical Name: Pogon Szczecin
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 20295
+
+------------------------------------------------------------
+CONFLICT #23
+------------------------------------------------------------
+Historical Name: Lech Poznan
+Message: Women's/senior identity conflict
+Matcher Type: REVIEW
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 67516
+
+------------------------------------------------------------
+CONFLICT #24
+------------------------------------------------------------
+Historical Name: Shelbourne FC
+Message: Youth/senior identity conflict
+Matcher Type: STRONG
+Identity Type: YOUTH
+Resolved Type: SENIOR
+Provider IDs: 70139
+
+------------------------------------------------------------
+CONFLICT #25
+------------------------------------------------------------
+Historical Name: Ingolstadt
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 10724
+
+------------------------------------------------------------
+CONFLICT #26
+------------------------------------------------------------
+Historical Name: Esbjerg fB
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 28770
+
+------------------------------------------------------------
+CONFLICT #27
+------------------------------------------------------------
+Historical Name: Hobro IK
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 39675
+
+------------------------------------------------------------
+CONFLICT #28
+------------------------------------------------------------
+Historical Name: Aarhus Fremad
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 28773
+
+------------------------------------------------------------
+CONFLICT #29
+------------------------------------------------------------
+Historical Name: Bo'ness Athletic FC
+Message: Youth/senior identity conflict
+Matcher Type: STRONG
+Identity Type: YOUTH
+Resolved Type: SENIOR
+Provider IDs: 61898
+
+------------------------------------------------------------
+CONFLICT #30
+------------------------------------------------------------
+Historical Name: B1913 Odense
+Message: Reserve/senior identity conflict
+Matcher Type: EXACT
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 1698
+
+------------------------------------------------------------
+CONFLICT #31
+------------------------------------------------------------
+Historical Name: Tottenham Hotspur
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 16271
+
+------------------------------------------------------------
+CONFLICT #32
+------------------------------------------------------------
+Historical Name: FC Barcelona
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 8811
+
+------------------------------------------------------------
+CONFLICT #33
+------------------------------------------------------------
+Historical Name: Montpellier
+Message: Women's/senior identity conflict
+Matcher Type: STRONG
+Identity Type: WOMEN
+Resolved Type: SENIOR
+Provider IDs: 7543
+
+------------------------------------------------------------
+CONFLICT #34
+------------------------------------------------------------
+Historical Name: Hannover
+Message: Reserve/senior identity conflict
+Matcher Type: STRONG
+Identity Type: RESERVE
+Resolved Type: SENIOR
+Provider IDs: 2785
+

@@ -1,0 +1,4208 @@
+[
+  {
+    "conflict_number": 1,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "FC Rubin Kazan",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2012_2013\\matches.json",
+        "path": "matches[69].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2012_2013\\matches.json",
+        "path": "matches[97].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2013_2014\\matches.json",
+        "path": "matches[73].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2013_2014\\matches.json",
+        "path": "matches[79].home_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 2,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Sibir Novosibirsk (- 2019)",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2012_2013\\matches.json",
+        "path": "matches[99].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2013_2014\\matches.json",
+        "path": "matches[77].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2014_2015\\matches.json",
+        "path": "matches[62].away_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 3,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Rotor Volgograd",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "REVIEW",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\russia\\russian_cup\\2017_2018\\matches.json",
+        "path": "matches[34].home_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 4,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Málaga CF",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[0].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[12].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[15].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[30].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[42].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[48].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[61].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[70].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[79].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[89].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[101].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[105].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[115].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[126].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[144].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2003_2004\\matches.json",
+        "path": "matches[154].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[10].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[17].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[28].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[35].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[45].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[65].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[69].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[77].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[94].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[103].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[111].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[125].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[140].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[150].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[161].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[170].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[185].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[193].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[200].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[215].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[230].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[232].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[247].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[259].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[264].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[276].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[294].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[304].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[315].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[319].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[335].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[342].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[357].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[369].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[378].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[390].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[399].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[416].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[420].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[432].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[446].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2004_2005\\matches.json",
+        "path": "matches[459].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[7].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[18].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[31].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[35].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[54].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[65].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[74].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[80].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[89].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[105].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[114].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[127].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[135].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[149].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[164].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[175].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[180].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[189].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[204].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[215].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[222].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[232].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[245].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[253].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[268].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[277].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[290].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[298].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[313].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[324].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[334].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[348].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[360].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[364].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[381].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[392].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[404].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[414].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[421].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[434].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[442].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[460].away_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 5,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Real Madrid",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[5].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[21].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[26].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[36].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[52].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[57].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[71].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[86].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[92].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[107].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[115].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[129].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[141].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[151].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[161].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[166].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[180].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[187].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[207].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[212].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[229].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[234].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[241].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[261].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[272].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[278].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[294].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[300].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[314].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[326].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[330].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[343].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[353].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[365].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[378].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[393].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[399].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[414].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[426].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[433].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[444].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2005_2006\\matches.json",
+        "path": "matches[456].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[2].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[16].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[22].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[38].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[44].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[56].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[66].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[87].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[98].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[99].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[118].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[127].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[142].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[151].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[163].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[165].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[184].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[187].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[200].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[209].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[228].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[233].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[249].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[263].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[272].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[277].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[294].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[306].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[318].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[320].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[338].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[344].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[359].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[367].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[383].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[394].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[404].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[416].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[422].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[432].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[449].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[453].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[10].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[15].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[24].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[41].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[50].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[58].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[75].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[86].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[91].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[108].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[118].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[129].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[139].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[151].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[156].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[171].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[177].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[190].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[202].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[215].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[223].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[232].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[247].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[256].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[272].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[278].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[296].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[299].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[314].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[323].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[337].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[346].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[354].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[367].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[378].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[394].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[403].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[409].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[427].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[431].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[447].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[457].away_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 6,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Sevilla FC",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[8].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[19].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[30].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[39].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[52].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[62].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[75].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[79].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[90].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[109].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[114].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[127].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[135].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[148].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[156].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[170].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[185].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[191].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[204].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[219].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[235].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[237].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[257].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[260].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[278].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[290].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[293].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[304].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[322].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[330].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[346].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[356].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[367].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[371].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[383].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[399].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[404].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[422].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[426].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2007_2008\\matches.json",
+        "path": "matches[442].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[6].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[20].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[24].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[36].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[52].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[58].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[67].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[81].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[96].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[107].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[116].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[129].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[136].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[146].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[164].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[172].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[181].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[195].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[201].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[209].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[228].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[235].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[251].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[258].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[269].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[284].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[295].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[301].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[315].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[322].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[337].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[345].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[352].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[373].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[384].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[392].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[405].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[413].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[422].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[437].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[445].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2008_2009\\matches.json",
+        "path": "matches[452].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[8].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[12].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[23].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[34].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[54].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[60].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[69].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[78].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[92].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[104].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[112].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[130].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[135].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[151].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[156].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[174].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[175].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[186].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[204].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[217].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[225].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[239].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[246].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[253].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[264].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[283].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[294].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[298].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[318].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[324].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[340].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[351].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[358].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[370].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[380].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[393].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[404].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[407].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[424].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[432].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[446].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2016_2017\\matches.json",
+        "path": "matches[451].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[5].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[15].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[30].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[36].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[48].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[55].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[74].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[79].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[93].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[103].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[113].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[126].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[135].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[150].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[162].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[166].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[183].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[193].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[205].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[213].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[229].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[240].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[247].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[261].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[274].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[284].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[296].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[305].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[317].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[322].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[330].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[350].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[360].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[372].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[381].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[385].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[400].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[415].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[426].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[433].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[447].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[451].away_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 7,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "FC Barcelona",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[1].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[18].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[24].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[35].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[50].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[61].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[71].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[81].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[89].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[106].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[111].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[125].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[132].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[154].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[163].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[171].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[184].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[190].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[199].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[218].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[221].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[232].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[242].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[255].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[268].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[280].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[286].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[307].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[309].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[323].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[330].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[348].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[352].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[363].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[383].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[385].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[397].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[409].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[422].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[433].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[442].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2010_2011\\matches.json",
+        "path": "matches[461].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[3].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[18].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[29].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[33].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[47].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[56].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[66].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[86].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[90].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[104].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[111].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[121].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[133].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[149].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[157].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[168].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[176].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[194].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[199].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[212].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[229].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[233].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[242].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[256].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[268].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[275].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[296].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[305].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[317].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[327].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[334].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[349].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[355].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[371].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[375].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[386].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[398].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[409].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[426].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[436].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[440].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2011_2012\\matches.json",
+        "path": "matches[461].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[0].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[16].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[31].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[33].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[47].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[57].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[68].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[77].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[89].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[109].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[120].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[121].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[132].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[146].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[161].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[167].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[177].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[188].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[201].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[212].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[221].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[235].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[249].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[256].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[265].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[276].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[287].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[297].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[309].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[322].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[330].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[350].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[353].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[366].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[381].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[386].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[397].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[407].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[418].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[433].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[442].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2012_2013\\matches.json",
+        "path": "matches[460].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[5].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[12].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[22].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[43].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[50].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[55].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[70].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[85].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[94].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[99].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[113].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[125].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[133].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[144].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[154].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[165].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[180].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[196].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[199].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[216].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[224].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[235].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[245].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[263].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[269].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[278].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[286].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[298].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[312].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[321].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[331].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[342].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[355].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[370].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[374].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[388].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[397].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[412].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[418].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[429].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[441].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2013_2014\\matches.json",
+        "path": "matches[453].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[2].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[12].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[27].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[33].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[44].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[61].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[67].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[82].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[94].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[109].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[111].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[123].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[133].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[144].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[158].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[169].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[176].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[197].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[199].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[212].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[225].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[236].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[248].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[255].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[263].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[279].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[285].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[297].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[314].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[320].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[336].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[350].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[358].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[371].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[375].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[390].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[396].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[410].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[418].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[429].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[442].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2014_2015\\matches.json",
+        "path": "matches[459].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[6].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[21].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[22].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[35].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[50].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[65].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[82].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[91].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[99].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[109].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[126].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[131].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[138].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[146].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[164].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[172].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[178].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[186].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[197].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[208].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[224].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[232].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[252].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[255].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[270].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[277].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[294].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[299].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[308].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[325].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[332].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[347].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[360].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[365].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[384].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[392].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[397].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[408].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[421].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[435].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[440].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2017_2018\\matches.json",
+        "path": "matches[453].home_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 8,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Ath Bilbao",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [],
+    "sources": [
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[10].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[17].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[27].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[36].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[44].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[59].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[67].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[78].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[88].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[101].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[119].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[131].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[136].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[143].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[156].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[175].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[185].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[197].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[198].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[210].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[223].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[232].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[248].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[262].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[265].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[276].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[286].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[296].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[309].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[324].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[331].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[351].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[354].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[363].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[379].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[395].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[406].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[412].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[425].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[437].home_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[441].away_team",
+        "type": "history"
+      },
+      {
+        "file": "public_data\\knowledge\\football\\history\\clubs\\spain\\segunda_division\\2015_2016\\matches.json",
+        "path": "matches[452].home_team",
+        "type": "history"
+      }
+    ]
+  },
+  {
+    "conflict_number": 9,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Chelsea FC",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "3173"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[3].away",
+        "type": "fixture"
+      },
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[1].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 10,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Liverpool FC",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "6204"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[4].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 11,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Sheffield United",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "16291"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[4].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 12,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Newcastle",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "7366"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[5].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 13,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Everton FC",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "3168"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[5].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 14,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Borussia Dortmund",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "74343"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[6].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 15,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Heerenveen",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "7132"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[6].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 16,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Real Madrid",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "30603"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[15].home",
+        "type": "fixture"
+      },
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[0].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 17,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Sevilla FC",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "6711"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[15].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 18,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "ACF Fiorentina",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "18690"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[16].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 19,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Manchester City",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "7380"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[16].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 20,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Canada",
+    "identityType": "YOUTH",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Youth/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "2189"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[73].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 21,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Mexico",
+    "identityType": "YOUTH",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Youth/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "1999"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[73].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 22,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Pogon Szczecin",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "20295"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[146].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 23,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Lech Poznan",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "REVIEW",
+    "score": null,
+    "providerIds": [
+      "67516"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[194].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 24,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Shelbourne FC",
+    "identityType": "YOUTH",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Youth/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "70139"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[248].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 25,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Ingolstadt",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "10724"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[310].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 26,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Esbjerg fB",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "28770"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[326].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 27,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Hobro IK",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "39675"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[327].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 28,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Aarhus Fremad",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "28773"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-08.json",
+        "path": "matches[346].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 29,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Bo'ness Athletic FC",
+    "identityType": "YOUTH",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Youth/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "61898"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-10.json",
+        "path": "matches[61].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 30,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "B1913 Odense",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "EXACT",
+    "score": null,
+    "providerIds": [
+      "1698"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-11.json",
+        "path": "matches[74].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 31,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Tottenham Hotspur",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "16271"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[0].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 32,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "FC Barcelona",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "8811"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[4].home",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 33,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Montpellier",
+    "identityType": "WOMEN",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Women's/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "7543"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[4].away",
+        "type": "fixture"
+      }
+    ]
+  },
+  {
+    "conflict_number": 34,
+    "nameA": null,
+    "nameB": null,
+    "liveName": null,
+    "historicalName": "Hannover",
+    "identityType": "RESERVE",
+    "resolvedType": "SENIOR",
+    "conflict": null,
+    "message": "Reserve/senior identity conflict",
+    "matcherType": "STRONG",
+    "score": null,
+    "providerIds": [
+      "2785"
+    ],
+    "sources": [
+      {
+        "file": "public_data\\fixtures\\2026-08-12.json",
+        "path": "matches[122].away",
+        "type": "fixture"
+      }
+    ]
+  }
+]

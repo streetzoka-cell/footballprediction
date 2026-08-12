@@ -1,0 +1,21 @@
+============================================================
+ZOKASCORE ENCODING REPAIR REPORT
+============================================================
+
+Mode: DRY RUN — NO FILES MODIFIED
+Root: C:\Users\COISA COMPUTERS\OneDrive\Desktop\Apk\footballprediction\backend-v1\public_data
+
+Files scanned:       96899
+Files changed:       0
+Files skipped:       96899
+Files failed:        0
+
+Bytes scanned:       1827543476
+Bytes written:       0
+
+Replacements:        0
+Backups created:     0
+
+------------------------------------------------------------
+SAMPLE CHANGES
+------------------------------------------------------------

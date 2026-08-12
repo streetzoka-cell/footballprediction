@@ -1,0 +1,33 @@
+{
+  "id": "world_cup_format",
+  "name": "FIFA World Cup Format",
+  "aliases": [
+    "world cup format",
+    "how the world cup works",
+    "world cup structure"
+  ],
+  "category": "history",
+  "intents": [
+    "definition",
+    "how_it_works"
+  ],
+  "definition": "The FIFA World Cup format has evolved over time. The current format features 32 teams (expanding to 48 in 2026) competing over a month in the host nation(s). It consists of a group stage followed by a knockout bracket.",
+  "history": [
+    {
+      "era": "1930-1978",
+      "format": "16 teams (mostly), single group stage followed by knockout rounds."
+    },
+    {
+      "era": "1982-1994",
+      "format": "24 teams, expanded to include a Round of 16."
+    },
+    {
+      "era": "1998-2022",
+      "format": "32 teams, 8 groups of 4, top 2 advance to Round of 16."
+    },
+    {
+      "era": "2026 onwards",
+      "format": "48 teams, 12 groups of 4, top 2 plus 8 best third-place teams advance to Round of 32."
+    }
+  ]
+}
