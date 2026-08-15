@@ -9,7 +9,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import StatusCenter from "./components/StatusCenter";
 
-// ★ NEW: Import Zoka AI and the Brain icon
+// Import Zoka AI and the Brain icon
 import ZokaAI from "./components/ZokaAI";
 import { Brain } from "lucide-react";
 
