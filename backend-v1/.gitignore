@@ -1,26 +1,169 @@
-# Dependencies
-node_modules/
+# ============================================================
+# ZOKASCORE - Git Ignore
+# Source code stays in Git.
+# Generated data, secrets, models and local runtime files do not.
+# ============================================================
 
+
+# ------------------------------------------------------------
+# Dependencies
+# ------------------------------------------------------------
+
+node_modules/
+**/node_modules/
+
+
+# ------------------------------------------------------------
 # Logs
+# ------------------------------------------------------------
+
 logs/
+**/logs/
 *.log
 
+
+# ------------------------------------------------------------
 # Environment & Secrets
+# ------------------------------------------------------------
+
 .env
-.env.local
+.env.*
+!.env.example
+
 firebase-adminsdk.json
+serviceAccount*.json
+*.pem
+*.key
 
-# Local Data & Datasets (Build locally using Pipelines 00-50)
+
+# ------------------------------------------------------------
+# Local Data & Generated Datasets
+# Built locally by Pipelines 00-50
+# ------------------------------------------------------------
+
 data/
-public_data/
-public_data_OLD/
-public_data_OLD_LEGACY/
-data_audit/
-backups/
-.venv/
-encoding-repair-report/
+**/data/
 
-# OS Files
+public_data/
+**/public_data/
+
+public_data_OLD/
+**/public_data_OLD/
+
+public_data_OLD_LEGACY/
+**/public_data_OLD_LEGACY/
+
+data_audit/
+**/data_audit/
+
+backups/
+**/backups/
+
+encoding-repair-report/
+**/encoding-repair-report/
+
+
+# ------------------------------------------------------------
+# Raw football datasets
+# ------------------------------------------------------------
+
+*.csv
+
+
+# ------------------------------------------------------------
+# Machine Learning Artifacts
+# ------------------------------------------------------------
+
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+*.pt
+*.pth
+*.h5
+*.hdf5
+*.model
+*.bin
+
+models/
+**/models/
+
+artifacts/
+**/artifacts/
+
+checkpoints/
+**/checkpoints/
+
+
+# ------------------------------------------------------------
+# Python
+# ------------------------------------------------------------
+
+.venv/
+venv/
+env/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+
+
+# ------------------------------------------------------------
+# Archives / forensic material
+# ------------------------------------------------------------
+
+_archive/
+**/_archive/
+
+_archive_31_forensics/
+**/_archive_31_forensics/
+
+_archive_31_legacy/
+**/_archive_31_legacy/
+
+
+# ------------------------------------------------------------
+# Temporary files
+# ------------------------------------------------------------
+
 *.bak
+*.backup
+*.old
+*.orig
+*.tmp
+*.temp
+
+
+# ------------------------------------------------------------
+# OS Files
+# ------------------------------------------------------------
+
 .DS_Store
 Thumbs.db
+desktop.ini
+
+
+# ------------------------------------------------------------
+# Vercel local metadata
+# ------------------------------------------------------------
+
+.vercel/*
+
+
+# ------------------------------------------------------------
+# Generated frontend/build files
+# ------------------------------------------------------------
+
+dist/
+build/
+coverage/
+.vite/
+.cache/
+
+
+# ------------------------------------------------------------
+# Runtime user/local state
+# ------------------------------------------------------------
+
+user_memory.json
+**/user_memory.json

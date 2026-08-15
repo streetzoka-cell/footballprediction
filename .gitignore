@@ -1,24 +1,83 @@
+# ============================================================
+# ZOKASCORE MAIN SITE
+# ============================================================
+
+
 # Dependencies
 node_modules/
 backend/node_modules/
+backend-v1/node_modules/
+
 
 # Environment files
 .env
-backend/.env
+.env.*
+!.env.example
 
-# Firebase Admin
-backend-v1/serviceAccountKey.json
+backend/.env
+backend-v1/.env
+
+
+# Firebase Admin / Secrets
 firebase-adminsdk.json
+backend-v1/serviceAccountKey.json
+backend-v1/serviceAccount*.json
+*.pem
+*.key
+
 
 # Logs
 *.log
+logs/
 backend/logs/
+backend-v1/logs/
+
 
 # OS files
 .DS_Store
 Thumbs.db
+desktop.ini
 
-# Vite
+
+# Vite / Build output
 dist/
+build/
+.vite/
+coverage/
 
+
+# Vercel local files
+.vercel/
+
+
+# Local/generated backend data
+backend/data/
+backend/public_data/
+backend-v1/data/
+backend-v1/public_data/
+backend-v1/public_data_OLD/
+backend-v1/data_audit/
+backend-v1/backups/
+
+
+# Python / ML artifacts
+.venv/
+__pycache__/
+*.pyc
+*.pkl
+*.pickle
+*.joblib
+*.onnx
+*.pt
+*.pth
+
+
+# Temporary files
+*.bak
+*.tmp
+*.temp
+*.old
+
+
+# Local agent/tool state
 skills-lock.json
