@@ -13,6 +13,9 @@ const RecoveryService = require('./services/RecoveryService');
 const UserPredictionStore = require('./services/UserPredictionStore');
 const QueueService = require('./services/QueueService');
 
+// ★ NEW ML PREDICTION JOB
+const predictionJob = require('./scheduler/jobs/predictionJob');
+
 const app = require('./server');
 
 async function bootstrap() {
@@ -35,6 +38,13 @@ async function bootstrap() {
 
     startScheduler();
 
+    // ★ START ML PREDICTION GENERATOR LOOP
+    async function runPredictionJobLoop() {
+      const interval = await predictionJob.execute();
+      setTimeout(runPredictionJobLoop, interval);
+    }
+    runPredictionJobLoop();
+
     const server = app.listen(env.PORT, () => {
       logger.info(`🚀 Server listening on port ${env.PORT}`);
       logger.info('🛡️  Active Provider Engine:');
@@ -45,7 +55,7 @@ async function bootstrap() {
       logger.info('   Standings   : Football-Data → API-Football');
       logger.info('   Teams       : API-Football → Football-Data');
       logger.info('   Media/Logos : SportsDB');
-      logger.info('🧠 AI Engine   : Zoka V1 (Model Lab & Intelligence API Active)');
+      logger.info('🧠 AI Engine   : Zoka V2 (Model Lab & Intelligence API Active)');
       logger.info('========================================');
     });
 

@@ -17,8 +17,20 @@ const FormGuide = ({ form }) => {
   );
 };
 
-export default function MatchIntelligence({ data, homeName, awayName }) {
-  if (!data) {
+// Helper component for probability bars
+const ProbBar = ({ label, homeProb, drawProb, awayProb }) => (
+  <div className="flex-col gap-8 mt-8">
+    <div className="text-muted text-xs font-bold uppercase">{label}</div>
+    <div className="flex h-8 rounded-md overflow-hidden bg-elevated" role="progressbar">
+      {homeProb && <div style={{ width: `${homeProb}%`, background: 'var(--primary)' }} title={`Home ${homeProb}%`} />}
+      {drawProb && <div style={{ width: `${drawProb}%`, background: 'var(--text-muted)' }} title={`Draw ${drawProb}%`} />}
+      {awayProb && <div style={{ width: `${awayProb}%`, background: 'var(--danger)' }} title={`Away ${awayProb}%`} />}
+    </div>
+  </div>
+);
+
+export default function MatchIntelligence({ data, homeName, awayName, mlPredictions }) { // ★ Added mlPredictions prop
+  if (!data && !mlPredictions) {
     return (
       <section className="glass-card flex-col gap-20 p-20 mt-20">
         <div className="flex-center gap-8">
@@ -26,18 +38,21 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
           <h3 className="text-primary font-bold text-md">Match Intelligence</h3>
         </div>
         <div className="text-muted text-sm text-center p-12">
-          Deep tactical stats (Elo, H2H, Goal Patterns) will populate here once the match begins or is scheduled.
+          Deep tactical stats and ML predictions will populate here once the match is scheduled.
         </div>
       </section>
     );
   }
 
-  const { home, away, h2h, zokaPick } = data;
-
-  // Calculate Win Probability Bar (Simple Elo conversion for visual)
+  const { home, away, h2h } = data || {};
   const totalElo = (home?.elo || 1500) + (away?.elo || 1500);
   const homeWinProb = totalElo > 0 ? Math.round(((home?.elo || 1500) / totalElo) * 100) : 50;
   const awayWinProb = 100 - homeWinProb;
+
+  // Extract ML Probabilities safely
+  const p1X2 = mlPredictions?.["1x2"]?.probabilities;
+  const pOU = mlPredictions?.["ou_2_5"]?.probabilities;
+  const pBTTS = mlPredictions?.["btts"]?.probabilities;
 
   return (
     <section className="glass-card flex-col gap-20 p-20 mt-20" aria-labelledby="match-intel-title">
@@ -46,22 +61,46 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
         <h3 id="match-intel-title" className="text-primary font-bold text-md">Match Intelligence</h3>
       </div>
 
-      {/* ★ NEW: ZOKA STRONG PICK BANNER */}
-      {zokaPick && (
+      {/* ★ NEW: ZOKASCORE V2 ML PREDICTIONS */}
+      {mlPredictions && (
         <div className="glass-card p-16 flex-col gap-8" style={{ background: 'linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--accent-rgb), 0.05))', border: '1px solid rgba(var(--primary-rgb), 0.2)' }}>
           <div className="flex-center gap-8 text-primary font-bold text-sm uppercase">
-            <Zap size={14} fill="currentColor" /> Zoka Strong Pick
+            <Zap size={14} fill="currentColor" /> Zoka AI Predictions
           </div>
-          <div className="flex-between items-center">
-            <span className="text-primary font-extrabold text-lg">{zokaPick.market}</span>
-            <span className={`badge ${zokaPick.confidence === 'HIGH' ? 'badge-primary' : zokaPick.confidence === 'MEDIUM' ? 'badge-gold' : 'badge-muted'}`}>
-              {zokaPick.confidence} ({zokaPick.rating}%)
-            </span>
+          
+          {p1X2 && (
+            <ProbBar 
+              label="1X2 Probability" 
+              homeProb={p1X2.HOME_WIN * 100} 
+              drawProb={p1X2.DRAW * 100} 
+              awayProb={p1X2.AWAY_WIN * 100} 
+            />
+          )}
+          
+          <div className="grid grid-cols-2 gap-12 mt-12">
+            {pOU && (
+              <div className="glass-card p-12 flex-col gap-4">
+                <div className="text-muted text-xs font-bold uppercase">Over/Under 2.5</div>
+                <div className="flex-between text-sm font-bold">
+                  <span className="text-primary">Over: {pOU.OVER ? (pOU.OVER * 100).toFixed(1) : '-'}%</span>
+                  <span className="text-danger">Under: {pOU.UNDER ? (pOU.UNDER * 100).toFixed(1) : '-'}%</span>
+                </div>
+              </div>
+            )}
+            {pBTTS && (
+              <div className="glass-card p-12 flex-col gap-4">
+                <div className="text-muted text-xs font-bold uppercase">BTTS</div>
+                <div className="flex-between text-sm font-bold">
+                  <span className="text-success">Yes: {pBTTS.YES ? (pBTTS.YES * 100).toFixed(1) : '-'}%</span>
+                  <span className="text-muted">No: {pBTTS.NO ? (pBTTS.NO * 100).toFixed(1) : '-'}%</span>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
 
-      {/* Elo & Win Probability */}
+      {/* Elo & Win Probability (Existing) */}
       <div className="flex-col gap-8">
         <div className="text-muted text-xs font-bold uppercase">Strength (Elo)</div>
         <div className="flex h-8 rounded-md overflow-hidden bg-elevated" role="progressbar">
@@ -75,7 +114,7 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
         </div>
       </div>
 
-      {/* Recent Form */}
+      {/* Recent Form (Existing) */}
       <div className="grid gap-12" style={{ gridTemplateColumns: '1fr 1fr' }}>
         <div className="glass-card p-12 flex-col gap-8" style={{ background: 'rgba(var(--primary-rgb), 0.03)' }}>
           <div className="flex-center gap-4 text-muted text-xs font-bold uppercase">
@@ -91,25 +130,7 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
         </div>
       </div>
 
-      {/* Goal Patterns */}
-      <div className="grid gap-12" style={{ gridTemplateColumns: '1fr 1fr' }}>
-        <div className="glass-card p-12 flex-col gap-4">
-          <div className="flex-center gap-4 text-muted text-xs font-bold uppercase">
-            <BarChart2 size={12} /> {homeName} Stats
-          </div>
-          <div className="text-secondary text-sm flex-between"><span>Over 2.5:</span> <span className="font-bold">{home?.goalPatterns?.overall?.over_2_5_pct || '-'}%</span></div>
-          <div className="text-secondary text-sm flex-between"><span>BTTS:</span> <span className="font-bold">{home?.goalPatterns?.overall?.btts_pct || '-'}%</span></div>
-        </div>
-        <div className="glass-card p-12 flex-col gap-4">
-          <div className="flex-center gap-4 text-muted text-xs font-bold uppercase">
-            <BarChart2 size={12} /> {awayName} Stats
-          </div>
-          <div className="text-secondary text-sm flex-between"><span>Over 2.5:</span> <span className="font-bold">{away?.goalPatterns?.overall?.over_2_5_pct || '-'}%</span></div>
-          <div className="text-secondary text-sm flex-between"><span>BTTS:</span> <span className="font-bold">{away?.goalPatterns?.overall?.btts_pct || '-'}%</span></div>
-        </div>
-      </div>
-
-      {/* H2H Summary */}
+      {/* H2H Summary (Existing) */}
       {h2h && h2h.meetings > 0 && (
         <div className="glass-card p-12 flex-col gap-8">
           <div className="flex-center gap-4 text-muted text-xs font-bold uppercase">
@@ -119,9 +140,6 @@ export default function MatchIntelligence({ data, homeName, awayName }) {
             <span className="text-primary">{h2h.teamA_wins} Wins</span>
             <span className="text-muted">{h2h.draws} Draws</span>
             <span className="text-danger">{h2h.teamB_wins} Wins</span>
-          </div>
-          <div className="text-muted text-xs text-center mt-4">
-            Total Meetings: {h2h.meetings} | Last 5: {h2h.last_5?.slice(0,3).map(m => `${m.teamA_score}-${m.teamB_score}`).join(', ')}
           </div>
         </div>
       )}

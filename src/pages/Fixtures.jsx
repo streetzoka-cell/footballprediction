@@ -611,7 +611,7 @@ export default function Fixtures() {
     <div className="zoka-page">
       <SEO 
         title="Football Fixtures, Live Scores & League Tables" 
-        description="Explore today's football fixtures, live scores, and predictions from top leagues worldwide." 
+        description="Explore today's football fixtures, live scores, and AI predictions from top leagues worldwide." 
         keywords="football fixtures, live scores, predictions, premier league, champions league" 
         robots="index,follow" 
         structuredData={itemListSchema}
@@ -638,7 +638,6 @@ export default function Fixtures() {
                 </select>
               )}
             </div>
-
             <button className="zoka-hdr-btn" onClick={handleRefresh} title="Refresh"><RefreshCw size={18} className={fixturesLoading ? 'anim-spin' : ''} /></button>
           </div>
         </div>
@@ -668,29 +667,14 @@ export default function Fixtures() {
               <span>More</span>
               <ChevronDown size={16} style={{ transition: 'transform 0.3s cubic-bezier(0.4, 0, 0.2, 1)', transform: ui.moreDatesOpen ? 'rotate(180deg)' : 'rotate(0deg)' }} />
             </button>
-            
-            <div 
-              className="zoka-more-dropdown"
-              style={{
-                maxHeight: ui.moreDatesOpen ? '450px' : '0',
-                opacity: ui.moreDatesOpen ? '1' : '0',
-                visibility: ui.moreDatesOpen ? 'visible' : 'hidden',
-                padding: ui.moreDatesOpen ? 'var(--sp-8)' : '0 var(--sp-8)',
-                transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
-              }}
-            >
+            <div className="zoka-more-dropdown" style={{ maxHeight: ui.moreDatesOpen ? '450px' : '0', opacity: ui.moreDatesOpen ? '1' : '0', visibility: ui.moreDatesOpen ? 'visible' : 'hidden', padding: ui.moreDatesOpen ? 'var(--sp-8)' : '0 var(--sp-8)', transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)' }}>
               <div className="zoka-more-label">Past Dates</div>
               {dates.past.map(d => (
-                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
-                  {d.label}
-                </button>
+                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>
               ))}
-              
               <div className="zoka-more-label" style={{ marginTop: '12px' }}>Future Dates</div>
               {dates.future.map(d => (
-                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>
-                  {d.label}
-                </button>
+                <button key={d.str} className={`zoka-more-item ${selectedDate === d.str ? 'active' : ''}`} onClick={() => { setSelectedDate(d.str); setUI(prev => ({ ...prev, moreDatesOpen: false })); }}>{d.label}</button>
               ))}
             </div>
           </div>
@@ -708,16 +692,47 @@ export default function Fixtures() {
           <>
             <div className="zoka-pill-scroll" style={{ display: 'flex', gap: '8px', marginBottom: '16px', overflowX: 'auto' }}>
               {[{ key: 'all', label: 'All Matches' }, { key: 'live', label: 'Live (Real-time)' }, { key: 'finished', label: 'Finished Results' }].map(tf => (
-                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)}>
-                  {tf.label}
-                </button>
+                <button key={tf.key} className={`zoka-pill ${timeFilter === tf.key ? 'active' : ''}`} onClick={() => setTimeFilter(tf.key)}>{tf.label}</button>
               ))}
             </div>
 
             {fixturesLoading ? (
               <div className="zoka-skel-featured" />
             ) : (
-              <MatchOfTheDayCard match={featuredMatch} />
+              <MatchOfTheDayCard match={featuredMatch} mlPredictions={featuredMatch?.mlPredictions} />
+            )}
+
+            {/* ★ NEW: ZOKA AI PREDICTIONS SECTION ★ */}
+            {!searchQ && timeFilter === 'all' && displayFixtures.filter(m => m.mlPredictions).length > 0 && (
+              <div className="zoka-section zoka-ai-section">
+                <div className="zoka-league-hd">
+                  <Brain size={18} style={{ color: 'var(--accent)' }} />
+                  <span className="zoka-league-name">Zoka AI Predictions</span>
+                </div>
+                {displayFixtures.filter(m => m.mlPredictions).slice(0, 5).map((m, i) => (
+                  <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`ai-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 50}ms` }}>
+                    <div className="zoka-ai-top">
+                      <span className="zoka-ai-comp">{m.leagueName}</span>
+                      <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
+                    </div>
+                    <div className="zoka-ai-teams">
+                      <span className="zoka-ai-team">{m.homeName}</span>
+                      <span className="zoka-ai-vs">VS</span>
+                      <span className="zoka-ai-team">{m.awayName}</span>
+                    </div>
+                    <div className="zoka-ai-probbar">
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN * 100 || 33}%`, background: 'var(--primary)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW * 100 || 33}%`, background: 'var(--text-muted)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN * 100 || 33}%`, background: 'var(--danger)' }} />
+                    </div>
+                    <div className="zoka-ai-labels">
+                      <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? (m.mlPredictions["1x2"].probabilities.HOME_WIN * 100).toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? (m.mlPredictions["1x2"].probabilities.DRAW * 100).toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? (m.mlPredictions["1x2"].probabilities.AWAY_WIN * 100).toFixed(0) : 33}%</span>
+                    </div>
+                  </Link>
+                ))}
+              </div>
             )}
 
             {topMatches.length > 0 && !searchQ && (
@@ -762,12 +777,7 @@ export default function Fixtures() {
               <ListSkeleton count={5} />
             ) : displayFixtures.length === 0 ? (
               <div className="zoka-empty-anim" style={{padding: '40px 0'}}>
-                <EmptyState 
-                  icon={Calendar} 
-                  title="No fixtures scheduled for this date." 
-                  hint="Try another date or clear your search." 
-                  action={searchQ ? <button className="zoka-pill" onClick={() => setSearchQ('')} style={{marginTop: 8}}>Clear Search</button> : null} 
-                />
+                <EmptyState icon={Calendar} title="No fixtures scheduled for this date." hint="Try another date or clear your search." action={searchQ ? <button className="zoka-pill" onClick={() => setSearchQ('')} style={{marginTop: 8}}>Clear Search</button> : null} />
               </div>
             ) : (
               <>
@@ -790,27 +800,19 @@ export default function Fixtures() {
 
                 {(ui.leagueFilterOpen || compFilter !== 'ALL') && otherLeagues.map(group => renderLeagueSection(group))}
 
-                {/* ★ SEO FIX: Semantic Internal Linking Directory */}
                 <nav className="zoka-seo-links glass-card p-24 mt-24" aria-label="Match and league directory">
                   <h3 className="text-primary font-bold mb-12 text-lg">Today's Match Directory</h3>
                   <ul className="grid gap-4" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(250px, 1fr))' }}>
                     {displayFixtures.slice(0, 60).map(m => (
                       <li key={m.id}>
-                        <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link text-sm hover:text-primary transition-colors" rel="bookmark">
-                          {m.homeName} vs {m.awayName}
-                        </Link>
+                        <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} className="zoka-seo-link text-sm hover:text-primary transition-colors" rel="bookmark">{m.homeName} vs {m.awayName}</Link>
                       </li>
                     ))}
                   </ul>
-                  
                   <h3 className="text-primary font-bold mt-24 mb-12 text-lg">Explore Leagues</h3>
                   <ul className="flex flex-wrap gap-8">
                     {MAJOR_LEAGUES.map(c => (
-                      <li key={c.id}>
-                        <Link to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link badge text-xs">
-                          {c.name}
-                        </Link>
-                      </li>
+                      <li key={c.id}><Link to={`/league/${c.id}/${slugify(c.name)}`} className="zoka-seo-link badge text-xs">{c.name}</Link></li>
                     ))}
                   </ul>
                 </nav>
@@ -839,8 +841,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}
-                  {l.name}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}{l.name}
                 </button>
               ))}
             </div>
@@ -849,17 +850,12 @@ export default function Fixtures() {
             ) : standingsTable.length > 0 ? (
               <div className="zoka-tbl-wrap">
                 <table className="zoka-tbl">
-                  <thead>
-                    <tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr>
-                  </thead>
+                  <thead><tr><th>#</th><th>Team</th><th>P</th><th>W</th><th>D</th><th>L</th><th>GF</th><th>GA</th><th>GD</th><th>Pts</th></tr></thead>
                   <tbody>
                     {standingsTable.map(row => (
                       <tr key={row.team?.id || row.rank}>
                         <td>{row.rank}</td>
-                        <td className="flex-center gap-8">
-                          {row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" />}
-                          {row.team?.name || 'TBD'}
-                        </td>
+                        <td className="flex-center gap-8">{row.team?.logo && <img src={row.team?.logo} alt="" width="20" height="20" loading="lazy" />}{row.team?.name || 'TBD'}</td>
                         <td>{row.all?.played}</td><td>{row.all?.win}</td><td>{row.all?.draw}</td><td>{row.all?.lose}</td>
                         <td>{row.all?.goals?.for}</td><td>{row.all?.goals?.against}</td>
                         <td>{row.goalsDiff > 0 ? '+' : ''}{row.goalsDiff}</td>
@@ -869,9 +865,7 @@ export default function Fixtures() {
                   </tbody>
                 </table>
               </div>
-            ) : (
-              <EmptyState icon={Trophy} title="Select a competition to view standings." />
-            )}
+            ) : ( <EmptyState icon={Trophy} title="Select a competition to view standings." /> )}
           </>
         )}
 
@@ -880,8 +874,7 @@ export default function Fixtures() {
             <div className="zoka-pill-scroll" style={{ marginBottom: '10px' }}>
               {MAJOR_LEAGUES.map(l => (
                 <button key={l.id} className={`zoka-pill ${selectedLeagueId === l.id ? 'active' : ''}`} onClick={() => setSelectedLeagueId(l.id)}>
-                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}
-                  {l.name}
+                  {l.emblem && <img src={l.emblem} alt={l.name} width="24" height="24" loading="lazy" />}{l.name}
                 </button>
               ))}
             </div>
@@ -896,9 +889,7 @@ export default function Fixtures() {
                   </Link>
                 ))}
               </div>
-            ) : (
-              <EmptyState icon={Users} title="Select a competition to view teams." />
-            )}
+            ) : ( <EmptyState icon={Users} title="Select a competition to view teams." /> )}
           </>
         )}
       </div>

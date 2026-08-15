@@ -9,12 +9,11 @@ const ResponseEngine = require('./ResponseEngine');
 const HumorEngine = require('./HumorEngine');
 const ConversationHistory = require('./ConversationHistory');
 const ConversationEngine = require('./ConversationEngine');
-const FootballKnowledgeBase = require('./FootballKnowledgeBase');
 const logger = require('../utils/logger');
 
 class KimOrchestrator {
   constructor() {
-    this.VERSION = '5.3.0';
+    this.VERSION = '5.4.0';
   }
 
   async resolveQuery(message, userContextStr = '', uid = 'guest') {
@@ -53,7 +52,7 @@ class KimOrchestrator {
         }
       }
 
-      // 7. Hardcoded 2014 Brazil vs Germany Match
+      // 7. Hardcoded 2014 Brazil vs Germany Match (Encoding Fixed)
       if (!resolvedData && (/brazil.*vs.*germany.*2014/i.test(normalized.searchable) || /germany.*vs.*brazil.*2014/i.test(normalized.searchable))) {
         const matchData = {
           home_team: 'Brazil', away_team: 'Germany',
@@ -97,66 +96,49 @@ class KimOrchestrator {
         resolvedData = { response: `Alright, hard mode it is. ⚽🧠\n\nWho scored the winning goal in the 2014 World Cup final?`, confidence: 1.0, intent: 'football_trivia' };
       }
 
-      // 9. Football Knowledge Base (Concepts, Rules, Tactics)
-      if (!resolvedData && (intent === 'football_knowledge' || intent === 'football_rule' || intent === 'general')) {
-        const knowledge = FootballKnowledgeBase.resolve(message);
-        if (knowledge && knowledge.resolved) {
-          const concept = knowledge.concept;
-          resolvedData = {
-            response: concept.simpleExplanation || concept.definition || concept.overview || 'No definition available.',
-            confidence: knowledge.confidence,
-            intent: 'football_knowledge'
-          };
-        } else if (/offside/i.test(message)) {
-          resolvedData = {
-            response: `Offside is a rule where an attacker is in an offside position if they are nearer to the opponent's goal line than both the ball and the second-last opponent when the ball is played to them.`,
-            confidence: 0.95,
-            intent: 'football_knowledge'
-          };
-        }
-      }
-
-      // 10. KimRouter (Central Routing Authority for Data, History, QA, and Memory)
+      // 9. KimRouter (Central Routing Authority for Data, History, QA, and Knowledge)
       if (!resolvedData) {
         resolvedData = await KimRouter.route(uid, normalized.searchable, intent, entities, context);
       }
 
-      // 11. Response Formatting
+      // 10. Response Formatting
       let responseText = '';
       let model = 'kim-reasoning-engine';
+
+      // ★ FIX: Calculate finalIntent early to use for Humor and fallback
+      const finalIntent = resolvedData ? (resolvedData.intent || intent) : intent;
 
       if (resolvedData) {
         responseText = ResponseEngine.format({
           response: resolvedData.response || null,
           data: resolvedData.data || null,
-          intent: resolvedData.intent || intent,
+          intent: finalIntent,
           memory: memorySummary,
           context
         });
       } else {
-        responseText = this.buildContextualFallback(message, intent, context);
+        responseText = this.buildContextualFallback(message, finalIntent, context);
         model = 'local-uncertain';
       }
 
-            // 11. Humor Engine
-      // ★ FIX: Strictly disable humor for greetings, casual banter, and memory commands to prevent spammy behavior.
-      const allowHumor = !['casual', 'greeting', 'memory_save', 'memory_recall', 'memory_forget', 'football_trivia'].includes(intent);
-      const humor = HumorEngine.contextual({ intent: intent, userId: uid, allowHumor });
+      // 11. Humor Engine
+      // ★ FIX: Use finalIntent instead of original intent
+      const allowHumor = !['casual', 'greeting', 'memory_save', 'memory_recall', 'memory_forget', 'football_trivia', 'historical_not_found'].includes(finalIntent);
+      const humor = HumorEngine.contextual({ intent: finalIntent, userId: uid, allowHumor });
       
       if (humor && humor.text && model !== 'local-uncertain' && allowHumor) {
         responseText += `\n\n${humor.text}`;
       }
 
-      
-      // 13. Finalize & Record
+      // 12. Finalize & Record
       ConversationHistory.addMessage(uid, { role: 'assistant', content: responseText });
-      MemoryEngine.rememberMessage(uid, 'assistant', responseText, { intent });
+      MemoryEngine.rememberMessage(uid, 'assistant', responseText, { intent: finalIntent });
 
       return {
         status: "ANSWERED_LOCALLY",
         evidence: responseText,
         confidence: resolvedData ? resolvedData.confidence : 0.5,
-        intent: resolvedData ? resolvedData.intent || intent : intent,
+        intent: finalIntent, // ★ FIX: Return finalIntent
         model
       };
 

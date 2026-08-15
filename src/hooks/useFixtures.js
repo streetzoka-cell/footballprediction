@@ -1,5 +1,5 @@
-﻿// src/hooks/useFixtures.js
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+﻿import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useMemo } from 'react'; // ★ NEW: Added useMemo
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
@@ -194,4 +194,49 @@ export function useTeams(leagueId) {
       return failureCount < 1;
     },
   });
+}
+
+// ============================================================
+// ★ NEW: Hook that merges Fixtures with ML Predictions
+// ============================================================
+export function useFixturesWithPredictions(dateStr, sport = 'football') {
+  const fixturesQuery = useFixtures(dateStr, sport);
+
+  const predictionsQuery = useQuery({
+    queryKey: ['mlPredictions', dateStr],
+    queryFn: async () => {
+      try {
+        const res = await footballApi.getDailyPredictions(dateStr);
+        // Create a lookup map: { matchId: predictionData }
+        const predMap = {};
+        (res?.data || []).forEach(p => {
+          predMap[String(p.matchId)] = p.markets;
+        });
+        return predMap;
+      } catch (err) {
+        // If predictions fail, return empty object so fixtures still render
+        return {};
+      }
+    },
+    staleTime: 60 * 60 * 1000, // Predictions are static pre-match, cache for 1 hour
+    gcTime: 1000 * 60 * 60 * 24,
+    retry: 1,
+  });
+
+  // Merge predictions into fixtures
+  const mergedData = useMemo(() => {
+    if (!fixturesQuery.data) return [];
+    const preds = predictionsQuery.data || {};
+    
+    return fixturesQuery.data.map(match => ({
+      ...match,
+      mlPredictions: preds[String(match.id)] || null
+    }));
+  }, [fixturesQuery.data, predictionsQuery.data]);
+
+  return {
+    ...fixturesQuery,
+    data: mergedData,
+    isPredictionsLoading: predictionsQuery.isLoading
+  };
 }

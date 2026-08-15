@@ -7,23 +7,22 @@ const logger = require('../../../utils/logger');
 router.use(adminAuth);
 
 // POST /api/v1/admin/ai-lab/generate-features
-// Triggers the Node.js script to calculate Elo, Form, and H2H for all missing matches
+// Triggers the NEW V2 ML pipeline to generate daily multi-market predictions
 router.post('/generate-features', (req, res) => {
-  logger.info('[Admin AI Lab] Triggering generate-match-features.js...');
+  logger.info('[Admin AI Lab] Triggering Pipeline 50 (Daily ML Predictions)...');
   
-  // Execute the script. Note: This runs asynchronously in the background.
-  // The response is sent immediately so the frontend doesn't hang.
-  exec('node scripts/generate-match-features.js', { cwd: process.cwd(), maxBuffer: 1024 * 1024 * 10 }, (error, stdout, stderr) => {
+  // Execute the Python script. Note: This runs asynchronously in the background.
+  exec('python pipeline/50-generate-daily-predictions.py', { cwd: process.cwd(), maxBuffer: 1024 * 1024 * 20 }, (error, stdout, stderr) => {
     if (error) {
-      logger.error(`[Admin AI Lab] Error running features script: ${error.message}`);
+      logger.error(`[Admin AI Lab] Error running Pipeline 50: ${error.message}`);
       return;
     }
-    logger.info(`[Admin AI Lab] Features script completed successfully.`);
+    logger.info(`[Admin AI Lab] Pipeline 50 completed successfully.`);
   });
 
   res.json({ 
     success: true, 
-    message: 'Feature generation started in the background. Check server logs for progress.' 
+    message: 'V2 ML Prediction generation started in the background. Check server logs for progress.' 
   });
 });
 

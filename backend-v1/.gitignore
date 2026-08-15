@@ -1,10 +1,26 @@
+# Dependencies
 node_modules/
+
+# Logs
 logs/
-data/
-public_data/
+*.log
+
+# Environment & Secrets
 .env
 .env.local
 firebase-adminsdk.json
-*.log
+
+# Local Data & Datasets (Build locally using Pipelines 00-50)
+data/
+public_data/
+public_data_OLD/
+public_data_OLD_LEGACY/
+data_audit/
+backups/
+.venv/
+encoding-repair-report/
+
+# OS Files
 *.bak
 .DS_Store
+Thumbs.db

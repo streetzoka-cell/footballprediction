@@ -99,6 +99,21 @@ export default function MatchDetails() {
     return null;
   }, [todayFx, yestFx, tomFx, matchId, now, fallbackMatchData]);
 
+  // ★ NEW: Fetch Daily ML Predictions for the match's date
+  const { data: dailyPredictions = [] } = useQuery({
+    queryKey: ['mlPredictions', match?.dateStr],
+    queryFn: () => footballApi.getDailyPredictions(match.dateStr).then(res => res?.data || []),
+    enabled: !!match?.dateStr,
+    staleTime: 60 * 60 * 1000, // Cache for 1 hour
+  });
+
+  // ★ NEW: Extract the specific prediction for this match
+  const matchPrediction = useMemo(() => {
+    if (!dailyPredictions || !match) return null;
+    const found = dailyPredictions.find(p => String(p.matchId) === String(match.id));
+    return found ? found.markets : null;
+  }, [dailyPredictions, match]);
+
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
   const standingsTable = standingsData?.standings?.[0] || [];
@@ -334,8 +349,8 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* ZOKA MATCH INTELLIGENCE (Includes Strong Pick, Elo, Form, Goal Patterns, H2H summary) */}
-          <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} />
+          {/* ZOKA MATCH INTELLIGENCE (Includes ML Predictions, Strong Pick, Elo, Form, Goal Patterns, H2H summary) */}
+          <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} mlPredictions={matchPrediction} />
 
           {/* DEDICATED ODDS SECTION (With Fallbacks) */}
           <div className="glass-card p-24 mb-24 mt-24">

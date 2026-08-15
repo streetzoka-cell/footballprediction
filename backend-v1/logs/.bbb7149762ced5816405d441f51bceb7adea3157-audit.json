@@ -6,16 +6,6 @@
     "auditLog": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\.bbb7149762ced5816405d441f51bceb7adea3157-audit.json",
     "files": [
         {
-            "date": 1785275547076,
-            "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-07-29.log",
-            "hash": "8ac0842e030a7f9cd9ff69bb55840d3e947dbe0e90a687dc219f63224b40a082"
-        },
-        {
-            "date": 1785360151356,
-            "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-07-30.log",
-            "hash": "d5c0e233591113bc78c25ea79eba881e751fca5d7a14e6af3c9acc77315fa663"
-        },
-        {
             "date": 1785513827179,
             "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-07-31.log",
             "hash": "734dc662466120c871da5baa902e4da4c631c396655b4119deced14cc4c54526"
@@ -64,6 +54,16 @@
             "date": 1786482273612,
             "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-08-12.log",
             "hash": "375f680f4b5b26a4d0104e53b18bb944224a8ed92fec2172dbd7165a0dcccf45"
+        },
+        {
+            "date": 1786630487454,
+            "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-08-13.log",
+            "hash": "bdccf90bd1a75decabc91458f41148ac16fc193bfd10cc91d56c4d8d345138d3"
+        },
+        {
+            "date": 1786657049992,
+            "name": "C:\\Users\\COISA COMPUTERS\\OneDrive\\Desktop\\Apk\\footballprediction\\backend-v1\\logs\\error-2026-08-14.log",
+            "hash": "c9e5f84b0cb4201dc78b20648a35b54cc484039a47c9a4bef24c8864aae594f4"
         }
     ],
     "hashType": "sha256"

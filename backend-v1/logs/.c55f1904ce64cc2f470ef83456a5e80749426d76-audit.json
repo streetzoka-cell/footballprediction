@@ -6,16 +6,6 @@
     "auditLog": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\.c55f1904ce64cc2f470ef83456a5e80749426d76-audit.json",
     "files": [
         {
-            "date": 1785418095323,
-            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-07-30.log",
-            "hash": "14b0c59c08a5bd8dadc77b1c4e83062e4713d256c4190433cf3f16737922854d"
-        },
-        {
-            "date": 1785445408351,
-            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-07-31.log",
-            "hash": "e762111e6ffcb0ed06a3cb299cf93b6a05cb53b1991f41010540222a6b22f988"
-        },
-        {
             "date": 1785531604390,
             "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-08-01.log",
             "hash": "8617074087d3da05096e95208287d47c92c1ce8b878b33ab86007918dd5ab45a"
@@ -74,6 +64,21 @@
             "date": 1786482000632,
             "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-08-12.log",
             "hash": "090082e5fbfaf5704ec4256e262157ec2d13aa4332768ed15ff730f08404f9cd"
+        },
+        {
+            "date": 1786568400201,
+            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-08-13.log",
+            "hash": "344a42e81a92307e8a628996ccb51b2ae1bc8e528062d9316f0c65835e1e728a"
+        },
+        {
+            "date": 1786654800544,
+            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-08-14.log",
+            "hash": "49a00848aaa30786e27540fb42e4e1a976248d200c4493dbb48434a1824f662b"
+        },
+        {
+            "date": 1786741200524,
+            "name": "C:\\Users\\COISA COMPUTERS\\onedrive\\desktop\\apk\\footballprediction\\backend-v1\\logs\\combined-2026-08-15.log",
+            "hash": "a6dedd509a26be411c108d8c2098744b8c78b452723150732149e71827653750"
         }
     ],
     "hashType": "sha256"

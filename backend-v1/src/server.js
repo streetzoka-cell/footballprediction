@@ -29,7 +29,7 @@ const leaguesRoute = require('./routes/v1/leagues');
 const adminSchedulers = require('./routes/v1/admin/schedulers');
 const monitoringDashboard = require('./routes/v1/monitoring/dashboard');
 const sitemapRoute = require('./routes/v1/sitemap');
-const predictionsRoute = require('./routes/v1/predictions');
+const predictionsRoute = require('./routes/v1/predictions'); // Updated to serve ML data + votes
 const queueRoute = require('./routes/v1/queue');
 const featuredRoute = require('./routes/v1/featured');
 const zokaPicksRoute = require('./routes/v1/zokaPicks');
@@ -159,7 +159,7 @@ app.use('/api/v1/match', matchRoute);
 app.use('/api/v1/teams', teamsRoute);
 app.use('/api/v1/standings', standingsRoute);
 app.use('/api/v1/leagues', leaguesRoute);
-app.use('/api/v1/predictions', predictionsRoute);
+app.use('/api/v1/predictions', predictionsRoute); // Serves ML data + User Votes
 app.use('/api/v1/queue', queueRoute);
 app.use('/api/v1/featured', featuredRoute);
 app.use('/api/v1/zoka-picks', zokaPicksRoute);
@@ -210,7 +210,7 @@ app.use('/api/v1/knowledge', knowledgeRoutes);
 
 /*
  * ============================================================
- * SITEMAPS & STATIC DATA
+ * SITEMAPS & STATIC DATA (Includes ML /predictions/ folder)
  * ============================================================
  */
 
@@ -232,6 +232,11 @@ app.use(
       if (!filePath.endsWith('.json')) return;
       if (filePath.endsWith('live.json')) {
         res.setHeader('Cache-Control', 'public, max-age=15');
+        return;
+      }
+      // Cache predictions for 1 hour, other static data for 15 mins
+      if (filePath.includes('predictions')) {
+        res.setHeader('Cache-Control', 'public, max-age=3600');
         return;
       }
       res.setHeader('Cache-Control', 'public, max-age=900');

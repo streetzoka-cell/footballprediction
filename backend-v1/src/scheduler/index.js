@@ -1,13 +1,13 @@
-﻿// backend-v1/src/scheduler/index.js
-const schedulerEngine = require('./SchedulerEngine');
+﻿const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
 const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
 const finishedFixturesJob = require('./jobs/finishedFixturesJob');
 const standingsJob = require('./jobs/standingsJob');
 const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
-const leaderboardJob = require('./jobs/leaderboardJob'); // ★ FIX: Added missing import
+const leaderboardJob = require('./jobs/leaderboardJob');
 const statsJob = require('./jobs/statsJob'); 
+const predictionJob = require('./jobs/predictionJob'); // ★ NEW ML JOB
 
 const { processQueue } = require('../services/QueueService');
 const internetMonitor = require('../services/InternetMonitor');
@@ -18,6 +18,7 @@ const CRON = {
   TOMORROW_FIXTURES: '10 0 * * *',
   FINISHED_FIXTURES: '0 */5 * * *', 
   STANDINGS: '0 */6 * * *',
+  PREDICTIONS: '0 4 * * *', // ★ NEW: Run ML generator at 4:00 AM UTC daily
 };
 
 const USER_PREDICTION_SYNC_CHECK_MS = parseInt(
@@ -33,6 +34,9 @@ function startScheduler() {
   schedulerEngine.schedule('FinishedFixtures', CRON.FINISHED_FIXTURES, () => finishedFixturesJob.execute(false));
   schedulerEngine.schedule('Standings', CRON.STANDINGS, standingsJob.execute);
   
+  // ★ REGISTER ML PREDICTION JOB
+  schedulerEngine.schedule('MLPredictions', CRON.PREDICTIONS, predictionJob.execute);
+
   schedulerEngine.schedule('LeaderboardJob', leaderboardJob.schedule, leaderboardJob.execute);
   schedulerEngine.schedule('StatsJob', statsJob.schedule, statsJob.execute);
 
@@ -66,6 +70,10 @@ function startScheduler() {
       await liveJob.execute();
       await leaderboardJob.execute(); 
       await statsJob.execute(); 
+      
+      // ★ RUN ON BOOT so we don't have to wait until 4 AM for the first batch
+      await predictionJob.execute(); 
+      
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {
@@ -81,6 +89,10 @@ function startScheduler() {
       await liveJob.execute();
       await leaderboardJob.execute(); 
       await statsJob.execute(); 
+      
+      // ★ RUN ON INTERNET RESTORE in case we missed the 4 AM cron during downtime
+      await predictionJob.execute();
+      
       await processQueue();
       await userPredictionSyncJob.execute(false);
     } catch (err) {

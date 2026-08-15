@@ -6051,3 +6051,344 @@ Design principles:
 .mg-bottom-cta h3 { font-size: 1.5rem; font-weight: 800; color: var(--text-primary); margin-bottom: 12px; }
 .mg-bottom-cta p { color: var(--text-muted); max-width: 600px; margin: 0 auto; line-height: 1.6; }
 
+
+
+/* ============================================================
+   ZOKASCORE V2 — PRO AI PREDICTION STYLES
+============================================================ */
+
+/* --- AI PREDICTION MINI CARDS --- */
+.zoka-ai-section {
+  margin-bottom: var(--sp-24);
+}
+
+.zoka-ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.04), rgba(var(--accent-rgb), 0.02));
+  border: 1px solid rgba(var(--primary-rgb), 0.15);
+  border-radius: 16px;
+  margin-bottom: 12px;
+  text-decoration: none;
+  color: inherit;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: zk-slide-in 0.4s ease-out both;
+  position: relative;
+  overflow: hidden;
+}
+
+.zoka-ai-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; width: 4px; height: 100%;
+  background: linear-gradient(180deg, var(--primary), var(--accent));
+  opacity: 0.8;
+}
+
+.zoka-ai-card:hover {
+  border-color: rgba(var(--primary-rgb), 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+  background: linear-gradient(135deg, rgba(var(--primary-rgb), 0.08), rgba(var(--accent-rgb), 0.04));
+}
+
+.zoka-ai-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.zoka-ai-comp {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoka-ai-time {
+  background: rgba(var(--gold-rgb), 0.1);
+  color: var(--gold);
+  padding: 2px 8px;
+  border-radius: 6px;
+  font-size: 10px;
+}
+
+.zoka-ai-teams {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.zoka-ai-team {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--text-primary);
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.zoka-ai-team:first-child { text-align: left; }
+.zoka-ai-team:last-child { text-align: right; }
+
+.zoka-ai-vs {
+  font-size: 10px;
+  font-weight: 900;
+  color: var(--text-muted);
+  background: rgba(255,255,255,0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.zoka-ai-probbar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: var(--bg-elevated);
+}
+
+.zoka-ai-probbar div {
+  height: 100%;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoka-ai-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--text-muted);
+}
+
+.zoka-ai-labels span:first-child { color: var(--primary); }
+.zoka-ai-labels span:last-child { color: var(--danger); }
+
+/* --- ENHANCED MATCH OF THE DAY --- */
+.zoka-motd-card {
+  background: linear-gradient(135deg, var(--bg-card), rgba(var(--primary-rgb), 0.02));
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 20px;
+  margin-bottom: 24px;
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+}
+
+.zoka-motd-card.expanded {
+  border-color: rgba(var(--primary-rgb), 0.3);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3), 0 0 0 1px rgba(var(--primary-rgb), 0.1);
+  background: linear-gradient(135deg, var(--bg-card), rgba(var(--primary-rgb), 0.04));
+}
+
+.zoka-motd-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 12px;
+  transition: background 0.2s;
+  background: none;
+  border: none;
+  color: inherit;
+  font-family: inherit;
+}
+
+.zoka-motd-header:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.zoka-intel-animate {
+  animation: zk-fade-slide-down 0.5s cubic-bezier(0.4, 0, 0.2, 1) both;
+}
+
+/* --- VOTE BUTTONS PRO --- */
+.zoka-vote-btn {
+  flex: 1;
+  padding: 14px 8px;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.zoka-vote-btn:hover:not(:disabled) {
+  border-color: var(--primary);
+  color: var(--primary);
+  transform: translateY(-2px);
+  background: rgba(var(--primary-rgb), 0.05);
+  box-shadow: 0 4px 12px rgba(var(--primary-rgb), 0.1);
+}
+
+.zoka-vote-btn.selected {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dim));
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 6px 20px rgba(var(--primary-rgb), 0.35);
+}
+
+.zoka-vote-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* --- PROBABILITY BARS (Match Intelligence) --- */
+.zoka-prediction-widget {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 20px;
+  position: relative;
+  z-index: 1;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+}
+
+.zoka-prediction-bar {
+  display: flex;
+  height: 8px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.05);
+}
+
+.zoka-pred-fill {
+  height: 100%;
+  transition: width 1.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.zoka-pred-fill.home { background: linear-gradient(90deg, var(--primary), var(--primary-dim)); }
+.zoka-pred-fill.draw { background: var(--text-muted); }
+.zoka-pred-fill.away { background: linear-gradient(90deg, var(--danger), #c026d3); }
+
+.zoka-pred-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+/* --- ANIMATIONS --- */
+@keyframes zk-slide-in {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes zk-fade-slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes zk-score-pop {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); color: var(--success); }
+  100% { transform: scale(1); }
+}
+
+/* --- GLASSMORPHISM ENHANCEMENTS --- */
+.zoka-card {
+  position: relative;
+  overflow: hidden;
+  padding: 12px 16px;
+  background: rgba(255, 255, 255, 0.02);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 16px;
+  margin-bottom: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  animation: zk-slide-in 0.3s ease-out both;
+  cursor: pointer;
+}
+
+.zoka-card:hover {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: rgba(var(--primary-rgb), 0.2);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
+}
+
+.zoka-card.live {
+  border-color: rgba(var(--danger-rgb), 0.3);
+  background: rgba(var(--danger-rgb), 0.02);
+  animation: zk-live-glow 3s ease-in-out infinite, zk-slide-in 0.3s ease-out both;
+}
+
+@keyframes zk-live-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(var(--danger-rgb), 0); }
+  50% { box-shadow: 0 0 12px 0 rgba(var(--danger-rgb), 0.15); }
+}
+
+/* --- TABS UPGRADE --- */
+.zoka-tabs {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 4px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.zoka-tabs::-webkit-scrollbar { display: none; }
+
+.zoka-tab-indicator {
+  position: absolute;
+  bottom: 4px;
+  height: calc(100% - 8px);
+  background: rgba(var(--primary-rgb), 0.15);
+  border-radius: 8px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 0;
+  pointer-events: none;
+  box-shadow: 0 0 12px rgba(var(--primary-rgb), 0.2);
+}
+
+.zoka-tab {
+  position: relative;
+  z-index: 1;
+  flex: 1 0 auto;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s ease;
+  text-align: center;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+}
+
+.zoka-tab.active {
+  background: transparent;
+  color: var(--primary);
+  box-shadow: none;
+}

@@ -37,86 +37,86 @@ class KnowledgeRouter {
 
     /* ----------------------------------------------------------
        0. LIGHTWEIGHT FOOTBALL KNOWLEDGE DICTIONARY
-       Handles simple facts instantly without JSON DB lookups.
     ---------------------------------------------------------- */
     const lightweightFacts = [
-      { pattern: /anfield/i, answer: "Liverpool play at Anfield." },
-      { pattern: /old trafford/i, answer: "Manchester United play at Old Trafford." },
-      { pattern: /camp nou/i, answer: "Barcelona play at Camp Nou." },
-      { pattern: /red devils/i, answer: "Manchester United are known as the Red Devils." },
-      { pattern: /old lady/i, answer: "Juventus are known as the Old Lady." },
-      { pattern: /\bcr7\b/i, answer: "CR7 is Cristiano Ronaldo." },
-      { pattern: /o fenômeno/i, answer: "O Fenômeno is Ronaldo Nazário." },
-      { pattern: /hand of god/i, answer: "Diego Maradona scored the Hand of God goal." },
-      { pattern: /king eric/i, answer: "King Eric is Eric Cantona." },
-      { pattern: /divine ponytail/i, answer: "Roberto Baggio is known as the Divine Ponytail." },
+      { pattern: /\b(where|which stadium|stadium).*liverpool|\banfield\b/i, answer: "Liverpool play at Anfield." },
+      { pattern: /\b(where|which stadium|stadium).*manchester united|\bold trafford\b/i, answer: "Manchester United play at Old Trafford." },
+      { pattern: /\b(where|which stadium|stadium).*barcelona|\bcamp nou\b/i, answer: "Barcelona play at Camp Nou." },
+      { pattern: /\b(who|what).*red devils\b/i, answer: "Manchester United are known as the Red Devils." },
+      { pattern: /\b(who|what).*old lady\b/i, answer: "Juventus are known as the Old Lady." },
+      { pattern: /\b(who|what).*cr7\b/i, answer: "CR7 is Cristiano Ronaldo." },
+      { pattern: /\b(who|what).*o fenômeno\b/i, answer: "O Fenômeno is Ronaldo Nazário." },
+      { pattern: /\b(what|who).*hand of god\b/i, answer: "Diego Maradona scored the Hand of God goal." },
+      { pattern: /\b(who|what).*king eric\b/i, answer: "King Eric is Eric Cantona." },
+      { pattern: /\b(who|what).*divine ponytail\b/i, answer: "Roberto Baggio is known as the Divine Ponytail." },
       
       // Competition Records
-      { pattern: /most champions league/i, answer: "Real Madrid have won the most Champions League titles." },
-      { pattern: /champions league the most times/i, answer: "Real Madrid have won the Champions League the most times." },
-      { pattern: /most world cups/i, answer: "Brazil has won the most World Cups." },
-      { pattern: /most ballon d'?or/i, answer: "Lionel Messi has won the most Ballon d'Or awards." },
-      { pattern: /most serie a/i, answer: "Juventus has won Serie A the most times." },
-      { pattern: /most la liga/i, answer: "Real Madrid has won La Liga the most times." },
-      { pattern: /most bundesliga/i, answer: "Bayern Munich has won the Bundesliga the most times." },
-      { pattern: /most ligue 1/i, answer: "Paris Saint-Germain has won Ligue 1 the most times." },
-      { pattern: /most europa league/i, answer: "Sevilla has won the Europa League the most times." },
-      { pattern: /most afcon/i, answer: "Egypt has won AFCON the most times." },
-      { pattern: /most international goals/i, answer: "Cristiano Ronaldo has scored the most goals in men's international football." },
-      { pattern: /most premier league goals in a single season/i, answer: "Erling Haaland scored the most Premier League goals in a single season." },
+      { pattern: /\b(who has won|who won|most).*champions league\b/i, answer: "Real Madrid have won the most Champions League titles." },
+      { pattern: /\b(who has won|who won|most).*world cups\b/i, answer: "Brazil has won the most World Cups." },
+      { pattern: /\b(who has won|who won|most).*ballon d'?or\b/i, answer: "Lionel Messi has won the most Ballon d'Or awards." },
+      { pattern: /\b(who has won|who won|most).*serie a\b/i, answer: "Juventus has won Serie A the most times." },
+      { pattern: /\b(who has won|who won|most).*la liga\b/i, answer: "Real Madrid has won La Liga the most times." },
+      { pattern: /\b(who has won|who won|most).*bundesliga\b/i, answer: "Bayern Munich has won the Bundesliga the most times." },
+      { pattern: /\b(who has won|who won|most).*ligue 1\b/i, answer: "Paris Saint-Germain has won Ligue 1 the most times." },
+      { pattern: /\b(who has won|who won|most).*europa league\b/i, answer: "Sevilla has won the Europa League the most times." },
+      { pattern: /\b(who has won|who won|most).*afcon\b/i, answer: "Egypt has won AFCON the most times." },
+      { pattern: /\b(who has scored|most).*international goals\b/i, answer: "Cristiano Ronaldo has scored the most goals in men's international football." },
+      { pattern: /\b(who scored|most).*premier league goals in a single season\b/i, answer: "Erling Haaland scored the most Premier League goals in a single season." },
       
       // Specific Trivia
-      { pattern: /unbeaten in the 2003\/04/i, answer: "Arsenal went unbeaten in the 2003/04 Premier League season." },
-      { pattern: /36 premier league goals in 2022\/23/i, answer: "Erling Haaland scored 36 Premier League goals in the 2022/23 season." },
-      { pattern: /harambee stars/i, answer: "Kenya's national football team is commonly called Harambee Stars." },
-      { pattern: /die schwarzgelben/i, answer: "Borussia Dortmund is known as Die Schwarzgelben." },
-      { pattern: /2023 fifa club world cup/i, answer: "Manchester City won the 2023 FIFA Club World Cup." },
-      { pattern: /2023\/24 serie a/i, answer: "Inter won the 2023/24 Serie A season." },
-      { pattern: /2023\/24 la liga/i, answer: "Real Madrid won the 2023/24 La Liga season." },
-      { pattern: /2023\/24 bundesliga/i, answer: "Bayer Leverkusen won the 2023/24 Bundesliga season." },
-      { pattern: /afcon 2023/i, answer: "Ivory Coast won AFCON 2023." },
-      { pattern: /2022 ballon d'?or/i, answer: "Karim Benzema won the 2022 Ballon d'Or." },
-      { pattern: /2023 ballon d'?or/i, answer: "Lionel Messi won the 2023 Ballon d'Or." },
-      { pattern: /91 goals in the 2012/i, answer: "Lionel Messi scored 91 goals in the 2012 calendar year." },
+      { pattern: /\b(who|what).*unbeaten in the 2003\/04\b/i, answer: "Arsenal went unbeaten in the 2003/04 Premier League season." },
+      { pattern: /\b(who scored|how many).*36 premier league goals in 2022\/23\b/i, answer: "Erling Haaland scored 36 Premier League goals in the 2022/23 season." },
+      { pattern: /\b(what|who).*harambee stars\b/i, answer: "Kenya's national football team is commonly called Harambee Stars." },
+      { pattern: /\b(who|what).*die schwarzgelben\b/i, answer: "Borussia Dortmund is known as Die Schwarzgelben." },
+      { pattern: /\b(who won|winner).*2023 fifa club world cup\b/i, answer: "Manchester City won the 2023 FIFA Club World Cup." },
+      { pattern: /\b(who won|winner).*2023\/24 serie a\b/i, answer: "Inter won the 2023/24 Serie A season." },
+      { pattern: /\b(who won|winner).*2023\/24 la liga\b/i, answer: "Real Madrid won the 2023/24 La Liga season." },
+      { pattern: /\b(who won|winner).*2023\/24 bundesliga\b/i, answer: "Bayer Leverkusen won the 2023/24 Bundesliga season." },
+      { pattern: /\b(who won|winner).*afcon 2023\b/i, answer: "Ivory Coast won AFCON 2023." },
+      { pattern: /\b(who won|winner).*2022 ballon d'?or\b/i, answer: "Karim Benzema won the 2022 Ballon d'Or." },
+      { pattern: /\b(who won|winner).*2023 ballon d'?or\b/i, answer: "Lionel Messi won the 2023 Ballon d'Or." },
+      { pattern: /\b(who scored|how many).*91 goals in the 2012\b/i, answer: "Lionel Messi scored 91 goals in the 2012 calendar year." },
       
       // Entity / Location
-      { pattern: /germany.*continent/i, answer: "Germany is in Europe." },
-      { pattern: /real madrid.*country/i, answer: "Real Madrid is from Spain." },
-      { pattern: /bayern munich.*country/i, answer: "Bayern Munich is from Germany." },
+      { pattern: /\b(what|which).*germany.*continent\b/i, answer: "Germany is in Europe." },
+      { pattern: /\b(what|which).*real madrid.*country\b/i, answer: "Real Madrid is from Spain." },
+      { pattern: /\b(what|which).*bayern munich.*country\b/i, answer: "Bayern Munich is from Germany." },
       
-      // ★ FIX: Softened subjective claims to factual records
-      { pattern: /greatest premier league goalscorer/i, answer: "Alan Shearer is the Premier League's all-time top scorer." },
-      { pattern: /all-time top scorer/i, answer: "Alan Shearer is the Premier League's all-time top scorer." },
+      // Records
+      { pattern: /\b(who is|who was).*greatest premier league goalscorer\b/i, answer: "Alan Shearer is the Premier League's all-time top scorer." },
+      { pattern: /\b(who is|who was).*all-time top scorer\b/i, answer: "Alan Shearer is the Premier League's all-time top scorer." },
       
-      { pattern: /first premier league title/i, answer: "Manchester United won the first Premier League title." },
-      { pattern: /first uefa conference league/i, answer: "Roma won the first UEFA Conference League." },
-      { pattern: /2023 europa conference league/i, answer: "West Ham won the 2023 Europa Conference League." },
-      { pattern: /2016 europa league/i, answer: "Sevilla won the 2016 Europa League." },
-      { pattern: /2023 europa league/i, answer: "Sevilla won the 2023 Europa League." },
+      { pattern: /\b(who won|winner).*first premier league title\b/i, answer: "Manchester United won the first Premier League title." },
+      { pattern: /\b(who won|winner).*first uefa conference league\b/i, answer: "Roma won the first UEFA Conference League." },
+      { pattern: /\b(who won|winner).*2023 europa conference league\b/i, answer: "West Ham won the 2023 Europa Conference League." },
+      { pattern: /\b(who won|winner).*2016 europa league\b/i, answer: "Sevilla won the 2016 Europa League." },
+      { pattern: /\b(who won|winner).*2023 europa league\b/i, answer: "Sevilla won the 2023 Europa League." },
       
       // Transfers
-      // ★ FIX: Corrected Haaland transfer fact
-      { pattern: /haaland.*join/i, answer: "Erling Haaland joined Manchester City from Borussia Dortmund." },
-      { pattern: /ronaldo.*join.*sporting.*2003/i, answer: "Cristiano Ronaldo joined Manchester United from Sporting CP in 2003." },
-      { pattern: /neymar.*join.*barcelona.*2017/i, answer: "Neymar joined Paris Saint-Germain from Barcelona in 2017." },
+      { pattern: /\b(who|where).*haaland.*join\b/i, answer: "Erling Haaland joined Manchester City from Borussia Dortmund." },
+      { pattern: /\b(who|where).*ronaldo.*join.*sporting.*2003\b/i, answer: "Cristiano Ronaldo joined Manchester United from Sporting CP in 2003." },
+      { pattern: /\b(who|where).*neymar.*join.*barcelona.*2017\b/i, answer: "Neymar joined Paris Saint-Germain from Barcelona in 2017." },
       
       // Concepts
-      { pattern: /less possession.*still win/i, answer: "Yes. A team with less possession can still win a football match." },
-      { pattern: /scores first.*guarantee victory/i, answer: "No. Scoring first does not guarantee victory. Teams can still concede, draw or lose." },
+      { pattern: /\b(can|do).*less possession.*still win\b/i, answer: "Yes. A team with less possession can still win a football match." },
+      { pattern: /\b(does|is).*scores first.*guarantee victory\b/i, answer: "No. Scoring first does not guarantee victory. Teams can still concede, draw or lose." },
       
-      // Historical Matches (Missing from datasets)
-      { pattern: /2005 champions league final.*score/i, answer: "The score in the 2005 Champions League final was 3-3." },
-      { pattern: /who won the 2005 champions league final/i, answer: "Liverpool won the 2005 Champions League final." },
-      { pattern: /1999 champions league final/i, answer: "Manchester United won the 1999 Champions League final. Ole Gunnar Solskjær scored the winning goal." },
-      // ★ FIX: Corrected 2012 UCL wording
-      { pattern: /2012 champions league/i, answer: "Chelsea won the 2012 Champions League. Didier Drogba scored the equaliser and the decisive penalty." },
-      { pattern: /2014 world cup final.*who scored/i, answer: "Mario Götze scored the winning goal for Germany in the 2014 World Cup final." },
-      { pattern: /germany.*second goal.*2014 semifinal/i, answer: "Toni Kroos scored Germany's second goal against Brazil in the 2014 semifinal." },
-      { pattern: /germany.*fourth goal.*2014 semifinal/i, answer: "Toni Kroos scored Germany's fourth goal against Brazil in the 2014 semifinal." },
-      { pattern: /germany.*fifth goal.*2014 semifinal/i, answer: "Sami Khedira scored Germany's fifth goal against Brazil in the 2014 semifinal." },
-      { pattern: /liverpool.*equalising goal.*2005 champions league final/i, answer: "Steven Gerrard scored Liverpool's equalising goal in the 2005 Champions League final." },
-      { pattern: /liverpool.*third goal.*2005 champions league final/i, answer: "Xabi Alonso scored Liverpool's third goal in the 2005 Champions League final." },
-      { pattern: /morocco.*2022 world cup semi/i, answer: "Morocco reached the 2022 World Cup semi-final." }
+      // Historical Matches
+      { pattern: /\b(what was|what is).*2005 champions league final.*score\b/i, answer: "The score in the 2005 Champions League final was 3-3." },
+      { pattern: /\b(who won|winner).*2005 champions league final\b/i, answer: "Liverpool won the 2005 Champions League final." },
+      { pattern: /\b(who won|winner).*1999 champions league final\b/i, answer: "Manchester United won the 1999 Champions League final. Ole Gunnar Solskjær scored the winning goal." },
+      { pattern: /\b(who won|winner).*2012 champions league\b/i, answer: "Chelsea won the 2012 Champions League. Didier Drogba scored the equaliser and the decisive penalty." },
+      { pattern: /\b(who scored).*2014 world cup final\b/i, answer: "Mario Götze scored the winning goal for Germany in the 2014 World Cup final." },
+      
+      // 2014 Semifinal Goals (Corrected Facts)
+      { pattern: /\b(who scored).*germany.*second goal.*2014 semifinal\b/i, answer: "Miroslav Klose scored Germany's second goal against Brazil in the 2014 semifinal." },
+      { pattern: /\b(who scored).*germany.*third goal.*2014 semifinal\b/i, answer: "Toni Kroos scored Germany's third goal against Brazil in the 2014 semifinal." },
+      { pattern: /\b(who scored).*germany.*fourth goal.*2014 semifinal\b/i, answer: "Toni Kroos scored Germany's fourth goal against Brazil in the 2014 semifinal." },
+      { pattern: /\b(who scored).*germany.*fifth goal.*2014 semifinal\b/i, answer: "Sami Khedira scored Germany's fifth goal against Brazil in the 2014 semifinal." },
+      
+      { pattern: /\b(who scored).*liverpool.*equalising goal.*2005 champions league final\b/i, answer: "Steven Gerrard scored Liverpool's equalising goal in the 2005 Champions League final." },
+      { pattern: /\b(who scored).*liverpool.*third goal.*2005 champions league final\b/i, answer: "Xabi Alonso scored Liverpool's third goal in the 2005 Champions League final." },
+      { pattern: /\b(who|what).*morocco.*2022 world cup semi\b/i, answer: "Morocco reached the 2022 World Cup semi-final." }
     ];
 
     for (const fact of lightweightFacts) {
@@ -131,13 +131,27 @@ class KnowledgeRouter {
     const historicalResponse = this.resolveHistorical(intent, message, context);
     if (historicalResponse) return historicalResponse;
 
+    /* ----------------------------------------------------------
+       2. FOOTBALL DATA RESOLVER (Structured Data)
+    ---------------------------------------------------------- */
     const dataResponse = FootballDataResolver.resolve(intent, message, context.entities || []);
-    if (dataResponse && dataResponse.answer) {
-      return this.result({ type: 'FOOTBALL_DATA', intent: intent, confidence: dataResponse.confidence, answer: dataResponse.answer, data: dataResponse.data });
+    
+    // ★ FIX: Route based on resolver's type and format the structured result
+    if (dataResponse) {
+      const answer = this.formatFootballDataResponse(dataResponse);
+      if (answer) {
+        return this.result({
+          type: 'FOOTBALL_DATA',
+          intent: intent,
+          confidence: dataResponse.confidence || 0.90,
+          answer,
+          data: dataResponse.data
+        });
+      }
     }
 
     /* ----------------------------------------------------------
-       2. FOOTBALL KNOWLEDGE BASE
+       3. FOOTBALL KNOWLEDGE BASE
     ---------------------------------------------------------- */
     if (intent === 'football_knowledge' || intent === 'football_rule' || intent === 'football_definition' || intent === 'definition' || intent === 'general') {
       try {
@@ -179,7 +193,7 @@ class KnowledgeRouter {
     }
 
     /* ----------------------------------------------------------
-       3. CONVERSATIONAL BANTER ROUTING
+       4. CONVERSATIONAL BANTER ROUTING
     ---------------------------------------------------------- */
     if (this.goatPatterns.test(msg)) return this.handleGOAT(memory, context);
     if (this.opinionPatterns.test(msg)) return this.handleOpinion(msg, memory, context);
@@ -200,11 +214,82 @@ class KnowledgeRouter {
     return null;
   }
 
+  /* ============================================================
+     STRUCTURED DATA FORMATTER
+  ============================================================ */
+  
+  // ★ FIX: Converts structured DataResolver responses into readable KIM answers
+  formatFootballDataResponse(response) {
+    if (!response) return null;
+
+    switch (response.type) {
+      case 'historical_summary': {
+        const s = response.data?.summary;
+        if (!s) return null;
+        return [
+          `**${s.team}**`,
+          `• Matches: ${s.matches}`,
+          `• Wins: ${s.wins}`,
+          `• Draws: ${s.draws}`,
+          `• Losses: ${s.losses}`,
+          `• Goals For: ${s.goalsFor}`,
+          `• Goals Against: ${s.goalsAgainst}`,
+          `• Win Rate: ${s.winRate}%`
+        ].join('\n');
+      }
+
+      case 'historical_h2h': {
+        const h = response.data?.h2h;
+        if (!h) return null;
+        return [
+          `**${h.team1} vs ${h.team2}** Head-to-Head`,
+          `• Matches: ${h.matches}`,
+          `• ${h.team1} wins: ${h.team1Wins}`,
+          `• ${h.team2} wins: ${h.team2Wins}`,
+          `• Draws: ${h.draws}`,
+          `• ${h.team1} goals: ${h.team1Goals}`,
+          `• ${h.team2} goals: ${h.team2Goals}`
+        ].join('\n');
+      }
+
+      case 'historical_record': {
+        const d = response.data;
+        if (!d || !d.tournament) return null;
+        const year = d.tournament.year || '';
+        const competition = d.tournament.competition || 'Tournament';
+        const fieldText = d.field === 'champion' ? 'Winner' : d.field === 'top_scorer' ? 'Top Scorer' : d.field;
+        return `The ${year} ${competition} ${fieldText} was **${d.value}**.`;
+      }
+
+      case 'historical_matches': {
+        const d = response.data;
+        if (!d || !d.matches || d.matches.length === 0) return null;
+        let res = `Found ${d.total} matches. Here are the latest ${d.returned}:\n`;
+        for (const m of d.matches) {
+          const hs = m.home_score ?? m.score?.ft?.home ?? '?';
+          const as = m.away_score ?? m.score?.ft?.away ?? '?';
+          res += `• ${m.date}: ${m.home_team} ${hs} - ${as} ${m.away_team}\n`;
+        }
+        return res.trim();
+      }
+
+      case 'historical_data_not_found': {
+        return `I couldn't find any historical match data for that query in my archive.`;
+      }
+
+      default:
+        return null;
+    }
+  }
+
+  /* ============================================================
+     HISTORICAL ROUTING
+  ============================================================ */
+
   resolveHistorical(intent, message, context) {
     const entities = context.entities || [];
     const msg = message.toLowerCase();
 
-    // ★ FIX: Use historical context from ConversationEngine for multi-turn queries
     const historicalContext = context.lastHistoricalEvent || {};
     const yearMatch = msg.match(/\b(19\d{2}|20\d{2})\b/);
     const year = yearMatch ? yearMatch[1] : historicalContext.year || null;
@@ -212,25 +297,18 @@ class KnowledgeRouter {
     let relativePath = null;
     let tournamentName = 'Tournament';
 
-    const hasHistoryKeyword = /\b(won|winner|champion|runner[- ]?up|host|hosted|final|top scorer|golden boot|most goals|scored)\b/i.test(msg);
-    const hasMatchKeyword = /\b(score|beat|beaten|result|played against)\b/i.test(msg);
-    const hasVersus = /\b(vs|versus|against)\b/i.test(msg);
-    const teams = entities.filter(e => e.type === 'team').map(e => e.value);
-
-    // If it's a specific match query, let MatchAnalyzer handle it
-    if (hasMatchKeyword && (teams.length >= 2 || hasVersus) && !historicalContext.year) {
-      return null; 
-    }
-
-    const isHistoricalQuery = (intent === 'football_history' || intent === 'match_result' || hasHistoryKeyword || historicalContext.year);
+    const isHistoricalQuery =
+      intent === 'football_history' ||
+      intent === 'match_result' ||
+      intent === 'tournament_history' ||
+      historicalContext.year;
 
     if (!year || !isHistoricalQuery) return null;
 
-    // ★ FIX: head_to_head shouldn't be overwritten by competition detection
     if (intent === 'head_to_head' || historicalContext.isH2H) {
-      if (teams.length >= 2) {
-        const teamA = this.normalizeFilePart(teams[0]);
-        const teamB = this.normalizeFilePart(teams[1]);
+      if (entities.length >= 2) {
+        const teamA = this.normalizeFilePart(entities[0].value);
+        const teamB = this.normalizeFilePart(entities[1].value);
         relativePath = `history/entities/h2h/${teamA}_vs_${teamB}.json`;
       } else if (historicalContext.relativePath) {
         relativePath = historicalContext.relativePath;
@@ -270,7 +348,6 @@ class KnowledgeRouter {
       if (tournament) {
         let answer = this.formatTournamentField(tournament, msg, year, tournamentName);
         
-        // ★ FIX: Return historical event context to be stored by Orchestrator/ConversationEngine
         return this.result({ 
           type: 'HISTORICAL_DATA', 
           intent: intent, 
@@ -278,7 +355,7 @@ class KnowledgeRouter {
           data: { 
             source: historicalData.source, 
             tournament,
-            historicalEvent: { // Pass this back so ConversationEngine can store it
+            historicalEvent: {
               year: year,
               tournamentName: tournamentName,
               relativePath: relativePath,
@@ -292,9 +369,13 @@ class KnowledgeRouter {
       }
     }
 
-    let answer = `Here is what I found in the historical archive:\n\n`;
-    answer += `\`\`\`json\n${JSON.stringify(historicalData.data, null, 2).slice(0, 500)}...\n\`\`\``;
-    return this.result({ type: 'HISTORICAL_DATA', intent: intent, confidence: 0.98, data: { source: historicalData.source } });
+    return this.result({
+      type: 'HISTORICAL_DATA',
+      intent,
+      confidence: 0.85,
+      data: { source: historicalData.source },
+      answer: `I found the ${year} ${tournamentName} in my historical archive, but I'm not sure which detail you're asking for. You can ask for the winner, runner-up, host, or top scorer. ⚽`
+    });
   }
 
   formatTournamentField(tournament, msg, year, tournamentName) {

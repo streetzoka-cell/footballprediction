@@ -1,21 +1,10 @@
 'use strict';
 
-/**
- * ============================================================
- * KIM — INTENT ENGINE
- * ============================================================
- * Version: 3.1.1
- * 
- * Determines what the user is trying to accomplish and extracts
- * the entities required by downstream engines.
- * ============================================================
- */
-
 const EntityEngine = require('./EntityEngine');
 
 class IntentEngine {
   constructor() {
-    this.VERSION = '3.1.1';
+    this.VERSION = '3.2.0';
     this.config = {
       maxCandidates: 8,
       explanationCandidates: 5,
@@ -27,10 +16,6 @@ class IntentEngine {
     };
     this.rules = this.buildRules();
   }
-
-  /* ============================================================
-     RULE DEFINITIONS
-  ============================================================ */
 
   buildRules() {
     return [
@@ -49,16 +34,12 @@ class IntentEngine {
       { intent: 'team_analysis', priority: 9, confidence: 0.91, patterns: [/\bteam stats\b/i, /\bteam statistics\b/i, /\bhow good is\b/i, /\bhow strong is\b/i, /\bteam performance\b/i, /\bstrength of\b/i, /\bteam profile\b/i] },
       { intent: 'competition', priority: 9, confidence: 0.90, patterns: [/\bstandings\b/i, /\btable\b/i, /\bleague table\b/i, /\bwho leads\b/i, /\bwho is top\b/i, /\btop of the table\b/i, /\bcompetition\b/i, /\bleague leaders\b/i, /\bpoints table\b/i] },
       
-      { intent: 'football_knowledge', priority: 8, confidence: 0.90, patterns: [/\bwhat is\b/i, /\bwhat does\b/i, /\bexplain\b/i, /\bmeaning of\b/i, /\bhow does\b/i, /\bwhy does\b/i, /\bwhy is\b/i, /\bwhat are the rules\b/i, /\brule\b/i, /\blaw of the game\b/i, /\bfootball law\b/i] },
+      { intent: 'football_knowledge', priority: 8, confidence: 0.90, patterns: [/\bwhat is\b/i, /\bwhat does\b/i, /\bexplain\b/i, /\bmeaning of\b/i, /\bhow does\b/i, /\bwhy does\b/i, /\bwhy is\b/i, /\bwhat are the rules\b/i, /\brule\b/i, /\blaw of the game\b/i, /\bfootball law\b/i, /\bwho has won\b/i, /\bmost titles\b/i, /\bmost times\b/i] },
       { intent: 'identity', priority: 8, confidence: 0.98, patterns: [/\bwho are you\b/i, /\bwhat are you\b/i, /\bwhat is your name\b/i, /\bwho made you\b/i, /\bwho built you\b/i, /\bwhat can you do\b/i, /\bwhat do you know\b/i] },
       
       { intent: 'casual', priority: 5, confidence: 0.86, patterns: [/\bhello\b/i, /\bhi\b/i, /\bhey\b/i, /\bthanks\b/i, /\bthank you\b/i, /\bgood morning\b/i, /\bgood afternoon\b/i, /\bgood evening\b/i, /\bgood night\b/i, /\bhow are you\b/i, /\bi'm bored\b/i, /\bi am bored\b/i, /\bwhat's up\b/i, /\bwhats up\b/i] }
     ];
   }
-
-  /* ============================================================
-     MAIN RESOLUTION
-  ============================================================ */
 
   resolve(message, memory = {}) {
     const originalText = String(message || '').trim();
@@ -88,14 +69,56 @@ class IntentEngine {
 
     const candidates = this.buildCandidates(text, entities, lexicalSignals, activeContext);
 
-    if (!candidates.length) {
-      return {
-        intent: 'general',
-        entities,
-        confidence: 0.45,
-        signals: { matchedPatterns: 0, entityCount: entities.length, contextual: false, candidates: [], lexicalSignals }
-      };
+if (!candidates.length) {
+  const teamCount = entities.filter(e => e.type === 'team').length;
+  const playerCount = entities.filter(e => e.type === 'player').length;
+
+  if (teamCount > 0 && playerCount === 0) {
+    return {
+      intent: 'team_analysis',
+      entities,
+      confidence: 0.70,
+      signals: {
+        matchedPatterns: 0,
+        entityCount: entities.length,
+        contextual: false,
+        candidates: [],
+        lexicalSignals,
+        fallback: true
+      }
+    };
+  }
+
+  if (playerCount > 0 && teamCount === 0) {
+    return {
+      intent: 'player_analysis',
+      entities,
+      confidence: 0.70,
+      signals: {
+        matchedPatterns: 0,
+        entityCount: entities.length,
+        contextual: false,
+        candidates: [],
+        lexicalSignals,
+        fallback: true
+      }
+    };
+  }
+
+  return {
+    intent: 'general',
+    entities,
+    confidence: 0.45,
+    signals: {
+      matchedPatterns: 0,
+      entityCount: entities.length,
+      contextual: false,
+      candidates: [],
+      lexicalSignals
     }
+  };
+}
+
 
     candidates.sort((a, b) => {
       if (b.score !== a.score) return b.score - a.score;
@@ -106,6 +129,21 @@ class IntentEngine {
     const best = candidates[0];
     const ambiguity = this.detectAmbiguity(candidates);
     const finalConfidence = this.calibrateConfidence(best, ambiguity);
+
+    // ★ FIX: Entity-Aware Fallback for natural language queries
+    // If no strong rule matched (defaults to general), but a team/player exists,
+    // route to their respective analysis intents.
+    const teamCount = entities.filter(e => e.type === 'team').length;
+    const playerCount = entities.filter(e => e.type === 'player').length;
+
+    if (best.intent === 'general') {
+      if (teamCount > 0 && playerCount === 0) {
+        return { intent: 'team_analysis', entities, confidence: 0.70, signals: { matchedPatterns: 0, entityCount: entities.length, contextual: false, candidates: [], lexicalSignals, fallback: true } };
+      }
+      if (playerCount > 0 && teamCount === 0) {
+        return { intent: 'player_analysis', entities, confidence: 0.70, signals: { matchedPatterns: 0, entityCount: entities.length, contextual: false, candidates: [], lexicalSignals, fallback: true } };
+      }
+    }
 
     return {
       intent: best.intent,
@@ -129,10 +167,6 @@ class IntentEngine {
     };
   }
 
-  /* ============================================================
-     NORMALIZATION & SIGNALS
-  ============================================================ */
-
   normalizeText(text) {
     return String(text || '').toLowerCase().replace(/[’‘]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, ' ').trim();
   }
@@ -152,10 +186,6 @@ class IntentEngine {
       negation: /\b(not|never|don't|dont|didn't|didnt|isn't|isnt|wasn't|wasnt|can't|cant|no)\b/i.test(text)
     };
   }
-
-  /* ============================================================
-     CANDIDATE BUILDING
-  ============================================================ */
 
   buildCandidates(text, entities, lexicalSignals, activeContext) {
     const candidates = [];
@@ -202,10 +232,6 @@ class IntentEngine {
 
     return candidates.sort((a, b) => b.score - a.score).slice(0, this.config.maxCandidates);
   }
-
-  /* ============================================================
-     CONTEXTUAL INTENT RESOLUTION
-  ============================================================ */
 
   resolveContextualIntent(text, entities, activeContext) {
     if (!activeContext) return null;
@@ -266,10 +292,6 @@ class IntentEngine {
     return merged;
   }
 
-  /* ============================================================
-     AMBIGUITY & CONFIDENCE
-  ============================================================ */
-
   detectAmbiguity(candidates) {
     if (candidates.length < 2) return { ambiguous: false, margin: 1, competing: [] };
     const first = candidates[0];
@@ -285,10 +307,6 @@ class IntentEngine {
     if (candidate.matchedPatterns >= 2) confidence += 0.02;
     return Number(Math.min(this.config.maxConfidence, Math.max(this.config.minimumConfidence, confidence)).toFixed(3));
   }
-
-  /* ============================================================
-     ENTITY EXTRACTION & HELPERS
-  ============================================================ */
 
   extractEntities(message) {
     try {
