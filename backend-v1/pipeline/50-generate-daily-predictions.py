@@ -1,341 +1,310 @@
-#!/usr/bin/env python3
-"""
-ZOKASCORE V2
-Pipeline 50 — Hardened Daily Multi-Market Prediction Generator
-"""
-
 import os
 import json
-import math
-import tempfile
-from datetime import datetime, timedelta, timezone
-
+import joblib
+import re
+import unicodedata
+from collections import deque, Counter
+from datetime import datetime, timezone, timedelta
 import pandas as pd
-import xgboost as xgb
+import numpy as np
 
-# ============================================================
-# CONFIGURATION
-# ============================================================
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+MODELS_DIR = os.path.join(BASE_DIR, "data", "models")
+INDEX_DIR = os.path.join(BASE_DIR, "data", "indexes")
+CANONICAL_SOURCES_DIR = os.path.join(BASE_DIR, "data", "zokascore_football_data", "canonical_sources")
+FIXTURES_DIR = os.path.join(BASE_DIR, "public_data", "fixtures")
+PREDICTIONS_DIR = os.path.join(BASE_DIR, "public_data", "predictions")
+MASTER_FILE = os.path.join(BASE_DIR, "data", "processed", "master_with_elo.csv")
+TEAMS_INDEX_FILE = os.path.join(INDEX_DIR, "teams-index.json")
+INTERNAL_TEAM_MAP_FILE = os.path.join(CANONICAL_SOURCES_DIR, "internal_team_map.json")
+LIVE_STATE_FILE = os.path.join(MODELS_DIR, "live_team_state.json")
 
-MODEL_DIR = os.path.join("data", "ml")
-FIXTURES_DIR = os.path.join("public_data", "fixtures")
-OUTPUT_DIR = os.path.join("public_data", "predictions")
-
-PIPELINE_VERSION = "50"
-ENGINE_VERSION = "ZOKASCORE_V2"
-
-FEATURE_COLUMNS = [
-    "home_elo_pre", "away_elo_pre", "elo_diff",
-    "home_ewma_points", "away_ewma_points",
-    "home_ewma_gd", "away_ewma_gd",
-    "home_ewma_gf", "away_ewma_gf",
-    "home_ewma_ga", "away_ewma_ga",
-    "home_ewma_home_points", "away_ewma_away_points",
-    "home_ewma_home_gd", "away_ewma_away_gd",
-    "home_ewma_home_gf", "away_ewma_away_gf",
-    "home_ewma_home_ga", "away_ewma_away_ga",
-    "home_matches_before", "away_matches_before",
-    "home_home_matches_before", "away_away_matches_before"
-]
-
-MODEL_REGISTRY = {
-    "1x2": {"model_file": "zokascore_v2_model.json", "map_file": "label_mapping.json", "expected_labels": {"HOME_WIN", "DRAW", "AWAY_WIN"}},
-    "ou_0_5": {"model_file": "market_ou_0_5_model.json", "map_file": "market_ou_0_5_label_mapping.json", "expected_labels": {"OVER", "UNDER"}},
-    "ou_1_5": {"model_file": "market_ou_1_5_model.json", "map_file": "market_ou_1_5_label_mapping.json", "expected_labels": {"OVER", "UNDER"}},
-    "ou_2_5": {"model_file": "market_ou_2_5_model.json", "map_file": "market_ou_2_5_label_mapping.json", "expected_labels": {"OVER", "UNDER"}},
-    "ou_3_5": {"model_file": "market_ou_3_5_model.json", "map_file": "market_ou_3_5_label_mapping.json", "expected_labels": {"OVER", "UNDER"}},
-    "btts": {"model_file": "market_btts_model.json", "map_file": "market_btts_label_mapping.json", "expected_labels": {"YES", "NO"}}
+# Model Registry (Points to the new .joblib files)
+MODELS = {
+    "1x2": {"file": os.path.join(MODELS_DIR, "champion_model.joblib"), "class_map": {0: "AWAY_WIN", 1: "DRAW", 2: "HOME_WIN"}},
+    "ou_0_5": {"file": os.path.join(MODELS_DIR, "market_ou_0_5_model.joblib"), "class_map": {0: "UNDER", 1: "OVER"}},
+    "ou_1_5": {"file": os.path.join(MODELS_DIR, "market_ou_1_5_model.joblib"), "class_map": {0: "UNDER", 1: "OVER"}},
+    "ou_2_5": {"file": os.path.join(MODELS_DIR, "market_ou_2_5_model.joblib"), "class_map": {0: "UNDER", 1: "OVER"}},
+    "ou_3_5": {"file": os.path.join(MODELS_DIR, "market_ou_3_5_model.joblib"), "class_map": {0: "UNDER", 1: "OVER"}},
+    "btts": {"file": os.path.join(MODELS_DIR, "market_btts_model.joblib"), "class_map": {0: "NO", 1: "YES"}}
 }
 
-REQUIRED_STATE_FIELDS = [
-    "elo", "overall_points", "overall_gd", "overall_gf", "overall_ga",
-    "home_points", "home_gd", "home_gf", "home_ga",
-    "away_points", "away_gd", "away_gf", "away_ga",
-    "matches_played", "home_matches_played", "away_matches_played"
-]
+FEATURES_1X2 = ["home_elo_pre", "away_elo_pre", "elo_diff", "home_form_pts", "away_form_pts", "home_home_pts", "away_away_pts", "home_gf_avg", "away_gf_avg", "home_ga_avg", "away_ga_avg", "h2h_hw_rate", "h2h_d_rate", "h2h_aw_rate", "h2h_matches"]
+FEATURES_MARKET = ["home_elo_pre", "away_elo_pre", "elo_diff", "home_ewma_pts", "away_ewma_pts", "home_ewma_gd", "away_ewma_gd", "home_ewma_gf", "away_ewma_gf", "home_ewma_ga", "away_ewma_ga", "home_ewma_home_pts", "away_ewma_away_pts", "home_ewma_home_gd", "away_ewma_away_gd", "home_ewma_home_gf", "away_ewma_away_gf", "home_ewma_home_ga", "away_ewma_away_ga", "home_matches_before", "away_matches_before", "home_home_matches_before", "away_away_matches_before"]
 
-PROBABILITY_TOLERANCE = 0.01
+def clean_name(value):
+    if value is None: return ""
+    value = str(value).strip().lower()
+    value = unicodedata.normalize("NFKD", value)
+    value = "".join(c for c in value if not unicodedata.combining(c))
+    value = value.replace("&", " and ")
+    value = re.sub(r"[.'\"']", "", value)
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return re.sub(r"\s+", " ", value).strip()
 
-# ============================================================
-# HELPERS
-# ============================================================
+def name_variants(value):
+    original = clean_name(value)
+    if not original: return set()
+    variants = {original, original.replace(" ", "")}
+    for s in [" fc", " cf", " sc", " afc", " ac", " bc", " fk", " sk", " sv", " bv", " cd", " cs", " ca", " as", " ss", " ud", " real"]:
+        if original.endswith(s): variants.add(original[:-len(s)].strip())
+    return variants
 
-def utc_now():
-    return datetime.now(timezone.utc)
+class TeamResolver:
+    def __init__(self, teams_index, internal_provider_map):
+        self.teams_index = teams_index or {}
+        self.internal_provider_map = internal_provider_map or {}
+        self.exact = {}
+        self.variant = {}
+        self.provider = {}
+        self._build_indexes()
 
-def load_json(path):
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+    def _register_exact(self, name, zk_id):
+        norm = clean_name(name)
+        if norm: self.exact.setdefault(norm, zk_id)
 
-def is_finite(value):
-    try:
-        return math.isfinite(float(value))
-    except (TypeError, ValueError):
-        return False
+    def _register_variant(self, name, zk_id):
+        for v in name_variants(name): self.variant.setdefault(v, zk_id)
 
-def atomic_json_write(path, payload):
-    directory = os.path.dirname(path)
-    os.makedirs(directory, exist_ok=True)
-    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".prediction_", suffix=".tmp")
-    try:
-        with os.fdopen(fd, "w", encoding="utf-8") as f:
-            json.dump(payload, f, indent=2, ensure_ascii=False, allow_nan=False)
-            f.write("\n")
-        os.replace(tmp_path, path)
-    except Exception:
-        if os.path.exists(tmp_path): os.remove(tmp_path)
-        raise
+    def _build_indexes(self):
+        for zk_id, profile in self.teams_index.items():
+            names = []
+            if isinstance(profile, dict):
+                for f in ["name", "team_name", "short_name", "common_name"]:
+                    v = profile.get(f)
+                    if isinstance(v, str) and v.strip(): names.append(v)
+            for name in names:
+                self._register_exact(name, zk_id)
+                self._register_variant(name, zk_id)
+            # Extract provider IDs directly from the index profile
+            if isinstance(profile, dict):
+                for pid_key in ["id", "provider_id", "api_id", "isports_id"]:
+                    pid = profile.get(pid_key)
+                    if pid: self.provider.setdefault(str(pid), zk_id)
 
-def safe_match_id(match):
-    raw_id = match.get("id") or match.get("matchId")
-    if raw_id is None: return None
-    value = str(raw_id).strip()
-    if not value or value.lower() in {"none", "null"}: return None
-    return value
+        for provider_id, zk_id in self.internal_provider_map.items():
+            if zk_id: self.provider[str(provider_id)] = zk_id
 
-def extract_team(match, side):
-    team_object = match.get(f"{side}Team")
-    if not isinstance(team_object, dict): team_object = {}
-    team_id = team_object.get("id") or match.get(f"{side}TeamId") or match.get(f"{side}Id")
-    team_name = team_object.get("name") or match.get(f"{side}Name") or (str(team_id) if team_id is not None else None)
-    if team_id is not None: team_id = str(team_id).strip()
-    if team_name is not None: team_name = str(team_name).strip()
-    return team_id, team_name
+    def resolve(self, provider_id, fixture_name):
+        if provider_id:
+            zk_id = self.provider.get(str(provider_id))
+            if zk_id: return {"zk_id": zk_id, "method": "provider_id"}
+        zk_id = self.exact.get(clean_name(fixture_name))
+        if zk_id: return {"zk_id": zk_id, "method": "exact_name"}
+        for v in name_variants(fixture_name):
+            zk_id = self.variant.get(v)
+            if zk_id: return {"zk_id": zk_id, "method": "variant"}
+        return {"zk_id": None, "method": "unresolved"}
 
-# ============================================================
-# ARTIFACT VALIDATION & FEATURE BUILDER
-# ============================================================
+def calculate_form(history):
+    if not history: return 0.0, 0.0, 0.0
+    relevant = list(history)[-5:]
+    pts = sum(m["points"] for m in relevant)
+    gf = sum(m["gf"] for m in relevant)
+    ga = sum(m["ga"] for m in relevant)
+    return pts, gf / len(relevant), ga / len(relevant)
 
-def load_models():
-    print("\n🔍 VALIDATING ML ARTIFACTS")
-    print("-" * 60)
-    models = {}
-    mappings = {}
-    for market, config in MODEL_REGISTRY.items():
-        model_path = os.path.join(MODEL_DIR, config["model_file"])
-        mapping_path = os.path.join(MODEL_DIR, config["map_file"])
-        if not os.path.isfile(model_path): raise FileNotFoundError(f"Missing model for {market}: {model_path}")
-        if not os.path.isfile(mapping_path): raise FileNotFoundError(f"Missing label mapping for {market}: {mapping_path}")
-        
-        m = xgb.XGBClassifier()
-        m.load_model(model_path)
-        mapping = load_json(mapping_path)
-        
-        if not isinstance(mapping, dict): raise ValueError(f"Invalid label mapping for {market}")
-        labels = set(mapping.values())
-        if labels != config["expected_labels"]: raise ValueError(f"Invalid labels for {market}. Expected {config['expected_labels']}, got {labels}")
-        
-        models[market] = m
-        mappings[market] = mapping
-        print(f"   ✅ {market.upper()}")
-    print(f"\n   🧠 Total models loaded: {len(models)}")
-    return models, mappings
-
-def build_features(home_state, away_state):
-    for field in REQUIRED_STATE_FIELDS:
-        if field not in home_state or field not in away_state: return None, f"Missing state field: {field}"
-        if not is_finite(home_state[field]) or not is_finite(away_state[field]): return None, f"Non-finite state value: {field}"
-
-    h_elo = float(home_state["elo"])
-    a_elo = float(away_state["elo"])
-    features = {
-        "home_elo_pre": h_elo, "away_elo_pre": a_elo, "elo_diff": h_elo - a_elo,
-        "home_ewma_points": float(home_state["overall_points"]), "away_ewma_points": float(away_state["overall_points"]),
-        "home_ewma_gd": float(home_state["overall_gd"]), "away_ewma_gd": float(away_state["overall_gd"]),
-        "home_ewma_gf": float(home_state["overall_gf"]), "away_ewma_gf": float(away_state["overall_gf"]),
-        "home_ewma_ga": float(home_state["overall_ga"]), "away_ewma_ga": float(away_state["overall_ga"]),
-        "home_ewma_home_points": float(home_state["home_points"]), "away_ewma_away_points": float(away_state["away_points"]),
-        "home_ewma_home_gd": float(home_state["home_gd"]), "away_ewma_away_gd": float(away_state["away_gd"]),
-        "home_ewma_home_gf": float(home_state["home_gf"]), "away_ewma_away_gf": float(away_state["away_gf"]),
-        "home_ewma_home_ga": float(home_state["home_ga"]), "away_ewma_away_ga": float(away_state["away_ga"]),
-        "home_matches_before": float(home_state["matches_played"]), "away_matches_before": float(away_state["matches_played"]),
-        "home_home_matches_before": float(home_state["home_matches_played"]), "away_away_matches_before": float(away_state["away_matches_played"])
-    }
-    for name in FEATURE_COLUMNS:
-        if name not in features: return None, f"Missing feature: {name}"
-        if not is_finite(features[name]): return None, f"Non-finite feature: {name}"
-    return features, None
-
-def predict_match(home_id, away_id, ewma_state, models, mappings):
-    home_state = ewma_state.get(str(home_id))
-    away_state = ewma_state.get(str(away_id))
-    if not home_state: return None, f"Home team {home_id} not in EWMA state"
-    if not away_state: return None, f"Away team {away_id} not in EWMA state"
-    
-    features, error = build_features(home_state, away_state)
-    if error: return None, error
-    
-    X_live = pd.DataFrame([features], columns=FEATURE_COLUMNS)
-    markets = {}
-    for market_name, model in models.items():
-        probabilities = model.predict_proba(X_live)[0]
-        mapping = mappings[market_name]
-        prob_map = {}
-        for idx, prob in enumerate(probabilities):
-            key = str(idx)
-            if key not in mapping: return None, f"Missing mapping index {key} for {market_name}"
-            if not is_finite(prob): return None, f"Non-finite probability for {market_name}"
-            prob_map[mapping[key]] = float(prob)
-        
-        total = sum(prob_map.values())
-        if not is_finite(total) or abs(total - 1.0) > PROBABILITY_TOLERANCE: return None, f"Probability sum invalid for {market_name}: {total}"
-        
-        prob_map = {k: v / total for k, v in prob_map.items()}
-        pick = max(prob_map, key=prob_map.get)
-        markets[market_name] = {"probabilities": prob_map, "pick": pick, "pick_probability": prob_map[pick]}
-    return markets, None
-
-# ============================================================
-# MAIN
-# ============================================================
-
-def main():
-    print(f"🧠 ZOKASCORE V2 - Pipeline 50: Hardened Daily Multi-Market Generator")
+def run():
     print("=" * 60)
-    generated_at = utc_now().isoformat()
+    print(" ZOKASCORE V2 — STEP 50: DAILY MULTI-MARKET GENERATOR")
+    print("=" * 60)
+
+    # 1. Load Artifacts
+    print("[1/5] Loading artifacts...")
+    models = {}
+    for market, cfg in MODELS.items():
+        if os.path.exists(cfg["file"]):
+            models[market] = joblib.load(cfg["file"])
+            
+    live_team_state = json.load(open(LIVE_STATE_FILE, "r", encoding="utf-8"))
+    teams_index = json.load(open(TEAMS_INDEX_FILE, "r", encoding="utf-8"))
+    internal_team_map = json.load(open(INTERNAL_TEAM_MAP_FILE, "r", encoding="utf-8")).get("by_provider_club_id", {})
+    resolver = TeamResolver(teams_index, internal_team_map)
+
+    # 2. Reconstruct 1X2 State
+    print("[2/5] Reconstructing Form & H2H state...")
+    master_df = pd.read_csv(MASTER_FILE, low_memory=False)
+    master_df["date"] = pd.to_datetime(master_df["date"], errors="coerce")
+    master_df = master_df.sort_values(by=["date", "zokascore_match_id"], kind="mergesort").reset_index(drop=True)
     
-    models, mappings = load_models()
+    team_states_1x2 = {}
+    h2h_states = {}
     
-    ewma_state_path = os.path.join(MODEL_DIR, "ewma_state.json")
-    if not os.path.isfile(ewma_state_path): raise FileNotFoundError(f"Missing EWMA state: {ewma_state_path}")
-    ewma_state = load_json(ewma_state_path)
-    print(f"\n📦 Live team state: {len(ewma_state):,} teams")
+    def get_1x2_state(team_id):
+        if team_id not in team_states_1x2:
+            team_states_1x2[team_id] = {
+                "elo": 1500.0,
+                "recent_matches": deque(maxlen=5),
+                "recent_home_matches": deque(maxlen=5),
+                "recent_away_matches": deque(maxlen=5)
+            }
+        return team_states_1x2[team_id]
+
+    for row in master_df.itertuples(index=False):
+        h_id, a_id = str(row.home_team_id), str(row.away_team_id)
+        
+        home_state = get_1x2_state(h_id)
+        away_state = get_1x2_state(a_id)
+        
+        home_state["elo"] = float(row.home_elo_pre) + float(row.home_elo_delta)
+        away_state["elo"] = float(row.away_elo_pre) + float(row.away_elo_delta)
+        h, a = int(row.home_score), int(row.away_score)
+        h_pts, a_pts = (3 if h > a else 0 if h < a else 1), (3 if a > h else 0 if a < h else 1)
+        
+        home_state["recent_matches"].append({"gf": h, "ga": a, "points": h_pts})
+        away_state["recent_matches"].append({"gf": a, "ga": h, "points": a_pts})
+        home_state["recent_home_matches"].append({"gf": h, "ga": a, "points": h_pts})
+        away_state["recent_away_matches"].append({"gf": a, "ga": h, "points": a_pts})
+
+    # 3. Process Dates
+    os.makedirs(PREDICTIONS_DIR, exist_ok=True)
+    now = datetime.now(timezone.utc)
     
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
-    metadata = {
-        "engine": ENGINE_VERSION, "pipeline": PIPELINE_VERSION, "generated_at": generated_at,
-        "markets": list(MODEL_REGISTRY.keys()), "days_processed": []
-    }
-    
-    now = utc_now()
     for offset in (0, 1):
         target_date = (now + timedelta(days=offset)).date()
         date_str = target_date.isoformat()
-        
-        print("\n" + "=" * 60)
-        print(f"📅 PROCESSING {date_str}")
-        print("=" * 60)
-        
         fixture_file = os.path.join(FIXTURES_DIR, f"{date_str}.json")
-        output_file = os.path.join(OUTPUT_DIR, f"{date_str}.json")
         
-        day_meta = {"date": date_str, "total_fixtures": 0, "predicted": 0, "skipped": 0, "output_written": False}
-        
-        if not os.path.isfile(fixture_file):
-            print(f"⚠️ No fixture file found: {fixture_file}")
-            day_meta["status"] = "no_fixture_file"
-            metadata["days_processed"].append(day_meta)
+        if not os.path.exists(fixture_file):
             continue
             
-        try:
-            fixture_data = load_json(fixture_file)
-        except Exception as exc:
-            print(f"❌ Failed to read fixture file: {exc}")
-            day_meta["status"] = "fixture_read_error"
-            metadata["days_processed"].append(day_meta)
-            continue
+        print(f"[3/5] Processing {date_str}.json...")
+        with open(fixture_file, "r", encoding="utf-8") as f:
+            fixture_data = json.load(f)
             
-        # ★ THE FIX: Look for 'matches' OR 'data' array
-        matches = fixture_data.get("matches", fixture_data.get("data", []))
-        if not isinstance(matches, list):
-            print("❌ Invalid fixture structure: 'matches'/'data' must be a list")
-            day_meta["status"] = "invalid_fixture_structure"
-            metadata["days_processed"].append(day_meta)
-            continue
-            
-        day_meta["total_fixtures"] = len(matches)
-        print(f"📊 Fixtures found: {len(matches):,}")
-        
-        if len(matches) == 0:
-            print("⚠️ Fixture file contains zero matches. Existing prediction file will NOT be overwritten.")
-            day_meta["status"] = "empty_fixture_file"
-            metadata["days_processed"].append(day_meta)
-            continue
-            
-        predictions = []
-        seen_match_ids = set()
+        matches = fixture_data.get("data", []) if isinstance(fixture_data, dict) else fixture_data
+        predictions_list = []
         
         for match in matches:
-            if not isinstance(match, dict):
-                day_meta["skipped"] += 1
-                continue
-                
-            match_id = safe_match_id(match)
-            if match_id is None or match_id in seen_match_ids:
-                day_meta["skipped"] += 1
-                continue
-            seen_match_ids.add(match_id)
+            if not isinstance(match, dict): continue
+            match_id = str(match.get("id", ""))
+            if not match_id: continue
             
-            home_id, home_name = extract_team(match, "home")
-            away_id, away_name = extract_team(match, "away")
+            home_obj = match.get("homeTeam", {})
+            away_obj = match.get("awayTeam", {})
+            home_name = match.get("homeTeamName") or home_obj.get("name")
+            away_name = match.get("awayTeamName") or away_obj.get("name")
+            home_pid = str(match.get("homeTeamId") or home_obj.get("id", "")).strip()
+            away_pid = str(match.get("awayTeamId") or away_obj.get("id", "")).strip()
+            
+            home_res = resolver.resolve(home_pid, home_name)
+            away_res = resolver.resolve(away_pid, away_name)
+            home_id, away_id = home_res["zk_id"], away_res["zk_id"]
             
             if not home_id or not away_id:
-                day_meta["skipped"] += 1
                 continue
                 
-            markets, error = predict_match(home_id, away_id, ewma_state, models, mappings)
-            if error:
-                day_meta["skipped"] += 1
-                continue
+            h_state_1x2 = get_1x2_state(home_id)
+            a_state_1x2 = get_1x2_state(away_id)
+            
+            h_pts, h_gf, h_ga = calculate_form(h_state_1x2.get("recent_matches", []))
+            a_pts, a_gf, a_ga = calculate_form(a_state_1x2.get("recent_matches", []))
+            h_home_pts, _, _ = calculate_form(h_state_1x2.get("recent_home_matches", []))
+            a_away_pts, _, _ = calculate_form(a_state_1x2.get("recent_away_matches", []))
+            
+            h2h_key = "|".join(sorted([home_id, away_id]))
+            h2h = h2h_states.get(h2h_key, {"team_a_wins": 0, "draws": 0, "team_b_wins": 0})
+            total_h2h = sum(h2h.values())
+            hw_rate = h2h["team_a_wins"]/total_h2h if total_h2h > 0 else 0.0
+            d_rate = h2h["draws"]/total_h2h if total_h2h > 0 else 0.0
+            aw_rate = h2h["team_b_wins"]/total_h2h if total_h2h > 0 else 0.0
+
+            features_1x2 = pd.DataFrame([{
+                "home_elo_pre": h_state_1x2["elo"], "away_elo_pre": a_state_1x2["elo"], "elo_diff": h_state_1x2["elo"] - a_state_1x2["elo"],
+                "home_form_pts": h_pts, "away_form_pts": a_pts, "home_home_pts": h_home_pts, "away_away_pts": a_away_pts,
+                "home_gf_avg": h_gf, "away_gf_avg": a_gf, "home_ga_avg": h_ga, "away_ga_avg": a_ga,
+                "h2h_hw_rate": hw_rate if home_id < away_id else aw_rate, "h2h_d_rate": d_rate, "h2h_aw_rate": aw_rate if home_id < away_id else hw_rate, "h2h_matches": total_h2h
+            }])[FEATURES_1X2]
+
+            h_state_mkt = live_team_state.get(home_id, {})
+            a_state_mkt = live_team_state.get(away_id, {})
+            home_elo = float(h_state_mkt.get("elo", h_state_1x2["elo"]))
+            away_elo = float(a_state_mkt.get("elo", a_state_1x2["elo"]))
+
+            features_mkt = pd.DataFrame([{
+                "home_elo_pre": home_elo, "away_elo_pre": away_elo, "elo_diff": home_elo - away_elo,
+                "home_ewma_pts": h_state_mkt.get("ewma_points", 1.0), "away_ewma_pts": a_state_mkt.get("ewma_points", 1.0),
+                "home_ewma_gd": h_state_mkt.get("ewma_gd", 0.0), "away_ewma_gd": a_state_mkt.get("ewma_gd", 0.0),
+                "home_ewma_gf": h_state_mkt.get("ewma_gf", 1.0), "away_ewma_gf": a_state_mkt.get("ewma_gf", 1.0),
+                "home_ewma_ga": h_state_mkt.get("ewma_ga", 1.0), "away_ewma_ga": a_state_mkt.get("ewma_ga", 1.0),
+                "home_ewma_home_pts": h_state_mkt.get("ewma_home_points", 1.0), "away_ewma_away_pts": a_state_mkt.get("ewma_away_points", 1.0),
+                "home_ewma_home_gd": h_state_mkt.get("ewma_home_gd", 0.0), "away_ewma_away_gd": a_state_mkt.get("ewma_away_gd", 0.0),
+                "home_ewma_home_gf": h_state_mkt.get("ewma_home_gf", 1.0), "away_ewma_away_gf": a_state_mkt.get("ewma_away_gf", 1.0),
+                "home_ewma_home_ga": h_state_mkt.get("ewma_home_ga", 1.0), "away_ewma_away_ga": a_state_mkt.get("ewma_away_ga", 1.0),
+                "home_matches_before": h_state_mkt.get("matches_played", 0), "away_matches_before": a_state_mkt.get("matches_played", 0),
+                "home_home_matches_before": h_state_mkt.get("home_matches_played", 0), "away_away_matches_before": a_state_mkt.get("away_matches_played", 0)
+            }])[FEATURES_MARKET]
+
+            match_markets = {}
+            for market, model in models.items():
+                X = features_1x2 if market == "1x2" else features_mkt
+                probs = model.predict_proba(X)[0]
+                classes = list(model.classes_)
                 
-            predictions.append({
+                prob_map = {}
+                for i, c in enumerate(classes):
+                    c_int = int(c)
+                    label = MODELS[market]["class_map"].get(c_int, str(c_int))
+                    prob_map[label] = round(float(probs[i]) * 100, 2)
+                
+                pick = max(prob_map, key=prob_map.get)
+                match_markets[market] = {
+                    "probabilities": prob_map,
+                    "pick": pick,
+                    "pick_probability": prob_map[pick]
+                }
+                
+            # Add prediction directly into the match object for the frontend
+            match["prediction"] = match_markets
+            
+            predictions_list.append({
                 "matchId": match_id,
-                "homeTeam": {"id": home_id, "name": home_name},
-                "awayTeam": {"id": away_id, "name": away_name},
-                "markets": markets
+                "homeTeam": {"id": home_id, "providerId": home_pid, "name": home_name},
+                "awayTeam": {"id": away_id, "providerId": away_pid, "name": away_name},
+                "markets": match_markets
             })
-            day_meta["predicted"] += 1
+
+        # 4. Save Updated Fixtures & Predictions
+        print(f"[4/5] Saving updated fixtures and predictions for {date_str}...")
+        # Save back to fixtures file so frontend has predictions automatically
+        with open(fixture_file, "w", encoding="utf-8") as f:
+            json.dump(fixture_data, f, indent=2, ensure_ascii=False)
             
-        if day_meta["predicted"] == 0:
-            print("❌ ZERO VALID PREDICTIONS GENERATED. Existing prediction file will NOT be overwritten.")
-            day_meta["status"] = "generation_failed_zero_predictions"
-            metadata["days_processed"].append(day_meta)
-            continue
+        # Save to predictions file for Node.js MLPredictionEngine
+        pred_file = os.path.join(PREDICTIONS_DIR, f"{date_str}.json")
+        
+        # ★ NEW: Read existing predictions to merge and protect past data
+        existing_preds = []
+        if os.path.exists(pred_file):
+            try:
+                with open(pred_file, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                    existing_preds = existing_data.get("predictions", [])
+            except:
+                pass
+                
+        # Create a map of existing predictions
+        pred_map = {p["matchId"]: p for p in existing_preds}
+        
+        # Update with new predictions (overwrites only the matches processed today)
+        for new_pred in predictions_list:
+            pred_map[new_pred["matchId"]] = new_pred
             
-        output_payload = {
-            "engine": ENGINE_VERSION, "pipeline": PIPELINE_VERSION, "status": "generated",
-            "date": date_str, "generated_at": generated_at,
-            "fixture_count": day_meta["total_fixtures"], "prediction_count": day_meta["predicted"],
-            "markets": list(MODEL_REGISTRY.keys()), "predictions": predictions
-        }
-        
-        try:
-            atomic_json_write(output_file, output_payload)
-            day_meta["output_written"] = True
-            day_meta["status"] = "success"
-            print(f"\n💾 Written: {output_file}")
-        except Exception as exc:
-            print(f"\n❌ Output write failed: {exc}")
-            day_meta["status"] = "output_write_failed"
+        final_predictions = list(pred_map.values())
             
-        coverage = (day_meta["predicted"] / day_meta["total_fixtures"] * 100) if day_meta["total_fixtures"] > 0 else 0
-        print(f"\n📊 {date_str} SUMMARY")
-        print(f"   Fixtures:   {day_meta['total_fixtures']:,}")
-        print(f"   Predicted:  {day_meta['predicted']:,}")
-        print(f"   Skipped:    {day_meta['skipped']:,}")
-        print(f"   Coverage:   {coverage:.2f}%")
-        metadata["days_processed"].append(day_meta)
-        
-    metadata_file = os.path.join(OUTPUT_DIR, "_metadata.json")
-    try:
-        atomic_json_write(metadata_file, metadata)
-        print(f"\n📋 Metadata written: {metadata_file}")
-    except Exception as exc:
-        print(f"\n⚠️ Metadata write failed: {exc}")
-        
-    print("\n" + "=" * 60)
-    print("✅ PIPELINE 50 COMPLETE")
-    print("=" * 60)
-    print("🚀 READY FOR NODE.JS DELIVERY")
+        with open(pred_file, "w", encoding="utf-8") as f:
+            json.dump({
+                "engine": "ZOKASCORE_V2",
+                "pipeline": "50",
+                "date": date_str,
+                "generated_at": now.isoformat(),
+                "predictions": final_predictions
+            }, f, indent=2, ensure_ascii=False)
+            
+        print(f"   [OK] {date_str}: Generated {len(predictions_list)} predictions.")
+
+    print("[5/5] Done.")
     print("=" * 60)
 
 if __name__ == "__main__":
-    try:
-        main()
-    except KeyboardInterrupt:
-        print("\n⚠️ Pipeline interrupted by user.")
-        raise SystemExit(130)
-    except Exception as exc:
-        print("\n❌ PIPELINE 50 FAILED")
-        print(f"   {type(exc).__name__}: {exc}")
-        raise SystemExit(1)
+    run()

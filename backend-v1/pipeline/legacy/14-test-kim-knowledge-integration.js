@@ -1,6 +1,6 @@
 'use strict';
 
-const KimOrchestrator = require('../src/kim/KimOrchestrator');
+const KimOrchestrator = require('../../src/kim/KimOrchestrator');
 
 const UID = 'kim-v2-integration-test';
 

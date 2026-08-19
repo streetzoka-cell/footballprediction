@@ -1,6 +1,6 @@
 'use strict';
 
-const KnowledgeQueryEngine = require('../src/kim/KnowledgeQueryEngine');
+const KnowledgeQueryEngine = require('../../src/kim/KnowledgeQueryEngine');
 
 console.log('============================================================');
 console.log(' ZOKASCORE V2 PIPELINE — STEP 13: KNOWLEDGE QUERY ENGINE TEST');

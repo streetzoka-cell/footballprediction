@@ -2,8 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
-const intelligence = require('../src/services/FootballIntelligenceService');
-const featureEngine = require('../src/services/FeatureEngine');
+const intelligence = require('../../src/services/FootballIntelligenceService');
+const featureEngine = require('../../src/services/FeatureEngine');
 
 async function main() {
   console.log('============================================================');

@@ -1,8 +1,8 @@
 'use strict';
 
-const intelligence = require('../src/services/FootballIntelligenceService');
-const featureEngine = require('../src/services/FeatureEngine');
-const poissonEngine = require('../src/services/PoissonPredictionEngine');
+const intelligence = require('../../src/services/FootballIntelligenceService');
+const featureEngine = require('../../src/services/FeatureEngine');
+const poissonEngine = require('../../src/services/PoissonPredictionEngine');
 
 async function main() {
   console.log('============================================================');

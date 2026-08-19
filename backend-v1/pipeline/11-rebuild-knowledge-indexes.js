@@ -1,151 +1,1030 @@
 'use strict';
 
+/**
+ * ============================================================
+ * ZOKASCORE V2 — STEP 11: CANONICAL INDEX BUILDING
+ * ============================================================
+ *
+ * PURPOSE
+ * -------
+ * Build deterministic lookup indexes from the verified
+ * ZOKASCORE V2 canonical MASTER dataset and canonical
+ * intelligence indexes.
+ *
+ * VERIFIED UPSTREAM GATES
+ * -----------------------
+ * STEP 8  — Seasonal Intelligence Validation: PASS
+ * STEP 9  — Canonical Alignment Audit: PASS
+ * STEP 10 — Historical Integrity Audit: PASS
+ *
+ * INPUT
+ * -----
+ * data/source/ZOKASCORE_FINAL/ZOKASCORE_PUBLIC_MASTER.csv
+ * data/indexes/teams-index.json
+ * data/indexes/players-index.json
+ * data/intelligence/player-intelligence-index.json
+ *
+ * OUTPUT
+ * ------
+ * data/intelligence/indexes/
+ *
+ *   match_index.json
+ *   team_match_index.json
+ *   h2h_index.json
+ *   competition_index.json
+ *   season_index.json
+ *   players_index.json
+ *   canonical_team_index.json
+ *
+ * IMPORTANT
+ * ---------
+ * - Canonical source data is NEVER modified.
+ * - Duplicate Match IDs fail closed.
+ * - Unresolved teams are excluded.
+ * - Self-matches are excluded.
+ * - Invalid/missing scores are excluded.
+ * - Index population must match the verified Step 10
+ *   reconstruction population.
+ * - Output is written atomically through a temporary directory.
+ * ============================================================
+ */
+
 const fs = require('fs');
 const path = require('path');
+const csv = require('csv-parser');
 
 const ROOT = path.join(__dirname, '..');
-const V2_DIR = path.join(ROOT, 'public_data');
-const HISTORY_DIR = path.join(V2_DIR, 'knowledge', 'football', 'history');
-const ENTITY_DIR = path.join(ROOT, 'data_audit', 'entity_resolution');
-const PLAYERS_DIR = path.join(V2_DIR, 'stats', 'players');
-const INDEX_DIR = path.join(V2_DIR, 'knowledge', 'football', 'indexes');
 
-function ensureDir(dir) { if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true }); }
-function loadJson(filePath) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch (e) { return null; } }
-function walkDir(dir, callback) {
-  if (!fs.existsSync(dir)) return;
-  for (const file of fs.readdirSync(dir)) {
-    const fullPath = path.join(dir, file);
-    const stat = fs.statSync(fullPath);
-    if (stat.isDirectory()) walkDir(fullPath, callback);
-    else if (file.endsWith('.json')) callback(fullPath);
-  }
+const DATA_DIR = path.join(
+    ROOT,
+    'data',
+    'source',
+    'ZOKASCORE_FINAL'
+);
+
+const INDEX_DIR = path.join(
+    ROOT,
+    'data',
+    'indexes'
+);
+
+const INTEL_DIR = path.join(
+    ROOT,
+    'data',
+    'intelligence'
+);
+
+const OUT_DIR = path.join(
+    INTEL_DIR,
+    'indexes'
+);
+
+const TEMP_DIR = path.join(
+    INTEL_DIR,
+    '.indexes_step11_tmp'
+);
+
+const MASTER_FILE = path.join(
+    DATA_DIR,
+    'ZOKASCORE_PUBLIC_MASTER.csv'
+);
+
+const TEAMS_INDEX_FILE = path.join(
+    INDEX_DIR,
+    'teams-index.json'
+);
+
+const PLAYERS_INDEX_FILE = path.join(
+    INDEX_DIR,
+    'players-index.json'
+);
+
+const PLAYER_INTEL_FILE = path.join(
+    INTEL_DIR,
+    'player-intelligence-index.json'
+);
+
+const EXPECTED_INDEXED_MATCHES = 484270;
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function ensureDir(dir) {
+    if (!fs.existsSync(dir)) {
+        fs.mkdirSync(dir, {
+            recursive: true
+        });
+    }
 }
 
-function makeH2HKey(a, b) { return [String(a), String(b)].sort().join('_vs_'); }
+function removeDir(dir) {
+    if (!fs.existsSync(dir)) return;
 
-async function buildIndexes() {
-  console.log('============================================================');
-  console.log(' ZOKASCORE V2 PIPELINE — STEP 11: REBUILD KNOWLEDGE INDEXES');
-  console.log('============================================================\n');
-
-  ensureDir(INDEX_DIR);
-
-  const teamMatchIndex = {};
-  const h2hIndex = {};
-  const matchIndex = {};
-  const competitionIndex = {};
-  const seasonIndex = {};
-
-  console.log('🔍 Scanning final V2 match backbone...');
-  walkDir(HISTORY_DIR, (filePath) => {
-    const data = loadJson(filePath);
-    if (!data || !Array.isArray(data.matches)) return;
-
-    const relPath = path.relative(ROOT, filePath).replace(/\\/g, '/');
-
-    for (const match of data.matches) {
-      const matchId = match.match_id;
-      const homeId = String(match.home_team_id);
-      const awayId = String(match.away_team_id);
-
-      if (!matchId || !homeId || !awayId) continue;
-
-      // 1. MATCH INDEX
-      matchIndex[matchId] = {
-        date: match.date,
-        home_team_id: homeId,
-        away_team_id: awayId,
-        home_score: match.home_score,
-        away_score: match.away_score,
-        competition: match.competition,
-        season: match.season,
-        file: relPath
-      };
-
-      // 2. TEAM MATCH INDEX
-      if (!teamMatchIndex[homeId]) teamMatchIndex[homeId] = [];
-      teamMatchIndex[homeId].push(matchId);
-
-      if (!teamMatchIndex[awayId]) teamMatchIndex[awayId] = [];
-      teamMatchIndex[awayId].push(matchId);
-
-      // 3. H2H INDEX
-      const h2hKey = makeH2HKey(homeId, awayId);
-      if (!h2hIndex[h2hKey]) h2hIndex[h2hKey] = [];
-      h2hIndex[h2hKey].push(matchId);
-
-      // 4. COMPETITION INDEX
-      const compKey = match.competition || 'Unknown';
-      if (!competitionIndex[compKey]) competitionIndex[compKey] = [];
-      competitionIndex[compKey].push(matchId);
-
-      // 5. SEASON INDEX
-      const seasonKey = match.season || 'Unknown';
-      if (!seasonIndex[seasonKey]) seasonIndex[seasonKey] = [];
-      seasonIndex[seasonKey].push(matchId);
-    }
-  });
-
-  console.log('⚙️ Writing Core Indexes...');
-  fs.writeFileSync(path.join(INDEX_DIR, 'match_index.json'), JSON.stringify(matchIndex), 'utf8');
-  fs.writeFileSync(path.join(INDEX_DIR, 'team_match_index.json'), JSON.stringify(teamMatchIndex), 'utf8');
-  fs.writeFileSync(path.join(INDEX_DIR, 'h2h_index.json'), JSON.stringify(h2hIndex), 'utf8');
-  fs.writeFileSync(path.join(INDEX_DIR, 'competition_index.json'), JSON.stringify(competitionIndex), 'utf8');
-  fs.writeFileSync(path.join(INDEX_DIR, 'season_index.json'), JSON.stringify(seasonIndex), 'utf8');
-  console.log('✅ Core indexes written.');
-
-  // Sync Player Index
-  console.log('\n🔄 Syncing Player Index...');
-  const playerIndex = { total_players: 0, players: [] };
-  walkDir(PLAYERS_DIR, (filePath) => {
-    if (path.basename(filePath) === 'players_index.json') return;
-    const profile = loadJson(filePath);
-    if (!profile || !profile.identity || !profile.identity.player_id) return;
-
-    playerIndex.players.push({
-      player_id: profile.identity.player_id,
-      player_key: profile.identity.player_key,
-      name: profile.identity.name,
-      file: path.basename(filePath),
-      total_goals: profile.statistics?.total_goals || 0
+    fs.rmSync(dir, {
+        recursive: true,
+        force: true
     });
-    playerIndex.total_players++;
-  });
-
-  playerIndex.players.sort((a, b) => b.total_goals - a.total_goals);
-  fs.writeFileSync(path.join(PLAYERS_DIR, 'players_index.json'), JSON.stringify(playerIndex, null, 2), 'utf8');
-  console.log(`✅ Player index synced (${playerIndex.total_players} players).`);
-
-  // Sync Team Alias Index
-  console.log('\n🔄 Syncing Team Alias Index...');
-  const canonicalTeams = loadJson(path.join(ENTITY_DIR, 'canonical_teams.json')) || [];
-  const teamAliasIndex = {};
-  for (const team of canonicalTeams) {
-    if (team && team.canonical_id) {
-      teamAliasIndex[team.canonical_id] = {
-        name: team.primary_name,
-        type: team.type,
-        aliases: team.aliases || []
-      };
-    }
-  }
-  fs.writeFileSync(path.join(INDEX_DIR, 'team_alias_index.json'), JSON.stringify(teamAliasIndex, null, 2), 'utf8');
-  console.log(`✅ Team alias index synced (${Object.keys(teamAliasIndex).length} teams).`);
-
-  console.log('\n============================================================');
-  console.log(' STEP 11 COMPLETE');
-  console.log('============================================================');
-  console.log(`📁 Index Directory: ${INDEX_DIR}`);
-  console.log(`📊 Matches Indexed:     ${Object.keys(matchIndex).length.toLocaleString()}`);
-  console.log(`📊 Teams Indexed:        ${Object.keys(teamMatchIndex).length.toLocaleString()}`);
-  console.log(`📊 H2H Pairs Indexed:    ${Object.keys(h2hIndex).length.toLocaleString()}`);
-  console.log(`📊 Competitions Indexed: ${Object.keys(competitionIndex).length.toLocaleString()}`);
-  console.log(`📊 Seasons Indexed:      ${Object.keys(seasonIndex).length.toLocaleString()}`);
-  console.log('\n🔒 V2 DATA WAS NOT MODIFIED.');
 }
 
-buildIndexes().catch(err => {
-  console.error('❌ Indexing Failed:', err);
-  process.exit(1);
+function readJson(filePath) {
+    if (!fs.existsSync(filePath)) {
+        throw new Error(
+            `Required file not found: ${filePath}`
+        );
+    }
+
+    return JSON.parse(
+        fs.readFileSync(
+            filePath,
+            'utf8'
+        )
+    );
+}
+
+function clean(value) {
+    return String(value ?? '')
+        .trim()
+        .toLowerCase()
+        .normalize('NFKD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/&/g, ' and ')
+        .replace(/[.'’‘`"]/g, '')
+        .replace(/[^a-z0-9]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+}
+
+function compact(value) {
+    return clean(value)
+        .replace(/\s+/g, '');
+}
+
+function safeNumber(value) {
+    if (
+        value === undefined ||
+        value === null ||
+        String(value).trim() === ''
+    ) {
+        return null;
+    }
+
+    const n = Number(value);
+
+    return Number.isFinite(n)
+        ? n
+        : null;
+}
+
+function deriveSeasonFromDate(value) {
+    const date =
+        String(value ?? '').trim();
+
+    if (!date) {
+        return null;
+    }
+
+    const match =
+        date.match(/^(\d{4})/);
+
+    return match
+        ? match[1]
+        : null;
+}
+
+function atomicWriteJson(
+    dir,
+    filename,
+    data
+) {
+    fs.writeFileSync(
+        path.join(dir, filename),
+        JSON.stringify(data),
+        'utf8'
+    );
+}
+
+// ============================================================
+// MAIN
+// ============================================================
+
+async function run() {
+
+    console.log(
+        '============================================================'
+    );
+
+    console.log(
+        ' ZOKASCORE V2 — STEP 11: CANONICAL INDEX BUILDING'
+    );
+
+    console.log(
+        '============================================================\n'
+    );
+
+    // ========================================================
+    // PRE-FLIGHT
+    // ========================================================
+
+    if (!fs.existsSync(MASTER_FILE)) {
+        throw new Error(
+            `MASTER file not found: ${MASTER_FILE}`
+        );
+    }
+
+    if (!fs.existsSync(TEAMS_INDEX_FILE)) {
+        throw new Error(
+            `Teams index not found: ${TEAMS_INDEX_FILE}`
+        );
+    }
+
+    if (!fs.existsSync(PLAYERS_INDEX_FILE)) {
+        throw new Error(
+            `Players index not found: ${PLAYERS_INDEX_FILE}`
+        );
+    }
+
+    if (!fs.existsSync(PLAYER_INTEL_FILE)) {
+        throw new Error(
+            `Player intelligence index not found: ${PLAYER_INTEL_FILE}`
+        );
+    }
+
+    // ========================================================
+    // 1. LOAD CANONICAL TEAM INDEX
+    // ========================================================
+
+    console.log(
+        '[1/4] Loading canonical team index...'
+    );
+
+    const teamsIndex =
+        readJson(
+            TEAMS_INDEX_FILE
+        );
+
+    const teamNameToIds =
+        new Map();
+
+    for (
+        const [
+            teamId,
+            profile
+        ]
+        of Object.entries(
+            teamsIndex
+        )
+    ) {
+
+        const name =
+            profile?.name;
+
+        if (!name) continue;
+
+        const normalized =
+            compact(name);
+
+        if (!normalized) continue;
+
+        if (
+            !teamNameToIds.has(
+                normalized
+            )
+        ) {
+            teamNameToIds.set(
+                normalized,
+                []
+            );
+        }
+
+        teamNameToIds
+            .get(normalized)
+            .push(teamId);
+    }
+
+    const teamNameToIdMap =
+        new Map();
+
+    let ambiguousTeamNames = 0;
+
+    for (
+        const [
+            name,
+            ids
+        ]
+        of teamNameToIds.entries()
+    ) {
+
+        if (ids.length === 1) {
+            teamNameToIdMap.set(
+                name,
+                ids[0]
+            );
+        } else {
+            ambiguousTeamNames++;
+        }
+    }
+
+    console.log(
+        `   ↳ Canonical teams: ${Object.keys(teamsIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Unambiguous names: ${teamNameToIdMap.size.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Ambiguous names: ${ambiguousTeamNames.toLocaleString()}\n`
+    );
+
+    // ========================================================
+    // 2. BUILD CORE INDEXES FROM MASTER
+    // ========================================================
+
+    console.log(
+        '[2/4] Building canonical match indexes from MASTER...'
+    );
+
+    const matchIndex = {};
+    const teamMatchIndex = {};
+    const h2hIndex = {};
+    const competitionIndex = {};
+    const seasonIndex = {};
+
+    let masterRows = 0;
+    let indexedMatches = 0;
+
+    let duplicateIds = 0;
+    let skippedUnresolved = 0;
+    let skippedSelfMatch = 0;
+    let skippedInvalidScore = 0;
+    let skippedMissingId = 0;
+
+    await new Promise(
+        (resolve, reject) => {
+
+            fs.createReadStream(
+                MASTER_FILE
+            )
+                .pipe(csv())
+
+                .on(
+                    'data',
+                    row => {
+
+                        masterRows++;
+
+                        const matchId =
+                            String(
+                                row.zokascore_match_id ?? ''
+                            ).trim();
+
+                        if (!matchId) {
+                            skippedMissingId++;
+                            return;
+                        }
+
+                        // ------------------------------------------------
+                        // DUPLICATE MATCH ID — FAIL CLOSED
+                        // ------------------------------------------------
+
+                        if (
+                            Object.prototype.hasOwnProperty.call(
+                                matchIndex,
+                                matchId
+                            )
+                        ) {
+                            duplicateIds++;
+
+                            console.error(
+                                `❌ FATAL: Duplicate match_id encountered: ${matchId}`
+                            );
+
+                            return;
+                        }
+
+                        const date =
+                            String(
+                                row.date ?? ''
+                            ).trim();
+
+                        const homeName =
+                            String(
+                                row.home_team ?? ''
+                            ).trim();
+
+                        const awayName =
+                            String(
+                                row.away_team ?? ''
+                            ).trim();
+
+                        const competition =
+                            String(
+                                row.competition ??
+                                'UNKNOWN_COMPETITION'
+                            ).trim() ||
+                            'UNKNOWN_COMPETITION';
+
+                        let season =
+                            String(
+                                row.season ?? ''
+                            ).trim();
+
+                        if (!season) {
+                            season =
+                                deriveSeasonFromDate(
+                                    date
+                                );
+                        }
+
+                        if (!season) {
+                            season =
+                                'UNKNOWN_SEASON';
+                        }
+
+                        // ------------------------------------------------
+                        // CANONICAL TEAM RESOLUTION
+                        // ------------------------------------------------
+
+                        const homeId =
+                            teamNameToIdMap.get(
+                                compact(homeName)
+                            );
+
+                        const awayId =
+                            teamNameToIdMap.get(
+                                compact(awayName)
+                            );
+
+                        if (
+                            !homeId ||
+                            !awayId
+                        ) {
+                            skippedUnresolved++;
+                            return;
+                        }
+
+                        // ------------------------------------------------
+                        // SELF-MATCH
+                        // ------------------------------------------------
+
+                        if (
+                            homeId === awayId
+                        ) {
+                            skippedSelfMatch++;
+                            return;
+                        }
+
+                        // ------------------------------------------------
+                        // SCORE VALIDATION
+                        // ------------------------------------------------
+
+                        const homeScore =
+                            safeNumber(
+                                row.home_score
+                            );
+
+                        const awayScore =
+                            safeNumber(
+                                row.away_score
+                            );
+
+                        if (
+                            homeScore === null ||
+                            awayScore === null
+                        ) {
+                            skippedInvalidScore++;
+                            return;
+                        }
+
+                        // ------------------------------------------------
+                        // MATCH INDEX
+                        // ------------------------------------------------
+
+                        matchIndex[matchId] = {
+                            date,
+                            home_team_id: homeId,
+                            away_team_id: awayId,
+                            home_score: homeScore,
+                            away_score: awayScore,
+                            competition,
+                            season
+                        };
+
+                        // ------------------------------------------------
+                        // TEAM MATCH INDEX
+                        // ------------------------------------------------
+
+                        if (
+                            !teamMatchIndex[homeId]
+                        ) {
+                            teamMatchIndex[homeId] = [];
+                        }
+
+                        teamMatchIndex[
+                            homeId
+                        ].push(matchId);
+
+                        if (
+                            !teamMatchIndex[awayId]
+                        ) {
+                            teamMatchIndex[awayId] = [];
+                        }
+
+                        teamMatchIndex[
+                            awayId
+                        ].push(matchId);
+
+                        // ------------------------------------------------
+                        // H2H INDEX
+                        // ------------------------------------------------
+
+                        const sortedTeams =
+                            [
+                                homeId,
+                                awayId
+                            ].sort();
+
+                        const h2hKey =
+                            `${sortedTeams[0]}_vs_${sortedTeams[1]}`;
+
+                        if (
+                            !h2hIndex[h2hKey]
+                        ) {
+                            h2hIndex[h2hKey] = [];
+                        }
+
+                        h2hIndex[
+                            h2hKey
+                        ].push(matchId);
+
+                        // ------------------------------------------------
+                        // COMPETITION INDEX
+                        // ------------------------------------------------
+
+                        if (
+                            !competitionIndex[
+                                competition
+                            ]
+                        ) {
+                            competitionIndex[
+                                competition
+                            ] = [];
+                        }
+
+                        competitionIndex[
+                            competition
+                        ].push(matchId);
+
+                        // ------------------------------------------------
+                        // SEASON INDEX
+                        // ------------------------------------------------
+
+                        if (
+                            !seasonIndex[
+                                season
+                            ]
+                        ) {
+                            seasonIndex[
+                                season
+                            ] = [];
+                        }
+
+                        seasonIndex[
+                            season
+                        ].push(matchId);
+
+                        indexedMatches++;
+                    }
+                )
+
+                .on(
+                    'end',
+                    resolve
+                )
+
+                .on(
+                    'error',
+                    reject
+                );
+        }
+    );
+
+    console.log(
+        `   ↳ MASTER rows scanned: ${masterRows.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Matches indexed: ${indexedMatches.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Skipped (missing ID): ${skippedMissingId.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Skipped (unresolved team): ${skippedUnresolved.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Skipped (self-match): ${skippedSelfMatch.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Skipped (invalid/missing score): ${skippedInvalidScore.toLocaleString()}\n`
+    );
+
+    // ========================================================
+    // HARD INTEGRITY GATES
+    // ========================================================
+
+    if (duplicateIds > 0) {
+        throw new Error(
+            `STEP 11 integrity failure: ${duplicateIds} duplicate Match IDs detected.`
+        );
+    }
+
+    if (
+        indexedMatches !==
+        EXPECTED_INDEXED_MATCHES
+    ) {
+        throw new Error(
+            `STEP 11 integrity failure: expected ` +
+            `${EXPECTED_INDEXED_MATCHES.toLocaleString()} ` +
+            `verified matches, got ` +
+            `${indexedMatches.toLocaleString()}.`
+        );
+    }
+
+    if (
+        masterRows !==
+        484363
+    ) {
+        throw new Error(
+            `STEP 11 integrity failure: expected 484,363 MASTER rows, got ${masterRows}.`
+        );
+    }
+
+    if (
+        skippedUnresolved !== 84
+    ) {
+        throw new Error(
+            `STEP 11 integrity failure: expected 84 unresolved-team rows, got ${skippedUnresolved}.`
+        );
+    }
+
+    if (
+        skippedSelfMatch !== 4
+    ) {
+        throw new Error(
+            `STEP 11 integrity failure: expected 4 self-match rows, got ${skippedSelfMatch}.`
+        );
+    }
+
+    if (
+        skippedInvalidScore !== 5
+    ) {
+        throw new Error(
+            `STEP 11 integrity failure: expected 5 invalid/missing-score rows, got ${skippedInvalidScore}.`
+        );
+    }
+
+    const reconstructedTotal =
+        indexedMatches +
+        skippedUnresolved +
+        skippedSelfMatch +
+        skippedInvalidScore +
+        skippedMissingId;
+
+    if (
+        reconstructedTotal !==
+        masterRows
+    ) {
+        throw new Error(
+            `STEP 11 accounting failure: ` +
+            `${reconstructedTotal.toLocaleString()} ` +
+            `classified rows != ` +
+            `${masterRows.toLocaleString()} MASTER rows.`
+        );
+    }
+
+    console.log(
+        '   ✅ Match population matches verified Step 10 reconstruction.'
+    );
+
+    console.log(
+        '   ✅ MASTER accounting is complete.'
+    );
+
+    console.log(
+        '   ✅ Duplicate Match ID gate passed.\n'
+    );
+
+    // ========================================================
+    // 3. BUILD PLAYER + CANONICAL TEAM INDEXES
+    // ========================================================
+
+    console.log(
+        '[3/4] Building player and canonical team indexes...'
+    );
+
+    const playersIndex =
+        readJson(
+            PLAYERS_INDEX_FILE
+        );
+
+    const playerIntel =
+        readJson(
+            PLAYER_INTEL_FILE
+        );
+
+    const playersManifest = [];
+
+    for (
+        const [
+            playerId,
+            profile
+        ]
+        of Object.entries(
+            playersIndex
+        )
+    ) {
+
+        const intel =
+            playerIntel[playerId] ||
+            {};
+
+        playersManifest.push({
+            player_id:
+                playerId,
+
+            name:
+                profile.name ||
+                'Unknown',
+
+            total_goals:
+                Number(
+                    intel.goals || 0
+                ),
+
+            total_appearances:
+                Number(
+                    intel.appearances || 0
+                )
+        });
+    }
+
+    playersManifest.sort(
+        (a, b) =>
+            b.total_goals -
+            a.total_goals
+    );
+
+    const playerIndexOutput = {
+        total_players:
+            playersManifest.length,
+
+        players:
+            playersManifest
+    };
+
+    const canonicalTeamIndex = {};
+
+    for (
+        const [
+            teamId,
+            profile
+        ]
+        of Object.entries(
+            teamsIndex
+        )
+    ) {
+
+        canonicalTeamIndex[
+            teamId
+        ] = {
+            name:
+                profile.name ||
+                'Unknown',
+
+            country:
+                profile.country ??
+                null,
+
+            stadium:
+                profile.stadium ??
+                null
+        };
+    }
+
+    console.log(
+        `   ↳ Players indexed: ${playersManifest.length.toLocaleString()}`
+    );
+
+    console.log(
+        `   ↳ Canonical teams indexed: ${Object.keys(canonicalTeamIndex).length.toLocaleString()}\n`
+    );
+
+    // ========================================================
+    // 4. ATOMIC WRITE
+    // ========================================================
+
+    console.log(
+        '[4/4] Writing indexes atomically...'
+    );
+
+    removeDir(TEMP_DIR);
+
+    ensureDir(TEMP_DIR);
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'match_index.json',
+        matchIndex
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'team_match_index.json',
+        teamMatchIndex
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'h2h_index.json',
+        h2hIndex
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'competition_index.json',
+        competitionIndex
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'season_index.json',
+        seasonIndex
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'players_index.json',
+        playerIndexOutput
+    );
+
+    atomicWriteJson(
+        TEMP_DIR,
+        'canonical_team_index.json',
+        canonicalTeamIndex
+    );
+
+    // --------------------------------------------------------
+    // Validate generated temporary files before publication
+    // --------------------------------------------------------
+
+    const requiredOutputs = [
+        'match_index.json',
+        'team_match_index.json',
+        'h2h_index.json',
+        'competition_index.json',
+        'season_index.json',
+        'players_index.json',
+        'canonical_team_index.json'
+    ];
+
+    for (
+        const filename
+        of requiredOutputs
+    ) {
+
+        const filePath =
+            path.join(
+                TEMP_DIR,
+                filename
+            );
+
+        if (!fs.existsSync(filePath)) {
+            throw new Error(
+                `Atomic output validation failed: missing ${filename}`
+            );
+        }
+
+        JSON.parse(
+            fs.readFileSync(
+                filePath,
+                'utf8'
+            )
+        );
+    }
+
+    // --------------------------------------------------------
+    // Replace final output directory
+    // --------------------------------------------------------
+
+    removeDir(OUT_DIR);
+
+    fs.renameSync(
+        TEMP_DIR,
+        OUT_DIR
+    );
+
+    console.log(
+        '   ↳ Temporary indexes validated.'
+    );
+
+    console.log(
+        '   ↳ Final indexes published atomically.'
+    );
+
+    // ========================================================
+    // FINAL REPORT
+    // ========================================================
+
+    console.log(
+        '\n============================================================'
+    );
+
+    console.log(
+        ' STEP 11 COMPLETE: PASS'
+    );
+
+    console.log(
+        '============================================================'
+    );
+
+    console.log(
+        `📁 Index Directory: ${OUT_DIR}`
+    );
+
+    console.log(
+        `📊 MASTER Rows:          ${masterRows.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Matches Indexed:      ${Object.keys(matchIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Teams Indexed:        ${Object.keys(teamMatchIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 H2H Pairs Indexed:    ${Object.keys(h2hIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Competitions Indexed: ${Object.keys(competitionIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Seasons Indexed:      ${Object.keys(seasonIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Players Indexed:      ${playersManifest.length.toLocaleString()}`
+    );
+
+    console.log(
+        `📊 Canonical Teams:      ${Object.keys(canonicalTeamIndex).length.toLocaleString()}`
+    );
+
+    console.log(
+        '\n🔒 Canonical V2 source data was NOT modified.'
+    );
+
+    console.log(
+        '🔒 Only derived index artifacts were written.'
+    );
+
+    console.log(
+        '============================================================\n'
+    );
+}
+
+run().catch(err => {
+
+    console.error(
+        '\n============================================================'
+    );
+
+    console.error(
+        '❌ STEP 11 FAILED'
+    );
+
+    console.error(
+        '============================================================'
+    );
+
+    console.error(
+        err.message
+    );
+
+    console.error(
+        '\n🔒 Canonical source data was NOT modified.'
+    );
+
+    removeDir(TEMP_DIR);
+
+    process.exit(1);
 });

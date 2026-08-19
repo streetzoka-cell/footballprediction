@@ -1,82 +1,93 @@
 const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
-const { getCanonicalSlug } = require('./TeamMatcherService');
 
-const ENTITIES_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football', 'history', 'entities');
+const PUBLIC_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football');
+const INDEX_DIR = path.join(PUBLIC_DIR, 'indexes');
+const ENTITIES_DIR = path.join(PUBLIC_DIR, 'history', 'entities');
+const INTERNAL_MAP_FILE = path.join(process.cwd(), 'data', 'zokascore_football_data', 'canonical_sources', 'internal_team_map.json');
 
-function loadJson(filePath) {
-  try {
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+// Load indexes into memory once for instant lookups
+let teamsIndex = {};
+let providerMap = {};
+let nameToIdMap = new Map();
+let currentElo = {};
+let h2hSummaries = {};
+
+try {
+  teamsIndex = JSON.parse(fs.readFileSync(path.join(INDEX_DIR, 'teams-index.json'), 'utf8'));
+  Object.entries(teamsIndex).forEach(([zkId, profile]) => {
+    if (profile && profile.name) {
+      const slug = String(profile.name).toLowerCase().replace(/[^a-z0-9]+/g, '_');
+      nameToIdMap.set(slug, zkId);
     }
-  } catch (e) {
-    logger.warn(`[MatchIntel] Failed to read ${filePath}: ${e.message}`);
-  }
+  });
+} catch (e) { logger.warn('[MatchIntel] teams-index.json not found'); }
+
+try {
+  const mapData = JSON.parse(fs.readFileSync(INTERNAL_MAP_FILE, 'utf8'));
+  providerMap = mapData.by_provider_club_id || {};
+} catch (e) { /* Ignore if missing */ }
+
+try {
+  const eloData = JSON.parse(fs.readFileSync(path.join(INDEX_DIR, 'elo_current.json'), 'utf8'));
+  currentElo = eloData.elos || {};
+} catch (e) { logger.warn('[MatchIntel] elo_current.json not found. Run Step 16.'); }
+
+try {
+  h2hSummaries = JSON.parse(fs.readFileSync(path.join(ENTITIES_DIR, 'h2h', 'summaries.json'), 'utf8'));
+} catch (e) { logger.warn('[MatchIntel] H2H summaries.json not found.'); }
+
+function resolveTeamId(input) {
+  const val = String(input || '').trim();
+  if (!val) return null;
+  if (val.startsWith('ZK_TEAM_')) return val;
+  if (providerMap[val]) return providerMap[val];
+  const slug = val.toLowerCase().replace(/[^a-z0-9]+/g, '_');
+  if (nameToIdMap.has(slug)) return nameToIdMap.get(slug);
   return null;
 }
 
-function generateZokaPick(home, away, h2h) {
-  const homeElo = home?.elo || 1500;
-  const awayElo = away?.elo || 1500;
-  const eloDiff = homeElo - awayElo;
+function getTeamData(zkId) {
+  if (!zkId) return { elo: 1500, form: [] };
   
-  const homeOver25 = home?.goalPatterns?.overall?.over_2_5_pct || 0;
-  const awayOver25 = away?.goalPatterns?.overall?.over_2_5_pct || 0;
-  const avgOver25 = (homeOver25 + awayOver25) / 2;
+  const filePath = path.join(ENTITIES_DIR, 'team_intelligence', `${zkId}.json`);
+  let stats = { recent_form: [] };
   
-  const homeBtts = home?.goalPatterns?.overall?.btts_pct || 0;
-  const awayBtts = away?.goalPatterns?.overall?.btts_pct || 0;
-  const avgBtts = (homeBtts + awayBtts) / 2;
+  try {
+    if (fs.existsSync(filePath)) {
+      stats = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch (e) { /* Ignore */ }
 
-  if (eloDiff > 100 && avgOver25 > 60) return { market: 'HOME WIN & OVER 2.5', confidence: 'HIGH', rating: 85 };
-  if (eloDiff < -100 && avgOver25 > 60) return { market: 'AWAY WIN & OVER 2.5', confidence: 'HIGH', rating: 85 };
-  if (avgOver25 > 65) return { market: 'OVER 2.5 GOALS', confidence: 'MEDIUM', rating: 75 };
-  if (avgBtts > 60) return { market: 'BOTH TEAMS TO SCORE', confidence: 'MEDIUM', rating: 70 };
-  if (Math.abs(eloDiff) > 150) return { market: eloDiff > 0 ? 'HOME WIN' : 'AWAY WIN', confidence: 'MEDIUM', rating: 65 };
-  return { market: 'DRAW OR UNDER 2.5', confidence: 'LOW', rating: 50 };
+  return {
+    elo: currentElo[zkId] || 1500,
+    form: stats.recent_form || []
+  };
 }
 
 async function getMatchIntelligence(homeTeam, awayTeam) {
-  // Use the TeamMatcher to get the correct canonical slug
-  const homeSlug = getCanonicalSlug(homeTeam);
-  const awaySlug = getCanonicalSlug(awayTeam);
-  
-  // Read from the original folders to maintain frontend compatibility
-  const homeIntel = loadJson(path.join(ENTITIES_DIR, 'team_intelligence', `${homeSlug}.json`));
-  const awayIntel = loadJson(path.join(ENTITIES_DIR, 'team_intelligence', `${awaySlug}.json`));
-  
-  const h2hTeams = [homeSlug, awaySlug].sort();
-  const h2hIntel = loadJson(path.join(ENTITIES_DIR, 'h2h', `${h2hTeams[0]}_${h2hTeams[1]}.json`));
-  
-  const homeElo = loadJson(path.join(ENTITIES_DIR, 'team_elo', `${homeSlug}.json`));
-  const awayElo = loadJson(path.join(ENTITIES_DIR, 'team_elo', `${awaySlug}.json`));
+  const homeId = resolveTeamId(homeTeam);
+  const awayId = resolveTeamId(awayTeam);
 
-  const homeData = {
-    team: homeTeam,
-    elo: homeElo?.current_elo || null,
-    form: homeIntel?.recent_form?.slice(-5) || [],
-    stats: homeIntel?.overall || {},
-    goalPatterns: homeIntel?.goal_patterns || {},
-    resilience: homeIntel?.resilience || {}
-  };
-  
-  const awayData = {
-    team: awayTeam,
-    elo: awayElo?.current_elo || null,
-    form: awayIntel?.recent_form?.slice(-5) || [],
-    stats: awayIntel?.overall || {},
-    goalPatterns: awayIntel?.goal_patterns || {},
-    resilience: awayIntel?.resilience || {}
-  };
+  if (!homeId || !awayId) {
+    return null; // Frontend will handle null gracefully
+  }
 
-  const zokaPick = generateZokaPick(homeData, awayData, h2hIntel);
+  const teams = [homeId, awayId].sort();
+  const h2hKey = `${teams[0]}_vs_${teams[1]}`;
+  
+  const h2h = h2hSummaries[h2hKey] || { matches: 0, team_a_wins: 0, team_b_wins: 0, draws: 0 };
 
   return {
-    home: homeData,
-    away: awayData,
-    h2h: h2hIntel || null,
-    zokaPick
+    home: getTeamData(homeId),
+    away: getTeamData(awayId),
+    h2h: {
+      meetings: h2h.matches,
+      teamA_wins: h2h.team_a_wins,
+      teamB_wins: h2h.team_b_wins,
+      draws: h2h.draws
+    }
   };
 }
 

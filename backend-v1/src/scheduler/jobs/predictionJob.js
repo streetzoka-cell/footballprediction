@@ -15,41 +15,15 @@ const logger = require('../../utils/logger');
 
 const ROOT = process.cwd();
 
+// ★ NEW: Point to the Master Orchestrator instead of just Step 50
 const PIPELINE_SCRIPT = path.join(
   ROOT,
   'pipeline',
-  '50-generate-daily-predictions.py'
+  'run_daily_pipeline.js'
 );
 
-// Windows virtual-environment Python.
-// Fall back to "python" for environments where the venv path
-// does not exist.
-const WINDOWS_PYTHON = path.join(
-  ROOT,
-  '.venv',
-  'Scripts',
-  'python.exe'
-);
-
-const UNIX_PYTHON = path.join(
-  ROOT,
-  '.venv',
-  'bin',
-  'python'
-);
-
-const PYTHON_COMMAND =
-  process.platform === 'win32'
-    ? (
-        fs.existsSync(WINDOWS_PYTHON)
-          ? WINDOWS_PYTHON
-          : 'python'
-      )
-    : (
-        fs.existsSync(UNIX_PYTHON)
-          ? UNIX_PYTHON
-          : 'python3'
-      );
+// Use the Node.js executable to run the orchestrator script
+const NODE_COMMAND = process.execPath || 'node';
 
 // Retry after failure.
 const RETRY_DELAY_MS =
@@ -72,19 +46,19 @@ async function execute() {
   return new Promise((resolve) => {
 
     logger.info(
-      '[PredictionJob] ========================================'
+      '[PipelineJob] ========================================'
     );
 
     logger.info(
-      '[PredictionJob] Starting Pipeline 50 daily prediction generation...'
+      '[PipelineJob] Starting ZOKASCORE V2 Master Pipeline...'
     );
 
     logger.info(
-      `[PredictionJob] Python: ${PYTHON_COMMAND}`
+      `[PipelineJob] Node: ${NODE_COMMAND}`
     );
 
     logger.info(
-      `[PredictionJob] Script: ${PIPELINE_SCRIPT}`
+      `[PipelineJob] Script: ${PIPELINE_SCRIPT}`
     );
 
     // --------------------------------------------------------
@@ -94,27 +68,18 @@ async function execute() {
     if (!fs.existsSync(PIPELINE_SCRIPT)) {
 
       logger.error(
-        `[PredictionJob] Pipeline script not found: ${PIPELINE_SCRIPT}`
+        `[PipelineJob] Orchestrator script not found: ${PIPELINE_SCRIPT}`
       );
 
       return resolve(RETRY_DELAY_MS);
     }
 
-    if (
-      process.platform === 'win32' &&
-      fs.existsSync(WINDOWS_PYTHON)
-    ) {
-      logger.info(
-        '[PredictionJob] Using project .venv Python interpreter.'
-      );
-    }
-
     // --------------------------------------------------------
-    // EXECUTE PYTHON
+    // EXECUTE NODE ORCHESTRATOR
     // --------------------------------------------------------
 
     execFile(
-      PYTHON_COMMAND,
+      NODE_COMMAND,
       [PIPELINE_SCRIPT],
       {
         cwd: ROOT,
@@ -130,7 +95,7 @@ async function execute() {
         if (stderr && stderr.trim()) {
 
           logger.warn(
-            `[PredictionJob] Python stderr:\n${stderr.trim()}`
+            `[PipelineJob] Orchestrator stderr:\n${stderr.trim()}`
           );
         }
 
@@ -141,23 +106,23 @@ async function execute() {
         if (error) {
 
           logger.error(
-            `[PredictionJob] Pipeline 50 failed: ${error.message}`
+            `[PipelineJob] Master Pipeline failed: ${error.message}`
           );
 
           if (typeof error.code !== 'undefined') {
             logger.error(
-              `[PredictionJob] Exit code: ${error.code}`
+              `[PipelineJob] Exit code: ${error.code}`
             );
           }
 
           if (stdout && stdout.trim()) {
             logger.error(
-              `[PredictionJob] Python output before failure:\n${stdout.trim()}`
+              `[PipelineJob] Orchestrator output before failure:\n${stdout.trim()}`
             );
           }
 
           logger.warn(
-            '[PredictionJob] Retry scheduled in 1 hour.'
+            '[PipelineJob] Retry scheduled in 1 hour.'
           );
 
           return resolve(RETRY_DELAY_MS);
@@ -170,20 +135,20 @@ async function execute() {
         if (stdout && stdout.trim()) {
 
           logger.info(
-            `[PredictionJob] Pipeline 50 output:\n${stdout.trim()}`
+            `[PipelineJob] Orchestrator output:\n${stdout.trim()}`
           );
         }
 
         logger.info(
-          '[PredictionJob] Pipeline 50 completed successfully.'
+          '[PipelineJob] Master Pipeline completed successfully.'
         );
 
         logger.info(
-          '[PredictionJob] Next execution scheduled in 24 hours.'
+          '[PipelineJob] Next execution scheduled in 24 hours.'
         );
 
         logger.info(
-          '[PredictionJob] ========================================'
+          '[PipelineJob] ========================================'
         );
 
         return resolve(SUCCESS_INTERVAL_MS);

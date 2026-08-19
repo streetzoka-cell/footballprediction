@@ -8,8 +8,8 @@ const {
   ensureDirSync,
 } = require('../utils/atomicWriter');
 
-const PUBLIC_PREDICTIONS_FILE = path.join(
-  process.cwd(), 'public_data', 'predictions.json'
+const PUBLIC_VOTES_FILE = path.join(
+  process.cwd(), 'public_data', 'community_votes.json'
 );
 
 const DATA_DIR = path.join(process.cwd(), 'data', 'predictions');
@@ -31,7 +31,7 @@ function safeFileId(id) {
 }
 
 function loadAggregate() {
-  const data = readJSONSafeSync(PUBLIC_PREDICTIONS_FILE, {});
+  const data = readJSONSafeSync(PUBLIC_VOTES_FILE, {});
   store = data && typeof data === 'object' && !Array.isArray(data) ? data : {};
 }
 
@@ -57,7 +57,7 @@ function saveReceipts(matchId) {
 }
 
 function saveAggregate() {
-  writeJSONAtomicSync(PUBLIC_PREDICTIONS_FILE, store, { pretty: true });
+  writeJSONAtomicSync(PUBLIC_VOTES_FILE, store, { pretty: true });
 }
 
 function scheduleAggregateSave() {

@@ -1,8 +1,8 @@
-'use strict';
-
 import os
-import numpy as np
+import json
+import joblib
 import pandas as pd
+import numpy as np
 import xgboost as xgb
 
 from sklearn.metrics import (
@@ -16,572 +16,262 @@ from sklearn.metrics import (
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight
 
-
 # ============================================================
-# CONFIGURATION
+# ZOKASCORE V2 — STEP 37
+# XGBOOST MODEL TRAINING
 # ============================================================
 
-FEATURES_FILE = os.path.join(
-    "data",
-    "ml",
-    "features_v2.csv"
-)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-RANDOM_STATE = 42
+FEATURES_FILE = os.path.join(BASE_DIR, "data", "ml", "features_v2.csv")
+OUTPUT_DIR = os.path.join(BASE_DIR, "data", "models")
+REPORT_DIR = os.path.join(BASE_DIR, "data", "processed")
+
+MODEL_FILE = os.path.join(OUTPUT_DIR, "xgboost_v1.joblib")
+REPORT_FILE = os.path.join(REPORT_DIR, "xgboost_model_report.json")
+
+EXPECTED_ROWS = 484354
+TRAIN_RATIO = 0.80
+
+# Updated baselines from previous steps
+BASELINE_ACCURACY = 47.97
+ELO_ONLY_ACCURACY = 51.23
+RF_BALANCED_ACCURACY = 48.60
 
 FEATURE_COLUMNS = [
-    "home_elo_pre",
-    "away_elo_pre",
-    "elo_diff",
-
-    "home_form_pts",
-    "away_form_pts",
-
-    "home_home_pts",
-    "away_away_pts",
-
-    "home_gf_avg",
-    "away_gf_avg",
-
-    "home_ga_avg",
-    "away_ga_avg",
-
-    "h2h_hw_rate",
-    "h2h_d_rate",
-    "h2h_aw_rate",
-    "h2h_matches"
+    "home_elo_pre", "away_elo_pre", "elo_diff",
+    "home_form_pts", "away_form_pts", "home_home_pts", "away_away_pts",
+    "home_gf_avg", "away_gf_avg", "home_ga_avg", "away_ga_avg",
+    "h2h_hw_rate", "h2h_d_rate", "h2h_aw_rate", "h2h_matches"
 ]
 
+LABELS = ["HOME_WIN", "DRAW", "AWAY_WIN"]
 
-# ============================================================
-# HEADER
-# ============================================================
+def run():
+    print("=" * 60)
+    print(" ZOKASCORE V2 — STEP 37: XGBOOST MODEL TRAINING")
+    print("=" * 60)
+    print()
 
-print("🧠 ZOKASCORE V2 - Pipeline 37: XGBoost Training")
-print("=" * 60)
-print()
+    print("[1/8] Checking Step 35 feature dataset...")
+    if not os.path.exists(FEATURES_FILE):
+        raise FileNotFoundError(f"Feature dataset not found:\n{FEATURES_FILE}")
 
+    print("\n[2/8] Loading features...")
+    df = pd.read_csv(FEATURES_FILE, low_memory=False)
+    if len(df) != EXPECTED_ROWS:
+        raise RuntimeError(f"POPULATION MISMATCH: expected {EXPECTED_ROWS:,}, got {len(df):,}.")
+    print(f"   ↳ Rows loaded: {len(df):,}")
 
-# ============================================================
-# 1. LOAD DATA
-# ============================================================
+    print("\n[3/8] Validating feature dataset...")
+    missing = [c for c in FEATURE_COLUMNS + ["match_id", "date", "target"] if c not in df.columns]
+    if missing:
+        raise RuntimeError(f"Missing required columns: {missing}")
 
-print(f"📊 Loading features from {FEATURES_FILE}...")
+    if df["match_id"].isna().any() or df["match_id"].duplicated().any():
+        raise RuntimeError("Match IDs are missing or duplicated.")
 
-if not os.path.exists(FEATURES_FILE):
-    raise FileNotFoundError(
-        f"Features file not found:\n{FEATURES_FILE}\n\n"
-        "Run Pipeline 35 first."
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    if df["date"].isna().any():
+        raise RuntimeError("Invalid dates found.")
+
+    for col in FEATURE_COLUMNS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+        if df[col].isna().any():
+            raise RuntimeError(f"{col} contains invalid/missing values.")
+    
+    invalid_targets = set(df["target"].unique()) - set(LABELS)
+    if invalid_targets:
+        raise RuntimeError(f"Invalid target values: {invalid_targets}")
+    print("   ✅ Structural integrity verified.")
+
+    print("\n[4/8] Preparing deterministic chronological split...")
+    df = df.sort_values(by=["date", "match_id"], kind="mergesort").reset_index(drop=True)
+
+    split_idx = int(len(df) * TRAIN_RATIO)
+    train_df = df.iloc[:split_idx].copy()
+    test_df = df.iloc[split_idx:].copy()
+
+    train_end_date = train_df.iloc[-1]["date"]
+    test_start_date = test_df.iloc[0]["date"]
+
+    print(f"   ↳ Training: {len(train_df):,} matches (Through {train_end_date.date()})")
+    print(f"   ↳ Testing:  {len(test_df):,} matches (From {test_start_date.date()})")
+
+    X_train = train_df[FEATURE_COLUMNS].astype(float)
+    X_test = test_df[FEATURE_COLUMNS].astype(float)
+    
+    y_train_raw = train_df["target"].astype(str)
+    y_test_raw = test_df["target"].astype(str)
+
+    print("\n[5/8] Encoding targets (fit on train only)...")
+    le = LabelEncoder()
+    y_train = le.fit_transform(y_train_raw)
+    y_test = le.transform(y_test_raw)
+
+    print("\n[6/8] Calculating balanced sample weights (from train only)...")
+    sample_weights = compute_sample_weight(
+        class_weight="balanced",
+        y=y_train
     )
 
-df = pd.read_csv(
-    FEATURES_FILE,
-    low_memory=False
-)
-
-print(f"   ✅ Loaded {len(df):,} matches.")
-
-
-# ============================================================
-# 2. VALIDATE REQUIRED COLUMNS
-# ============================================================
-
-required_columns = FEATURE_COLUMNS + [
-    "match_id",
-    "date",
-    "target"
-]
-
-missing = [
-    column
-    for column in required_columns
-    if column not in df.columns
-]
-
-if missing:
-    raise ValueError(
-        "Missing required columns:\n"
-        + "\n".join(f"   - {x}" for x in missing)
+    print("\n[7/8] Training XGBoost Classifier...")
+    model = xgb.XGBClassifier(
+        objective="multi:softprob",
+        num_class=3,
+        n_estimators=300,
+        learning_rate=0.05,
+        max_depth=6,
+        min_child_weight=3,
+        subsample=0.85,
+        colsample_bytree=0.85,
+        gamma=0.0,
+        reg_alpha=0.0,
+        reg_lambda=1.0,
+        random_state=42,
+        n_jobs=-1,
+        eval_metric="mlogloss",
+        tree_method="hist"
     )
 
-
-# ============================================================
-# 3. CLEAN / SORT CHRONOLOGICALLY
-# ============================================================
-
-df["date"] = pd.to_datetime(
-    df["date"],
-    errors="coerce"
-)
-
-before = len(df)
-
-df = df.dropna(
-    subset=["date", "target"] + FEATURE_COLUMNS
-).copy()
-
-removed = before - len(df)
-
-if removed:
-    print(f"   ⚠️ Removed {removed:,} invalid rows.")
-
-df = df.sort_values(
-    "date",
-    kind="stable"
-).reset_index(drop=True)
-
-print(
-    f"   📅 Date range: "
-    f"{df.iloc[0]['date'].date()} → "
-    f"{df.iloc[-1]['date'].date()}"
-)
-
-
-# ============================================================
-# 4. TARGET VALIDATION
-# ============================================================
-
-VALID_TARGETS = {
-    "HOME_WIN",
-    "DRAW",
-    "AWAY_WIN"
-}
-
-invalid_targets = sorted(
-    set(df["target"].dropna().unique()) - VALID_TARGETS
-)
-
-if invalid_targets:
-    raise ValueError(
-        f"Invalid target values found: {invalid_targets}"
-    )
-
-print("\n🎯 Target distribution")
-
-target_counts = df["target"].value_counts()
-
-for label in ["HOME_WIN", "DRAW", "AWAY_WIN"]:
-    print(
-        f"   {label:<12} "
-        f"{target_counts.get(label, 0):>8,}"
-    )
-
-
-# ============================================================
-# 5. FEATURES / TARGET
-# ============================================================
-
-X = df[FEATURE_COLUMNS].astype(float)
-y = df["target"].astype(str)
-
-
-# ============================================================
-# 6. ENCODE TARGET
-# ============================================================
-
-le = LabelEncoder()
-
-y_encoded = le.fit_transform(y)
-
-print("\n🏷️ Target encoding")
-
-for encoded_value, label in enumerate(le.classes_):
-    print(
-        f"   {encoded_value} → {label}"
-    )
-
-
-# ============================================================
-# 7. CHRONOLOGICAL 80/20 SPLIT
-# ============================================================
-
-split_idx = int(len(df) * 0.8)
-
-X_train = X.iloc[:split_idx]
-X_test = X.iloc[split_idx:]
-
-y_train = y_encoded[:split_idx]
-y_test = y_encoded[split_idx:]
-
-train_end_date = df.iloc[split_idx - 1]["date"]
-test_start_date = df.iloc[split_idx]["date"]
-
-print("\n📚 Chronological split")
-print(
-    f"   🏋️ Training: {len(X_train):,} matches"
-)
-print(
-    f"      Through: {train_end_date.date()}"
-)
-
-print(
-    f"   🧪 Testing:  {len(X_test):,} matches"
-)
-print(
-    f"      From:    {test_start_date.date()}"
-)
-
-
-# ============================================================
-# 8. BALANCED SAMPLE WEIGHTS
-# ============================================================
-#
-# Important:
-#
-# We do NOT balance the test set.
-# The test set must remain representative of real football.
-#
-# We only weight the TRAINING observations so DRAW is not
-# ignored simply because it is less frequent.
-# ============================================================
-
-sample_weights = compute_sample_weight(
-    class_weight="balanced",
-    y=y_train
-)
-
-print("\n⚖️ Training class weighting")
-
-train_counts = pd.Series(y_train).value_counts()
-
-for encoded_value, label in enumerate(le.classes_):
-    count = train_counts.get(encoded_value, 0)
-
-    if count > 0:
-        weight = len(y_train) / (
-            len(le.classes_) * count
-        )
-    else:
-        weight = 0
-
-    print(
-        f"   {label:<12} "
-        f"count={count:>8,} "
-        f"weight={weight:.3f}"
-    )
-
-
-# ============================================================
-# 9. TRAIN XGBOOST
-# ============================================================
-
-print("\n⚡ Training XGBoost Classifier...")
-print("   • Objective: multi:softprob")
-print("   • Trees: 300")
-print("   • Learning rate: 0.05")
-print("   • Max depth: 6")
-print("   • Subsample: 0.85")
-print("   • Column sampling: 0.85")
-print("   • Class-balanced training weights")
-print("   • CPU workers: all")
-print()
-
-model = xgb.XGBClassifier(
-    objective="multi:softprob",
-    num_class=3,
-
-    n_estimators=300,
-    learning_rate=0.05,
-    max_depth=6,
-
-    min_child_weight=3,
-    subsample=0.85,
-    colsample_bytree=0.85,
-
-    gamma=0.0,
-
-    reg_alpha=0.0,
-    reg_lambda=1.0,
-
-    random_state=RANDOM_STATE,
-    n_jobs=-1,
-
-    eval_metric="mlogloss",
-
-    tree_method="hist"
-)
-
-
-model.fit(
-    X_train,
-    y_train,
-    sample_weight=sample_weights
-)
-
-
-# ============================================================
-# 10. PREDICTIONS
-# ============================================================
-
-print("📈 Evaluating on unseen chronological test data...")
-
-y_pred = model.predict(X_test)
-
-y_prob = model.predict_proba(X_test)
-
-
-# ============================================================
-# 11. DECODE TARGETS
-# ============================================================
-
-y_test_str = le.inverse_transform(
-    y_test
-)
-
-y_pred_str = le.inverse_transform(
-    y_pred
-)
-
-
-# ============================================================
-# 12. CORE METRICS
-# ============================================================
-
-accuracy = accuracy_score(
-    y_test_str,
-    y_pred_str
-)
-
-balanced_accuracy = balanced_accuracy_score(
-    y_test_str,
-    y_pred_str
-)
-
-macro_f1 = f1_score(
-    y_test_str,
-    y_pred_str,
-    average="macro"
-)
-
-weighted_f1 = f1_score(
-    y_test_str,
-    y_pred_str,
-    average="weighted"
-)
-
-logloss = log_loss(
-    y_test,
-    y_prob,
-    labels=np.arange(len(le.classes_))
-)
-
-
-# ============================================================
-# 13. RESULTS
-# ============================================================
-
-print("\n" + "=" * 60)
-print("✅ PIPELINE 37 COMPLETE")
-print("=" * 60)
-
-print(
-    f"🎯 Accuracy:              "
-    f"{accuracy * 100:.2f}%"
-)
-
-print(
-    f"⚖️ Balanced Accuracy:     "
-    f"{balanced_accuracy * 100:.2f}%"
-)
-
-print(
-    f"🧠 Macro F1:              "
-    f"{macro_f1 * 100:.2f}%"
-)
-
-print(
-    f"📊 Weighted F1:           "
-    f"{weighted_f1 * 100:.2f}%"
-)
-
-print(
-    f"📉 Log Loss:              "
-    f"{logloss:.4f}"
-)
-
-print()
-print("📊 Reference Models")
-print("-" * 60)
-print("   Original baseline:     47.97%")
-print("   ELO-only:              52.71%")
-print("   Balanced ELO:          48.58%")
-print("   Random Forest:         50.45%")
-
-
-difference_rf = (
-    accuracy * 100
-) - 50.45
-
-difference_baseline = (
-    accuracy * 100
-) - 47.97
-
-print()
-print(
-    f"🚀 vs Random Forest:      "
-    f"{difference_rf:+.2f} pp"
-)
-
-print(
-    f"🚀 vs Original baseline:  "
-    f"{difference_baseline:+.2f} pp"
-)
-
-
-# ============================================================
-# 14. CLASSIFICATION REPORT
-# ============================================================
-
-print("\n📋 Classification Report")
-print("-" * 60)
-
-print(
-    classification_report(
-        y_test_str,
-        y_pred_str,
-        labels=["HOME_WIN", "DRAW", "AWAY_WIN"],
-        zero_division=0
-    )
-)
-
-
-# ============================================================
-# 15. CONFUSION MATRIX
-# ============================================================
-
-print("🧩 Confusion Matrix")
-print("-" * 60)
-
-labels = [
-    "HOME_WIN",
-    "DRAW",
-    "AWAY_WIN"
-]
-
-cm = confusion_matrix(
-    y_test_str,
-    y_pred_str,
-    labels=labels
-)
-
-print(
-    f"{'':>12}"
-    f"{'HOME_WIN':>12}"
-    f"{'DRAW':>12}"
-    f"{'AWAY_WIN':>12}"
-)
-
-for i, label in enumerate(labels):
-    print(
-        f"{label:>12}"
-        f"{cm[i, 0]:>12,}"
-        f"{cm[i, 1]:>12,}"
-        f"{cm[i, 2]:>12,}"
-    )
-
-
-# ============================================================
-# 16. PER-CLASS RECALL
-# ============================================================
-
-print("\n🎯 Per-Class Recall")
-print("-" * 60)
-
-report = classification_report(
-    y_test_str,
-    y_pred_str,
-    labels=labels,
-    output_dict=True,
-    zero_division=0
-)
-
-for label in labels:
-    recall = report[label]["recall"]
-
-    print(
-        f"   {label:<12} "
-        f"{recall * 100:>6.2f}%"
-    )
-
-
-# ============================================================
-# 17. FEATURE IMPORTANCE
-# ============================================================
-
-print("\n🧠 Feature Importances")
-print("-" * 60)
-
-importances = model.feature_importances_
-
-ranked_features = sorted(
-    zip(FEATURE_COLUMNS, importances),
-    key=lambda x: x[1],
-    reverse=True
-)
-
-for rank, (feature, importance) in enumerate(
-    ranked_features,
-    start=1
-):
-    print(
-        f"   {rank:>2}. "
-        f"{feature:<20} "
-        f"{importance * 100:>6.2f}%"
-    )
-
-
-# ============================================================
-# 18. H2H CONTRIBUTION
-# ============================================================
-
-h2h_features = {
-    "h2h_hw_rate",
-    "h2h_d_rate",
-    "h2h_aw_rate",
-    "h2h_matches"
-}
-
-h2h_importance = sum(
-    importance
-    for feature, importance in ranked_features
-    if feature in h2h_features
-)
-
-print("\n🥊 H2H Feature Contribution")
-print("-" * 60)
-
-print(
-    f"   Combined H2H importance: "
-    f"{h2h_importance * 100:.2f}%"
-)
-
-print(
-    f"   Matches with prior H2H: "
-    f"{int((df['h2h_matches'] > 0).sum()):,}"
-)
-
-
-# ============================================================
-# 19. FINAL DIAGNOSIS
-# ============================================================
-
-print("\n" + "=" * 60)
-
-if accuracy > 0.5045 and macro_f1 > 0.45:
-    print(
-        "🚀 RESULT: XGBoost improves over the Random Forest "
-        "while maintaining meaningful three-way prediction."
-    )
-
-elif accuracy > 0.4797 and macro_f1 > 0.40:
-    print(
-        "✅ RESULT: XGBoost beats the original baseline "
-        "and is learning all three outcomes."
-    )
-
-else:
-    print(
-        "⚠️ RESULT: XGBoost requires further tuning."
-    )
-
-print("=" * 60)
+    model.fit(X_train, y_train, sample_weight=sample_weights)
+    print("   ✅ Model trained.")
+
+    print("\n[8/8] Evaluating and saving artifacts...")
+    y_pred = model.predict(X_test)
+    y_prob = model.predict_proba(X_test)
+
+    y_test_str = le.inverse_transform(y_test)
+    y_pred_str = le.inverse_transform(y_pred)
+
+    accuracy = accuracy_score(y_test_str, y_pred_str)
+    balanced_accuracy = balanced_accuracy_score(y_test_str, y_pred_str)
+    macro_f1 = f1_score(y_test_str, y_pred_str, average="macro")
+    weighted_f1 = f1_score(y_test_str, y_pred_str, average="weighted")
+    logloss = log_loss(y_test, y_prob, labels=np.arange(len(le.classes_)))
+
+    diff_baseline = (accuracy * 100) - BASELINE_ACCURACY
+    diff_elo = (accuracy * 100) - ELO_ONLY_ACCURACY
+    diff_rf = (accuracy * 100) - RF_BALANCED_ACCURACY
+
+    report = classification_report(y_test_str, y_pred_str, labels=LABELS, output_dict=True, zero_division=0)
+    cm = confusion_matrix(y_test_str, y_pred_str, labels=LABELS)
+    importances = model.feature_importances_
+
+    # Save Model & Report
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(REPORT_DIR, exist_ok=True)
+
+    temp_model = MODEL_FILE + ".tmp"
+    joblib.dump(model, temp_model)
+    os.replace(temp_model, MODEL_FILE)
+
+    model_report = {
+        "pipeline_step": "37",
+        "status": "PASS",
+        "source": "data/ml/features_v2.csv",
+        "population": {
+            "total_rows": EXPECTED_ROWS,
+            "training_rows": len(train_df),
+            "testing_rows": len(test_df),
+            "train_ratio": TRAIN_RATIO
+        },
+        "date_range": {
+            "training_through": train_end_date.strftime("%Y-%m-%d"),
+            "testing_from": test_start_date.strftime("%Y-%m-%d")
+        },
+        "features": FEATURE_COLUMNS,
+        "target": "target",
+        "target_classes": LABELS,
+        "model": {
+            "type": "XGBoostClassifier",
+            "n_estimators": 300,
+            "max_depth": 6,
+            "learning_rate": 0.05,
+            "objective": "multi:softprob",
+            "sample_weight": "balanced (calculated from training set only)"
+        },
+        "evaluation": {
+            "accuracy": accuracy,
+            "accuracy_percent": accuracy * 100,
+            "balanced_accuracy": balanced_accuracy,
+            "macro_f1": macro_f1,
+            "weighted_f1": weighted_f1,
+            "log_loss": logloss,
+            "baseline_accuracy_percent": BASELINE_ACCURACY,
+            "elo_only_accuracy_percent": ELO_ONLY_ACCURACY,
+            "rf_balanced_accuracy_percent": RF_BALANCED_ACCURACY,
+            "difference_vs_baseline_pp": diff_baseline,
+            "difference_vs_elo_only_pp": diff_elo,
+            "difference_vs_rf_balanced_pp": diff_rf,
+            "classification_report": report,
+            "confusion_matrix": cm.tolist(),
+            "feature_importances": dict(zip(FEATURE_COLUMNS, importances.tolist()))
+        },
+        "leakage_control": {
+            "chronological_split": True,
+            "same_day_order": "date + match_id",
+            "target_mapping_applied_after_split": True,
+            "sample_weights_from_train_only": True
+        },
+        "output": MODEL_FILE
+    }
+
+    temp_report = REPORT_FILE + ".tmp"
+    with open(temp_report, "w", encoding="utf-8") as f:
+        json.dump(model_report, f, indent=2)
+    os.replace(temp_report, REPORT_FILE)
+
+    # Console Output
+    print()
+    print("=" * 60)
+    print(" STEP 37 COMPLETE: PASS")
+    print("=" * 60)
+    print(f"🎯 Accuracy:              {accuracy * 100:.2f}%")
+    print(f"⚖️ Balanced Accuracy:     {balanced_accuracy * 100:.2f}%")
+    print(f"🧠 Macro F1:              {macro_f1 * 100:.2f}%")
+    print(f"📊 Weighted F1:           {weighted_f1 * 100:.2f}%")
+    print(f"📉 Log Loss:              {logloss:.4f}")
+    
+    print()
+    print("📊 Reference Models")
+    print("-" * 60)
+    print(f"   Original baseline:     {BASELINE_ACCURACY:.2f}%")
+    print(f"   ELO-only:              {ELO_ONLY_ACCURACY:.2f}%")
+    print(f"   RF Balanced:           {RF_BALANCED_ACCURACY:.2f}%")
+
+    print()
+    print(f"🚀 vs RF Balanced:       {diff_rf:+.2f} pp")
+    print(f"🚀 vs ELO-only:          {diff_elo:+.2f} pp")
+    print(f"🚀 vs Original baseline: {diff_baseline:+.2f} pp")
+
+    print()
+    print("📋 Classification Report")
+    print("-" * 60)
+    print(classification_report(y_test_str, y_pred_str, labels=LABELS, zero_division=0))
+
+    print("🧩 Confusion Matrix")
+    print("-" * 60)
+    print(f"{'':>12}{'HOME_WIN':>12}{'DRAW':>12}{'AWAY_WIN':>12}")
+    for i, label in enumerate(LABELS):
+        print(f"{label:>12}{cm[i, 0]:>12,}{cm[i, 1]:>12,}{cm[i, 2]:>12,}")
+
+    print()
+    print("🧠 Feature Importances")
+    print("-" * 60)
+    importance_rows = sorted(zip(FEATURE_COLUMNS, importances), key=lambda x: x[1], reverse=True)
+    for rank, (feature, importance) in enumerate(importance_rows, start=1):
+        print(f"   {rank:>2}. {feature:<20} {importance * 100:>6.2f}%")
+
+    print()
+    print(f"📁 Model:               {MODEL_FILE}")
+    print(f"📁 Report:              {REPORT_FILE}")
+    print()
+    print("🔒 Step 35 feature dataset was NOT modified.")
+    print("🔒 Target mapping applied AFTER chronological split.")
+    print("🔒 Sample weights derived strictly from training data.")
+    print("🔒 Exact population preserved: 484,354.")
+    print("=" * 60)
+
+if __name__ == "__main__":
+    run()

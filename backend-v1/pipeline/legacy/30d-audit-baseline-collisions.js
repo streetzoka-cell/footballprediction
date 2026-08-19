@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const intelligence = require('../src/services/FootballIntelligenceService');
+const intelligence = require('../../src/services/FootballIntelligenceService');
 
 const ROOT = path.resolve(__dirname, '..');
 const MIGRATION_DIR = path.join(ROOT, 'public_data_v2', 'migration');

@@ -2,48 +2,31 @@ const fs = require('fs');
 const path = require('path');
 const logger = require('../utils/logger');
 
-const HISTORY_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football', 'history', 'clubs');
+const HISTORY_DIR = path.join(process.cwd(), 'public_data', 'knowledge', 'football', 'history');
 
-// Map your API-Football League IDs to our folder structure
-const LEAGUE_MAP = {
-  39: 'england/premier_league',
-  40: 'england/championship',
-  41: 'england/league_one',
-  42: 'england/league_two',
-  140: 'spain/la_liga',
-  141: 'spain/segunda_division',
-  78: 'germany/bundesliga',
-  79: 'germany/bundesliga_2',
-  135: 'italy/serie_a',
-  136: 'italy/serie_b',
-  61: 'france/ligue_1',
-  62: 'france/ligue_2',
-  2: 'europe/uefa_champions_league',
-  3: 'europe/uefa_europa_league',
-  848: 'europe/uefa_conference_league'
-};
+// V2 uses slugs like "e0", "sp1", etc., or the competition name slugified.
+// Since live matches use API-Football IDs, we'll create a fallback slug from the league name.
+function getCompSlug(match) {
+  const leagueName = match.leagueName || match.league?.name || 'unknown_competition';
+  return String(leagueName).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+}
 
+// V2 derives the season from the year (e.g., "2024")
 function getSeason(dateStr) {
-  const date = new Date(dateStr);
-  const year = date.getFullYear();
-  const month = date.getMonth() + 1; // 1-12
-  return month >= 7 ? `${year}_${year+1}` : `${year-1}_${year}`;
+  if (!dateStr) return new Date().getFullYear().toString();
+  return String(dateStr).split('-')[0];
 }
 
 async function archiveMatch(match) {
   try {
-    const leagueId = match.league?.id;
-    const leaguePath = LEAGUE_MAP[leagueId];
-    
-    // Skip leagues we don't track in our historical database
-    if (!leaguePath) return;
-    
     const matchDate = match.date?.split('T')[0];
     if (!matchDate) return;
 
+    const compSlug = getCompSlug(match);
     const season = getSeason(matchDate);
-    const dirPath = path.join(HISTORY_DIR, leaguePath, season);
-    const filePath = path.join(dirPath, 'matches.json');
+    
+    const dirPath = path.join(HISTORY_DIR, compSlug);
+    const filePath = path.join(dirPath, `${season}.json`);
     
     // Ensure directory exists
     if (!fs.existsSync(dirPath)) {
@@ -51,7 +34,7 @@ async function archiveMatch(match) {
     }
     
     // Read existing matches
-    let payload = { matches: [] };
+    let payload = { competition: match.leagueName || match.league?.name, season, total_matches: 0, matches: [] };
     if (fs.existsSync(filePath)) {
       payload = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     }
@@ -64,34 +47,39 @@ async function archiveMatch(match) {
     );
     if (exists) return;
     
-    // Format to our historical schema
-    const ftHome = match.homeScore ?? match.homeTeam?.score;
-    const ftAway = match.awayScore ?? match.awayTeam?.score;
+    const ftHome = match.homeScore ?? match.homeTeam?.score ?? 0;
+    const ftAway = match.awayScore ?? match.awayTeam?.score ?? 0;
     
+    // Format to our V2 historical schema (with ELO and ML Predictions if available)
     const historicalMatch = {
+      match_id: String(match.id || ''),
       date: matchDate,
-      time: match.date?.split('T')[1]?.split('+')[0] || null,
+      competition: match.leagueName || match.league?.name || 'Unknown',
+      season: season,
       home_team: match.homeTeam?.name || match.homeName,
       away_team: match.awayTeam?.name || match.awayName,
-      score: {
-        ft: { 
-          home: ftHome, 
-          away: ftAway, 
-          result: ftHome > ftAway ? 'H' : ftHome < ftAway ? 'A' : 'D' 
-        }
-      },
-      stadium: match.fixture?.venue?.name || null,
-      // Note: Pre-match features (Elo, Form) will be missing here. 
-      // They will be populated next time you run the generate-match-features.js script.
+      home_score: ftHome,
+      away_score: ftAway,
+      home_team_id: match.homeTeamId || match.homeTeam?.id || null,
+      away_team_id: match.awayTeamId || match.awayTeam?.id || null,
+      // Preserve ELO and ML Predictions if they were injected by Python Step 50
+      home_elo_pre: match.home_elo_pre || null,
+      away_elo_pre: match.away_elo_pre || null,
+      home_elo_post: match.home_elo_post || null,
+      away_elo_post: match.away_elo_post || null,
+      home_elo_delta: match.home_elo_delta || null,
+      away_elo_delta: match.away_elo_delta || null,
+      prediction: match.prediction || null
     };
     
     payload.matches.push(historicalMatch);
+    payload.total_matches = payload.matches.length;
     
     // Sort matches by date
     payload.matches.sort((a, b) => new Date(a.date) - new Date(b.date));
     
-    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2));
-    logger.info(`[HistoricalArchive] Archived ${historicalMatch.home_team} vs ${historicalMatch.away_team} to ${leaguePath}/${season}`);
+    fs.writeFileSync(filePath, JSON.stringify(payload, null, 2), 'utf8');
+    logger.info(`[HistoricalArchive] Archived ${historicalMatch.home_team} vs ${historicalMatch.away_team} to ${compSlug}/${season}.json`);
   } catch (err) {
     logger.error(`[HistoricalArchive] Failed to archive match: ${err.message}`);
   }

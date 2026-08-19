@@ -1,7 +1,7 @@
 'use strict';
 
 // Corrected path assuming services are in backend-v1/src/services/
-const intelligence = require('../src/services/FootballIntelligenceService');
+const intelligence = require('../../src/services/FootballIntelligenceService');
 
 async function main() {
   console.log('============================================================');

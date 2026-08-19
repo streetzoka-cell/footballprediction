@@ -45,6 +45,8 @@ const aiLabRoutes = require('./routes/v1/admin/aiLab');
 const MatchIntelligenceService = require('./services/MatchIntelligenceService');
 
 const resultsRoute = require('./routes/v1/results');
+const historyRoute = require('./routes/v1/history');
+const matchIntelligenceRoute = require('./routes/v1/matchIntelligence');
 
 const app = express();
 
@@ -165,6 +167,9 @@ app.use('/api/v1/featured', featuredRoute);
 app.use('/api/v1/zoka-picks', zokaPicksRoute);
 app.use('/api/v1/leaderboard', leaderboardRoute);
 app.use('/api/v1/results', resultsRoute);
+app.use('/api/v1/history', historyRoute);
+app.use('/api/v1/match-intelligence', matchIntelligenceRoute);
+
 
 // ★ MOUNT INTELLIGENCE & MODEL LAB ROUTES
 app.use('/api/v1/intelligence', intelligenceRoutes);

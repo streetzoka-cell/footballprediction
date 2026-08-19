@@ -1,377 +1,202 @@
 import os
+import json
+import joblib
 import pandas as pd
+import numpy as np
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 
-FEATURES_FILE = os.path.join("data", "ml", "features_v2.csv")
-
-print("🧠 ZOKASCORE V2 - Pipeline 36: Advanced Model Training")
-print("=" * 60)
-print()
-
 # ============================================================
-# 1. LOAD DATA
+# ZOKASCORE V2 — STEP 36
+# V2 MODEL TRAINING (RANDOM FOREST)
 # ============================================================
 
-print(f"📊 Loading features from {FEATURES_FILE}...")
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-if not os.path.exists(FEATURES_FILE):
-    raise FileNotFoundError(
-        f"Features file not found: {FEATURES_FILE}\n"
-        "Run Pipeline 35 first."
-    )
+FEATURES_FILE = os.path.join(BASE_DIR, "data", "ml", "features_v2.csv")
+OUTPUT_DIR = os.path.join(BASE_DIR, "data", "models")
+REPORT_DIR = os.path.join(BASE_DIR, "data", "processed")
 
-df = pd.read_csv(FEATURES_FILE)
+MODEL_FILE = os.path.join(OUTPUT_DIR, "random_forest_v2.joblib")
+REPORT_FILE = os.path.join(REPORT_DIR, "v2_model_report.json")
 
-print(f"   ✅ Loaded {len(df):,} matches.")
+EXPECTED_ROWS = 484354
+TRAIN_RATIO = 0.80
 
-# ============================================================
-# 2. VALIDATE REQUIRED COLUMNS
-# ============================================================
+# Baselines from previous steps
+BASELINE_ACCURACY = 47.97
+ELO_ONLY_ACCURACY = 51.23
 
 FEATURE_COLUMNS = [
-    "home_elo_pre",
-    "away_elo_pre",
-    "elo_diff",
-    "home_form_pts",
-    "away_form_pts",
-    "home_home_pts",
-    "away_away_pts",
-    "home_gf_avg",
-    "away_gf_avg",
-    "home_ga_avg",
-    "away_ga_avg",
-    "h2h_hw_rate",
-    "h2h_d_rate",
-    "h2h_aw_rate",
-    "h2h_matches",
+    "home_elo_pre", "away_elo_pre", "elo_diff",
+    "home_form_pts", "away_form_pts", "home_home_pts", "away_away_pts",
+    "home_gf_avg", "away_gf_avg", "home_ga_avg", "away_ga_avg",
+    "h2h_hw_rate", "h2h_d_rate", "h2h_aw_rate", "h2h_matches"
 ]
 
-TARGET_COLUMN = "target"
-DATE_COLUMN = "date"
+LABELS = ["HOME_WIN", "DRAW", "AWAY_WIN"]
 
-required_columns = FEATURE_COLUMNS + [TARGET_COLUMN, DATE_COLUMN]
+def run():
+    print("=" * 60)
+    print(" ZOKASCORE V2 — STEP 36: V2 MODEL TRAINING (RF)")
+    print("=" * 60)
+    print()
 
-missing = [
-    col for col in required_columns
-    if col not in df.columns
-]
+    print("[1/7] Checking Step 35 feature dataset...")
+    if not os.path.exists(FEATURES_FILE):
+        raise FileNotFoundError(f"Feature dataset not found:\n{FEATURES_FILE}")
 
-if missing:
-    raise ValueError(
-        "Missing required columns:\n"
-        + "\n".join(f"  - {x}" for x in missing)
+    print("\n[2/7] Loading features...")
+    df = pd.read_csv(FEATURES_FILE, low_memory=False)
+    if len(df) != EXPECTED_ROWS:
+        raise RuntimeError(f"POPULATION MISMATCH: expected {EXPECTED_ROWS:,}, got {len(df):,}.")
+    print(f"   ↳ Rows loaded: {len(df):,}")
+
+    print("\n[3/7] Validating feature dataset...")
+    missing = [c for c in FEATURE_COLUMNS + ["match_id", "date", "target"] if c not in df.columns]
+    if missing:
+        raise RuntimeError(f"Missing required columns: {missing}")
+
+    if df["match_id"].isna().any() or df["match_id"].duplicated().any():
+        raise RuntimeError("Match IDs are missing or duplicated.")
+
+    df["date"] = pd.to_datetime(df["date"], errors="coerce")
+    if df["date"].isna().any():
+        raise RuntimeError("Invalid dates found.")
+
+    for col in FEATURE_COLUMNS:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+        if df[col].isna().any():
+            raise RuntimeError(f"{col} contains invalid/missing values.")
+    print("   ✅ Structural integrity verified.")
+
+    print("\n[4/7] Preparing deterministic chronological split...")
+    df = df.sort_values(by=["date", "match_id"], kind="mergesort").reset_index(drop=True)
+
+    split_idx = int(len(df) * TRAIN_RATIO)
+    train_df = df.iloc[:split_idx].copy()
+    test_df = df.iloc[split_idx:].copy()
+
+    train_end_date = train_df.iloc[-1]["date"]
+    test_start_date = test_df.iloc[0]["date"]
+
+    print(f"   ↳ Training: {len(train_df):,} matches (Through {train_end_date.date()})")
+    print(f"   ↳ Testing:  {len(test_df):,} matches (From {test_start_date.date()})")
+
+    print("\n[5/7] Training Random Forest Classifier...")
+    X_train = train_df[FEATURE_COLUMNS]
+    y_train = train_df["target"]
+    X_test = test_df[FEATURE_COLUMNS]
+    y_test = test_df["target"]
+
+    model = RandomForestClassifier(
+        n_estimators=100,
+        class_weight="balanced",
+        random_state=42,
+        n_jobs=-1
     )
 
-# ============================================================
-# 3. CLEAN + CHRONOLOGICAL ORDER
-# ============================================================
+    model.fit(X_train, y_train)
+    print("   ✅ Model trained.")
+
+    print("\n[6/7] Evaluating unseen chronological test data...")
+    y_pred = model.predict(X_test)
+    accuracy = accuracy_score(y_test, y_pred)
+    
+    diff_baseline = (accuracy * 100) - BASELINE_ACCURACY
+    diff_elo = (accuracy * 100) - ELO_ONLY_ACCURACY
+
+    report = classification_report(y_test, y_pred, labels=LABELS, output_dict=True, zero_division=0)
+    matrix = confusion_matrix(y_test, y_pred, labels=LABELS)
+    importances = model.feature_importances_
+
+    print("\n[7/7] Saving V2 model and audit report...")
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    os.makedirs(REPORT_DIR, exist_ok=True)
+
+    temp_model = MODEL_FILE + ".tmp"
+    joblib.dump(model, temp_model)
+    os.replace(temp_model, MODEL_FILE)
+
+    model_report = {
+        "pipeline_step": "36",
+        "status": "PASS",
+        "source": "data/ml/features_v2.csv",
+        "population": {
+            "total_rows": EXPECTED_ROWS,
+            "training_rows": len(train_df),
+            "testing_rows": len(test_df),
+            "train_ratio": TRAIN_RATIO
+        },
+        "date_range": {
+            "training_through": train_end_date.strftime("%Y-%m-%d"),
+            "testing_from": test_start_date.strftime("%Y-%m-%d")
+        },
+        "features": FEATURE_COLUMNS,
+        "target": "target",
+        "target_classes": LABELS,
+        "model": {
+            "type": "RandomForestClassifier",
+            "n_estimators": 100,
+            "class_weight": "balanced",
+            "random_state": 42
+        },
+        "evaluation": {
+            "accuracy": accuracy,
+            "accuracy_percent": accuracy * 100,
+            "baseline_accuracy_percent": BASELINE_ACCURACY,
+            "elo_only_accuracy_percent": ELO_ONLY_ACCURACY,
+            "difference_vs_baseline_pp": diff_baseline,
+            "difference_vs_elo_only_pp": diff_elo,
+            "classification_report": report,
+            "confusion_matrix": matrix.tolist(),
+            "feature_importances": dict(zip(FEATURE_COLUMNS, importances.tolist()))
+        },
+        "leakage_control": {
+            "chronological_split": True,
+            "same_day_order": "date + match_id"
+        },
+        "output": MODEL_FILE
+    }
+
+    temp_report = REPORT_FILE + ".tmp"
+    with open(temp_report, "w", encoding="utf-8") as f:
+        json.dump(model_report, f, indent=2)
+    os.replace(temp_report, REPORT_FILE)
+
+    # Console Output
+    print()
+    print("=" * 60)
+    print(" STEP 36 COMPLETE: PASS")
+    print("=" * 60)
+    print(f"📊 Model accuracy:      {accuracy * 100:.2f}%")
+    print(f"📊 Original baseline:   {BASELINE_ACCURACY:.2f}%")
+    print(f"📊 ELO-only (Step 34):  {ELO_ONLY_ACCURACY:.2f}%")
+    
+    if diff_elo > 0:
+        print(f"🚀 vs ELO-only:         +{diff_elo:.2f} pp")
+    else:
+        print(f"📉 vs ELO-only:         {diff_elo:.2f} pp")
+
+    print()
+    print("📋 Classification Report")
+    print("-" * 60)
+    print(classification_report(y_test, y_pred, labels=LABELS, zero_division=0))
+
+    print("🧠 Feature Importances")
+    print("-" * 60)
+    importance_rows = sorted(zip(FEATURE_COLUMNS, importances), key=lambda x: x[1], reverse=True)
+    for feature, importance in importance_rows:
+        print(f"   {feature:<20} {importance * 100:>7.2f}%")
+
+    print()
+    print(f"📁 Model:               {MODEL_FILE}")
+    print(f"📁 Report:              {REPORT_FILE}")
+    print()
+    print("🔒 Step 35 feature dataset was NOT modified.")
+    print("🔒 No future matches were used for training.")
+    print("🔒 Exact population preserved: 484,354.")
+    print("=" * 60)
 
-df[DATE_COLUMN] = pd.to_datetime(
-    df[DATE_COLUMN],
-    errors="coerce"
-)
-
-if df[DATE_COLUMN].isna().any():
-    bad_dates = int(df[DATE_COLUMN].isna().sum())
-    raise ValueError(
-        f"Found {bad_dates:,} rows with invalid dates."
-    )
-
-# Convert all model features to numeric.
-for column in FEATURE_COLUMNS:
-    df[column] = pd.to_numeric(
-        df[column],
-        errors="coerce"
-    )
-
-invalid_features = df[FEATURE_COLUMNS].isna().any(axis=1)
-
-if invalid_features.any():
-    count = int(invalid_features.sum())
-    raise ValueError(
-        f"Found {count:,} rows containing invalid feature values."
-    )
-
-df = df.sort_values(
-    DATE_COLUMN,
-    kind="stable"
-).reset_index(drop=True)
-
-print(
-    f"   📅 Date range: "
-    f"{df.iloc[0][DATE_COLUMN].date()} → "
-    f"{df.iloc[-1][DATE_COLUMN].date()}"
-)
-
-# ============================================================
-# 4. TARGET VALIDATION
-# ============================================================
-
-VALID_TARGETS = {
-    "HOME_WIN",
-    "DRAW",
-    "AWAY_WIN",
-}
-
-invalid_targets = ~df[TARGET_COLUMN].isin(VALID_TARGETS)
-
-if invalid_targets.any():
-    count = int(invalid_targets.sum())
-    raise ValueError(
-        f"Found {count:,} rows with invalid targets."
-    )
-
-print("\n🎯 Target distribution")
-
-target_counts = df[TARGET_COLUMN].value_counts()
-
-for target in ["HOME_WIN", "DRAW", "AWAY_WIN"]:
-    print(
-        f"   {target:<10} "
-        f"{int(target_counts.get(target, 0)):>8,}"
-    )
-
-# ============================================================
-# 5. PREPARE X / Y
-# ============================================================
-
-X = df[FEATURE_COLUMNS]
-y = df[TARGET_COLUMN]
-
-# ============================================================
-# 6. CHRONOLOGICAL 80/20 SPLIT
-# ============================================================
-
-split_idx = int(len(df) * 0.80)
-
-if split_idx <= 0 or split_idx >= len(df):
-    raise ValueError("Invalid chronological split.")
-
-X_train = X.iloc[:split_idx]
-X_test = X.iloc[split_idx:]
-
-y_train = y.iloc[:split_idx]
-y_test = y.iloc[split_idx:]
-
-train_end_date = df.iloc[split_idx - 1][DATE_COLUMN]
-test_start_date = df.iloc[split_idx][DATE_COLUMN]
-
-print("\n📚 Chronological split")
-print(
-    f"   🏋️ Training: {len(X_train):,} matches"
-    f" (Through {train_end_date.date()})"
-)
-
-print(
-    f"   🧪 Testing:  {len(X_test):,} matches"
-    f" (From {test_start_date.date()})"
-)
-
-# ============================================================
-# 7. TRAIN RANDOM FOREST
-# ============================================================
-
-print(
-    "\n🌲 Training Random Forest Classifier..."
-)
-
-print(
-    "   • Trees: 100"
-    "\n   • Class weighting: balanced"
-    "\n   • Random state: 42"
-    "\n   • CPU workers: all"
-)
-
-model = RandomForestClassifier(
-    n_estimators=100,
-    class_weight="balanced",
-    random_state=42,
-    n_jobs=-1,
-)
-
-model.fit(X_train, y_train)
-
-# ============================================================
-# 8. PREDICTION
-# ============================================================
-
-print(
-    "\n📈 Evaluating on unseen chronological test data..."
-)
-
-y_pred = model.predict(X_test)
-
-accuracy = accuracy_score(
-    y_test,
-    y_pred
-)
-
-# ============================================================
-# 9. RESULTS
-# ============================================================
-
-print("\n" + "=" * 60)
-print("✅ PIPELINE 36 COMPLETE")
-print("=" * 60)
-
-print(
-    f"🎯 Model Accuracy:       {accuracy * 100:.2f}%"
-)
-
-print(
-    "📊 Target Baseline:       47.97%"
-)
-
-print(
-    "📊 ELO-only:              52.71%"
-)
-
-print(
-    "📊 Balanced ELO:          48.58%"
-)
-
-baseline_difference = (
-    accuracy * 100
-) - 47.97
-
-elo_difference = (
-    accuracy * 100
-) - 52.71
-
-print(
-    f"🚀 vs Baseline:           "
-    f"{baseline_difference:+.2f} percentage points"
-)
-
-print(
-    f"⚽ vs ELO-only:           "
-    f"{elo_difference:+.2f} percentage points"
-)
-
-# ============================================================
-# 10. CLASSIFICATION REPORT
-# ============================================================
-
-print("\n📋 Classification Report")
-print("-" * 60)
-
-print(
-    classification_report(
-        y_test,
-        y_pred,
-        labels=["HOME_WIN", "DRAW", "AWAY_WIN"],
-        zero_division=0,
-    )
-)
-
-# ============================================================
-# 11. CONFUSION MATRIX
-# ============================================================
-
-print("🧩 Confusion Matrix")
-print("-" * 60)
-
-labels = [
-    "HOME_WIN",
-    "DRAW",
-    "AWAY_WIN",
-]
-
-cm = confusion_matrix(
-    y_test,
-    y_pred,
-    labels=labels,
-)
-
-print(
-    f"{'':>12}"
-    f"{'HOME_WIN':>12}"
-    f"{'DRAW':>12}"
-    f"{'AWAY_WIN':>12}"
-)
-
-for i, label in enumerate(labels):
-    print(
-        f"{label:>12}"
-        f"{cm[i, 0]:>12,}"
-        f"{cm[i, 1]:>12,}"
-        f"{cm[i, 2]:>12,}"
-    )
-
-# ============================================================
-# 12. FEATURE IMPORTANCE
-# ============================================================
-
-print("\n🧠 Feature Importances")
-print("-" * 60)
-
-importances = model.feature_importances_
-
-importance_rows = sorted(
-    zip(FEATURE_COLUMNS, importances),
-    key=lambda x: x[1],
-    reverse=True,
-)
-
-for feature, importance in importance_rows:
-    print(
-        f"   {feature:<20}"
-        f"{importance * 100:>7.2f}%"
-    )
-
-# ============================================================
-# 13. H2H-SPECIFIC CHECK
-# ============================================================
-
-h2h_features = [
-    "h2h_hw_rate",
-    "h2h_d_rate",
-    "h2h_aw_rate",
-    "h2h_matches",
-]
-
-h2h_importance = sum(
-    importance
-    for feature, importance in zip(
-        FEATURE_COLUMNS,
-        importances,
-    )
-    if feature in h2h_features
-)
-
-print("\n🥊 H2H Feature Contribution")
-print("-" * 60)
-
-print(
-    f"   Combined H2H importance: "
-    f"{h2h_importance * 100:.2f}%"
-)
-
-print(
-    f"   Matches with prior H2H: "
-    f"{int((df['h2h_matches'] > 0).sum()):,}"
-)
-
-# ============================================================
-# 14. FINAL STATUS
-# ============================================================
-
-print("\n" + "=" * 60)
-
-if accuracy > 0.5271:
-    print(
-        "🔥 RESULT: Form + H2H BEATS the ELO-only model."
-    )
-elif accuracy > 0.4797:
-    print(
-        "✅ RESULT: Model beats the original baseline,"
-        " but does not yet beat ELO-only."
-    )
-else:
-    print(
-        "⚠️ RESULT: Form + H2H does not beat the"
-        " original baseline."
-    )
-
-print("=" * 60)
+if __name__ == "__main__":
+    run()
