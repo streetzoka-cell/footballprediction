@@ -1,13 +1,13 @@
-// footballprediction/backend-v1/src/services/QuotaManager.js
-
 const logger = require('../utils/logger');
 
-// â˜… Scaled for 2 API keys (200 daily calls total)
-const TOTAL_BUDGET = 200; 
-const FT_BUDGET = 24;       // 12 calls/day * 2 keys
-const FALLBACK_BUDGET = 6;  // 3 calls/day * 2 keys
-const EMERGENCY_RESERVE = 16; // 8 calls/day * 2 keys
-const LIVE_BUDGET = TOTAL_BUDGET - FT_BUDGET - FALLBACK_BUDGET - EMERGENCY_RESERVE; // 154 calls
+// Aligned with actual multi-key provider capacity (400 iSports + 200 API-Football)
+const TOTAL_BUDGET = 600; 
+
+// Logical allocation
+const LIVE_BUDGET = 350;      // 350 calls for live polling (priority + fallbacks)
+const FT_BUDGET = 100;       // 100 calls for FT reconciliation
+const FALLBACK_BUDGET = 50;  // 50 calls for emergency data
+const EMERGENCY_RESERVE = 100; // 100 calls hard locked for critical failures
 
 class QuotaManager {
   constructor() {
@@ -33,8 +33,11 @@ class QuotaManager {
     return this.liveUsed < LIVE_BUDGET;
   }
 
+  // ★ FIX: Only record the call once, at the service layer
   recordLiveCall() {
-    this.liveUsed++;
+    if (this.liveUsed < LIVE_BUDGET) {
+      this.liveUsed++;
+    }
   }
 
   canFetchFT() {
