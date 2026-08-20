@@ -148,7 +148,7 @@ const LiveTicker = memo(({ matches }) => {
 });
 
 const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
-  const [isExpanded, setIsExpanded] = useState(true); // Default expanded to show AI pick
+  const [isExpanded, setIsExpanded] = useState(true);
   const [userVote, setUserVote] = useState(() => localStorage.getItem(`zoka_vote_${match?.id}`));
   const [isVoting, setIsVoting] = useState(false);
   const [voteData, setVoteData] = useState(null);
@@ -202,7 +202,6 @@ const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
   const percentages = voteData?.percentages || { home: 0, draw: 0, away: 0 };
   const totalVotes = voteData?.totalVotes || 0;
 
-  // ★ NEW: Extract AI Pick
   const aiPick = mlPredictions?.["1x2"]?.pick;
   const aiProb = mlPredictions?.["1x2"]?.pick_probability;
   const formatPick = (p) => {
@@ -262,7 +261,6 @@ const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
             </div>
           </div>
 
-          {/* ★ NEW: Zoka AI Smart Pick Badge */}
           {aiPick && (
             <div className="flex-center justify-between gap-8" style={{ background: 'rgba(var(--accent-rgb), 0.05)', border: '1px solid rgba(var(--accent-rgb), 0.2)', padding: '8px 12px', borderRadius: '8px' }}>
               <div className="flex-center gap-4 text-xs font-bold uppercase" style={{ color: 'var(--accent)' }}>
@@ -419,7 +417,7 @@ export default function Fixtures() {
   const [tab, setTab] = useState(searchParams.get('tab') || 'fixtures');
   const [compFilter, setCompFilter] = useState(searchParams.get('league') || 'ALL');
   const [searchQ, setSearchQ] = useState('');
-  const [ui, setUI] = useState({ moreDatesOpen: false, leagueFilterOpen: false, showLiveOnly: false, showAllTopMatches: false, showAllLiveMatches: false });
+  const [ui, setUI] = useState({ moreDatesOpen: false, leagueFilterOpen: false, showLiveOnly: false, showAllTopMatches: false, showAllLiveMatches: false, showMotd: false });
   const toggleUI = useCallback((key) => setUI(prev => ({ ...prev, [key]: !prev[key] })), []);
 
   const [selectedLeagueId, setSelectedLeagueId] = useState(null);
@@ -431,9 +429,28 @@ export default function Fixtures() {
   const dateDropdownRef = useRef(null);
 
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
-  const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
   
-  // Extract all matches that have ML Predictions
+  // ★ SMART DEDUPLICATION LOGIC
+  const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive).sort(sortMatches), [allFixtures]);
+  const liveMatchIds = useMemo(() => new Set(liveMatches.map(m => String(m.id))), [liveMatches]);
+
+  const topMatches = useMemo(() => {
+    return allFixtures.filter(m => {
+      if (liveMatchIds.has(String(m.id))) return false; // Exclude live matches
+      const home = norm(m.homeName); const away = norm(m.awayName);
+      return [...TOP_TEAMS_SET].some(t => home.includes(t) || away.includes(t));
+    }).sort(sortMatches); 
+  }, [allFixtures, liveMatchIds]);
+  const topMatchIds = useMemo(() => new Set(topMatches.map(m => String(m.id))), [topMatches]);
+
+  const favMatches = useMemo(() => {
+    return allFixtures.filter(m => {
+      if (liveMatchIds.has(String(m.id)) || topMatchIds.has(String(m.id))) return false; // Exclude live & top
+      return favorites.includes(String(m.id));
+    }).sort(sortMatches);
+  }, [allFixtures, liveMatchIds, topMatchIds, favorites]);
+  const favMatchIds = useMemo(() => new Set(favMatches.map(m => String(m.id))), [favMatches]);
+
   const predictedMatches = useMemo(() => {
     return allFixtures.filter(m => m.mlPredictions && m.mlPredictions["1x2"]);
   }, [allFixtures]);
@@ -536,24 +553,13 @@ export default function Fixtures() {
     }))
   }), [displayFixtures]);
 
-  const topMatches = useMemo(() => {
-    return allFixtures.filter(m => {
-      const home = norm(m.homeName); const away = norm(m.awayName);
-      const isTopHome = [...TOP_TEAMS_SET].some(t => home.includes(t));
-      const isTopAway = [...TOP_TEAMS_SET].some(t => away.includes(t));
-      return isTopHome || isTopAway;
-    }).sort(sortMatches); 
-  }, [allFixtures]);
-
-  const visibleTopMatches = ui.showAllTopMatches ? topMatches : topMatches.slice(0, 2);
-  const hiddenTopCount = topMatches.length - 2;
-  const topMatchIds = useMemo(() => new Set(topMatches.map(m => String(m.id))), [topMatches]);
-
   const grouped = useMemo(() => {
     const map = new Map();
     displayFixtures.forEach(m => {
-      if (favorites.includes(String(m.id))) return;
-      if (topMatchIds.has(String(m.id))) return;
+      const id = String(m.id);
+      // ★ STRICT DEDUPLICATION: Exclude Live, Top, and Fav matches from standard league grouping
+      if (liveMatchIds.has(id) || topMatchIds.has(id) || favMatchIds.has(id)) return;
+      
       const key = m.leagueName || 'Other';
       if (!map.has(key)) map.set(key, { name: key, logo: m.leagueLogo, id: m.leagueId, matches: [] });
       map.get(key).matches.push(m);
@@ -566,7 +572,7 @@ export default function Fixtures() {
       if (lA !== lB) return lA - lB;
       return a.name.localeCompare(b.name);
     });
-  }, [displayFixtures, favorites, leaguePriorityMap, pinnedLeagues, topMatchIds]);
+  }, [displayFixtures, liveMatchIds, topMatchIds, favMatchIds, leaguePriorityMap, pinnedLeagues]);
 
   const { topLeagues, otherLeagues } = useMemo(() => {
     return { topLeagues: grouped.slice(0, 5).map(g => ({...g, isTop: true})), otherLeagues: grouped.slice(5).map(g => ({...g, isTop: false})) };
@@ -575,7 +581,8 @@ export default function Fixtures() {
   const toggleLeagueExpand = useCallback((leagueName) => { setExpandedLeagues(prev => { const n = new Set(prev); if (n.has(leagueName)) n.delete(leagueName); else n.add(leagueName); return n; }); }, []);
 
   const liveCount = useMemo(() => allFixtures.filter(m => m.isLive).length, [allFixtures]);
-  const favMatches = useMemo(() => displayFixtures.filter(m => favorites.includes(String(m.id))), [displayFixtures, favorites]);
+  const visibleTopMatches = ui.showAllTopMatches ? topMatches : topMatches.slice(0, 2);
+  const hiddenTopCount = topMatches.length - 2;
   const visibleLiveMatches = ui.showAllLiveMatches ? liveMatches : liveMatches.slice(0, 5);
   const hiddenLiveCount = liveMatches.length - 5;
 
@@ -723,10 +730,16 @@ export default function Fixtures() {
               ))}
             </div>
 
-            {fixturesLoading ? (
-              <div className="zoka-skel-featured" />
-            ) : (
-              <MatchOfTheDayCard match={featuredMatch} mlPredictions={featuredMatch?.mlPredictions} />
+            {/* ★ NEW: MATCH OF THE DAY TOGGLE */}
+            <button className="zoka-show-more" onClick={() => toggleUI('showMotd')} style={{ marginBottom: '16px' }}>
+              <Brain size={16} /> {ui.showMotd ? 'Hide Match of the Day' : 'Show Match of the Day'}
+            </button>
+            {ui.showMotd && (
+              fixturesLoading ? (
+                <div className="zoka-skel-featured" />
+              ) : (
+                <MatchOfTheDayCard match={featuredMatch} mlPredictions={featuredMatch?.mlPredictions} />
+              )
             )}
 
             {/* Snippet for AI Predictions on main fixtures tab */}
@@ -736,29 +749,41 @@ export default function Fixtures() {
                   <Brain size={18} style={{ color: 'var(--accent)' }} />
                   <span className="zoka-league-name">Zoka AI Predictions</span>
                 </div>
-                {predictedMatches.slice(0, 3).map((m, i) => (
-                  <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`ai-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 50}ms` }}>
-                    <div className="zoka-ai-top">
-                      <span className="zoka-ai-comp">{m.leagueName}</span>
-                      <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
-                    </div>
-                    <div className="zoka-ai-teams">
-                      <span className="zoka-ai-team">{m.homeName}</span>
-                      <span className="zoka-ai-vs">VS</span>
-                      <span className="zoka-ai-team">{m.awayName}</span>
-                    </div>
-                    <div className="zoka-ai-probbar">
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
-                    </div>
-                    <div className="zoka-ai-labels">
-                      <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
-                      <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
-                      <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
-                    </div>
-                  </Link>
-                ))}
+                {predictedMatches.slice(0, 3).map((m, i) => {
+                  const bestScore = m.mlPredictions?.correct_scores ? Object.keys(m.mlPredictions.correct_scores)[0] : null;
+                  return (
+                    <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`ai-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 50}ms` }}>
+                      <div className="zoka-ai-top">
+                        <span className="zoka-ai-comp">{m.leagueName}</span>
+                        <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
+                      </div>
+                      <div className="zoka-ai-teams">
+                        <span className="zoka-ai-team">{m.homeName}</span>
+                        <span className="zoka-ai-vs">VS</span>
+                        <span className="zoka-ai-team">{m.awayName}</span>
+                      </div>
+                      <div className="zoka-ai-probbar">
+                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
+                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
+                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
+                      </div>
+                      <div className="zoka-ai-labels">
+                        <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
+                        <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
+                        <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
+                      </div>
+                      {/* ★ NEW: ZOKA STRONG PICK (CORRECT SCORE) */}
+                      {bestScore && (
+                        <div className="zoka-ai-extras">
+                          <div className="zoka-ai-stat" style={{ background: 'rgba(var(--accent-rgb), 0.1)', borderColor: 'rgba(var(--accent-rgb), 0.2)' }}>
+                            <span className="lbl">Strong Pick</span>
+                            <span className="val" style={{ color: 'var(--accent)' }}>{bestScore}</span>
+                          </div>
+                        </div>
+                      )}
+                    </Link>
+                  );
+                })}
                 <button className="zoka-show-more" onClick={() => setTab('predictions')}>
                   <Brain size={16} /> View All Predictions ({predictedMatches.length})
                 </button>
@@ -860,44 +885,53 @@ export default function Fixtures() {
               <span className="zoka-league-count">{predictedMatches.length}</span>
             </div>
             {predictedMatches.length > 0 ? (
-              predictedMatches.map((m, i) => (
-                <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`pred-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 40}ms` }}>
-                  <div className="zoka-ai-top">
-                    <span className="zoka-ai-comp">{m.leagueName}</span>
-                    <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
-                  </div>
-                  <div className="zoka-ai-teams">
-                    <span className="zoka-ai-team">{m.homeName}</span>
-                    <span className="zoka-ai-vs">VS</span>
-                    <span className="zoka-ai-team">{m.awayName}</span>
-                  </div>
-                  {/* 1X2 Probabilities */}
-                  <div className="zoka-ai-probbar">
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
-                  </div>
-                  <div className="zoka-ai-labels">
-                    <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
-                    <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
-                    <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
-                  </div>
-                  
-                  {/* O/U & BTTS Quick Stats */}
-                  <div className="zoka-ai-extras">
-                    <div className="zoka-ai-stat">
-                      <span className="lbl">O/U 2.5</span>
-                      <span className="val">{m.mlPredictions["ou_2_5"]?.pick || '-'}</span>
-                      <span className="prob">{m.mlPredictions["ou_2_5"]?.pick_probability ? m.mlPredictions["ou_2_5"].pick_probability.toFixed(0) : 0}%</span>
+              predictedMatches.map((m, i) => {
+                const bestScore = m.mlPredictions?.correct_scores ? Object.keys(m.mlPredictions.correct_scores)[0] : null;
+                return (
+                  <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`pred-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 40}ms` }}>
+                    <div className="zoka-ai-top">
+                      <span className="zoka-ai-comp">{m.leagueName}</span>
+                      <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
                     </div>
-                    <div className="zoka-ai-stat">
-                      <span className="lbl">BTTS</span>
-                      <span className="val">{m.mlPredictions["btts"]?.pick || '-'}</span>
-                      <span className="prob">{m.mlPredictions["btts"]?.pick_probability ? m.mlPredictions["btts"].pick_probability.toFixed(0) : 0}%</span>
+                    <div className="zoka-ai-teams">
+                      <span className="zoka-ai-team">{m.homeName}</span>
+                      <span className="zoka-ai-vs">VS</span>
+                      <span className="zoka-ai-team">{m.awayName}</span>
                     </div>
-                  </div>
-                </Link>
-              ))
+                    {/* 1X2 Probabilities */}
+                    <div className="zoka-ai-probbar">
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
+                    </div>
+                    <div className="zoka-ai-labels">
+                      <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
+                    </div>
+                    
+                    {/* O/U, BTTS & Correct Score Quick Stats */}
+                    <div className="zoka-ai-extras">
+                      <div className="zoka-ai-stat">
+                        <span className="lbl">O/U 2.5</span>
+                        <span className="val">{m.mlPredictions["ou_2_5"]?.pick || '-'}</span>
+                        <span className="prob">{m.mlPredictions["ou_2_5"]?.pick_probability ? m.mlPredictions["ou_2_5"].pick_probability.toFixed(0) : 0}%</span>
+                      </div>
+                      <div className="zoka-ai-stat">
+                        <span className="lbl">BTTS</span>
+                        <span className="val">{m.mlPredictions["btts"]?.pick || '-'}</span>
+                        <span className="prob">{m.mlPredictions["btts"]?.pick_probability ? m.mlPredictions["btts"].pick_probability.toFixed(0) : 0}%</span>
+                      </div>
+                      {bestScore && (
+                        <div className="zoka-ai-stat" style={{ background: 'rgba(var(--accent-rgb), 0.1)', borderColor: 'rgba(var(--accent-rgb), 0.2)' }}>
+                          <span className="lbl">Score</span>
+                          <span className="val" style={{ color: 'var(--accent)' }}>{bestScore}</span>
+                        </div>
+                      )}
+                    </div>
+                  </Link>
+                );
+              })
             ) : (
               <div className="zoka-empty-anim" style={{padding: '40px 0'}}>
                 <EmptyState icon={Brain} title="No AI Predictions Available" hint="The ZOKASCORE V2 ML Engine has not generated predictions for this date yet." />

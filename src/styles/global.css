@@ -6519,3 +6519,133 @@ Design principles:
   color: var(--text-secondary);
   font-size: 11px;
 }
+
+/* ===== ZOKA UI MINIATURIZATION & CLEANUP ===== */
+
+/* Smaller, sleeker match cards */
+.zoka-card {
+  padding: 8px 12px !important;
+  margin-bottom: 6px !important;
+  border-radius: 12px !important;
+}
+
+.zoka-team-name {
+  font-size: 13px !important;
+}
+
+.zoka-score-num {
+  font-size: 1.2em !important;
+}
+
+.zoka-status {
+  font-size: 10px !important;
+  padding: 3px 6px !important;
+}
+
+.zoka-comp-row {
+  margin-top: 6px !important;
+  padding-top: 6px !important;
+}
+
+.zoka-comp-row span {
+  font-size: 10px !important;
+}
+
+/* AI Prediction Cards Mini */
+.zoka-ai-card {
+  padding: 12px !important;
+  gap: 6px !important;
+  margin-bottom: 8px !important;
+}
+
+.zoka-ai-teams {
+  font-size: 14px !important;
+  margin: 2px 0 !important;
+}
+
+.zoka-ai-probbar {
+  height: 6px !important;
+  margin-top: 4px !important;
+}
+
+.zoka-ai-labels {
+  font-size: 10px !important;
+}
+
+.zoka-ai-extras {
+  gap: 8px !important;
+  margin-top: 8px !important;
+  padding-top: 8px !important;
+}
+
+.zoka-ai-stat {
+  padding: 4px 8px !important;
+  font-size: 11px !important;
+  border-radius: 8px !important;
+}
+
+.zoka-ai-stat .lbl {
+  font-size: 9px !important;
+}
+
+.zoka-ai-stat .val {
+  font-size: 12px !important;
+}
+
+/* League Headers Mini */
+.zoka-league-hd {
+  margin-bottom: 6px !important;
+}
+
+.zoka-league-name {
+  font-size: 12px !important;
+}
+
+.zoka-league-count {
+  font-size: 10px !important;
+  padding: 1px 6px !important;
+}
+
+/* ===== PRO MATCH DETAILS STYLES ===== */
+
+.md-page { padding: var(--sp-12) 0 !important; }
+.md-container { padding: 0 var(--sp-8) !important; max-width: 600px !important; }
+.md-header-card { padding: var(--sp-12) !important; margin-bottom: var(--sp-8) !important; border-radius: var(--r-12) !important; }
+.md-teams { gap: var(--sp-4) !important; }
+.md-team { gap: var(--sp-4) !important; }
+.md-team img { width: 40px !important; height: 40px !important; }
+.md-team-name { font-size: 0.9rem !important; }
+.md-score { font-size: 1.8rem !important; }
+.md-timeline { height: 4px !important; margin-top: var(--sp-12) !important; border-radius: 2px !important; }
+.md-timeline-dot { width: 8px !important; height: 8px !important; top: -2px !important; }
+
+.md-pro-grid { 
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-8) !important;
+  margin-bottom: var(--sp-8) !important;
+}
+
+.glass-card { 
+  border-radius: var(--r-12) !important; 
+  padding: var(--sp-12) !important; 
+}
+
+/* Make links look clickable */
+a { 
+  transition: opacity 0.2s ease; 
+}
+a:hover { 
+  opacity: 0.8; 
+}
+
+/* List items in H2H */
+ul a { 
+  background: var(--bg-elevated); 
+  border: 1px solid var(--border); 
+  margin-bottom: 4px; 
+}
+ul a:hover { 
+  border-color: var(--primary); 
+  background: rgba(var(--primary-rgb), 0.05); 
+}

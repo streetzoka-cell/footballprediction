@@ -1,7 +1,7 @@
 ﻿// frontend/src/components/MatchCard.jsx
 import React, { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Pin, Camera, Clock, Zap } from 'lucide-react';
+import { Star, Pin, Camera, Clock, Zap, ChevronRight } from 'lucide-react';
 import { buildMatchRoute } from '../utils/routes';
 import { formatMinute } from '../engine/matchEngine'; 
 
@@ -52,7 +52,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   } else if (matchStatus === 'CANC' || matchStatus === 'ABD') {
     statusBadge = <span className="status-badge" style={{ color: 'var(--danger)', background: 'rgba(var(--danger-rgb), 0.1)' }}>CANC</span>;
   } else if (matchStatus === 'INT' || matchStatus === 'SUSP') {
-    statusBadge = <span className="status-badge" style={{ color: 'var(--gold)', background: 'rgba(var(--gold-rgb), 0.1)' }}>INTERRUPTED</span>;
+    statusBadge = <span className="status-badge" style={{ color: 'var(--gold)', background: 'rgba(var(--gold-rgb), 0.1)' }}>INT</span>;
   } else if (isHT) {
     statusBadge = <span className="status-badge status-ht">HT</span>;
   } else if (isLive) {
@@ -71,7 +71,6 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
 
   const hasStats = m.stats && (m.stats.possession || m.stats.shots || m.stats.corners);
 
-  // ★ NEW: Extract AI Smart Pick
   const aiPick = m.mlPredictions?.["1x2"]?.pick;
   const aiProb = m.mlPredictions?.["1x2"]?.pick_probability;
   
@@ -114,7 +113,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
         <div className="zoka-teams">
           <div className="zoka-team-col home">
             <div className="zoka-team-row">
-              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={`${m.homeName} logo`} width="24" height="24" loading="lazy" />}
+              {m.homeLogo && <img className="zoka-crest" src={m.homeLogo} alt={`${m.homeName} logo`} width="20" height="20" loading="lazy" />}
               <span className="zoka-team-name">{m.homeName}</span>
             </div>
           </div>
@@ -129,24 +128,24 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
           </div>
           <div className="zoka-team-col away">
             <div className="zoka-team-row">
-              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={`${m.awayName} logo`} width="24" height="24" loading="lazy" />}
+              {m.awayLogo && <img className="zoka-crest" src={m.awayLogo} alt={`${m.awayName} logo`} width="20" height="20" loading="lazy" />}
               <span className="zoka-team-name">{m.awayName}</span>
             </div>
           </div>
+          <ChevronRight size={18} className="text-muted ml-4" />
         </div>
         
         <div className="zoka-comp-row" style={{ justifyContent: 'space-between' }}>
           <div className="flex-center gap-4" style={{ minWidth: 0 }}>
-            {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" aria-hidden="true" />}
+            {m.leagueLogo && <img src={m.leagueLogo} alt="" width="12" height="12" loading="lazy" aria-hidden="true" />}
             <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.leagueName}</span>
           </div>
           
-          {/* ★ NEW: AI Smart Pick Pill */}
           {aiPick && (
             <div 
               className="flex-center gap-4" 
               style={{ 
-                fontSize: '10.1px', 
+                fontSize: '10px', 
                 fontWeight: 700, 
                 color: 'var(--accent)', 
                 background: 'rgba(var(--accent-rgb), 0.1)', 
@@ -164,7 +163,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
       </Link>
 
       {hasStats && (
-        <div className="p-12 flex-col gap-8" style={{ borderTop: '1px solid var(--border)', marginTop: 'var(--sp-8)' }}>
+        <div className="p-8 flex-col gap-4" style={{ borderTop: '1px solid var(--border)', marginTop: 'var(--sp-4)' }}>
           {m.stats.possession && (
             <div className="flex-between text-muted" style={{ fontSize: 'var(--fs-xs)' }} role="group" aria-label="Possession stats">
               <span>{m.stats.possession.home}%</span>
@@ -177,7 +176,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
         </div>
       )}
 
-      <footer className="p-12 flex-between">
+      <footer className="p-8 flex-between">
         <button onClick={() => handleReactNow(m)} className="btn btn-ghost btn-sm">
           <Camera size={12} aria-hidden="true" /> React
         </button>
