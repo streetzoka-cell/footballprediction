@@ -1,9 +1,8 @@
-﻿const liveService = require('../../services/LiveMatchService');
+﻿// backend-v1/src/scheduler/jobs/liveJob.js
+const liveService = require('../../services/LiveMatchService');
 const QuotaManager = require('../../services/QuotaManager');
-const LivePriorityService = require('../../services/LivePriorityService');
 const fixtureService = require('../../services/FixtureService');
 const { submitUrl } = require('../../services/IndexNowService');
-const { LIVE_POLLING } = require('../../config/constants');
 const logger = require('../../utils/logger');
 
 const createSlug = (str) =>
@@ -14,39 +13,15 @@ let prevLiveIds = new Set();
 
 async function execute() {
   try {
-    // 1. Check global quota first
-    if (!QuotaManager.canPollLive()) {
-      return LIVE_POLLING.IDLE_INTERVAL_MS; // Wait 5 mins if quota depleted
-    }
-
-    // 2. ★ NEW: Check local schedule intelligence before making any API call
-    if (!LivePriorityService.shouldPollLive()) {
-      logger.info('[LiveJob] No priority competitions expected live. Skipping API poll.');
-      return LIVE_POLLING.IDLE_INTERVAL_MS; // Wait 5 mins, save API quota
-    }
-
-    // 3. Make the live API call (ProviderManager will get all global live data)
+    if (!QuotaManager.canPollLive()) return 10 * 60 * 1000; // Wait 10 mins if quota depleted
+    
     const result = await liveService.syncLiveMatches();
-    
-    if (result.skipped) {
-      return LIVE_POLLING.IDLE_INTERVAL_MS;
-    }
+    if (result.skipped) return 10 * 60 * 1000;
 
-    // ★ FIX: LiveMatchService already recorded the call. Do NOT double-count here.
     const liveMatches = result.liveMatches || [];
-    
-    // 4. Extract Priority matches to drive the interval calculation
-    const priorityLiveMatches = liveMatches.filter(m => LivePriorityService.isPriorityCompetition(m.leagueId));
-    const nearFinishCount = priorityLiveMatches.filter(m => m.display?.minute >= 80).length;
-
-    // 5. Calculate smart interval based on priority activity
-    const intervalMs = LivePriorityService.getRecommendedInterval(
-      priorityLiveMatches.length,
-      nearFinishCount
-    );
-
-    // 6. Ping IndexNow for matches that JUST went live
     const currentLiveIds = new Set(liveMatches.map(m => String(m.id)));
+
+    // Ping IndexNow for matches that JUST went live
     if (prevLiveIds.size > 0 || liveMatches.length > 0) {
       const startedMatches = liveMatches.filter(m => !prevLiveIds.has(String(m.id)));
       for (const match of startedMatches) {
@@ -63,12 +38,10 @@ async function execute() {
       }
     }
 
-    // 7. FT Reconciliation Logic
+    // FT Reconciliation: If a match drops off the live feed, fetch final results
     if (prevLiveIds.size > 0) {
       const finishedIds = [...prevLiveIds].filter(id => !currentLiveIds.has(id));
-      
       if (finishedIds.length > 0 && QuotaManager.canFetchFT()) {
-        // Trigger FT collection for matches that dropped off the live feed
         await fixtureService.refreshFinishedMatches();
         QuotaManager.recordFTCall();
       }
@@ -76,11 +49,18 @@ async function execute() {
 
     prevLiveIds = currentLiveIds;
 
+    // ★ YOUR EXACT LOGIC: 5 mins for 10+ matches, 10 mins for below 10
+    let intervalMs = 10 * 60 * 1000; // 10 minutes default
+    if (liveMatches.length >= 10) {
+      intervalMs = 5 * 60 * 1000; // 5 minutes if 10+ live
+    }
+
+    logger.info(`[LiveJob] ${liveMatches.length} live matches. Next poll in ${intervalMs / 60000} mins.`);
     return intervalMs;
     
   } catch (err) {
     logger.error(`[LiveJob] Error: ${err.message}`);
-    return LIVE_POLLING.IDLE_INTERVAL_MS; // Fallback to idle on error
+    return 10 * 60 * 1000; // Fallback to 10 mins on error
   }
 }
 

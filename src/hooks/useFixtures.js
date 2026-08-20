@@ -2,7 +2,7 @@
 import { useQuery, keepPreviousData } from '@tanstack/react-query';
 import { useMemo, useState, useEffect } from 'react';
 import { footballApi } from '../services/footballApi';
-import { normalizeMatch } from '../engine/matchEngine';
+import { normalizeMatch, applySmartMinute } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 
 const cleanName = (str) => {
@@ -13,7 +13,7 @@ const cleanName = (str) => {
     .trim();
 };
 
-// ★ NEW: 1-second local ticker hook to update match minutes without API polling
+// 1-second local ticker hook to update match minutes without API polling
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -37,7 +37,7 @@ export function useHomeMatches() {
 }
 
 export function useFixtures(dateStr, sport = 'football') {
-  // ★ Tick the clock every second locally!
+  // Tick the clock every second locally
   const now = useNow(1000);
 
   const query = useQuery({
@@ -72,7 +72,7 @@ export function useFixtures(dateStr, sport = 'football') {
         return null;
       };
 
-      // Merge raw data only. Do NOT normalize here, so we can normalize every second locally!
+      // Merge raw data only. Do NOT normalize here, so we can normalize every second locally.
       fixtures.forEach(m => map.set(String(m.id), m));
 
       finished.forEach(m => {
@@ -108,7 +108,7 @@ export function useFixtures(dateStr, sport = 'football') {
     }
   });
 
-  // ★ Normalize data locally every second based on `now`
+  // Normalize + tick data locally every second based on `now`
   const normalizedData = useMemo(() => {
     if (!query.data) return [];
     const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
@@ -116,6 +116,7 @@ export function useFixtures(dateStr, sport = 'football') {
     return query.data
       .map(m => normalizeMatch(m, true, now))
       .filter(Boolean)
+      .map(m => applySmartMinute(m, now)) // ★ ticks the minute every second, with kickoff-based fallback
       .filter(m => {
         if (m.isHidden) return false;
         if (m.timestamp) {
@@ -150,6 +151,7 @@ export function useLiveMatches(sport = 'football') {
     return (query.data || [])
       .map((m) => normalizeMatch(m, true, now))
       .filter(Boolean)
+      .map((m) => applySmartMinute(m, now)) // ★ ticks the minute every second, with kickoff-based fallback
       .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
   }, [query.data, now]);
 
@@ -225,7 +227,7 @@ export function useTeams(leagueId) {
 }
 
 // ============================================================
-// ★ NEW: Hook that merges Fixtures with ML Predictions
+// Hook that merges Fixtures with ML Predictions
 // ============================================================
 export function useFixturesWithPredictions(dateStr, sport = 'football') {
   const fixturesQuery = useFixtures(dateStr, sport);
@@ -252,7 +254,7 @@ export function useFixturesWithPredictions(dateStr, sport = 'football') {
   const mergedData = useMemo(() => {
     if (!fixturesQuery.data) return [];
     const preds = predictionsQuery.data || {};
-    
+
     return fixturesQuery.data.map(match => ({
       ...match,
       mlPredictions: preds[String(match.id)] || null

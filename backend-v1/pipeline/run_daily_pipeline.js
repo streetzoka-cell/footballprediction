@@ -12,7 +12,6 @@ function runStep(command, label) {
   logger.info(`============================================================`);
   
   try {
-    // Execute synchronously to prevent steps from fighting each other
     execSync(command, { cwd: ROOT, stdio: 'inherit' });
     logger.info(`[Pipeline] ✅ COMPLETED: ${label}`);
     return true;
@@ -24,46 +23,42 @@ function runStep(command, label) {
 }
 
 async function run() {
-  logger.info('🚀 STARTING ZOKASCORE V2 DAILY PIPELINE 🚀');
+  logger.info('🚀 STARTING ZOKASCORE V2 MASTER PIPELINE 🚀');
 
   // --- PHASE 1: CORE CSV SYNC & ELO (PYTHON) ---
-  // 1. Merge live results from public_data/results into the Core CSVs and deduplicate
   runStep('python pipeline/append-results-to-master.py', 'Append Live Results to Master CSV');
-  
-  // 2. Recalculate Elo for the newly appended matches
   runStep('python pipeline/32-build-zokascore-elo.py', 'Build ZOKASCORE ELO');
-  
-  // 3. Publish the updated Elo to the public folder
   runStep('python pipeline/16-publish-elo-state.py', 'Publish Current ELO State');
 
   // --- PHASE 2: KNOWLEDGE GRAPH (NODE.js) ---
-  // 4. Rebuild canonical team/player indexes (reads Core CSVs)
   runStep('node pipeline/01-build-canonical-indexes.js', 'Build Canonical Indexes');
-  
-  // 5. Build deep intelligence (Team stats, H2H, recent form) from Core CSVs
   runStep('node pipeline/06-build-intelligence-indexes.js', 'Build Intelligence Indexes');
-  
-  // 6. Build seasonal stats (Win %, BTTS %, Over/Under %) from Core CSVs
   runStep('node pipeline/07-seasonal-intelligence.js', 'Build Seasonal Intelligence');
-  
-  // 7. Build fast lookup maps for the API
   runStep('node pipeline/11-rebuild-knowledge-indexes.js', 'Rebuild Knowledge Indexes');
-  
-  // 8. Copy the verified intelligence to public_data
   runStep('node pipeline/13-publish-knowledge.js', 'Publish Knowledge to Public');
-  
-  // 9. Publish historical matches (with the newly calculated Elo) to public_data
   runStep('node pipeline/14-publish-historical-matches.js', 'Publish Historical Matches');
-  
-  // 10. Publish match events (scorers, cards) to public_data
   runStep('node pipeline/15-publish-match-events.js', 'Publish Match Events');
 
-  // --- PHASE 3: LIVE PREDICTIONS (PYTHON) ---
-  // 11. Generate today's predictions reading the UNIFIED public_data folder
+  // --- PHASE 3: ML FEATURE EXTRACTION & TRAINING ---
+  // ★ Fixed file name to match your folder
+  runStep('node pipeline/33-build-elo-features.js', 'Extract ML Elo Features (Node.js)');
+  
+  runStep('python pipeline/40-build-ewma-features.py', 'Build EWMA Features');
+  
+  // ★ Fixed file name to match your folder
+  runStep('python pipeline/46-build-market-targets.py', 'Build Unified ML Market Targets');
+  
+  // Train Extended Markets & CORRECT SCORE ML Model
+  runStep('python pipeline/49-train-extended-markets.py', 'Train OU & Correct Score ML Models');
+  
+  // Deploy Champion 1X2 Model
+  runStep('python pipeline/44-deploy-champion-model.py', 'Deploy Champion 1X2 Model');
+
+  // --- PHASE 4: LIVE PREDICTIONS (PYTHON) ---
   runStep('python pipeline/50-generate-daily-predictions.py', 'Generate Daily ML Predictions');
 
   logger.info('\n============================================================');
-  logger.info('✅ ZOKASCORE V2 DAILY PIPELINE COMPLETE ✅');
+  logger.info('✅ ZOKASCORE V2 MASTER PIPELINE COMPLETE ✅');
   logger.info('============================================================');
 }
 

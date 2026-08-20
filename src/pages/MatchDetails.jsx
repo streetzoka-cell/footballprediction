@@ -17,7 +17,9 @@ import { applySmartMinute, normalizeMatch } from '../engine/matchEngine';
 import { seoGenerators, buildSEO, howToSchema } from '../utils/seoBuilder';
 import { footballApi } from '../services/footballApi';
 
-function useNow(interval = 10000) {
+// ★ FIX: 1s tick, not 10s. This now only drives the fallback (non-fixtures-list) path —
+// matches sourced from useFixtures() already tick internally at 1s and shouldn't be re-ticked here.
+function useNow(interval = 1000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
     const id = setInterval(() => setNow(Date.now()), interval);
@@ -76,7 +78,7 @@ const StatBar = ({ label, home, away, isPercentage = false }) => {
 
 export default function MatchDetails() {
   const { matchId } = useParams();
-  const now = useNow(10000);
+  const now = useNow(1000);
   
   const { data: todayFx = [] } = useFixtures(todayStr());
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
@@ -93,8 +95,13 @@ export default function MatchDetails() {
   const match = useMemo(() => {
     const all = [...todayFx, ...tomFx, ...yestFx];
     const found = all.find(m => String(m.id) === String(matchId));
-    if (found) return applySmartMinute(found, now);
-    if (fallbackMatchData) return normalizeMatch(fallbackMatchData, true, now); 
+    // ★ FIX: `found` already comes from useFixtures(), which normalizes AND smart-ticks every
+    // second internally. Re-running applySmartMinute here double-counts elapsed time against
+    // the same updatedAt baseline (the minute races ahead / glitches). Use it as-is.
+    if (found) return found;
+    // Fallback data is fetched once (1hr staleTime) and never ticks on its own —
+    // this is the one case that genuinely needs normalizing + smart-minute ticking here.
+    if (fallbackMatchData) return applySmartMinute(normalizeMatch(fallbackMatchData, true, now), now);
     return null;
   }, [todayFx, yestFx, tomFx, matchId, now, fallbackMatchData]);
 

@@ -1,26 +1,20 @@
 // backend-v1/src/routes/v1/standings.js
-
 const express = require('express');
 const router = express.Router();
 
 const localSnapshotRepo = require('../../repositories/LocalSnapshotRepository');
-const { findLeague, getLeagueAliases } = require('../../config/leagues');
 
-function matchesLeague(standing, identifiers) {
+function matchesLeague(standing, queryId) {
   if (!standing) return false;
 
   const candidates = [
-    standing.id,
-    standing.leagueId,
-    standing.competitionId,
-    standing.code,
-  ]
-    .filter(Boolean)
-    .map((value) => String(value).toLowerCase());
+    String(standing.id || '').toLowerCase(),
+    String(standing.leagueId || '').toLowerCase(),
+    String(standing.competitionId || '').toLowerCase(),
+    String(standing.code || '').toLowerCase()
+  ].filter(Boolean);
 
-  return identifiers.some((id) =>
-    candidates.includes(String(id).toLowerCase())
-  );
+  return candidates.includes(String(queryId).toLowerCase());
 }
 
 /**
@@ -39,14 +33,8 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    const league = findLeague(leagueQuery);
-    const identifiers = league
-      ? getLeagueAliases(league.id)
-      : [String(leagueQuery)];
-
-    const match = standings.find((standing) =>
-      matchesLeague(standing, identifiers)
-    );
+    // Safe lookup without relying on missing config functions
+    const match = standings.find((standing) => matchesLeague(standing, leagueQuery));
 
     if (!match) {
       return res.status(404).json({

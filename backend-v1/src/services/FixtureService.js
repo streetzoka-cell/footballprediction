@@ -1,4 +1,5 @@
-﻿const fs = require('fs').promises;
+﻿// backend-v1/src/services/FixtureService.js
+const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
 const { buildUnifiedFixtures } = require('./UnifiedFixtureService');
@@ -82,7 +83,7 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   const newlyFinished = [];
   const nowMs = Date.now();
 
-  const FT_FORCE_MS = 3.5 * 60 * 60 * 1000;
+  const FT_FORCE_MS = 4 * 60 * 60 * 1000; // Increased to 4 hours to allow API to update scores
   const STUCK_AT_90_MS = 3 * 60 * 60 * 1000;
 
   for (let match of matches) {
@@ -95,7 +96,28 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
     const stuckAtNinety = atNinety && elapsedMs > STUCK_AT_90_MS;
     const isExpired = elapsedMs > FT_FORCE_MS;
 
+    // ★ FIX: Check if scores are actually present. 
+    // If status is FT but scores are 0-0, wait for API to update them unless it's an explicit 0-0 (display.score.home === 0)
+    const hasScores = (match.homeScore != null && match.awayScore != null) && 
+                      (match.homeScore > 0 || match.awayScore > 0 || match.display?.score?.home === 0);
+
     if (isFT || isExpired || stuckAtNinety) {
+      if (!hasScores && !isExpired) {
+        // Match is FT but scores are 0-0 and not explicitly marked as 0-0. Keep in fixtures to wait for API update.
+        match.status = 'FT';
+        match.isLive = false;
+        if (match.display) {
+          match.display.isLive = false;
+          match.display.isFinished = true;
+          match.display.minute = 90;
+        }
+        logger.warn(
+          `[FixtureService] Match ${match.id} is FT but waiting for scores to update.`
+        );
+        stillFixtures.push(match);
+        continue;
+      }
+
       if (match.homeScore == null || match.awayScore == null) {
         match.status = 'FT';
         match.isLive = false;

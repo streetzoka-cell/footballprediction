@@ -13,7 +13,6 @@ import { usePreferencesStore } from '../store/usePreferencesStore';
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
 import { buildMatchRoute } from '../utils/routes'; 
 import { Sound } from '../utils/soundEngine';
-import { applySmartMinute } from '../engine/matchEngine'; 
 import MatchCard from '../components/MatchCard';
 import AdSlot from '../components/AdSlot'; 
 import SEO from '../components/SEO';
@@ -29,15 +28,6 @@ const CMT = {
   kickoff: ["Kick Off!", "We're underway!"],
 };
 const pick = (a) => a[Math.floor(Math.random() * a.length)];
-
-function useNow(interval = 10000) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), interval);
-    return () => clearInterval(id);
-  }, [interval]);
-  return now;
-}
 
 function useToasts() {
   const [toasts, setToasts] = useState([]);
@@ -387,9 +377,11 @@ const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).so
 export default function Fixtures() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const now = useNow(10000);
 
   const [selectedDate, setSelectedDate] = useState(searchParams.get('date') || todayStr());
+  // ★ useFixtures already ticks minutes every second internally (normalizeMatch + applySmartMinute).
+  // Do NOT re-run applySmartMinute on this data here — doing so double-counts elapsed time
+  // against the same `updatedAt` baseline and makes the clock race ahead / glitch.
   const { data: rawFixtures = [], isLoading: fixturesLoading, error: fixturesError } = useFixtures(selectedDate);
   const queryClient = useQueryClient();
   const { toasts, addGoal } = useToasts();
@@ -428,7 +420,10 @@ export default function Fixtures() {
   const moreRef = useRef(null);
   const dateDropdownRef = useRef(null);
 
-  const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
+  // ★ FIX: rawFixtures is already normalized + smart-ticked by useFixtures (updates every 1s
+  // via its own internal ticker). Just use it directly — the hook already filters isHidden too,
+  // this is a cheap defensive re-filter, not a reprocessing step.
+  const allFixtures = useMemo(() => rawFixtures.filter(m => !m.isHidden), [rawFixtures]);
   
   // ★ SMART DEDUPLICATION LOGIC
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive).sort(sortMatches), [allFixtures]);

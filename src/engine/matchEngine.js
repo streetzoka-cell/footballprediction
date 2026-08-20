@@ -11,7 +11,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     home: raw.homeScore || display.score?.home || 0,
     away: raw.awayScore || display.score?.away || 0
   };
-  
+
   const homeName = raw.homeName || raw.homeTeam?.name || 'TBD';
   const awayName = raw.awayName || raw.awayTeam?.name || 'TBD';
   const homeLogo = raw.homeLogo || raw.homeTeam?.crest || null;
@@ -42,8 +42,8 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     }
   }
 
-  const FT_THRESHOLD_MS = 3 * 60 * 60 * 1000; 
-  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000; 
+  const FT_THRESHOLD_MS = 3 * 60 * 60 * 1000;
+  const HIDE_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
   if (timestamp) {
     const matchStartTime = timestamp * 1000;
@@ -122,7 +122,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   const hasRealStats = !!(stats.possession || stats.shots || stats.shotsOnTarget || stats.corners);
 
   const rawOdds = raw.odds || raw.bookmakers?.[0]?.bets?.find(b => b.id === 1)?.values || raw.bets?.find(b => b.id === 1)?.values || null;
-  
+
   const odds = rawOdds ? {
     home: rawOdds.find(v => v.value === 'Home')?.odd || rawOdds.home,
     draw: rawOdds.find(v => v.value === 'Draw')?.odd || rawOdds.draw,
@@ -177,7 +177,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     category: raw.category || 'NORMAL',
     stats,
     hasRealStats,
-    odds, 
+    odds,
     mlPredictions: raw.prediction || raw.mlPredictions || null,
     intelData: raw.intelData || null,
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
@@ -199,6 +199,59 @@ export function formatMinute(min, status) {
     if (min > 120) return `120+${min - 120}'`;
   }
   return `${min}'`;
+}
+
+// ============================================================
+// ★ SMART MINUTE ENGINE
+// ============================================================
+
+// Typical period lengths used to approximate minute from kickoff time,
+// same approach livescore apps use as a fallback between live updates.
+const HALF_LEN = 45;
+const HT_BREAK = 15;      // avg half-time break
+const ET_HALF_LEN = 15;
+const ET_BREAK = 5;       // break before extra time
+const ET_HT_BREAK = 5;    // break between ET halves
+
+// Estimate current minute purely from kickoff timestamp + period math.
+// Used as a fallback when we don't have a recent enough API update to trust.
+function estimateMinuteFromKickoff(kickoffMs, status, now) {
+  if (!kickoffMs) return null;
+  const elapsedMin = (now - kickoffMs) / 60000;
+  if (elapsedMin < 0) return null; // hasn't kicked off yet
+
+  switch (status) {
+    case '1H':
+    case 'LIVE':
+      return Math.min(Math.max(1, Math.round(elapsedMin)), HALF_LEN + 10);
+
+    case 'HT':
+      return HALF_LEN;
+
+    case '2H': {
+      const secondHalfStart = HALF_LEN + HT_BREAK; // minutes from kickoff
+      const into2H = elapsedMin - secondHalfStart;
+      return Math.min(Math.max(HALF_LEN + 1, HALF_LEN + Math.round(Math.max(into2H, 0))), 90 + 10);
+    }
+
+    case 'ET': {
+      const et1Start = HALF_LEN * 2 + HT_BREAK + ET_BREAK;
+      const et1End = et1Start + ET_HALF_LEN;
+      if (elapsedMin <= et1End + ET_HT_BREAK) {
+        const into = elapsedMin - et1Start;
+        return Math.min(Math.max(91, 90 + Math.round(Math.max(into, 0))), 105 + 1);
+      }
+      const et2Start = et1End + ET_HT_BREAK;
+      const into2 = elapsedMin - et2Start;
+      return Math.min(Math.max(106, 105 + Math.round(Math.max(into2, 0))), 120 + 1);
+    }
+
+    case 'PEN':
+      return 120;
+
+    default:
+      return null;
+  }
 }
 
 export function applySmartMinute(m, now = Date.now()) {
@@ -225,30 +278,43 @@ export function applySmartMinute(m, now = Date.now()) {
   }
 
   const apiMinute = m.minute || 0;
-  let smartMinute = apiMinute;
+  let apiEstimate = null;
+  let isFresh = false;
 
-  // ★ FIX: If match is live but API says minute 0, force it to 1 to avoid showing 0'
-  if (m.isLive && smartMinute < 1) {
-    smartMinute = 1;
-  }
-
+  // Estimate #1: ticking forward from the last real API update
   if (m.updatedAt) {
     const lastUpdateTime = new Date(m.updatedAt).getTime();
     if (!isNaN(lastUpdateTime) && lastUpdateTime > 0) {
       const elapsedSinceUpdateMs = now - lastUpdateTime;
-      if (elapsedSinceUpdateMs > 0 && elapsedSinceUpdateMs < 120000) {
+      if (elapsedSinceUpdateMs >= 0) {
         const elapsedMins = Math.floor(elapsedSinceUpdateMs / 60000);
-        smartMinute = Math.max(smartMinute, smartMinute + elapsedMins);
+        apiEstimate = apiMinute + elapsedMins;
+        // Treat as "fresh" only while within a window wider than the poll
+        // interval, so one missed refetch doesn't break the clock.
+        isFresh = elapsedSinceUpdateMs < 90 * 1000;
       }
     }
   }
 
-  if (status === '1H') smartMinute = Math.min(smartMinute, 50);
-  else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 95);
-  else if (status === 'ET') smartMinute = Math.min(smartMinute, 125);
+  // Estimate #2: purely from kickoff time — used when the API estimate
+  // is missing or stale (e.g. minute is 0 or the last update is old).
+  const kickoffMs = m.timestamp ? m.timestamp * 1000 : null;
+  const kickoffEstimate = estimateMinuteFromKickoff(kickoffMs, status, now);
 
-  // Ensure it's never 0 if live
-  if (m.isLive && smartMinute < 1) smartMinute = 1;
+  let smartMinute;
+  if (isFresh && apiEstimate) {
+    smartMinute = kickoffEstimate ? Math.max(apiEstimate, kickoffEstimate) : apiEstimate;
+  } else if (kickoffEstimate) {
+    smartMinute = Math.max(kickoffEstimate, apiMinute);
+  } else {
+    smartMinute = Math.max(apiEstimate || apiMinute, 1);
+  }
+
+  if (status === '1H') smartMinute = Math.min(smartMinute, 55);
+  else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 100);
+  else if (status === 'ET') smartMinute = Math.min(smartMinute, 121);
+
+  if (smartMinute < 1) smartMinute = 1;
 
   const newProgress = Math.min((smartMinute / 90) * 100, 100);
   const newLabel = `${smartMinute}'`;
@@ -267,7 +333,6 @@ export function applySmartMinute(m, now = Date.now()) {
     timelineProgress: newProgress,
   };
 }
-
 
 export const extractTournamentStage = (raw) => null;
 export const extractMatchDate = (m) => m.dateStr;
