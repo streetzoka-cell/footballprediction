@@ -1,3 +1,4 @@
+// frontend/src/pages/MatchDetails.jsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
@@ -77,6 +78,7 @@ export default function MatchDetails() {
   const { matchId } = useParams();
   const now = useNow(10000);
   
+  // 1. Try to find match in today's, yesterday's, or tomorrow's local fixture files
   const { data: todayFx = [] } = useFixtures(todayStr());
   const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
   const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
@@ -99,20 +101,26 @@ export default function MatchDetails() {
     return null;
   }, [todayFx, yestFx, tomFx, matchId, now, fallbackMatchData]);
 
-  // ★ NEW: Fetch Daily ML Predictions for the match's date
+  // 2. Extract ML Predictions from the match object (injected by Python Step 50)
+  const injectedPrediction = useMemo(() => {
+    if (!match) return null;
+    return match.mlPredictions || null;
+  }, [match]);
+
+  // Fallback: Fetch Daily ML Predictions if not injected in the match object
   const { data: dailyPredictions = [] } = useQuery({
     queryKey: ['mlPredictions', match?.dateStr],
     queryFn: () => footballApi.getDailyPredictions(match.dateStr).then(res => res?.data || []),
-    enabled: !!match?.dateStr,
-    staleTime: 60 * 60 * 1000, // Cache for 1 hour
+    enabled: !!match?.dateStr && !injectedPrediction, // Only fetch if missing
+    staleTime: 60 * 60 * 1000,
   });
 
-  // ★ NEW: Extract the specific prediction for this match
-  const matchPrediction = useMemo(() => {
+  const finalPrediction = useMemo(() => {
+    if (injectedPrediction) return injectedPrediction;
     if (!dailyPredictions || !match) return null;
     const found = dailyPredictions.find(p => String(p.matchId) === String(match.id));
     return found ? found.markets : null;
-  }, [dailyPredictions, match]);
+  }, [injectedPrediction, dailyPredictions, match]);
 
   const standingsLeagueId = match?.leagueId;
   const { data: standingsData } = useStandings(standingsLeagueId);
@@ -121,6 +129,7 @@ export default function MatchDetails() {
   const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
   const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
 
+  // 3. Fetch Recent Matches from API (which reads V2 results folder)
   const { data: homeResults = [] } = useQuery({
     queryKey: ['team-results', homeTeamId],
     queryFn: () => footballApi.getResults({ teamId: homeTeamId, limit: 5 }).then(res => res.data || []),
@@ -135,14 +144,19 @@ export default function MatchDetails() {
     staleTime: 1000 * 60 * 60,
   });
 
-  // Fetch Deep Match Intelligence (Elo, Form, Goal Patterns, H2H history, Strong Pick)
-  const { data: intelData } = useQuery({
+  // ★ FIX 3: Use Injected Intelligence Data First (Elo, Form, Goal Patterns, H2H history)
+  const injectedIntel = useMemo(() => match?.intelData || null, [match]);
+
+  const { data: fallbackIntelData } = useQuery({
     queryKey: ['match-intel', match?.homeName, match?.awayName],
     queryFn: () => footballApi.getMatchIntelligence(match.homeName, match.awayName).then(res => res?.data || null),
-    enabled: !!match?.homeName && !!match?.awayName,
+    enabled: !!match?.homeName && !!match?.awayName && !injectedIntel, // Only fire API if JSON didn't have it!
     staleTime: 1000 * 60 * 60,
     retry: 1,
   });
+
+  // Use injected data first, fallback to API data if missing
+  const intelData = injectedIntel || fallbackIntelData;
 
   const [goalFlash, setGoalFlash] = useState(false);
   const prevScore = useRef({ home: match?.homeScore, away: match?.awayScore });
@@ -349,8 +363,8 @@ export default function MatchDetails() {
             </div>
           )}
 
-          {/* ZOKA MATCH INTELLIGENCE (Includes ML Predictions, Strong Pick, Elo, Form, Goal Patterns, H2H summary) */}
-          <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} mlPredictions={matchPrediction} />
+          {/* ZOKA MATCH INTELLIGENCE (Uses injected intelData first) */}
+          <MatchIntelligence data={intelData} homeName={match.homeName} awayName={match.awayName} mlPredictions={finalPrediction} />
 
           {/* DEDICATED ODDS SECTION (With Fallbacks) */}
           <div className="glass-card p-24 mb-24 mt-24">

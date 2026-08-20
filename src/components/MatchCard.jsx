@@ -1,6 +1,7 @@
-﻿import React, { memo, useState, useEffect, useRef } from 'react';
+﻿// frontend/src/components/MatchCard.jsx
+import React, { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { Star, Pin, Camera, Clock } from 'lucide-react';
+import { Star, Pin, Camera, Clock, Zap } from 'lucide-react';
 import { buildMatchRoute } from '../utils/routes';
 import { formatMinute } from '../engine/matchEngine'; 
 
@@ -70,6 +71,17 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
 
   const hasStats = m.stats && (m.stats.possession || m.stats.shots || m.stats.corners);
 
+  // ★ NEW: Extract AI Smart Pick
+  const aiPick = m.mlPredictions?.["1x2"]?.pick;
+  const aiProb = m.mlPredictions?.["1x2"]?.pick_probability;
+  
+  const formatPick = (pick) => {
+    if (!pick) return null;
+    if (pick === 'HOME_WIN') return m.homeName?.split(' ')[0] || 'HOME';
+    if (pick === 'AWAY_WIN') return m.awayName?.split(' ')[0] || 'AWAY';
+    return pick;
+  };
+
   return (
     <article className={cls} style={{ animationDelay: i * 15 + 'ms' }} aria-label={`${m.homeName} vs ${m.awayName}`}>
       
@@ -122,9 +134,32 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
             </div>
           </div>
         </div>
-        <div className="zoka-comp-row">
-          {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" aria-hidden="true" />}
-          <span>{m.leagueName}</span>
+        
+        <div className="zoka-comp-row" style={{ justifyContent: 'space-between' }}>
+          <div className="flex-center gap-4" style={{ minWidth: 0 }}>
+            {m.leagueLogo && <img src={m.leagueLogo} alt="" width="14" height="14" loading="lazy" aria-hidden="true" />}
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{m.leagueName}</span>
+          </div>
+          
+          {/* ★ NEW: AI Smart Pick Pill */}
+          {aiPick && (
+            <div 
+              className="flex-center gap-4" 
+              style={{ 
+                fontSize: '10px', 
+                fontWeight: 700, 
+                color: 'var(--accent)', 
+                background: 'rgba(var(--accent-rgb), 0.1)', 
+                padding: '2px 6px', 
+                borderRadius: '4px', 
+                border: '1px solid rgba(var(--accent-rgb), 0.2)',
+                flexShrink: 0
+              }}
+            >
+              <Zap size={10} fill="currentColor" />
+              {formatPick(aiPick)} ({aiProb}%)
+            </div>
+          )}
         </div>
       </Link>
 

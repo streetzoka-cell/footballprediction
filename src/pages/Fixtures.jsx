@@ -409,6 +409,11 @@ export default function Fixtures() {
 
   const allFixtures = useMemo(() => rawFixtures.map(m => applySmartMinute(m, now)).filter(m => !m.isHidden), [rawFixtures, now]);
   const liveMatches = useMemo(() => allFixtures.filter(m => m.isLive), [allFixtures]);
+  
+  // Extract all matches that have ML Predictions
+  const predictedMatches = useMemo(() => {
+    return allFixtures.filter(m => m.mlPredictions && m.mlPredictions["1x2"]);
+  }, [allFixtures]);
 
   const featuredMatch = useMemo(() => {
     if (allFixtures.length === 0) return null;
@@ -497,7 +502,7 @@ export default function Fixtures() {
     return list; 
   }, [allFixtures, compFilter, ui.showLiveOnly, searchQ, timeFilter]);
 
-  // ★ SEO FIX: Inject ItemList Schema for Google Knowledge Graph
+  // SEO Schema
   const itemListSchema = useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -610,7 +615,7 @@ export default function Fixtures() {
   return (
     <div className="zoka-page">
       <SEO 
-        title="Football Fixtures, Live Scores & League Tables" 
+        title="Football Fixtures, Live Scores & AI Predictions" 
         description="Explore today's football fixtures, live scores, and AI predictions from top leagues worldwide." 
         keywords="football fixtures, live scores, predictions, premier league, champions league" 
         robots="index,follow" 
@@ -622,7 +627,7 @@ export default function Fixtures() {
         <div className="zoka-hdr">
           <div className="zoka-hdr-title">
             <h1 className="flex-center gap-8"><Activity size={18} style={{ color: 'var(--primary)' }} /> Zoka <span style={{ color: 'var(--primary)' }}>Live</span></h1>
-            <div className="zoka-hdr-sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Standings'}</div>
+            <div className="zoka-hdr-sub">{liveCount > 0 ? `${liveCount} Live Matches` : 'Live scores · Fixtures · Predictions'}</div>
           </div>
           <div className="zoka-hdr-actions">
             <div className="zoka-sound-wrap">
@@ -680,7 +685,8 @@ export default function Fixtures() {
           </div>
         </div>
 
-        <TabBar tabs={['fixtures', 'favourites', 'standings', 'teams']} activeTab={tab} onTabChange={setTab} />
+        {/* ★ NEW: Added 'predictions' to the tab list */}
+        <TabBar tabs={['fixtures', 'predictions', 'favourites', 'standings', 'teams']} activeTab={tab} onTabChange={setTab} />
 
         <div className="zoka-search-static">
           <Search size={18} style={{ color: 'var(--text-muted)', flexShrink: 0 }} />
@@ -702,14 +708,14 @@ export default function Fixtures() {
               <MatchOfTheDayCard match={featuredMatch} mlPredictions={featuredMatch?.mlPredictions} />
             )}
 
-            {/* ★ NEW: ZOKA AI PREDICTIONS SECTION ★ */}
-            {!searchQ && timeFilter === 'all' && displayFixtures.filter(m => m.mlPredictions).length > 0 && (
+            {/* Snippet for AI Predictions on main fixtures tab */}
+            {!searchQ && timeFilter === 'all' && predictedMatches.length > 0 && (
               <div className="zoka-section zoka-ai-section">
                 <div className="zoka-league-hd">
                   <Brain size={18} style={{ color: 'var(--accent)' }} />
                   <span className="zoka-league-name">Zoka AI Predictions</span>
                 </div>
-                {displayFixtures.filter(m => m.mlPredictions).slice(0, 5).map((m, i) => (
+                {predictedMatches.slice(0, 3).map((m, i) => (
                   <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`ai-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 50}ms` }}>
                     <div className="zoka-ai-top">
                       <span className="zoka-ai-comp">{m.leagueName}</span>
@@ -720,18 +726,23 @@ export default function Fixtures() {
                       <span className="zoka-ai-vs">VS</span>
                       <span className="zoka-ai-team">{m.awayName}</span>
                     </div>
+                    {/* FIX: Removed * 100 because probabilities are already 0-100 */}
                     <div className="zoka-ai-probbar">
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN * 100 || 33}%`, background: 'var(--primary)' }} />
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW * 100 || 33}%`, background: 'var(--text-muted)' }} />
-                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN * 100 || 33}%`, background: 'var(--danger)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
+                      <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
                     </div>
                     <div className="zoka-ai-labels">
-                      <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? (m.mlPredictions["1x2"].probabilities.HOME_WIN * 100).toFixed(0) : 33}%</span>
-                      <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? (m.mlPredictions["1x2"].probabilities.DRAW * 100).toFixed(0) : 33}%</span>
-                      <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? (m.mlPredictions["1x2"].probabilities.AWAY_WIN * 100).toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
+                      <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
                     </div>
                   </Link>
                 ))}
+                {/* Button to switch to the full predictions tab */}
+                <button className="zoka-show-more" onClick={() => setTab('predictions')}>
+                  <Brain size={16} /> View All Predictions ({predictedMatches.length})
+                </button>
               </div>
             )}
 
@@ -821,6 +832,53 @@ export default function Fixtures() {
           </>
         )}
 
+        {/* ★ NEW: DEDICATED PREDICTIONS TAB ★ */}
+        {tab === 'predictions' && (
+          <div className="zoka-section">
+            <div className="zoka-league-hd">
+              <Brain size={18} style={{ color: 'var(--accent)' }} />
+              <span className="zoka-league-name">Zoka AI Predictions</span>
+              <span className="zoka-league-count">{predictedMatches.length}</span>
+            </div>
+            {predictedMatches.length > 0 ? (
+              predictedMatches.map((m, i) => (
+                <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`pred-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 40}ms` }}>
+                  <div className="zoka-ai-top">
+                    <span className="zoka-ai-comp">{m.leagueName}</span>
+                    <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
+                  </div>
+                  <div className="zoka-ai-teams">
+                    <span className="zoka-ai-team">{m.homeName}</span>
+                    <span className="zoka-ai-vs">VS</span>
+                    <span className="zoka-ai-team">{m.awayName}</span>
+                  </div>
+                  {/* 1X2 Probabilities */}
+                  <div className="zoka-ai-probbar">
+                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
+                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
+                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%`, background: 'var(--danger)' }} />
+                  </div>
+                  <div className="zoka-ai-labels">
+                    <span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN ? m.mlPredictions["1x2"].probabilities.HOME_WIN.toFixed(0) : 33}%</span>
+                    <span>{m.mlPredictions["1x2"]?.probabilities.DRAW ? m.mlPredictions["1x2"].probabilities.DRAW.toFixed(0) : 33}%</span>
+                    <span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN ? m.mlPredictions["1x2"].probabilities.AWAY_WIN.toFixed(0) : 33}%</span>
+                  </div>
+                  
+                  {/* O/U & BTTS Quick Stats */}
+                  <div className="flex justify-between mt-8 text-xs text-muted" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
+                    <span>O/U 2.5: <strong style={{color: 'var(--text-primary)'}}>{m.mlPredictions["ou_2_5"]?.pick || '-'}</strong> ({m.mlPredictions["ou_2_5"]?.pick_probability ? m.mlPredictions["ou_2_5"].pick_probability.toFixed(0) : 0}%)</span>
+                    <span>BTTS: <strong style={{color: 'var(--text-primary)'}}>{m.mlPredictions["btts"]?.pick || '-'}</strong> ({m.mlPredictions["btts"]?.pick_probability ? m.mlPredictions["btts"].pick_probability.toFixed(0) : 0}%)</span>
+                  </div>
+                </Link>
+              ))
+            ) : (
+              <div className="zoka-empty-anim" style={{padding: '40px 0'}}>
+                <EmptyState icon={Brain} title="No AI Predictions Available" hint="The ZOKASCORE V2 ML Engine has not generated predictions for this date yet." />
+              </div>
+            )}
+          </div>
+        )}
+
         {tab === 'favourites' && (
           <div className="zoka-section">
             <div className="zoka-league-hd"><Star size={18} style={{ color: 'var(--gold)' }} /><span className="zoka-league-name">Favourites</span></div>
@@ -865,7 +923,7 @@ export default function Fixtures() {
                   </tbody>
                 </table>
               </div>
-            ) : ( <EmptyState icon={Trophy} title="Select a competition to view standings." /> )}
+            ) : ( <EmptyState icon={Trophy} title="Select a competition to view standings." /> ) }
           </>
         )}
 
@@ -889,7 +947,7 @@ export default function Fixtures() {
                   </Link>
                 ))}
               </div>
-            ) : ( <EmptyState icon={Users} title="Select a competition to view teams." /> )}
+            ) : ( <EmptyState icon={Users} title="Select a competition to view teams." /> ) }
           </>
         )}
       </div>

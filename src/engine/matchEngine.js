@@ -1,4 +1,5 @@
-﻿import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
+﻿// backend-v1/src/engine/matchEngine.js
+import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   if (!raw) return null;
@@ -108,7 +109,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   const hasRealStats = !!(stats.possession || stats.shots || stats.shotsOnTarget || stats.corners);
 
-    // ★ FIX: Robustly extract Odds from various API payload shapes
   const rawOdds = raw.odds || raw.bookmakers?.[0]?.bets?.find(b => b.id === 1)?.values || raw.bets?.find(b => b.id === 1)?.values || null;
   
   const odds = rawOdds ? {
@@ -119,7 +119,6 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     under25: raw.odds?.under_25 || raw.odds?.under25
   } : null;
 
-  
   return {
     id: String(raw.id || ''),
     sport: raw.sport || 'football',
@@ -166,7 +165,11 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     category: raw.category || 'NORMAL',
     stats,
     hasRealStats,
-    odds, // ★ NEW: Attach parsed odds
+    odds, 
+    // ★ FIX 1: Carry over ML predictions injected by Python Step 50
+    mlPredictions: raw.prediction || raw.mlPredictions || null,
+    // ★ FIX 2: Carry over injected Intelligence (Elo, Form, H2H) from fixture file!
+    intelData: raw.intelData || null,
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
     league: { name: leagueName, emblem: leagueLogo, id: raw.leagueId },
