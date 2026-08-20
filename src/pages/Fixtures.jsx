@@ -1,9 +1,10 @@
-﻿import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
+﻿// frontend/src/pages/Fixtures.jsx
+import React, { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Search, X, Star, Volume2, VolumeX, Trophy, Users,
   ChevronRight, ChevronDown, ChevronUp, RefreshCw, Calendar, Activity, 
-  Pin, Flame, Loader, Brain, TrendingUp, Check
+  Pin, Flame, Loader, Brain, TrendingUp, Check, Zap
 } from 'lucide-react';
 
 import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
@@ -146,8 +147,8 @@ const LiveTicker = memo(({ matches }) => {
   );
 });
 
-const MatchOfTheDayCard = memo(({ match }) => {
-  const [isExpanded, setIsExpanded] = useState(false);
+const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
+  const [isExpanded, setIsExpanded] = useState(true); // Default expanded to show AI pick
   const [userVote, setUserVote] = useState(() => localStorage.getItem(`zoka_vote_${match?.id}`));
   const [isVoting, setIsVoting] = useState(false);
   const [voteData, setVoteData] = useState(null);
@@ -201,6 +202,16 @@ const MatchOfTheDayCard = memo(({ match }) => {
   const percentages = voteData?.percentages || { home: 0, draw: 0, away: 0 };
   const totalVotes = voteData?.totalVotes || 0;
 
+  // ★ NEW: Extract AI Pick
+  const aiPick = mlPredictions?.["1x2"]?.pick;
+  const aiProb = mlPredictions?.["1x2"]?.pick_probability;
+  const formatPick = (p) => {
+    if (!p) return null;
+    if (p === 'HOME_WIN') return match.homeName?.split(' ')[0] || 'HOME';
+    if (p === 'AWAY_WIN') return match.awayName?.split(' ')[0] || 'AWAY';
+    return p;
+  };
+
   return (
     <div className={`zoka-motd-card ${isExpanded ? 'expanded' : ''}`}>
       <button className="zoka-motd-header" onClick={() => setIsExpanded(!isExpanded)}>
@@ -250,6 +261,18 @@ const MatchOfTheDayCard = memo(({ match }) => {
               <span className="font-bold text-sm text-center leading-tight truncate max-w-full" style={{ color: 'var(--text-primary)' }}>{match.awayName}</span>
             </div>
           </div>
+
+          {/* ★ NEW: Zoka AI Smart Pick Badge */}
+          {aiPick && (
+            <div className="flex-center justify-between gap-8" style={{ background: 'rgba(var(--accent-rgb), 0.05)', border: '1px solid rgba(var(--accent-rgb), 0.2)', padding: '8px 12px', borderRadius: '8px' }}>
+              <div className="flex-center gap-4 text-xs font-bold uppercase" style={{ color: 'var(--accent)' }}>
+                <Zap size={12} fill="currentColor" /> Zoka AI Pick
+              </div>
+              <div className="text-sm font-extrabold" style={{ color: 'var(--text-primary)' }}>
+                {formatPick(aiPick)} ({aiProb}%)
+              </div>
+            </div>
+          )}
 
           <div className="flex-col gap-8">
             <div className="text-muted text-xs font-bold uppercase flex-center gap-6">
@@ -502,7 +525,6 @@ export default function Fixtures() {
     return list; 
   }, [allFixtures, compFilter, ui.showLiveOnly, searchQ, timeFilter]);
 
-  // SEO Schema
   const itemListSchema = useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -685,7 +707,6 @@ export default function Fixtures() {
           </div>
         </div>
 
-        {/* ★ NEW: Added 'predictions' to the tab list */}
         <TabBar tabs={['fixtures', 'predictions', 'favourites', 'standings', 'teams']} activeTab={tab} onTabChange={setTab} />
 
         <div className="zoka-search-static">
@@ -726,7 +747,6 @@ export default function Fixtures() {
                       <span className="zoka-ai-vs">VS</span>
                       <span className="zoka-ai-team">{m.awayName}</span>
                     </div>
-                    {/* FIX: Removed * 100 because probabilities are already 0-100 */}
                     <div className="zoka-ai-probbar">
                       <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%`, background: 'var(--primary)' }} />
                       <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%`, background: 'var(--text-muted)' }} />
@@ -739,7 +759,6 @@ export default function Fixtures() {
                     </div>
                   </Link>
                 ))}
-                {/* Button to switch to the full predictions tab */}
                 <button className="zoka-show-more" onClick={() => setTab('predictions')}>
                   <Brain size={16} /> View All Predictions ({predictedMatches.length})
                 </button>
@@ -865,9 +884,17 @@ export default function Fixtures() {
                   </div>
                   
                   {/* O/U & BTTS Quick Stats */}
-                  <div className="flex justify-between mt-8 text-xs text-muted" style={{ borderTop: '1px solid var(--border)', paddingTop: '8px' }}>
-                    <span>O/U 2.5: <strong style={{color: 'var(--text-primary)'}}>{m.mlPredictions["ou_2_5"]?.pick || '-'}</strong> ({m.mlPredictions["ou_2_5"]?.pick_probability ? m.mlPredictions["ou_2_5"].pick_probability.toFixed(0) : 0}%)</span>
-                    <span>BTTS: <strong style={{color: 'var(--text-primary)'}}>{m.mlPredictions["btts"]?.pick || '-'}</strong> ({m.mlPredictions["btts"]?.pick_probability ? m.mlPredictions["btts"].pick_probability.toFixed(0) : 0}%)</span>
+                  <div className="zoka-ai-extras">
+                    <div className="zoka-ai-stat">
+                      <span className="lbl">O/U 2.5</span>
+                      <span className="val">{m.mlPredictions["ou_2_5"]?.pick || '-'}</span>
+                      <span className="prob">{m.mlPredictions["ou_2_5"]?.pick_probability ? m.mlPredictions["ou_2_5"].pick_probability.toFixed(0) : 0}%</span>
+                    </div>
+                    <div className="zoka-ai-stat">
+                      <span className="lbl">BTTS</span>
+                      <span className="val">{m.mlPredictions["btts"]?.pick || '-'}</span>
+                      <span className="prob">{m.mlPredictions["btts"]?.pick_probability ? m.mlPredictions["btts"].pick_probability.toFixed(0) : 0}%</span>
+                    </div>
                   </div>
                 </Link>
               ))

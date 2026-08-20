@@ -1,5 +1,5 @@
 import React from 'react';
-import { Brain, TrendingUp, BarChart2, Swords, Shield, Zap, Target, Activity, Loader } from 'lucide-react';
+import { Brain, TrendingUp, Swords, Zap, Activity, Loader } from 'lucide-react';
 
 const FormGuide = ({ form }) => {
   if (!form || form.length === 0) return <span className="text-muted text-sm">No recent form data</span>;
@@ -18,16 +18,18 @@ const FormGuide = ({ form }) => {
 };
 
 // Helper component for probability bars
-const ProbBar = ({ label, homeProb, drawProb, awayProb }) => (
-  <div className="flex-col gap-8 mt-8">
-    <div className="text-muted text-xs font-bold uppercase">{label}</div>
-    <div className="flex h-8 rounded-md overflow-hidden bg-elevated" role="progressbar">
-      {homeProb > 0 && <div style={{ width: `${homeProb}%`, background: 'var(--primary)' }} title={`Home ${homeProb}%`} />}
-      {drawProb > 0 && <div style={{ width: `${drawProb}%`, background: 'var(--text-muted)' }} title={`Draw ${drawProb}%`} />}
-      {awayProb > 0 && <div style={{ width: `${awayProb}%`, background: 'var(--danger)' }} title={`Away ${awayProb}%`} />}
+const ProbBar = ({ label, homeProb, drawProb, awayProb }) => {
+  return (
+    <div className="flex-col gap-8 mt-8">
+      <div className="text-muted text-xs font-bold uppercase">{label}</div>
+      <div className="flex h-8 rounded-md overflow-hidden bg-elevated" role="progressbar">
+        {homeProb > 0 && <div style={{ width: `${homeProb}%`, background: 'var(--primary)' }} title={`Home ${homeProb}%`} />}
+        {drawProb > 0 && <div style={{ width: `${drawProb}%`, background: 'var(--text-muted)' }} title={`Draw ${drawProb}%`} />}
+        {awayProb > 0 && <div style={{ width: `${awayProb}%`, background: 'var(--danger)' }} title={`Away ${awayProb}%`} />}
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default function MatchIntelligence({ data, homeName, awayName, mlPredictions }) {
   const { home, away, h2h } = data || {};
@@ -36,6 +38,12 @@ export default function MatchIntelligence({ data, homeName, awayName, mlPredicti
   const p1X2 = mlPredictions?.["1x2"]?.probabilities;
   const pOU = mlPredictions?.["ou_2_5"]?.probabilities;
   const pBTTS = mlPredictions?.["btts"]?.probabilities;
+
+  // Pre-format strings to avoid complex inline ternaries in JSX
+  const overVal = pOU?.OVER ? Number(pOU.OVER).toFixed(1) + '%' : '-';
+  const underVal = pOU?.UNDER ? Number(pOU.UNDER).toFixed(1) + '%' : '-';
+  const yesVal = pBTTS?.YES ? Number(pBTTS.YES).toFixed(1) + '%' : '-';
+  const noVal = pBTTS?.NO ? Number(pBTTS.NO).toFixed(1) + '%' : '-';
 
   const totalElo = (home?.elo || 1500) + (away?.elo || 1500);
   const homeWinProb = totalElo > 0 ? Math.round(((home?.elo || 1500) / totalElo) * 100) : 50;
@@ -69,8 +77,8 @@ export default function MatchIntelligence({ data, homeName, awayName, mlPredicti
               <div className="glass-card p-12 flex-col gap-4">
                 <div className="text-muted text-xs font-bold uppercase">Over/Under 2.5</div>
                 <div className="flex-between text-sm font-bold">
-                  <span className="text-primary">Over: {pOU.OVER ? pOU.OVER.toFixed(1) : '-'}%</span>
-                  <span className="text-danger">Under: {pOU.UNDER ? pOU.UNDER.toFixed(1) : '-'}%</span>
+                  <span className="text-primary">Over: {overVal}</span>
+                  <span className="text-danger">Under: {underVal}</span>
                 </div>
               </div>
             )}
@@ -78,8 +86,8 @@ export default function MatchIntelligence({ data, homeName, awayName, mlPredicti
               <div className="glass-card p-12 flex-col gap-4">
                 <div className="text-muted text-xs font-bold uppercase">BTTS</div>
                 <div className="flex-between text-sm font-bold">
-                  <span className="text-success">Yes: {pBTTS.YES ? pBTTS.YES.toFixed(1) : '-'}%</span>
-                  <span className="text-muted">No: {pBTTS.NO ? pBTTS.NO.toFixed(1) : '-'}%</span>
+                  <span className="text-success">Yes: {yesVal}</span>
+                  <span className="text-muted">No: {noVal}</span>
                 </div>
               </div>
             )}
