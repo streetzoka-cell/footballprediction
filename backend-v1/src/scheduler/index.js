@@ -1,4 +1,5 @@
-﻿const schedulerEngine = require('./SchedulerEngine');
+﻿// backend-v1/src/scheduler/index.js
+const schedulerEngine = require('./SchedulerEngine');
 const liveJob = require('./jobs/liveJob');
 const todayFixturesJob = require('./jobs/todayFixturesJob');
 const upcomingFixturesJob = require('./jobs/upcomingFixturesJob');
@@ -8,6 +9,8 @@ const userPredictionSyncJob = require('./jobs/userPredictionSyncJob');
 const leaderboardJob = require('./jobs/leaderboardJob');
 const statsJob = require('./jobs/statsJob'); 
 const predictionJob = require('./jobs/predictionJob'); // ★ NEW ML JOB
+const MasterResultsJob = require('./jobs/MasterResultsJob'); // ★ NEW MASTER SYNC
+const BackfillResultsJob = require('./jobs/BackfillResultsJob'); // ★ NEW 14-DAY BACKFILL
 
 const { processQueue } = require('../services/QueueService');
 const internetMonitor = require('../services/InternetMonitor');
@@ -19,6 +22,8 @@ const CRON = {
   FINISHED_FIXTURES: '0 */5 * * *', 
   STANDINGS: '0 */6 * * *',
   PREDICTIONS: '0 4 * * *', // ★ NEW: Run ML generator at 4:00 AM UTC daily
+  MASTER_RESULTS: '*/45 * * * *', // ★ NEW: Run master results sync every 45 mins
+  BACKFILL_RESULTS: '50 23 * * *', // ★ NEW: Run 14-day backfill at 23:50 UTC (10 mins before reset)
 };
 
 const USER_PREDICTION_SYNC_CHECK_MS = parseInt(
@@ -36,6 +41,12 @@ function startScheduler() {
   
   // ★ REGISTER ML PREDICTION JOB
   schedulerEngine.schedule('MLPredictions', CRON.PREDICTIONS, predictionJob.execute);
+
+  // ★ REGISTER MASTER RESULTS SYNC JOB
+  schedulerEngine.schedule('MasterResultsSync', CRON.MASTER_RESULTS, MasterResultsJob.execute);
+
+  // ★ REGISTER 14-DAY BACKFILL JOB
+  schedulerEngine.schedule('BackfillResultsJob', CRON.BACKFILL_RESULTS, BackfillResultsJob.execute);
 
   schedulerEngine.schedule('LeaderboardJob', leaderboardJob.schedule, leaderboardJob.execute);
   schedulerEngine.schedule('StatsJob', statsJob.schedule, statsJob.execute);
@@ -71,6 +82,9 @@ function startScheduler() {
       await leaderboardJob.execute(); 
       await statsJob.execute(); 
       
+      // ★ RUN ON BOOT so we don't have to wait for the 45-min cron to get accurate scores
+      await MasterResultsJob.execute(); 
+      
       // ★ RUN ON BOOT so we don't have to wait until 4 AM for the first batch
       await predictionJob.execute(); 
       
@@ -89,6 +103,9 @@ function startScheduler() {
       await liveJob.execute();
       await leaderboardJob.execute(); 
       await statsJob.execute(); 
+      
+      // ★ RUN ON INTERNET RESTORE to immediately fetch missing scores after downtime
+      await MasterResultsJob.execute();
       
       // ★ RUN ON INTERNET RESTORE in case we missed the 4 AM cron during downtime
       await predictionJob.execute();

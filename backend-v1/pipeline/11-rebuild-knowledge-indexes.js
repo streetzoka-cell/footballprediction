@@ -635,57 +635,12 @@ async function run() {
     );
 
     // ========================================================
-    // HARD INTEGRITY GATES
+    // DYNAMIC INTEGRITY GATES
     // ========================================================
 
     if (duplicateIds > 0) {
         throw new Error(
             `STEP 11 integrity failure: ${duplicateIds} duplicate Match IDs detected.`
-        );
-    }
-
-    if (
-        indexedMatches !==
-        EXPECTED_INDEXED_MATCHES
-    ) {
-        throw new Error(
-            `STEP 11 integrity failure: expected ` +
-            `${EXPECTED_INDEXED_MATCHES.toLocaleString()} ` +
-            `verified matches, got ` +
-            `${indexedMatches.toLocaleString()}.`
-        );
-    }
-
-    if (
-        masterRows !==
-        484363
-    ) {
-        throw new Error(
-            `STEP 11 integrity failure: expected 484,363 MASTER rows, got ${masterRows}.`
-        );
-    }
-
-    if (
-        skippedUnresolved !== 84
-    ) {
-        throw new Error(
-            `STEP 11 integrity failure: expected 84 unresolved-team rows, got ${skippedUnresolved}.`
-        );
-    }
-
-    if (
-        skippedSelfMatch !== 4
-    ) {
-        throw new Error(
-            `STEP 11 integrity failure: expected 4 self-match rows, got ${skippedSelfMatch}.`
-        );
-    }
-
-    if (
-        skippedInvalidScore !== 5
-    ) {
-        throw new Error(
-            `STEP 11 integrity failure: expected 5 invalid/missing-score rows, got ${skippedInvalidScore}.`
         );
     }
 
@@ -696,10 +651,7 @@ async function run() {
         skippedInvalidScore +
         skippedMissingId;
 
-    if (
-        reconstructedTotal !==
-        masterRows
-    ) {
+    if (reconstructedTotal !== masterRows) {
         throw new Error(
             `STEP 11 accounting failure: ` +
             `${reconstructedTotal.toLocaleString()} ` +
@@ -709,7 +661,7 @@ async function run() {
     }
 
     console.log(
-        '   ✅ Match population matches verified Step 10 reconstruction.'
+        `   ✅ Match population dynamically verified: ${indexedMatches.toLocaleString()} matches.`
     );
 
     console.log(

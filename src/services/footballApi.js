@@ -184,5 +184,10 @@ export const footballApi = {
   getDailyLeaderboard: (date) => monitorApiCall(`GET /leaderboard/daily/${date}`, () => fetchJSON(`${API_BASE}/leaderboard/daily/${encodeURIComponent(date)}`)),
   getLeaderboardSummary: (period) => monitorApiCall(`GET /leaderboard/summary/${period}`, () => fetchJSON(`${API_BASE}/leaderboard/summary/${encodeURIComponent(period)}`)),
 
+  
   adminResolveMatch: (payload) => monitorApiCall('POST /admin/leaderboards/resolve', () => authFetchJSON(`${API_BASE}/admin/leaderboards/resolve`, { method: 'POST', body: JSON.stringify(payload) })),
+
+    adminBackfillResults: () => monitorApiCall('POST /admin/leaderboards/rebuild/backfill-results', () => 
+    authFetchJSON(`${API_BASE}/leaderboards/rebuild/backfill-results`, { method: 'POST' })
+  ),
 };

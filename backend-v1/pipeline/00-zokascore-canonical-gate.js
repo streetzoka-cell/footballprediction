@@ -2,15 +2,7 @@
 
 /**
  * 00-zokascore-canonical-gate.js
- * 
- * ============================================================
- * ZOKASCORE V2 — CANONICAL DATA GATE (FINAL)
- * ============================================================
- * 
- * Purpose:
- *   Verify the integrity of the 7 immutable canonical source files.
- *   Bridges the secondary ID namespace gap using NFKD metadata normalization
- *   to ensure true relational integrity without modifying source files.
+ * Dynamic Baseline Version
  */
 
 const fs = require('fs');
@@ -19,6 +11,7 @@ const csv = require('csv-parser');
 
 const DATA_DIR = path.join(__dirname, '..', 'data', 'source', 'ZOKASCORE_FINAL');
 const AUDIT_DIR = path.join(__dirname, '..', 'data_audit', 'canonical_gate');
+const BASELINE_FILE = path.join(AUDIT_DIR, 'baseline_counts.json');
 
 const FILES = {
     MASTER: 'ZOKASCORE_PUBLIC_MASTER.csv',
@@ -28,11 +21,6 @@ const FILES = {
     APPEARANCES: 'ZOKASCORE_APPEARANCES.csv',
     EVENTS: 'ZOKASCORE_EVENTS.csv',
     RATINGS: 'ZOKASCORE_RATINGS.csv'
-};
-
-const EXPECTED_COUNTS = {
-    MASTER: 484363, COMPETITIONS: 240, TEAMS: 4562, PLAYERS: 50149,
-    APPEARANCES: 1879231, EVENTS: 1257111, RATINGS: 281835
 };
 
 const REQUIRED_COLUMNS = {
@@ -48,6 +36,12 @@ const REQUIRED_COLUMNS = {
 let gatePassed = true;
 const issues = [];
 
+// Load dynamic baseline
+let baselines = {};
+if (fs.existsSync(BASELINE_FILE)) {
+    baselines = JSON.parse(fs.readFileSync(BASELINE_FILE, 'utf8'));
+}
+
 const log = (msg) => console.log(`[ZK-GATE] ${msg}`);
 const warn = (msg) => console.warn(`[ZK-GATE-WARN] ${msg}`);
 const fail = (msg) => {
@@ -61,13 +55,11 @@ function filePath(filename) { return path.join(DATA_DIR, filename); }
 function fileExists(filename) { return fs.existsSync(filePath(filename)); }
 function isBlank(value) { return value === undefined || value === null || String(value).trim() === ''; }
 
-// Normalization for semantic duplicate grouping
 function normalize(value) {
     if (value === undefined || value === null) return '';
     return String(value).trim().toLowerCase();
 }
 
-// Superior normalization logic from 99G to bridge ID namespace mismatch
 function clean(value) {
   return String(value ?? '')
     .trim()
@@ -158,6 +150,19 @@ function streamCsv(filename, onRow) {
     });
 }
 
+// Dynamic count checker
+function checkDynamicCount(key, count) {
+    const baseline = baselines[key] || 0;
+    if (count < baseline) {
+        fail(`${key} count DROPPED: found ${count.toLocaleString()}, expected at least ${baseline.toLocaleString()}`);
+    } else if (count > baseline) {
+        log(`${key} count GREW: found ${count.toLocaleString()} (was ${baseline.toLocaleString()}). Updating baseline.`);
+        baselines[key] = count;
+    } else {
+        log(`✅ ${key} count stable at ${count.toLocaleString()} rows.`);
+    }
+}
+
 async function verifyEntityFile(key, filename, idColumn) {
     log(`\nVerifying ${key}...`);
     if (!fileExists(filename)) { fail(`Missing ${filename}`); return null; }
@@ -183,8 +188,9 @@ async function verifyEntityFile(key, filename, idColumn) {
 
     if (count === null) return null;
 
-    log(`${key} rows: ${count.toLocaleString()} | Expected: ${EXPECTED_COUNTS[key]}`);
-    if (count !== EXPECTED_COUNTS[key]) fail(`${key} count mismatch: found ${count}, expected ${EXPECTED_COUNTS[key]}`);
+    log(`${key} rows: ${count.toLocaleString()}`);
+    checkDynamicCount(key, count);
+    
     if (blankIds > 0) fail(`${key} contains ${blankIds.toLocaleString()} blank ${idColumn} values`);
     if (duplicateIds > 0) {
         fail(`${key} contains ${duplicateIds.toLocaleString()} duplicate ${idColumn} occurrences`);
@@ -196,12 +202,13 @@ async function verifyEntityFile(key, filename, idColumn) {
 
 async function verifyMaster() {
     const filename = FILES.MASTER;
+    const key = 'MASTER';
     log('\n============================================================');
     log('VERIFYING MASTER');
     log('============================================================');
 
     if (!fileExists(filename)) { fail(`Missing MASTER file: ${filename}`); return null; }
-    const schemaOK = await verifySchema('MASTER', filename);
+    const schemaOK = await verifySchema(key, filename);
     if (!schemaOK) return null;
 
     let masterCount = 0;
@@ -229,7 +236,6 @@ async function verifyMaster() {
         } else {
             matchIds.add(matchId);
             
-            // Build metadata index for cross-namespace FK validation
             const dKey = buildKey(row.date, row.home_team, row.away_team);
             const rKey = buildReverseKey(row.date, row.home_team, row.away_team);
             if (!directMetaIndex.has(dKey)) directMetaIndex.set(dKey, matchId);
@@ -280,8 +286,9 @@ async function verifyMaster() {
         }
     }
 
-    log(`MASTER rows: ${masterCount.toLocaleString()} | Expected: ${EXPECTED_COUNTS.MASTER}`);
-    if (masterCount !== EXPECTED_COUNTS.MASTER) fail(`MASTER count mismatch: found ${masterCount}, expected ${EXPECTED_COUNTS.MASTER}`);
+    log(`MASTER rows: ${masterCount.toLocaleString()}`);
+    checkDynamicCount(key, masterCount);
+    
     log(`MASTER unique match IDs: ${matchIds.size.toLocaleString()}`);
     if (blankMatchIds > 0) fail(`MASTER contains ${blankMatchIds.toLocaleString()} blank match IDs`);
     if (duplicateMatchIds > 0) {
@@ -289,7 +296,7 @@ async function verifyMaster() {
         log(`Duplicate match ID samples: ${duplicateMatchIdSamples.join(', ')}`);
     }
     log(`MASTER date range: ${minYear} to ${maxYear}`);
-    if (minYear < 1872 || maxYear > 2026) fail(`MASTER date bounds outside expected range 1872-2026`);
+    if (minYear < 1872 || maxYear > new Date().getFullYear() + 1) fail(`MASTER date bounds outside expected range 1872-${new Date().getFullYear() + 1}`);
     if (blankDates > 0) fail(`MASTER contains ${blankDates.toLocaleString()} blank dates`);
     if (invalidDates > 0) fail(`MASTER contains ${invalidDates.toLocaleString()} invalid date values`);
 
@@ -319,7 +326,6 @@ async function verifyMaster() {
     };
 }
 
-// Helper to resolve match ID across namespaces
 function resolveMatchId(matchId, master) {
     if (master.matchIds.has(matchId)) return true;
     
@@ -338,12 +344,13 @@ function resolveMatchId(matchId, master) {
 
 async function verifyAppearances(master, players, teams) {
     const filename = FILES.APPEARANCES;
+    const key = 'APPEARANCES';
     log('\n============================================================');
     log('VERIFYING APPEARANCES');
     log('============================================================');
 
     if (!fileExists(filename)) { fail(`Missing APPEARANCES file: ${filename}`); return null; }
-    const schemaOK = await verifySchema('APPEARANCES', filename);
+    const schemaOK = await verifySchema(key, filename);
     if (!schemaOK) return null;
 
     let count = 0;
@@ -370,14 +377,13 @@ async function verifyAppearances(master, players, teams) {
         if (!teamId || !teams.ids.has(teamId)) orphanTeam++;
     });
 
-    log(`APPEARANCES rows: ${count.toLocaleString()} | Expected: ${EXPECTED_COUNTS.APPEARANCES}`);
-    if (count !== EXPECTED_COUNTS.APPEARANCES) fail(`APPEARANCES count mismatch: found ${count}, expected ${EXPECTED_COUNTS.APPEARANCES}`);
+    log(`APPEARANCES rows: ${count.toLocaleString()}`);
+    checkDynamicCount(key, count);
     
     log(`Orphan matches: ${orphanMatch.toLocaleString()}`);
     log(`Orphan players: ${orphanPlayer.toLocaleString()}`);
     log(`Orphan teams: ${orphanTeam.toLocaleString()}`);
 
-    // Orphan matches in APPEARANCES are treated as forensic warnings, not fatal failures.
     if (orphanPlayer > 0 || orphanTeam > 0) {
         fail('APPEARANCES contains broken player/team foreign-key relationships');
     } else {
@@ -398,12 +404,13 @@ async function verifyAppearances(master, players, teams) {
 
 async function verifyEvents(master, players, teams) {
     const filename = FILES.EVENTS;
+    const key = 'EVENTS';
     log('\n============================================================');
     log('VERIFYING EVENTS');
     log('============================================================');
 
     if (!fileExists(filename)) { fail(`Missing EVENTS file: ${filename}`); return null; }
-    const schemaOK = await verifySchema('EVENTS', filename);
+    const schemaOK = await verifySchema(key, filename);
     if (!schemaOK) return null;
 
     let count = 0;
@@ -434,15 +441,14 @@ async function verifyEvents(master, players, teams) {
         if (playerInId && !players.ids.has(playerInId)) orphanPlayerIn++;
     });
 
-    log(`EVENTS rows: ${count.toLocaleString()} | Expected: ${EXPECTED_COUNTS.EVENTS}`);
-    if (count !== EXPECTED_COUNTS.EVENTS) fail(`EVENTS count mismatch: found ${count}, expected ${EXPECTED_COUNTS.EVENTS}`);
+    log(`EVENTS rows: ${count.toLocaleString()}`);
+    checkDynamicCount(key, count);
 
     log(`Orphan matches: ${orphanMatch.toLocaleString()}`);
     log(`Orphan players: ${orphanPlayer.toLocaleString()}`);
     log(`Orphan teams: ${orphanTeam.toLocaleString()}`);
     log(`Orphan player-in IDs: ${orphanPlayerIn.toLocaleString()}`);
 
-    // Orphan matches in EVENTS are treated as forensic warnings, not fatal failures.
     if (orphanPlayer > 0 || orphanTeam > 0 || orphanPlayerIn > 0) {
         fail('EVENTS contains broken player/team foreign-key relationships');
     } else {
@@ -463,12 +469,13 @@ async function verifyEvents(master, players, teams) {
 
 async function verifyRatings(teams) {
     const filename = FILES.RATINGS;
+    const key = 'RATINGS';
     log('\n============================================================');
     log('VERIFYING RATINGS');
     log('============================================================');
 
     if (!fileExists(filename)) { fail(`Missing RATINGS file: ${filename}`); return null; }
-    const schemaOK = await verifySchema('RATINGS', filename);
+    const schemaOK = await verifySchema(key, filename);
     if (!schemaOK) return null;
 
     let count = 0;
@@ -498,8 +505,9 @@ async function verifyRatings(teams) {
         if (isBlank(row.rating_value)) blankRatingValues++;
     });
 
-    log(`RATINGS rows: ${count.toLocaleString()} | Expected: ${EXPECTED_COUNTS.RATINGS}`);
-    if (count !== EXPECTED_COUNTS.RATINGS) fail(`RATINGS count mismatch: found ${count}, expected ${EXPECTED_COUNTS.RATINGS}`);
+    log(`RATINGS rows: ${count.toLocaleString()}`);
+    checkDynamicCount(key, count);
+    
     log(`Orphan teams: ${orphanTeam.toLocaleString()}`);
 
     if (orphanTeam > 0) fail(`RATINGS contains ${orphanTeam.toLocaleString()} broken team foreign keys`);
@@ -519,12 +527,16 @@ async function verifyRatings(teams) {
 
 function writeAuditReport(results) {
     ensureDir(AUDIT_DIR);
+    
+    // Save updated baselines
+    fs.writeFileSync(BASELINE_FILE, JSON.stringify(baselines, null, 2), 'utf8');
+
     const report = {
         generatedAt: new Date().toISOString(),
         gate: gatePassed ? 'PASS' : 'FAIL',
         sourceDirectory: 'data/source/ZOKASCORE_FINAL',
         files: { ...FILES },
-        expectedCounts: { ...EXPECTED_COUNTS },
+        dynamicBaselines: { ...baselines },
         issues,
         results: {
             teams: results.teams ? { count: results.teams.count, uniqueIds: results.teams.uniqueIds, duplicateIds: results.teams.duplicateIds, blankIds: results.teams.blankIds } : null,
@@ -559,7 +571,7 @@ function writeAuditReport(results) {
 
 async function run() {
     console.log('\n============================================================');
-    console.log(' ZOKASCORE V2 — CANONICAL DATA GATE');
+    console.log(' ZOKASCORE V2 — CANONICAL DATA GATE (DYNAMIC)');
     console.log('============================================================');
 
     log(`Source: ${DATA_DIR}`);

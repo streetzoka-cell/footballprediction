@@ -18,8 +18,8 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
   const zT = pr.length, res = Math.max(zT - zP, 1);
   const zAcc = zT > 0 ? Math.round(((zE + zR) / res) * 100) : 0;
 
-  // ★ NEW: State for AI Feature Generation
   const [aiRunning, setAiRunning] = useState(false);
+  const [backfillRunning, setBackfillRunning] = useState(false);
 
   const handleRunAI = async () => {
     setAiRunning(true);
@@ -29,8 +29,19 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
     } catch (e) {
       toast('Failed to start AI job: ' + (e.friendlyMessage || e.message), 'er');
     } finally {
-      // Allow UI to reset after a short delay, even though script runs in background
       setTimeout(() => setAiRunning(false), 2000);
+    }
+  };
+
+  const handleBackfill = async () => {
+    setBackfillRunning(true);
+    try {
+      await footballApi.adminBackfillResults();
+      toast('14-day backfill started! This uses 14 API calls and runs in background.', 'ok');
+    } catch (e) {
+      toast('Failed to start backfill: ' + (e.friendlyMessage || e.message), 'er');
+    } finally {
+      setTimeout(() => setBackfillRunning(false), 2000);
     }
   };
 
@@ -51,6 +62,16 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
             <><Cpu size={14} /> Update AI Features</>
           )}
         </button>
+
+        {/* ★ NEW: 14-DAY BACKFILL BUTTON */}
+        <button className="btn btn-secondary w-full flex-center gap-8 mt-8" onClick={handleBackfill} disabled={backfillRunning}>
+          {backfillRunning ? (
+            <><Loader2 size={14} className="anim-spin" /> Backfilling 14 Days...</>
+          ) : (
+            <><RotateCcw size={14} /> Force 14-Day Results Backfill</>
+          )}
+        </button>
+
         <div className="grid gap-8 mt-8" style={{ gridTemplateColumns: '1fr 1fr' }}>
           <div className="glass-card p-8 flex-col items-center gap-4 text-center">
             <TrendingUp size={14} className="text-primary" />

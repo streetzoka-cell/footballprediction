@@ -8,6 +8,7 @@ const LeaderboardEngine = require('../../../services/LeaderboardEngine');
 const RankingEngine = require('../../../services/RankingEngine');
 const finishedFixturesJob = require('../../../scheduler/jobs/finishedFixturesJob');
 const logger = require('../../../utils/logger');
+const BackfillResultsJob = require('../../../scheduler/jobs/BackfillResultsJob');
 
 router.use(adminAuth);
 
@@ -39,6 +40,30 @@ router.post('/resolve', async (req, res, next) => {
     next(err);
   }
 });
+
+
+/**
+ * @route POST /api/v1/admin/leaderboards/backfill-results
+ * @desc Manually trigger 14-day results backfill
+ */
+router.post('/backfill-results', async (req, res, next) => {
+  try {
+    // Respond immediately so the frontend doesn't timeout
+    res.status(202).json({
+      success: true,
+      message: '14-day backfill started in background. Check server logs for progress.'
+    });
+
+    // Run the job asynchronously
+    BackfillResultsJob.execute().catch(err => {
+      logger.error(`[ADMIN] Manual backfill failed: ${err.message}`);
+    });
+
+  } catch (err) {
+    next(err);
+  }
+});
+
 
 /**
  * Manual rebuild controller
