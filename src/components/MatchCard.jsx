@@ -146,7 +146,7 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
             <div 
               className="flex-center gap-4" 
               style={{ 
-                fontSize: '10px', 
+                fontSize: '10.1px', 
                 fontWeight: 700, 
                 color: 'var(--accent)', 
                 background: 'rgba(var(--accent-rgb), 0.1)', 
