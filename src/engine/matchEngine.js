@@ -6,12 +6,12 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   const display = raw.display || {};
   const time = raw.time || {};
-  // ★ FIX: Prioritize root scores, fallback to display scores
+  // ★ FIX: Fallback to display.score if root homeScore/awayScore is 0 but display has a score
   const score = {
-    home: raw.homeScore ?? display.score?.home ?? 0,
-    away: raw.awayScore ?? display.score?.away ?? 0
+    home: raw.homeScore || display.score?.home || 0,
+    away: raw.awayScore || display.score?.away || 0
   };
-
+  
   const homeName = raw.homeName || raw.homeTeam?.name || 'TBD';
   const awayName = raw.awayName || raw.awayTeam?.name || 'TBD';
   const homeLogo = raw.homeLogo || raw.homeTeam?.crest || null;
@@ -227,13 +227,18 @@ export function applySmartMinute(m, now = Date.now()) {
   const apiMinute = m.minute || 0;
   let smartMinute = apiMinute;
 
+  // ★ FIX: If match is live but API says minute 0, force it to 1 to avoid showing 0'
+  if (m.isLive && smartMinute < 1) {
+    smartMinute = 1;
+  }
+
   if (m.updatedAt) {
     const lastUpdateTime = new Date(m.updatedAt).getTime();
     if (!isNaN(lastUpdateTime) && lastUpdateTime > 0) {
       const elapsedSinceUpdateMs = now - lastUpdateTime;
       if (elapsedSinceUpdateMs > 0 && elapsedSinceUpdateMs < 120000) {
         const elapsedMins = Math.floor(elapsedSinceUpdateMs / 60000);
-        smartMinute = apiMinute + elapsedMins;
+        smartMinute = Math.max(smartMinute, smartMinute + elapsedMins);
       }
     }
   }
@@ -241,6 +246,9 @@ export function applySmartMinute(m, now = Date.now()) {
   if (status === '1H') smartMinute = Math.min(smartMinute, 50);
   else if (status === '2H' || status === 'LIVE') smartMinute = Math.min(smartMinute, 95);
   else if (status === 'ET') smartMinute = Math.min(smartMinute, 125);
+
+  // Ensure it's never 0 if live
+  if (m.isLive && smartMinute < 1) smartMinute = 1;
 
   const newProgress = Math.min((smartMinute / 90) * 100, 100);
   const newLabel = `${smartMinute}'`;
@@ -259,6 +267,7 @@ export function applySmartMinute(m, now = Date.now()) {
     timelineProgress: newProgress,
   };
 }
+
 
 export const extractTournamentStage = (raw) => null;
 export const extractMatchDate = (m) => m.dateStr;
