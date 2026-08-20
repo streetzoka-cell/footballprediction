@@ -1,4 +1,4 @@
-﻿// backend-v1/src/engine/matchEngine.js
+﻿// frontend/src/engine/matchEngine.js
 import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
@@ -6,7 +6,11 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
 
   const display = raw.display || {};
   const time = raw.time || {};
-  const score = display.score || {};
+  // ★ FIX: Prioritize root scores, fallback to display scores
+  const score = {
+    home: raw.homeScore ?? display.score?.home ?? 0,
+    away: raw.awayScore ?? display.score?.away ?? 0
+  };
 
   const homeName = raw.homeName || raw.homeTeam?.name || 'TBD';
   const awayName = raw.awayName || raw.awayTeam?.name || 'TBD';
@@ -20,6 +24,14 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
   let status = raw.status || display.status;
   let minute = display.minute || raw.minute || 0;
   let isHidden = false;
+
+  // ★ HARDENED FT LOGIC: Trust the root API status over a malformed display object
+  const finishedStatuses = ['FT', 'AET', 'PEN', 'AW', 'WO'];
+  if (finishedStatuses.includes(status)) {
+    isFinished = true;
+    isLive = false;
+    if (minute < 90) minute = 90;
+  }
 
   let timestamp = raw.timestamp;
   if (!timestamp) {
@@ -166,9 +178,7 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now()) {
     stats,
     hasRealStats,
     odds, 
-    // ★ FIX 1: Carry over ML predictions injected by Python Step 50
     mlPredictions: raw.prediction || raw.mlPredictions || null,
-    // ★ FIX 2: Carry over injected Intelligence (Elo, Form, H2H) from fixture file!
     intelData: raw.intelData || null,
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },

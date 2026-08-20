@@ -1,5 +1,6 @@
-﻿import { useQuery, keepPreviousData } from '@tanstack/react-query';
-import { useMemo } from 'react'; // ★ NEW: Added useMemo
+﻿// frontend/src/hooks/useFixtures.js
+import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useMemo, useState, useEffect } from 'react';
 import { footballApi } from '../services/footballApi';
 import { normalizeMatch } from '../engine/matchEngine';
 import { todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
@@ -11,6 +12,16 @@ const cleanName = (str) => {
     .replace(/[^a-z0-9]/g, '')
     .trim();
 };
+
+// ★ NEW: 1-second local ticker hook to update match minutes without API polling
+function useNow(intervalMs = 1000) {
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+  return now;
+}
 
 export function useHomeMatches() {
   return useQuery({
@@ -26,7 +37,10 @@ export function useHomeMatches() {
 }
 
 export function useFixtures(dateStr, sport = 'football') {
-  return useQuery({
+  // ★ Tick the clock every second locally!
+  const now = useNow(1000);
+
+  const query = useQuery({
     queryKey: ['fixtures', dateStr, sport],
     queryFn: async () => {
       const [fixRes, liveRes, finRes] = await Promise.all([
@@ -58,6 +72,7 @@ export function useFixtures(dateStr, sport = 'football') {
         return null;
       };
 
+      // Merge raw data only. Do NOT normalize here, so we can normalize every second locally!
       fixtures.forEach(m => map.set(String(m.id), m));
 
       finished.forEach(m => {
@@ -69,7 +84,6 @@ export function useFixtures(dateStr, sport = 'football') {
         }
       });
 
-      // ★ FIX: Ensure live matches only overwrite if they share the same dateStr
       live.forEach(m => {
         const existing = findExisting(m);
         if (existing && existing.dateStr === m.dateStr) {
@@ -80,20 +94,7 @@ export function useFixtures(dateStr, sport = 'football') {
         }
       });
 
-      const now = Date.now();
-      const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
-
-      return Array.from(map.values())
-        .map(m => normalizeMatch(m, true, now))
-        .filter(Boolean)
-        .filter(m => {
-          if (m.isHidden) return false;
-          if (m.timestamp) {
-            const elapsed = now - (m.timestamp * 1000);
-            if (elapsed > HIDE_OLD_MS && !m.isFinished) return false;
-          }
-          return true;
-        });
+      return Array.from(map.values());
     },
     placeholderData: keepPreviousData,
     staleTime: 30 * 1000,
@@ -106,18 +107,36 @@ export function useFixtures(dateStr, sport = 'football') {
       return false;
     }
   });
+
+  // ★ Normalize data locally every second based on `now`
+  const normalizedData = useMemo(() => {
+    if (!query.data) return [];
+    const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
+
+    return query.data
+      .map(m => normalizeMatch(m, true, now))
+      .filter(Boolean)
+      .filter(m => {
+        if (m.isHidden) return false;
+        if (m.timestamp) {
+          const elapsed = now - (m.timestamp * 1000);
+          if (elapsed > HIDE_OLD_MS && !m.isFinished) return false;
+        }
+        return true;
+      });
+  }, [query.data, now]);
+
+  return { ...query, data: normalizedData };
 }
 
 export function useLiveMatches(sport = 'football') {
-  return useQuery({
+  const now = useNow(1000);
+
+  const query = useQuery({
     queryKey: ['liveMatches', sport],
     queryFn: async () => {
       const res = await footballApi.getLive(sport);
-      const now = Date.now();
-      return (res?.data || [])
-        .map((m) => normalizeMatch(m, true, now))
-        .filter(Boolean)
-        .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
+      return res?.data || [];
     },
     refetchInterval: 30000,
     refetchIntervalInBackground: true,
@@ -126,6 +145,15 @@ export function useLiveMatches(sport = 'football') {
     retry: 1,
     refetchOnWindowFocus: true,
   });
+
+  const normalizedData = useMemo(() => {
+    return (query.data || [])
+      .map((m) => normalizeMatch(m, true, now))
+      .filter(Boolean)
+      .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
+  }, [query.data, now]);
+
+  return { ...query, data: normalizedData };
 }
 
 export function useFinishedMatches(dateStr, sport = 'football') {
@@ -207,23 +235,20 @@ export function useFixturesWithPredictions(dateStr, sport = 'football') {
     queryFn: async () => {
       try {
         const res = await footballApi.getDailyPredictions(dateStr);
-        // Create a lookup map: { matchId: predictionData }
         const predMap = {};
         (res?.data || []).forEach(p => {
           predMap[String(p.matchId)] = p.markets;
         });
         return predMap;
       } catch (err) {
-        // If predictions fail, return empty object so fixtures still render
         return {};
       }
     },
-    staleTime: 60 * 60 * 1000, // Predictions are static pre-match, cache for 1 hour
+    staleTime: 60 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,
     retry: 1,
   });
 
-  // Merge predictions into fixtures
   const mergedData = useMemo(() => {
     if (!fixturesQuery.data) return [];
     const preds = predictionsQuery.data || {};

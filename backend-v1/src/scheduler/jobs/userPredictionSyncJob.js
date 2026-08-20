@@ -1,24 +1,28 @@
-// backend-v1/src/scheduler/jobs/MasterResultsJob.js
-const fixtureService = require('../../services/FixtureService');
+// backend-v1/src/scheduler/jobs/userPredictionSyncJob.js
+const UserPredictionStore = require('../../services/UserPredictionStore');
 const logger = require('../../utils/logger');
 
-async function execute() {
+/**
+ * Syncs local WAL (Write-Ahead Log) predictions to Firestore as a backup.
+ */
+async function execute(force = false) {
   try {
-    logger.info('[MasterResultsJob] Running 45-minute master results sync...');
+    logger.info(`[UserPredictionSyncJob] Starting WAL sync to Firestore (Force: ${force})...`);
     
-    // Fetches accurate results for Today and Yesterday directly from API
-    await fixtureService.syncMasterResults(0);
-    await fixtureService.syncMasterResults(-1);
+    const result = await UserPredictionStore.processPendingSync(force);
     
-    return { success: true };
+    if (!result.skipped) {
+      logger.info(`[UserPredictionSyncJob] Completed. Synced=${result.synced || 0}`);
+    }
+    
+    return result;
   } catch (err) {
-    logger.error(`[MasterResultsJob] Failed: ${err.message}`);
-    return { success: false, error: err.message };
+    logger.error(`[UserPredictionSyncJob] Failed: ${err.message}`);
+    throw err;
   }
 }
 
 module.exports = {
   execute,
-  // Run every 45 minutes
-  schedule: '*/45 * * * *'
+  schedule: '0 * * * *' // Runs every hour at minute 0
 };
