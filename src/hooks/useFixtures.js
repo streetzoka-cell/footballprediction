@@ -90,10 +90,21 @@ export function useFixtures(dateStr, sport = 'football') {
         }
       });
 
+      // ★ FIX: live.json is the real-time source of truth. If a match shows
+      // up in THIS fetch cycle's live response, the provider is telling us
+      // it's in progress right now — full stop. Previously, a match that had
+      // been (incorrectly, or prematurely) tagged isFinished by the results
+      // endpoint would permanently block any further live updates, because
+      // of an `if (existing.display?.isFinished && !m.display?.isFinished)
+      // return;` guard here. That let a single bad/early "finished" entry
+      // freeze a match's score and status for the rest of the session, even
+      // while live.json kept reporting it as active (2H, correct score,
+      // ticking minute). A live entry always overrides a "finished" tag from
+      // the results feed now — the results endpoint is authoritative only
+      // for matches that have actually dropped out of live.json.
       live.forEach(m => {
         const existing = findExisting(m);
         if (existing && existing.dateStr === m.dateStr) {
-          if (existing.display?.isFinished && !m.display?.isFinished) return;
           map.set(String(existing.id), { ...existing, ...m, id: existing.id });
         } else if (m.dateStr === dateStr) {
           map.set(String(m.id), m);
