@@ -13,6 +13,12 @@ const cleanName = (str) => {
     .trim();
 };
 
+// ★ How long after a successful fetch we still trust the data as "fresh"
+// enough to let the clock-based FT fallback in matchEngine act on it.
+// Wider than the refetch interval so a single missed poll doesn't count
+// as an outage, but tight enough that a real network drop is caught fast.
+const DATA_FRESHNESS_WINDOW_MS = 3 * 60 * 1000; // 3 minutes
+
 // 1-second local ticker hook to update match minutes without API polling
 function useNow(intervalMs = 1000) {
   const [now, setNow] = useState(Date.now());
@@ -108,26 +114,42 @@ export function useFixtures(dateStr, sport = 'football') {
     }
   });
 
+  // ★ Freshness is about the FETCH, not any single match's fields — the raw
+  // API payload doesn't reliably carry a per-match "last updated" time, so
+  // we derive it from react-query's own bookkeeping: when did we last get
+  // a successful response, and are we currently in an error state.
+  const isDataFresh =
+    !query.isError &&
+    !!query.dataUpdatedAt &&
+    (now - query.dataUpdatedAt) < DATA_FRESHNESS_WINDOW_MS;
+
   // Normalize + tick data locally every second based on `now`
   const normalizedData = useMemo(() => {
     if (!query.data) return [];
     const HIDE_OLD_MS = 24 * 60 * 60 * 1000;
 
     return query.data
-      .map(m => normalizeMatch(m, true, now))
+      .map(m => normalizeMatch(m, true, now, isDataFresh))
       .filter(Boolean)
       .map(m => applySmartMinute(m, now)) // ★ ticks the minute every second, with kickoff-based fallback
       .filter(m => {
         if (m.isHidden) return false;
-        if (m.timestamp) {
+        // ★ Only apply the "too old, hide it" cutoff when data is fresh —
+        // during an outage we don't want matches vanishing from the list
+        // just because the clock ran past a threshold while we were blind.
+        if (m.timestamp && isDataFresh) {
           const elapsed = now - (m.timestamp * 1000);
           if (elapsed > HIDE_OLD_MS && !m.isFinished) return false;
         }
         return true;
       });
-  }, [query.data, now]);
+  }, [query.data, now, isDataFresh]);
 
-  return { ...query, data: normalizedData };
+  return {
+    ...query,
+    data: normalizedData,
+    isLiveDataStale: !isDataFresh,
+  };
 }
 
 export function useLiveMatches(sport = 'football') {
@@ -147,15 +169,24 @@ export function useLiveMatches(sport = 'football') {
     refetchOnWindowFocus: true,
   });
 
+  const isDataFresh =
+    !query.isError &&
+    !!query.dataUpdatedAt &&
+    (now - query.dataUpdatedAt) < DATA_FRESHNESS_WINDOW_MS;
+
   const normalizedData = useMemo(() => {
     return (query.data || [])
-      .map((m) => normalizeMatch(m, true, now))
+      .map((m) => normalizeMatch(m, true, now, isDataFresh))
       .filter(Boolean)
       .map((m) => applySmartMinute(m, now)) // ★ ticks the minute every second, with kickoff-based fallback
       .filter((m) => m.isLive && !m.isFinished && !m.isHidden);
-  }, [query.data, now]);
+  }, [query.data, now, isDataFresh]);
 
-  return { ...query, data: normalizedData };
+  return {
+    ...query,
+    data: normalizedData,
+    isLiveDataStale: !isDataFresh,
+  };
 }
 
 export function useFinishedMatches(dateStr, sport = 'football') {
@@ -163,7 +194,9 @@ export function useFinishedMatches(dateStr, sport = 'football') {
     queryKey: ['results', dateStr, sport],
     queryFn: async () => {
       const res = await footballApi.getFinished(sport, dateStr);
-      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now())).filter(Boolean);
+      // Data straight from the results endpoint is authoritative and not
+      // subject to the live clock-drift problem, so it's always "fresh".
+      return (res?.data || []).map(m => normalizeMatch(m, true, Date.now(), true)).filter(Boolean);
     },
     staleTime: 5 * 60 * 1000,
     gcTime: 1000 * 60 * 60 * 24,

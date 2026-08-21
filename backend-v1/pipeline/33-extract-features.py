@@ -1,5 +1,9 @@
 import os
+import tempfile
+
+import numpy as np
 import pandas as pd
+
 
 # ============================================================
 # ZOKASCORE V2 — STEP 33
@@ -12,21 +16,32 @@ import pandas as pd
 # Output:
 #   data/ml/features_elo.csv
 #
-# Step 33 is a pure projection of the validated Step 32 ELO
-# dataset.
+# CONTRACT:
+#   Step 33 is a PURE projection of the validated Step 32
+#   master_with_elo.csv dataset.
 #
 # It does NOT:
+#   - rebuild historical data
 #   - scan historical JSON
-#   - rebuild team identity
+#   - resolve team identities
 #   - recalculate ELO
-#   - use a separate ELO index
-#   - modify Step 32 output
+#   - use another ELO source
+#   - silently drop malformed rows
+#   - use a hard-coded expected row count
 #
-# Expected population:
-#   484,354
+# Population:
+#   Dynamically inherited from the validated Step 32 source.
+#
+# Every valid Step 32 match must produce exactly one Step 33
+# feature row.
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
 
 SOURCE_FILE = os.path.join(
     BASE_DIR,
@@ -46,11 +61,11 @@ OUTPUT_FILE = os.path.join(
     "features_elo.csv"
 )
 
-EXPECTED_ROWS = 484354
+TEMP_OUTPUT_FILE = OUTPUT_FILE + ".tmp"
 
 
 # ============================================================
-# REQUIRED SOURCE COLUMNS
+# SOURCE CONTRACT
 # ============================================================
 
 REQUIRED_COLUMNS = [
@@ -63,6 +78,394 @@ REQUIRED_COLUMNS = [
     "home_elo_pre",
     "away_elo_pre",
 ]
+
+
+OUTPUT_COLUMNS = [
+    "match_id",
+    "date",
+    "home_team_id",
+    "away_team_id",
+    "home_elo_pre",
+    "away_elo_pre",
+    "elo_diff",
+    "target",
+]
+
+
+VALID_TARGETS = {
+    "HOME_WIN",
+    "DRAW",
+    "AWAY_WIN",
+}
+
+
+# ============================================================
+# HELPERS
+# ============================================================
+
+def fail(message):
+    raise RuntimeError(message)
+
+
+def validate_required_columns(df):
+    missing = [
+        column
+        for column in REQUIRED_COLUMNS
+        if column not in df.columns
+    ]
+
+    if missing:
+        fail(
+            "Missing required Step 32 columns: "
+            + ", ".join(missing)
+        )
+
+
+def validate_source(df):
+    """
+    Validate the entire Step 32 population.
+
+    Nothing is silently dropped.
+    """
+
+    print("[3/6] Validating Step 32 dataset...")
+
+    validate_required_columns(df)
+
+    # --------------------------------------------------------
+    # Match IDs
+    # --------------------------------------------------------
+
+    match_ids = (
+        df["zokascore_match_id"]
+        .astype("string")
+        .str.strip()
+    )
+
+    if match_ids.isna().any() or (match_ids == "").any():
+        count = int(
+            match_ids.isna().sum()
+            + (match_ids == "").sum()
+        )
+
+        fail(
+            f"Found {count:,} missing/empty Match IDs."
+        )
+
+    duplicate_count = int(
+        match_ids.duplicated().sum()
+    )
+
+    if duplicate_count:
+        fail(
+            f"Found {duplicate_count:,} duplicate Match IDs."
+        )
+
+    # --------------------------------------------------------
+    # Team IDs
+    # --------------------------------------------------------
+
+    home_team = (
+        df["home_team_id"]
+        .astype("string")
+        .str.strip()
+    )
+
+    away_team = (
+        df["away_team_id"]
+        .astype("string")
+        .str.strip()
+    )
+
+    if home_team.isna().any() or (home_team == "").any():
+        fail("Missing/empty home_team_id detected.")
+
+    if away_team.isna().any() or (away_team == "").any():
+        fail("Missing/empty away_team_id detected.")
+
+    self_matches = (
+        home_team == away_team
+    )
+
+    if self_matches.any():
+        fail(
+            f"Found {int(self_matches.sum()):,} self-match rows."
+        )
+
+    # --------------------------------------------------------
+    # Dates
+    # --------------------------------------------------------
+
+    parsed_dates = pd.to_datetime(
+        df["date"],
+        errors="coerce"
+    )
+
+    invalid_dates = int(
+        parsed_dates.isna().sum()
+    )
+
+    if invalid_dates:
+        fail(
+            f"Found {invalid_dates:,} invalid dates."
+        )
+
+    # --------------------------------------------------------
+    # Scores
+    # --------------------------------------------------------
+
+    home_scores = pd.to_numeric(
+        df["home_score"],
+        errors="coerce"
+    )
+
+    away_scores = pd.to_numeric(
+        df["away_score"],
+        errors="coerce"
+    )
+
+    invalid_scores = (
+        home_scores.isna()
+        | away_scores.isna()
+        | ~np.isfinite(home_scores)
+        | ~np.isfinite(away_scores)
+        | (home_scores < 0)
+        | (away_scores < 0)
+        | (home_scores % 1 != 0)
+        | (away_scores % 1 != 0)
+    )
+
+    invalid_score_count = int(
+        invalid_scores.sum()
+    )
+
+    if invalid_score_count:
+        fail(
+            f"Found {invalid_score_count:,} invalid score rows."
+        )
+
+    # --------------------------------------------------------
+    # ELO
+    # --------------------------------------------------------
+
+    home_elo = pd.to_numeric(
+        df["home_elo_pre"],
+        errors="coerce"
+    )
+
+    away_elo = pd.to_numeric(
+        df["away_elo_pre"],
+        errors="coerce"
+    )
+
+    invalid_elo = (
+        home_elo.isna()
+        | away_elo.isna()
+        | ~np.isfinite(home_elo)
+        | ~np.isfinite(away_elo)
+    )
+
+    invalid_elo_count = int(
+        invalid_elo.sum()
+    )
+
+    if invalid_elo_count:
+        fail(
+            f"Found {invalid_elo_count:,} invalid ELO rows."
+        )
+
+    print("   ✅ Required columns present.")
+    print("   ✅ Match IDs present and unique.")
+    print("   ✅ Canonical team IDs valid.")
+    print("   ✅ Dates valid.")
+    print("   ✅ Scores valid.")
+    print("   ✅ Pre-match ELO values valid.")
+
+    return {
+        "match_ids": match_ids,
+        "home_team": home_team,
+        "away_team": away_team,
+        "dates": parsed_dates,
+        "home_scores": home_scores,
+        "away_scores": away_scores,
+        "home_elo": home_elo,
+        "away_elo": away_elo,
+    }
+
+
+# ============================================================
+# FEATURE PROJECTION
+# ============================================================
+
+def build_features(df, validated):
+    print("\n[4/6] Extracting ML features...")
+
+    home_scores = validated["home_scores"]
+    away_scores = validated["away_scores"]
+
+    features = pd.DataFrame({
+        "match_id": validated["match_ids"].astype(str),
+        "date": validated["dates"].dt.strftime("%Y-%m-%d"),
+        "home_team_id": validated["home_team"].astype(str),
+        "away_team_id": validated["away_team"].astype(str),
+        "home_elo_pre": validated["home_elo"].round(2),
+        "away_elo_pre": validated["away_elo"].round(2),
+    })
+
+    features["elo_diff"] = (
+        features["home_elo_pre"]
+        - features["away_elo_pre"]
+    ).round(2)
+
+    features["target"] = np.select(
+        [
+            home_scores > away_scores,
+            home_scores < away_scores,
+        ],
+        [
+            "HOME_WIN",
+            "AWAY_WIN",
+        ],
+        default="DRAW",
+    )
+
+    features = features[OUTPUT_COLUMNS]
+
+    return features
+
+
+# ============================================================
+# OUTPUT VALIDATION
+# ============================================================
+
+def validate_output(features, source_rows):
+    print("\n[5/6] Validating generated features...")
+
+    if len(features) != source_rows:
+        fail(
+            "Feature population mismatch: "
+            f"source={source_rows:,}, "
+            f"features={len(features):,}."
+        )
+
+    if list(features.columns) != OUTPUT_COLUMNS:
+        fail(
+            "Output column structure mismatch."
+        )
+
+    if features["match_id"].isna().any():
+        fail(
+            "Generated features contain missing Match IDs."
+        )
+
+    if features["match_id"].duplicated().any():
+        fail(
+            "Generated features contain duplicate Match IDs."
+        )
+
+    if features["target"].isna().any():
+        fail(
+            "Generated features contain missing targets."
+        )
+
+    actual_targets = set(
+        features["target"].unique()
+    )
+
+    if not actual_targets.issubset(VALID_TARGETS):
+        fail(
+            "Unexpected target values: "
+            + str(
+                actual_targets - VALID_TARGETS
+            )
+        )
+
+    home_wins = int(
+        (features["target"] == "HOME_WIN").sum()
+    )
+
+    draws = int(
+        (features["target"] == "DRAW").sum()
+    )
+
+    away_wins = int(
+        (features["target"] == "AWAY_WIN").sum()
+    )
+
+    if home_wins + draws + away_wins != source_rows:
+        fail(
+            "Result accounting mismatch."
+        )
+
+    print(
+        f"   ✅ Feature rows: {len(features):,}"
+    )
+
+    print(
+        f"   ✅ Unique Match IDs: "
+        f"{features['match_id'].nunique():,}"
+    )
+
+    print(
+        f"   ✅ HOME_WIN: {home_wins:,}"
+    )
+
+    print(
+        f"   ✅ DRAW: {draws:,}"
+    )
+
+    print(
+        f"   ✅ AWAY_WIN: {away_wins:,}"
+    )
+
+    return {
+        "home_wins": home_wins,
+        "draws": draws,
+        "away_wins": away_wins,
+    }
+
+
+# ============================================================
+# ATOMIC WRITE + RELOAD
+# ============================================================
+
+def write_output(features):
+    print("\n[6/6] Writing ML feature dataset...")
+
+    os.makedirs(
+        OUTPUT_DIR,
+        exist_ok=True
+    )
+
+    features.to_csv(
+        TEMP_OUTPUT_FILE,
+        index=False
+    )
+
+    verification = pd.read_csv(
+        TEMP_OUTPUT_FILE,
+        low_memory=False
+    )
+
+    if len(verification) != len(features):
+        fail(
+            "Output reload population mismatch."
+        )
+
+    if list(verification.columns) != OUTPUT_COLUMNS:
+        fail(
+            "Output reload column mismatch."
+        )
+
+    if verification["match_id"].duplicated().any():
+        fail(
+            "Output reload contains duplicate Match IDs."
+        )
+
+    os.replace(
+        TEMP_OUTPUT_FILE,
+        OUTPUT_FILE
+    )
 
 
 # ============================================================
@@ -83,14 +486,16 @@ def run():
     print("[1/6] Checking Step 32 output...")
 
     if not os.path.exists(SOURCE_FILE):
-        raise FileNotFoundError(
+        fail(
             f"Step 32 output not found:\n{SOURCE_FILE}"
         )
 
-    print(f"   ↳ Source: {SOURCE_FILE}")
+    print(
+        f"   ↳ Source: {SOURCE_FILE}"
+    )
 
     # --------------------------------------------------------
-    # [2/6] LOAD STEP 32 DATASET
+    # [2/6] LOAD
     # --------------------------------------------------------
 
     print("\n[2/6] Loading master_with_elo.csv...")
@@ -102,379 +507,47 @@ def run():
 
     source_rows = len(df)
 
-    print(f"   ↳ Rows loaded: {source_rows:,}")
-
-    if source_rows != EXPECTED_ROWS:
-        raise RuntimeError(
-            f"STEP 32 POPULATION MISMATCH: "
-            f"expected {EXPECTED_ROWS:,}, "
-            f"got {source_rows:,}."
+    if source_rows == 0:
+        fail(
+            "Step 32 dataset is empty."
         )
 
     print(
-        f"   ✅ Exact Step 32 population: "
-        f"{EXPECTED_ROWS:,}"
+        f"   ↳ Rows loaded: {source_rows:,}"
     )
 
     # --------------------------------------------------------
-    # [3/6] STRUCTURAL VALIDATION
+    # [3/6] VALIDATE
     # --------------------------------------------------------
 
-    print("\n[3/6] Validating Step 32 dataset...")
-
-    missing_columns = [
-        column
-        for column in REQUIRED_COLUMNS
-        if column not in df.columns
-    ]
-
-    if missing_columns:
-        raise RuntimeError(
-            "Missing required Step 32 columns: "
-            + ", ".join(missing_columns)
-        )
-
-    print("   ✅ Required columns present.")
-
-    # Match IDs
-    if df["zokascore_match_id"].isna().any():
-        count = int(
-            df["zokascore_match_id"].isna().sum()
-        )
-
-        raise RuntimeError(
-            f"Found {count:,} missing Match IDs."
-        )
-
-    duplicate_count = int(
-        df["zokascore_match_id"].duplicated().sum()
-    )
-
-    if duplicate_count > 0:
-        raise RuntimeError(
-            f"Found {duplicate_count:,} duplicate Match IDs."
-        )
-
-    print("   ✅ Match IDs present and unique.")
-
-    # Team IDs
-    if df[
-        ["home_team_id", "away_team_id"]
-    ].isna().any().any():
-
-        raise RuntimeError(
-            "Missing canonical team IDs detected."
-        )
-
-    if (
-        df["home_team_id"].astype(str)
-        == df["away_team_id"].astype(str)
-    ).any():
-
-        count = int(
-            (
-                df["home_team_id"].astype(str)
-                == df["away_team_id"].astype(str)
-            ).sum()
-        )
-
-        raise RuntimeError(
-            f"Found {count:,} self-match rows."
-        )
-
-    print("   ✅ Canonical team IDs valid.")
-
-    # Dates
-    parsed_dates = pd.to_datetime(
-        df["date"],
-        errors="coerce"
-    )
-
-    invalid_dates = int(
-        parsed_dates.isna().sum()
-    )
-
-    if invalid_dates > 0:
-        raise RuntimeError(
-            f"Found {invalid_dates:,} invalid dates."
-        )
-
-    print("   ✅ Dates valid.")
-
-    # Scores
-    home_scores = pd.to_numeric(
-        df["home_score"],
-        errors="coerce"
-    )
-
-    away_scores = pd.to_numeric(
-        df["away_score"],
-        errors="coerce"
-    )
-
-    invalid_scores = (
-        home_scores.isna()
-        | away_scores.isna()
-        | ~home_scores.mod(1).eq(0)
-        | ~away_scores.mod(1).eq(0)
-        | home_scores.lt(0)
-        | away_scores.lt(0)
-    )
-
-    invalid_score_count = int(
-        invalid_scores.sum()
-    )
-
-    if invalid_score_count > 0:
-        raise RuntimeError(
-            f"Found {invalid_score_count:,} invalid scores."
-        )
-
-    print("   ✅ Scores valid.")
-
-        # ELO
-    home_elo = pd.to_numeric(
-        df["home_elo_pre"], 
-        errors="coerce"
-    )
-
-    away_elo = pd.to_numeric(
-        df["away_elo_pre"],
-        errors="coerce"
-    )
-    invalid_elo = (
-        ~home_elo.notna()
-        | ~away_elo.notna()
-        | ~home_elo.apply(pd.api.types.is_number)
-        | ~away_elo.apply(pd.api.types.is_number)
-    )
-
-    # More reliable finite-number validation.
-    invalid_elo = (
-        home_elo.isna()
-        | away_elo.isna()
-        | ~home_elo.isin(home_elo[home_elo.notna()])
-        | ~away_elo.isin(away_elo[away_elo.notna()])
-    )
-
-    # Explicit finite check.
-    finite_home = pd.Series(
-        pd.api.types.is_number(x) and pd.notna(x)
-        for x in home_elo
-    )
-
-    finite_away = pd.Series(
-        pd.api.types.is_number(x) and pd.notna(x)
-        for x in away_elo
-    )
-
-    if not finite_home.all() or not finite_away.all():
-        raise RuntimeError(
-            "Non-finite or invalid ELO values detected."
-        )
-
-    if not (
-        home_elo.abs() < float("inf")
-    ).all() or not (
-        away_elo.abs() < float("inf")
-    ).all():
-
-        raise RuntimeError(
-            "Infinite ELO values detected."
-        )
-
-    print("   ✅ Pre-match ELO values valid.")
+    validated = validate_source(df)
 
     # --------------------------------------------------------
-    # [4/6] EXTRACT FEATURES
+    # [4/6] PROJECT
     # --------------------------------------------------------
 
-    print("\n[4/6] Extracting ML features...")
-
-    features_df = pd.DataFrame({
-        "match_id": df["zokascore_match_id"],
-        "date": parsed_dates.dt.strftime("%Y-%m-%d"),
-        "home_team_id": df["home_team_id"],
-        "away_team_id": df["away_team_id"],
-        "home_elo_pre": home_elo.round(2),
-        "away_elo_pre": away_elo.round(2),
-    })
-
-    features_df["elo_diff"] = (
-        features_df["home_elo_pre"]
-        - features_df["away_elo_pre"]
-    ).round(2)
-
-    # Vectorized target generation.
-    features_df["target"] = "DRAW"
-
-    features_df.loc[
-        home_scores > away_scores,
-        "target"
-    ] = "HOME_WIN"
-
-    features_df.loc[
-        home_scores < away_scores,
-        "target"
-    ] = "AWAY_WIN"
-
-    # --------------------------------------------------------
-    # [5/6] FEATURE ACCOUNTING
-    # --------------------------------------------------------
-
-    print("\n[5/6] Validating generated features...")
-
-    if len(features_df) != EXPECTED_ROWS:
-        raise RuntimeError(
-            f"Feature row count failure: "
-            f"expected {EXPECTED_ROWS:,}, "
-            f"got {len(features_df):,}."
-        )
-
-    if features_df["match_id"].isna().any():
-        raise RuntimeError(
-            "Generated features contain missing Match IDs."
-        )
-
-    if features_df["match_id"].duplicated().any():
-        raise RuntimeError(
-            "Generated features contain duplicate Match IDs."
-        )
-
-    expected_targets = {
-        "HOME_WIN",
-        "DRAW",
-        "AWAY_WIN"
-    }
-
-    actual_targets = set(
-        features_df["target"].unique()
-    )
-
-    if not actual_targets.issubset(
-        expected_targets
-    ):
-        raise RuntimeError(
-            f"Unexpected target values: "
-            f"{actual_targets - expected_targets}"
-        )
-
-    target_total = len(
-        features_df[
-            features_df["target"].isin(expected_targets)
-        ]
-    )
-
-    if target_total != EXPECTED_ROWS:
-        raise RuntimeError(
-            "Target accounting failure."
-        )
-
-    home_wins = int(
-        (features_df["target"] == "HOME_WIN").sum()
-    )
-
-    draws = int(
-        (features_df["target"] == "DRAW").sum()
-    )
-
-    away_wins = int(
-        (features_df["target"] == "AWAY_WIN").sum()
-    )
-
-    if home_wins + draws + away_wins != EXPECTED_ROWS:
-        raise RuntimeError(
-            "Result accounting does not equal "
-            f"{EXPECTED_ROWS:,}."
-        )
-
-    print(
-        f"   ✅ Feature rows: {len(features_df):,}"
-    )
-
-    print(
-        f"   ✅ Unique Match IDs: "
-        f"{features_df['match_id'].nunique():,}"
-    )
-
-    print(
-        f"   ✅ HOME_WIN: {home_wins:,}"
-    )
-
-    print(
-        f"   ✅ DRAW:     {draws:,}"
-    )
-
-    print(
-        f"   ✅ AWAY_WIN: {away_wins:,}"
+    features = build_features(
+        df,
+        validated
     )
 
     # --------------------------------------------------------
-    # [6/6] WRITE + RELOAD VALIDATION
+    # [5/6] VALIDATE FEATURES
     # --------------------------------------------------------
 
-    print("\n[6/6] Writing ML feature dataset...")
-
-    os.makedirs(
-        OUTPUT_DIR,
-        exist_ok=True
-    )
-
-    temp_output = OUTPUT_FILE + ".tmp"
-
-    features_df.to_csv(
-        temp_output,
-        index=False
-    )
-
-    # Reload the actual written file.
-    verification = pd.read_csv(
-        temp_output,
-        low_memory=False
-    )
-
-    if len(verification) != EXPECTED_ROWS:
-        raise RuntimeError(
-            f"Output validation failed: "
-            f"expected {EXPECTED_ROWS:,}, "
-            f"got {len(verification):,}."
-        )
-
-    expected_output_columns = [
-        "match_id",
-        "date",
-        "home_team_id",
-        "away_team_id",
-        "home_elo_pre",
-        "away_elo_pre",
-        "elo_diff",
-        "target",
-    ]
-
-    if list(verification.columns) != expected_output_columns:
-        raise RuntimeError(
-            "Output column structure mismatch.\n"
-            f"Expected: {expected_output_columns}\n"
-            f"Got:      {list(verification.columns)}"
-        )
-
-    if verification["match_id"].duplicated().any():
-        raise RuntimeError(
-            "Output validation failed: duplicate Match IDs."
-        )
-
-    if verification["target"].isna().any():
-        raise RuntimeError(
-            "Output validation failed: missing targets."
-        )
-
-    os.replace(
-        temp_output,
-        OUTPUT_FILE
+    accounting = validate_output(
+        features,
+        source_rows
     )
 
     # --------------------------------------------------------
-    # FINAL REPORT
+    # [6/6] WRITE
+    # --------------------------------------------------------
+
+    write_output(features)
+
+    # --------------------------------------------------------
+    # FINAL
     # --------------------------------------------------------
 
     print("\n" + "=" * 60)
@@ -482,83 +555,59 @@ def run():
     print("=" * 60)
 
     print(
-        f"📊 Step 32 source rows:  {source_rows:,}"
+        f"📊 Source population: {source_rows:,}"
     )
 
     print(
-        f"📊 Feature rows:        {len(features_df):,}"
+        f"📊 Feature population: {len(features):,}"
     )
 
     print(
-        f"📊 Unique Match IDs:    "
-        f"{features_df['match_id'].nunique():,}"
+        f"📊 Unique Match IDs: "
+        f"{features['match_id'].nunique():,}"
     )
 
     print(
-        f"📊 Home wins:           {home_wins:,}"
+        f"📊 Home wins: {accounting['home_wins']:,}"
     )
 
     print(
-        f"📊 Draws:               {draws:,}"
+        f"📊 Draws: {accounting['draws']:,}"
     )
 
     print(
-        f"📊 Away wins:           {away_wins:,}"
+        f"📊 Away wins: {accounting['away_wins']:,}"
     )
 
     print(
-        f"📁 ML Features:         {OUTPUT_FILE}"
+        f"📁 Features: {OUTPUT_FILE}"
     )
 
     print()
-
-    print(
-        "🔒 Step 32 ELO dataset was NOT modified."
-    )
-
-    print(
-        "🔒 Historical JSON files were NOT scanned."
-    )
-
-    print(
-        "🔒 No ELO was recalculated."
-    )
-
-    print(
-        "🔒 No team identity was re-resolved."
-    )
-
-    print(
-        "🔒 Feature population exactly matches "
-        "Step 32: 484,354."
-    )
-
+    print("🔒 No hard-coded population expectation.")
+    print("🔒 Source population inherited dynamically from Step 32.")
+    print("🔒 No rows silently dropped.")
+    print("🔒 No ELO recalculation.")
+    print("🔒 No identity resolution.")
     print("=" * 60)
 
 
-# ============================================================
-# ENTRY POINT
-# ============================================================
-
 if __name__ == "__main__":
+
     try:
         run()
 
-    except Exception as error:
+    except Exception:
 
-        temp_output = OUTPUT_FILE + ".tmp"
-
-        if os.path.exists(temp_output):
+        if os.path.exists(TEMP_OUTPUT_FILE):
             try:
-                os.remove(temp_output)
+                os.remove(TEMP_OUTPUT_FILE)
             except OSError:
                 pass
 
         print()
         print("=" * 60)
         print(" ❌ STEP 33 FAILED")
-        print("=" * 60)
-        print(str(error))
         print("=" * 60)
 
         raise

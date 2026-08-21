@@ -34,7 +34,8 @@ MODELS = {
 
 FEATURES_1X2 = ["home_elo_pre", "away_elo_pre", "elo_diff", "home_form_pts", "away_form_pts", "home_home_pts", "away_away_pts", "home_gf_avg", "away_gf_avg", "home_ga_avg", "away_ga_avg", "h2h_hw_rate", "h2h_d_rate", "h2h_aw_rate", "h2h_matches"]
 FEATURES_MARKET = ["home_elo_pre", "away_elo_pre", "elo_diff", "home_ewma_pts", "away_ewma_pts", "home_ewma_gd", "away_ewma_gd", "home_ewma_gf", "away_ewma_gf", "home_ewma_ga", "away_ewma_ga", "home_ewma_home_pts", "away_ewma_away_pts", "home_ewma_home_gd", "away_ewma_away_gd", "home_ewma_home_gf", "away_ewma_away_gf", "home_ewma_home_ga", "away_ewma_away_ga", "home_matches_before", "away_matches_before", "home_home_matches_before", "away_away_matches_before"]
-FEATURES_CS = ["home_elo_pre", "away_elo_pre", "elo_diff", "home_ewma_gf", "away_ewma_gf", "home_ewma_ga", "away_ewma_ga", "home_ewma_home_gf", "away_ewma_away_gf", "home_ewma_home_ga", "away_ewma_away_ga", "home_matches_before", "away_matches_before"]
+
+# ← FIXED: Removed FEATURES_CS list. We now pass FEATURES_MARKET directly to the CS model.
 
 def clean_name(value):
     if value is None: return ""
@@ -199,18 +200,8 @@ def calculate_correct_score_matrix(markets):
 
 def calculate_correct_score_matrix_ml(cs_model, features_1x2, features_mkt):
     try:
-        cs_features = pd.DataFrame([{
-            "home_elo_pre": features_1x2["home_elo_pre"].iloc[0],
-            "away_elo_pre": features_1x2["away_elo_pre"].iloc[0],
-            "elo_diff": features_1x2["elo_diff"].iloc[0],
-            "home_ewma_gf": features_mkt["home_ewma_gf"].iloc[0], "away_ewma_gf": features_mkt["away_ewma_gf"].iloc[0],
-            "home_ewma_ga": features_mkt["home_ewma_ga"].iloc[0], "away_ewma_ga": features_mkt["away_ewma_ga"].iloc[0],
-            "home_ewma_home_gf": features_mkt["home_ewma_home_gf"].iloc[0], "away_ewma_away_gf": features_mkt["away_ewma_away_gf"].iloc[0],
-            "home_ewma_home_ga": features_mkt["home_ewma_home_ga"].iloc[0], "away_ewma_away_ga": features_mkt["away_ewma_away_ga"].iloc[0],
-            "home_matches_before": features_mkt["home_matches_before"].iloc[0], "away_matches_before": features_mkt["away_matches_before"].iloc[0]
-        }])[FEATURES_CS]
-
-        probs = cs_model.predict_proba(cs_features)[0]
+        # ★ FIX: Pass the 23 features directly, matching the new Step 49 training
+        probs = cs_model.predict_proba(features_mkt)[0]
         classes = list(cs_model.classes_)
         
         mapping_file = os.path.join(MODELS_DIR, "market_correct_score_label_mapping.json")

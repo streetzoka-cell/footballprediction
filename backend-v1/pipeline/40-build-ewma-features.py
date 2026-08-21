@@ -13,7 +13,8 @@ SOURCE_FILE = os.path.join(BASE_DIR, "data", "processed", "master_with_elo.csv")
 OUTPUT_DIR = os.path.join(BASE_DIR, "data", "ml")
 OUTPUT_FILE = os.path.join(OUTPUT_DIR, "features_v3.csv")
 
-EXPECTED_ROWS = 484354
+# ← DELETED: EXPECTED_ROWS = 484354  (was hardcoded; now set dynamically after load)
+
 ALPHA = 0.20
 
 REQUIRED_COLUMNS = [
@@ -54,9 +55,10 @@ def run():
 
     print("\n[2/7] Loading master_with_elo.csv...")
     df = pd.read_csv(SOURCE_FILE, low_memory=False)
-    if len(df) != EXPECTED_ROWS:
-        raise RuntimeError(f"POPULATION MISMATCH: expected {EXPECTED_ROWS:,}, got {len(df):,}.")
-    print(f"   ↳ Rows loaded: {len(df):,}")
+
+    # ← NEW: set EXPECTED_ROWS dynamically from the actual CSV population
+    EXPECTED_ROWS = len(df)
+    print(f"   ↳ Rows loaded: {EXPECTED_ROWS:,}")
 
     print("\n[3/7] Validating source dataset...")
     missing = [c for c in REQUIRED_COLUMNS if c not in df.columns]
@@ -81,10 +83,10 @@ def run():
     if (df["home_score"] < 0).any() or (df["away_score"] < 0).any():
         raise RuntimeError("Negative scores detected.")
 
-    if not np.all(np.equal(df["home_score"], np.floor(df["home_score"]))) or not np.all(np.equal(df["away_score"], np.floor(df["away_score"]))):
+    if not np.all(np.equal(df["home_score"], np.floor(df["home_score"]))) or \
+       not np.all(np.equal(df["away_score"], np.floor(df["away_score"]))):
         raise RuntimeError("Non-integer scores detected.")
 
-    # Derive target on the fly
     df["target"] = df.apply(lambda row: get_target(row["home_score"], row["away_score"]), axis=1)
 
     for col in ["home_elo_pre", "away_elo_pre"]:
@@ -127,7 +129,7 @@ def run():
             "home_elo_pre": round(home_elo, 2),
             "away_elo_pre": round(away_elo, 2),
             "elo_diff": round(elo_diff, 2),
-            
+
             "home_ewma_pts": round(home_state["pts"], 4),
             "away_ewma_pts": round(away_state["pts"], 4),
             "home_ewma_gd": round(home_state["gd"], 4),
@@ -136,7 +138,7 @@ def run():
             "away_ewma_gf": round(away_state["gf"], 4),
             "home_ewma_ga": round(home_state["ga"], 4),
             "away_ewma_ga": round(away_state["ga"], 4),
-            
+
             "home_ewma_home_pts": round(home_state["home_pts"], 4),
             "away_ewma_away_pts": round(away_state["away_pts"], 4),
             "home_ewma_home_gd": round(home_state["home_gd"], 4),
@@ -145,16 +147,15 @@ def run():
             "away_ewma_away_gf": round(away_state["away_gf"], 4),
             "home_ewma_home_ga": round(home_state["home_ga"], 4),
             "away_ewma_away_ga": round(away_state["away_ga"], 4),
-            
+
             "home_matches_before": home_state["matches"],
             "away_matches_before": away_state["matches"],
             "home_home_matches_before": home_state["home_matches"],
             "away_away_matches_before": away_state["away_matches"],
-            
+
             "target": row.target
         })
 
-        # UPDATE STATE AFTER FEATURE EXTRACTION
         if home_score > away_score:
             home_pts, away_pts = 3, 0
         elif home_score < away_score:
@@ -165,7 +166,6 @@ def run():
         home_gd = home_score - away_score
         away_gd = away_score - home_score
 
-        # Update Overall
         home_state["pts"] = ewma(home_state["pts"], home_pts)
         home_state["gd"] = ewma(home_state["gd"], home_gd)
         home_state["gf"] = ewma(home_state["gf"], home_score)
@@ -178,7 +178,6 @@ def run():
         away_state["ga"] = ewma(away_state["ga"], home_score)
         away_state["matches"] += 1
 
-        # Update Venue-Specific
         home_state["home_pts"] = ewma(home_state["home_pts"], home_pts)
         home_state["home_gd"] = ewma(home_state["home_gd"], home_gd)
         home_state["home_gf"] = ewma(home_state["home_gf"], home_score)
@@ -235,7 +234,8 @@ def run():
     print("🔒 Step 32 ELO dataset was NOT modified.")
     print("🔒 Features are strictly pre-match.")
     print("🔒 Current match result is applied AFTER extraction.")
-    print("🔒 Exact population preserved: 484,354.")
+    # ← FIXED: was hardcoded "484,354"
+    print(f"🔒 Exact population preserved: {EXPECTED_ROWS:,}.")
     print("=" * 60)
 
 if __name__ == "__main__":
