@@ -1,5 +1,5 @@
 ﻿import React, { useState, useRef, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Circle, Square, Download, Camera, Sparkles, Sliders, Layers } from 'lucide-react';
 
 export default function FaceARStudio() {

@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue, startTransition, memo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { Search, Trophy, TrendingUp, Target, X, Crown, Flame, Users, Calendar, Award, ChevronDown, RotateCcw, ChevronRight, ArrowLeft, ArrowUp, ArrowDown, Swords, Info } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { useDailyLeaderboard, useWeeklyLeaderboard, useMonthlyLeaderboard, useGoatLeaderboard } from '../hooks/useUserData';

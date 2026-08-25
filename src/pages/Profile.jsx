@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   LogOut, Target, Trophy, Flame, Calendar, Edit3, Shield, 
   Mail, Star, ArrowRight, Zap, Lock

@@ -1,5 +1,5 @@
 ﻿import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Monitor, Camera, Mic, MicOff, Volume2, Square, Circle, 
   Trash2, Move, AppWindow, Palette, Settings, X, Layers, Crop, Sliders, Check, AlertTriangle, Info

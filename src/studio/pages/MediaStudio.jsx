@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Circle, Square, Upload, Download, Camera, Sparkles, Video } from 'lucide-react';
 
 export default function MediaStudio() {

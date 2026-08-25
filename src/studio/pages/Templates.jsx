@@ -1,5 +1,5 @@
 ﻿import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { useEditorStore } from '../store/editorStore';
 import { Newspaper, Trophy, Zap, Star, User, Shield, AlertTriangle, TrendingUp } from 'lucide-react';
 import SEO from '../../components/SEO';

@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate, Link } from 'react-router-dom';
 import { Target, Shield, Zap, Heart, Star, ArrowLeft, Globe, Award, Clock, Mail, Phone, MessageCircle, HelpCircle } from 'lucide-react';
 import SEO from '../../components/SEO';
 

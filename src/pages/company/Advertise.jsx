@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Megaphone, CheckCircle, TrendingUp, Target, Users, BarChart3, Star, Mail, HelpCircle } from 'lucide-react';
 import SEO from '../../components/SEO';
 

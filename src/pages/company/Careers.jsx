@@ -1,4 +1,4 @@
-﻿import { useNavigate } from 'react-router-dom';
+﻿import { useNavigate, Link } from 'react-router-dom';
 import { ArrowLeft, Briefcase, MapPin, Clock, Zap, Users, Heart, Star, Send, AlertCircle, HelpCircle, Mail } from 'lucide-react';
 import SEO from '../../components/SEO';
 

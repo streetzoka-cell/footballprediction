@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import { footballApi } from "../../services/footballApi";
 import { getLocalDateStr } from '../../utils/dates';
 import { useEditorStore } from '../store/editorStore';
