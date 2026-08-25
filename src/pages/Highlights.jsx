@@ -19,10 +19,10 @@ import { safeWrite } from '../services/safeWrite';
 import SEO from "../components/SEO";
 import AdSlot from '../components/AdSlot'; 
 
+// --- UTILS ---
 const slugify = (text) => String(text).toLowerCase().replace(/[^a-z0-9\s-]/g, '').trim().replace(/\s+/g, '-').substring(0, 60);
 const getSeoImageUrl = (post) => (!post || !post.imageUrl) ? "https://zokascore.xyz/logo.png" : `https://zokascore.xyz/api/og-image/${post.id}`;
-
-const BULLET = '\u2022'; 
+const BULLET = '\u2022';
 
 const formatTimestamp = (date) => {
   if (!date) return 'Just now';
@@ -42,42 +42,298 @@ const formatTimestamp = (date) => {
 
 const calcReadTime = (body) => Math.max(1, Math.ceil((body?.trim().split(/\s+/).length || 1) / 200));
 
-const BADGES = {
-  'Breaking':     { color: 'var(--danger)',  bg: 'rgba(var(--danger-rgb),.15)',  label: `BREAKING` },
-  'Official':     { color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.15)', label: `OFFICIAL` },
-  'Rumour':       { color: 'var(--gold)',    bg: 'rgba(var(--gold-rgb),.15)',    label: `RUMOUR` },
-  'Match Report': { color: 'var(--accent)',  bg: 'rgba(var(--accent-rgb),.15)',  label: `MATCH REPORT` },
-  'Transfers':    { color: 'var(--warning)', bg: 'rgba(var(--warning-rgb),.15)', label: `TRANSFERS` },
-  'Injuries':     { color: 'var(--accent)',  bg: 'rgba(var(--accent-rgb),.15)',  label: `INJURIES` },
+export const BADGES = {
+  'Breaking':     { label: `🔴 BREAKING`, color: 'var(--danger)', bg: 'rgba(var(--danger-rgb),.15)' },
+  'Official':     { label: `🟢 OFFICIAL`, color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.15)' },
+  'Rumour':       { label: `🟡 RUMOUR`, color: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.15)' },
+  'Match Report': { label: `🔵 MATCH REPORT`, color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)' },
+  'Transfers':    { label: `🟠 TRANSFERS`, color: 'var(--warning)', bg: 'rgba(var(--warning-rgb),.15)' },
+  'Injuries':     { label: `🟣 INJURIES`, color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.15)' },
 };
 
-const CATEGORIES = [
-  { key: 'All', label: 'All News' }, { key: 'Breaking', label: 'Breaking' }, 
-  { key: 'Official', label: 'Official' }, { key: 'Transfers', label: 'Transfers' }, 
-  { key: 'Match Report', label: 'Match Reports' }, { key: 'Injuries', label: 'Injuries' },
+export const CATEGORIES = ['All', 'Breaking', 'Official', 'Transfers', 'Match Report', 'Injuries'];
+
+export const REACTIONS = [
+  { id: 'like', emoji: '👍', label: 'Like' },
+  { id: 'fire', emoji: '🔥', label: 'Fire' },
+  { id: 'wow', emoji: '🤯', label: 'Mindblown' },
+  { id: 'love', emoji: '❤️', label: 'Love' },
+  { id: 'angry', emoji: '😡', label: 'Angry' }
 ];
 
-const REACTIONS = [
-  { key: 'like',   icon: '👍', label: 'Like' },
-  { key: 'fire',   icon: '🔥', label: 'Fire' },
-  { key: 'wow',    icon: '😮', label: 'Wow' },
-  { key: 'funny',  icon: '😂', label: 'Funny' },
-  { key: 'sad',    icon: '😢', label: 'Sad' },
-];
-
-const useReadingProgress = () => {
+// --- HOOKS ---
+export function useReadingProgress() {
   const [progress, setProgress] = useState(0);
   useEffect(() => {
-    const updateScroll = () => {
-      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (scrollHeight > 0) setProgress((window.scrollY / scrollHeight) * 100);
+    const onScroll = () => {
+      const h = document.documentElement;
+      const scrolled = (h.scrollTop / (h.scrollHeight - h.clientHeight)) * 100;
+      setProgress(Math.min(100, Math.max(0, scrolled)));
     };
-    window.addEventListener('scroll', updateScroll);
-    return () => window.removeEventListener('scroll', updateScroll);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
   return progress;
-};
+}
 
+// --- COMPONENTS ---
+function CommentSection({ postId, comments, newComments, setNewComments, handleComment }) {
+  return (
+    <div className="comments-wrap mt-16">
+      <div className="comment-row">
+        <input 
+          value={newComments[postId] || ''}
+          onChange={e => setNewComments(prev => ({ ...prev, [postId]: e.target.value }))}
+          placeholder="Add comment..."
+          className="comment-input"
+        />
+        <button onClick={() => handleComment(postId)} className="btn btn-primary"><Send size={16} /></button>
+      </div>
+      <div className="flex-col gap-8 mt-12">
+        {(comments || []).length === 0 && <p className="text-muted text-sm text-center py-12">No comments yet.</p>}
+        {(comments || []).map(c => (
+          <div key={c.id} className="comment-row">
+            <div className="comment-avatar">{c.authorName?.[0] || 'G'}</div>
+            <div className="comment-bubble">
+              <b>{c.authorName || 'Guest'}</b> <span>{c.body}</span>
+              <small>{formatTimestamp(c.createdAt)}</small>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero, comments, newComments, setNewComments, handleComment, fetchComments }) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [showComments, setShowComments] = useState(false); 
+  const isSaved = savedPosts.includes(post.id);
+  const badge = BADGES[post.category] || { label: post.category, color: 'var(--text-muted)', bg: 'var(--bg-elevated)' };
+  const trending = (post.views || 0) > 1000;
+
+  const toggleComments = () => { if (!showComments) fetchComments(post.id); setShowComments(p => !p); };
+
+  return (
+    <article className={`news-card anim-fade-up ${isHero ? 'expanded' : ''} ${trending ? 'trending' : ''}`} style={{ animationDelay: `${index * 50}ms` }}>
+      {post.imageUrl && (
+        <div onClick={() => onExpand(post)} className="news-img-wrap">
+          <img src={post.imageUrl} alt={post.title} loading="lazy" className="news-img" />
+          <div className="news-hero-overlay" />
+          {isHero ? (
+            <div className="news-hero-meta flex-col gap-8">
+              <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+              <h2 className="news-title">{post.title}</h2>
+            </div>
+          ) : (
+            <div className="absolute top-12 left-12">
+              <span className="badge" style={{ background: 'rgba(0,0,0,0.6)', color: badge.color }}>{badge.label}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="news-body">
+        <div onClick={() => onExpand(post)} className="flex-col gap-8 cursor-pointer">
+          {(!isHero || !post.imageUrl) && (
+            <div className="news-author-row">
+              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="news-avatar">{(post.authorName || 'A')[0]}</div>
+              <div className="flex-col gap-2">
+                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="font-bold text-sm text-primary">{post.authorName || 'Admin'}</div>
+                <div className="text-muted text-xs">{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</div>
+              </div>
+              {!post.imageUrl && <span className="badge" style={{ background: badge.bg, color: badge.color, marginLeft: 'auto' }}>{badge.label}</span>}
+            </div>
+          )}
+
+          {isHero && post.imageUrl && (
+            <div className="news-author-row text-xs">
+              <span onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="font-bold text-primary">By {post.authorName || 'Admin'}</span>
+              <span>{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</span>
+            </div>
+          )}
+
+          {!isHero && <h3 className="news-title">{post.title}</h3>}
+          
+          <p className={`news-excerpt ${isExpanded ? '' : 'clamp-3'}`}>{post.body}</p>
+          {!isExpanded && post.body.length > 100 && <span className="text-primary font-bold text-xs cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
+          {isExpanded && <span className="text-primary font-bold text-xs cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
+        </div>
+
+        <div className="news-stats">
+          <span className="flex-center gap-4"><Eye size={12} /> {post.views || 0}</span>
+          <span className="flex-center gap-4"><MessageCircle size={12} /> {post.commentsCount || 0}</span>
+          {trending && <span className="badge badge-danger"><Flame size={12} /> Trending</span>}
+        </div>
+
+        <div className="news-actions">
+          <div className="reactions">
+            {REACTIONS.map(r => {
+              const count = post.reactions?.[r.id] || 0;
+              const hasReacted = post[`reacted_${r.id}_${user?.uid}`];
+              return <button key={r.id} onClick={() => onReaction(post, r.id)} className={`reaction-btn ${hasReacted ? 'active' : ''}`}><span>{r.emoji}</span> {count > 0 && count}</button>;
+            })}
+          </div>
+          <div className="card-cta">
+            <button onClick={toggleComments} className="btn-icon-sm"><MessageCircle size={18} /></button>
+            {!isHero && <button onClick={() => onToggleSave(post.id)} className="btn-icon-sm"><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} className={isSaved ? 'text-gold' : ''} /></button>}
+            {!isHero && <button onClick={() => onShare(post)} className="btn-icon-sm"><Share2 size={18} /></button>}
+          </div>
+        </div>
+      </div>
+
+      {showComments && <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />}
+      
+      {isAdmin && (
+        <div className="admin-actions mt-12">
+          <button onClick={() => onEdit(post)} className="btn btn-secondary btn-sm flex-1"><Pencil size={14} /> Edit</button>
+          <button onClick={() => onDelete(post.id)} className="btn btn-danger btn-sm flex-1"><Trash2 size={14} /> Delete</button>
+        </div>
+      )}
+    </article>
+  );
+}
+
+function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onImageClick, newComments, setNewComments, handleComment }) {
+  const progress = useReadingProgress();
+  const [lightbox, setLightbox] = useState(null);
+  const isSaved = savedPosts.includes(post.id);
+  const badge = BADGES[post.category] || { label: post.category, color: 'var(--text-muted)', bg: 'var(--bg-elevated)' };
+  const paragraphs = post.body.split('\n').filter(p => p.trim() !== '');
+
+  return (
+    <article className="news-single glass-card">
+      <div className="reading-progress" style={{ width: `${progress}%` }} />
+      
+      <div className="news-author-row mb-12">
+        <div onClick={onAuthorClick} className="news-avatar" style={{ width: 40, height: 40 }}>{(post.authorName || 'A')[0]}</div>
+        <div className="flex-col gap-2 flex-1">
+          <div onClick={onAuthorClick} className="font-bold text-primary">{post.authorName || 'Admin'}</div>
+          <div className="text-muted text-xs flex-center gap-4">
+            {formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read {BULLET} <Eye size={10} /> {post.views || 0} views
+          </div>
+        </div>
+        <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
+      </div>
+
+      <h1 className="news-title mt-12">{post.title}</h1>
+      
+      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} className="news-img" style={{ height: 'auto', maxHeight: '450px', cursor: 'pointer', margin: '12px 0' }} loading="lazy" />}
+
+      <div className="news-body flex-col gap-12">
+        {paragraphs.map((para, i) => (
+          <p key={i} style={i === 0 ? { fontSize: 'var(--fs-lg)', fontWeight: 800, color: 'var(--primary)' } : {}}>{para}</p>
+        ))}
+      </div>
+
+      {relatedMatch && (
+        <div className="related-match-box mt-12">
+          <h4>Related Match: {relatedMatch.homeTeam?.name || 'Home'} vs {relatedMatch.awayTeam?.name || 'Away'}</h4>
+          <p>{relatedMatch.leagueName} {BULLET} {relatedMatch.kickoff || 'TBD'}</p>
+          <Link to={`/match/${relatedMatch.id}`}>View Match Center →</Link>
+        </div>
+      )}
+
+      <div className="news-actions mt-16 p-12 sticky bottom-0 z-100 glass-card">
+        <div className="reactions">
+          {REACTIONS.map(r => {
+            const count = post.reactions?.[r.id] || 0;
+            const hasReacted = post[`reacted_${r.id}_${user?.uid}`];
+            return <button key={r.id} onClick={() => onReaction(post, r.id)} className={`reaction-btn ${hasReacted ? 'active' : ''}`}><span>{r.emoji}</span> {count > 0 && count}</button>;
+          })}
+        </div>
+        <div className="card-cta">
+          <button onClick={() => onToggleSave(post.id)} className="btn-icon"><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} className={isSaved ? 'text-gold' : ''} /></button>
+          <button onClick={() => onShare(post)} className="btn-icon"><Share2 size={18} /></button>
+        </div>
+      </div>
+
+      {isAdmin && (
+        <div className="admin-actions mt-12">
+          <button onClick={() => onEdit(post)} className="btn btn-secondary btn-sm flex-1"><Pencil size={14} /> Edit</button>
+          <button onClick={() => onDelete(post.id)} className="btn btn-danger btn-sm flex-1"><Trash2 size={14} /> Delete</button>
+        </div>
+      )}
+
+      <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
+
+      {relatedPosts.length > 0 && (
+        <div className="related-grid mt-24">
+          <h3 className="text-primary font-bold mb-12 col-span-full">You might also like</h3>
+          {relatedPosts.map(p => (
+            <div key={p.id} onClick={() => onRelatedClick(p)} className="trending-card" style={{ height: '180px' }}>
+              {p.imageUrl && <img src={p.imageUrl} alt="" className="trending-img" />}
+              <div className="p-8 flex-col gap-4 absolute bottom-0 left-0 right-0 bg-overlay">
+                <div className="text-danger font-bold text-xs">{BADGES[p.category]?.label || p.category}</div>
+                <div className="text-primary font-bold line-clamp-2 text-sm">{p.title}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify({"@context":"https://schema.org","@type":"NewsArticle", headline:post.title, image:[getSeoImageUrl(post)], datePublished:post.createdAt?.toMillis ? new Date(post.createdAt.toMillis()).toISOString() : new Date().toISOString(), author:{name:post.authorName}}) }} />
+    </article>
+  );
+}
+
+function AdminForm({ formData, setFormData, handleSave, saving, uploadingImage, handleImageUpload, fileInputRef, onClose, editingPost }) {
+  return (
+    <div onClick={onClose} className="modal-overlay">
+      <div onClick={e => e.stopPropagation()} className="modal-box" style={{ maxWidth: '600px', textAlign: 'left' }}>
+        <div className="flex-between p-16 border-b mb-16">
+          <h2 className="text-primary font-bold">{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
+          <button onClick={onClose} className="btn-icon"><X size={18} /></button>
+        </div>
+        <form onSubmit={handleSave} className="flex-col gap-16">
+          <div className="flex-col gap-8">
+            <label className="text-muted font-bold text-xs">Title</label>
+            <input value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} required placeholder="e.g. Mbappe ruled out for 3 weeks" className="form-input" />
+          </div>
+          <div className="flex gap-12">
+            <div className="flex-col gap-8 flex-1">
+              <label className="text-muted font-bold text-xs">Category</label>
+              <select value={formData.category} onChange={e => setFormData(d => ({ ...d, category: e.target.value }))} className="form-input">
+                {Object.keys(BADGES).map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div className="flex-col gap-8 flex-1">
+              <label className="text-muted font-bold text-xs">Match ID (Optional)</label>
+              <input value={formData.relatedMatchId} onChange={e => setFormData(d => ({ ...d, relatedMatchId: e.target.value }))} placeholder="e.g. feat_2023-10-01_123" className="form-input" />
+            </div>
+          </div>
+          <div className="flex-col gap-8">
+            <label className="text-muted font-bold text-xs">Attachment (Optional)</label>
+            {formData.imageUrl ? (
+              <div className="relative p-8">
+                <img src={formData.imageUrl} alt="Preview" className="w-full rounded-8" />
+                <button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="btn-icon absolute top-12 right-12"><X size={16} /></button>
+              </div>
+            ) : (
+              <div className="glass-card flex-col p-20 items-center gap-8 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
+                {uploadingImage ? <Loader size={24} className="anim-spin text-primary" /> : <ImageIcon size={24} className="text-muted" />}
+                <span className="text-muted text-sm">Click to upload from device</span>
+                <span className="text-muted text-xs">Auto-compresses for fast loading</span>
+                <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
+              </div>
+            )}
+          </div>
+          <div className="flex-col gap-8">
+            <label className="text-muted font-bold text-xs">Body / Content</label>
+            <textarea value={formData.body} onChange={e => setFormData(d => ({ ...d, body: e.target.value }))} required rows={6} placeholder="Write the news details here..." className="form-input" style={{ minHeight: '120px', resize: 'vertical' }} />
+          </div>
+          <button type="submit" disabled={saving} className="btn btn-primary w-full mt-8">{saving ? <Loader size={18} className="anim-spin" /> : <Plus size={18} />} {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}</button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+function AdSlot({ index }) { 
+  return <div className="ad-slot">Ad {BULLET} slot {index}</div>; 
+}
+
+// --- MAIN COMPONENT ---
 export default function Highlights() {
   const { currentUser, userProfile } = useAuth();
   const user = currentUser;
@@ -109,7 +365,7 @@ export default function Highlights() {
   const [comments, setComments] = useState({});
   const [newComments, setNewComments] = useState({});
   const fileInputRef = useRef(null);
-  const scrollProgress = useReadingProgress();
+  const progress = useReadingProgress();
 
   useEffect(() => {
     const handleScroll = () => setShowScrollTop(window.scrollY > 500);
@@ -119,6 +375,7 @@ export default function Highlights() {
 
   useEffect(() => { setVisibleCount(15); }, [activeFilter, authorFilter]);
 
+  // Fetch all posts
   useEffect(() => {
     if (!db) return;
     setLoading(true);
@@ -130,6 +387,7 @@ export default function Highlights() {
     return () => unsub();
   }, [db]);
 
+  // Fetch single post if URL changes
   useEffect(() => {
     if (!db || !urlPostId) { setActivePost(null); setRelatedMatch(null); return; }
     setLoading(true);
@@ -149,6 +407,7 @@ export default function Highlights() {
     });
   }, [db, urlPostId, navigate]);
 
+  // Fetch comments for active post
   useEffect(() => {
     if (!activePost || !db) return;
     const targetId = activePost.id;
@@ -177,7 +436,7 @@ export default function Highlights() {
     if (activeFilter === 'Saved') list = list.filter(p => savedPosts.includes(p.id));
     else if (activeFilter !== 'All') list = list.filter(p => p.category === activeFilter);
     return list;
-  }, [posts, activeFilter, authorFilter, savedPosts])
+  }, [posts, activeFilter, authorFilter, savedPosts]);
 
   const trendingPosts = useMemo(() => [...posts].sort((a, b) => (b.views || 0) - (a.views || 0)).slice(0, 5), [posts]);
 
@@ -267,7 +526,7 @@ export default function Highlights() {
 
   return (
     <div className="highlights-page">
-      <div className="reading-progress" style={{ width: `${scrollProgress}%` }} />
+      <div className="reading-progress" style={{ width: `${progress}%` }} />
       
       <SEO
         title={seoPost ? seoPost.title : "Football News, Transfers & Match Updates | ZOKASCORE"}
@@ -313,7 +572,7 @@ export default function Highlights() {
           <>
             <div className="filter-row mt-16 mb-16">
               {CATEGORIES.map(cat => (
-                <button key={cat.key} onClick={() => setActiveFilter(cat.key)} className={`filter-btn ${activeFilter === cat.key ? 'active' : ''}`}>{cat.label}</button>
+                <button key={cat} onClick={() => setActiveFilter(cat)} className={`filter-btn ${activeFilter === cat ? 'active' : ''}`}>{cat}</button>
               ))}
               {savedPosts.length > 0 && <button onClick={() => setActiveFilter('Saved')} className={`filter-btn ${activeFilter === 'Saved' ? 'active' : ''}`}>Saved ({savedPosts.length})</button>}
             </div>
@@ -363,7 +622,7 @@ export default function Highlights() {
                         comments={comments[post.id] || []} newComments={newComments} setNewComments={setNewComments}
                         handleComment={handleComment} fetchComments={fetchCommentsForFeed}
                       />
-                      {(i + 1) % 4 === 0 && <AdSlot id={`news-ad-${i}`} mobile={true} desktop={true} />}
+                      {(i + 1) % 4 === 0 && <AdSlot index={(i + 1) / 4} />}
                     </React.Fragment>
                   ))}
                 </div>
@@ -384,53 +643,11 @@ export default function Highlights() {
       )}
 
       {isFormOpen && (
-        <div onClick={() => setIsFormOpen(false)} className="modal-overlay">
-          <div onClick={e => e.stopPropagation()} className="modal-box" style={{ maxWidth: '600px', textAlign: 'left' }}>
-            <div className="flex-between p-16 border-b mb-16">
-              <h2 className="text-primary font-bold">{editingPost ? 'Edit Post' : 'Create New Post'}</h2>
-              <button onClick={() => setIsFormOpen(false)} className="btn-icon"><X size={18} /></button>
-            </div>
-            <form onSubmit={handleSave} className="flex-col gap-16">
-              <div className="flex-col gap-8">
-                <label className="text-muted font-bold text-xs">Title</label>
-                <input value={formData.title} onChange={e => setFormData(d => ({ ...d, title: e.target.value }))} required placeholder="e.g. Mbappe ruled out for 3 weeks" className="form-input" />
-              </div>
-              <div className="flex gap-12">
-                <div className="flex-col gap-8 flex-1">
-                  <label className="text-muted font-bold text-xs">Category</label>
-                  <select value={formData.category} onChange={e => setFormData(d => ({ ...d, category: e.target.value }))} className="form-input">
-                    {Object.keys(BADGES).map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="flex-col gap-8 flex-1">
-                  <label className="text-muted font-bold text-xs">Match ID (Optional)</label>
-                  <input value={formData.relatedMatchId} onChange={e => setFormData(d => ({ ...d, relatedMatchId: e.target.value }))} placeholder="e.g. feat_2023-10-01_123" className="form-input" />
-                </div>
-              </div>
-              <div className="flex-col gap-8">
-                <label className="text-muted font-bold text-xs">Attachment (Optional)</label>
-                {formData.imageUrl ? (
-                  <div className="relative p-8">
-                    <img src={formData.imageUrl} alt="Preview" className="w-full rounded-8" />
-                    <button type="button" onClick={() => setFormData(d => ({ ...d, imageUrl: '' }))} className="btn-icon absolute top-12 right-12"><X size={16} /></button>
-                  </div>
-                ) : (
-                  <div className="glass-card flex-col p-20 items-center gap-8 cursor-pointer" onClick={() => fileInputRef.current?.click()}>
-                    {uploadingImage ? <Loader size={24} className="anim-spin text-primary" /> : <ImageIcon size={24} className="text-muted" />}
-                    <span className="text-muted text-sm">Click to upload from device</span>
-                    <span className="text-muted text-xs">Auto-compresses for fast loading</span>
-                    <input type="file" accept="image/*" ref={fileInputRef} onChange={handleImageUpload} className="hidden" />
-                  </div>
-                )}
-              </div>
-              <div className="flex-col gap-8">
-                <label className="text-muted font-bold text-xs">Body / Content</label>
-                <textarea value={formData.body} onChange={e => setFormData(d => ({ ...d, body: e.target.value }))} required rows={6} placeholder="Write the news details here..." className="form-input" style={{ minHeight: '120px', resize: 'vertical' }} />
-              </div>
-              <button type="submit" disabled={saving} className="btn btn-primary w-full mt-8">{saving ? <Loader size={18} className="anim-spin" /> : <Plus size={18} />} {saving ? 'Saving...' : (editingPost ? 'Update Post' : 'Publish Post')}</button>
-            </form>
-          </div>
-        </div>
+        <AdminForm 
+          formData={formData} setFormData={setFormData} handleSave={handleSave} saving={saving} 
+          uploadingImage={uploadingImage} handleImageUpload={handleImageUpload} 
+          fileInputRef={fileInputRef} onClose={() => setIsFormOpen(false)} editingPost={editingPost}
+        />
       )}
 
       {shareData && (
@@ -447,201 +664,6 @@ export default function Highlights() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function PostCard({ post, index, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onExpand, onAuthorClick, isHero, comments, newComments, setNewComments, handleComment, fetchComments }) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const [showComments, setShowComments] = useState(false); 
-  const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: 'var(--text-muted)', bg: 'var(--bg-elevated)', label: post.category };
-
-  const toggleComments = () => { if (!showComments) fetchComments(post.id); setShowComments(p => !p); };
-
-  return (
-    <article className={`news-card anim-fade-up ${isHero ? 'expanded' : ''}`} style={{ animationDelay: `${index * 50}ms` }}>
-      {post.imageUrl && (
-        <div onClick={() => onExpand(post)} className="news-img-wrap">
-          <img src={post.imageUrl} alt={post.title} loading="lazy" className="news-img" />
-          <div className="news-hero-overlay" />
-          {isHero ? (
-            <div className="news-hero-meta flex-col gap-8">
-              <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-              <h2 className="news-title">{post.title}</h2>
-            </div>
-          ) : (
-            <div className="absolute top-12 left-12">
-              <span className="badge" style={{ background: 'rgba(0,0,0,0.6)', color: badge.color }}>{badge.label}</span>
-            </div>
-          )}
-        </div>
-      )}
-
-      <div className="news-body">
-        <div onClick={() => onExpand(post)} className="flex-col gap-8 cursor-pointer">
-          {(!isHero || !post.imageUrl) && (
-            <div className="news-author-row">
-              <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="news-avatar">{(post.authorName || 'A')[0]}</div>
-              <div className="flex-col gap-2">
-                <div onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="font-bold text-sm text-primary">{post.authorName || 'Admin'}</div>
-                <div className="text-muted text-xs">{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</div>
-              </div>
-              {!post.imageUrl && <span className="badge" style={{ background: badge.bg, color: badge.color, marginLeft: 'auto' }}>{badge.label}</span>}
-            </div>
-          )}
-
-          {isHero && post.imageUrl && (
-            <div className="news-author-row text-xs">
-              <span onClick={(e) => { e.stopPropagation(); onAuthorClick(); }} className="font-bold text-primary">By {post.authorName || 'Admin'}</span>
-              <span>{formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read</span>
-            </div>
-          )}
-
-          {!isHero && <h3 className="news-title">{post.title}</h3>}
-          
-          <p className={`news-excerpt ${isExpanded ? '' : 'clamp-3'}`}>{post.body}</p>
-          {!isExpanded && post.body.length > 100 && <span className="text-primary font-bold text-xs cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsExpanded(true); }}>Read more</span>}
-          {isExpanded && <span className="text-primary font-bold text-xs cursor-pointer" onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}>Show less</span>}
-        </div>
-
-        <div className="news-stats">
-          <span className="flex-center gap-4"><Eye size={12} /> {post.views || 0}</span>
-          <span className="flex-center gap-4"><MessageCircle size={12} /> {post.commentsCount || 0}</span>
-          {(post.views > 1000) && <span className="badge badge-danger"><Flame size={12} /> Trending</span>}
-        </div>
-
-        <div className="news-actions">
-          <div className="reactions">
-            {REACTIONS.map(r => {
-              const count = post.reactions?.[r.key] || 0;
-              const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-              return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`reaction-btn ${hasReacted ? 'active' : ''}`}><span>{r.icon}</span> {count > 0 && count}</button>;
-            })}
-          </div>
-          <div className="card-cta">
-            <button onClick={toggleComments} className="btn-icon-sm"><MessageCircle size={18} /></button>
-            {!isHero && <button onClick={() => onToggleSave(post.id)} className="btn-icon-sm"><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} className={isSaved ? 'text-gold' : ''} /></button>}
-            {!isHero && <button onClick={() => onShare(post)} className="btn-icon-sm"><Share2 size={18} /></button>}
-          </div>
-        </div>
-      </div>
-
-      {showComments && <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />}
-      
-      {isAdmin && (
-        <div className="admin-actions mt-12">
-          <button onClick={() => onEdit(post)} className="btn btn-secondary btn-sm flex-1"><Pencil size={14} /> Edit</button>
-          <button onClick={() => onDelete(post.id)} className="btn btn-danger btn-sm flex-1"><Trash2 size={14} /> Delete</button>
-        </div>
-      )}
-    </article>
-  );
-}
-
-function SinglePostView({ post, comments, relatedMatch, isAdmin, user, savedPosts, onToggleSave, onShare, onReaction, onEdit, onDelete, onAuthorClick, relatedPosts, onRelatedClick, onImageClick, newComments, setNewComments, handleComment }) {
-  const isSaved = savedPosts.includes(post.id);
-  const badge = BADGES[post.category] || { color: 'var(--text-muted)', bg: 'var(--bg-elevated)', label: post.category };
-  const paragraphs = post.body.split('\n').filter(p => p.trim() !== '');
-
-  return (
-    <article className="news-single glass-card">
-      <div className="news-author-row mb-12">
-        <div onClick={onAuthorClick} className="news-avatar" style={{ width: 40, height: 40 }}>{(post.authorName || 'A')[0]}</div>
-        <div className="flex-col gap-2 flex-1">
-          <div onClick={onAuthorClick} className="font-bold text-primary">{post.authorName || 'Admin'}</div>
-          <div className="text-muted text-xs flex-center gap-4">
-            {formatTimestamp(post.createdAt)} {BULLET} {calcReadTime(post.body)} min read {BULLET} <Eye size={10} /> {post.views || 0} views
-          </div>
-        </div>
-        <span className="badge" style={{ background: badge.bg, color: badge.color }}>{badge.label}</span>
-      </div>
-
-      <h1 className="news-title mt-12">{post.title}</h1>
-      
-      {post.imageUrl && <img src={post.imageUrl} alt={post.title} onClick={() => onImageClick(post.imageUrl)} className="news-img" style={{ height: 'auto', maxHeight: '450px', cursor: 'pointer', margin: '12px 0' }} loading="lazy" />}
-
-      <div className="news-body flex-col gap-12">
-        {paragraphs.map((para, i) => (
-          <p key={i} style={i === 0 ? { fontSize: 'var(--fs-lg)', fontWeight: 800, color: 'var(--primary)' } : {}}>{para}</p>
-        ))}
-      </div>
-
-      {relatedMatch && (
-        <div className="related-match-box mt-12">
-          <div className="text-muted font-bold text-xs">RELATED MATCH</div>
-          <div className="flex-center gap-12 text-primary font-bold mt-4">
-            <span>{relatedMatch.homeTeam?.name || 'Home'}</span>
-            <span className="text-muted">{relatedMatch.homeScore ?? '-'} - {relatedMatch.awayScore ?? '-'}</span>
-            <span>{relatedMatch.awayTeam?.name || 'Away'}</span>
-          </div>
-        </div>
-      )}
-
-      <div className="news-actions mt-16 p-12 sticky bottom-0 z-100 glass-card">
-        <div className="reactions">
-          {REACTIONS.map(r => {
-            const count = post.reactions?.[r.key] || 0;
-            const hasReacted = post[`reacted_${r.key}_${user?.uid}`];
-            return <button key={r.key} onClick={() => onReaction(post, r.key)} className={`reaction-btn ${hasReacted ? 'active' : ''}`}><span>{r.icon}</span> {count > 0 && count}</button>;
-          })}
-        </div>
-        <div className="card-cta">
-          <button onClick={() => onToggleSave(post.id)} className="btn-icon"><Bookmark size={18} fill={isSaved ? 'currentColor' : 'none'} className={isSaved ? 'text-gold' : ''} /></button>
-          <button onClick={() => onShare(post)} className="btn-icon"><Share2 size={18} /></button>
-        </div>
-      </div>
-
-      {isAdmin && (
-        <div className="admin-actions mt-12">
-          <button onClick={() => onEdit(post)} className="btn btn-secondary btn-sm flex-1"><Pencil size={14} /> Edit</button>
-          <button onClick={() => onDelete(post.id)} className="btn btn-danger btn-sm flex-1"><Trash2 size={14} /> Delete</button>
-        </div>
-      )}
-
-      <CommentSection postId={post.id} comments={comments} newComments={newComments} setNewComments={setNewComments} handleComment={handleComment} />
-
-      {relatedPosts.length > 0 && (
-        <div className="related-grid mt-24">
-          <h3 className="text-primary font-bold mb-12 col-span-full">You might also like</h3>
-          {relatedPosts.map(p => (
-            <div key={p.id} onClick={() => onRelatedClick(p)} className="trending-card" style={{ height: '180px' }}>
-              {p.imageUrl && <img src={p.imageUrl} alt="" className="trending-img" />}
-              <div className="p-8 flex-col gap-4 absolute bottom-0 left-0 right-0 bg-overlay">
-                <div className="text-danger font-bold text-xs">{BADGES[p.category]?.label || p.category}</div>
-                <div className="text-primary font-bold line-clamp-2 text-sm">{p.title}</div>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </article>
-  );
-}
-
-function CommentSection({ postId, comments, newComments, setNewComments, handleComment }) {
-  return (
-    <div className="comments-wrap mt-16">
-      <div className="comment-row">
-        <input 
-          value={newComments[postId] || ''}
-          onChange={e => setNewComments(prev => ({ ...prev, [postId]: e.target.value }))}
-          placeholder="Write a comment..."
-          className="comment-input"
-        />
-        <button onClick={() => handleComment(postId)} className="btn btn-primary"><Send size={16} /></button>
-      </div>
-      <div className="flex-col gap-8 mt-12">
-        {(comments || []).length === 0 && <p className="text-muted text-sm text-center py-12">No comments yet.</p>}
-        {(comments || []).map(c => (
-          <div key={c.id} className="comment-row">
-            <div className="comment-avatar">{c.authorName?.[0] || 'G'}</div>
-            <div className="comment-bubble">
-              <b>{c.authorName || 'Guest'}</b> <span>{c.body}</span>
-            </div>
-          </div>
-        ))}
-      </div>
     </div>
   );
 }
