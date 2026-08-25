@@ -111,7 +111,6 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
       if (!newPicks.length) { setSaving(false); return; }
       const merged = mergeWithExisting(newPicks);
 
-      // ★ FIXED: Use new Date().toISOString() instead of serverTimestamp()
       await onSaveDraft({
         matches: merged,
         date,
@@ -138,7 +137,6 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
       if (!newPicks.length) { setPublishing(false); return; }
       const merged = mergeWithExisting(newPicks);
 
-      // ★ FIXED: Use new Date().toISOString() instead of serverTimestamp()
       await onPublish({
         matches: merged,
         date,
@@ -155,7 +153,6 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
     setPublishing(false);
   }, [ready, buildNewPicks, mergeWithExisting, onPublish, date, toast]);
 
-  // ★ FIXED: Load history from backend API (no Firestore reads!)
   const loadHist = useCallback(async () => {
     if (hist.length > 0 || histLoad) return;
     setHistLoad(true);
@@ -196,11 +193,11 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
   }, [pubMatches]);
 
   return (
-    <div className="flex-col gap-16">
+    <div className="flex flex-col gap-16">
       {/* Selection Header */}
       {cnt > 0 && (
         <div className="glass-card p-16 flex-between flex-wrap gap-8 anim-fade-up" style={{ background: 'rgba(var(--gold-rgb), 0.04)', borderColor: 'rgba(var(--gold-rgb), 0.2)', boxShadow: '0 4px 20px rgba(var(--gold-rgb), 0.05)' }}>
-          <div className="flex-col gap-4">
+          <div className="flex flex-col gap-4">
             <div className="flex-center gap-8">
               <span className="text-primary font-bold text-md">{cnt} / {MAX_ZOKA} Selected</span>
               {scored === cnt && cnt > 0 && (
@@ -246,7 +243,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
 
       {/* Full State */}
       {isFull && cnt === 0 && (
-        <div className="glass-card p-24 flex-col items-center gap-8 text-center anim-fade-up" style={{ borderColor: 'rgba(var(--gold-rgb), 0.2)' }}>
+        <div className="glass-card p-24 flex flex-col items-center gap-8 text-center anim-fade-up" style={{ borderColor: 'rgba(var(--gold-rgb), 0.2)' }}>
           <div className="p-16 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.1)' }}>
             <Target size={32} className="text-gold" />
           </div>
@@ -272,7 +269,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
 
       {/* Match List */}
       {fxLoading ? <Skel n={4} /> : vis.length > 0 ? (
-        <div className={`flex-col gap-8 ${flash ? 'anim-goal-flash' : ''}`}>
+        <div className={`flex flex-col gap-8 ${flash ? 'anim-goal-flash' : ''}`}>
           {vis.map((m, i) => {
             const mid = String(m.id);
             const isPublished = pubMap.has(mid);
@@ -306,7 +303,7 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
       )}
 
       {/* History Accordion */}
-      <div className="glass-card p-16 flex-col gap-12 mt-8">
+      <div className="glass-card p-16 flex flex-col gap-12 mt-8">
         <button className="flex-between w-full text-left group" onClick={() => { setShowHist(p => !p); if (!showHist) loadHist(); }}>
           <h3 className="text-primary font-bold flex-center gap-8 text-md group-hover:text-gold transition-colors">
             <History size={16} /> Zoka Picks History
@@ -315,13 +312,13 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
         </button>
 
         {showHist && (
-          <div className="mt-8 flex-col gap-8 anim-fade-up">
+          <div className="mt-8 flex flex-col gap-8 anim-fade-up">
             {histLoad ? <Skel n={2} /> : hist.length > 0 ? hist.map(day => {
               const isOpen = openDay === day.date;
               const res = day.total - day.p;
               const acc = res > 0 ? Math.round(((day.e + day.r) / res) * 100) : 0;
               return (
-                <div key={day.date} className="glass-card p-12 cursor-pointer hover:border-primary/20 transition-colors" onClick={() => setOpenDay(isOpen ? null : day.date)}>
+                <div key={day.date} className="glass-card p-12 cursor-pointer hover-card" onClick={() => setOpenDay(isOpen ? null : day.date)}>
                   <div className="flex-between">
                     <div>
                       <div className="text-primary font-bold text-sm">{dateLabel(day.date)}</div>
@@ -339,9 +336,9 @@ const ZokaTab = memo(function ZokaTab({ date, fixtures, fxLoading, pubPicks, onP
                   </div>
 
                   {isOpen && (
-                    <div className="mt-12 pt-12 border-t border-border flex-col gap-4 anim-fade-up">
+                    <div className="mt-12 pt-12 border-b flex flex-col gap-4 anim-fade-up">
                       {day.matches.map((pk, i) => (
-                        <div key={i} className="flex-between py-8 px-8 rounded-lg hover:bg-elevated transition-colors text-sm gap-8">
+                        <div key={i} className="flex-between py-8 px-8 rounded-lg hover-bg-elevated transition-colors text-sm gap-8">
                           <div className="flex-1 min-w-0 flex-center gap-8">
                             {pk.homeLogo && <img src={pk.homeLogo} alt="" width="16" height="16" />}
                             <span className="text-primary font-bold truncate">{pk.homeTeam?.shortName || pk.homeTeam?.name || '?'}</span>

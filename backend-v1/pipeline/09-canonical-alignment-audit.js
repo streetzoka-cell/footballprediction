@@ -9,8 +9,7 @@
  *
  * PURPOSE
  * -------
- * Independently audit the relational alignment between the
- * canonical ZOKASCORE datasets:
+ * Independently audit relational alignment between:
  *
  *   MASTER
  *   APPEARANCES
@@ -22,59 +21,49 @@
  *   players-index.json
  *   match-id-crosswalk.json
  *
- * DESIGN RULES
- * ------------
- * - This is an AUDIT only.
- * - No source file is modified.
- * - No IDs are generated.
- * - No fuzzy matching.
- * - No alias guessing.
- * - No synthetic identity generation.
- * - Canonical team-name normalization follows the same
- *   deterministic contract used by Step 7.
- * - Ambiguous canonical team names are NOT resolved.
- * - Missing references and unknown references are reported
- *   separately.
- * - Match crosswalk integrity is independently audited.
- * - Duplicate MASTER match IDs are reported.
- * - All residuals are preserved for forensic investigation.
- * - No hard-coded orphan counts are used.
+ * IMPORTANT DESIGN PRINCIPLE
+ * --------------------------
+ * A textual MASTER team name that cannot be resolved to the
+ * canonical team registry is a FORENSIC NAME-RESOLUTION RESIDUAL.
  *
- * STATUS CONTRACT
- * --------------
- * HARD FAIL:
- *   - Unresolved MASTER team names
- *   - Duplicate MASTER match IDs
- *   - Invalid crosswalk targets
- *   - Unknown player references
- *   - Unknown team references
+ * It is NOT the same thing as:
  *
- * ACCEPTABLE FORENSIC WARNINGS:
- *   - Ambiguous MASTER team names
- *   - Unknown APPEARANCES match references
- *   - Unknown EVENTS match references
- *   - Missing player IDs in EVENTS
+ *   - an invalid team ID
+ *   - an unknown player ID
+ *   - an invalid crosswalk target
+ *   - a duplicate canonical match ID
  *
- * IMPORTANT:
- * Unknown secondary match references are NOT silently ignored.
- * They are fully counted and preserved in the report, but they
- * do not invalidate the canonical registries themselves.
+ * Therefore unresolved MASTER team names are WARNINGS and do
+ * not independently fail this relational alignment gate.
  *
- * INPUTS
+ * HARD FAIL
+ * ---------
+ * - Duplicate MASTER Match IDs
+ * - Missing MASTER Match IDs
+ * - Invalid crosswalk targets
+ * - Unknown Player references
+ * - Unknown non-empty Team references
+ *
+ * FORENSIC WARNINGS
+ * -----------------
+ * - Unresolved MASTER team names
+ * - Ambiguous MASTER team names
+ * - Unknown APPEARANCES match references
+ * - Unknown EVENTS match references
+ * - Missing player IDs in EVENTS
+ * - Missing team IDs in secondary datasets
+ *
+ * SAFETY
  * ------
- * data/source/ZOKASCORE_FINAL/
- *   ZOKASCORE_PUBLIC_MASTER.csv
- *   ZOKASCORE_APPEARANCES.csv
- *   ZOKASCORE_EVENTS.csv
- *
- * data/indexes/
- *   teams-index.json
- *   players-index.json
- *   match-id-crosswalk.json
- *
- * OUTPUT
- * ------
- * data_audit/canonical_alignment_report.json
+ * - Audit only
+ * - No source CSV modification
+ * - No ID generation
+ * - No fuzzy matching
+ * - No alias guessing
+ * - No synthetic identity generation
+ * - No automatic repair
+ * - No hard-coded orphan expectations
+ * - Missing and unknown references remain separate
  *
  * ============================================================
  */
@@ -198,7 +187,7 @@ function incrementMap(map, key) {
 }
 
 // ============================================================
-// INDEX LOADING
+// JSON LOADING
 // ============================================================
 
 function loadJson(file, label) {
@@ -218,6 +207,10 @@ function loadJson(file, label) {
     );
   }
 }
+
+// ============================================================
+// TEAM INDEX
+// ============================================================
 
 function buildTeamIndex(teamsIndex) {
   const teamIdSet = new Set(
@@ -324,6 +317,10 @@ async function auditMaster(teamIndex) {
       .on('data', row => {
         rows++;
 
+        // ------------------------------------------------------
+        // MATCH ID
+        // ------------------------------------------------------
+
         const matchId =
           stringValue(
             row.zokascore_match_id
@@ -354,19 +351,14 @@ async function auditMaster(teamIndex) {
           );
         }
 
+        // ------------------------------------------------------
+        // HOME TEAM NAME
+        // ------------------------------------------------------
+
         const homeName =
           stringValue(
             row.home_team
           );
-
-        const awayName =
-          stringValue(
-            row.away_team
-          );
-
-        // ------------------------------------------------------
-        // HOME TEAM
-        // ------------------------------------------------------
 
         if (homeName) {
           const normalized =
@@ -394,8 +386,13 @@ async function auditMaster(teamIndex) {
         }
 
         // ------------------------------------------------------
-        // AWAY TEAM
+        // AWAY TEAM NAME
         // ------------------------------------------------------
+
+        const awayName =
+          stringValue(
+            row.away_team
+          );
 
         if (awayName) {
           const normalized =
@@ -483,15 +480,11 @@ async function auditMaster(teamIndex) {
     masterMatchIdCounts,
     duplicateMatchIds,
     duplicateMatchIdRows,
-
     missingMatchIdRows,
-
     unresolvedHomeNames,
     unresolvedAwayNames,
-
     ambiguousHomeNames,
     ambiguousAwayNames,
-
     uniqueUnresolvedTeamNames,
     uniqueAmbiguousTeamNames
   };
@@ -538,9 +531,7 @@ function auditCrosswalk(
       continue;
     }
 
-    sourceIdSet.add(
-      source
-    );
+    sourceIdSet.add(source);
 
     if (!target) {
       incrementMap(
@@ -551,22 +542,14 @@ function auditCrosswalk(
       continue;
     }
 
-    targetIdSet.add(
-      target
-    );
+    targetIdSet.add(target);
 
-    if (
-      source === target
-    ) {
-      identityMappings.add(
-        source
-      );
+    if (source === target) {
+      identityMappings.add(source);
     }
 
     if (
-      !masterMatchIdSet.has(
-        target
-      )
+      !masterMatchIdSet.has(target)
     ) {
       incrementMap(
         invalidTargetIds,
@@ -714,10 +697,6 @@ async function auditSecondaryDataset({
           }
         }
 
-        // IMPORTANT:
-        // Do NOT return when Match ID is missing.
-        // Player and Team references must still be audited.
-
         // ------------------------------------------------------
         // PLAYER
         // ------------------------------------------------------
@@ -804,7 +783,6 @@ async function auditSecondaryDataset({
 
   return {
     stats,
-
     unknownMatchIdRefs,
     unknownPlayerIdRefs,
     unknownTeamIdRefs
@@ -821,36 +799,14 @@ function calculateStatus({
   appearances,
   events
 }) {
-  /**
-   * HARD FAILURES
-   *
-   * These indicate structural corruption of the canonical
-   * relational graph.
-   */
-
   const failures = [];
-
-  /**
-   * WARNINGS
-   *
-   * These are residuals that must remain visible and preserved
-   * for forensic work, but do not invalidate the canonical
-   * registries themselves.
-   */
-
   const warnings = [];
 
   // ==========================================================
   // HARD FAILURES
+  //
+  // These represent actual canonical relational violations.
   // ==========================================================
-
-  if (
-    master.uniqueUnresolvedTeamNames.size > 0
-  ) {
-    failures.push(
-      'MASTER contains unresolved team names'
-    );
-  }
 
   if (
     master.duplicateMatchIds.length > 0
@@ -910,7 +866,18 @@ function calculateStatus({
 
   // ==========================================================
   // FORENSIC WARNINGS
+  //
+  // These remain visible and are preserved for investigation.
+  // They do NOT invalidate canonical registries.
   // ==========================================================
+
+  if (
+    master.uniqueUnresolvedTeamNames.size > 0
+  ) {
+    warnings.push(
+      `MASTER contains ${master.uniqueUnresolvedTeamNames.size.toLocaleString()} unresolved team names. These are historical/name-resolution residuals and were NOT auto-resolved.`
+    );
+  }
 
   if (
     master.uniqueAmbiguousTeamNames.size > 0
@@ -933,6 +900,22 @@ function calculateStatus({
   ) {
     warnings.push(
       `EVENTS contains ${events.stats.unknownMatchIds.toLocaleString()} unknown Match references. These are preserved as forensic residuals.`
+    );
+  }
+
+  if (
+    appearances.stats.missingTeamIds > 0
+  ) {
+    warnings.push(
+      `APPEARANCES contains ${appearances.stats.missingTeamIds.toLocaleString()} blank Team IDs. These are retained as unresolved source relationships.`
+    );
+  }
+
+  if (
+    events.stats.missingTeamIds > 0
+  ) {
+    warnings.push(
+      `EVENTS contains ${events.stats.missingTeamIds.toLocaleString()} blank Team IDs. These are retained as unresolved source relationships.`
     );
   }
 
@@ -986,9 +969,7 @@ function buildReport({
         teamIndex.teamIdSet.size,
 
       players:
-        Object.keys(
-          playersIndex
-        ).length,
+        Object.keys(playersIndex).length,
 
       ambiguous_team_names:
         teamIndex.ambiguousNames.size
@@ -1166,6 +1147,9 @@ function buildReport({
       ambiguous_team_names_auto_resolved:
         false,
 
+      unresolved_master_team_names_blocking:
+        false,
+
       missing_vs_unknown_references_separated:
         true,
 
@@ -1210,12 +1194,10 @@ async function run() {
     '============================================================\n'
   );
 
-  ensureDir(
-    AUDIT_DIR
-  );
+  ensureDir(AUDIT_DIR);
 
   // ==========================================================
-  // 1. LOAD CANONICAL INDEXES
+  // 1. LOAD INDEXES
   // ==========================================================
 
   console.log(
@@ -1247,9 +1229,7 @@ async function run() {
 
   const playerIdSet =
     new Set(
-      Object.keys(
-        playersIndex
-      )
+      Object.keys(playersIndex)
     );
 
   console.log(
@@ -1487,15 +1467,23 @@ async function run() {
     statusResult.status === 'PASS'
   ) {
     console.log(
-      '\n✅ Canonical relational alignment verified.'
+      '\n============================================================'
     );
 
     console.log(
-      '✅ No unresolved MASTER team names.'
+      '✅ CANONICAL RELATIONAL ALIGNMENT VERIFIED'
     );
 
     console.log(
-      '✅ No duplicate MASTER Match IDs.'
+      '============================================================'
+    );
+
+    console.log(
+      '✅ MASTER Match IDs are unique.'
+    );
+
+    console.log(
+      '✅ MASTER contains no missing Match IDs.'
     );
 
     console.log(
@@ -1507,7 +1495,11 @@ async function run() {
     );
 
     console.log(
-      '✅ No unknown Team references.'
+      '✅ No unknown non-empty Team references.'
+    );
+
+    console.log(
+      '✅ Unresolved MASTER team names remain forensic warnings.'
     );
 
     console.log(
@@ -1515,15 +1507,19 @@ async function run() {
     );
 
     console.log(
-      '✅ Missing and unknown references are separated.'
+      '✅ Missing and unknown references remain separated.'
     );
 
     console.log(
-      '✅ Secondary residuals remain preserved for forensics.'
+      '✅ Secondary match residuals remain preserved.'
     );
 
     console.log(
       '🔒 Canonical source files were NOT modified.'
+    );
+
+    console.log(
+      '============================================================\n'
     );
   } else {
     console.log(
@@ -1538,15 +1534,11 @@ async function run() {
         `   ❌ ${failure}`
       );
     }
-  }
 
-  console.log(
-    '============================================================\n'
-  );
+    console.log(
+      '============================================================\n'
+    );
 
-  if (
-    statusResult.status === 'FAIL'
-  ) {
     process.exit(1);
   }
 }

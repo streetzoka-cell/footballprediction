@@ -1,10 +1,12 @@
-﻿import { slugify } from './format';
+﻿// src/utils/routes.js
+import { slugify } from './seoBuilder';
 
 export const ROUTES = Object.freeze({
   HOME: '/',
   FIXTURES: '/fixtures',
-  RESULTS: '/results', // ★ PHASE 8: Added Results Archive
+  RESULTS: '/results',
   PREDICTIONS: '/predictions',
+  PREDICTION_V21: '/predictions/v21',
   MASTERGAMES: '/mastergames',
   BASKETBALL: '/basketball',
   HIGHLIGHTS: '/highlights',
@@ -25,20 +27,39 @@ export const ROUTES = Object.freeze({
   CONTACT: '/contact',
   PARTNERS: '/partners',
   ADVERTISE: '/advertise',
+  CHANGELOG: '/changelog',
+  STATUS: '/status',
+  FOOTBALL_KNOWLEDGE: '/football-knowledge',
 });
 
-export const buildMatchRoute = (matchId, homeName, awayName) => 
-  `/match/${matchId}/${slugify(homeName)}-vs-${slugify(awayName)}`;
+export const STUDIO_ROUTES = Object.freeze({
+  HOME: '/studio',
+  TEMPLATES: '/studio/templates',
+  EDITOR: '/studio/editor',
+  REACTOR: '/studio/reactor',
+  WEB_SHOWCASE: '/studio/web-showcase',
+  MEDIA: '/studio/media',
+  FACE_AR: '/studio/face-ar',
+});
 
-export const buildTeamRoute = (teamId, teamName) => 
-  `/team/${teamId}/${slugify(teamName)}`;
+const safeSlug = (name) => slugify(name) || 'unknown';
 
-export const buildLeagueRoute = (leagueId, leagueName) => 
-  `/league/${leagueId}/${slugify(leagueName)}`;
+export const buildMatchRoute = (id, home, away) => {
+  if (!id) return '/';
+  return `/match/${id}/${safeSlug(home)}-vs-${safeSlug(away)}`.toLowerCase();
+};
 
-// ★ PHASE 7: Added /competition/ route builder
-export const buildCompetitionRoute = (leagueId, leagueName) => 
-  `/competition/${leagueId}/${slugify(leagueName)}`;
+export const buildTeamRoute = (id, name) =>
+  `/team/${id || 'unknown'}/${safeSlug(name)}`.toLowerCase();
 
-export const buildHighlightRoute = (postId, title) => 
-  `/highlights/${slugify(title)}-${postId}`;
+export const buildLeagueRoute = (id, name) =>
+  `/league/${id || 'unknown'}/${safeSlug(name)}`.toLowerCase();
+
+export const buildCompetitionRoute = (id, name) =>
+  `/competition/${id || 'unknown'}/${safeSlug(name)}`.toLowerCase();
+
+export const buildHighlightRoute = (postId, title) =>
+  `/highlights/${safeSlug(title)}-${postId || ''}`.toLowerCase();
+
+export const buildSearchRoute = (q) =>
+  `/search?q=${encodeURIComponent(q || '')}`;

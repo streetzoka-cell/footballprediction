@@ -1,75 +1,57 @@
-﻿// src/core/PwaManager.jsx
-import { useEffect } from 'react';
-import { useRegisterSW } from 'virtual:pwa-register/react';
-import { Download, RefreshCw, CheckCircle } from 'lucide-react';
-import { useToast } from './ToastManager';
+﻿/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ZOKASCORE — PWA Manager (Cleaned)
+   Tailwind utility classes → CSS vars for theme consistency
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+import { useEffect, useState } from "react";
 
 export default function PwaManager() {
-  const toast = useToast();
-
-  const {
-    needRefresh: [needRefresh, setNeedRefresh],
-    offlineReady: [offlineReady, setOfflineReady],
-    updateServiceWorker,
-  } = useRegisterSW({
-    onRegistered(r) {
-      if (r) {
-        setInterval(() => r.update(), 60 * 60 * 1000); 
-        window.addEventListener('online', () => {
-          r.update();
-        });
-      }
-    },
-  });
-
-  useEffect(() => {
-    if (needRefresh) {
-      toast.info('New version available! Updating...', {
-        icon: <RefreshCw size={18} className="text-amber-400" />,
-        duration: 3000
-      });
-      const timer = setTimeout(() => updateServiceWorker(true), 3000);
-      setNeedRefresh(false);
-      return () => clearTimeout(timer);
-    }
-  }, [needRefresh, toast, updateServiceWorker, setNeedRefresh]);
-
-  useEffect(() => {
-    if (offlineReady) {
-      toast.success('App ready for offline use!', {
-        icon: <CheckCircle size={18} className="text-emerald-400" />,
-      });
-      setOfflineReady(false);
-    }
-  }, [offlineReady, toast, setOfflineReady]);
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showBanner, setShowBanner] = useState(false);
+  const [isInstalled, setIsInstalled] = useState(false);
 
   useEffect(() => {
     const handler = (e) => {
       e.preventDefault();
-      window.deferredPrompt = e; 
-      window.dispatchEvent(new Event('pwaInstallable'));
-      
-      setTimeout(() => {
-        if (!window.matchMedia('(display-mode: standalone)').matches && window.deferredPrompt) {
-          toast.info('Install ZOKASCORE for offline access!', {
-            action: { 
-              label: 'Install', 
-              onClick: () => {
-                window.deferredPrompt.prompt();
-                window.deferredPrompt.userChoice.then(() => {
-                  window.deferredPrompt = null;
-                });
-              }
-            },
-            icon: <Download size={18} className="text-blue-400" />,
-            duration: 10000
-          });
-        }
-      }, 10000);
+      setDeferredPrompt(e);
+      setShowBanner(true);
     };
-    window.addEventListener('beforeinstallprompt', handler);
-    return () => window.removeEventListener('beforeinstallprompt', handler);
-  }, [toast]);
 
-  return null;
+    window.addEventListener("beforeinstallprompt", handler);
+
+    if (window.matchMedia("(display-mode: standalone)").matches) {
+      setIsInstalled(true);
+    }
+
+    return () => window.removeEventListener("beforeinstallprompt", handler);
+  }, []);
+
+  const handleInstall = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === "accepted") setIsInstalled(true);
+    setDeferredPrompt(null);
+    setShowBanner(false);
+  };
+
+  const handleDismiss = () => setShowBanner(false);
+
+  if (isInstalled || !showBanner) return null;
+
+  return (
+    <div className="zk-pwa-banner" role="banner">
+      <div className="zk-pwa-banner-content">
+        <span className="zk-pwa-banner-icon text-success">📱</span>
+        <div className="zk-pwa-banner-text">
+          <strong>Install ZOKASCORE</strong>
+          <span>Add to home screen for faster access</span>
+        </div>
+      </div>
+      <div className="zk-pwa-banner-actions">
+        <button className="zk-pwa-banner-install" onClick={handleInstall}>Install</button>
+        <button className="zk-pwa-banner-dismiss" onClick={handleDismiss}>Later</button>
+      </div>
+    </div>
+  );
 }

@@ -5,27 +5,22 @@ import { adminFetchJSON } from '../services/adminApi';
 const BACKEND_URL = "https://api.zokascore.xyz";
 
 export function useSystemObservability() {
-  const { apiMetrics, errorLogs, cacheHits, cacheMisses } = useObservabilityStore();
+  const { apiMetrics, errorLogs, cacheHits, cacheMisses, clearLogs } = useObservabilityStore();
   const totalApiCalls = Object.values(apiMetrics).reduce((acc, m) => acc + m.count, 0);
   const totalApiFailures = Object.values(apiMetrics).reduce((acc, m) => acc + m.failures, 0);
-  const totalCacheCalls = cacheHits + cacheMisses;
-
+  const totalCache = cacheHits + cacheMisses;
   return {
-    apiMetrics,
-    errorLogs,
-    cacheHitRatio: totalCacheCalls > 0 ? Math.round((cacheHits / totalCacheCalls) * 100) : 0,
-    apiSuccessRate: totalApiCalls > 0 ? Math.round(((totalApiCalls - totalApiFailures) / totalApiCalls) * 100) : 100,
-    clearLogs: useObservabilityStore((state) => state.clearLogs),
+    apiMetrics, errorLogs,
+    cacheHitRatio: totalCache ? Math.round((cacheHits / totalCache) * 100) : 0,
+    apiSuccessRate: totalApiCalls ? Math.round(((totalApiCalls - totalApiFailures) / totalApiCalls) * 100) : 100,
+    clearLogs,
   };
 }
 
 export function useAdminUsers(searchTerm) {
   return useQuery({
     queryKey: ['adminUsers', searchTerm],
-    queryFn: async () => {
-      // TODO: Add backend endpoint /api/v1/admin/users
-      return [];
-    },
+    queryFn: async () => [], // TODO: backend /api/v1/admin/users
     staleTime: 60 * 1000,
     enabled: !!searchTerm,
   });
@@ -34,10 +29,7 @@ export function useAdminUsers(searchTerm) {
 export function useAdminStaff() {
   return useQuery({
     queryKey: ['adminStaff'],
-    queryFn: async () => {
-      // TODO: Add backend endpoint /api/v1/admin/staff
-      return [];
-    },
+    queryFn: async () => [], // TODO: backend /api/v1/admin/staff
     staleTime: 60 * 1000,
   });
 }
@@ -73,11 +65,7 @@ export function useAdminAnalytics() {
     queryFn: async () => {
       const res = await adminFetchJSON('/api/v1/monitoring/metrics');
       const stats = res?.data?.recovery?.queue || {};
-
-      return {
-        totalUsers: 0,
-        totalPredictions: stats.syncedOps || 0,
-      };
+      return { totalUsers: 0, totalPredictions: stats.syncedOps || 0 };
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,

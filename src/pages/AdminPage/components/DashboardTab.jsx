@@ -46,9 +46,9 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
   };
 
   return (
-    <div className="flex-col gap-16">
+    <div className="flex flex-col gap-16">
       {/* AI LAB CONTROL PANEL */}
-      <div className="glass-card p-16 flex-col gap-12" style={{ borderColor: 'rgba(var(--primary-rgb), 0.2)', background: 'linear-gradient(135deg, rgba(var(--primary-rgb), 0.03), var(--bg-card))' }}>
+      <div className="glass-card p-16 flex flex-col gap-12" style={{ borderColor: 'rgba(var(--primary-rgb), 0.2)', background: 'linear-gradient(135deg, rgba(var(--primary-rgb), 0.03), var(--bg-card))' }}>
         <h3 className="text-primary font-bold flex-center gap-8">
           <Brain size={16} /> ZOKASCORE AI Lab
         </h3>
@@ -63,7 +63,7 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
           )}
         </button>
 
-        {/* ★ NEW: 14-DAY BACKFILL BUTTON */}
+        {/* 14-DAY BACKFILL BUTTON */}
         <button className="btn btn-secondary w-full flex-center gap-8 mt-8" onClick={handleBackfill} disabled={backfillRunning}>
           {backfillRunning ? (
             <><Loader2 size={14} className="anim-spin" /> Backfilling 14 Days...</>
@@ -72,13 +72,13 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
           )}
         </button>
 
-        <div className="grid gap-8 mt-8" style={{ gridTemplateColumns: '1fr 1fr' }}>
-          <div className="glass-card p-8 flex-col items-center gap-4 text-center">
+        <div className="admin-grid-100 mt-8">
+          <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
             <TrendingUp size={14} className="text-primary" />
             <span className="text-muted text-xs">Model V1 Status</span>
             <span className="text-danger font-bold text-xs">NOT DEPLOYED (-9% ROI)</span>
           </div>
-          <div className="glass-card p-8 flex-col items-center gap-4 text-center">
+          <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
             <Activity size={14} className="text-accent" />
             <span className="text-muted text-xs">Historical DB</span>
             <span className="text-primary font-bold text-xs">~227,000 Matches</span>
@@ -87,22 +87,22 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
       </div>
 
       {/* OVERVIEW STATS */}
-      <div className="glass-card p-16 flex-col gap-12">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8"><Activity size={15} /> Overview — {dateLabel(date)}</h3>
-        <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))' }}>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-accent">{fxCount}</span><span className="text-muted text-xs">Fixtures</span></div>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-danger">{liveCount}</span><span className="text-muted text-xs">Live</span></div>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-primary">{finCount}</span><span className="text-muted text-xs">Finished</span></div>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-gold">{preds.length}</span><span className="text-muted text-xs">Featured</span></div>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-gold">{zT}</span><span className="text-muted text-xs">Zoka</span></div>
-          <div className="glass-card p-8 flex-col items-center"><span className="font-extrabold text-primary">{zAcc}%</span><span className="text-muted text-xs">Zoka Acc</span></div>
+        <div className="admin-grid-100">
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-accent">{fxCount}</span><span className="text-muted text-xs">Fixtures</span></div>
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-danger">{liveCount}</span><span className="text-muted text-xs">Live</span></div>
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-primary">{finCount}</span><span className="text-muted text-xs">Finished</span></div>
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-gold">{preds.length}</span><span className="text-muted text-xs">Featured</span></div>
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-gold">{zT}</span><span className="text-muted text-xs">Zoka</span></div>
+          <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-primary">{zAcc}%</span><span className="text-muted text-xs">Zoka Acc</span></div>
         </div>
       </div>
       
       {/* LEADERBOARD REBUILDS */}
-      <div className="glass-card p-16 flex-col gap-12">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8"><RotateCcw size={15} /> Rebuild Data & Leaderboards</h3>
-        <div className="grid gap-8" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))' }}>
+        <div className="admin-grid-150">
           <button className="btn btn-secondary" onClick={() => onRebuild('fixtures')} disabled={rebuilding === 'fixtures'}>
             {rebuilding === 'fixtures' ? <Loader2 size={13} className="anim-spin" /> : <Sparkles size={13} />}Refresh Finished
           </button>

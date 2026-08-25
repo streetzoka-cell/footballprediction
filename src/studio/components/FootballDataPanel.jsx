@@ -1,6 +1,4 @@
-﻿// footballprediction/src/studio/components/FootballDataPanel.jsx
-
-import React from 'react';
+﻿import React from 'react';
 import { useEditorStore } from '../store/editorStore';
 import { Shirt, Tv, User, X } from 'lucide-react';
 

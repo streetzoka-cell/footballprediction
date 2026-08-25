@@ -1,67 +1,80 @@
-﻿// footballprediction/src/utils/preload.js
-import { preload } from 'react-dom';
+﻿/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ZOKASCORE — Route Preloader (Cleaned)
+   Preconnects/prefetches critical route chunks on navigation hint.
+   Added: Results, FootballKnowledge, Changelog, Status
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-const preloadMap = {
-  "/": () => import("../pages/Home"),
-  "/fixtures": () => import("../pages/Fixtures"),
-  "/predictions": () => import("../pages/Predictions"),
-  "/mastergames": () => import("../pages/MasterGames"),
-  "/basketball": () => import("../pages/Basketball"),
-  "/highlights": () => import("../pages/Highlights"),
-  "/livestream": () => import("../pages/LiveStream"),
-  "/leaderboard": () => import("../pages/Leaderboard"),
-  "/profile": () => import("../pages/Profile"),
-  "/login": () => import("../pages/Login"),
-  "/about": () => import("../pages/company/About"),
-  "/faq": () => import("../pages/FAQ"),
-  "/help-center": () => import("../pages/HelpCenter"),
-  "/privacy": () => import("../pages/PrivacyPolicy"),
-  "/terms": () => import("../pages/Terms"),
-  "/studio": () => import("../studio/pages/StudioHome"),
+import { ROUTES, STUDIO_ROUTES } from "./routes";
+
+/* ── Map route paths → dynamic import factories ──────────────── */
+const PRELOAD_MAP = {
+  [ROUTES.HOME]:            () => import("../pages/Home"),
+  [ROUTES.FIXTURES]:        () => import("../pages/Fixtures"),
+  [ROUTES.RESULTS]:         () => import("../pages/Results"),
+  [ROUTES.PREDICTIONS]:     () => import("../pages/Predictions"),
+  [ROUTES.PREDICTION_V21]:  () => import("../pages/PredictionV21"),
+  [ROUTES.MASTER_GAMES]:    () => import("../pages/MasterGames"),
+  [ROUTES.BASKETBALL]:      () => import("../pages/Basketball"),
+  [ROUTES.HIGHLIGHTS]:      () => import("../pages/Highlights"),
+  [ROUTES.LIVESTREAM]:      () => import("../pages/Livestream"),
+  [ROUTES.LEADERBOARD]:     () => import("../pages/Leaderboard"),
+  [ROUTES.PROFILE]:         () => import("../pages/Profile"),
+  [ROUTES.LOGIN]:           () => import("../pages/Login"),
+  [ROUTES.ABOUT]:           () => import("../pages/About"),
+  [ROUTES.PRIVACY]:         () => import("../pages/Privacy"),
+  [ROUTES.TERMS]:           () => import("../pages/Terms"),
+  [ROUTES.FAQ]:             () => import("../pages/FAQ"),
+  [ROUTES.HELP]:            () => import("../pages/HelpCenter"),
+  [ROUTES.SEARCH]:          () => import("../pages/Search"),
+  [ROUTES.CAREERS]:         () => import("../pages/Careers"),
+  [ROUTES.CONTACT]:         () => import("../pages/Contact"),
+  [ROUTES.PARTNERS]:        () => import("../pages/Partners"),
+  [ROUTES.ADVERTISE]:       () => import("../pages/Advertise"),
+  [ROUTES.TEAM]:            () => import("../pages/Team"),
+  [ROUTES.FOOTBALL_KNOWLEDGE]: () => import("../pages/FootballKnowledge"),
+  [ROUTES.CHANGELOG]:       () => import("../pages/Changelog"),
+  [ROUTES.STATUS]:          () => import("../pages/Status"),
+
+  /* ── Studio ───────────────────────────────────────────── */
+  [STUDIO_ROUTES.HOME]:         () => import("../pages/studio/StudioHome"),
+  [STUDIO_ROUTES.TEMPLATES]:    () => import("../pages/studio/StudioTemplates"),
+  [STUDIO_ROUTES.EDITOR]:       () => import("../pages/studio/StudioEditor"),
+  [STUDIO_ROUTES.REACTOR]:      () => import("../pages/studio/StudioReactor"),
+  [STUDIO_ROUTES.WEB_SHOWCASE]: () => import("../pages/studio/StudioWebShowcase"),
+  [STUDIO_ROUTES.MEDIA]:        () => import("../pages/studio/StudioMedia"),
+  [STUDIO_ROUTES.FACE_AR]:      () => import("../pages/studio/StudioFaceAR"),
+
+  /* ── Admin (guarded but still preloadable) ───────────── */
+  [ROUTES.ADMIN]:           () => import("../pages/Admin"),
 };
 
-const preloadedRoutes = new Set();
+/* ── Cached preload promises ─────────────────────────────────── */
+const preloaded = new Set();
 
-/**
- * Preloads a route's JavaScript chunk.
- * Uses React 19's preload API if available, falling back to standard dynamic import.
- */
+/** Preload a route's chunk without navigating to it. */
 export function preloadRoute(path) {
-  // Handle exact matches first
-  if (preloadMap[path] && !preloadedRoutes.has(path)) {
-    preloadedRoutes.add(path);
-    preloadMap[path]();
-    return;
-  }
+  const factory = PRELOAD_MAP[path];
+  if (!factory || preloaded.has(path)) return;
+  preloaded.add(path);
+  factory(); // fire and forget — Vite creates the chunk
+}
 
-  // Handle dynamic match routes (e.g., /match/12345/man-city-vs-arsenal)
-  if (path.startsWith("/match/") && !preloadedRoutes.has('/match/')) {
-    preloadedRoutes.add('/match/');
-    import("../pages/MatchDetails");
-    return;
-  }
+/** Preload multiple routes at once. */
+export function preloadRoutes(paths) {
+  paths.forEach(preloadRoute);
+}
 
-  // Handle dynamic team routes
-  if (path.startsWith("/team/") && !preloadedRoutes.has('/team/')) {
-    preloadedRoutes.add('/team/');
-    import("../pages/TeamPage");
-    return;
-  }
-
-  // Handle dynamic league routes
-  if (path.startsWith("/league/") && !preloadedRoutes.has('/league/')) {
-    preloadedRoutes.add('/league/');
-    import("../pages/LeaguePage");
-    return;
-  }
-
-  // Handle company routes dynamically
-  if (path.startsWith("/team") || path.startsWith("/careers") || path.startsWith("/contact") || path.startsWith("/partners") || path.startsWith("/advertise")) {
-    const part = path.split("/")[1];
-    const routeKey = `/${part}`;
-    if (!preloadedRoutes.has(routeKey)) {
-      preloadedRoutes.add(routeKey);
-      import(`../pages/company/${part.charAt(0).toUpperCase() + part.slice(1)}`);
-    }
+/** Preload likely next routes based on current path. */
+export function preloadLikelyRoutes(currentPath) {
+  if (currentPath === ROUTES.HOME) {
+    preloadRoutes([ROUTES.FIXTURES, ROUTES.PREDICTIONS, ROUTES.LEADERBOARD]);
+  } else if (currentPath === ROUTES.FIXTURES) {
+    preloadRoutes([ROUTES.RESULTS, ROUTES.LIVESTREAM]);
+  } else if (currentPath.startsWith("/studio")) {
+    preloadRoutes([
+      STUDIO_ROUTES.TEMPLATES,
+      STUDIO_ROUTES.EDITOR,
+      STUDIO_ROUTES.MEDIA,
+    ]);
   }
 }

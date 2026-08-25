@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en-KE">
+<html lang="en">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -9,7 +9,6 @@
   <meta name="color-scheme" content="dark light" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-  <!-- ★ SEO FIX: Default Title & Description (React Helmet will overwrite these) -->
   <title>ZOKASCORE - Live Football Scores, AI Predictions & News</title>
   <meta name="description" content="Get live football scores, fixtures, AI-powered match predictions, and breaking news from leagues worldwide on ZOKASCORE." />
 
@@ -18,7 +17,7 @@
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
-  <link rel="manifest" href="/manifest.json" />
+  <link rel="manifest" href="/manifest.webmanifest" />
 
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
@@ -43,8 +42,6 @@
 
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <!-- ★ VALIDATION FIX: Default JSON-LD to satisfy validate-deployment.js -->
-  <!-- React Helmet will inject page-specific schemas, but this prevents the build warning -->
   <script type="application/ld+json" id="default-schema">
     {
       "@context": "https://schema.org",
@@ -76,10 +73,10 @@
 
 <body>
   <noscript>
-    <div style="padding:40px;text-align:center;font-family:Inter,system-ui,sans-serif;color:#fff;background:#05070a;min-height:100vh;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;">
-      <img src="/icons/icon-192.png" alt="ZOKASCORE" width="80" height="80" style="border-radius:16px;" />
-      <h1 style="font-size:1.5rem;font-weight:800;margin:0;">ZOKASCORE</h1>
-      <p style="color:#94a3b8;max-width:400px;line-height:1.6;">ZOKASCORE requires JavaScript. Please enable it in your browser settings.</p>
+    <div class="zk-noscript">
+      <img src="/icons/icon-192.png" alt="ZOKASCORE" width="80" height="80" />
+      <h1>ZOKASCORE</h1>
+      <p>ZOKASCORE requires JavaScript. Please enable it in your browser settings.</p>
     </div>
   </noscript>
 
@@ -90,22 +87,20 @@
     <div id="loader-status-text" class="loader-status-text">Initializing...</div>
   </div>
 
-  <!-- ★ VALIDATION FIX: Exact empty root div to satisfy validate-deployment.js -->
   <div id="root"></div>
 
-  <!-- ★ PHASE 9: SEO Fallback for non-JS crawlers (Safe inside noscript) -->
   <noscript>
-    <div style="padding: 20px; font-family: system-ui, sans-serif; max-width: 800px; margin: 0 auto; color: #ffffff; background: #05070a;">
-      <h1 style="font-size: 24px; margin-bottom: 10px;">Live Football Scores, Fixtures, Results & Predictions</h1>
-      <p style="color: #94a3b8; margin-bottom: 20px;">Welcome to ZOKASCORE. Track today's football fixtures, make AI-powered predictions, and follow live scores from leagues worldwide.</p>
-      <nav aria-label="Primary Navigation" style="display: flex; gap: 15px; flex-wrap: wrap;">
-        <a href="/fixtures" style="color: #16c784; font-weight: bold;">Today's Fixtures</a>
-        <a href="/predictions" style="color: #16c784; font-weight: bold;">Match Predictions</a>
-        <a href="/league/39/premier-league" style="color: #16c784;">Premier League</a>
-        <a href="/league/140/la-liga" style="color: #16c784;">La Liga</a>
-        <a href="/league/2/champions-league" style="color: #16c784;">Champions League</a>
-        <a href="/team/33/manchester-united" style="color: #16c784;">Manchester United</a>
-        <a href="/team/541/real-madrid" style="color: #16c784;">Real Madrid</a>
+    <div class="zk-noscript" style="max-width: 800px;">
+      <h1>Live Football Scores, Fixtures, Results & Predictions</h1>
+      <p>Welcome to ZOKASCORE. Track today's football fixtures, make AI-powered predictions, and follow live scores from leagues worldwide.</p>
+      <nav aria-label="Primary Navigation">
+        <a href="/fixtures">Today's Fixtures</a>
+        <a href="/predictions">Match Predictions</a>
+        <a href="/league/39/premier-league">Premier League</a>
+        <a href="/league/140/la-liga">La Liga</a>
+        <a href="/league/2/champions-league">Champions League</a>
+        <a href="/team/33/manchester-united">Manchester United</a>
+        <a href="/team/541/real-madrid">Real Madrid</a>
       </nav>
     </div>
   </noscript>

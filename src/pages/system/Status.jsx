@@ -23,20 +23,22 @@ export default function Status() {
         description="Check the real-time status of ZOKASCORE services, including API availability, live scores, fixtures, predictions, scheduled jobs, and platform performance."
         keywords="ZOKASCORE status, system status, service health, API status, live scores status, football platform status, uptime, service monitoring"
         robots="index,follow"
-          />
+      />
 
       <PageLayout title="System Status" subtitle={`Last updated: ${updated}`}>
         <Section title="Current Status">
-          <p className="text-secondary text-sm">All major ZOKASCORE services are currently operating normally.</p>
+          <p className="text-secondary text-sm leading-relaxed">All major ZOKASCORE services are currently operating normally.</p>
         </Section>
 
         <Section title="Service Health">
-          <div className="flex-col gap-12">
+          <div className="flex flex-col gap-12">
             {services.map((service) => (
-              <div key={service.name} className="glass-card p-20">
+              <div key={service.name} className="company-card">
                 <div className="flex-between items-center mb-8">
                   <strong className="text-primary text-sm">{service.name}</strong>
-                  <span className="badge badge-primary">â— {service.status}</span>
+                  <span className="badge badge-success">
+                    <span className="zk-live-pulse-dot mr-2" style={{ background: 'var(--success)' }} /> {service.status}
+                  </span>
                 </div>
                 <p className="text-muted text-xs">{service.description}</p>
               </div>
@@ -45,7 +47,7 @@ export default function Status() {
         </Section>
 
         <Section title="Incident Reporting">
-          <p className="text-secondary text-sm">
+          <p className="text-secondary text-sm leading-relaxed">
             If you experience issues with ZOKASCORE that are not listed here, please report them through our Contact page. We investigate all reported service interruptions and work to resolve them as quickly as possible.
           </p>
         </Section>

@@ -24,21 +24,27 @@ export function ToastProvider({ children }) {
   };
 
   const icons = {
-    success: <CheckCircle size={18} className="text-emerald-400" />,
-    error: <XCircle size={18} className="text-red-400" />,
-    warning: <AlertTriangle size={18} className="text-amber-400" />,
-    info: <Info size={18} className="text-blue-400" />,
+    success: <CheckCircle size={18} />,
+    error: <XCircle size={18} />,
+    warning: <AlertTriangle size={18} />,
+    info: <Info size={18} />,
   };
 
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] flex flex-col gap-2 w-full max-w-sm px-4 pointer-events-none">
+      <div className="zk-toast-container">
         {toasts.map((t) => (
-          <div key={t.id} className={`pointer-events-auto bg-[#0a0f1a]/95 border border-white/10 backdrop-blur-xl rounded-xl p-3 flex items-center gap-3 shadow-2xl animate-toast-in`}>
-            {icons[t.type]}
-            <span className="text-white text-sm font-medium flex-1">{t.message}</span>
-            <button onClick={() => remove(t.id)} className="text-slate-500 hover:text-white"><X size={14} /></button>
+          <div key={t.id} className="zk-toast">
+            <span className={`zk-toast-icon zk-toast-icon--${t.type}`}>
+              {icons[t.type]}
+            </span>
+            <div className="zk-toast-body">
+              <div className="zk-toast-title">{t.message}</div>
+            </div>
+            <button onClick={() => remove(t.id)} className="zk-toast-close" aria-label="Close toast">
+              <X size={14} />
+            </button>
           </div>
         ))}
       </div>

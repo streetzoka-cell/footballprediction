@@ -1,32 +1,15 @@
-// ═══════════════════════════════════════════════════════════════
-// FILE: src/utils/dates.js
-// SINGLE SOURCE OF TRUTH for all date operations
-//
-// RULE:
-//   • UTC functions  → backend keys (Firestore IDs, fixture files). NEVER change these.
-//   • LOCAL functions → display only (day tabs, kickoff clock).
-// ═══════════════════════════════════════════════════════════════
-
-// Safely parse a date string as UTC if it lacks timezone info
-export function parseDateAsUTC(dateStr) {
-  if (!dateStr) return new Date(NaN);
-  if (typeof dateStr !== 'string') return new Date(dateStr);
-  if (dateStr.endsWith('Z') || dateStr.includes('+') || (dateStr.length > 10 && dateStr.indexOf('-', 10) !== -1)) {
-    return new Date(dateStr);
-  }
-  return new Date(dateStr + 'Z');
+// src/utils/dates.js
+export function parseDateAsUTC(s) {
+  if (!s) return new Date(NaN);
+  if (typeof s !== 'string') return new Date(s);
+  if (s.endsWith('Z') || s.includes('+') || (s.length > 10 && s.indexOf('-', 10) !== -1)) return new Date(s);
+  return new Date(s + 'Z');
 }
 
-// ───────────────────────────────────────────────────────────────
-// UTC DATE STRINGS  →  backend keys (must match the backend exactly)
-// ───────────────────────────────────────────────────────────────
 export function getLocalDateStr(offset = 0) {
   const d = new Date();
   d.setUTCDate(d.getUTCDate() + offset);
-  const y = d.getUTCFullYear();
-  const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-  const day = String(d.getUTCDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
 }
 
 export const todayStr = () => getLocalDateStr(0);
@@ -34,141 +17,124 @@ export const yesterdayStr = () => getLocalDateStr(-1);
 export const tomorrowStr = () => getLocalDateStr(1);
 export const getDateStr = getLocalDateStr;
 
-// UTC date string from a UTC timestamp (matches backend fixture files)
-export function getLocalDateFromUtc(utcDateStr) {
-  if (!utcDateStr) return null;
+export function getLocalDateFromUtc(utcStr) {
+  if (!utcStr) return null;
   try {
-    const d = parseDateAsUTC(utcDateStr);
-    if (isNaN(d.getTime())) return null;
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  } catch {
-    return null;
-  }
+    const d = parseDateAsUTC(utcStr);
+    if (isNaN(d.getTime())) return null; 
+    return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
+  } catch (e) { return null; }
 }
 
-// ───────────────────────────────────────────────────────────────
-// LOCAL TIME  →  display only (the user's own timezone, e.g. EAT)
-// ───────────────────────────────────────────────────────────────
-
-// The user's LOCAL "today" (not UTC). Use this for visible day tabs.
 export function localDateStr(offset = 0) {
   const d = new Date();
-  d.setDate(d.getDate() + offset); // LOCAL setters
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+  d.setDate(d.getDate() + offset);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// Convert a UTC date/timestamp into the user's LOCAL date string (YYYY-MM-DD).
-// e.g. "2026-08-02T23:00:00Z" → "2026-08-03" for a UTC+3 (EAT) user.
-export function toLocalDateStr(utcInput) {
-  if (!utcInput) return null;
-  const d = utcInput instanceof Date ? utcInput : parseDateAsUTC(utcInput);
-  if (isNaN(d.getTime())) return null;
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
+export function toLocalDateStr(input) {
+  if (!input) return null;
+  const d = input instanceof Date ? input : parseDateAsUTC(input);
+  if (isNaN(d.getTime())) return null; 
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// A single LOCAL day can span two UTC days (depending on timezone offset).
-// Return the UTC fixture filenames that could contain matches for this local day.
 export function utcFilesForLocalDate(localDate) {
   const base = parseDateAsUTC(`${localDate}T12:00:00Z`);
-  const files = new Set();
+  const set = new Set();
   for (const off of [-1, 0, 1]) {
     const d = new Date(base);
     d.setUTCDate(d.getUTCDate() + off);
-    files.add(d.toISOString().split('T')[0]);
+    set.add(d.toISOString().split('T')[0]);
   }
-  return [...files];
+  return [...set];
 }
 
-// ───────────────────────────────────────────────────────────────
-// DISPLAY FORMATTERS (local)
-// ───────────────────────────────────────────────────────────────
 export function formatDateShort(dateStr) {
   if (!dateStr) return '';
-  const parts = dateStr.split('-');
+  const parts = dateStr.split('-').map(Number);
   if (parts.length !== 3) return dateStr;
-  const date = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-  if (isNaN(date.getTime())) return dateStr;
-  return date.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
+  const d = new Date(parts[0], parts[1] - 1, parts[2]);
+  if (isNaN(d.getTime())) return dateStr;
+  return d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
-// Kickoff clock in LOCAL time: "20:00"
 export function formatTime(dateStr) {
   if (!dateStr) return '--:--';
-  try {
-    const d = parseDateAsUTC(dateStr);
-    return d.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false });
-  } catch {
-    return '--:--';
+  try { 
+    return parseDateAsUTC(dateStr).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', hour12: false }); 
+  } catch (e) { 
+    return '--:--'; 
   }
 }
 
-// ───────────────────────────────────────────────────────────────
-// COMPARE HELPERS
-// ───────────────────────────────────────────────────────────────
-export function isToday(dateStr) { return dateStr === getLocalDateStr(0); }
-export function isYesterday(dateStr) { return dateStr === getLocalDateStr(-1); }
-export function isTomorrow(dateStr) { return dateStr === getLocalDateStr(1); }
+export function isToday(s) { return s === getLocalDateStr(0); }
+export function isYesterday(s) { return s === getLocalDateStr(-1); }
+export function isTomorrow(s) { return s === getLocalDateStr(1); }
 
-export function relativeDateLabel(dateStr) {
-  if (isToday(dateStr)) return 'Today';
-  if (isYesterday(dateStr)) return 'Yesterday';
-  if (isTomorrow(dateStr)) return 'Tomorrow';
-  return formatDateShort(dateStr);
+export function relativeDateLabel(s) {
+  if (isToday(s)) return 'Today';
+  if (isYesterday(s)) return 'Yesterday';
+  if (isTomorrow(s)) return 'Tomorrow';
+  return formatDateShort(s);
 }
 
-// ───────────────────────────────────────────────────────────────
-// LEADERBOARD PERIODS (local)
-// ───────────────────────────────────────────────────────────────
 export function getWeekStart() {
   const d = new Date();
   const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1); // Monday
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
   d.setDate(diff);
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const dayStr = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${dayStr}`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
 export function getMonthStart() {
   const d = new Date();
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  return `${y}-${m}-01`;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
 }
 
 export function getDateRange(days = 7, startOffset = -3) {
-  const dates = [];
   const today = getLocalDateStr(0);
+  const dates = [];
   for (let i = startOffset; i < startOffset + days; i++) {
-    const dateStr = getLocalDateStr(i);
-    const parts = dateStr.split('-');
-    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
-    dates.push({
-      str: dateStr,
-      label: d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }),
-      day: d.toLocaleDateString('en-GB', { weekday: 'short' }),
-      num: d.getDate(),
-      month: d.toLocaleDateString('en-GB', { month: 'short' }),
-      isToday: dateStr === today,
+    const str = getLocalDateStr(i);
+    const parts = str.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2]);
+    dates.push({ 
+      str, 
+      label: d.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }), 
+      day: d.toLocaleDateString('en-GB', { weekday: 'short' }), 
+      num: d.getDate(), 
+      month: d.toLocaleDateString('en-GB', { month: 'short' }), 
+      isToday: str === today 
     });
   }
   return dates;
 }
 
-// Backend rollover window (2:55–3:10 AM UTC)
 export function isInRolloverWindow() {
   const now = new Date();
-  const h = now.getUTCHours();
-  const m = now.getUTCMinutes();
+  const h = now.getUTCHours(), m = now.getUTCMinutes();
   return (h === 2 && m >= 55) || (h === 3 && m < 10);
+}
+
+export function formatTimeAgo(date) {
+  if (!date) return 'Never';
+  let ts;
+  if (typeof date === 'number') ts = date < 1e12 ? date * 1000 : date;
+  else if (typeof date === 'string') { 
+    ts = Date.parse(date); 
+    if (isNaN(ts)) return 'Unknown'; 
+  }
+  else if (date && date.seconds != null) ts = date.seconds * 1000;
+  else if (date && date.getTime) ts = date.getTime();
+  else return 'Unknown';
+  
+  const s = Math.floor((Date.now() - ts) / 1000);
+  if (s < 10) return 'Just now';
+  if (s < 60) return `${s}s ago`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }

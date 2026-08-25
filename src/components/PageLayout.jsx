@@ -1,159 +1,138 @@
-﻿import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { Link } from 'react-router-dom';
-import { Share2, Copy, Printer, ChevronRight, Clock, ArrowLeft } from 'lucide-react';
-import SEO from './SEO'; 
+﻿import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 
-const useReadingProgress = () => {
-  const [progress, setProgress] = useState(0);
-  useEffect(() => {
-    const updateScroll = () => {
-      const scrollHeight = document.documentElement.scrollHeight - window.innerHeight;
-      if (scrollHeight > 0) setProgress((window.scrollY / scrollHeight) * 100);
-    };
-    window.addEventListener('scroll', updateScroll);
-    return () => window.removeEventListener('scroll', updateScroll);
-  }, []);
-  return progress;
-};
-
-export default function PageLayout({ 
-  seo, 
-  title, 
-  label, 
-  subtitle, 
-  children, 
-  accentColor = 'var(--accent)',
+export default function PageLayout({
+  children,
+  title,
+  subtitle,
   heroImage,
-  size = 'default', 
-  lastUpdated,
-  breadcrumbs,
-  actions,
-  cta
+  heroBadge,
+  author,
+  authorAvatar,
+  date,
+  readTime,
+  tags,
+  headings,
+  relatedContent,
 }) {
-  const progress = useReadingProgress();
-  const contentRef = useRef(null);
-  const [headings, setHeadings] = useState([]);
-  const [readingTime, setReadingTime] = useState(1);
+  const [progress, setProgress] = useState(0);
+  const [activeHeading, setActiveHeading] = useState("");
+  const articleRef = useRef(null);
 
-  useEffect(() => {
-    if (!contentRef.current) return;
-    
-    const elements = Array.from(contentRef.current.querySelectorAll('h2, h3'));
-    const generatedHeadings = elements.map((el, i) => {
-      const id = el.id || `pl-section-${i}`;
-      el.id = id; 
-      return { id, text: el.innerText, tag: el.tagName.toLowerCase() };
-    });
-    setHeadings(generatedHeadings);
-
-    const text = contentRef.current.innerText || '';
-    const words = text.trim().split(/\s+/).length;
-    setReadingTime(Math.max(1, Math.ceil(words / 200)));
-  }, [children]);
-
-  const handleShare = useCallback(async () => {
-    if (navigator.share) {
-      try { await navigator.share({ title, url: window.location.href }); } catch {}
-    } else {
-      navigator.clipboard.writeText(window.location.href);
-      alert('Link copied to clipboard!');
-    }
-  }, [title]);
-
-  const handleCopyLink = useCallback(() => {
-    navigator.clipboard.writeText(window.location.href);
-    alert('Link copied!');
+  // ── Scroll progress tracking
+  const handleScroll = useCallback(() => {
+    const el = articleRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const scrolled = Math.max(0, -rect.top);
+    const total = rect.height - window.innerHeight + 60;
+    setProgress(total > 0 ? Math.min(100, (scrolled / total) * 100) : 0);
   }, []);
 
-  const handlePrint = useCallback(() => window.print(), []);
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
 
-  const formatDate = (dateStr) => {
-    if (!dateStr) return null;
-    try { return new Date(dateStr).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }); } 
-    catch { return null; }
-  };
+  // ── IntersectionObserver for active heading in TOC
+  const headingIds = useMemo(() => (headings || []).map((h) => h.id), [headings]);
 
-  const widthClass = size === 'narrow' ? 'pl-max-800' : size === 'wide' ? 'pl-max-1200' : 'pl-max-1000';
+  useEffect(() => {
+    if (!headingIds.length) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.filter((e) => e.isIntersecting);
+        if (visible.length) setActiveHeading(visible[0].target.id);
+      },
+      { rootMargin: "-80px 0px -60% 0px", threshold: 0 }
+    );
+    headingIds.forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) observer.observe(el);
+    });
+    return () => observer.disconnect();
+  }, [headingIds]);
+
+  const hasToc = headings && headings.length > 0;
 
   return (
-    <>
-      {seo && <SEO {...seo} />}
-      
-      <div className="pl-progress-bar" style={{ width: `${progress}%`, background: accentColor }} aria-hidden="true" />
-      
-      <main className={`pl-layout ${widthClass}`} aria-labelledby="page-title">
-        <div className="pl-bg-glow" style={{ background: `radial-gradient(circle at top, ${accentColor}15, transparent 70%)` }} aria-hidden="true" />
-        
-        <div className="pl-container">
-          
-          {breadcrumbs && breadcrumbs.length > 0 && (
-            <nav className="pl-breadcrumbs" aria-label="Breadcrumb">
-              <ol style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
-                {breadcrumbs.map((crumb, i) => (
-                  <li key={i} style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <Link to={crumb.path} className="pl-crumb">{crumb.name}</Link>
-                    {i < breadcrumbs.length - 1 && <ChevronRight size={12} className="pl-crumb-sep" aria-hidden="true" />}
-                  </li>
-                ))}
-              </ol>
-            </nav>
+    <article className={`pl-layout${hasToc ? " pl-layout--with-toc" : ""}`}>
+      {/* ── Progress Bar ─────────────────────── */}
+      <div className="pl-progress-bar" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
+        <div className="pl-progress-fill" style={{ width: `${progress}%` }} />
+      </div>
+
+      {/* ── Hero ────────────────────────────── */}
+      {title && (
+        <header className="pl-hero">
+          {heroImage && (
+            <>
+              <div className="pl-hero-bg" style={{ backgroundImage: `url(${heroImage})` }} />
+              <div className="pl-hero-overlay" />
+            </>
           )}
-
-          <header className={`pl-header ${heroImage ? 'has-hero' : ''}`} style={heroImage ? { backgroundImage: `linear-gradient(to bottom, rgba(5,7,10,0.3), var(--bg-deep)), url(${heroImage})` } : {}}>
-            <div className="pl-header-inner">
-              {label && (
-                <div className="pl-kicker" style={{ background: `${accentColor}15`, color: accentColor, border: `1px solid ${accentColor}30` }}>
-                  <span className="pl-kicker-dot" style={{ background: accentColor }} aria-hidden="true" /> {label}
-                </div>
-              )}
-              <h1 id="page-title" className="pl-title">{title}</h1>
-              {subtitle && <p className="pl-subtitle">{subtitle}</p>}
-              
-              <div className="pl-meta-bar">
-                {lastUpdated && (
-                  <span className="pl-meta-item">
-                    <Clock size={12} aria-hidden="true" /> Updated <time dateTime={lastUpdated}>{formatDate(lastUpdated)}</time>
-                  </span>
-                )}
-                <span className="pl-meta-item">{readingTime} min read</span>
-                
-                <div className="pl-actions">
-                  <button onClick={handleShare} className="pl-action-btn" title="Share" aria-label="Share page"><Share2 size={14} /></button>
-                  <button onClick={handleCopyLink} className="pl-action-btn" title="Copy Link" aria-label="Copy link"><Copy size={14} /></button>
-                  <button onClick={handlePrint} className="pl-action-btn" title="Print" aria-label="Print page"><Printer size={14} /></button>
-                  {actions}
-                </div>
-              </div>
-            </div>
-          </header>
-
-          <div className="pl-body-wrapper">
-            {headings.length > 2 && (
-              <aside className="pl-toc" aria-label="Table of Contents">
-                <div className="pl-toc-title">Contents</div>
-                <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-                  {headings.map(h => (
-                    <li key={h.id} className={`pl-toc-item ${h.tag === 'h3' ? 'sub' : ''}`}>
-                      <a href={`#${h.id}`}>{h.text}</a>
-                    </li>
-                  ))}
-                </ul>
-              </aside>
-            )}
-
-            <article ref={contentRef} className="pl-content">
-              {children}
-            </article>
+          <div className="pl-hero-content">
+            {heroBadge && <span className="pl-hero-badge">{heroBadge}</span>}
+            <h1 className="pl-hero-title">{title}</h1>
+            {subtitle && <p className="pl-hero-desc">{subtitle}</p>}
           </div>
+        </header>
+      )}
 
-          {cta && (
-            <footer className="pl-cta-wrapper" style={{ borderColor: `${accentColor}30` }}>
-              {cta}
-            </footer>
+      {/* ── Meta Bar ────────────────────────── */}
+      {(author || date || readTime || tags?.length) && (
+        <div className="pl-meta-bar">
+          {author && (
+            <span className="pl-meta-author">
+              {authorAvatar && <img className="pl-meta-avatar" src={authorAvatar} alt={author} loading="lazy" />}
+              {author}
+            </span>
           )}
-          
+          {author && date && <span className="pl-meta-separator" />}
+          {date && <time className="pl-meta-date" dateTime={date}>{new Date(date).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" })}</time>}
+          {date && readTime && <span className="pl-meta-separator" />}
+          {readTime && <span className="pl-meta-read-time">⏱ {readTime}</span>}
+          {tags?.length > 0 && (
+            <div className="pl-meta-tags">
+              {tags.map((t) => (
+                <span key={t} className="pl-meta-tag">{t}</span>
+              ))}
+            </div>
+          )}
         </div>
-      </main>
-    </>
+      )}
+
+      {/* ── Content + TOC Grid ─────────────── */}
+      <div className="pl-main-content" ref={articleRef}>
+        <div className="pl-article">
+          {children}
+        </div>
+
+        {/* ── Related ─────────────────────── */}
+        {relatedContent && (
+          <aside className="pl-related">
+            <h2 className="pl-related-title">Related</h2>
+            {relatedContent}
+          </aside>
+        )}
+      </div>
+
+      {/* ── TOC Sidebar (desktop only) ───── */}
+      {hasToc && (
+        <aside className="pl-toc-sidebar">
+          <nav className="pl-toc" aria-label="Table of contents">
+            <span className="pl-toc-title">On this page</span>
+            {headings.map((h) => (
+              <a
+                key={h.id}
+                href={`#${h.id}`}
+                className={`pl-toc-link${activeHeading === h.id ? " pl-toc-link--active" : ""}`}
+              >
+                {h.text}
+              </a>
+            ))}
+          </nav>
+        </aside>
+      )}
+    </article>
   );
 }

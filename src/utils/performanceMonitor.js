@@ -1,42 +1,40 @@
-﻿// footballprediction/src/utils/performanceMonitor.js
-import { useObservabilityStore } from '../store/useObservabilityStore';
+﻿/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ZOKASCORE — Performance Monitor (Cleaned)
+   Wraps API calls with timing & optional reporting
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
+
+const THRESHOLD_MS = 3000;
+const SAMPLE_RATE = 0.05; // log only 5% of fast calls to avoid noise
 
 /**
- * Wraps an async API call to measure its execution time and log the result.
- * @param {string} endpoint - The API endpoint or query name (e.g., 'GET /fixtures').
- * @param {Function} fetchFn - The async function to execute.
- * @returns {Promise<any>} - The result of the fetchFn.
+ * Wraps an async function (typically an API call) with performance tracking.
+ * Slow calls (>3s) are always logged; fast calls are sampled.
  */
-export async function monitorApiCall(endpoint, fetchFn) {
-  const startTime = performance.now();
-  try {
-    const result = await fetchFn();
-    const latency = performance.now() - startTime;
-    
-    // Log success latency
-    useObservabilityStore.getState().logApiCall(endpoint, latency, true);
-    return result;
-  } catch (error) {
-    const latency = performance.now() - startTime;
-    
-    // Log failure latency and error
-    useObservabilityStore.getState().logApiCall(endpoint, latency, false);
-    useObservabilityStore.getState().logError({ ...error, endpoint });
-    throw error;
-  }
-}
+export function monitorApiCall(label, fn, { threshold = THRESHOLD_MS } = {}) {
+  const start = performance.now();
+  return fn()
+    .then((result) => {
+      const elapsed = performance.now() - start;
+      const isSlow = elapsed > threshold;
 
-/**
- * Tracks React Query cache hits and misses for observability.
- * @param {object} query - The React Query query object.
- */
-export function trackCacheHit(query) {
-  const obs = useObservabilityStore.getState();
-  const isStale = query.state.dataUpdatedAt === 0 || query.state.isInvalidated;
-  
-  if (isStale || query.state.status === 'pending') {
-    obs.logCacheMiss();
-  } else {
-    obs.logCacheHit();
-  }
+      if (isSlow || Math.random() < SAMPLE_RATE) {
+        if (typeof __DEV__ !== "undefined" && __DEV__) {
+          const tag = isSlow ? "🐌 SLOW" : "✓";
+          console.log(`[perf] ${tag} ${label}: ${elapsed.toFixed(0)}ms`);
+        }
+
+        // Report to analytics in production (replace with your analytics SDK)
+        if (!isSlow && typeof window !== "undefined" && window.navigator?.sendBeacon) {
+          // Future: send slow-call metrics via sendBeacon to /api/metrics
+        }
+      }
+      return result;
+    })
+    .catch((err) => {
+      const elapsed = performance.now() - start;
+      if (typeof __DEV__ !== "undefined" && __DEV__) {
+        console.error(`[perf] ✗ ${label}: ${elapsed.toFixed(0)}ms — ${err.message}`);
+      }
+      throw err;
+    });
 }

@@ -31,17 +31,16 @@ const TerminalModal = ({ isOpen, onClose, logs }) => {
 
   return (
     <div
-      className="fixed inset-0 bg-black/80 flex-center z-max p-20"
+      className="fixed inset-0 bg-overlay flex-center z-max p-20"
       onClick={onClose}
     >
       <div
-        className="glass-card w-90vw max-w-900 h-70vh flex-col overflow-hidden"
+        className="glass-card w-90vw max-w-900 h-70vh flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex-between p-16 border-b border-border">
+        <div className="flex-between p-16 border-b">
           <div className="flex-center gap-8 text-primary font-mono font-bold text-sm">
-            <Terminal size={14} /> root@zoka-api:~/logs$
-          </div>
+            <Terminal size={14} /> root@zoka-api:~/logs$           </div>
           <button onClick={onClose} className="btn-icon-sm">
             <X size={18} />
           </button>
@@ -55,7 +54,7 @@ const TerminalModal = ({ isOpen, onClose, logs }) => {
             <div className="text-muted">Waiting for data stream...</div>
           ) : (
             logs.map((line, i) => (
-              <div key={i} className="mb-4 opacity-90">
+              <div key={i} className="terminal-line">
                 {`> ${line}`}
               </div>
             ))
@@ -172,39 +171,36 @@ const SystemHealthTab = memo(function SystemHealthTab() {
   const quotaPercent = Math.min(100, Math.round((quotaUsed / quotaTotal) * 100));
 
   return (
-    <div className="flex-col gap-16">
-      <div className="glass-card p-16 flex-col gap-12">
+    <div className="flex flex-col gap-16">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8">
           <Cpu size={15} /> System Vitals
         </h3>
 
-        <div
-          className="grid gap-12"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}
-        >
-          <div className="glass-card p-12 flex-col items-center gap-4">
+        <div className="admin-grid-auto">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-primary text-lg">
               {health.status === 'healthy' ? '🟢' : '🔴'}
             </span>
             <span className="text-muted text-xs">API Status</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-primary">{uptimeMins} min</span>
             <span className="text-muted text-xs">Uptime</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-accent">{totalReqs}</span>
             <span className="text-muted text-xs">Total Requests</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-gold">{cacheHits}</span>
             <span className="text-muted text-xs">Cache Hits</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-danger">{errorCount}</span>
             <span className="text-muted text-xs">Active Errors</span>
           </div>
@@ -221,30 +217,27 @@ const SystemHealthTab = memo(function SystemHealthTab() {
         </div>
       )}
 
-      <div className="glass-card p-16 flex-col gap-12">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8">
           <Zap size={15} /> API Quota Manager
         </h3>
 
-        <div
-          className="grid gap-12"
-          style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))' }}
-        >
-          <div className="glass-card p-12 flex-col items-center gap-4">
+        <div className="admin-grid-auto">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-accent">
               {quota.liveUsed || 0} / {(quota.liveUsed || 0) + (quota.liveRemaining || 0)}
             </span>
             <span className="text-muted text-xs">Live Polls</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-primary">
               {quota.ftUsed || 0} / {(quota.ftUsed || 0) + (quota.ftRemaining || 0)}
             </span>
             <span className="text-muted text-xs">FT Updates</span>
           </div>
 
-          <div className="glass-card p-12 flex-col items-center gap-4">
+          <div className="glass-card p-12 flex flex-col items-center gap-4">
             <span className="font-extrabold text-gold">
               {quota.fallbackUsed || 0} /{' '}
               {(quota.fallbackUsed || 0) + (quota.fallbackRemaining || 0)}
@@ -268,7 +261,7 @@ const SystemHealthTab = memo(function SystemHealthTab() {
         </p>
       </div>
 
-      <div className="glass-card p-16 flex-col gap-12">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <div className="flex-between">
           <h3 className="text-primary font-bold flex-center gap-8">
             <Activity size={15} /> Network Operations Centre

@@ -140,14 +140,10 @@ export default function FaceARStudio() {
   const startCamera = async () => {
     try {
       stopCameraStreams();
-
       await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js');
       await loadScript('https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js');
 
-      const stream = await navigator.mediaDevices.getUserMedia({ 
-        video: { width: 720, height: 1280, facingMode: 'user' }, 
-        audio: true 
-      });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 720, height: 1280, facingMode: 'user' }, audio: true });
       streamRef.current = stream;
       
       if (videoRef.current) {
@@ -155,10 +151,7 @@ export default function FaceARStudio() {
         await videoRef.current.play();
       }
 
-      const faceMesh = new window.FaceMesh({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`
-      });
-      
+      const faceMesh = new window.FaceMesh({ locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}` });
       faceMesh.setOptions({ maxNumFaces: 1, refineLandmarks: true, minDetectionConfidence: 0.5, minTrackingConfidence: 0.5 });
       faceMesh.onResults(onResults);
 
@@ -168,15 +161,9 @@ export default function FaceARStudio() {
       });
       cameraInstanceRef.current = camera;
       camera.start();
-      
       setCameraOn(true);
     } catch (err) {
-      if (err.name === 'AbortError' || err.name === 'NotAllowedError' || err.name === 'NotFoundError') {
-        alert("Camera access timed out or was denied. Please ensure no other app is using the camera, refresh the page, and try again.");
-      } else {
-        alert("An error occurred while loading the AR Studio. Please refresh and try again.");
-      }
-      console.error("Camera Error:", err);
+      alert("Camera access timed out or was denied. Please ensure no other app is using the camera, refresh the page, and try again.");
       stopCameraStreams();
     }
   };
@@ -214,9 +201,7 @@ export default function FaceARStudio() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  useEffect(() => {
-    return () => { stopCameraStreams(); };
-  }, []);
+  useEffect(() => { return () => { stopCameraStreams(); }; }, []);
 
   const filters = [
     { id: 'none', name: 'Normal' }, { id: 'saturate(1.5) contrast(1.2)', name: 'Vivid' },
@@ -237,33 +222,11 @@ export default function FaceARStudio() {
 
   return (
     <div className="ar-studio-container">
-      <style>{`
-        .ar-studio-container { display: flex; flex-direction: column; height: 100vh; height: 100dvh; background: #0a0f1a; color: #fff; overflow: hidden; }
-        .ar-topbar { height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1f2937; background: #111827; flex-shrink: 0; z-index: 10; }
-        .ar-main { flex: 1; display: flex; overflow: hidden; }
-        .ar-sidebar { width: 100px; background: #111827; border-right: 1px solid #1f2937; display: flex; flex-direction: column; flex-shrink: 0; transition: width 0.3s ease; }
-        @media (min-width: 768px) { .ar-sidebar { width: 280px; } }
-        .ar-tabs { display: flex; flex-direction: column; padding: 16px 12px; gap: 8px; border-bottom: 1px solid #1f2937; }
-        .ar-tab-btn { display: flex; align-items: center; gap: 12px; padding: 12px; border-radius: 10px; background: none; border: none; color: #64748b; font-weight: 700; font-size: 14px; cursor: pointer; transition: all 0.2s; text-align: left; white-space: nowrap; }
-        .ar-tab-btn:hover { background: #1f2937; color: #fff; }
-        .ar-tab-btn.active { background: rgba(var(--accent-rgb, 16, 185, 129), 0.15); color: var(--accent, #10b981); }
-        .ar-tools-list { flex: 1; padding: 16px 12px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
-        .ar-tool-btn { padding: 12px; border-radius: 8px; background: #1f2937; border: 1px solid #334155; color: #cbd5e1; font-size: 13px; font-weight: 600; cursor: pointer; text-align: center; transition: all 0.2s; }
-        .ar-tool-btn:hover { border-color: var(--accent, #10b981); color: #fff; }
-        .ar-tool-btn.active { background: var(--accent, #10b981); color: #fff; border-color: var(--accent, #10b981); box-shadow: 0 4px 12px rgba(16, 185, 129, 0.4); }
-        .ar-canvas-area { flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px; background: #000; position: relative; }
-        .ar-video-wrapper { height: 100%; aspect-ratio: 9/16; max-width: 100%; background: #000; border-radius: 16px; overflow: hidden; position: relative; border: 2px solid #1f2937; box-shadow: 0 0 40px rgba(0,0,0,0.5); }
-        .ar-controls { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); display: flex; gap: 20px; background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(12px); padding: 12px 20px; border-radius: 50px; border: 1px solid rgba(255,255,255,0.1); z-index: 20; }
-        .ar-btn { width: 48px; height: 48px; border-radius: 50%; background: #1f2937; border: 1px solid #334155; color: #fff; display: flex; align-items: center; justify-content: 'center'; cursor: pointer; transition: all 0.2s; }
-        .ar-btn:hover { transform: scale(1.05); }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }
-      `}</style>
-
       <div className="ar-topbar">
-        <button onClick={() => navigate('/studio/media')} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <ArrowLeft size={18} /> <span className="hidden sm:inline">Back</span>
+        <button onClick={() => navigate('/studio/media')} className="btn-icon btn-ghost" style={{ color: '#94a3b8' }}>
+          <ArrowLeft size={18} /> <span className="hidden md:inline">Back</span>
         </button>
-        <h1 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Football Face AR</h1>
+        <h1 className="ar-topbar-title">Football Face AR</h1>
       </div>
 
       <div className="ar-main">
@@ -294,26 +257,26 @@ export default function FaceARStudio() {
 
         <div className="ar-canvas-area">
           <div className="ar-video-wrapper">
-            <video ref={videoRef} style={{ display: 'none' }} playsInline />
-            <canvas ref={canvasRef} width={720} height={1280} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <video ref={videoRef} className="hidden" playsInline />
+            <canvas ref={canvasRef} width={720} height={1280} className="w-full h-full object-cover" />
 
             {recordedUrl && (
-              <video src={recordedUrl} controls autoPlay loop style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', background: '#000' }} />
+              <video src={recordedUrl} controls autoPlay loop className="absolute inset-0 w-full h-full object-cover bg-black" />
             )}
 
             {!cameraOn && !recordedUrl && (
-              <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b', background: 'rgba(0,0,0,0.8)' }}>
-                <Camera size={48} style={{ marginBottom: '12px' }} />
-                <p style={{ fontWeight: 700, fontSize: '14px' }}>Camera is off</p>
-                <button onClick={startCamera} style={{ marginTop: '16px', background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+              <div className="ar-empty-state">
+                <Camera size={48} className="mb-12" />
+                <p className="font-bold text-sm">Camera is off</p>
+                <button onClick={startCamera} className="ms-enable-btn">
                   Enable Face AR
                 </button>
               </div>
             )}
 
             {isRecording && (
-              <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800 }}>
-                <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} /> REC
+              <div className="ar-rec-badge">
+                <div className="w-2 h-2 bg-white rounded-full anim-pulse" /> REC
               </div>
             )}
           </div>

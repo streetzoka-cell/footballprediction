@@ -39,7 +39,7 @@ const UsersTab = memo(function UsersTab({ toast }) {
   }, [users, search]);
 
   return (
-    <div className="glass-card p-16 flex-col gap-12">
+    <div className="glass-card p-16 flex flex-col gap-12">
       <h3 className="text-primary font-bold flex-center gap-8"><Users size={15} /> Users</h3>
       {isInitialLoad ? (
         <button className="btn btn-secondary w-full" onClick={() => loadUsers(false)} disabled={loading}>
@@ -55,7 +55,7 @@ const UsersTab = memo(function UsersTab({ toast }) {
             <div key={u.id} className="glass-card p-12 flex-between">
               <div className="flex-center gap-12">
                 <div className="flex-center font-extrabold text-inverse" style={{ width: 38, height: 38, borderRadius: 10, background: `hsl(${(i * 37) % 360}, 50%, 25%)`, fontSize: '.78rem' }}>{(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}</div>
-                <div className="flex-col">
+                <div className="flex flex-col">
                   <div className="text-primary font-bold text-sm">{u.displayName || 'Anonymous'}</div>
                   <div className="text-muted text-xs">{u.email || u.id}</div>
                 </div>

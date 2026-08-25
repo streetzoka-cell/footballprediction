@@ -1,23 +1,9 @@
-import React from 'react';
+/* ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+   ZOKASCORE — Ad Slot (Cleaned)
+   Dormant until AdSense approval. Returns null.
+   Removed all commented-out code + inline styles.
+   ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */
 
-export default function AdSlot({ id, mobile = true, desktop = true }) {
-  // For now, return null to avoid layout shifts before AdSense approval
+export default function AdSlot() {
   return null;
-  
-  // After AdSense approval, replace with:
-  /*
-  return (
-    <div 
-      className={`ad-slot ${desktop && !mobile ? 'hidden-mobile' : ''} ${mobile && !desktop ? 'hidden-desktop' : ''}`} 
-      style={{ margin: '16px 0', textAlign: 'center' }}
-    >
-      <ins className="adsbygoogle"
-           style={{ display: 'block' }}
-           data-ad-client="ca-pub-4820100355705138"
-           data-ad-slot={id}
-           data-ad-format="auto"
-           data-full-width-responsive="true" />
-    </div>
-  );
-  */
 }

@@ -13,60 +13,63 @@ from datetime import datetime, timezone
 # ZOKASCORE V2 — STEP 45
 # LIVE PREDICTION ENGINE
 #
-# PURPOSE:
-#   Consume real upcoming fixtures from:
+# PURPOSE
+# -------
+# Consume real upcoming fixtures from:
 #
-#       public_data/fixtures/YYYY-MM-DD.json
+#     public_data/fixtures/*.json
 #
-#   Resolve:
+# Resolve:
 #
-#       provider team ID
-#           ↓
-#       canonical ZK_TEAM_* ID
-#
-#   using the authoritative:
-#
-#       data/zokascore_football_data/
-#           canonical_sources/
-#           internal_team_map.json
-#
-#   Then:
-#
-#       canonical team
-#           ↓
-#       Step 44 live_team_state
-#           ↓
-#       exact 15-feature model input
-#           ↓
-#       champion model
-#           ↓
-#       1X2 probabilities
+#     provider team ID
+#          ↓
+#     authoritative internal_team_map.json
+#          ↓
+#     canonical ZK_TEAM_* ID
+#          ↓
+#     Step 44 live_team_state.json
+#          ↓
+#     exact 15-feature champion model
+#          ↓
+#     1X2 probabilities
 #
 #
-# SAFETY:
+# SAFETY RULES
+# ------------
+# 1. Never invent canonical team IDs.
+# 2. Never invent provider IDs.
+# 3. Never invent team state.
+# 4. Never modify Step 44 artifacts.
+# 5. Never modify fixture files.
+# 6. Only predict NS/TBD fixtures.
+# 7. Deduplicate provider match IDs.
+# 8. Never fuzzy-match team names.
+# 9. internal_team_map.json is authoritative.
+# 10. Provider ID present + missing from internal map
+#     = unresolved.
+# 11. teams-index.json may NOT override a missing
+#     authoritative provider mapping.
+# 12. Name matching is allowed only when NO provider ID exists.
+# 13. Canonical team must exist in live_team_state.json.
+# 14. Home and away canonical IDs must differ.
+# 15. Exact champion feature order is enforced.
+# 16. Model classes must exactly match label_mapping.json.
+# 17. All probabilities must be finite and sum to 1.
+# 18. No prediction is emitted when a safety gate fails.
 #
-#   - Never invents canonical team IDs
-#   - Never invents provider IDs
-#   - Never creates fake team states
-#   - Never modifies Step 44 model artifacts
-#   - Never modifies fixture files
-#   - Only predicts NS/TBD fixtures
-#   - Deduplicates provider match IDs
-#   - Validates feature schema
-#   - Validates model classes
-#   - Validates label mapping
-#   - Validates probability sums
-#   - Requires canonical team to exist in live state
-#   - Uses provider-ID mapping before name fallback
-#   - Uses internal_team_map.json as authoritative
-#     provider-ID source
 #
-# IMPORTANT:
+# H2H
+# ---
+# Step 44 live_team_state.json does not currently contain H2H.
 #
-#   A provider ID missing from internal_team_map.json
-#   remains unresolved.
+# Therefore the champion's four H2H inputs are explicitly:
 #
-#   We DO NOT guess those 630 missing provider IDs.
+#     h2h_hw_rate = 0
+#     h2h_d_rate  = 0
+#     h2h_aw_rate = 0
+#     h2h_matches = 0
+#
+# This is an explicit fallback, NOT fabricated H2H data.
 # ============================================================
 
 
@@ -208,13 +211,20 @@ PREDICTABLE_STATUSES = {
 # UTILITIES
 # ============================================================
 
+def as_string(value):
+    if value is None:
+        return None
+
+    value = str(value).strip()
+
+    return value if value else None
+
+
 def clean_name(value):
     """
-    Normalize a team name for safe fallback matching.
+    Deterministic normalization only.
 
-    This is ONLY a fallback resolver.
-
-    Provider-ID resolution has priority.
+    This is NOT fuzzy matching.
     """
 
     value = str(value or "").strip().lower()
@@ -256,33 +266,69 @@ def clean_name(value):
     return value
 
 
-def as_string(value):
+def load_json(path):
+    with open(
+        path,
+        "r",
+        encoding="utf-8"
+    ) as file:
+        return json.load(file)
 
-    if value is None:
-        return None
 
-    value = str(value).strip()
+def atomic_write_json(path, data):
+    os.makedirs(
+        os.path.dirname(path),
+        exist_ok=True
+    )
 
-    if not value:
-        return None
+    temp_path = path + ".tmp"
 
-    return value
+    with open(
+        temp_path,
+        "w",
+        encoding="utf-8"
+    ) as file:
+
+        json.dump(
+            data,
+            file,
+            indent=2,
+            ensure_ascii=False
+        )
+
+    os.replace(
+        temp_path,
+        path
+    )
+
+
+def atomic_write_csv(df, path):
+    os.makedirs(
+        os.path.dirname(path),
+        exist_ok=True
+    )
+
+    temp_path = path + ".tmp"
+
+    df.to_csv(
+        temp_path,
+        index=False
+    )
+
+    os.replace(
+        temp_path,
+        path
+    )
 
 
 def get_nested_values(obj, keys):
-    """
-    Recursively collect values for a set of possible field names.
-    """
-
     found = []
 
     if isinstance(obj, dict):
 
         for key, value in obj.items():
 
-            key_lower = str(key).lower()
-
-            if key_lower in keys:
+            if str(key).lower() in keys:
                 found.append(value)
 
             found.extend(
@@ -330,43 +376,39 @@ def first_value(obj, keys):
 
 def extract_team_name(profile):
 
-    keys = {
-        "name",
-        "team_name",
-        "teamname",
-        "display_name",
-        "displayname",
-        "short_name",
-        "shortname",
-    }
-
     return first_value(
         profile,
-        keys
+        {
+            "name",
+            "team_name",
+            "teamname",
+            "display_name",
+            "displayname",
+            "short_name",
+            "shortname",
+        }
     )
 
 
 def extract_provider_ids(profile):
 
-    keys = {
-        "id",
-        "provider_id",
-        "providerid",
-        "api_id",
-        "apiid",
-        "isports_id",
-        "isportsid",
-        "football_id",
-        "footballid",
-        "external_id",
-        "externalid",
-        "source_id",
-        "sourceid",
-    }
-
     values = get_nested_values(
         profile,
-        keys
+        {
+            "id",
+            "provider_id",
+            "providerid",
+            "api_id",
+            "apiid",
+            "isports_id",
+            "isportsid",
+            "football_id",
+            "footballid",
+            "external_id",
+            "externalid",
+            "source_id",
+            "sourceid",
+        }
     )
 
     result = set()
@@ -387,7 +429,7 @@ def extract_provider_ids(profile):
 
 
 # ============================================================
-# GENERIC TEAM INDEX REGISTRATION
+# TEAMS INDEX
 # ============================================================
 
 def register_team_mapping(
@@ -396,11 +438,6 @@ def register_team_mapping(
     canonical_id,
     profile
 ):
-    """
-    Register one canonical team profile.
-
-    Used primarily for teams-index.json.
-    """
 
     canonical_id = as_string(
         canonical_id
@@ -434,7 +471,7 @@ def register_team_mapping(
             elif existing != canonical_id:
 
                 # Ambiguous name.
-                # Never guess.
+                # Remove it rather than guessing.
                 name_map.pop(
                     normalized,
                     None
@@ -457,28 +494,14 @@ def register_team_mapping(
         elif existing != canonical_id:
 
             # Ambiguous provider ID.
-            # Never guess.
+            # Remove it rather than guessing.
             provider_map.pop(
                 provider_id,
                 None
             )
 
 
-# ============================================================
-# TEAMS INDEX RESOLVER
-# ============================================================
-
 def build_team_resolver(teams_index):
-    """
-    Build fallback resolver from teams-index.json.
-
-    Produces:
-
-        provider ID -> ZK_TEAM_ID
-        normalized name -> ZK_TEAM_ID
-
-    Supports dictionary-style and list-style indexes.
-    """
 
     provider_map = {}
     name_map = {}
@@ -557,47 +580,20 @@ def build_team_resolver(teams_index):
                 profile
             )
 
-    return provider_map, name_map
+    return (
+        provider_map,
+        name_map
+    )
 
 
 # ============================================================
-# AUTHORITATIVE INTERNAL TEAM MAP
+# AUTHORITATIVE INTERNAL PROVIDER MAP
 # ============================================================
 
 def build_internal_provider_map(
     internal_team_map,
     team_states
 ):
-    """
-    Build authoritative:
-
-        provider club ID
-            ->
-        canonical ZK_TEAM_* ID
-
-    from:
-
-        internal_team_map.json
-
-    Expected observed structure:
-
-        {
-            "by_provider_club_id": {
-                "501": "ZK_TEAM_...",
-                "1455": "ZK_TEAM_...",
-                ...
-            }
-        }
-
-    SAFETY:
-
-    - Only uses explicit mappings.
-    - Never derives IDs.
-    - Never guesses.
-    - Requires mapped canonical ID to exist
-      in live_team_state.json.
-    - Detects conflicting mappings.
-    """
 
     if not isinstance(
         internal_team_map,
@@ -620,13 +616,12 @@ def build_internal_provider_map(
 
         raise RuntimeError(
             "internal_team_map.json is missing "
-            "the expected 'by_provider_club_id' object."
+            "'by_provider_club_id'."
         )
 
     provider_map = {}
 
     skipped_missing_state = 0
-
     conflicts = 0
 
     for raw_provider_id, raw_canonical_id in raw_map.items():
@@ -639,16 +634,12 @@ def build_internal_provider_map(
             raw_canonical_id
         )
 
-        if not provider_id:
-            continue
-
-        if not canonical_id:
+        if not provider_id or not canonical_id:
             continue
 
         if canonical_id not in team_states:
 
             skipped_missing_state += 1
-
             continue
 
         existing = provider_map.get(
@@ -663,8 +654,6 @@ def build_internal_provider_map(
 
         elif existing != canonical_id:
 
-            # Conflict.
-            # Never guess.
             provider_map.pop(
                 provider_id,
                 None
@@ -680,27 +669,34 @@ def build_internal_provider_map(
 
 
 # ============================================================
-# COMBINED TEAM RESOLVER
+# STRICT TEAM RESOLUTION
 # ============================================================
 
 def resolve_team(
     provider_id,
     team_name,
     internal_provider_map,
-    index_provider_map,
     name_map,
     team_states
 ):
     """
-    Resolve fixture team.
+    AUTHORITATIVE RESOLUTION POLICY
+    --------------------------------
 
-    Priority:
+    Provider ID exists:
+        MUST resolve through internal_team_map.json.
 
-        1. authoritative internal provider map
-        2. teams-index provider map
-        3. normalized team name
+    Provider ID exists but is absent:
+        UNRESOLVED.
 
-    A resolved team MUST exist in live_team_state.json.
+    No provider-ID fallback to teams-index.
+
+    No provider-ID fallback to name.
+
+    No provider ID:
+        deterministic normalized-name lookup is permitted.
+
+    Fuzzy matching is never performed.
     """
 
     provider_id = as_string(
@@ -708,7 +704,7 @@ def resolve_team(
     )
 
     # --------------------------------------------------------
-    # 1. AUTHORITATIVE INTERNAL PROVIDER MAP
+    # PROVIDER-ID PATH
     # --------------------------------------------------------
 
     if provider_id:
@@ -717,80 +713,54 @@ def resolve_team(
             provider_id
         )
 
-        if canonical_id:
+        if not canonical_id:
+            return None
 
-            if canonical_id in team_states:
+        if canonical_id not in team_states:
+            return None
 
-                return {
-                    "canonical_id": canonical_id,
-                    "method": "provider_id",
-                    "resolver_source": "internal_team_map",
-                }
+        return {
+            "canonical_id":
+                canonical_id,
 
-    # --------------------------------------------------------
-    # 2. TEAMS INDEX PROVIDER MAP
-    # --------------------------------------------------------
+            "method":
+                "provider_id",
 
-    if provider_id:
-
-        canonical_id = index_provider_map.get(
-            provider_id
-        )
-
-        if canonical_id:
-
-            if canonical_id in team_states:
-
-                return {
-                    "canonical_id": canonical_id,
-                    "method": "provider_id",
-                    "resolver_source": "teams-index",
-                }
+            "resolver_source":
+                "internal_team_map",
+        }
 
     # --------------------------------------------------------
-    # 3. NAME FALLBACK
+    # NO PROVIDER ID
     # --------------------------------------------------------
 
     normalized_name = clean_name(
         team_name
     )
 
-    if normalized_name:
+    if not normalized_name:
+        return None
 
-        canonical_id = name_map.get(
-            normalized_name
-        )
+    canonical_id = name_map.get(
+        normalized_name
+    )
 
-        if canonical_id:
+    if not canonical_id:
+        return None
 
-            if canonical_id in team_states:
+    if canonical_id not in team_states:
+        return None
 
-                return {
-                    "canonical_id": canonical_id,
-                    "method": "team_name",
-                    "resolver_source": "teams-index",
-                }
+    return {
+        "canonical_id":
+            canonical_id,
 
-    # --------------------------------------------------------
-    # UNRESOLVED
-    # --------------------------------------------------------
+        "method":
+            "team_name",
 
-    return None
-
-
-# ============================================================
-# JSON
-# ============================================================
-
-def load_json(path):
-
-    with open(
-        path,
-        "r",
-        encoding="utf-8"
-    ) as file:
-
-        return json.load(file)
+        "resolver_source":
+            "teams-index",
+    }
 
 
 # ============================================================
@@ -798,15 +768,6 @@ def load_json(path):
 # ============================================================
 
 def load_fixture_file(path):
-    """
-    Supports:
-
-        {"data": [...]}
-
-    and:
-
-        [...]
-    """
 
     data = load_json(
         path
@@ -833,29 +794,21 @@ def load_fixture_file(path):
 
         return []
 
-    if not isinstance(
+    return matches if isinstance(
         matches,
         list
-    ):
-
-        return []
-
-    return matches
+    ) else []
 
 
 def extract_fixture(
     match,
     source_file
 ):
-    """
-    Convert provider fixture into controlled structure.
-    """
 
     if not isinstance(
         match,
         dict
     ):
-
         return None
 
     status = as_string(
@@ -863,7 +816,6 @@ def extract_fixture(
     )
 
     if status not in PREDICTABLE_STATUSES:
-
         return None
 
     home_team = (
@@ -875,6 +827,18 @@ def extract_fixture(
         match.get("awayTeam")
         or {}
     )
+
+    if not isinstance(
+        home_team,
+        dict
+    ):
+        home_team = {}
+
+    if not isinstance(
+        away_team,
+        dict
+    ):
+        away_team = {}
 
     home_name = (
         match.get("homeTeamName")
@@ -924,9 +888,9 @@ def extract_fixture(
         dict
     ):
 
-        league = match.get(
+        league = match[
             "league"
-        ).get("name")
+        ].get("name")
 
     date_value = (
         match.get("date")
@@ -978,21 +942,30 @@ def get_prediction_date():
     ).date()
 
 
+def parse_fixture_date(value):
+
+    if not value:
+        return None
+
+    try:
+
+        parsed = pd.to_datetime(
+            value,
+            errors="coerce",
+            utc=True
+        )
+
+        if pd.isna(parsed):
+            return None
+
+        return parsed.date()
+
+    except Exception:
+
+        return None
+
+
 def collect_upcoming_fixtures():
-    """
-    Scan fixture JSON files.
-
-    Only:
-
-        NS
-        TBD
-
-    are accepted.
-
-    Historical fixtures are skipped.
-
-    Duplicate provider match IDs are removed.
-    """
 
     fixture_files = sorted(
         glob.glob(
@@ -1037,40 +1010,15 @@ def collect_upcoming_fixtures():
             if fixture is None:
                 continue
 
-            date_value = fixture[
-                "date"
-            ]
+            fixture_date = parse_fixture_date(
+                fixture["date"]
+            )
 
-            fixture_date = None
-
-            if date_value:
-
-                try:
-
-                    parsed = pd.to_datetime(
-                        date_value,
-                        errors="coerce",
-                        utc=True
-                    )
-
-                    if not pd.isna(parsed):
-
-                        fixture_date = (
-                            parsed.date()
-                        )
-
-                except Exception:
-
-                    fixture_date = None
-
-            # ------------------------------------------------
-            # HISTORICAL GUARD
-            # ------------------------------------------------
-
-            if fixture_date is not None:
-
-                if fixture_date < today:
-                    continue
+            if (
+                fixture_date is not None
+                and fixture_date < today
+            ):
+                continue
 
             match_id = fixture[
                 "match_id"
@@ -1103,7 +1051,7 @@ def collect_upcoming_fixtures():
 
 
 # ============================================================
-# STEP 44 STATE -> MODEL FEATURES
+# STEP 44 → MODEL FEATURES
 # ============================================================
 
 def get_numeric(
@@ -1145,19 +1093,6 @@ def build_model_features(
     home_state,
     away_state
 ):
-    """
-    Convert Step 44 live state into the exact
-    15 features required by the champion model.
-
-    H2H is not present in Step 44 live_team_state.json.
-
-    Therefore:
-
-        h2h_hw_rate = 0
-        h2h_d_rate  = 0
-        h2h_aw_rate = 0
-        h2h_matches = 0
-    """
 
     home_elo = get_numeric(
         home_state,
@@ -1256,7 +1191,7 @@ def build_model_features(
             + ", ".join(missing)
         )
 
-    return {
+    features = {
 
         "home_elo_pre":
             home_elo,
@@ -1291,6 +1226,7 @@ def build_model_features(
         "away_ga_avg":
             away_ga,
 
+        # Explicit Step 44 H2H fallback.
         "h2h_hw_rate":
             0.0,
 
@@ -1301,23 +1237,20 @@ def build_model_features(
             0.0,
 
         "h2h_matches":
-            0,
+            0.0,
     }
+
+    return features
 
 
 def validate_features(features):
 
-    missing = [
-        column
-        for column in FEATURE_COLUMNS
-        if column not in features
-    ]
-
-    if missing:
+    if list(features.keys()) != FEATURE_COLUMNS:
 
         raise RuntimeError(
-            "Missing model features: "
-            + ", ".join(missing)
+            "Feature order mismatch.\n"
+            f"Expected: {FEATURE_COLUMNS}\n"
+            f"Actual:   {list(features.keys())}"
         )
 
     for column in FEATURE_COLUMNS:
@@ -1360,29 +1293,6 @@ def build_label_mapping(
     label_mapping,
     model
 ):
-    """
-    Safely normalize label_mapping.json.
-
-    Supports:
-
-        {
-            "0": "AWAY_WIN",
-            "1": "DRAW",
-            "2": "HOME_WIN"
-        }
-
-    and:
-
-        {
-            "AWAY_WIN": 0,
-            "DRAW": 1,
-            "HOME_WIN": 2
-        }
-
-    Internally:
-
-        class ID -> label
-    """
 
     if not isinstance(
         label_mapping,
@@ -1394,50 +1304,61 @@ def build_label_mapping(
             "an object."
         )
 
-    class_to_label = True
+    if not label_mapping:
 
-    for key, value in label_mapping.items():
+        raise RuntimeError(
+            "label_mapping.json is empty."
+        )
 
-        try:
+    keys_are_numeric = all(
+        isinstance(
+            key,
+            (int, float)
+        )
+        or (
+            isinstance(key, str)
+            and re.fullmatch(
+                r"-?\d+",
+                key.strip()
+            )
+        )
+        for key in label_mapping.keys()
+    )
 
-            int(key)
+    values_are_numeric = all(
+        isinstance(
+            value,
+            (int, float)
+        )
+        or (
+            isinstance(value, str)
+            and re.fullmatch(
+                r"-?\d+",
+                value.strip()
+            )
+        )
+        for value in label_mapping.values()
+    )
 
-            class_to_label = True
+    if keys_are_numeric and not values_are_numeric:
 
-            break
+        orientation = "class_id -> label"
 
-        except (
-            TypeError,
-            ValueError
-        ):
+    elif not keys_are_numeric and values_are_numeric:
 
-            pass
+        orientation = "label -> class_id"
 
-        try:
+    else:
 
-            int(value)
-
-            class_to_label = False
-
-            break
-
-        except (
-            TypeError,
-            ValueError
-        ):
-
-            pass
+        raise RuntimeError(
+            "Could not safely determine label_mapping.json "
+            "orientation."
+        )
 
     inverse_mapping = {}
-
     forward_mapping = {}
 
-    # --------------------------------------------------------
-    # FORMAT A
-    # class ID -> label
-    # --------------------------------------------------------
-
-    if class_to_label:
+    if orientation == "class_id -> label":
 
         for raw_class_id, raw_label in label_mapping.items():
 
@@ -1453,9 +1374,7 @@ def build_label_mapping(
             ):
 
                 raise RuntimeError(
-                    "Invalid class ID in "
-                    "label_mapping.json: "
-                    f"{raw_class_id!r}"
+                    f"Invalid class ID: {raw_class_id!r}"
                 )
 
             label = str(
@@ -1465,9 +1384,19 @@ def build_label_mapping(
             if label not in EXPECTED_LABELS:
 
                 raise RuntimeError(
-                    "Unknown label in "
-                    "label_mapping.json: "
-                    f"{label!r}"
+                    f"Unknown label: {label!r}"
+                )
+
+            if class_id in inverse_mapping:
+
+                raise RuntimeError(
+                    f"Duplicate class ID: {class_id}"
+                )
+
+            if label in forward_mapping:
+
+                raise RuntimeError(
+                    f"Duplicate label: {label}"
                 )
 
             inverse_mapping[
@@ -1477,11 +1406,6 @@ def build_label_mapping(
             forward_mapping[
                 label
             ] = class_id
-
-    # --------------------------------------------------------
-    # FORMAT B
-    # label -> class ID
-    # --------------------------------------------------------
 
     else:
 
@@ -1494,9 +1418,7 @@ def build_label_mapping(
             if label not in EXPECTED_LABELS:
 
                 raise RuntimeError(
-                    "Unknown label in "
-                    "label_mapping.json: "
-                    f"{label!r}"
+                    f"Unknown label: {label!r}"
                 )
 
             try:
@@ -1511,9 +1433,20 @@ def build_label_mapping(
             ):
 
                 raise RuntimeError(
-                    "Invalid class ID for label "
-                    f"{label!r}: "
+                    f"Invalid class ID for {label}: "
                     f"{raw_class_id!r}"
+                )
+
+            if label in forward_mapping:
+
+                raise RuntimeError(
+                    f"Duplicate label: {label}"
+                )
+
+            if class_id in inverse_mapping:
+
+                raise RuntimeError(
+                    f"Duplicate class ID: {class_id}"
                 )
 
             forward_mapping[
@@ -1524,40 +1457,14 @@ def build_label_mapping(
                 class_id
             ] = label
 
-    # --------------------------------------------------------
-    # LABEL VALIDATION
-    # --------------------------------------------------------
-
-    actual_labels = set(
+    if set(
         inverse_mapping.values()
-    )
-
-    missing_labels = (
-        EXPECTED_LABELS
-        - actual_labels
-    )
-
-    if missing_labels:
+    ) != EXPECTED_LABELS:
 
         raise RuntimeError(
-            "label_mapping.json is missing labels: "
-            + ", ".join(
-                sorted(missing_labels)
-            )
+            "label_mapping.json does not contain exactly "
+            "HOME_WIN, DRAW and AWAY_WIN."
         )
-
-    if len(inverse_mapping) != len(
-        forward_mapping
-    ):
-
-        raise RuntimeError(
-            "label_mapping.json contains "
-            "duplicate class IDs or labels."
-        )
-
-    # --------------------------------------------------------
-    # MODEL CLASS VALIDATION
-    # --------------------------------------------------------
 
     model_classes = getattr(
         model,
@@ -1571,43 +1478,47 @@ def build_label_mapping(
             "Champion model has no classes_ attribute."
         )
 
-    model_classes = [
-        int(value)
-        for value in model_classes
-    ]
+    try:
 
-    mapping_classes = sorted(
-        inverse_mapping.keys()
-    )
+        model_classes = [
+            int(value)
+            for value in model_classes
+        ]
 
-    expected_model_classes = sorted(
-        model_classes
-    )
-
-    if mapping_classes != expected_model_classes:
+    except Exception:
 
         raise RuntimeError(
-            "Model class IDs do not match "
-            "label_mapping.json.\n"
-            f"Mapping: {mapping_classes}\n"
-            f"Model:   {expected_model_classes}"
+            "Champion model classes_ contains "
+            "non-integer class IDs."
         )
 
-    if len(inverse_mapping) != 3:
+    if len(model_classes) != len(
+        set(model_classes)
+    ):
 
         raise RuntimeError(
-            "Expected exactly 3 outcome classes, "
-            f"found {len(inverse_mapping)}."
+            "Champion model contains duplicate class IDs."
+        )
+
+    if sorted(
+        inverse_mapping.keys()
+    ) != sorted(model_classes):
+
+        raise RuntimeError(
+            "Model class IDs do not match label_mapping.json.\n"
+            f"Mapping: {sorted(inverse_mapping.keys())}\n"
+            f"Model:   {sorted(model_classes)}"
+        )
+
+    if len(model_classes) != 3:
+
+        raise RuntimeError(
+            "Expected exactly 3 model classes."
         )
 
     print(
-        "   ↳ Label mapping orientation: "
-        + (
-            "class_id -> label"
-            if class_to_label
-            else
-            "label -> class_id"
-        )
+        f"   ↳ Label mapping orientation: "
+        f"{orientation}"
     )
 
     print(
@@ -1628,6 +1539,181 @@ def build_label_mapping(
 
 
 # ============================================================
+# MODEL PREDICTION VALIDATION
+# ============================================================
+
+def predict_1x2(
+    model,
+    X,
+    model_classes,
+    inverse_mapping
+):
+
+    probabilities = model.predict_proba(
+        X
+    )[0]
+
+    if len(probabilities) != len(
+        model_classes
+    ):
+
+        raise RuntimeError(
+            "Model returned unexpected probability count: "
+            f"{len(probabilities)}"
+        )
+
+    probability_by_label = {}
+
+    for class_id, probability in zip(
+        model_classes,
+        probabilities
+    ):
+
+        class_id = int(
+            class_id
+        )
+
+        probability = float(
+            probability
+        )
+
+        if not np.isfinite(
+            probability
+        ):
+
+            raise RuntimeError(
+                f"Non-finite probability for class "
+                f"{class_id}: {probability}"
+            )
+
+        if probability < 0.0 or probability > 1.0:
+
+            raise RuntimeError(
+                f"Invalid probability for class "
+                f"{class_id}: {probability}"
+            )
+
+        if class_id not in inverse_mapping:
+
+            raise RuntimeError(
+                f"Unknown model class ID: {class_id}"
+            )
+
+        label = inverse_mapping[
+            class_id
+        ]
+
+        probability_by_label[
+            label
+        ] = probability
+
+    if set(
+        probability_by_label
+    ) != EXPECTED_LABELS:
+
+        raise RuntimeError(
+            "Prediction did not produce all three "
+            "1X2 outcome labels."
+        )
+
+    home_prob = probability_by_label[
+        "HOME_WIN"
+    ]
+
+    draw_prob = probability_by_label[
+        "DRAW"
+    ]
+
+    away_prob = probability_by_label[
+        "AWAY_WIN"
+    ]
+
+    probability_sum = (
+        home_prob
+        + draw_prob
+        + away_prob
+    )
+
+    if not np.isclose(
+        probability_sum,
+        1.0,
+        atol=1e-5
+    ):
+
+        raise RuntimeError(
+            "Model probabilities do not sum to 1.0: "
+            f"{probability_sum}"
+        )
+
+    outcome_probabilities = {
+
+        "HOME_WIN":
+            home_prob,
+
+        "DRAW":
+            draw_prob,
+
+        "AWAY_WIN":
+            away_prob,
+    }
+
+    predicted_outcome = max(
+        outcome_probabilities,
+        key=outcome_probabilities.get
+    )
+
+    return (
+        home_prob,
+        draw_prob,
+        away_prob,
+        predicted_outcome
+    )
+
+
+# ============================================================
+# UNRESOLVED RECORD HELPER
+# ============================================================
+
+def make_unresolved_record(
+    fixture,
+    **extra
+):
+
+    record = {
+
+        "match_id":
+            fixture["match_id"],
+
+        "date":
+            fixture["date"],
+
+        "league":
+            fixture["league"],
+
+        "home_team":
+            fixture["home_name"],
+
+        "away_team":
+            fixture["away_name"],
+
+        "home_provider_id":
+            fixture["home_provider_id"],
+
+        "away_provider_id":
+            fixture["away_provider_id"],
+
+        "source_file":
+            fixture["source_file"],
+    }
+
+    record.update(
+        extra
+    )
+
+    return record
+
+
+# ============================================================
 # MAIN
 # ============================================================
 
@@ -1636,7 +1722,7 @@ def run():
     print("=" * 70)
 
     print(
-        " ZOKASCORE V2 — STEP 45: "
+        "ZOKASCORE V2 — STEP 45: "
         "LIVE PREDICTION ENGINE"
     )
 
@@ -1655,23 +1741,17 @@ def run():
     required_files = [
 
         CHAMPION_MODEL_FILE,
-
         CHAMPION_SCHEMA_FILE,
-
         LIVE_STATE_FILE,
-
         LABEL_MAPPING_FILE,
-
         CHAMPION_MANIFEST_FILE,
-
         TEAMS_INDEX_FILE,
-
         INTERNAL_TEAM_MAP_FILE,
     ]
 
     for path in required_files:
 
-        if not os.path.exists(path):
+        if not os.path.isfile(path):
 
             raise FileNotFoundError(
                 "Required artifact not found:\n"
@@ -1742,14 +1822,20 @@ def run():
         INTERNAL_TEAM_MAP_FILE
     )
 
+    if not isinstance(
+        team_states,
+        dict
+    ):
+
+        raise RuntimeError(
+            "live_team_state.json must contain "
+            "an object keyed by canonical team ID."
+        )
+
     print(
         f"   ↳ Live team states: "
         f"{len(team_states):,}"
     )
-
-    # ========================================================
-    # MODEL CLASS INFORMATION
-    # ========================================================
 
     model_classes = getattr(
         model,
@@ -1763,17 +1849,41 @@ def run():
             "Champion model has no classes_ attribute."
         )
 
+    try:
+
+        model_classes = [
+            int(value)
+            for value in model_classes
+        ]
+
+    except Exception:
+
+        raise RuntimeError(
+            "Champion model classes_ contains "
+            "non-integer class IDs."
+        )
+
     print(
         "   ↳ Model classes: "
         + ", ".join(
-            str(int(value))
+            str(value)
             for value in model_classes
         )
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # FEATURE SCHEMA
-    # ========================================================
+    # --------------------------------------------------------
+
+    if not isinstance(
+        schema,
+        dict
+    ):
+
+        raise RuntimeError(
+            "champion_feature_schema.json must contain "
+            "a JSON object."
+        )
 
     schema_features = schema.get(
         "features",
@@ -1807,9 +1917,47 @@ def run():
         f"({len(FEATURE_COLUMNS)} features)."
     )
 
-    # ========================================================
+    # --------------------------------------------------------
+    # MODEL FEATURE COUNT
+    # --------------------------------------------------------
+
+    model_feature_count = getattr(
+        model,
+        "n_features_in_",
+        None
+    )
+
+    if model_feature_count is not None:
+
+        try:
+
+            model_feature_count = int(
+                model_feature_count
+            )
+
+        except Exception:
+
+            raise RuntimeError(
+                "Champion model n_features_in_ is invalid."
+            )
+
+        if model_feature_count != len(
+            FEATURE_COLUMNS
+        ):
+
+            raise RuntimeError(
+                "Champion model feature count mismatch.\n"
+                f"Expected: {len(FEATURE_COLUMNS)}\n"
+                f"Model: {model_feature_count}"
+            )
+
+    print(
+        "   ✅ Champion model feature count validated."
+    )
+
+    # --------------------------------------------------------
     # LABEL MAPPING
-    # ========================================================
+    # --------------------------------------------------------
 
     _, inverse_mapping = build_label_mapping(
         label_mapping,
@@ -1820,6 +1968,24 @@ def run():
         "   ✅ Label mapping validated."
     )
 
+    # --------------------------------------------------------
+    # BASIC MANIFEST VALIDATION
+    # --------------------------------------------------------
+
+    if not isinstance(
+        manifest,
+        dict
+    ):
+
+        raise RuntimeError(
+            "champion_manifest.json must contain "
+            "a JSON object."
+        )
+
+    print(
+        "   ✅ Champion manifest loaded."
+    )
+
     # ========================================================
     # 3. BUILD TEAM RESOLVERS
     # ========================================================
@@ -1828,27 +1994,21 @@ def run():
         "\n[3/7] Building canonical team resolvers..."
     )
 
-    # --------------------------------------------------------
-    # TEAMS INDEX
-    # --------------------------------------------------------
+    # The provider map from teams-index is intentionally
+    # NOT used for authoritative provider resolution.
+    #
+    # It is retained only because teams-index supplies the
+    # deterministic name map used when a fixture has no
+    # provider ID.
 
-    index_provider_map, name_map = build_team_resolver(
+    _index_provider_map, name_map = build_team_resolver(
         teams_index
-    )
-
-    print(
-        f"   ↳ teams-index provider mappings: "
-        f"{len(index_provider_map):,}"
     )
 
     print(
         f"   ↳ teams-index name mappings: "
         f"{len(name_map):,}"
     )
-
-    # --------------------------------------------------------
-    # INTERNAL AUTHORITATIVE MAP
-    # --------------------------------------------------------
 
     (
         internal_provider_map,
@@ -1875,22 +2035,33 @@ def run():
         f"{internal_conflicts:,}"
     )
 
+    if internal_conflicts:
+
+        raise RuntimeError(
+            "Authoritative internal provider map contains "
+            "conflicting provider IDs."
+        )
+
     print()
 
     print(
-        "   Provider resolution priority:"
+        "   AUTHORITATIVE PROVIDER RESOLUTION:"
     )
 
     print(
-        "      1. internal_team_map.json"
+        "      provider ID → internal_team_map.json"
     )
 
     print(
-        "      2. teams-index.json"
+        "      provider ID missing → UNRESOLVED"
     )
 
     print(
-        "      3. normalized team name"
+        "      no provider ID → deterministic name fallback"
+    )
+
+    print(
+        "      fuzzy matching → FORBIDDEN"
     )
 
     # ========================================================
@@ -1898,8 +2069,11 @@ def run():
     # ========================================================
 
     print(
-        "\n[4/7] Loading real upcoming fixtures "
-        f"from:\n   {FIXTURES_DIR}"
+        "\n[4/7] Loading real upcoming fixtures from:"
+    )
+
+    print(
+        f"   {FIXTURES_DIR}"
     )
 
     fixtures = collect_upcoming_fixtures()
@@ -1920,10 +2094,22 @@ def run():
 
         print()
 
+        # Never leave stale public predictions.
+        atomic_write_json(
+            PUBLIC_PREDICTIONS_FILE,
+            []
+        )
+
+        print(
+            "   ✅ Public predictions cleared."
+        )
+
+        print()
+
         print("=" * 70)
 
         print(
-            " STEP 45 COMPLETE: NO FIXTURES"
+            "STEP 45 COMPLETE: NO FIXTURES"
         )
 
         print("=" * 70)
@@ -1935,113 +2121,55 @@ def run():
     # ========================================================
 
     print(
-        "\n[5/7] Resolving teams "
-        "and generating predictions..."
+        "\n[5/7] Resolving teams and generating predictions..."
     )
 
     predictions = []
-
     unresolved = []
 
     resolved_by_provider_id = 0
-
     resolved_by_name = 0
 
     resolved_from_internal_map = 0
-
     resolved_from_teams_index = 0
 
-    # --------------------------------------------------------
-    # TRACK PROVIDER IDS
-    # --------------------------------------------------------
-
     provider_ids_seen = set()
-
     provider_ids_found_internal = set()
-
     provider_ids_missing_internal = set()
+
+    seen_prediction_ids = set()
 
     for fixture in fixtures:
 
-        if fixture.get(
-            "home_provider_id"
-        ):
+        match_id = fixture[
+            "match_id"
+        ]
 
-            provider_ids_seen.add(
-                str(
-                    fixture[
-                        "home_provider_id"
-                    ]
+        # ----------------------------------------------------
+        # DEFENSIVE MATCH-ID DEDUPLICATION
+        # ----------------------------------------------------
+
+        if match_id in seen_prediction_ids:
+
+            unresolved.append(
+                make_unresolved_record(
+                    fixture,
+                    reason="duplicate prediction match ID"
                 )
             )
 
-        if fixture.get(
-            "away_provider_id"
-        ):
+            continue
 
-            provider_ids_seen.add(
-                str(
-                    fixture[
-                        "away_provider_id"
-                    ]
-                )
-
-            )
-
-        # ====================================================
-        # HOME RESOLUTION
-        # ====================================================
-
-        home_resolution = resolve_team(
-
-            fixture[
-                "home_provider_id"
-            ],
-
-            fixture[
-                "home_name"
-            ],
-
-            internal_provider_map,
-
-            index_provider_map,
-
-            name_map,
-
-            team_states
-        )
-
-        # ====================================================
-        # AWAY RESOLUTION
-        # ====================================================
-
-        away_resolution = resolve_team(
-
-            fixture[
-                "away_provider_id"
-            ],
-
-            fixture[
-                "away_name"
-            ],
-
-            internal_provider_map,
-
-            index_provider_map,
-
-            name_map,
-
-            team_states
-        )
-
-        # ====================================================
-        # TRACK INTERNAL MAP COVERAGE
-        # ====================================================
+        # ----------------------------------------------------
+        # TRACK PROVIDER IDS
+        # ----------------------------------------------------
 
         for provider_id in [
+
             fixture[
                 "home_provider_id"
             ],
+
             fixture[
                 "away_provider_id"
             ],
@@ -2053,6 +2181,10 @@ def run():
 
             if not provider_id:
                 continue
+
+            provider_ids_seen.add(
+                provider_id
+            )
 
             if provider_id in internal_provider_map:
 
@@ -2066,89 +2198,118 @@ def run():
                     provider_id
                 )
 
-        # ====================================================
-        # UNKNOWN TEAM SAFETY GATE
-        # ====================================================
+        # ----------------------------------------------------
+        # HOME RESOLUTION
+        # ----------------------------------------------------
+
+        home_resolution = resolve_team(
+
+            fixture[
+                "home_provider_id"
+            ],
+
+            fixture[
+                "home_name"
+            ],
+
+            internal_provider_map,
+
+            name_map,
+
+            team_states
+        )
+
+        # ----------------------------------------------------
+        # AWAY RESOLUTION
+        # ----------------------------------------------------
+
+        away_resolution = resolve_team(
+
+            fixture[
+                "away_provider_id"
+            ],
+
+            fixture[
+                "away_name"
+            ],
+
+            internal_provider_map,
+
+            name_map,
+
+            team_states
+        )
+
+        # ----------------------------------------------------
+        # RESOLUTION FAILURE
+        # ----------------------------------------------------
 
         if (
             not home_resolution
             or not away_resolution
         ):
 
-            item = {
+            item = make_unresolved_record(
+                fixture
+            )
 
-                "match_id":
-                    fixture[
-                        "match_id"
-                    ],
+            item[
+                "home_resolved"
+            ] = bool(
+                home_resolution
+            )
 
-                "date":
-                    fixture[
-                        "date"
-                    ],
-
-                "league":
-                    fixture[
-                        "league"
-                    ],
-
-                "home_team":
-                    fixture[
-                        "home_name"
-                    ],
-
-                "away_team":
-                    fixture[
-                        "away_name"
-                    ],
-
-                "home_provider_id":
-                    fixture[
-                        "home_provider_id"
-                    ],
-
-                "away_provider_id":
-                    fixture[
-                        "away_provider_id"
-                    ],
-
-                "home_resolved":
-                    bool(
-                        home_resolution
-                    ),
-
-                "away_resolved":
-                    bool(
-                        away_resolution
-                    ),
-
-                "source_file":
-                    fixture[
-                        "source_file"
-                    ],
-            }
+            item[
+                "away_resolved"
+            ] = bool(
+                away_resolution
+            )
 
             if not home_resolution:
 
-                item[
-                    "home_resolution_failure"
-                ] = (
-                    "provider ID not found in "
-                    "authoritative internal map "
-                    "or fallback resolver, and "
-                    "name fallback did not resolve"
-                )
+                if fixture[
+                    "home_provider_id"
+                ]:
+
+                    item[
+                        "home_resolution_failure"
+                    ] = (
+                        "provider ID is not present in "
+                        "authoritative internal_team_map.json; "
+                        "no fallback identity matching permitted"
+                    )
+
+                else:
+
+                    item[
+                        "home_resolution_failure"
+                    ] = (
+                        "no provider ID and deterministic "
+                        "team-name resolution failed"
+                    )
 
             if not away_resolution:
 
-                item[
-                    "away_resolution_failure"
-                ] = (
-                    "provider ID not found in "
-                    "authoritative internal map "
-                    "or fallback resolver, and "
-                    "name fallback did not resolve"
-                )
+                if fixture[
+                    "away_provider_id"
+                ]:
+
+                    item[
+                        "away_resolution_failure"
+                    ] = (
+                        "provider ID is not present in "
+                        "authoritative internal_team_map.json; "
+                        "no fallback identity matching permitted"
+                    )
+
+                else:
+
+                    item[
+                        "away_resolution_failure"
+                    ] = (
+                        "no provider ID and deterministic "
+                        "team-name resolution failed"
+                    )
 
             unresolved.append(
                 item
@@ -2164,11 +2325,35 @@ def run():
             "canonical_id"
         ]
 
-        # ====================================================
+        # ----------------------------------------------------
+        # SAME TEAM SAFETY GATE
+        # ----------------------------------------------------
+
+        if home_id == away_id:
+
+            unresolved.append(
+                make_unresolved_record(
+                    fixture,
+
+                    home_canonical_id=home_id,
+
+                    away_canonical_id=away_id,
+
+                    reason=(
+                        "home and away resolved to the same "
+                        "canonical team ID"
+                    )
+                )
+            )
+
+            continue
+
+        # ----------------------------------------------------
         # RESOLUTION COUNTS
-        # ====================================================
+        # ----------------------------------------------------
 
         for resolution in [
+
             home_resolution,
             away_resolution
         ]:
@@ -2185,19 +2370,19 @@ def run():
 
                     resolved_from_internal_map += 1
 
-                elif resolution[
+            else:
+
+                resolved_by_name += 1
+
+                if resolution[
                     "resolver_source"
                 ] == "teams-index":
 
                     resolved_from_teams_index += 1
 
-            else:
-
-                resolved_by_name += 1
-
-        # ====================================================
-        # GET LIVE STATES
-        # ====================================================
+        # ----------------------------------------------------
+        # LIVE STATES
+        # ----------------------------------------------------
 
         home_state = team_states.get(
             home_id
@@ -2208,75 +2393,41 @@ def run():
         )
 
         if (
-            not home_state
-            or not away_state
+            not isinstance(
+                home_state,
+                dict
+            )
+            or not isinstance(
+                away_state,
+                dict
+            )
         ):
 
-            unresolved.append({
+            unresolved.append(
+                make_unresolved_record(
+                    fixture,
 
-                "match_id":
-                    fixture[
-                        "match_id"
-                    ],
+                    home_canonical_id=home_id,
 
-                "date":
-                    fixture[
-                        "date"
-                    ],
+                    away_canonical_id=away_id,
 
-                "league":
-                    fixture[
-                        "league"
-                    ],
-
-                "home_team":
-                    fixture[
-                        "home_name"
-                    ],
-
-                "away_team":
-                    fixture[
-                        "away_name"
-                    ],
-
-                "home_provider_id":
-                    fixture[
-                        "home_provider_id"
-                    ],
-
-                "away_provider_id":
-                    fixture[
-                        "away_provider_id"
-                    ],
-
-                "home_canonical_id":
-                    home_id,
-
-                "away_canonical_id":
-                    away_id,
-
-                "reason":
-                    "canonical team missing "
-                    "from live state",
-
-                "source_file":
-                    fixture[
-                        "source_file"
-                    ],
-            })
+                    reason=(
+                        "canonical team missing from "
+                        "Step 44 live_team_state.json"
+                    )
+                )
+            )
 
             continue
 
-        # ====================================================
-        # BUILD EXACT 15 FEATURES
-        # ====================================================
+        # ----------------------------------------------------
+        # BUILD FEATURES
+        # ----------------------------------------------------
 
         try:
 
             features = build_model_features(
-
                 home_state,
-
                 away_state
             )
 
@@ -2286,67 +2437,32 @@ def run():
 
         except Exception as exc:
 
-            unresolved.append({
+            unresolved.append(
+                make_unresolved_record(
+                    fixture,
 
-                "match_id":
-                    fixture[
-                        "match_id"
-                    ],
+                    home_canonical_id=home_id,
 
-                "date":
-                    fixture[
-                        "date"
-                    ],
+                    away_canonical_id=away_id,
 
-                "league":
-                    fixture[
-                        "league"
-                    ],
-
-                "home_team":
-                    fixture[
-                        "home_name"
-                    ],
-
-                "away_team":
-                    fixture[
-                        "away_name"
-                    ],
-
-                "home_provider_id":
-                    fixture[
-                        "home_provider_id"
-                    ],
-
-                "away_provider_id":
-                    fixture[
-                        "away_provider_id"
-                    ],
-
-                "home_canonical_id":
-                    home_id,
-
-                "away_canonical_id":
-                    away_id,
-
-                "reason":
-                    "feature construction failed: "
-                    f"{exc}",
-
-                "source_file":
-                    fixture[
-                        "source_file"
-                    ],
-            })
+                    reason=(
+                        "feature construction failed: "
+                        + str(exc)
+                    )
+                )
+            )
 
             continue
 
-        # ====================================================
-        # MODEL INPUT
-        # ====================================================
+        # ----------------------------------------------------
+        # EXACT MODEL INPUT
+        # ----------------------------------------------------
 
         X = pd.DataFrame(
-            [features],
+            [[
+                features[column]
+                for column in FEATURE_COLUMNS
+            ]],
             columns=FEATURE_COLUMNS
         ).astype(float)
 
@@ -2358,119 +2474,49 @@ def run():
                 "Fatal feature-order mismatch."
             )
 
-        # ====================================================
-        # PREDICT
-        # ====================================================
-
-        probabilities = model.predict_proba(
-            X
-        )[0]
-
-        if len(
-            probabilities
-        ) != len(
-            model_classes
+        if X.shape != (
+            1,
+            len(FEATURE_COLUMNS)
         ):
 
             raise RuntimeError(
-                "Model returned unexpected "
-                "probability count: "
-                f"{len(probabilities)}"
+                "Fatal model input shape mismatch: "
+                f"{X.shape}"
             )
-
-        probability_by_label = {}
-
-        for class_id, probability in zip(
-            model_classes,
-            probabilities
-        ):
-
-            class_id = int(
-                class_id
-            )
-
-            if class_id not in inverse_mapping:
-
-                raise RuntimeError(
-                    "Unknown model class ID: "
-                    f"{class_id}"
-                )
-
-            label = inverse_mapping[
-                class_id
-            ]
-
-            probability_by_label[
-                label
-            ] = float(
-                probability
-            )
-
-        home_prob = probability_by_label[
-            "HOME_WIN"
-        ]
-
-        draw_prob = probability_by_label[
-            "DRAW"
-        ]
-
-        away_prob = probability_by_label[
-            "AWAY_WIN"
-        ]
-
-        probability_sum = (
-            home_prob
-            + draw_prob
-            + away_prob
-        )
 
         if not np.isfinite(
-            probability_sum
-        ):
+            X.to_numpy()
+        ).all():
 
             raise RuntimeError(
-                "Model produced "
-                "non-finite probabilities."
+                "Fatal non-finite model input."
             )
 
-        if not np.isclose(
-            probability_sum,
-            1.0,
-            atol=1e-5
-        ):
+        # ----------------------------------------------------
+        # PREDICT
+        # ----------------------------------------------------
 
-            raise RuntimeError(
-                "Model probabilities do not "
-                f"sum to 1.0: {probability_sum}"
-            )
+        (
+            home_prob,
+            draw_prob,
+            away_prob,
+            predicted_outcome
+        ) = predict_1x2(
 
-        outcome_probabilities = {
-
-            "HOME_WIN":
-                home_prob,
-
-            "DRAW":
-                draw_prob,
-
-            "AWAY_WIN":
-                away_prob,
-        }
-
-        predicted_outcome = max(
-            outcome_probabilities,
-            key=outcome_probabilities.get
+            model,
+            X,
+            model_classes,
+            inverse_mapping
         )
 
-        # ====================================================
+        # ----------------------------------------------------
         # OUTPUT
-        # ====================================================
+        # ----------------------------------------------------
 
-        predictions.append({
+        prediction = {
 
             "match_id":
-                fixture[
-                    "match_id"
-                ],
+                match_id,
 
             "date":
                 fixture[
@@ -2589,7 +2635,15 @@ def run():
                 fixture[
                     "source_file"
                 ],
-        })
+        }
+
+        predictions.append(
+            prediction
+        )
+
+        seen_prediction_ids.add(
+            match_id
+        )
 
     # ========================================================
     # 6. SAVE RESULTS
@@ -2619,9 +2673,9 @@ def run():
         "step45_prediction_report.json"
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # PREDICTIONS CSV
-    # ========================================================
+    # --------------------------------------------------------
 
     if predictions:
 
@@ -2629,14 +2683,10 @@ def run():
             predictions
         )
 
-        prediction_df.to_csv(
-            predictions_csv,
-            index=False
+        atomic_write_csv(
+            prediction_df,
+            predictions_csv
         )
-
-        # ----------------------------------------------------
-        # PUBLIC FRONTEND JSON
-        # ----------------------------------------------------
 
         public_data = []
 
@@ -2657,27 +2707,9 @@ def run():
                 }
             })
 
-        temp_public = (
-            PUBLIC_PREDICTIONS_FILE
-            + ".tmp"
-        )
-
-        with open(
-            temp_public,
-            "w",
-            encoding="utf-8"
-        ) as file:
-
-            json.dump(
-                public_data,
-                file,
-                indent=2,
-                ensure_ascii=False
-            )
-
-        os.replace(
-            temp_public,
-            PUBLIC_PREDICTIONS_FILE
+        atomic_write_json(
+            PUBLIC_PREDICTIONS_FILE,
+            public_data
         )
 
         print(
@@ -2692,30 +2724,34 @@ def run():
 
     else:
 
+        # Explicitly clear stale public predictions.
+        atomic_write_json(
+            PUBLIC_PREDICTIONS_FILE,
+            []
+        )
+
+        # Keep CSV valid and empty.
+        atomic_write_csv(
+            pd.DataFrame(),
+            predictions_csv
+        )
+
         print(
             "   ⚠️ No predictions generated."
         )
 
-    # ========================================================
-    # UNRESOLVED REPORT
-    # ========================================================
+    # --------------------------------------------------------
+    # UNRESOLVED
+    # --------------------------------------------------------
 
-    with open(
+    atomic_write_json(
         unresolved_json,
-        "w",
-        encoding="utf-8"
-    ) as file:
+        unresolved
+    )
 
-        json.dump(
-            unresolved,
-            file,
-            indent=2,
-            ensure_ascii=False
-        )
-
-    # ========================================================
+    # --------------------------------------------------------
     # OUTCOME COUNTS
-    # ========================================================
+    # --------------------------------------------------------
 
     outcome_counts = {
 
@@ -2735,15 +2771,19 @@ def run():
             "predicted_outcome"
         ]
 
-        if outcome in outcome_counts:
+        if outcome not in outcome_counts:
 
-            outcome_counts[
-                outcome
-            ] += 1
+            raise RuntimeError(
+                f"Unexpected predicted outcome: {outcome}"
+            )
 
-    # ========================================================
+        outcome_counts[
+            outcome
+        ] += 1
+
+    # --------------------------------------------------------
     # PROVIDER COVERAGE
-    # ========================================================
+    # --------------------------------------------------------
 
     unique_provider_ids_seen = len(
         provider_ids_seen
@@ -2757,9 +2797,9 @@ def run():
         provider_ids_missing_internal
     )
 
-    # ========================================================
+    # --------------------------------------------------------
     # REPORT
-    # ========================================================
+    # --------------------------------------------------------
 
     report = {
 
@@ -2786,6 +2826,39 @@ def run():
                 "NS/TBD only",
 
             "historical_files_skipped":
+                True,
+
+            "duplicate_match_ids_removed":
+                True,
+        },
+
+        "identity_policy": {
+
+            "authoritative_source":
+                INTERNAL_TEAM_MAP_FILE,
+
+            "provider_id_is_authoritative":
+                True,
+
+            "provider_id_missing_from_internal_map":
+                "UNRESOLVED",
+
+            "provider_id_fallback_to_teams_index":
+                False,
+
+            "provider_id_fallback_to_name":
+                False,
+
+            "name_fallback_allowed_without_provider_id":
+                True,
+
+            "fuzzy_matching":
+                False,
+
+            "canonical_team_must_exist_in_live_state":
+                True,
+
+            "same_home_away_canonical_id_rejected":
                 True,
         },
 
@@ -2837,6 +2910,9 @@ def run():
                 resolved_from_internal_map,
 
             "provider_id_resolutions_from_teams_index":
+                0,
+
+            "name_resolutions_from_teams_index":
                 resolved_from_teams_index,
 
             "unique_provider_ids_seen":
@@ -2871,6 +2947,9 @@ def run():
 
             "h2h_fallback":
                 "0 rates / 0 matches",
+
+            "h2h_is_fabricated":
+                False,
         },
 
         "outcomes":
@@ -2886,27 +2965,9 @@ def run():
             PUBLIC_PREDICTIONS_FILE,
     }
 
-    temp_report = (
-        report_json
-        + ".tmp"
-    )
-
-    with open(
-        temp_report,
-        "w",
-        encoding="utf-8"
-    ) as file:
-
-        json.dump(
-            report,
-            file,
-            indent=2,
-            ensure_ascii=False
-        )
-
-    os.replace(
-        temp_report,
-        report_json
+    atomic_write_json(
+        report_json,
+        report
     )
 
     # ========================================================
@@ -2952,18 +3013,18 @@ def run():
     )
 
     print(
-        f"      ├─ internal_team_map: "
+        f"      └─ internal_team_map: "
         f"{resolved_from_internal_map:,}"
-    )
-
-    print(
-        f"      └─ teams-index:       "
-        f"{resolved_from_teams_index:,}"
     )
 
     print(
         f"   Name resolutions:        "
         f"{resolved_by_name:,}"
+    )
+
+    print(
+        f"      └─ teams-index:       "
+        f"{resolved_from_teams_index:,}"
     )
 
     print()
@@ -2977,17 +3038,17 @@ def run():
     )
 
     print(
-        f"   Unique provider IDs seen:       "
+        f"   Unique provider IDs seen:      "
         f"{unique_provider_ids_seen:,}"
     )
 
     print(
-        f"   Found in internal map:           "
+        f"   Found in internal map:         "
         f"{unique_provider_ids_found_internal:,}"
     )
 
     print(
-        f"   Missing from internal map:      "
+        f"   Missing from internal map:     "
         f"{unique_provider_ids_missing_internal:,}"
     )
 
@@ -3024,13 +3085,12 @@ def run():
     )
 
     print(
-        "⚠️ H2H features were therefore "
-        "explicitly set to zero."
+        "⚠️ H2H features explicitly set to zero."
     )
 
-    print()
-
     if unresolved:
+
+        print()
 
         print(
             f"⚠️ Unresolved report: "
@@ -3077,13 +3137,13 @@ def run():
     if predictions:
 
         print(
-            " STEP 45 COMPLETE: PASS"
+            "STEP 45 COMPLETE: PASS"
         )
 
     else:
 
         print(
-            " STEP 45 COMPLETE: NO PREDICTIONS"
+            "STEP 45 COMPLETE: NO PREDICTIONS"
         )
 
     print(
@@ -3097,4 +3157,20 @@ def run():
 
 if __name__ == "__main__":
 
-    run()
+    try:
+
+        run()
+
+    except Exception as exc:
+
+        print()
+        print("=" * 70)
+        print("STEP 45 FAILED")
+        print("=" * 70)
+        print()
+        print(
+            f"ERROR: {exc}"
+        )
+        print()
+
+        raise

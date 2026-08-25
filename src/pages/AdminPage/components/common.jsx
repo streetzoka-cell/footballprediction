@@ -1,7 +1,6 @@
 ﻿// footballprediction/src/pages/AdminPage/components/common.jsx
 
 import React, { useState, useEffect, useRef, memo } from 'react';
-// âœ… ADDED: Plus, Trash2, Star to the imports
 import { CheckCircle2, XCircle, AlertTriangle, ChevronUp, ChevronDown, Plus, Trash2, Star } from 'lucide-react';
 import { getLocalDateStr, getLocalDateFromUtc } from '../../../utils/dates';
 import { isLiveStatus, isFinishedStatus, SPORT } from '../../../utils/constants';
@@ -81,12 +80,12 @@ export const fmtTimeAgo = dt => {
 };
 
 export const Skel = memo(function Skel({ n = 3 }) {
-  return <div className="flex-col gap-8">{Array.from({ length: n }).map((_, i) => <div key={i} className="skeleton" style={{ height: 80, animationDelay: `${i * 80}ms` }} />)}</div>;
+  return <div className="flex flex-col gap-8">{Array.from({ length: n }).map((_, i) => <div key={i} className="skeleton" style={{ height: 80, animationDelay: `${i * 80}ms` }} />)}</div>;
 });
 
 export const Empty = memo(function Empty({ icon: Ic, title, hint }) {
   return (
-    <div className="glass-card flex-col items-center gap-8 p-32 text-center">
+    <div className="glass-card flex flex-col items-center gap-8 p-32 text-center">
       {Ic && <Ic size={26} className="text-muted" />}
       <p className="text-primary font-bold text-sm">{title}</p>
       {hint && <p className="text-muted text-xs">{hint}</p>}
@@ -121,8 +120,8 @@ export const Toast = memo(function Toast({ message, type, onDone }) {
 
 export const Confirm = memo(function Confirm({ title, msg, onYes, onNo, yesText = 'Confirm', danger = false }) {
   return (
-    <div className="fixed inset-0 bg-black/70 flex-center z-max p-20" onClick={onNo}>
-      <div className="glass-card p-24 max-w-400 w-full flex-col gap-12" onClick={e => e.stopPropagation()}>
+    <div className="fixed inset-0 bg-overlay flex-center z-max p-20" onClick={onNo}>
+      <div className="glass-card p-24 max-w-400 w-full flex flex-col gap-12" onClick={e => e.stopPropagation()}>
         <h3 className="text-primary font-bold text-md">{title}</h3>
         <p className="text-muted text-sm">{msg}</p>
         <div className="flex gap-8 mt-8">
@@ -141,7 +140,7 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
   const st = gst(m.status);
   
   return (
-    <div className="glass-card flex-col gap-8 p-12 anim-fade-up" style={{ animationDelay: `${idx * 20}ms`, borderLeft: sel ? '3px solid var(--gold)' : live ? '3px solid var(--danger)' : '3px solid var(--border)' }}>
+    <div className="glass-card flex flex-col gap-8 p-12 anim-fade-up" style={{ animationDelay: `${idx * 20}ms`, borderLeft: sel ? '3px solid var(--gold)' : live ? '3px solid var(--danger)' : '3px solid var(--border)' }}>
       <div className="flex-between">
         <div className="flex-center gap-8 text-muted text-xs font-bold">
           {comp?.emblem && <img src={comp.emblem} alt="" width="14" height="14" />}
@@ -159,9 +158,9 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
           {m.homeTeam?.crest && <img src={m.homeTeam.crest} alt="" width="24" height="24" />}
           <span className="text-primary font-bold text-sm truncate">{m.homeTeam?.shortName || m.homeTeam?.name || 'TBD'}</span>
         </div>
-        <div className={`flex-center gap-8 px-12 py-4 rounded-md ${live ? 'bg-danger/10' : fin ? 'bg-primary/10' : 'bg-elevated'}`}>
+        <div className={`flex-center gap-8 px-12 py-4 rounded-md ${live ? 'bg-danger-10' : fin ? 'bg-primary-10' : 'bg-elevated'}`}>
           {(live || fin) ? (
-            <><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.h ?? 0}</span><span className="text-muted">â€“</span><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.a ?? 0}</span></>
+            <><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.h ?? 0}</span><span className="text-muted">–</span><span className={`font-extrabold ${live ? 'text-danger' : 'text-primary'}`}>{sc.a ?? 0}</span></>
           ) : <span className="text-muted text-xs font-bold">VS</span>}
         </div>
         <div className="flex-center gap-8 flex-1 min-w-0 justify-end">
@@ -178,7 +177,7 @@ export const MatchRow = memo(function MatchRow({ m, idx, mode, sel, onToggleSel,
         {mode === 'zoka' && sel && scoreInput && (
           <div className="flex-center gap-4">
             <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.h} onChange={e => onScoreInput(mid, 'h', e.target.value)} placeholder="H" maxLength={2} />
-            <span className="text-muted">â€“</span>
+            <span className="text-muted">–</span>
             <input className="form-input text-center" style={{ width: 40, padding: '4px', fontWeight: 800 }} value={scoreInput.a} onChange={e => onScoreInput(mid, 'a', e.target.value)} placeholder="A" maxLength={2} />
           </div>
         )}

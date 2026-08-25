@@ -41,40 +41,26 @@ const AnimatedStat = ({ value, label, color, suffix = '', decimals = 0, delay = 
   const [val, setVal] = useState(0);
   const [ref, visible] = useInView(0.5);
 
- useEffect(() => {
-  if (!visible) return;
-
-  const safeValue = Number(value ?? 0);
-
-  let start = null;
-  const duration = 1400;
-
-  const step = (ts) => {
-    if (!start) start = ts;
-
-    const p = Math.min((ts - start) / duration, 1);
-    const eased = 1 - Math.pow(1 - p, 3);
-    const cur = eased * safeValue;
-
-    setVal(
-      decimals > 0
-        ? cur.toFixed(decimals)
-        : Math.floor(cur).toLocaleString()
-    );
-
-    if (p < 1) requestAnimationFrame(step);
-  };
-
-  requestAnimationFrame(step);
-}, [visible, value, decimals]);
-
+  useEffect(() => {
+    if (!visible) return;
+    const safeValue = Number(value ?? 0);
+    let start = null;
+    const duration = 1400;
+    const step = (ts) => {
+      if (!start) start = ts;
+      const p = Math.min((ts - start) / duration, 1);
+      const eased = 1 - Math.pow(1 - p, 3);
+      const cur = eased * safeValue;
+      setVal(decimals > 0 ? cur.toFixed(decimals) : Math.floor(cur).toLocaleString());
+      if (p < 1) requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }, [visible, value, decimals]);
 
   return (
-    <div ref={ref} className="pro-stat-card" style={{ animationDelay: `${delay}ms` }}>
+    <div ref={ref} className="pro-stat-card anim-fade-up" style={{ animationDelay: `${delay}ms` }}>
       <div className="pro-stat-glow" style={{ background: `radial-gradient(ellipse, ${color}15 0%, transparent 70%)` }} />
-      {icon && (
-        <div className="pro-stat-icon" style={{ background: `${color}15`, color }}>{icon}</div>
-      )}
+      {icon && <div className="pro-stat-icon" style={{ background: `${color}15`, color }}>{icon}</div>}
       <div className="pro-stat-val" style={{ color }}>{val}{suffix}</div>
       <div className="pro-stat-lbl">{label}</div>
     </div>
@@ -90,7 +76,7 @@ const AccuracyRing = ({ value, size = 116 }) => {
   const color = value >= 70 ? 'var(--primary)' : value >= 50 ? 'var(--gold)' : 'var(--danger)';
 
   return (
-    <div ref={ref} className="pro-ring" style={{ width: size, height: size, opacity: visible ? 1 : 0, animationDelay: '0.2s' }}>
+    <div ref={ref} className="pro-ring anim-pop" style={{ width: size, height: size, opacity: visible ? 1 : 0 }}>
       <svg width={size} height={size} style={{ transform: 'rotate(-90deg)' }}>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--bg-elevated)" strokeWidth={stroke} />
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke={color} strokeWidth={stroke}
@@ -110,7 +96,7 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
   const [hovered, setHovered] = useState(false);
   return (
     <div
-      className={`pro-badge ${earned ? 'unlock' : 'locked'}`}
+      className={`pro-badge anim-fade-up ${earned ? 'unlock' : 'locked'}`}
       style={{
         animationDelay: `${delay}ms`,
         transform: hovered && earned ? 'translateY(-3px)' : 'translateY(0)',
@@ -136,9 +122,9 @@ const BadgeCard = ({ badge, earned, delay = 0 }) => {
 const ProfileSkeleton = () => (
   <div className="pro-page">
     <div className="pro-wrap">
-      <div className="pro-skel-card" style={{ height: 180, marginBottom: 24 }} />
-      <div className="pro-skel-grid">
-        {[0, 1, 2, 3].map(i => <div key={i} className="pro-skel-card" style={{ height: 100 }} />)}
+      <div className="skeleton" style={{ height: 180, borderRadius: 16, marginBottom: 24 }} />
+      <div className="pro-stats-grid">
+        {[0, 1, 2, 3].map(i => <div key={i} className="skeleton" style={{ height: 100, borderRadius: 12 }} />)}
       </div>
     </div>
   </div>
@@ -186,13 +172,11 @@ export default function Profile() {
   const result = getResult(profile);
   const miss = profile.missCount || 0;
   const totalResolved = exact + result + miss; 
-  
   const total = getPredictions(profile);
   const points = getPoints(profile);
   const accuracyNum = calculateAccuracy(exact, result, totalResolved);
   
   const initials = useMemo(() => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
-  
   const memberSince = useMemo(
     () => currentUser?.metadata?.creationTime
       ? new Date(currentUser.metadata.creationTime).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -208,7 +192,6 @@ export default function Profile() {
     navigate('/');
   }, [signOut, navigate]);
 
-  // ★ SEO FIX: ProfilePage Schema
   const profileSchema = {
     "@context": "https://schema.org",
     "@type": "ProfilePage",
@@ -230,8 +213,6 @@ export default function Profile() {
       />
 
       <div className="pro-wrap">
-        
-        {/* Header Card */}
         <div className="pro-header-card">
           <div className="pro-header-top-line" />
           <div className="pro-header-content">
@@ -275,7 +256,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Season Info Cards */}
         <div className="pro-season-grid">
           <div className="pro-season-card active">
             <div className="pro-season-head">
@@ -293,7 +273,6 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Stats Grid */}
         <div className="pro-stats-grid">
           <AnimatedStat value={points} label="Points" color="var(--primary)" delay={0} icon={<Trophy size={18} />} />
           <AnimatedStat value={accuracyNum} label="Accuracy" color="var(--gold)" suffix="%" decimals={1} delay={80} icon={<Target size={18} />} />
@@ -301,7 +280,6 @@ export default function Profile() {
           <AnimatedStat value={profile.streak || 0} label="Day Streak" color="var(--danger)" delay={240} icon={<Flame size={18} />} />
         </div>
 
-        {/* Achievements */}
         <div className="pro-section">
           <div className="pro-section-head">
             <h3><Shield size={22} style={{ color: 'var(--gold)' }} /> Achievements</h3>
@@ -327,7 +305,6 @@ export default function Profile() {
           )}
         </div>
 
-        {/* CTA */}
         <div className={`pro-cta ${isDemo ? 'demo' : ''}`}>
           <div className="pro-cta-bg" />
           <div className="pro-cta-content">
@@ -335,7 +312,7 @@ export default function Profile() {
               <>
                 <h2>Start Predicting</h2>
                 <p>Sign in to track your predictions, earn badges, and climb the leaderboard.</p>
-                <button onClick={() => navigate('/login')} className="pro-cta-btn primary">
+                <button onClick={() => navigate('/login')} className="btn btn-primary">
                   Sign In <ArrowRight size={18} />
                 </button>
               </>
@@ -346,11 +323,11 @@ export default function Profile() {
                   {total > 0 ? "Predict today's matches and climb the global leaderboard." : "Browse today's fixtures and make your first prediction to start earning badges."}
                 </p>
                 <div className="pro-cta-actions">
-                  <button onClick={() => navigate('/fixtures')} className="pro-cta-btn primary">
+                  <button onClick={() => navigate('/fixtures')} className="btn btn-primary">
                     <Zap size={18} /> {total > 0 ? "Today's Picks" : 'Browse Fixtures'}
                   </button>
                   {total > 0 && (
-                    <button onClick={() => navigate('/leaderboard')} className="pro-cta-btn secondary">
+                    <button onClick={() => navigate('/leaderboard')} className="btn btn-secondary">
                       <Trophy size={18} /> Leaderboard
                     </button>
                   )}
@@ -359,7 +336,6 @@ export default function Profile() {
             )}
           </div>
         </div>
-
       </div>
     </div>
   );

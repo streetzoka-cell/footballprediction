@@ -38,20 +38,20 @@ export default function Changelog() {
         description="Stay up to date with the latest ZOKASCORE features, improvements, bug fixes, performance enhancements, and platform updates."
         keywords="ZOKASCORE changelog, release notes, updates, new features, bug fixes, platform improvements, version history"
         robots="index,follow"
-          />
+      />
 
       <PageLayout title="Changelog" subtitle="Follow the latest improvements and new features released on ZOKASCORE.">
         <Section title="Release History">
-          <div className="flex-col gap-16">
+          <div className="flex flex-col gap-16">
             {releases.map((release) => (
-              <div key={release.version} className="glass-card p-24">
+              <div key={release.version} className="company-card">
                 <div className="flex-between flex-wrap gap-10 mb-16">
                   <h2 className="text-primary font-extrabold text-md">Version {release.version}</h2>
                   <span className="text-muted text-sm">{release.date}</span>
                 </div>
-                <ul className="flex-col gap-8 text-secondary text-sm pl-16">
+                <ul className="company-list">
                   {release.features.map((feature) => (
-                    <li key={feature} className="list-disc">{feature}</li>
+                    <li key={feature}>{feature}</li>
                   ))}
                 </ul>
               </div>
@@ -60,7 +60,7 @@ export default function Changelog() {
         </Section>
 
         <Section title="Continuous Improvement">
-          <p className="text-secondary text-sm">
+          <p className="text-secondary text-sm leading-relaxed">
             ZOKASCORE is continuously evolving. We regularly improve performance, expand sports coverage, introduce new features, strengthen security, and enhance the overall user experience.
           </p>
         </Section>

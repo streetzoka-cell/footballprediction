@@ -72,13 +72,13 @@ function getTopPredictGames(gamesList, count = 10) {
 }
 
 const SkeletonCard = memo(({ delay = 0 }) => (
-  <div className="glass-card p-16 mb-8" style={{ animation: `zk-fade-up .35s ease ${delay}ms both` }}>
-    <div className="flex-center gap-10 p-4">
+  <div className="glass-card bb-skeleton-card anim-fade-up" style={{ animationDelay: `${delay}ms` }}>
+    <div className="bb-skeleton-row">
       <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
       <div className="skeleton" style={{ width: '55%', height: 14, flex: 1 }} />
       <div className="skeleton" style={{ width: 28, height: 20 }} />
     </div>
-    <div className="flex-center gap-10 p-4 mt-6">
+    <div className="bb-skeleton-row mt-6">
       <div className="skeleton" style={{ width: 30, height: 30, borderRadius: 8 }} />
       <div className="skeleton" style={{ width: '45%', height: 14, flex: 1 }} />
       <div className="skeleton" style={{ width: 28, height: 20 }} />
@@ -116,11 +116,11 @@ const ErrorScreen = memo(function ErrorScreen({ error, onRetry }) {
 
 const TeamLogo = memo(({ src, name }) => {
   if (!src) return (
-    <div className="flex-center bg-elevated text-muted font-bold" style={{ width: 30, height: 30, borderRadius: 8, fontSize: 13 }}>
+    <div className="bb-team-logo">
       {(name || '?')[0]}
     </div>
   );
-  return <img src={src} alt={name} style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'contain', background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
+  return <img src={src} alt={name} className="bb-team-logo" style={{ background: 'rgba(255,255,255,.03)', padding: 3 }} loading="lazy" />;
 });
 
 const StatusBadge = memo(({ game }) => {
@@ -133,14 +133,13 @@ const StatusBadge = memo(({ game }) => {
   else if (s === 'POST') { bg = 'rgba(var(--gold-rgb),.1)'; color = 'var(--gold)'; label = 'POSTP'; }
   else if (s === 'CANC') { bg = 'rgba(var(--danger-rgb),.1)'; color = 'var(--danger)'; label = 'CANC'; }
 
-  return <span className="badge" style={{ background: bg, color, border: 'none', animation: 'zk-pop .35s ease' }}>{label}</span>;
+  return <span className="badge anim-pop" style={{ background: bg, color, border: 'none' }}>{label}</span>;
 });
 
 const ScoreDisplay = memo(({ score, isLive }) => {
-  const baseStyle = { fontSize: 18, fontWeight: 800, minWidth: 36, textAlign: 'right', fontVariantNumeric: 'tabular-nums', transition: 'color .3s' };
-  if (!isLive) return <span style={{ ...baseStyle, color: 'var(--text-primary)' }}>{score ?? '-'}</span>;
+  if (!isLive) return <span className="bb-score">{score ?? '-'}</span>;
   return (
-    <span key={score} style={{ ...baseStyle, color: 'var(--danger)', textShadow: '0 0 12px rgba(var(--danger-rgb),.4)', display: 'inline-block', animation: 'zk-score-pop .5s ease' }}>
+    <span key={score} className="bb-score live anim-score-pop">
       {score ?? '-'}
     </span>
   );
@@ -160,33 +159,20 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
   }
   const qCount = quarters.length;
 
-  const teamNameStyle = (isWinner) => {
-    if (isWinner === true) return { flex: 1, fontSize: 14, fontWeight: 700, color: 'var(--primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-    if (isWinner === false) return { flex: 1, fontSize: 14, fontWeight: 400, color: 'var(--text-muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-    return { flex: 1, fontSize: 14, fontWeight: 500, color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' };
-  };
-
   return (
-    <div className="glass-card p-16 mb-8" style={{
-      border: game.isLive ? '1px solid rgba(var(--danger-rgb),.2)' : '1px solid var(--border)',
-      animation: `zk-fade-up .35s ease ${index * 50}ms both${game.isLive ? ', zk-live-glow 2.5s ease-in-out infinite' : ''}`,
-    }}>
-      {game.isLive && (
-        <div style={{ position: 'absolute', top: 0, left: 0, width: 3, height: '100%', background: 'linear-gradient(180deg, var(--danger), var(--danger-dim))', borderRadius: '0 2px 2px 0' }} />
-      )}
-
-      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
+    <div className={`bb-game-card ${game.isLive ? 'live' : ''} anim-fade-up`} style={{ animationDelay: `${index * 50}ms` }}>
+      <div className="bb-game-row">
         <TeamLogo src={game.homeLogo} name={game.homeTeam?.name} />
-        <span style={teamNameStyle(game.isFinished ? homeWin : undefined)}>{game.homeTeam?.name || 'TBD'}</span>
+        <span className={`bb-team-name ${game.isFinished ? (homeWin ? 'win' : 'loss') : ''}`}>{game.homeTeam?.name || 'TBD'}</span>
         {game.isScheduled
           ? <span className="text-secondary font-bold text-sm">{game.kickoff}</span>
           : <ScoreDisplay score={game.homeScore} isLive={game.isLive} />
         }
       </div>
 
-      <div className="flex-center gap-10 p-4" style={{ paddingLeft: game.isLive ? 10 : 0 }}>
+      <div className="bb-game-row">
         <TeamLogo src={game.awayLogo} name={game.awayTeam?.name} />
-        <span style={teamNameStyle(game.isFinished ? awayWin : undefined)}>{game.awayTeam?.name || 'TBD'}</span>
+        <span className={`bb-team-name ${game.isFinished ? (awayWin ? 'win' : 'loss') : ''}`}>{game.awayTeam?.name || 'TBD'}</span>
         {game.isScheduled
           ? <StatusBadge game={game} />
           : <ScoreDisplay score={game.awayScore} isLive={game.isLive} />
@@ -200,21 +186,21 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
       )}
 
       {showQuarters && (
-        <div className="grid gap-0 mt-10 pt-8 border-t" style={{ gridTemplateColumns: `repeat(${qCount + 1}, 1fr)`, animation: `zk-fade-up .3s ease ${index * 50 + 150}ms both` }}>
-          {quarters.map(q => <span key={q} className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>{q}</span>)}
-          <span className="text-muted text-center font-bold p-2" style={{ fontSize: 9 }}>TOT</span>
+        <div className="bb-quarter-grid anim-fade-up" style={{ gridTemplateColumns: `repeat(${qCount + 1}, 1fr)`, animationDelay: `${index * 50 + 150}ms` }}>
+          {quarters.map(q => <span key={q} className="bb-quarter-label">{q}</span>)}
+          <span className="bb-quarter-label">TOT</span>
           {qKeys.map((key) => (
-            <span key={`h_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+            <span key={`h_${key}`} className="bb-quarter-score">
               {game.score?.[key]?.home ?? '-'}
             </span>
           ))}
-          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.homeScore ?? '-'}</span>
+          <span className="bb-quarter-total">{game.homeScore ?? '-'}</span>
           {qKeys.map((key) => (
-            <span key={`a_${key}`} className="text-muted text-center p-2" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>
+            <span key={`a_${key}`} className="bb-quarter-score">
               {game.score?.[key]?.away ?? '-'}
             </span>
           ))}
-          <span className="text-secondary text-center p-2 font-bold" style={{ fontSize: 11, fontVariantNumeric: 'tabular-nums' }}>{game.awayScore ?? '-'}</span>
+          <span className="bb-quarter-total">{game.awayScore ?? '-'}</span>
         </div>
       )}
     </div>
@@ -223,7 +209,7 @@ const GameCard = memo(function GameCard({ game, index = 0 }) {
 
 const LeagueSection = memo(function LeagueSection({ league, games, sectionIndex = 0 }) {
   return (
-    <div style={{ animation: `zk-slide-in .4s ease ${sectionIndex * 80}ms both` }}>
+    <div className="anim-slide-in" style={{ animationDelay: `${sectionIndex * 80}ms` }}>
       <div className="flex-center gap-10 py-8 px-8 border-b mb-6 relative">
         <div style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: 3, background: league.color, borderRadius: '0 2px 2px 0' }} />
         {league.emblem && <img src={league.emblem} alt="" style={{ width: 22, height: 22, borderRadius: 5, objectFit: 'contain' }} loading="lazy" />}
@@ -243,10 +229,6 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
   const kickOff = game.kickoff || '';
 
   const pickLabels = { home: game.homeTeam?.name || 'Home', away: game.awayTeam?.name || 'Away' };
-  const pickColors = {
-    home: { bg: currentPick === 'home' ? 'rgba(var(--accent-rgb),.18)' : 'var(--bg-elevated)', border: currentPick === 'home' ? 'var(--accent)' : 'var(--border)', color: currentPick === 'home' ? 'var(--accent)' : 'var(--text-secondary)' },
-    away: { bg: currentPick === 'away' ? 'rgba(var(--danger-rgb),.12)' : 'var(--bg-elevated)', border: currentPick === 'away' ? 'var(--danger)' : 'var(--border)', color: currentPick === 'away' ? 'var(--danger)' : 'var(--text-secondary)' },
-  };
 
   const handlePick = useCallback((pick) => {
     if (!loggedIn) { onPredict(null, true); return; }
@@ -254,13 +236,13 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
   }, [loggedIn, onPredict, currentPick, onRemove, game.id]);
 
   return (
-    <div className="glass-card p-16 mb-8" style={{ border: `1px solid ${isLive ? 'rgba(var(--danger-rgb),.25)' : 'var(--border)'}`, animation: `zk-pop .35s ease ${index * 60}ms both` }}>
+    <div className={`bb-predict-card ${isLive ? 'live' : ''} anim-pop`} style={{ animationDelay: `${index * 60}ms` }}>
       {isLive && <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: 2, background: 'linear-gradient(90deg, var(--danger), var(--warning))', animation: 'zk-live-glow 2s ease-in-out infinite' }} />}
       <div className="flex-center gap-6 mb-10">
         {game.league?.emblem && <img src={game.league.emblem} alt="" style={{ width: 14, height: 14, objectFit: 'contain' }} />}
         <span className="text-muted font-bold flex-1" style={{ fontSize: '.66rem' }}>{game.league?.name || ''}</span>
         <span className="text-muted font-bold flex-center gap-4" style={{ fontSize: '.64rem', color: isLive ? 'var(--danger)' : 'var(--text-muted)' }}>
-          {isLive && <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--danger)', animation: 'zk-pulse 1.5s ease-in-out infinite' }} />}
+          {isLive && <span className="zk-live-pulse-dot" />}
           {isLive ? 'LIVE' : kickOff}
         </span>
       </div>
@@ -284,8 +266,7 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
       {!isFinished && (
         <div className="flex gap-8">
           {['home', 'away'].map((pick) => (
-            <button key={pick} className="btn flex-1" onClick={() => handlePick(pick)}
-              style={{ background: pickColors[pick].bg, border: `1.5px solid ${pickColors[pick].border}`, color: pickColors[pick].color, fontWeight: 800, fontSize: '.72rem' }}>
+            <button key={pick} className={`bb-predict-btn ${currentPick === pick ? `selected ${pick}` : ''}`} onClick={() => handlePick(pick)}>
               {pickLabels[pick]}
               {currentPick === pick && <CheckCircle2 size={13} className="ml-3" />}
               {!loggedIn && <Lock size={10} style={{ position: 'absolute', top: 4, right: 5, opacity: .4 }} />}
@@ -296,7 +277,7 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
       {isFinished && currentPick && (
         <div className="flex-center justify-center gap-6 py-6 text-muted font-bold" style={{ fontSize: '.72rem' }}>
           <span>Your pick:</span>
-          <span style={{ color: pickColors[currentPick]?.color || 'var(--accent)' }}>{pickLabels[currentPick]}</span>
+          <span className="text-primary">{pickLabels[currentPick]}</span>
         </div>
       )}
     </div>
@@ -305,8 +286,8 @@ const PredictCard = memo(function PredictCard({ game, prediction, onPredict, onR
 
 const LoginPromptModal = memo(function LoginPromptModal({ onClose }) {
   return (
-    <div onClick={onClose} className="fixed inset-0 bg-black/60 flex-center z-max p-20" style={{ backdropFilter: 'blur(4px)' }}>
-      <div onClick={e => e.stopPropagation()} className="glass-card flex-col p-32 text-center max-w-380 w-full">
+    <div onClick={onClose} className="zk-error-overlay">
+      <div onClick={e => e.stopPropagation()} className="glass-card flex-col p-32 text-center w-full" style={{ maxWidth: '380px' }}>
         <div className="glass-card flex-center mb-16 mx-auto" style={{ width: 56, height: 56, borderRadius: '50%', background: 'rgba(var(--accent-rgb),.12)', color: 'var(--accent)' }}>
           <Lock size={24} />
         </div>
@@ -467,7 +448,6 @@ export default function Basketball() {
 
   let sectionIdx = 0;
 
-  // ★ SEO GOLD: ItemList Schema for Basketball Games
   const itemListSchema = useMemo(() => ({
     "@context": "https://schema.org",
     "@type": "ItemList",
@@ -481,7 +461,7 @@ export default function Basketball() {
   }), [mergedGames]);
 
   return (
-    <div className="zoka-page" style={{ animation: 'zk-fade-up .45s ease' }}>
+    <div className="zoka-page anim-fade-up">
       {showLoginModal && <LoginPromptModal onClose={() => setShowLoginModal(false)} />}
 
       <SEO
@@ -492,7 +472,6 @@ export default function Basketball() {
         structuredData={itemListSchema}
       />
 
-      {/* ★ SEO GOLD: Editorial Context for Googlebot */}
       <div className="zoka-wrap pt-16">
         <div className="glass-card p-20 mb-16" style={{ borderLeft: '4px solid var(--accent)' }}>
           <h2 className="text-primary font-bold text-lg mb-8">Global Basketball Intelligence</h2>
@@ -502,7 +481,7 @@ export default function Basketball() {
         </div>
       </div>
 
-      <div className="glass sticky top-0 z-sticky" style={{ borderBottom: '1px solid var(--border)', animation: 'zk-slide-in .4s ease' }}>
+      <div className="glass sticky top-0 z-sticky border-b anim-slide-in">
         <div className="zoka-wrap flex-between py-12">
           <div className="flex-center gap-10">
             <div className="flex-center font-extrabold text-inverse" style={{ width: 28, height: 28, borderRadius: 8, background: 'var(--accent)', fontSize: '.72rem' }}>Z</div>
@@ -553,7 +532,7 @@ export default function Basketball() {
               const inWindow = windowDates.includes(d.date);
               const count = gameCounts[d.date];
               return (
-                <button key={d.date} data-date={d.date} className={`btn flex-col min-w-52 ${isActive ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedDate(d.date)} style={{ animation: `zk-fade-up .3s ease ${i * 25}ms both`, position: 'relative' }}>
+                <button key={d.date} data-date={d.date} className={`btn flex-col min-w-52 ${isActive ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setSelectedDate(d.date)} style={{ animationDelay: `${i * 25}ms`, position: 'relative' }}>
                   <span className="text-xs font-bold opacity-70 uppercase">{d.day}</span>
                   <span className="font-extrabold text-md">{d.num}</span>
                   <span className="text-xs font-semibold opacity-50">{d.month}</span>
@@ -585,7 +564,7 @@ export default function Basketball() {
               <div key={selectedDate}>
                 {liveLeagues.length > 0 && (
                   <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase anim-fade-up" style={{ animationDelay: `${sectionIdx * 60}ms` }}>
                       <div className="zk-live-pulse-dot" /> LIVE ({totalLiveInDate})
                     </div>
                     {liveLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`live-${l.key}`} league={l} games={l.games.filter(g => g.isLive)} sectionIndex={idx} />; })}
@@ -593,7 +572,7 @@ export default function Basketball() {
                 )}
                 {scheduledLeagues.length > 0 && (
                   <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase anim-fade-up" style={{ animationDelay: `${sectionIdx * 60}ms` }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--accent)' }} /> SCHEDULED
                     </div>
                     {scheduledLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`sched-${l.key}`} league={l} games={l.games.filter(g => g.isScheduled)} sectionIndex={idx} />; })}
@@ -601,7 +580,7 @@ export default function Basketball() {
                 )}
                 {finishedLeagues.length > 0 && (
                   <>
-                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase" style={{ animation: `zk-fade-up .3s ease ${sectionIdx * 60}ms both` }}>
+                    <div className="flex-center gap-8 my-24 text-muted text-xs font-bold uppercase anim-fade-up" style={{ animationDelay: `${sectionIdx * 60}ms` }}>
                       <div style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--primary)' }} /> FINISHED
                     </div>
                     {finishedLeagues.map(l => { const idx = sectionIdx++; return <LeagueSection key={`fin-${l.key}`} league={l} games={l.games.filter(g => g.isFinished)} sectionIndex={idx} />; })}

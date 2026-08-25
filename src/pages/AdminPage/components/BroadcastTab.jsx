@@ -51,7 +51,7 @@ const BroadcastTab = memo(function BroadcastTab({ toast }) {
   }, [db, title, message, type, uid, toast]);
 
   return (
-    <div className="glass-card p-16 flex-col gap-12">
+    <div className="glass-card p-16 flex flex-col gap-12">
       <h3 className="text-primary font-bold flex-center gap-8"><Megaphone size={15} /> Send Notification</h3>
       <div className="flex gap-8">
         <button className={`btn flex-1 ${type === 'global' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setType('global')}><Users size={12} /> Global</button>
@@ -59,7 +59,7 @@ const BroadcastTab = memo(function BroadcastTab({ toast }) {
       </div>
 
       {type === 'personal' && (
-        <div className="flex-col gap-8">
+        <div className="flex flex-col gap-8">
           <div className="flex gap-8">
             <input className="form-input flex-1" placeholder="Enter User UID manually or load users..." value={search} onChange={e => setSearch(e.target.value)} />
             <button className="btn btn-secondary" onClick={loadUsers} disabled={loadingUsers}>
@@ -67,11 +67,11 @@ const BroadcastTab = memo(function BroadcastTab({ toast }) {
             </button>
           </div>
           {showUserList && (
-            <div className="glass-card p-8 max-h-200 overflow-y-auto flex-col gap-4">
+            <div className="glass-card p-8 max-h-200px flex flex-col gap-4">
               {filteredUsers.length > 0 ? filteredUsers.map(u => (
-                <div key={u.id} className="flex-center gap-8 p-8 cursor-pointer hover:bg-card-hover rounded-md" onClick={() => selectUser(u)}>
+                <div key={u.id} className="flex-center gap-8 p-8 cursor-pointer hover-card rounded-md" onClick={() => selectUser(u)}>
                   <div className="flex-center font-extrabold text-inverse bg-accent" style={{ width: 30, height: 30, borderRadius: 8, fontSize: '.65rem' }}>{(u.displayName || u.email || '??').slice(0, 2).toUpperCase()}</div>
-                  <div className="flex-col">
+                  <div className="flex flex-col">
                     <div className="text-primary font-bold text-sm">{u.displayName || 'Anonymous'}</div>
                     <div className="text-muted text-xs">{u.email || u.id}</div>
                   </div>

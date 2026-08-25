@@ -1,9 +1,7 @@
-﻿// footballprediction/src/utils/analytics.js
-import { onLCP, onINP, onCLS, onFCP, onTTFB } from 'web-vitals';
+﻿import { onLCP, onINP, onCLS, onFCP, onTTFB } from 'web-vitals';
 
-function sendToGoogleAnalytics({ name, delta, value, id }) {
+function sendMetric({ name, delta, value, id }) {
   if (typeof window.gtag !== 'function') return;
-  
   window.gtag('event', name, {
     event_category: 'Web Vitals',
     event_label: id,
@@ -14,36 +12,18 @@ function sendToGoogleAnalytics({ name, delta, value, id }) {
 
 export function initAnalytics() {
   try {
-    // Initialize Web Vitals tracking
-    onLCP(sendToGoogleAnalytics);
-    onINP(sendToGoogleAnalytics);
-    onCLS(sendToGoogleAnalytics);
-    onFCP(sendToGoogleAnalytics);
-    onTTFB(sendToGoogleAnalytics);
-
-    // Global Error Catcher for synchronous errors
-    window.addEventListener('error', (event) => {
-      if (typeof window.gtag === 'function') {
-        window.gtag('event', 'exception', {
-          description: event.message,
-          fatal: true,
-        });
-      }
+    onLCP(sendMetric);
+    onINP(sendMetric);
+    onCLS(sendMetric);
+    onFCP(sendMetric);
+    onTTFB(sendMetric);
+    window.addEventListener('error', (e) => {
+      window.gtag?.('event', 'exception', { description: e.message, fatal: true });
     });
-
-    // Global Error Catcher for unhandled Promise rejections
-    window.addEventListener('unhandledrejection', (event) => {
-      if (typeof window.gtag === 'function') {
-        window.gtag('event', 'exception', {
-          description: `Unhandled Rejection: ${event.reason?.message || event.reason}`,
-          fatal: false,
-        });
-      }
+    window.addEventListener('unhandledrejection', (e) => {
+      window.gtag?.('event', 'exception', { description: `Rejection: ${e.reason?.message || e.reason}`, fatal: false });
     });
   } catch (err) {
-    // Only log initialization errors in development mode
-    if (import.meta.env.DEV) {
-      console.error('[Analytics] Initialization failed:', err);
-    }
+    if (import.meta.env?.DEV) console.error('[Analytics] init failed', err);
   }
 }

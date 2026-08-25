@@ -75,16 +75,16 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
   }, [onRemove, toast]);
 
   return (
-    <div className="flex-col gap-16">
+    <div className="flex flex-col gap-16">
       {/* Featured Matches List */}
-      <div className="glass-card p-16 flex-col gap-12">
+      <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8 text-md">
           <Radio size={16} className="text-gold" /> Featured Matches
           <span className="text-muted text-sm font-normal">({preds.length} / {MAX_FEATURED})</span>
         </h3>
 
         {preds.length > 0 ? (
-          <div className="flex-col gap-8">
+          <div className="flex flex-col gap-8">
             {preds.map((p, i) => {
               const mid = String(p.matchId);
               const isRemoving = removingId === mid;
@@ -100,7 +100,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
               return (
                 <div
                   key={mid}
-                  className="glass-card p-12 flex-col gap-8 anim-fade-up group hover:border-primary/20 transition-colors"
+                  className="glass-card p-12 flex flex-col gap-8 anim-fade-up group hover-card"
                   style={{ animationDelay: `${i * 20}ms`, borderLeft: '3px solid var(--primary)' }}
                 >
                   <div className="flex-between">
@@ -124,7 +124,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
                       )}
                     </div>
 
-                    <div className={`flex-center gap-8 px-16 py-6 rounded-lg min-w-[80px] justify-center ${live ? 'bg-danger/10' : finished ? 'bg-primary/10' : 'bg-elevated'}`}>
+                    <div className={`flex-center gap-8 px-16 py-6 rounded-lg min-w-80 justify-center ${live ? 'bg-danger-10' : finished ? 'bg-primary-10' : 'bg-elevated'}`}>
                       {sc ? (
                         <>
                           <span className={`font-extrabold text-lg ${live ? 'text-danger' : 'text-primary'}`}>{sc.h}</span>
@@ -146,7 +146,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
                     </div>
                   </div>
 
-                  <div className="flex-between mt-4 pt-8 border-t border-border">
+                  <div className="flex-between mt-4 pt-8 border-b">
                     <span className="badge badge-primary flex-center gap-4 text-xs">
                       <Star size={10} /> Featured
                     </span>
@@ -165,7 +165,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
 
       {/* Available Matches to Add */}
       {!isFull ? (
-        <div className="glass-card p-16 flex-col gap-12">
+        <div className="glass-card p-16 flex flex-col gap-12">
           <h3 className="text-primary font-bold flex-center gap-8 text-md">
             <Plus size={16} className="text-primary" /> Available Matches
           </h3>
@@ -187,7 +187,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
           {fxLoading ? (
             <Skel n={3} />
           ) : vis.length > 0 ? (
-            <div className="flex-col gap-8">
+            <div className="flex flex-col gap-8">
               {vis.map((m, i) => {
                 const mid = String(m.id);
                 const isAdding = addingId === mid;
@@ -206,7 +206,7 @@ const FeaturedTab = memo(function FeaturedTab({ date, preds, fixtures, onAdd, on
           )}
         </div>
       ) : (
-        <div className="glass-card p-24 flex-col items-center gap-8 text-center anim-fade-up" style={{ borderColor: 'rgba(var(--gold-rgb), 0.2)' }}>
+        <div className="glass-card p-24 flex flex-col items-center gap-8 text-center anim-fade-up" style={{ borderColor: 'rgba(var(--gold-rgb), 0.2)' }}>
           <div className="p-16 rounded-full" style={{ background: 'rgba(var(--gold-rgb), 0.1)' }}>
             <Pencil size={32} className="text-gold" />
           </div>

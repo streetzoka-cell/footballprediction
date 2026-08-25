@@ -2,20 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { ArrowLeft, Circle, Square, Upload, Download, Camera, Sparkles, Video } from 'lucide-react';
 
-const actionBtnStyle = { 
-  width: '56px', 
-  height: '56px', 
-  borderRadius: '50%', 
-  background: '#1f2937', 
-  border: '1px solid #334155', 
-  color: '#fff', 
-  display: 'flex', 
-  alignItems: 'center', 
-  justifyContent: 'center', 
-  cursor: 'pointer', 
-  transition: 'all 0.2s' 
-};
-
 export default function MediaStudio() {
   const navigate = useNavigate();
   const videoRef = useRef(null);
@@ -49,7 +35,6 @@ export default function MediaStudio() {
       setCameraOn(true);
     } catch (err) {
       alert("Camera access denied or not available.");
-      console.error(err);
     }
   };
 
@@ -91,9 +76,7 @@ export default function MediaStudio() {
     document.body.appendChild(a); a.click(); document.body.removeChild(a);
   };
 
-  useEffect(() => {
-    return () => { stopCameraStreams(); };
-  }, []);
+  useEffect(() => { return () => { stopCameraStreams(); }; }, []);
 
   const filters = [
     { name: 'Original', css: 'none' }, { name: 'Vivid', css: 'saturate(1.5) contrast(1.2)' },
@@ -108,93 +91,91 @@ export default function MediaStudio() {
   ];
 
   return (
-    <div style={{ position: 'fixed', inset: 0, zIndex: 9999, display: 'flex', flexDirection: 'column', width: '100%', height: '100%', background: '#0a0f1a', color: '#fff', overflow: 'hidden' }}>
-      <div style={{ padding: '16px', background: '#111827', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '1px solid #1f2937', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-          <button onClick={() => navigate('/studio')} style={{ color: '#94a3b8', background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <ArrowLeft size={16} /> Back
+    <div className="ms-container">
+      <div className="ms-topbar">
+        <div className="ms-topbar-left">
+          <button onClick={() => navigate('/studio')} className="btn-icon btn-ghost" style={{ color: '#94a3b8' }}>
+            <ArrowLeft size={16} /> <span className="hidden sm:inline">Back</span>
           </button>
-          <h1 style={{ fontSize: '16px', fontWeight: 800, margin: 0 }}>Reaction Studio (9:16)</h1>
+          <h1 className="ms-topbar-title">Reaction Studio (9:16)</h1>
         </div>
-        <button onClick={() => navigate('/studio/face-ar')} style={{ background: '#3b82f6', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', display: 'flex', alignItems: 'center', gap: '4px', cursor: 'pointer' }}>
+        <button onClick={() => navigate('/studio/face-ar')} className="ms-topbar-btn">
           <Sparkles size={14} /> Face AR
         </button>
       </div>
 
-      <div style={{ flex: 1, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '20px', background: '#000', position: 'relative' }}>
-        <div style={{ width: '100%', maxWidth: '400px', aspectRatio: '9/16', background: '#000', borderRadius: '16px', overflow: 'hidden', position: 'relative', border: '2px solid #1f2937', boxShadow: '0 0 20px rgba(0,0,0,0.5)' }}>
+      <div className="ms-canvas-area">
+        <div className="ms-canvas-wrap">
           {recordedUrl ? (
-            <video src={recordedUrl} controls autoPlay loop style={{ width: '100%', height: '100%', objectFit: 'cover', filter: filter, transform: effect }} />
+            <video src={recordedUrl} controls autoPlay loop className="ms-video-el" style={{ filter, transform: effect }} />
           ) : (
-            <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%', height: '100%', objectFit: 'cover', filter: filter, transform: effect, transformOrigin: 'center' }} />
+            <video ref={videoRef} autoPlay playsInline muted className="ms-video-el" style={{ filter, transform: effect }} />
           )}
           
           {!cameraOn && !recordedUrl && (
-            <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>
-              <Camera size={48} style={{ marginBottom: '12px' }} />
-              <p style={{ fontWeight: 700, fontSize: '14px' }}>Camera is off</p>
-              <button onClick={startCamera} style={{ marginTop: '16px', background: '#10b981', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: '8px', fontWeight: 700, fontSize: '12px', cursor: 'pointer' }}>
+            <div className="ms-canvas-empty">
+              <Camera size={48} className="mb-12" />
+              <p className="font-bold text-sm">Camera is off</p>
+              <button onClick={startCamera} className="ms-enable-btn">
                 Enable Camera
               </button>
             </div>
           )}
 
           {isRecording && (
-            <div style={{ position: 'absolute', top: '16px', right: '16px', background: 'rgba(239,68,68,0.9)', padding: '4px 12px', borderRadius: '20px', display: 'flex', alignItems: 'center', gap: '6px', fontSize: '11px', fontWeight: 800 }}>
-              <div style={{ width: '8px', height: '8px', background: '#fff', borderRadius: '50%', animation: 'pulse 1.5s infinite' }} /> REC
+            <div className="ms-rec-badge">
+              <div className="w-2 h-2 bg-white rounded-full anim-pulse" /> REC
             </div>
           )}
         </div>
       </div>
 
-      <div style={{ background: '#111827', borderTop: '1px solid #1f2937', padding: '16px' }}>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: '20px', marginBottom: '20px' }}>
+      <div className="ms-controls">
+        <div className="ms-actions-row">
           {!recordedUrl ? (
             <>
               {!cameraOn ? (
-                <button onClick={startCamera} style={actionBtnStyle}><Camera size={20} /></button>
+                <button onClick={startCamera} className="ms-action-btn"><Camera size={20} /></button>
               ) : (
                 !isRecording ? (
-                  <button onClick={startRecording} style={{ ...actionBtnStyle, background: '#ef4444' }}><Circle size={24} fill="#fff" /></button>
+                  <button onClick={startRecording} className="ms-action-btn" style={{ background: '#ef4444' }}><Circle size={24} fill="#fff" /></button>
                 ) : (
-                  <button onClick={stopRecording} style={{ ...actionBtnStyle, background: '#334155' }}><Square size={20} fill="#fff" /></button>
+                  <button onClick={stopRecording} className="ms-action-btn" style={{ background: '#334155' }}><Square size={20} fill="#fff" /></button>
                 )
               )}
-              <label style={actionBtnStyle}>
+              <label className="ms-action-btn">
                 <Upload size={20} />
-                <input type="file" accept="video/*" onChange={handleImport} style={{ display: 'none' }} />
+                <input type="file" accept="video/*" onChange={handleImport} className="hidden" />
               </label>
             </>
           ) : (
             <>
-              <button onClick={() => { setRecordedUrl(null); startCamera(); }} style={actionBtnStyle}><Video size={20} /></button>
-              <button onClick={handleDownload} style={{ ...actionBtnStyle, background: '#10b981' }}><Download size={20} /></button>
+              <button onClick={() => { setRecordedUrl(null); startCamera(); }} className="ms-action-btn"><Video size={20} /></button>
+              <button onClick={handleDownload} className="ms-action-btn" style={{ background: '#10b981' }}><Download size={20} /></button>
             </>
           )}
         </div>
 
-        <div style={{ marginBottom: '16px' }}>
-          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '8px' }}>Filters</div>
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+        <div className="mb-16">
+          <div className="text-xs text-muted uppercase font-extrabold mb-2">Filters</div>
+          <div className="ms-filter-row">
             {filters.map(f => (
-              <button key={f.name} onClick={() => setFilter(f.css)} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #334155', background: filter === f.css ? '#10b981' : '#1f2937', color: filter === f.css ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}>{f.name}</button>
+              <button key={f.name} onClick={() => setFilter(f.css)} className={`ms-filter-btn ${filter === f.css ? 'active' : ''}`}>{f.name}</button>
             ))}
           </div>
         </div>
 
         <div>
-          <div style={{ fontSize: '10px', color: '#64748b', textTransform: 'uppercase', fontWeight: 800, marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <div className="text-xs text-muted uppercase font-extrabold mb-2 flex items-center gap-1">
             <Sparkles size={10} /> Face Effects
           </div>
-          <div style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+          <div className="ms-filter-row">
             {effects.map(e => (
-              <button key={e.name} onClick={() => setEffect(e.css)} style={{ padding: '6px 14px', borderRadius: '20px', border: '1px solid #334155', background: effect === e.css ? '#f59e0b' : '#1f2937', color: effect === e.css ? '#fff' : '#94a3b8', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap', cursor: 'pointer' }}>{e.name}</button>
+              <button key={e.name} onClick={() => setEffect(e.css)} className={`ms-filter-btn ${effect === e.css ? 'active-gold' : ''}`}>{e.name}</button>
             ))}
           </div>
         </div>
       </div>
-
-      <style>{`@keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.3; } 100% { opacity: 1; } }`}</style>
     </div>
   );
 }

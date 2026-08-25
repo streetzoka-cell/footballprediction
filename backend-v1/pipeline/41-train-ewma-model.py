@@ -1,6 +1,7 @@
 import os
 import json
 import joblib
+
 import pandas as pd
 import numpy as np
 import xgboost as xgb
@@ -11,7 +12,7 @@ from sklearn.metrics import (
     confusion_matrix,
     balanced_accuracy_score,
     f1_score,
-    log_loss
+    log_loss,
 )
 from sklearn.preprocessing import LabelEncoder
 from sklearn.utils.class_weight import compute_sample_weight
@@ -20,35 +21,51 @@ from sklearn.utils.class_weight import compute_sample_weight
 # ============================================================
 # ZOKASCORE V2 — STEP 41
 # EWMA XGBOOST MODEL TRAINING
+# ============================================================
 #
-# Purpose:
-#   Train a leakage-controlled XGBoost classifier using:
-#   - Pre-match ELO signals
-#   - Chronological EWMA team performance signals
-#   - Venue-specific EWMA signals
-#
-# Input:
+# Source:
 #   data/ml/features_v3.csv
 #
 # Output:
 #   data/models/xgboost_ewma_v1.joblib
 #   data/processed/xgboost_ewma_model_report.json
 #
-# Design principles:
-#   - Chronological train/test split
-#   - No future information
-#   - Sample weights calculated from training data only
-#   - Target encoder fitted on training data only
-#   - Exact population preservation
-#   - Atomic artifact writes
+# CONTRACT
+# -------
+# Step 41 consumes ONLY the validated Step 40 dataset.
+#
+# It does NOT:
+#   - rebuild historical data
+#   - recalculate ELO
+#   - calculate EWMA
+#   - resolve identities
+#   - use another dataset
+#   - hard-code a population size
+#   - silently drop rows
+#
+# Population:
+#   Inherited dynamically from Step 40.
+#
+# Split:
+#   Deterministic chronological split.
+#
+# Leakage control:
+#   - Features are pre-match.
+#   - Target encoder is fitted on training data only.
+#   - Sample weights are calculated from training data only.
+#   - Test data is never used during training.
 # ============================================================
 
 
 # ============================================================
-# PATHS / CONFIGURATION
+# PATHS
 # ============================================================
 
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+BASE_DIR = os.path.dirname(
+    os.path.dirname(
+        os.path.abspath(__file__)
+    )
+)
 
 FEATURES_FILE = os.path.join(
     BASE_DIR,
@@ -79,15 +96,23 @@ REPORT_FILE = os.path.join(
     "xgboost_ewma_model_report.json"
 )
 
-EXPECTED_ROWS = 484354
+
+# ============================================================
+# CONFIGURATION
+# ============================================================
+
 TRAIN_RATIO = 0.80
 RANDOM_STATE = 42
 
-# Reference models
-BASELINE_ACCURACY = 47.97
-ELO_ONLY_ACCURACY = 51.23
-XGB_BALANCED_ACCURACY = 48.17
-XGB_NATURAL_ACCURACY = 51.50
+# Football result classes.
+#
+# These are semantic labels, not a population expectation.
+# The actual encoder is still fitted from the training data.
+EXPECTED_LABELS = [
+    "HOME_WIN",
+    "DRAW",
+    "AWAY_WIN",
+]
 
 
 # ============================================================
@@ -127,19 +152,14 @@ FEATURE_COLUMNS = [
     "away_matches_before",
 
     "home_home_matches_before",
-    "away_away_matches_before"
+    "away_away_matches_before",
 ]
 
-LABELS = [
-    "HOME_WIN",
-    "DRAW",
-    "AWAY_WIN"
-]
 
 IDENTITY_COLUMNS = [
     "match_id",
     "date",
-    "target"
+    "target",
 ]
 
 
@@ -149,31 +169,61 @@ IDENTITY_COLUMNS = [
 
 def atomic_joblib_dump(obj, output_file):
     temp_file = output_file + ".tmp"
-    joblib.dump(obj, temp_file)
-    os.replace(temp_file, output_file)
+
+    try:
+        joblib.dump(
+            obj,
+            temp_file
+        )
+
+        os.replace(
+            temp_file,
+            output_file
+        )
+
+    except Exception:
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except OSError:
+                pass
+
+        raise
 
 
 def atomic_json_dump(obj, output_file):
     temp_file = output_file + ".tmp"
 
-    with open(
-        temp_file,
-        "w",
-        encoding="utf-8"
-    ) as f:
-        json.dump(
-            obj,
-            f,
-            indent=2
+    try:
+        with open(
+            temp_file,
+            "w",
+            encoding="utf-8"
+        ) as f:
+
+            json.dump(
+                obj,
+                f,
+                indent=2
+            )
+
+        os.replace(
+            temp_file,
+            output_file
         )
 
-    os.replace(
-        temp_file,
-        output_file
-    )
+    except Exception:
+        if os.path.exists(temp_file):
+            try:
+                os.remove(temp_file)
+            except OSError:
+                pass
+
+        raise
 
 
 def validate_feature_dataset(df):
+
     required = (
         FEATURE_COLUMNS
         + IDENTITY_COLUMNS
@@ -187,68 +237,167 @@ def validate_feature_dataset(df):
 
     if missing:
         raise RuntimeError(
-            f"Missing required columns: {missing}"
+            "Missing required Step 40 columns: "
+            + ", ".join(missing)
         )
 
+    # --------------------------------------------------------
     # Match identity
-    if df["match_id"].isna().any():
+    # --------------------------------------------------------
+
+    match_ids = (
+        df["match_id"]
+        .astype("string")
+        .str.strip()
+    )
+
+    if match_ids.isna().any():
         raise RuntimeError(
             "Match IDs contain missing values."
         )
 
-    if df["match_id"].duplicated().any():
+    if (match_ids == "").any():
         raise RuntimeError(
-            "Duplicate match IDs detected."
+            "Match IDs contain empty values."
         )
 
+    if match_ids.duplicated().any():
+        duplicate_count = int(
+            match_ids.duplicated().sum()
+        )
+
+        raise RuntimeError(
+            "Duplicate match IDs detected: "
+            f"{duplicate_count:,}"
+        )
+
+    df["match_id"] = match_ids.astype(str)
+
+    # --------------------------------------------------------
     # Dates
+    # --------------------------------------------------------
+
     df["date"] = pd.to_datetime(
         df["date"],
         errors="coerce"
     )
 
-    if df["date"].isna().any():
+    invalid_dates = int(
+        df["date"].isna().sum()
+    )
+
+    if invalid_dates:
         raise RuntimeError(
-            "Invalid dates detected."
+            "Invalid dates detected: "
+            f"{invalid_dates:,}"
         )
 
+    # --------------------------------------------------------
     # Numeric features
+    # --------------------------------------------------------
+
     for column in FEATURE_COLUMNS:
+
         df[column] = pd.to_numeric(
             df[column],
             errors="coerce"
         )
 
-        if df[column].isna().any():
+        missing_count = int(
+            df[column].isna().sum()
+        )
+
+        if missing_count:
             raise RuntimeError(
-                f"{column} contains missing/invalid values."
+                f"{column} contains "
+                f"{missing_count:,} missing/invalid values."
             )
 
-        if not np.isfinite(
-            df[column].to_numpy(dtype=float)
-        ).all():
+        values = df[column].to_numpy(
+            dtype=float
+        )
+
+        if not np.isfinite(values).all():
+
             raise RuntimeError(
                 f"{column} contains non-finite values."
             )
 
+    # --------------------------------------------------------
     # Targets
-    invalid_targets = (
-        set(df["target"].dropna().unique())
-        - set(LABELS)
-    )
-
-    if invalid_targets:
-        raise RuntimeError(
-            f"Invalid target values detected: "
-            f"{sorted(invalid_targets)}"
-        )
+    # --------------------------------------------------------
 
     if df["target"].isna().any():
+
         raise RuntimeError(
             "Target contains missing values."
         )
 
+    targets = (
+        df["target"]
+        .astype(str)
+        .str.strip()
+    )
+
+    invalid_targets = (
+        set(targets.unique())
+        - set(EXPECTED_LABELS)
+    )
+
+    if invalid_targets:
+
+        raise RuntimeError(
+            "Invalid target values detected: "
+            + ", ".join(
+                sorted(invalid_targets)
+            )
+        )
+
+    df["target"] = targets
+
+    # --------------------------------------------------------
+    # Population sanity
+    # --------------------------------------------------------
+    #
+    # No hard-coded expected population.
+    # The only valid expectation is that the dataset is non-empty.
+    # --------------------------------------------------------
+
+    if len(df) == 0:
+
+        raise RuntimeError(
+            "Step 40 feature dataset is empty."
+        )
+
     return df
+
+
+def validate_split_population(
+    source_rows,
+    train_rows,
+    test_rows
+):
+
+    if train_rows + test_rows != source_rows:
+
+        raise RuntimeError(
+            "Train/test population mismatch: "
+            f"source={source_rows:,}, "
+            f"train={train_rows:,}, "
+            f"test={test_rows:,}."
+        )
+
+    if train_rows <= 0:
+
+        raise RuntimeError(
+            "Training population is empty."
+        )
+
+    if test_rows <= 0:
+
+        raise RuntimeError(
+            "Testing population is empty."
+        )
 
 
 # ============================================================
@@ -258,7 +407,10 @@ def validate_feature_dataset(df):
 def run():
 
     print("=" * 60)
-    print(" ZOKASCORE V2 — STEP 41: EWMA XGBOOST TRAINING")
+    print(
+        " ZOKASCORE V2 — STEP 41: "
+        "EWMA XGBOOST TRAINING"
+    )
     print("=" * 60)
     print()
 
@@ -266,53 +418,70 @@ def run():
     # [1/9] CHECK SOURCE
     # ========================================================
 
-    print("[1/9] Checking Step 40 feature dataset...")
+    print(
+        "[1/9] Checking Step 40 feature dataset..."
+    )
 
     if not os.path.exists(FEATURES_FILE):
+
         raise FileNotFoundError(
-            f"Step 40 feature dataset not found:\n"
+            "Step 40 feature dataset not found:\n"
             f"{FEATURES_FILE}"
         )
 
-    print("   ✅ Step 40 feature dataset found.")
+    print(
+        "   ✅ Step 40 feature dataset found."
+    )
 
     # ========================================================
     # [2/9] LOAD
     # ========================================================
 
-    print("\n[2/9] Loading features...")
+    print(
+        "\n[2/9] Loading features..."
+    )
 
     df = pd.read_csv(
         FEATURES_FILE,
         low_memory=False
     )
 
-    if len(df) != EXPECTED_ROWS:
+    source_rows = len(df)
+
+    if source_rows == 0:
+
         raise RuntimeError(
-            "POPULATION MISMATCH: "
-            f"expected {EXPECTED_ROWS:,}, "
-            f"got {len(df):,}."
+            "Step 40 feature dataset is empty."
         )
 
     print(
-        f"   ↳ Rows loaded: {len(df):,}"
+        f"   ↳ Rows loaded: {source_rows:,}"
     )
 
     # ========================================================
     # [3/9] VALIDATE
     # ========================================================
 
-    print("\n[3/9] Validating Step 40 feature dataset...")
+    print(
+        "\n[3/9] Validating Step 40 feature dataset..."
+    )
 
-    df = validate_feature_dataset(df)
+    df = validate_feature_dataset(
+        df
+    )
 
     print(
         "   ✅ Structural, numeric, identity, "
         "and target integrity verified."
     )
 
+    print(
+        f"   ✅ Dynamic source population: "
+        f"{source_rows:,}"
+    )
+
     # ========================================================
-    # [4/9] DETERMINISTIC CHRONOLOGICAL SPLIT
+    # [4/9] CHRONOLOGICAL SPLIT
     # ========================================================
 
     print(
@@ -326,11 +495,26 @@ def run():
             "match_id"
         ],
         kind="mergesort"
-    ).reset_index(drop=True)
+    ).reset_index(
+        drop=True
+    )
 
     split_idx = int(
-        len(df) * TRAIN_RATIO
+        source_rows * TRAIN_RATIO
     )
+
+    # Guard against pathological tiny datasets.
+    if split_idx <= 0:
+        raise RuntimeError(
+            "Chronological split produced "
+            "an empty training set."
+        )
+
+    if split_idx >= source_rows:
+        raise RuntimeError(
+            "Chronological split produced "
+            "an empty testing set."
+        )
 
     train_df = df.iloc[
         :split_idx
@@ -340,26 +524,35 @@ def run():
         split_idx:
     ].copy()
 
-    if len(train_df) + len(test_df) != EXPECTED_ROWS:
-        raise RuntimeError(
-            "Train/test population mismatch."
-        )
+    train_rows = len(train_df)
+    test_rows = len(test_df)
+
+    validate_split_population(
+        source_rows,
+        train_rows,
+        test_rows
+    )
 
     train_end_date = train_df.iloc[-1]["date"]
     test_start_date = test_df.iloc[0]["date"]
 
     print(
-        f"   ↳ Training: {len(train_df):,} matches "
+        f"   ↳ Training: {train_rows:,} matches "
         f"(Through {train_end_date.date()})"
     )
 
     print(
-        f"   ↳ Testing:  {len(test_df):,} matches "
+        f"   ↳ Testing:  {test_rows:,} matches "
         f"(From {test_start_date.date()})"
     )
 
+    print(
+        f"   ✅ Population preserved: "
+        f"{source_rows:,}"
+    )
+
     # ========================================================
-    # [5/9] PREPARE MATRICES + TARGET ENCODING
+    # [5/9] MATRICES + TARGET ENCODING
     # ========================================================
 
     print(
@@ -383,7 +576,8 @@ def run():
     ].astype(str)
 
     print(
-        "   ↳ Fitting target encoder on training data only..."
+        "   ↳ Fitting target encoder on "
+        "training data only..."
     )
 
     le = LabelEncoder()
@@ -392,22 +586,62 @@ def run():
         y_train_raw
     )
 
-    # Verify every test class exists in training.
+    # --------------------------------------------------------
+    # Verify the training data contains all expected outcomes.
+    # --------------------------------------------------------
+
+    missing_training_labels = (
+        set(EXPECTED_LABELS)
+        - set(le.classes_)
+    )
+
+    if missing_training_labels:
+
+        raise RuntimeError(
+            "Training data is missing expected "
+            "football result classes: "
+            + ", ".join(
+                sorted(missing_training_labels)
+            )
+        )
+
+    # --------------------------------------------------------
+    # Verify test classes are represented in training.
+    # --------------------------------------------------------
+
     unknown_test_classes = (
         set(y_test_raw.unique())
         - set(le.classes_)
     )
 
     if unknown_test_classes:
+
         raise RuntimeError(
             "Test set contains target classes "
             "not present in training: "
-            f"{unknown_test_classes}"
+            + ", ".join(
+                sorted(unknown_test_classes)
+            )
         )
 
     y_test = le.transform(
         y_test_raw
     )
+
+    target_classes = list(
+        le.classes_
+    )
+
+    num_classes = len(
+        target_classes
+    )
+
+    if num_classes < 2:
+
+        raise RuntimeError(
+            "Training data contains fewer than "
+            "two target classes."
+        )
 
     print(
         "   ↳ Target mapping:"
@@ -416,9 +650,14 @@ def run():
     for index, label in enumerate(
         le.classes_
     ):
+
         print(
             f"      {index} → {label}"
         )
+
+    print(
+        f"   ↳ Classes: {num_classes}"
+    )
 
     # ========================================================
     # [6/9] BALANCED SAMPLE WEIGHTS
@@ -432,6 +671,23 @@ def run():
         class_weight="balanced",
         y=y_train
     )
+
+    if len(sample_weights) != train_rows:
+
+        raise RuntimeError(
+            "Sample-weight population mismatch: "
+            f"weights={len(sample_weights):,}, "
+            f"training={train_rows:,}."
+        )
+
+    if not np.isfinite(
+        sample_weights
+    ).all():
+
+        raise RuntimeError(
+            "Sample weights contain "
+            "non-finite values."
+        )
 
     print(
         "   ✅ Weights calculated from "
@@ -448,26 +704,36 @@ def run():
     )
 
     model = xgb.XGBClassifier(
+
         objective="multi:softprob",
-        num_class=3,
+
+        num_class=num_classes,
 
         n_estimators=300,
+
         learning_rate=0.05,
+
         max_depth=6,
+
         min_child_weight=3,
 
         subsample=0.85,
+
         colsample_bytree=0.85,
 
         gamma=0.0,
+
         reg_alpha=0.0,
+
         reg_lambda=1.0,
 
         random_state=RANDOM_STATE,
+
         n_jobs=-1,
 
         eval_metric="mlogloss",
-        tree_method="hist"
+
+        tree_method="hist",
     )
 
     model.fit(
@@ -496,6 +762,35 @@ def run():
     y_prob = model.predict_proba(
         X_test
     )
+
+    # --------------------------------------------------------
+    # Probability matrix validation
+    # --------------------------------------------------------
+
+    if y_prob.shape[0] != test_rows:
+
+        raise RuntimeError(
+            "Prediction population mismatch: "
+            f"probabilities={y_prob.shape[0]:,}, "
+            f"testing={test_rows:,}."
+        )
+
+    if y_prob.shape[1] != num_classes:
+
+        raise RuntimeError(
+            "Prediction class dimension mismatch: "
+            f"probabilities={y_prob.shape[1]}, "
+            f"classes={num_classes}."
+        )
+
+    if not np.isfinite(
+        y_prob
+    ).all():
+
+        raise RuntimeError(
+            "Prediction probabilities contain "
+            "non-finite values."
+        )
 
     y_test_str = le.inverse_transform(
         y_test
@@ -531,44 +826,29 @@ def run():
         y_test,
         y_prob,
         labels=np.arange(
-            len(le.classes_)
+            num_classes
         )
     )
 
-    # ========================================================
-    # COMPARISON
-    # ========================================================
-
-    accuracy_percent = accuracy * 100
-
-    diff_baseline = (
-        accuracy_percent
-        - BASELINE_ACCURACY
-    )
-
-    diff_elo = (
-        accuracy_percent
-        - ELO_ONLY_ACCURACY
-    )
-
-    diff_xgb_balanced = (
-        accuracy_percent
-        - XGB_BALANCED_ACCURACY
-    )
-
-    diff_xgb_natural = (
-        accuracy_percent
-        - XGB_NATURAL_ACCURACY
+    accuracy_percent = (
+        accuracy * 100
     )
 
     # ========================================================
-    # CLASSIFICATION
+    # REFERENCE COMPARISON
+    # ========================================================
+    #
+    # IMPORTANT:
+    # No historical benchmark is treated as a required
+    # population or pass/fail condition.
+    #
+    # We report the model's actual result only.
     # ========================================================
 
     classification = classification_report(
         y_test_str,
         y_pred_str,
-        labels=LABELS,
+        labels=EXPECTED_LABELS,
         output_dict=True,
         zero_division=0
     )
@@ -576,7 +856,7 @@ def run():
     cm = confusion_matrix(
         y_test_str,
         y_pred_str,
-        labels=LABELS
+        labels=EXPECTED_LABELS
     )
 
     importances = model.feature_importances_
@@ -588,7 +868,7 @@ def run():
     elo_features = {
         "home_elo_pre",
         "away_elo_pre",
-        "elo_diff"
+        "elo_diff",
     }
 
     elo_importance = sum(
@@ -610,10 +890,6 @@ def run():
         )
         if feature not in elo_features
     )
-
-    # ========================================================
-    # FEATURE IMPORTANCE MAP
-    # ========================================================
 
     feature_importances = dict(
         zip(
@@ -640,13 +916,29 @@ def run():
         exist_ok=True
     )
 
-    # Save model + encoder together.
+    # --------------------------------------------------------
+    # Model artifact
+    # --------------------------------------------------------
+
     model_artifact = {
+
         "model": model,
+
         "label_encoder": le,
+
         "feature_columns": FEATURE_COLUMNS,
-        "target_classes": LABELS,
-        "pipeline_step": "41"
+
+        "target_classes": target_classes,
+
+        "pipeline_step": "41",
+
+        "source_population": source_rows,
+
+        "training_population": train_rows,
+
+        "testing_population": test_rows,
+
+        "train_ratio": TRAIN_RATIO,
     }
 
     atomic_joblib_dump(
@@ -664,22 +956,44 @@ def run():
 
         "status": "PASS",
 
-        "model_name": (
-            "ZOKASCORE V2 EWMA XGBoost"
-        ),
+        "model_name":
+            "ZOKASCORE V2 EWMA XGBoost",
 
-        "source": (
-            "data/ml/features_v3.csv"
-        ),
+        "source":
+            "data/ml/features_v3.csv",
+
+        # ----------------------------------------------------
+        # Population
+        # ----------------------------------------------------
 
         "population": {
-            "total_rows": EXPECTED_ROWS,
-            "training_rows": len(train_df),
-            "testing_rows": len(test_df),
-            "train_ratio": TRAIN_RATIO
+
+            "total_rows":
+                source_rows,
+
+            "training_rows":
+                train_rows,
+
+            "testing_rows":
+                test_rows,
+
+            "train_ratio":
+                TRAIN_RATIO,
+
+            "population_preserved":
+                (
+                    train_rows
+                    + test_rows
+                    == source_rows
+                ),
         },
 
+        # ----------------------------------------------------
+        # Dates
+        # ----------------------------------------------------
+
         "date_range": {
+
             "training_through":
                 train_end_date.strftime(
                     "%Y-%m-%d"
@@ -688,24 +1002,40 @@ def run():
             "testing_from":
                 test_start_date.strftime(
                     "%Y-%m-%d"
-                )
+                ),
         },
 
-        "features": FEATURE_COLUMNS,
+        # ----------------------------------------------------
+        # Features
+        # ----------------------------------------------------
 
-        "feature_count": len(
-            FEATURE_COLUMNS
-        ),
+        "features":
+            FEATURE_COLUMNS,
 
-        "target": "target",
+        "feature_count":
+            len(FEATURE_COLUMNS),
 
-        "target_classes": LABELS,
+        # ----------------------------------------------------
+        # Target
+        # ----------------------------------------------------
+
+        "target":
+            "target",
+
+        "target_classes":
+            target_classes,
 
         "target_encoding": {
             str(index): label
             for index, label
-            in enumerate(le.classes_)
+            in enumerate(
+                le.classes_
+            )
         },
+
+        # ----------------------------------------------------
+        # Model
+        # ----------------------------------------------------
 
         "model": {
 
@@ -716,7 +1046,7 @@ def run():
                 "multi:softprob",
 
             "num_class":
-                3,
+                num_classes,
 
             "n_estimators":
                 300,
@@ -752,8 +1082,12 @@ def run():
                 RANDOM_STATE,
 
             "sample_weight":
-                "balanced"
+                "balanced",
         },
+
+        # ----------------------------------------------------
+        # Evaluation
+        # ----------------------------------------------------
 
         "evaluation": {
 
@@ -764,7 +1098,9 @@ def run():
                 float(accuracy_percent),
 
             "balanced_accuracy":
-                float(balanced_accuracy),
+                float(
+                    balanced_accuracy
+                ),
 
             "balanced_accuracy_percent":
                 float(
@@ -790,34 +1126,6 @@ def run():
             "log_loss":
                 float(logloss),
 
-            "baseline_accuracy_percent":
-                BASELINE_ACCURACY,
-
-            "elo_only_accuracy_percent":
-                ELO_ONLY_ACCURACY,
-
-            "xgb_balanced_accuracy_percent":
-                XGB_BALANCED_ACCURACY,
-
-            "xgb_natural_accuracy_percent":
-                XGB_NATURAL_ACCURACY,
-
-            "difference_vs_baseline_pp":
-                float(diff_baseline),
-
-            "difference_vs_elo_only_pp":
-                float(diff_elo),
-
-            "difference_vs_xgb_balanced_pp":
-                float(
-                    diff_xgb_balanced
-                ),
-
-            "difference_vs_xgb_natural_pp":
-                float(
-                    diff_xgb_natural
-                ),
-
             "classification_report":
                 classification,
 
@@ -830,10 +1138,14 @@ def run():
             "signal_contribution": {
 
                 "elo_features":
-                    float(elo_importance),
+                    float(
+                        elo_importance
+                    ),
 
                 "ewma_features":
-                    float(ewma_importance),
+                    float(
+                        ewma_importance
+                    ),
 
                 "elo_features_percent":
                     float(
@@ -843,9 +1155,13 @@ def run():
                 "ewma_features_percent":
                     float(
                         ewma_importance * 100
-                    )
-            }
+                    ),
+            },
         },
+
+        # ----------------------------------------------------
+        # Leakage control
+        # ----------------------------------------------------
 
         "leakage_control": {
 
@@ -871,19 +1187,30 @@ def run():
                 False,
 
             "step_40_dataset_modified":
-                False
+                False,
         },
+
+        # ----------------------------------------------------
+        # Integrity
+        # ----------------------------------------------------
 
         "integrity": {
 
-            "expected_population":
-                EXPECTED_ROWS,
+            "source_population":
+                source_rows,
 
-            "actual_population":
-                len(df),
+            "training_population":
+                train_rows,
+
+            "testing_population":
+                test_rows,
 
             "population_preserved":
-                len(df) == EXPECTED_ROWS,
+                (
+                    train_rows
+                    + test_rows
+                    == source_rows
+                ),
 
             "duplicate_match_ids":
                 int(
@@ -901,10 +1228,15 @@ def run():
                     .isna()
                     .sum()
                     .sum()
-                )
+                ),
         },
 
-        "output": MODEL_FILE
+        # ----------------------------------------------------
+        # Output
+        # ----------------------------------------------------
+
+        "output":
+            MODEL_FILE,
     }
 
     atomic_json_dump(
@@ -922,76 +1254,43 @@ def run():
     print("=" * 60)
 
     print(
-        f"🎯 Accuracy:              "
+        f"📊 Source population:      "
+        f"{source_rows:,}"
+    )
+
+    print(
+        f"📊 Training population:    "
+        f"{train_rows:,}"
+    )
+
+    print(
+        f"📊 Testing population:     "
+        f"{test_rows:,}"
+    )
+
+    print(
+        f"🎯 Accuracy:               "
         f"{accuracy_percent:.2f}%"
     )
 
     print(
-        f"⚖️ Balanced Accuracy:     "
+        f"⚖️ Balanced Accuracy:      "
         f"{balanced_accuracy * 100:.2f}%"
     )
 
     print(
-        f"🧠 Macro F1:              "
+        f"🧠 Macro F1:               "
         f"{macro_f1 * 100:.2f}%"
     )
 
     print(
-        f"📊 Weighted F1:           "
+        f"📊 Weighted F1:            "
         f"{weighted_f1 * 100:.2f}%"
     )
 
     print(
-        f"📉 Log Loss:              "
+        f"📉 Log Loss:               "
         f"{logloss:.4f}"
-    )
-
-    print()
-    print("📊 Reference Models")
-    print("-" * 60)
-
-    print(
-        f"   Original baseline:     "
-        f"{BASELINE_ACCURACY:.2f}%"
-    )
-
-    print(
-        f"   ELO-only:              "
-        f"{ELO_ONLY_ACCURACY:.2f}%"
-    )
-
-    print(
-        f"   XGBoost (Balanced):    "
-        f"{XGB_BALANCED_ACCURACY:.2f}%"
-    )
-
-    print(
-        f"   XGBoost (Natural):     "
-        f"{XGB_NATURAL_ACCURACY:.2f}%"
-    )
-
-    print()
-    print("🚀 Model Comparison")
-    print("-" * 60)
-
-    print(
-        f"   vs XGBoost (Natural):  "
-        f"{diff_xgb_natural:+.2f} pp"
-    )
-
-    print(
-        f"   vs XGBoost (Balanced): "
-        f"{diff_xgb_balanced:+.2f} pp"
-    )
-
-    print(
-        f"   vs ELO-only:           "
-        f"{diff_elo:+.2f} pp"
-    )
-
-    print(
-        f"   vs Original baseline:  "
-        f"{diff_baseline:+.2f} pp"
     )
 
     print()
@@ -1002,7 +1301,7 @@ def run():
         classification_report(
             y_test_str,
             y_pred_str,
-            labels=LABELS,
+            labels=EXPECTED_LABELS,
             zero_division=0
         )
     )
@@ -1017,7 +1316,9 @@ def run():
         f"{'AWAY_WIN':>12}"
     )
 
-    for i, label in enumerate(LABELS):
+    for i, label in enumerate(
+        EXPECTED_LABELS
+    ):
 
         print(
             f"{label:>12}"
@@ -1058,23 +1359,23 @@ def run():
     print("-" * 60)
 
     print(
-        f"   ELO features:          "
+        f"   ELO features:           "
         f"{elo_importance * 100:>6.2f}%"
     )
 
     print(
-        f"   EWMA features:         "
+        f"   EWMA features:          "
         f"{ewma_importance * 100:>6.2f}%"
     )
 
     print()
     print(
-        f"📁 Model:               "
+        f"📁 Model:                 "
         f"{MODEL_FILE}"
     )
 
     print(
-        f"📁 Report:              "
+        f"📁 Report:                "
         f"{REPORT_FILE}"
     )
 
@@ -1101,8 +1402,13 @@ def run():
     )
 
     print(
-        "🔒 Exact population preserved: "
-        "484,354."
+        "🔒 Population inherited dynamically "
+        "from Step 40."
+    )
+
+    print(
+        f"🔒 Exact population preserved: "
+        f"{source_rows:,}."
     )
 
     print("=" * 60)

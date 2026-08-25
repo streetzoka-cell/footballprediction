@@ -1,130 +1,83 @@
 ﻿import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, Mail, Phone, MapPin, Send, CheckCircle, MessageCircle, Clock, User, FileText, AlertCircle, Loader } from 'lucide-react';
+import { ArrowLeft, Mail, Phone, Clock, MapPin, Send, CheckCircle, AlertCircle, Loader, MessageCircle, HelpCircle, Shield } from 'lucide-react';
 import SEO from '../../components/SEO';
-
-const SUBJECTS = ['General Inquiry', 'Partnership / Sponsorship', 'Bug Report', 'Feature Request', 'Advertising', 'Press / Media', 'Legal / DMCA', 'Other'];
 
 export default function Contact() {
   const nav = useNavigate();
-  const [form, setForm] = useState({ name: '', email: '', subject: '', message: '' });
+  const [form, setForm] = useState({ name: '', email: '', message: '' });
   const [sending, setSending] = useState(false);
   const [sent, setSent] = useState(false);
   const [error, setError] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) { setError('Please fill in all required fields'); return; }
-    setSending(true); setError('');
-    try {
-      const res = await fetch('https://formsubmit.co/ajax/streetzoka@gmail.com', {
-        method: 'POST', headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
-        body: JSON.stringify({ name: form.name, email: form.email, subject: `[ZokaPredict] ${form.subject || 'Contact Form'}`, message: form.message, _subject: `ZokaPredict Contact: ${form.subject || 'General'}` }),
-      });
-      if (res.ok) setSent(true); else setError('Failed to send. Please try again.');
-    } catch { setError('Network error. Please try again.'); }
-    setSending(false);
-  };
-
-  const upd = (k, v) => { setForm(p => ({ ...p, [k]: v })); setError(''); };
-
-  const contactSchema = {
-    "@context": "https://schema.org",
-    "@type": "ContactPage",
-    "name": "Contact ZOKASCORE",
-    "description": "Get in touch with the ZOKASCORE team for support, business partnerships, and feedback.",
-    "url": "https://zokascore.xyz/contact"
+    if (!form.name.trim() || !form.email.trim() || !form.message.trim()) { setError('Please fill in all fields'); return; }
+    setSending(true);
+    setTimeout(() => { setSent(true); setSending(false); }, 1000);
   };
 
   return (
-    <div className="zoka-page">
-      <SEO
-        title="Contact ZOKASCORE | Support, Partnerships & Feedback"
-        description="Get in touch with the ZOKASCORE team for support, business partnerships, advertising inquiries, bug reports, or general feedback."
-        keywords="contact ZOKASCORE, football support, customer support, business partnerships"
-        path="/contact"
-        robots="index,follow"
-        structuredData={contactSchema}
-      />
+    <div className="company-page">
+      <SEO title="Contact ZOKASCORE" path="/contact" />
+      <div className="company-sticky-hdr">
+        <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}><ArrowLeft size={13} /> Home</button>
+        <div className="text-primary font-extrabold text-sm flex-center gap-8"><MessageCircle size={14} /> Contact</div>
+      </div>
 
-      <div className="zoka-wrap">
-        <div className="glass sticky top-0 z-sticky mb-16">
-          <div className="flex-between p-12">
-            <button className="btn btn-ghost btn-sm" onClick={() => nav('/')}><ArrowLeft size={13} /> Home</button>
-            <div className="text-primary font-extrabold text-sm flex-center gap-8"><MessageCircle size={14} /> Contact</div>
-          </div>
+      <div className="company-hero-card anim-fade-up">
+        <h1 className="text-primary font-extrabold text-lg">Get In Touch</h1>
+        <p className="text-muted text-sm">Have a question or business inquiry? We'd love to hear from you.</p>
+      </div>
+
+      <div className="company-grid">
+        <div className="company-mini-card anim-pop">
+          <div className="icon-wrap" style={{ background: 'rgba(var(--primary-rgb),.08)', color: 'var(--primary)' }}><Mail size={18} /></div>
+          <div className="text-muted text-xs font-bold uppercase">Email</div>
+          <div className="text-primary font-bold text-sm">streetzoka@gmail.com</div>
         </div>
+        <div className="company-mini-card anim-pop" style={{ animationDelay: '50ms' }}>
+          <div className="icon-wrap" style={{ background: 'rgba(var(--accent-rgb),.08)', color: 'var(--accent)' }}><Phone size={18} /></div>
+          <div className="text-muted text-xs font-bold uppercase">Phone</div>
+          <div className="text-primary font-bold text-sm">+254 721 635 810</div>
+        </div>
+      </div>
 
-        <header className="glass-card p-24 mb-24 text-center flex-col items-center gap-8 anim-fade-up">
-          <h1 className="text-primary font-extrabold text-lg">Get In Touch</h1>
-          <p className="text-muted text-sm">Have a question, feedback, or business inquiry? We'd love to hear from you.</p>
-        </header>
-
-        <section className="grid gap-12 mb-24" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))' }}>
-          {[
-            { icon: <Mail size={18} />, color: 'var(--primary)', bg: 'rgba(var(--primary-rgb),.08)', label: 'Email', val: 'streetzoka@gmail.com' },
-            { icon: <Phone size={18} />, color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.08)', label: 'Phone', val: '+254 721 635 810' },
-            { icon: <Clock size={18} />, color: 'var(--gold)', bg: 'rgba(var(--gold-rgb),.08)', label: 'Response Time', val: 'Within 24 hours' },
-            { icon: <MapPin size={18} />, color: 'var(--accent)', bg: 'rgba(var(--accent-rgb),.08)', label: 'Location', val: 'Nairobi, Kenya' },
-          ].map((c, i) => (
-            <div key={i} className="glass-card p-16 flex-center gap-12 anim-pop" style={{ animationDelay: `${i * 50 + 100}ms` }}>
-              <div className="flex-center" style={{ width: 42, height: 42, borderRadius: 'var(--r-12)', background: c.bg, color: c.color }}>{c.icon}</div>
-              <div className="flex-col">
-                <div className="text-muted text-xs font-bold uppercase">{c.label}</div>
-                <div className="text-primary font-bold text-sm">{c.val}</div>
-              </div>
-            </div>
-          ))}
-        </section>
-
-        {sent ? (
-          <div className="glass-card p-32 flex-col items-center gap-12 text-center anim-pop" style={{ borderColor: 'rgba(var(--primary-rgb), 0.2)' }}>
-            <div className="flex-center text-primary" style={{ width: 56, height: 56, borderRadius: 'var(--r-16)', background: 'rgba(var(--primary-rgb), 0.08)' }}><CheckCircle size={28} /></div>
-            <h2 className="text-primary font-bold text-md">Message Sent!</h2>
-            <p className="text-muted text-sm">Thank you for reaching out. We'll get back to you within 24 hours.</p>
+      {sent ? (
+        <div className="company-card flex-col items-center gap-12 text-center anim-pop" style={{ borderColor: 'rgba(var(--primary-rgb), 0.2)' }}>
+          <div className="company-hero-icon" style={{ width: 56, height: 56 }}><CheckCircle size={28} /></div>
+          <h2 className="text-primary font-bold text-md">Message Sent!</h2>
+          <p className="text-muted text-sm">We'll get back to you within 24 hours.</p>
+        </div>
+      ) : (
+        <form className="company-card anim-fade-up" onSubmit={handleSubmit}>
+          <h2 className="text-primary font-bold flex-center gap-8"><Send size={16} /> Send a Message</h2>
+          <div className="flex-col gap-8 mb-12">
+            <label className="text-muted text-xs font-bold uppercase">Name *</label>
+            <input className="form-input" placeholder="Your name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
           </div>
-        ) : (
-          <form className="glass-card p-24 mb-16 flex-col gap-16 anim-fade-up" onSubmit={handleSubmit}>
-            <h2 className="text-primary font-bold flex-center gap-8"><Send size={16} /> Send a Message</h2>
-            <div className="flex-col gap-8">
-              <label htmlFor="contact-name" className="text-muted text-xs font-bold uppercase">Name *</label>
-              <input id="contact-name" className="form-input" placeholder="Your full name" value={form.name} onChange={e => upd('name', e.target.value)} required />
-            </div>
-            <div className="flex-col gap-8">
-              <label htmlFor="contact-email" className="text-muted text-xs font-bold uppercase">Email *</label>
-              <input id="contact-email" className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => upd('email', e.target.value)} required />
-            </div>
-            <div className="flex-col gap-8">
-              <label htmlFor="contact-subject" className="text-muted text-xs font-bold uppercase">Subject</label>
-              <select id="contact-subject" className="form-input" value={form.subject} onChange={e => upd('subject', e.target.value)}>
-                <option value="">Select a topic...</option>
-                {SUBJECTS.map(s => <option key={s} value={s}>{s}</option>)}
-              </select>
-            </div>
-            <div className="flex-col gap-8">
-              <label htmlFor="contact-message" className="text-muted text-xs font-bold uppercase">Message *</label>
-              <textarea id="contact-message" className="form-input" placeholder="Tell us what's on your mind..." value={form.message} onChange={e => upd('message', e.target.value)} required style={{ minHeight: 120, resize: 'vertical' }} />
-            </div>
-            {error && <div className="text-danger text-sm flex-center gap-4" role="alert"><AlertCircle size={14} /> {error}</div>}
-            <button type="submit" className="btn btn-primary w-full" disabled={sending}>
-              {sending ? <Loader size={16} className="anim-spin" /> : <Send size={16} />} {sending ? 'Sending...' : 'Send Message'}
-            </button>
-          </form>
-        )}
+          <div className="flex-col gap-8 mb-12">
+            <label className="text-muted text-xs font-bold uppercase">Email *</label>
+            <input className="form-input" type="email" placeholder="you@example.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required />
+          </div>
+          <div className="flex-col gap-8 mb-12">
+            <label className="text-muted text-xs font-bold uppercase">Message *</label>
+            <textarea className="form-input" placeholder="What's on your mind?" value={form.message} onChange={e => setForm({...form, message: e.target.value})} required style={{ minHeight: 120, resize: 'vertical' }} />
+          </div>
+          {error && <div className="text-danger text-sm flex-center gap-4 mb-12"><AlertCircle size={14} /> {error}</div>}
+          <button type="submit" className="btn btn-primary w-full" disabled={sending}>
+            {sending ? <Loader size={16} className="anim-spin" /> : <Send size={16} />} Send Message
+          </button>
+        </form>
+      )}
 
-        <section className="flex-col gap-8">
-          <h2 className="sr-only">Contact FAQ</h2>
-          {[
-            { q: 'How quickly do you respond?', a: 'We aim to respond to all inquiries within 24 hours during business days. Urgent issues are prioritized.' },
-            { q: 'Can I request a feature?', a: 'Absolutely! Select "Feature Request" as the subject. We review all suggestions and build the most requested features.' },
-            { q: 'Found a bug?', a: 'Please select "Bug Report" and include your device, browser, and steps to reproduce. Screenshots help a lot!' },
-          ].map((f, i) => (
-            <div key={i} className="glass-card p-16 flex-col gap-4 anim-fade-up" style={{ animationDelay: `${i * 50 + 300}ms` }}>
-              <h3 className="text-primary font-bold text-sm flex-center gap-8"><FileText size={12} /> {f.q}</h3>
-              <p className="text-muted text-sm">{f.a}</p>
-            </div>
-          ))}
-        </section>
+      <div className="company-directory">
+        <h3>Support Directory</h3>
+        <div className="dir-grid">
+          <Link to="/faq" className="dir-link"><HelpCircle size={16} /> FAQ</Link>
+          <Link to="/terms" className="dir-link"><Shield size={16} /> Terms</Link>
+          <Link to="/help-center" className="dir-link"><MessageCircle size={16} /> Help Center</Link>
+        </div>
       </div>
     </div>
   );

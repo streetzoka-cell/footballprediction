@@ -5,8 +5,6 @@ import { Mail, Lock, User, Eye, EyeOff, ArrowRight, Loader, Shield, X, Zap } fro
 import SEO from '../components/SEO';
 import { useToast } from '../core/ToastManager';
 
-const EASE_OUT = 'cubic-bezier(0.16, 1, 0.3, 1)';
-
 const PasswordStrength = memo(function PasswordStrength({ password }) {
   if (!password) return null;
   let score = 0;
@@ -24,7 +22,7 @@ const PasswordStrength = memo(function PasswordStrength({ password }) {
     <div className="flex-col gap-4 mt-8">
       <div className="flex gap-4">
         {[0, 1, 2, 3, 4].map(i => (
-          <div key={i} className="flex-1 h-1 rounded-md" style={{ background: i < score ? activeColor : 'var(--bg-elevated)', boxShadow: i < score ? `0 0 8px ${activeColor}44` : 'none', transition: 'background 0.3s' }} />
+          <div key={i} className="pass-strength-bar flex-1" style={{ background: i < score ? activeColor : 'var(--bg-elevated)', boxShadow: i < score ? `0 0 8px ${activeColor}44` : 'none' }} />
         ))}
       </div>
       <div className="flex-between text-xs">
@@ -43,7 +41,7 @@ const InputField = memo(function InputField({ icon, type, placeholder, value, on
   return (
     <div className="flex-col gap-4">
       {label && <label className={`text-xs font-bold ${focused ? 'text-primary' : 'text-muted'}`}>{label}</label>}
-      <div className={`glass-card flex-center gap-12 ${focused ? 'border-primary' : ''}`} style={{ padding: '0 16px', height: '48px' }}>
+      <div className={`login-input-wrap ${focused ? 'border-primary' : ''}`}>
         <div style={{ color: focused ? 'var(--primary)' : 'var(--text-muted)' }}>{icon}</div>
         <input
           type={isPassword ? (showPass ? 'text' : 'password') : type}
@@ -56,7 +54,6 @@ const InputField = memo(function InputField({ icon, type, placeholder, value, on
           onFocus={() => setFocused(true)}
           onBlur={() => setFocused(false)}
           className="flex-1 bg-transparent border-none outline-none text-primary text-sm"
-          style={{ background: 'transparent', border: 'none', outline: 'none', color: 'var(--text-primary)', fontSize: 'var(--fs-sm)' }}
         />
         {isPassword && (
           <button type="button" onClick={() => setShowPass(p => !p)} className="btn-icon-sm" aria-label="Toggle password visibility">
@@ -146,10 +143,10 @@ export default function Login() {
         robots="noindex,nofollow"
       />
       
-      <div className="glass-card flex-col gap-20 p-24" style={{ width: '100%', maxWidth: '420px', zIndex: 1, opacity: modeTrans ? 0 : 1, transition: 'opacity 0.25s ease' }}>
+      <div className="glass-card flex-col gap-20 login-card" style={{ opacity: modeTrans ? 0 : 1, transition: 'opacity 0.25s ease' }}>
         <div className="flex-col items-center gap-12">
-          <div className="glass-card flex-center" style={{ width: 64, height: 64, borderRadius: 'var(--r-16)', background: 'linear-gradient(135deg, var(--primary), var(--primary-dim))' }}>
-            <span className="font-extrabold text-inverse" style={{ fontSize: 'var(--fs-2xl)' }}>Z</span>
+          <div className="login-logo-box">
+            <span className="font-extrabold text-inverse text-2xl">Z</span>
           </div>
           <h1 className="text-primary font-extrabold text-xl">{isLogin ? 'Welcome Back' : 'Create Account'}</h1>
           <p className="text-muted text-sm">{isLogin ? 'Sign in to track your predictions' : 'Join the prediction community'}</p>
@@ -166,9 +163,9 @@ export default function Login() {
         </button>
 
         <div className="flex-center gap-12">
-          <div className="flex-1 h-px bg-border"></div>
+          <div className="login-divider"></div>
           <span className="text-muted text-xs">or use email</span>
-          <div className="flex-1 h-px bg-border"></div>
+          <div className="login-divider"></div>
         </div>
 
         <form onSubmit={handleSubmit} className="flex-col gap-16">

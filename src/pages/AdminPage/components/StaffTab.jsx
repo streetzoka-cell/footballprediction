@@ -43,7 +43,7 @@ const StaffTab = memo(function StaffTab({ toast }) {
   }, [db, toast]);
 
   return (
-    <div className="glass-card p-16 flex-col gap-12">
+    <div className="glass-card p-16 flex flex-col gap-12">
       <h3 className="text-primary font-bold flex-center gap-8"><UserCog size={15} /> Staff Members</h3>
       <div className="flex gap-8">
         <input className="form-input flex-1" placeholder="Enter email to add as staff..." value={email} onChange={e => setEmail(e.target.value)} onKeyDown={e => e.key === 'Enter' && addStaff()} />
@@ -60,7 +60,7 @@ const StaffTab = memo(function StaffTab({ toast }) {
             <div className="flex-center font-extrabold text-inverse" style={{ width: 38, height: 38, borderRadius: 10, background: s.role === 'admin' ? 'rgba(var(--gold-rgb),.12)' : 'rgba(var(--accent-rgb),.12)', color: s.role === 'admin' ? 'var(--gold)' : 'var(--accent)', fontSize: '.85rem' }}>
               {(s.displayName || s.email || '??').slice(0, 2).toUpperCase()}
             </div>
-            <div className="flex-col">
+            <div className="flex flex-col">
               <div className="text-primary font-bold text-sm">{s.displayName || 'Unknown'}</div>
               <div className="text-muted text-xs">{s.email}</div>
             </div>

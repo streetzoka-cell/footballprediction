@@ -92,7 +92,6 @@ export default function AdminPage() {
   const liveCount = useMemo(() => dayFixtures.filter(isLive).length, [dayFixtures]);
   const finCount = useMemo(() => dayFixtures.filter(isFin).length, [dayFixtures]);
 
-  // ★ FIXED: Use backend API instead of safeWrite for Zoka operations
   const handleZokaSaveDraft = useCallback(async (data) => {
     try {
       await footballApi.adminZokaSaveDraft(date, { payload: data });
@@ -122,7 +121,6 @@ export default function AdminPage() {
       msg: `This will remove ${pubPicks.matches?.length || 0} published pick(s) for ${dateLabel(date)}. Users won't see them anymore.`,
       onYes: async () => {
         try {
-          // ★ FIXED: Use backend API instead of deleteDoc
           await footballApi.adminZokaUnpublish(date);
           queryClient.invalidateQueries(['zokaPicks', date]);
           eventBus.emit(EVENT.ZOKA_PICKS_UPDATED, { dateStr: date, picks: null });
@@ -135,7 +133,6 @@ export default function AdminPage() {
     });
   }, [pubPicks, date, queryClient, showToast]);
 
-  // ★ FIXED: Use backend API instead of safeWrite for Featured operations
   const handleFeaturedAdd = useCallback(async (m) => {
     const match = {
       matchId: String(m.id),
@@ -149,7 +146,6 @@ export default function AdminPage() {
       priority: (preds?.length || 0) + 1,
     };
 
-    // Optimistic update
     await queryClient.cancelQueries(['activePredictions', date]);
     const previousPreds = queryClient.getQueryData(['activePredictions', date]) || [];
     const predId = `feat_${date}_${m.id}`;
@@ -176,7 +172,6 @@ export default function AdminPage() {
     queryClient.setQueryData(['activePredictions', date], updatedPreds);
 
     try {
-      // ★ FIXED: Use backend API instead of deleteDoc
       await footballApi.adminFeaturedRemove(date, matchId);
     } catch (e) {
       showToast('Failed to remove match: ' + (e.friendlyMessage || e.message), 'er');
@@ -186,12 +181,10 @@ export default function AdminPage() {
     }
   }, [date, queryClient, showToast]);
 
-  // ★ FIXED: No more race conditions - just call backend directly
   const handleResolve = useCallback(async (pred, h, a, isAuto = false) => {
     const matchId = String(pred.matchId || pred.id);
 
     try {
-      // Optimistic UI update only (no Firestore writes)
       const updated = preds.map(p =>
         String(p.matchId) === matchId
           ? { ...p, homeScore: h, awayScore: a, status: 'finished', isFinished: true, isResolved: true }
@@ -199,7 +192,6 @@ export default function AdminPage() {
       );
       queryClient.setQueryData(['activePredictions', date], updated);
 
-      // Call backend - it handles everything: active_predictions, leaderboard, zoka_picks, resolution status
       const result = await footballApi.adminResolveMatch({
         matchId,
         matchDate: date,
@@ -207,7 +199,6 @@ export default function AdminPage() {
         awayScore: a,
       });
 
-      // Invalidate all relevant caches
       queryClient.invalidateQueries(['activePredictions']);
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['userPoints'] });
@@ -224,7 +215,6 @@ export default function AdminPage() {
         showToast(msg, 'ok');
       }
     } catch (e) {
-      // Revert optimistic update on failure
       queryClient.invalidateQueries(['activePredictions', date]);
       showToast('Failed to resolve: ' + (e.friendlyMessage || e.message), 'er');
       console.error('[Admin] Resolve err:', e);
@@ -235,13 +225,11 @@ export default function AdminPage() {
     const matchId = String(pred.matchId || pred.id);
 
     try {
-      // Optimistic UI update only
       const updated = preds.map(p =>
         String(p.matchId) === matchId ? { ...p, homeScore: h, awayScore: a } : p
       );
       queryClient.setQueryData(['activePredictions', date], updated);
 
-      // Call backend to handle everything
       await footballApi.adminResolveMatch({
         matchId,
         matchDate: date,
@@ -249,7 +237,6 @@ export default function AdminPage() {
         awayScore: a,
       });
 
-      // Invalidate all caches
       queryClient.invalidateQueries(['activePredictions']);
       queryClient.invalidateQueries({ queryKey: ['leaderboard'] });
       queryClient.invalidateQueries({ queryKey: ['userPoints'] });
@@ -272,7 +259,6 @@ export default function AdminPage() {
       if (period === 'fixtures') {
         await footballApi.adminLeaderboardRebuild('fixtures', date);
         showToast('Finished matches refresh started in background!', 'ok');
-        // Delay invalidation to allow background job to complete
         setTimeout(() => {
           queryClient.invalidateQueries(['fixtures', date]);
           queryClient.invalidateQueries(['results', date]);
@@ -308,7 +294,7 @@ export default function AdminPage() {
           <div className="w-8"></div>
         </div>
 
-        <div className="glass-card flex gap-4 p-8 mb-16 overflow-x-auto">
+        <div className="glass-card admin-tab-bar">
           {TABS.map(t => (
             <button key={t.key} className={`btn btn-sm ${tab === t.key ? 'btn-primary' : 'btn-ghost'}`} onClick={() => setTab(t.key)}>
               <t.icon size={13} /><span className="hidden md:inline">{t.label}</span>
@@ -316,7 +302,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        <div className="glass-card flex gap-8 p-8 mb-16 overflow-x-auto">
+        <div className="glass-card admin-date-bar">
           {defaultDates.map(d => (
             <button key={d} className={`btn btn-sm ${d === date ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setDate(d)}>
               {dateLabel(d)}
@@ -332,7 +318,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-                {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} toast={showToast} />}
+        {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} toast={showToast} />}
         {tab === 'analytics' && <AnalyticsTab toast={showToast} />}
         {tab === 'logs' && <LogsTab />}
         {tab === 'zoka' && <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />}
