@@ -1,5 +1,5 @@
 ﻿import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { 
   Newspaper, X, Clock, MessageCircle, Plus, Pencil, Trash2, 
   Send, Image as ImageIcon, Loader, Sun, Moon, ArrowLeft, Eye, 
