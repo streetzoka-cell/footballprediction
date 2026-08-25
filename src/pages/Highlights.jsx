@@ -329,9 +329,6 @@ function AdminForm({ formData, setFormData, handleSave, saving, uploadingImage, 
   );
 }
 
-function AdSlot({ index }) { 
-  return <div className="ad-slot">Ad {BULLET} slot {index}</div>; 
-}
 
 // --- MAIN COMPONENT ---
 export default function Highlights() {
