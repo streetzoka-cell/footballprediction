@@ -4,7 +4,6 @@ import { BrowserRouter } from "react-router-dom";
 import { HelmetProvider } from "react-helmet-async";
 import App from "./App";
 import "./styles/global.css";
-import "./styles/ZOKA-ULTIMATE-FULL-MIDNIGHT.css";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
