@@ -10,6 +10,7 @@ const INTEL_DIR = path.join(ROOT, 'data', 'intelligence');
 const SEASONAL_DIR = path.join(INTEL_DIR, 'seasonal');
 
 const MASTER_FILE = path.join(DATA_DIR, 'ZOKASCORE_PUBLIC_MASTER.csv');
+const FIX_PROPOSAL_PATH = path.join(ROOT, 'data_audit','canonical_gate','fix-proposals.json');
 const TEAMS_INDEX_FILE = path.join(INDEX_DIR, 'teams-index.json');
 const VALIDATION_FILE = path.join(SEASONAL_DIR, 'validation-report.json');
 
@@ -76,6 +77,9 @@ async function run() {
   if (!fs.existsSync(SEASONAL_DIR)) throw new Error(`Seasonal intelligence directory not found: ${SEASONAL_DIR}`);
   console.log('[1/4] Loading canonical team index...');
   const teamsIndex = JSON.parse(fs.readFileSync(TEAMS_INDEX_FILE, 'utf8'));
+  // Load alias dedup map like 06/07
+  let aliasToKeep = new Map();
+  if(fs.existsSync(FIX_PROPOSAL_PATH)){ try{ const fp=JSON.parse(fs.readFileSync(FIX_PROPOSAL_PATH,'utf8')); for(const g of fp.duplicate_match_ids||[]){ for(const id of g.ids){ if(id!==g.keep) aliasToKeep.set(id,g.keep); } } console.log(`[VALIDATION] Loaded ${fp.duplicate_match_ids?.length||0} duplicate groups - skipping ${aliasToKeep.size} alias IDs`); }catch(e){} }
   const canonicalTeamCount = Object.keys(teamsIndex).length;
   const teamNameToIdMap = new Map(); let ambiguousNameCount = 0;
   const teamNameToIds = new Map();
@@ -96,8 +100,11 @@ async function run() {
   console.log('[2/4] Independently recalculating...');
   const seasonsMap = new Map(); const unresolvedTeams = new Map();
   let totalRows = 0, processedMatches = 0, explicitSeasonRows = 0, derivedSeasonRows = 0, skippedMissingSeason = 0, skippedMissingTeam = 0, skippedUnresolvedTeam = 0, skippedInvalidScore = 0, skippedSelfMatch = 0;
+  let aliasSkipped=0;
   await new Promise((resolve, reject) => {
     fs.createReadStream(MASTER_FILE).pipe(csv()).on('data', row => {
+        const mid = String(row.zokascore_match_id||'').trim();
+        if(aliasToKeep.has(mid)){ aliasSkipped++; return; }
         totalRows++;
         let season = String(row.season ?? '').trim();
         if (season) explicitSeasonRows++; else { season = deriveSeasonFromDate(row.date); if (season) derivedSeasonRows++; else { skippedMissingSeason++; return; } }
@@ -121,7 +128,7 @@ async function run() {
         processedMatches++;
       }).on('end', resolve).on('error', reject);
   });
-  console.log(`   ↳ Independently processed: ${processedMatches.toLocaleString()}`);
+  console.log(`   ↳ Independently processed: ${processedMatches.toLocaleString()} (alias skipped: ${aliasSkipped})`);
   console.log(`   ↳ Skipped self: ${skippedSelfMatch} | Invalid score: ${skippedInvalidScore} | Unresolved team: ${skippedUnresolvedTeam}\n`);
   console.log('[3/4] Comparing against Step 7 artifacts...');
   const mismatches = []; let seasonsExpected = 0, seasonsFound = 0, competitionsExpected = 0, competitionsFound = 0, teamProfilesExpected = 0, teamProfilesFound = 0;
@@ -157,3 +164,4 @@ async function run() {
   console.log(`Report: ${VALIDATION_FILE}\n`);
   if (status === 'FAIL') { console.log('First 5 mismatches:', JSON.stringify(mismatches.slice(0,5), null, 2)); process.exit(1); }
 }
+run().catch(err => { console.error('\n❌ STEP 8 FAILED'); console.error(err); process.exit(1); });
