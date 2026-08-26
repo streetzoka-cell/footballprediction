@@ -1,3 +1,11 @@
+/* =========================================================
+   ZOKASCORE 0-65 MASTER — SHOUTING + CORE — NO KNOCKOUT
+   All steps merged in order. Later files override earlier duplicates.
+   ========================================================= */
+
+
+
+/* ===== ZOKA-00-10-SHOUTING-COLORS-FIXED.css ===== */
 /* ============================================================
    ZOKASCORE — Core Design System — 0-10 SHOUTING COLORS
    Sharp • Clean • Shouting — No Dull Boring Colors
@@ -386,7 +394,7 @@ p { color: var(--text-secondary); line-height: 1.7; }
 .link-text-anim { display: inline-block; animation: zk-text-crossfade 0.35s var(--ease-out) both; }
 
 
-
+/* ===== ZOKA-11-31-SHOUTING.css ===== */
 /* ============================================================
    ZOKASCORE 11-31 — SHOUTING COLORS — SHARP CLEAN — NO KNOCKOUT
    Every selector from your paste kept
@@ -1025,7 +1033,7 @@ p { color: var(--text-secondary); line-height: 1.7; }
 .zk-status-item-badge--err { background: rgba(var(--danger-rgb),0.14); color: var(--danger); border-color: rgba(var(--danger-rgb),0.22); }
 
 
-
+/* ===== ZOKA-32-42-SHOUTING.css ===== */
 /* ============================================================
    ZOKASCORE 32-42 — SHOUTING COLORS + CORE — NO KNOCKOUT
    Every selector from your paste kept
@@ -1422,8 +1430,7 @@ a { text-decoration: none; color: inherit; }
 .dev-code-text { display: flex; align-items: center; gap: var(--sp-8); color: var(--text-muted); font-size: var(--fs-xs); font-family: var(--font-mono); white-space: nowrap; overflow-x: auto; }
 
 
-
-
+/* ===== ZOKA-43-54-SHOUTING.css ===== */
 /* ============================================================
    ZOKASCORE 43-54 — SHOUTING + CORE — NO KNOCKOUT
    Every selector from your paste kept
@@ -1653,6 +1660,23 @@ a { text-decoration: none; color: inherit; }
 .editorial-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--sp-16); }
 .editorial-grid h3 { font-size: var(--fs-sm); font-weight: 800; color: var(--accent); margin-bottom: var(--sp-4); }
 .editorial-grid p { font-size: var(--fs-xs); color: var(--text-secondary); line-height: 1.5; }
+
+/* ========== 47-49 — kept + shouting polish ========== */
+.team-hero-card { padding: var(--sp-24); margin-bottom: var(--sp-20); background: var(--bg-card); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20); box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.08); position: relative; overflow: hidden; }
+.team-hero-card::before{content:''; position:absolute; inset:0 0 auto 0; height:1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);}
+.team-crest-lg { width: 64px; height: 64px; object-fit: contain; filter: drop-shadow(0 4px 12px rgba(0,0,0,0.22)); }
+.team-title { font-size: var(--fs-2xl); font-weight: 900; color: var(--text-primary); margin: 0; letter-spacing: -0.03em; }
+.team-meta { display: flex; align-items: center; gap: var(--sp-12); color: var(--text-muted); font-size: var(--fs-sm); margin-top: var(--sp-4); font-weight: 600; }
+.section-h2 { display: flex; align-items: center; gap: var(--sp-8); font-size: var(--fs-lg); font-weight: 900; color: var(--text-primary); margin-bottom: var(--sp-12); margin-top: var(--sp-24); letter-spacing: -0.02em; }
+.match-row-link { display: flex; justify-content: space-between; align-items: center; padding: var(--sp-12); background: var(--bg-elevated); backdrop-filter: blur(12px); border: 1px solid var(--border); border-radius: var(--r-8); text-decoration: none; color: inherit; transition: all 0.22s; }
+.match-row-link:hover { background: var(--bg-card-hover); border-color: rgba(var(--primary-rgb),0.22); transform: translateX(2px); }
+.match-row-teams { display: flex; align-items: center; gap: var(--sp-8); font-size: var(--fs-sm); font-weight: 700; color: var(--text-primary); }
+.empty-loading { padding: var(--sp-16); text-align: center; color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; }
+
+/* 48-49 already shouted in earlier files — keeping same */
+
+
+/* ===== ZOKA-47-SHOUTING.css ===== */
 /* ========== 47. TEAM PAGE (team-*) — SHOUTING CORE ========== */
 .team-hero-card { padding: var(--sp-24); margin-bottom: var(--sp-20); background: var(--bg-card); backdrop-filter: blur(24px) saturate(200%); -webkit-backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20); box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 32px rgba(var(--primary-rgb),0.08); position: relative; overflow: hidden; transition: all 0.22s; }
 .team-hero-card::before{content:''; position:absolute; inset:0 0 auto 0; height:1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);}
@@ -1667,7 +1691,7 @@ a { text-decoration: none; color: inherit; }
 .empty-loading { padding: var(--sp-16); text-align: center; color: var(--text-muted); font-size: var(--fs-sm); font-weight: 600; }
 
 
-
+/* ===== ZOKA-48-SHOUTING.css ===== */
 /* ========== 48. HOME PAGE (z-*) — SHOUTING CORE ========== */
 .zoka-home { min-height: 100vh; width: 100%; background: var(--bg-deep); overflow-x: hidden; position: relative; }
 .zoka-home::before { content: ''; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background-image: radial-gradient(circle at 20% 30%, rgba(var(--primary-rgb),0.08) 0%, transparent 40%), radial-gradient(circle at 80% 70%, rgba(var(--gold-rgb),0.06) 0%, transparent 40%), radial-gradient(circle at 50% 0%, rgba(var(--accent-rgb),0.06) 0%, transparent 50%); pointer-events: none; z-index: 0; }
@@ -1793,6 +1817,7 @@ a { text-decoration: none; color: inherit; }
 .primary { color: var(--primary); } .danger { color: var(--danger); } .gold { color: var(--gold); } .accent { color: var(--accent); } .muted { color: var(--text-muted); } .bold { font-weight: 800; } .faint { opacity: 0.5; } .rotate-180 { transform: rotate(180deg); } .mx-4 { margin-left: 4px; margin-right: 4px; } .label-xs { font-size: var(--fs-xs); font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; } .section-h2-sm { font-size: var(--fs-base) !important; }
 
 
+/* ===== ZOKA-49-SHOUTING.css ===== */
 /* ========== 49. HOME PAGE MINI-COMPONENTS & FINAL UTILITIES — SHOUTING CORE ========== */
 .z-ticker-wrap { overflow: hidden; border: 1px solid var(--border); border-radius: var(--r-12); background: rgba(0,0,0,0.32); backdrop-filter: blur(16px) saturate(180%); -webkit-mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); mask-image: linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); margin-top: 12px; box-shadow: inset 0 1px 0 rgba(255,255,255,0.06); }
 .z-ticker-track { display: flex; gap: var(--sp-24); width: max-content; padding: 8px 0; animation: zk-marquee 28s linear infinite; }
@@ -1838,7 +1863,7 @@ a { text-decoration: none; color: inherit; }
 .vs { color: var(--text-muted); font-weight: 800; }
 
 
-
+/* ===== ZOKA-50-SHOUTING.css ===== */
 /* ========== 50. LIVESTREAM PAGE (ls-*) — SHOUTING CORE ========== */
 .ls-page { max-width: var(--mobile-width); margin: 0 auto; padding: 0 var(--sp-16); padding-bottom: 80px; position: relative; }
 .ls-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
@@ -1894,7 +1919,7 @@ a { text-decoration: none; color: inherit; }
 .ls-visit-link:hover{color: var(--primary); text-shadow: 0 0 8px rgba(var(--primary-rgb),0.22);}
 
 
-
+/* ===== ZOKA-51-SHOUTING.css ===== */
 /* ========== 51. LOGIN PAGE (login-*) — SHOUTING CORE ========== */
 .login-card { width: 100%; max-width: 420px; margin: 0 auto; padding: var(--sp-24); background: var(--bg-card); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20); box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 32px rgba(var(--primary-rgb),0.08); position: relative; overflow: hidden; }
 .login-card::before{content:''; position:absolute; inset:0 0 auto 0; height:1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);}
@@ -1906,57 +1931,7 @@ a { text-decoration: none; color: inherit; }
 .pass-strength-bar { height: 4px; border-radius: 2px; transition: all 0.32s; box-shadow: 0 0 8px currentColor; }
 
 
-/* ========== 53. MATCH DETAILS PAGE (md-*) — SHOUTING CORE ========== */
-.md-page { max-width: 800px; margin: 0 auto; padding: 0 var(--sp-16); padding-bottom: 80px; position: relative; }
-.md-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
-.md-header-card { background: var(--bg-card); backdrop-filter: blur(24px) saturate(200%); -webkit-backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20); padding: var(--sp-24); margin-bottom: var(--sp-20); position: relative; overflow: hidden; transition: all 0.32s; box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 32px rgba(var(--primary-rgb),0.06); }
-.md-header-card::before{content:''; position:absolute; inset:0 0 auto 0; height:1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);}
-.md-header-card.goal-flash { border-color: rgba(var(--primary-rgb),0.42); box-shadow: 0 0 48px rgba(var(--primary-rgb),0.22), inset 0 1px 0 rgba(255,255,255,0.08); animation: zk-goal-flash 1.2s ease-out; }
-.md-confetti { position: absolute; top: 50%; left: 50%; font-size: 48px; pointer-events: none; animation: zk-confetti 2s ease-out forwards; filter: drop-shadow(0 0 12px rgba(var(--gold-rgb),0.32)); }
-.md-teams { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-16); }
-.md-team { display: flex; flex-direction: column; align-items: center; gap: var(--sp-12); width: 33%; text-align: center; text-decoration: none; color: inherit; min-width: 0; transition: all 0.22s; }
-.md-team:hover{transform: translateY(-2px);}
-.md-team img { width: 64px; height: 64px; object-fit: contain; transition: transform 0.32s cubic-bezier(0.22,1,0.36,1); filter: drop-shadow(0 4px 16px rgba(0,0,0,0.22)); }
-.md-team:hover img { transform: scale(1.12); filter: drop-shadow(0 8px 24px rgba(0,0,0,0.32)) drop-shadow(0 0 16px rgba(var(--primary-rgb),0.18)); }
-.md-team-name { font-size: var(--fs-lg); font-weight: 900; color: var(--text-primary); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; letter-spacing: -0.02em; }
-.md-score-block { display: flex; flex-direction: column; align-items: center; gap: var(--sp-8); width: 33%; flex-shrink: 0; }
-.md-score { font-size: 3rem; font-weight: 900; color: var(--text-primary); font-family: var(--font-display); transition: all 0.32s; line-height: 1; text-shadow: 0 0 24px rgba(var(--primary-rgb),0.12); }
-.md-score.live { color: var(--danger); text-shadow: 0 0 24px rgba(var(--danger-rgb),0.42); }
-.md-score.pop { animation: zk-score-pop 0.6s var(--ease-spring); }
-.md-timeline { height: 6px; background: var(--bg-elevated); border-radius: 3px; margin-top: var(--sp-24); overflow: hidden; position: relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.22); }
-.md-timeline-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--danger)); border-radius: 3px; transition: width 0.5s var(--ease-out); position: relative; box-shadow: 0 0 12px rgba(var(--primary-rgb),0.32); }
-.md-timeline-dot { position: absolute; top: -3px; width: 12px; height: 12px; background: var(--danger); border-radius: 50%; box-shadow: 0 0 12px var(--danger), 0 0 0 3px rgba(var(--danger-rgb),0.22); animation: zk-pulse 1.5s infinite; transform: translateX(-50%); }
-.md-pro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-16); margin-bottom: var(--sp-24); }
-@media (max-width: 640px) { .md-pro-grid { grid-template-columns: 1fr; } }
-.md-mini-title { font-size: var(--fs-sm); font-weight: 900; color: var(--text-primary); margin-bottom: var(--sp-12); display: flex; align-items: center; gap: var(--sp-4); letter-spacing: -0.01em; }
-.md-mini-list { display: flex; flex-direction: column; gap: var(--sp-8); }
-.md-mini-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-sm); padding: var(--sp-4) 0; font-weight: 600; }
-.md-mini-row .rank { font-weight: 900; color: var(--text-muted); width: 20px; }
-.stat-bar-wrap { margin-bottom: var(--sp-12); }
-.stat-bar-label { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-sm); margin-bottom: 4px; font-weight: 700; }
-.stat-val { font-weight: 900; color: var(--text-primary); font-variant-numeric: tabular-nums; width: 30px; text-align: center; }
-.stat-name { color: var(--text-muted); flex: 1; text-align: center; font-weight: 600; }
-.stat-bar-track { height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: var(--bg-elevated); box-shadow: inset 0 1px 3px rgba(0,0,0,0.22); }
-.stat-bar-home { background: linear-gradient(90deg, var(--primary), var(--primary-dim)); transition: width 0.5s ease; box-shadow: 0 0 8px rgba(var(--primary-rgb),0.22); }
-.stat-bar-away { background: linear-gradient(90deg, var(--danger), #FF3B5C); transition: width 0.5s ease; box-shadow: 0 0 8px rgba(var(--danger-rgb),0.22); }
-.ai-preview-card { padding: var(--sp-20); margin-bottom: var(--sp-20); border-left: 3px solid var(--accent); background: var(--bg-card); backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); border-radius: 0 var(--r-16) var(--r-16) 0; box-shadow: var(--shadow-sm), 0 0 20px rgba(var(--accent-rgb),0.08), inset 0 1px 0 rgba(255,255,255,0.04); }
-.ai-preview-title { display: flex; align-items: center; gap: var(--sp-8); font-size: var(--fs-md); font-weight: 900; color: var(--text-primary); margin-bottom: var(--sp-12); }
-.pending-card { display: flex; flex-direction: column; align-items: center; gap: var(--sp-8); padding: var(--sp-24); text-align: center; background: var(--bg-card); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: var(--r-16); box-shadow: var(--shadow-sm); }
-.pending-card h3 { font-size: var(--fs-md); font-weight: 800; color: var(--text-primary); }
-.odds-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-8); }
-.odd-box { background: var(--bg-elevated); backdrop-filter: blur(12px); padding: var(--sp-12); border-radius: var(--r-8); text-align: center; border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); transition: all 0.22s; }
-.odd-box:hover{transform: translateY(-1px); border-color: rgba(var(--primary-rgb),0.22);}
-.odd-box .lbl { font-size: var(--fs-xs); color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; font-weight: 800; letter-spacing: 0.06em; }
-.odd-box .val { font-size: var(--fs-lg); font-weight: 900; color: var(--text-primary); }
-.h2h-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-16); }
-@media (max-width: 640px) { .h2h-grid { grid-template-columns: 1fr; } }
-.h2h-team-title { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-sm); font-weight: 800; color: var(--text-primary); margin-bottom: var(--sp-8); }
-.h2h-list { list-style: none; padding: 0; }
-.h2h-link { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-8) 0; font-size: var(--fs-xs); color: var(--text-secondary); text-decoration: none; border-bottom: 1px solid var(--border); font-weight: 600; transition: all 0.18s; }
-.h2h-link:hover { color: var(--primary); transform: translateX(2px); }
-.h2h-link span { margin-left: auto; font-weight: 800; color: var(--text-primary); }
-
-
+/* ===== ZOKA-52-SHOUTING.css ===== */
 /* ========== 52. MASTER GAMES PAGE (mg-*) — SHOUTING CORE ========== */
 .mg-page { max-width: var(--mobile-width); margin: 0 auto; padding: 0 var(--sp-16); padding-bottom: 80px; position: relative; }
 .mg-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 20% 0%, rgba(var(--primary-rgb),0.10), transparent 60%), radial-gradient(600px 360px at 80% 10%, rgba(var(--accent-rgb),0.08), transparent 60%);}
@@ -2010,8 +1985,59 @@ a { text-decoration: none; color: inherit; }
 .mg-card-footer { display: flex; justify-content: space-between; align-items: center; margin-top: var(--sp-12); padding-top: var(--sp-8); border-top: 1px solid var(--border); font-size: var(--fs-xs); color: var(--text-muted); font-weight: 600; }
 
 
+/* ===== ZOKA-53-SHOUTING.css ===== */
+/* ========== 53. MATCH DETAILS PAGE (md-*) — SHOUTING CORE ========== */
+.md-page { max-width: 800px; margin: 0 auto; padding: 0 var(--sp-16); padding-bottom: 80px; position: relative; }
+.md-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
+.md-header-card { background: var(--bg-card); backdrop-filter: blur(24px) saturate(200%); -webkit-backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20); padding: var(--sp-24); margin-bottom: var(--sp-20); position: relative; overflow: hidden; transition: all 0.32s; box-shadow: var(--shadow-lg), inset 0 1px 0 rgba(255,255,255,0.08), 0 0 32px rgba(var(--primary-rgb),0.06); }
+.md-header-card::before{content:''; position:absolute; inset:0 0 auto 0; height:1px; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.14), transparent);}
+.md-header-card.goal-flash { border-color: rgba(var(--primary-rgb),0.42); box-shadow: 0 0 48px rgba(var(--primary-rgb),0.22), inset 0 1px 0 rgba(255,255,255,0.08); animation: zk-goal-flash 1.2s ease-out; }
+.md-confetti { position: absolute; top: 50%; left: 50%; font-size: 48px; pointer-events: none; animation: zk-confetti 2s ease-out forwards; filter: drop-shadow(0 0 12px rgba(var(--gold-rgb),0.32)); }
+.md-teams { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-16); }
+.md-team { display: flex; flex-direction: column; align-items: center; gap: var(--sp-12); width: 33%; text-align: center; text-decoration: none; color: inherit; min-width: 0; transition: all 0.22s; }
+.md-team:hover{transform: translateY(-2px);}
+.md-team img { width: 64px; height: 64px; object-fit: contain; transition: transform 0.32s cubic-bezier(0.22,1,0.36,1); filter: drop-shadow(0 4px 16px rgba(0,0,0,0.22)); }
+.md-team:hover img { transform: scale(1.12); filter: drop-shadow(0 8px 24px rgba(0,0,0,0.32)) drop-shadow(0 0 16px rgba(var(--primary-rgb),0.18)); }
+.md-team-name { font-size: var(--fs-lg); font-weight: 900; color: var(--text-primary); line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; letter-spacing: -0.02em; }
+.md-score-block { display: flex; flex-direction: column; align-items: center; gap: var(--sp-8); width: 33%; flex-shrink: 0; }
+.md-score { font-size: 3rem; font-weight: 900; color: var(--text-primary); font-family: var(--font-display); transition: all 0.32s; line-height: 1; text-shadow: 0 0 24px rgba(var(--primary-rgb),0.12); }
+.md-score.live { color: var(--danger); text-shadow: 0 0 24px rgba(var(--danger-rgb),0.42); }
+.md-score.pop { animation: zk-score-pop 0.6s var(--ease-spring); }
+.md-timeline { height: 6px; background: var(--bg-elevated); border-radius: 3px; margin-top: var(--sp-24); overflow: hidden; position: relative; box-shadow: inset 0 1px 3px rgba(0,0,0,0.22); }
+.md-timeline-fill { height: 100%; background: linear-gradient(90deg, var(--primary), var(--danger)); border-radius: 3px; transition: width 0.5s var(--ease-out); position: relative; box-shadow: 0 0 12px rgba(var(--primary-rgb),0.32); }
+.md-timeline-dot { position: absolute; top: -3px; width: 12px; height: 12px; background: var(--danger); border-radius: 50%; box-shadow: 0 0 12px var(--danger), 0 0 0 3px rgba(var(--danger-rgb),0.22); animation: zk-pulse 1.5s infinite; transform: translateX(-50%); }
+.md-pro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-16); margin-bottom: var(--sp-24); }
+@media (max-width: 640px) { .md-pro-grid { grid-template-columns: 1fr; } }
+.md-mini-title { font-size: var(--fs-sm); font-weight: 900; color: var(--text-primary); margin-bottom: var(--sp-12); display: flex; align-items: center; gap: var(--sp-4); letter-spacing: -0.01em; }
+.md-mini-list { display: flex; flex-direction: column; gap: var(--sp-8); }
+.md-mini-row { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-sm); padding: var(--sp-4) 0; font-weight: 600; }
+.md-mini-row .rank { font-weight: 900; color: var(--text-muted); width: 20px; }
+.stat-bar-wrap { margin-bottom: var(--sp-12); }
+.stat-bar-label { display: flex; justify-content: space-between; align-items: center; font-size: var(--fs-sm); margin-bottom: 4px; font-weight: 700; }
+.stat-val { font-weight: 900; color: var(--text-primary); font-variant-numeric: tabular-nums; width: 30px; text-align: center; }
+.stat-name { color: var(--text-muted); flex: 1; text-align: center; font-weight: 600; }
+.stat-bar-track { height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: var(--bg-elevated); box-shadow: inset 0 1px 3px rgba(0,0,0,0.22); }
+.stat-bar-home { background: linear-gradient(90deg, var(--primary), var(--primary-dim)); transition: width 0.5s ease; box-shadow: 0 0 8px rgba(var(--primary-rgb),0.22); }
+.stat-bar-away { background: linear-gradient(90deg, var(--danger), #FF3B5C); transition: width 0.5s ease; box-shadow: 0 0 8px rgba(var(--danger-rgb),0.22); }
+.ai-preview-card { padding: var(--sp-20); margin-bottom: var(--sp-20); border-left: 3px solid var(--accent); background: var(--bg-card); backdrop-filter: blur(20px) saturate(180%); border-top: 1px solid var(--border); border-right: 1px solid var(--border); border-bottom: 1px solid var(--border); border-radius: 0 var(--r-16) var(--r-16) 0; box-shadow: var(--shadow-sm), 0 0 20px rgba(var(--accent-rgb),0.08), inset 0 1px 0 rgba(255,255,255,0.04); }
+.ai-preview-title { display: flex; align-items: center; gap: var(--sp-8); font-size: var(--fs-md); font-weight: 900; color: var(--text-primary); margin-bottom: var(--sp-12); }
+.pending-card { display: flex; flex-direction: column; align-items: center; gap: var(--sp-8); padding: var(--sp-24); text-align: center; background: var(--bg-card); backdrop-filter: blur(16px); border: 1px solid var(--border); border-radius: var(--r-16); box-shadow: var(--shadow-sm); }
+.pending-card h3 { font-size: var(--fs-md); font-weight: 800; color: var(--text-primary); }
+.odds-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp-8); }
+.odd-box { background: var(--bg-elevated); backdrop-filter: blur(12px); padding: var(--sp-12); border-radius: var(--r-8); text-align: center; border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,255,255,0.04); transition: all 0.22s; }
+.odd-box:hover{transform: translateY(-1px); border-color: rgba(var(--primary-rgb),0.22);}
+.odd-box .lbl { font-size: var(--fs-xs); color: var(--text-muted); text-transform: uppercase; margin-bottom: 4px; font-weight: 800; letter-spacing: 0.06em; }
+.odd-box .val { font-size: var(--fs-lg); font-weight: 900; color: var(--text-primary); }
+.h2h-grid { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-16); }
+@media (max-width: 640px) { .h2h-grid { grid-template-columns: 1fr; } }
+.h2h-team-title { display: flex; align-items: center; gap: var(--sp-4); font-size: var(--fs-sm); font-weight: 800; color: var(--text-primary); margin-bottom: var(--sp-8); }
+.h2h-list { list-style: none; padding: 0; }
+.h2h-link { display: flex; align-items: center; gap: var(--sp-4); padding: var(--sp-8) 0; font-size: var(--fs-xs); color: var(--text-secondary); text-decoration: none; border-bottom: 1px solid var(--border); font-weight: 600; transition: all 0.18s; }
+.h2h-link:hover { color: var(--primary); transform: translateX(2px); }
+.h2h-link span { margin-left: auto; font-weight: 800; color: var(--text-primary); }
 
 
+/* ===== ZOKA-54-SHOUTING.css ===== */
 /* ========== 54. PROFILE PAGE (pro-*) — SHOUTING CORE ========== */
 .pro-page { min-height: 100vh; width: 100%; background: var(--bg-deep); overflow-x: hidden; padding-bottom: 80px; position: relative; }
 .pro-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.10), transparent 60%), radial-gradient(600px 360px at 85% 20%, rgba(var(--accent-rgb),0.08), transparent 60%);}
@@ -2076,7 +2102,7 @@ a { text-decoration: none; color: inherit; }
 .pro-cta-actions { display: flex; gap: var(--sp-8); flex-wrap: wrap; justify-content: center; margin-top: var(--sp-8); }
 
 
-
+/* ===== ZOKA-55-SHOUTING.css ===== */
 /* ========== 55. RESULTS PAGE (res-*) — SHOUTING CORE ========== */
 .res-page { max-width: 800px; margin: 0 auto; padding: var(--sp-24) var(--sp-16); padding-bottom: 80px; position: relative; }
 .res-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
@@ -2104,6 +2130,7 @@ a { text-decoration: none; color: inherit; }
 .res-score-sep { color: var(--text-muted); font-size: var(--fs-sm); }
 
 
+/* ===== ZOKA-56-SHOUTING.css ===== */
 /* ========== 56. PREDICTIONS V21 (v21-*, pred-*) — SHOUTING CORE ========== */
 .pred-page { min-height: 100vh; width: 100%; background: var(--bg-deep); padding-bottom: var(--sp-32); overflow-x: hidden; position: relative; }
 .pred-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%), radial-gradient(600px 360px at 80% 20%, rgba(var(--gold-rgb),0.06), transparent 60%);}
@@ -2218,8 +2245,7 @@ a { text-decoration: none; color: inherit; }
 .beat-badge { font-size: 9px; background: linear-gradient(135deg, var(--gold), #FFA600); color: #000; padding: 3px 7px; border-radius: 4px; font-weight: 900; box-shadow: 0 0 12px rgba(var(--gold-rgb),0.22); letter-spacing: 0.06em; }
 
 
-
-
+/* ===== ZOKA-57-SHOUTING.css ===== */
 /* ========== 57. COMPANY & SUPPORT PAGES — SHOUTING CORE ========== */
 .company-page { max-width: 860px; margin: 0 auto; padding: var(--sp-24) var(--sp-16); padding-bottom: 80px; position: relative; }
 .company-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
@@ -2279,7 +2305,7 @@ a { text-decoration: none; color: inherit; }
 .dir-link:hover { color: var(--primary); transform: translateY(-2px); border-color: rgba(var(--primary-rgb),0.28); box-shadow: 0 8px 20px rgba(var(--primary-rgb),0.12); background: rgba(var(--primary-rgb),0.06); }
 
 
-
+/* ===== ZOKA-58-SHOUTING.css ===== */
 /* ========== 58. ADMIN PAGE UTILITIES & STYLES — SHOUTING CORE ========== */
 .admin-grid-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-12); }
 .admin-grid-150 { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--sp-12); }
@@ -2306,6 +2332,7 @@ a { text-decoration: none; color: inherit; }
 .admin-date-bar::-webkit-scrollbar { display: none; }
 
 
+/* ===== ZOKA-59-SHOUTING.css ===== */
 /* ========== 59. MATCH CARD & INTELLIGENCE FIXES — SHOUTING CORE ========== */
 .relative { position: relative; }
 .border-top { border-top: 1px solid var(--border); }
@@ -2373,6 +2400,7 @@ a { text-decoration: none; color: inherit; }
 .prob-away { background: linear-gradient(90deg, var(--danger), #FF3B5C); box-shadow: 0 0 8px rgba(var(--danger-rgb),0.22); }
 
 
+/* ===== ZOKA-60-SHOUTING.css ===== */
 /* ========== 60. ZOKA STUDIO (zs-*) — SHOUTING CORE ========== */
 .zs-home-page { min-height: 100dvh; background: var(--bg-deep); color: var(--text-primary); padding: max(24px, env(safe-area-inset-top)) 16px max(32px, env(safe-area-inset-bottom)); overflow-x: hidden; position: relative; }
 .zs-home-page::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:-1; background: radial-gradient(700px 420px at 30% 0%, rgba(var(--primary-rgb),0.10), transparent 60%), radial-gradient(600px 360px at 80% 10%, rgba(var(--accent-rgb),0.08), transparent 60%);}
@@ -2411,6 +2439,7 @@ a { text-decoration: none; color: inherit; }
 .zs-vs-text { font-size: 0.75rem; color: var(--text-muted); text-transform: uppercase; font-weight: 900; letter-spacing: 0.06em; }
 
 
+/* ===== ZOKA-61-SHOUTING.css ===== */
 /* ========== 61. STUDIO ASSET PANELS (studio-*) — SHOUTING CORE ========== */
 .studio-panel-container { background: var(--bg-elevated); backdrop-filter: blur(20px) saturate(180%); border: 1px solid var(--border); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 16px; box-shadow: var(--shadow-md), inset 0 1px 0 rgba(255,255,255,0.06); }
 .studio-panel-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border); padding-bottom: 12px; }
@@ -2437,7 +2466,7 @@ a { text-decoration: none; color: inherit; }
 .studio-action-sub { font-size: 0.65rem; color: var(--text-muted); font-weight: 600; }
 
 
-
+/* ===== ZOKA-62-SHOUTING.css ===== */
 /* ========== 62. REACTOR & MEDIA STUDIO (ms-*) — SHOUTING CORE ========== */
 .ms-container { position: fixed; inset: 0; z-index: 9999; display: flex; flex-direction: column; width: 100%; height: 100dvh; background: #0a0f1a; color: #fff; overflow: hidden; }
 .ms-topbar { padding: 16px; background: #111827; backdrop-filter: blur(16px); display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #1f2937; z-index: 10; box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset; }
@@ -2463,6 +2492,7 @@ a { text-decoration: none; color: inherit; }
 .ms-filter-btn.active-gold { background: linear-gradient(135deg, #f59e0b, #d97706); color: #fff; border-color: rgba(245,158,11,0.22); box-shadow: 0 4px 16px rgba(245,158,11,0.22); }
 
 
+/* ===== ZOKA-63-SHOUTING.css ===== */
 /* ========== 63. FACE AR STUDIO (ar-*) — SHOUTING CORE ========== */
 .ar-studio-container { display: flex; flex-direction: column; height: 100dvh; background: #0a0f1a; color: #fff; overflow: hidden; }
 .ar-topbar { height: 56px; padding: 0 16px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid #1f2937; background: #111827; backdrop-filter: blur(16px); flex-shrink: 0; z-index: 10; box-shadow: 0 1px 0 rgba(255,255,255,0.06) inset; }
@@ -2486,7 +2516,7 @@ a { text-decoration: none; color: inherit; }
 .ar-rec-badge { position: absolute; top: 16px; right: 16px; background: rgba(239,68,68,0.92); backdrop-filter: blur(12px); padding: 4px 12px; border-radius: 20px; display: flex; align-items: center; gap: 6px; font-size: 11px; font-weight: 900; box-shadow: 0 0 16px rgba(239,68,68,0.32); animation: zk-pulse 1.5s infinite; }
 
 
-
+/* ===== ZOKA-64-SHOUTING.css ===== */
 /* ========== 64. STUDIO EDITOR (zs-*) — SHOUTING CORE ========== */
 .zs-editor-container { display: flex; flex-direction: column; height: 100dvh; background: var(--bg-deep); color: var(--text-primary); overflow: hidden; position: relative; }
 .zs-editor-container::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:0; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
@@ -2548,7 +2578,7 @@ a { text-decoration: none; color: inherit; }
 .zs-spin { animation: zk-spin 1s linear infinite; }
 
 
-
+/* ===== ZOKA-65-SHOUTING.css ===== */
 /* ========== 65. WEB SHOWCASE STUDIO (wss-*) — SHOUTING CORE ========== */
 .wss-container { display: flex; flex-direction: column; height: 100dvh; background: var(--bg-deep); color: var(--text-primary); overflow: hidden; position: relative; }
 .wss-container::before{content:''; position:fixed; inset:0; pointer-events:none; z-index:0; background: radial-gradient(700px 420px at 50% 0%, rgba(var(--primary-rgb),0.08), transparent 60%);}
