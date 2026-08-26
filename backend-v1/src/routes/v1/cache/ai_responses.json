@@ -43,5 +43,10 @@
     "reply": "Haha, I hear you! 😹 Message received loud and clear—it's time for ZOKASCORE to lock in and get serious! \n\nEven if the featured board is looking a bit empty right now, we can still get you those points. If there's *any* match you're eyeing today—whether it's Premier League, Champions League, or a local derby—just drop the team names right here. \n\nTell me who's playing, and we'll break down the tactics and get those predictions sorted. Who do you want to talk about?",
     "model": "gemini-gemini-3.5-flash",
     "timestamp": 1786749438322
+  },
+  "PrJH43f046P1YMaNKVXDDqFj3n22:ok": {
+    "reply": "Hey there, **zoka street**! Welcome back. \n\nI see you mentioned the **4-3-3** formation earlier! That is one of the most iconic, fluid, and attacking setups in modern football, famous for its wing play, high pressing, and midfield dominance (perfected by teams like Pep Guardiola's Barcelona and Jürgen Klopp's Liverpool). \n\nSince we don't have deep match-specific data to make concrete predictions today, we can dive into football theory! What would you like to discuss?\n*   The strengths and weaknesses of the **4-3-3** (and how to counter it)?\n*   General football tactics, player roles (like the *Regista* or *inverted winger*), or training drills?\n*   Football history and legendary teams?\n\nLet me know how you want to kick things off!",
+    "model": "gemini-gemini-3.5-flash",
+    "timestamp": 1787772292177
   }
 }
