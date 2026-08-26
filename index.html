@@ -3,14 +3,36 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
-
   <meta name="application-name" content="ZOKASCORE" />
   <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark light" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
 
-  <title>ZOKASCORE - Live Football Scores, AI Predictions & News</title>
-  <meta name="description" content="Get live football scores, fixtures, AI-powered match predictions, and breaking news from leagues worldwide on ZOKASCORE." />
+  <!-- ★ FIXED TITLE - LIKE SOFASCORE -->
+  <title>Football Live Scores, Fixtures, Results & AI Predictions | ZOKASCORE</title>
+  <meta name="description" content="Live football scores, today's fixtures, results, Premier League table, La Liga, Champions League standings, H2H stats and free AI football predictions on ZOKASCORE." />
+  <link rel="canonical" href="https://zokascore.xyz/" />
+
+  <meta name="keywords" content="live scores, football live scores, today's fixtures, premier league, la liga, champions league, results, standings, h2h, football predictions, zokascore, zokacore, zoka score" />
+
+  <!-- ★ OG - MUST EXIST FOR SSR TO REPLACE -->
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="ZOKASCORE" />
+  <meta property="og:locale" content="en_GB" />
+  <meta property="og:title" content="Football Live Scores, Fixtures, Results & AI Predictions | ZOKASCORE" />
+  <meta property="og:description" content="Live football scores, today's fixtures, results, standings and AI predictions." />
+  <meta property="og:url" content="https://zokascore.xyz/" />
+  <meta property="og:image" content="https://zokascore.xyz/og-image.png" />
+  <meta property="og:image:secure_url" content="https://zokascore.xyz/og-image.png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:site" content="@zokascore" />
+  <meta name="twitter:creator" content="@zokascore" />
+  <meta name="twitter:title" content="Football Live Scores, Fixtures, Results & AI Predictions | ZOKASCORE" />
+  <meta name="twitter:description" content="Live football scores, fixtures and AI predictions." />
+  <meta name="twitter:image" content="https://zokascore.xyz/og-image.png" />
 
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -18,45 +40,45 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 
   <link rel="manifest" href="/manifest.webmanifest" />
-
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-
   <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="ZOKASCORE" />
-  <link rel="sitemap" type="application/xml" href="/zokascore-sitemap.xml" />
 
-  <!-- ★ CORE WEB VITALS: Preload Critical Font & API DNS -->
-  <link rel="preload" href="https://fonts.gstatic.com/s/inter/v18/UcCO3FwrK3iLTeHuS_nVMrMxCp50SjIw2boKoduKmMEVuLyfAZ9hiA.woff2" as="font" type="font/woff2" crossorigin />
-  
   <link rel="dns-prefetch" href="//fonts.googleapis.com" />
   <link rel="dns-prefetch" href="//fonts.gstatic.com" />
   <link rel="dns-prefetch" href="//api.zokascore.xyz" />
-
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://api.zokascore.xyz" crossorigin />
 
-  <link rel="preload" href="/loader.css" as="style" />
-  <link rel="stylesheet" href="/loader.css" />
-
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-  <script type="application/ld+json" id="default-schema">
-    {
-      "@context": "https://schema.org",
-      "@type": "WebSite",
-      "name": "ZOKASCORE",
-      "url": "https://zokascore.xyz",
-      "potentialAction": {
-        "@type": "SearchAction",
-        "target": "https://zokascore.xyz/search?q={search_term_string}",
-        "query-input": "required name=search_term_string"
-      }
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "WebSite",
+    "name": "ZOKASCORE",
+    "alternateName": ["ZOKACORE", "Zoka Score", "ZokaScore Football"],
+    "url": "https://zokascore.xyz",
+    "potentialAction": {
+      "@type": "SearchAction",
+      "target": "https://zokascore.xyz/search?q={search_term_string}",
+      "query-input": "required name=search_term_string"
     }
+  }
+  </script>
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "Organization",
+    "name": "ZOKASCORE",
+    "url": "https://zokascore.xyz",
+    "logo": "https://zokascore.xyz/icons/icon-512.png",
+    "sameAs": ["https://twitter.com/zokascore", "https://www.facebook.com/61593201145808", "https://www.tiktok.com/@zokascore"]
+  }
   </script>
 
-  <!-- Google Analytics -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -64,58 +86,25 @@
     gtag('js', new Date());
     gtag('config', 'G-GZ2JTNKCCN');
   </script>
-
-  <!-- Google AdSense -->
-  <script async
-    src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820100355705138"
-    crossorigin="anonymous"></script>
+  <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-4820100355705138" crossorigin="anonymous"></script>
 </head>
-
 <body>
   <noscript>
-    <div class="zk-noscript">
-      <img src="/icons/icon-192.png" alt="ZOKASCORE" width="80" height="80" />
-      <h1>ZOKASCORE</h1>
-      <p>ZOKASCORE requires JavaScript. Please enable it in your browser settings.</p>
-    </div>
+    <h1>Football Live Scores, Fixtures, Results & Predictions - ZOKASCORE</h1>
+    <p>Live football scores and today's fixtures from Premier League, La Liga, Serie A, Bundesliga, Champions League. AI predictions, H2H, standings.</p>
+    <nav>
+      <a href="/fixtures">Today's Fixtures</a>
+      <a href="/results">Results</a>
+      <a href="/predictions">Predictions</a>
+      <a href="/league/39/premier-league">Premier League 2026/2027</a>
+      <a href="/league/140/la-liga">La Liga</a>
+      <a href="/league/2/champions-league">Champions League</a>
+      <a href="/league/78/bundesliga">Bundesliga</a>
+      <a href="/league/135/serie-a">Serie A</a>
+    </nav>
   </noscript>
-
-  <div id="static-loader" role="status" aria-live="polite">
-    <div class="loader-ball">⚽</div>
-    <div class="loader-text">ZOKASCORE</div>
-    <div class="loader-bar"><div class="loader-bar-fill"></div></div>
-    <div id="loader-status-text" class="loader-status-text">Initializing...</div>
-  </div>
-
+  <div id="static-loader"><div class="loader-ball">⚽</div><div class="loader-text">ZOKASCORE</div></div>
   <div id="root"></div>
-
-  <noscript>
-    <div class="zk-noscript" style="max-width: 800px;">
-      <h1>Live Football Scores, Fixtures, Results & Predictions</h1>
-      <p>Welcome to ZOKASCORE. Track today's football fixtures, make AI-powered predictions, and follow live scores from leagues worldwide.</p>
-      <nav aria-label="Primary Navigation">
-        <a href="/fixtures">Today's Fixtures</a>
-        <a href="/predictions">Match Predictions</a>
-        <a href="/league/39/premier-league">Premier League</a>
-        <a href="/league/140/la-liga">La Liga</a>
-        <a href="/league/2/champions-league">Champions League</a>
-        <a href="/team/33/manchester-united">Manchester United</a>
-        <a href="/team/541/real-madrid">Real Madrid</a>
-      </nav>
-    </div>
-  </noscript>
-
-  <script>
-    (function() {
-      var t = document.getElementById('loader-status-text');
-      var l = document.getElementById('static-loader');
-      if (!navigator.onLine) { if(t) t.textContent='You are offline. Reconnect to load ZOKASCORE.'; return; }
-      var msgs=['Loading Live Matches...','Synchronizing Fixtures...','Preparing Predictions...','Fetching Leaderboards...'];
-      var i=0; var iv=setInterval(function(){if(i<msgs.length){if(t)t.textContent=msgs[i];i++;}else clearInterval(iv);},1500);
-      setTimeout(function(){if(!document.getElementById('root').children.length&&l&&t){t.innerHTML='Taking longer than usual. <a href="/" style="color:#16c784;text-decoration:underline;font-weight:700;">Retry</a>';}},10000);
-    })();
-  </script>
-
   <script type="module" src="/src/main.jsx"></script>
 </body>
 </html>
