@@ -1,3 +1,86 @@
+/* MIDNIGHT MAIN + GLASSY TACTILE PRO */
+:root,[data-theme="midnight"]{
+  --bg-deep:#05070a; --bg-deep-rgb:5,7,10; --bg-surface:#0a0f1a;
+  --bg-card:rgba(16,24,40,0.82); --bg-card-hover:rgba(22,32,56,0.92);
+  --bg-elevated:rgba(24,36,64,0.72); --bg-glass:rgba(16,24,40,0.72);
+  --bg-glass-strong:rgba(10,15,26,0.86); --glass-border:rgba(255,255,255,0.08);
+  --glass-blur:24px; --border:rgba(255,255,255,0.08); --border-hover:rgba(255,255,255,0.14);
+  --text-primary:#f8fafc; --text-secondary:#94a3b8; --text-muted:#64748b; --text-inverse:#05070a;
+  --primary:#10b981; --primary-rgb:16,185,129; --primary-dim:#059669;
+  --accent:#38bdf8; --accent-rgb:56,189,248; --danger:#ef4444; --danger-rgb:239,68,68;
+  --gold:#f59e0b; --gold-rgb:245,158,11; --warning:#f59e0b; --success:#10b981;
+  --mobile-width:480px; --r-8:8px; --r-12:12px; --r-16:16px; --r-20:20px; --r-24:24px;
+  --sp-8:8px; --sp-12:12px; --sp-16:16px; --sp-24:24px; --sp-32:32px;
+  --z-sticky:50; --ease-out:cubic-bezier(0.22,1,0.36,1);
+  --shadow-sm:0 2px 8px rgba(0,0,0,0.22); --shadow-md:0 8px 24px rgba(0,0,0,0.28);
+  --shadow-lg:0 16px 48px rgba(0,0,0,0.38); --shadow-xl:0 24px 64px rgba(0,0,0,0.48);
+  --shadow-primary:0 8px 24px rgba(var(--primary-rgb),0.28);
+}
+*{box-sizing:border-box; -webkit-tap-highlight-color:transparent}
+html{scroll-behavior:smooth; background:var(--bg-deep)}
+body{margin:0; font-family:Inter,system-ui,sans-serif; background:var(--bg-deep); color:var(--text-primary); -webkit-font-smoothing:antialiased}
+#root{min-height:100vh}
+
+/* GLASS REAL */
+.glass-card,[class*="-card"],.team-hero-card,.bb-game-card,.news-card,.lb-row,.pro-header-card,.md-header-card,.ls-live-hero,.zs-tool-card{
+  background:linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02)), var(--bg-card) !important;
+  backdrop-filter:blur(24px) saturate(200%) !important; -webkit-backdrop-filter:blur(24px) saturate(200%) !important;
+  border:1px solid var(--glass-border) !important;
+  box-shadow:0 8px 32px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.10), 0 0 0 1px rgba(255,255,255,0.04) inset, 0 0 40px rgba(var(--primary-rgb),0.06) !important;
+  position:relative;
+}
+.glass-card::before,[class*="-card"]::before{content:''; position:absolute; inset:0 0 auto 0; height:1.5px; background:linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent); pointer-events:none}
+
+/* BUTTONS PRO */
+button{cursor:pointer; touch-action:manipulation; will-change:transform; transition:all 0.22s cubic-bezier(0.22,1,0.36,1)}
+button:hover{transform:translateY(-1px); filter:brightness(1.08)}
+button:active{transform:translateY(1px) scale(0.98); filter:brightness(0.92); transition-duration:0.08s}
+.zoka-ai-fab,.z-cta,.wss-btn-accent,.zs-btn-primary{background:linear-gradient(135deg, var(--primary), var(--primary-dim)) !important; border:1px solid rgba(255,255,255,0.18) !important; box-shadow:0 8px 24px rgba(var(--primary-rgb),0.32), inset 0 1px 0 rgba(255,255,255,0.32) !important; font-weight:900 !important}
+
+/* PAGE BREAK */
+@keyframes z-page-break{0%{transform:scale(1); filter:blur(0); opacity:1}100%{transform:scale(1.08) translateY(-12px); filter:blur(16px) brightness(1.3); opacity:0}}
+.breaking{animation:z-page-break 0.38s cubic-bezier(0.4,0,0.6,1) forwards !important}
+@keyframes z-page-enter{0%{transform:scale(0.96) translateY(12px); filter:blur(12px); opacity:0}100%{transform:scale(1); filter:blur(0); opacity:1}}
+.app-layout{animation:z-page-enter 0.42s cubic-bezier(0.22,1,0.36,1) both}
+
+/* LOADER FIX */
+#static-loader,.zoka-loader-container{position:fixed; inset:0; z-index:9999; display:flex; align-items:center; justify-content:center; background:radial-gradient(800px 500px at 50% 0%, rgba(var(--primary-rgb),0.14), transparent 60%), var(--bg-deep)}
+.loader-ball,.zoka-loader-content{display:flex; flex-direction:column; align-items:center; gap:16px}
+.loader-ball{font-size:48px; animation:zk-bounce 1.2s infinite; filter:drop-shadow(0 0 16px rgba(var(--primary-rgb),0.32))}
+.loader-text{font-weight:900; letter-spacing:0.14em; color:var(--text-primary); font-size:14px}
+.zoka-loader-progress-outer{width:120px; height:4px; background:rgba(255,255,255,0.08); border-radius:4px; overflow:hidden; box-shadow:inset 0 1px 3px rgba(0,0,0,0.32)}
+.zoka-loader-progress-inner{height:100%; background:linear-gradient(90deg, var(--primary), #34FFA3); border-radius:4px; animation:zk-load 1.4s ease-in-out infinite; box-shadow:0 0 12px rgba(var(--primary-rgb),0.42)}
+.zk-page-loader{padding:24px}
+.zk-page-loader-skeleton{display:flex; flex-direction:column; gap:12px; max-width:400px}
+.zk-page-loader-skeleton-bar{height:16px; border-radius:8px; background:linear-gradient(90deg, var(--bg-elevated), rgba(255,255,255,0.06), var(--bg-elevated)); background-size:200% 100%; animation:zk-shimmer 1.2s infinite}
+.zk-page-loader-skeleton-bar--lg{height:24px; width:70%}
+.zk-page-loader-skeleton-bar--md{width:90%}
+.zk-page-loader-skeleton-bar--sm{width:60%}
+@keyframes zk-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes zk-shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+@keyframes zk-load{0%{width:0; transform:translateX(0)}50%{width:60%; transform:translateX(20%)}100%{width:0; transform:translateX(100%)}}
+@keyframes zk-fade-up{0%{transform:translateY(12px); opacity:0}100%{transform:translateY(0); opacity:1}}
+
+/* THEME SWITCHER */
+.theme-switcher-wrapper{position:relative}
+.theme-switcher-trigger{width:36px; height:36px; border-radius:10px; background:var(--bg-card); backdrop-filter:blur(16px); border:1px solid var(--border); display:flex; align-items:center; justify-content:center; font-size:18px; cursor:pointer; transition:all 0.22s}
+.theme-switcher-trigger:hover{border-color:rgba(var(--primary-rgb),0.32); transform:translateY(-1px)}
+.theme-switcher-popover{position:absolute; top:42px; right:0; min-width:160px; background:var(--bg-glass-strong); backdrop-filter:blur(24px) saturate(200%); border:1px solid var(--glass-border); border-radius:12px; padding:6px; box-shadow:var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08); z-index:100; animation:zk-fade-up 0.22s both}
+.theme-switcher-option{width:100%; display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:8px; background:transparent; border:1px solid transparent; color:var(--text-secondary); font-weight:700; font-size:13px; cursor:pointer; transition:all 0.18s; text-align:left}
+.theme-switcher-option:hover{background:rgba(255,255,255,0.06); color:var(--text-primary)}
+.theme-switcher-option--active{background:rgba(var(--primary-rgb),0.12); color:var(--primary); border-color:rgba(var(--primary-rgb),0.24)}
+
+/* PageLayout */
+.pl-progress-bar{position:fixed; top:0; left:0; right:0; height:3px; background:rgba(255,255,255,0.06); z-index:9999}
+.pl-progress-fill{height:100%; background:linear-gradient(90deg, var(--primary), var(--accent)); box-shadow:0 0 12px rgba(var(--primary-rgb),0.42); transition:width 0.1s linear}
+.app-layout{display:flex; flex-direction:column; min-height:100vh}
+.main-content{flex:1; max-width:860px; width:100%; margin:0 auto; padding:0 0 80px}
+.zoka-ai-fab{position:fixed; bottom:20px; right:20px; width:52px; height:52px; border-radius:50%; background:linear-gradient(135deg, var(--primary), var(--accent)); border:1px solid rgba(255,255,255,0.18); color:#fff; display:flex; align-items:center; justify-content:center; box-shadow:0 8px 24px rgba(var(--primary-rgb),0.32), inset 0 1px 0 rgba(255,255,255,0.22); cursor:pointer; z-index:90; transition:all 0.22s}
+.zoka-ai-fab:hover{transform:translateY(-2px) scale(1.06)}
+.flex-center{display:flex; align-items:center; justify-content:center}
+.text-muted{color:var(--text-muted)} .text-xs{font-size:11px}
+
+
 /* =========================================================
    ZOKASCORE 0-65 MASTER — SHOUTING + CORE — NO KNOCKOUT
    All steps merged in order. Later files override earlier duplicates.
@@ -2625,3 +2708,150 @@ a { text-decoration: none; color: inherit; }
 .wss-modal-sheet { width: 100%; max-width: 500px; max-height: 80vh; background: var(--bg-surface); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20) var(--r-20) 0 0; padding: 24px 16px; overflow-y: auto; animation: zk-fade-up 0.32s var(--ease-out); box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08); }
 .wss-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .wss-modal-title { font-size: 18px; font-weight: 900; color: var(--text-primary); margin: 0; letter-spacing: -0.02em; }
+
+
+/* ============================================================
+   ZOKA GLASSY TACTILE PRO — Feel it with hand
+   Layer this AFTER your MASTER 0-65
+   - Real glass depth (not flat blur)
+   - Pro smooth buttons (spring + press + ripple)
+   - Break-to-next-page tap animation
+   ============================================================ */
+
+/* ---------- 1. REAL GLASS BASE — 3 layers ---------- */
+:root{
+  --glass-real: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+  --glass-edge: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.22);
+  --glass-depth: 0 8px 32px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 40px rgba(var(--primary-rgb),0.06);
+}
+
+/* Make every card feel like thick glass */
+[class*="-card"], [class*="-box"], .team-hero-card, .bb-game-card, .news-card, .lb-row, .res-match-card, .mg-match-card, .v21-mc, .company-card, .company-mini-card, .intel-card, .zs-tool-card, .zs-project-card, .studio-panel-container, .wss-panel, .ls-service-card, .ls-upcoming-card, .pro-header-card, .pro-stat-card, .pro-season-card, .fk-card, .md-header-card {
+  background-image: var(--glass-real) !important;
+  backdrop-filter: blur(24px) saturate(200%) !important;
+  -webkit-backdrop-filter: blur(24px) saturate(200%) !important;
+  box-shadow: var(--glass-depth), var(--glass-edge) !important;
+  position: relative;
+}
+[class*="-card"]::after, [class*="-box"]::after{
+  content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.08) 40%, transparent 60%);
+  opacity:0.6; mix-blend-mode: overlay;
+}
+
+/* Frost edge highlight — top 1px super visible */
+[class*="-card"]::before{
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent) !important;
+  height:1.5px !important;
+}
+
+/* ---------- 2. PRO SMOOTH BUTTONS — feel it ---------- */
+button, .z-ha-btn, .z-dc-btn, .v21-fbtn, .v21-dc, .filter-row button, .ls-filter-row button, .z-cta, .zs-btn-primary, .wss-btn, .wss-btn-accent, .v21-banner-btn, .login-card button, .z-toggle, .z-lbrow, .match-row-link, .res-match-card, .mg-match-card, .v21-mc, .company-link, .dir-link {
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  transition: all 0.22s cubic-bezier(0.22,1,0.36,1) !important;
+  will-change: transform, box-shadow, filter;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Hover lift — pro smooth */
+button:hover, .z-cta:hover, .wss-btn-accent:hover, .zs-btn-primary:hover, .v21-banner-btn:hover {
+  transform: translateY(-2px) scale(1.01) !important;
+  filter: brightness(1.12) saturate(1.1);
+  box-shadow: 0 12px 32px rgba(var(--primary-rgb),0.32), inset 0 1px 0 rgba(255,255,255,0.24) !important;
+}
+
+/* ACTIVE PRESS — hand feel */
+button:active, .z-cta:active, .wss-btn:active, .zs-btn-primary:active, .res-match-card:active, .mg-match-card:active, .v21-mc:active, .news-card:active, .zoka-teams:active, .bb-game-card:active {
+  transform: translateY(1px) scale(0.98) !important;
+  filter: brightness(0.92);
+  transition-duration: 0.08s !important;
+}
+
+/* Ripple on tap */
+button::after, .z-cta::after, .wss-btn-accent::after {
+  content:''; position:absolute; left:50%; top:50%; width:0; height:0; border-radius:50%;
+  background: rgba(255,255,255,0.22); transform: translate(-50%,-50%); pointer-events:none;
+  transition: width 0.42s ease, height 0.42s ease, opacity 0.42s ease;
+  opacity:0;
+}
+button:active::after, .z-cta:active::after, .wss-btn-accent:active::after {
+  width: 240%; height: 240%; opacity: 1; transition: 0s;
+}
+
+/* Primary buttons — extra pro */
+.z-cta, .wss-btn-accent, .zs-btn-primary, .v21-banner-btn, .z-dc-btn, .z-ha-btn.primary, .v21-fbtn.on, .v21-dc.on {
+  background: linear-gradient(135deg, var(--primary), var(--primary-dim)) !important;
+  border: 1px solid rgba(255,255,255,0.18) !important;
+  box-shadow: 0 8px 24px rgba(var(--primary-rgb),0.32), inset 0 1px 0 rgba(255,255,255,0.32), inset 0 -1px 0 rgba(0,0,0,0.18) !important;
+  font-weight: 900 !important;
+  letter-spacing: -0.01em;
+}
+.z-cta:hover::before, .wss-btn-accent:hover::before {
+  content:''; position:absolute; inset:0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.18), transparent);
+  animation: z-shine 0.8s ease;
+}
+
+/* Secondary glass buttons */
+.z-ha-btn, .v21-fbtn, .filter-row button, .ls-filter-row button, .z-toggle, .v21-zoka-more {
+  background: rgba(255,255,255,0.06) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255,255,255,0.10) !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.08), 0 4px 12px rgba(0,0,0,0.12) !important;
+}
+.z-ha-btn:hover, .v21-fbtn:hover, .filter-row button:hover {
+  background: rgba(255,255,255,0.10) !important;
+  border-color: rgba(var(--primary-rgb),0.32) !important;
+  box-shadow: 0 0 0 4px rgba(var(--primary-rgb),0.12), inset 0 1px 0 rgba(255,255,255,0.12) !important;
+}
+
+/* ---------- 3. BREAK INTO NEXT PAGE — tap transition ---------- */
+@keyframes z-page-break {
+  0% { transform: scale(1) translateY(0); filter: blur(0) brightness(1); opacity:1; }
+  30% { transform: scale(0.98) translateY(2px); filter: blur(2px) brightness(1.1); }
+  100% { transform: scale(1.08) translateY(-8px); filter: blur(16px) brightness(1.3); opacity:0; }
+}
+@keyframes z-shine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
+
+.breaking {
+  animation: z-page-break 0.38s cubic-bezier(0.4,0,0.6,1) forwards !important;
+  pointer-events: none;
+}
+
+/* Add breaking class via JS on navigation:
+   document.querySelectorAll('a, [data-navigate]').forEach(el=>{
+     el.addEventListener('click', e=>{
+       document.body.classList.add('breaking');
+     })
+   })
+*/
+
+/* Page enter — smooth */
+@keyframes z-page-enter {
+  0% { transform: scale(0.96) translateY(12px); filter: blur(12px); opacity:0; }
+  100% { transform: scale(1) translateY(0); filter: blur(0); opacity:1; }
+}
+.zoka-home, .pred-page, .company-page, .pro-page, .md-page, .ls-page, .mg-page, .res-page, .zs-home-page {
+  animation: z-page-enter 0.42s cubic-bezier(0.22,1,0.36,1) both;
+}
+
+/* ---------- 4. HAND FEEL — inner depth + tactile ---------- */
+.team-hero-card, .pro-header-card, .md-header-card, .ls-live-hero {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.42), 0 0 0 1px rgba(255,255,255,0.08) inset, inset 0 1px 0 rgba(255,255,255,0.18), 0 0 48px rgba(var(--primary-rgb),0.10) !important;
+}
+.team-hero-card::after, .pro-header-card::after, .md-header-card::after {
+  background: radial-gradient(600px 200px at 50% 0%, rgba(255,255,255,0.10), transparent 60%) !important;
+  mix-blend-mode: soft-light;
+}
+
+/* ---------- 5. SMOOTH SCROLL + MOMENTUM ---------- */
+html { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+
+/* ---------- 6. FOCUS RING — pro ---------- */
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline: none !important;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb),0.22), 0 0 0 6px rgba(var(--primary-rgb),0.10) !important;
+  border-color: rgba(var(--primary-rgb),0.42) !important;
+}

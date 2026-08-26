@@ -18,7 +18,6 @@ export default function PageLayout({
   const [activeHeading, setActiveHeading] = useState("");
   const articleRef = useRef(null);
 
-  // ── Scroll progress tracking
   const handleScroll = useCallback(() => {
     const el = articleRef.current;
     if (!el) return;
@@ -33,7 +32,6 @@ export default function PageLayout({
     return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
-  // ── IntersectionObserver for active heading in TOC
   const headingIds = useMemo(() => (headings || []).map((h) => h.id), [headings]);
 
   useEffect(() => {
@@ -56,12 +54,10 @@ export default function PageLayout({
 
   return (
     <article className={`pl-layout${hasToc ? " pl-layout--with-toc" : ""}`}>
-      {/* ── Progress Bar ─────────────────────── */}
       <div className="pl-progress-bar" role="progressbar" aria-valuenow={Math.round(progress)} aria-valuemin={0} aria-valuemax={100}>
         <div className="pl-progress-fill" style={{ width: `${progress}%` }} />
       </div>
 
-      {/* ── Hero ────────────────────────────── */}
       {title && (
         <header className="pl-hero">
           {heroImage && (
@@ -78,7 +74,6 @@ export default function PageLayout({
         </header>
       )}
 
-      {/* ── Meta Bar ────────────────────────── */}
       {(author || date || readTime || tags?.length) && (
         <div className="pl-meta-bar">
           {author && (
@@ -101,13 +96,11 @@ export default function PageLayout({
         </div>
       )}
 
-      {/* ── Content + TOC Grid ─────────────── */}
       <div className="pl-main-content" ref={articleRef}>
         <div className="pl-article">
           {children}
         </div>
 
-        {/* ── Related ─────────────────────── */}
         {relatedContent && (
           <aside className="pl-related">
             <h2 className="pl-related-title">Related</h2>
@@ -116,7 +109,6 @@ export default function PageLayout({
         )}
       </div>
 
-      {/* ── TOC Sidebar (desktop only) ───── */}
       {hasToc && (
         <aside className="pl-toc-sidebar">
           <nav className="pl-toc" aria-label="Table of contents">

@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="midnight">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
@@ -7,15 +7,10 @@
   <meta name="theme-color" content="#05070a" />
   <meta name="color-scheme" content="dark light" />
   <meta name="referrer" content="strict-origin-when-cross-origin" />
-
-  <!-- ★ FIXED TITLE - LIKE SOFASCORE -->
   <title>Football Live Scores, Fixtures, Results & AI Predictions | ZOKASCORE</title>
   <meta name="description" content="Live football scores, today's fixtures, results, Premier League table, La Liga, Champions League standings, H2H stats and free AI football predictions on ZOKASCORE." />
   <link rel="canonical" href="https://zokascore.xyz/" />
-
   <meta name="keywords" content="live scores, football live scores, today's fixtures, premier league, la liga, champions league, results, standings, h2h, football predictions, zokascore, zokacore, zoka score" />
-
-  <!-- ★ OG - MUST EXIST FOR SSR TO REPLACE -->
   <meta property="og:type" content="website" />
   <meta property="og:site_name" content="ZOKASCORE" />
   <meta property="og:locale" content="en_GB" />
@@ -26,34 +21,28 @@
   <meta property="og:image:secure_url" content="https://zokascore.xyz/og-image.png" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
-
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:site" content="@zokascore" />
   <meta name="twitter:creator" content="@zokascore" />
   <meta name="twitter:title" content="Football Live Scores, Fixtures, Results & AI Predictions | ZOKASCORE" />
   <meta name="twitter:description" content="Live football scores, fixtures and AI predictions." />
   <meta name="twitter:image" content="https://zokascore.xyz/og-image.png" />
-
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ZOKASCORE" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon.png" />
   <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
   <link rel="search" type="application/opensearchdescription+xml" href="/opensearch.xml" title="ZOKASCORE" />
-
   <link rel="dns-prefetch" href="//fonts.googleapis.com" />
   <link rel="dns-prefetch" href="//fonts.gstatic.com" />
   <link rel="dns-prefetch" href="//api.zokascore.xyz" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://api.zokascore.xyz" crossorigin />
-
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
-
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
   <script type="application/ld+json">
   {
     "@context": "https://schema.org",
@@ -78,7 +67,13 @@
     "sameAs": ["https://twitter.com/zokascore", "https://www.facebook.com/61593201145808", "https://www.tiktok.com/@zokascore"]
   }
   </script>
-
+  <script>try{const t=localStorage.getItem("zokascore-theme")||"midnight";document.documentElement.setAttribute("data-theme",t);document.querySelector('meta[name=theme-color]')?.setAttribute("content",t==="light"?"#f8fafc":"#05070a")}catch(e){}</script>
+  <style>
+    #static-loader{position:fixed;inset:0;z-index:9999;display:flex;align-items:center;justify-content:center;background:radial-gradient(800px 500px at 50% 0%, rgba(16,185,129,0.14), transparent 60%), #05070a}
+    .loader-ball{font-size:48px;animation:zb 1.2s infinite;filter:drop-shadow(0 0 16px rgba(16,185,129,0.32))}
+    .loader-text{font-weight:900;letter-spacing:.14em;color:#f8fafc;margin-top:12px}
+    @keyframes zb{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+  </style>
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-GZ2JTNKCCN"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -103,7 +98,7 @@
       <a href="/league/135/serie-a">Serie A</a>
     </nav>
   </noscript>
-  <div id="static-loader"><div class="loader-ball">⚽</div><div class="loader-text">ZOKASCORE</div></div>
+  <div id="static-loader"><div style="display:flex;flex-direction:column;align-items:center"><div class="loader-ball">⚽</div><div class="loader-text">ZOKASCORE</div></div></div>
   <div id="root"></div>
   <script type="module" src="/src/main.jsx"></script>
 </body>
