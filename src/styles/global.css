@@ -2629,5 +2629,3 @@ a { text-decoration: none; color: inherit; }
 .wss-modal-sheet { width: 100%; max-width: 500px; max-height: 80vh; background: var(--bg-surface); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20) var(--r-20) 0 0; padding: 24px 16px; overflow-y: auto; animation: zk-fade-up 0.32s var(--ease-out); box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08); }
 .wss-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .wss-modal-title { font-size: 18px; font-weight: 900; color: var(--text-primary); margin: 0; letter-spacing: -0.02em; }
-
-
