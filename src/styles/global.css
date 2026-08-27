@@ -2625,3 +2625,102 @@ a { text-decoration: none; color: inherit; }
 .wss-modal-sheet { width: 100%; max-width: 500px; max-height: 80vh; background: var(--bg-surface); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20) var(--r-20) 0 0; padding: 24px 16px; overflow-y: auto; animation: zk-fade-up 0.32s var(--ease-out); box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08); }
 .wss-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .wss-modal-title { font-size: 18px; font-weight: 900; color: var(--text-primary); margin: 0; letter-spacing: -0.02em; }
+
+
+/* ============================================================
+   GLASSY TACTILE PRO v3 — replaces ENTIRE previous tail block
+   Rules of engagement: surfaces opt-in · pseudos yield via :where()
+   · animations never retain transform/filter · buttons untouched
+   unless explicitly listed.
+   ============================================================ */
+:root{
+  --glass-real: linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02));
+  --glass-edge: inset 0 1px 0 rgba(255,255,255,0.14), inset 0 -1px 0 rgba(0,0,0,0.22);
+  --glass-depth: 0 8px 32px rgba(0,0,0,0.32), 0 0 0 1px rgba(255,255,255,0.06) inset, 0 0 40px rgba(var(--primary-rgb),0.06);
+}
+
+/* ---------- SURFACES (explicit — no attribute regex on -box) ---------- */
+[class*="-card"], .team-hero-card, .bb-game-card, .news-card, .lb-row,
+.res-match-card, .mg-match-card, .v21-mc, .company-card, .company-mini-card,
+.intel-card, .zs-tool-card, .zs-project-card, .studio-panel-container,
+.wss-panel, .ls-service-card, .ls-upcoming-card,
+.pro-header-card, .pro-stat-card, .pro-season-card, .fk-card, .md-header-card {
+  background-color: var(--bg-card);
+  background-image: var(--glass-real);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  box-shadow: var(--glass-depth), var(--glass-edge);
+}
+
+/* ---------- FROST + SHEEN at ZERO specificity (:where) ----------
+   Any component's own ::before/::after (.v21-mc.live red bar,
+   .btn-primary shine, .badge-live dot…) outranks these. */
+:where([class*="-card"])::before{
+  content:''; position:absolute; inset:0 0 auto 0; height:1px; pointer-events:none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.22), transparent);
+}
+:where([class*="-card"], [class*="-hero-card"])::after{
+  content:''; position:absolute; inset:0; pointer-events:none; border-radius:inherit;
+  background: linear-gradient(105deg, transparent 20%, rgba(255,255,255,0.07) 40%, transparent 60%);
+  opacity:.6; mix-blend-mode:overlay;
+}
+
+/* ---------- HERO TACTILE ---------- */
+.team-hero-card, .pro-header-card, .md-header-card, .ls-live-hero {
+  box-shadow: 0 20px 60px rgba(0,0,0,0.42),
+              0 0 0 1px rgba(255,255,255,0.08) inset,
+              inset 0 1px 0 rgba(255,255,255,0.18),
+              0 0 48px rgba(var(--primary-rgb),0.10);
+}
+
+/* ---------- BUTTONS: polish pass ONLY (no hijack) ---------- */
+button{ -webkit-tap-highlight-color:transparent; touch-action:manipulation; }
+
+/* Primary family — additive glow (kept from §11 weights) */
+.btn-primary, .btn-accent, .z-cta, .wss-btn-accent, .zs-btn-primary,
+.v21-banner-btn, .z-dc-btn, .z-ha-btn.primary, .v21-fbtn.on, .v21-dc.on {
+  box-shadow: var(--shadow-primary, 0 8px 24px rgba(var(--primary-rgb),0.28)),
+              inset 0 1px 0 rgba(255,255,255,0.32);
+}
+
+/* Ripple ONLY where ::after is free (excludes .btn-primary/.btn-accent shine) */
+.z-cta::after, .wss-btn-accent::after {
+  content:''; position:absolute; left:50%; top:50%; width:0; height:0; border-radius:50%;
+  background: rgba(255,255,255,0.25); transform:translate(-50%,-50%);
+  pointer-events:none; opacity:0; transition:width .4s ease,height .4s ease,opacity .4s ease;
+}
+.z-cta:active::after, .wss-btn-accent:active::after { width:240%; height:240%; opacity:1; transition:none; }
+
+/* Press feel on CARD taps only (buttons keep their native states) */
+.zoka-card:active, .res-match-card:active, .mg-match-card:active,
+.v21-mc:active, .news-card:active, .match-row-link:active {
+  transform: translateY(1px) scale(0.985);
+}
+
+/* ---------- TRANSITIONS (containment-safe by construction) ---------- */
+@keyframes z-page-break {
+  0%  { opacity:1; }
+  30% { opacity:.9; }
+  100%{ opacity:0; }        /* fade-out: zero transform/filter → can NEVER cage fixed kids */
+}
+@keyframes z-shine { from{transform:translateX(-100%)} to{transform:translateX(100%)} }
+
+/* Entrance ends at true identity; NO fill-mode retention */
+@keyframes z-page-enter {
+  0%   { opacity:0; transform:translate3d(0,12px,0); }
+  70%  { opacity:1; }
+  100% { opacity:1; transform:none; }
+}
+.zoka-home, .pred-page, .company-page, .pro-page, .md-page,
+.ls-page, .mg-page, .res-page, .zs-home-page {
+  animation: z-page-enter .38s cubic-bezier(.22,1,.36,1); /* no both/forwards */
+}
+.breaking { animation: z-page-break .38s ease forwards; pointer-events:none; } /* opacity-only → safe anywhere */
+
+/* ---------- GLOBAL POLISH ---------- */
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+button:focus-visible, a:focus-visible, input:focus-visible {
+  outline:none !important;
+  box-shadow: 0 0 0 3px rgba(var(--primary-rgb),.22), 0 0 0 6px rgba(var(--primary-rgb),.10) !important;
+}
