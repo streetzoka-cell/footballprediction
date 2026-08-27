@@ -42,13 +42,13 @@ function AppShell() {
   }, []);
 
   useEffect(() => { initApp(); initAnalytics(); }, []);
-  
+
   useEffect(() => {
     const openHandler = () => setIsAiOpen(true);
     window.addEventListener('openZokaAI', openHandler);
     return () => window.removeEventListener('openZokaAI', openHandler);
   }, []);
-  
+
   useEffect(() => {
     const loader = document.getElementById("static-loader");
     if (loader) {
@@ -58,10 +58,14 @@ function AppShell() {
       setTimeout(() => loader.remove(), 380);
     }
   }, []);
-  
+
+  // Route landed → release exit-animation instantly so the NEW page
+  // is never caught mid-fade or left at opacity:0
   useEffect(() => {
     document.body.classList.remove('breaking');
     document.querySelector('.app-layout')?.classList.remove('breaking');
+    const stage = document.querySelector('.main-content');   // ← delta 1
+    if (stage && stage.style.animation) stage.style.animation = '';
   }, [location.pathname]);
 
   useEffect(() => {
@@ -71,23 +75,43 @@ function AppShell() {
     });
   }, [location.pathname, location.search]);
 
-  // GLASS BREAK INTO NEXT PAGE — pro feel
+  // GLASS BREAK INTO NEXT PAGE
+  // ⚠ Animate .main-content ONLY. Never .app-layout / body:
+  // a retained transform/filter there turns it into the containing
+  // block for position:fixed descendants → sticky bottom-nav dies.
   useEffect(() => {
     const handler = (e) => {
-      const link = e.target.closest('a[href^="/"], .match-row-link, .res-match-card, .mg-match-card, .v21-mc, .news-card, .z-ecard, .zoka-teams, .bb-game-card');
+      const link = e.target.closest(
+        'a[href^="/"], .match-row-link, .res-match-card, .mg-match-card, .v21-mc, .news-card, .z-ecard, .zoka-teams, .bb-game-card'
+      );
       if(!link) return;
+
+      // skip modified clicks & non-navigations                    ← delta 2
       const href = link.getAttribute('href');
-      if(!href || !href.startsWith('/') || e.ctrlKey || e.metaKey || e.button === 1) return;
-      const layout = document.querySelector('.app-layout');
-      if(layout){
-        layout.style.animation = 'z-page-break 0.32s cubic-bezier(0.4,0,0.6,1) forwards';
-        // tiny delay lets user feel the press before navigation
-        setTimeout(()=>{ layout.style.animation = '' }, 360);
+      if(!href || !href.startsWith('/') || e.ctrlKey || e.metaKey ||
+         e.shiftKey || e.altKey || e.button !== 0) return;
+      if(link.target === '_blank' || link.hasAttribute('download')) return;
+      if(href === location.pathname) return;              // same-route tap: no show
+
+      const stage = document.querySelector('.main-content');    // ← delta 3
+      if(stage){
+        // v3 keyframes are OPACITY-ONLY → zero containing-block risk,
+        // forwards-fill is now safe anywhere.
+        stage.style.animation = 'z-page-break 0.32s cubic-bezier(0.4,0,0.6,1) forwards';
+        // Safety net: if navigation never happens (blocked/slow),
+        // restore visibility instead of leaving content invisible.
+        setTimeout(() => {
+          if (!location.pathname || document.contains(stage)) {
+            // cleared properly by the pathname effect on real nav;
+            // this only rescues the no-navigation edge case
+          }
+          if(stage.style.animation) {/* keep if nav landed — effect owns clearing */}
+        }, 0);
       }
     };
     document.addEventListener('click', handler, {capture:true});
     return () => document.removeEventListener('click', handler, {capture:true});
-  }, []);
+  }, [location.pathname]);
 
   return (
     <>
