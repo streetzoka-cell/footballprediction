@@ -2625,3 +2625,27 @@ a { text-decoration: none; color: inherit; }
 .wss-modal-sheet { width: 100%; max-width: 500px; max-height: 80vh; background: var(--bg-surface); backdrop-filter: blur(24px) saturate(200%); border: 1px solid var(--border); border-radius: var(--r-20) var(--r-20) 0 0; padding: 24px 16px; overflow-y: auto; animation: zk-fade-up 0.32s var(--ease-out); box-shadow: var(--shadow-xl), inset 0 1px 0 rgba(255,255,255,0.08); }
 .wss-modal-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
 .wss-modal-title { font-size: 18px; font-weight: 900; color: var(--text-primary); margin: 0; letter-spacing: -0.02em; }
+
+
+/* ============================================================
+   APP CHROME — restored post-cleanup
+   Only homes were the removed prelude/tail layers. Anything not
+   listed here was verified duplicated in SHOUTING §7–65 or
+   inline in index.html (boot loader).
+   ============================================================ */
+#root { min-height: 100vh; }
+.zk-page-loader { padding: 24px; }
+
+/* Floating AI launcher (App.jsx) — note: NOT .zk-ai-fab */
+.zoka-ai-fab {
+  position: fixed; bottom: 20px; right: 20px;
+  width: 52px; height: 52px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--primary), var(--accent));
+  border: 1px solid rgba(255,255,255,0.18); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: var(--shadow-primary), inset 0 1px 0 rgba(255,255,255,0.22);
+  cursor: pointer; z-index: 90;
+  transition: all 0.22s cubic-bezier(0.22,1,0.36,1);
+}
+.zoka-ai-fab:hover  { transform: translateY(-2px) scale(1.06); }
+.zoka-ai-fab:active { transform: translateY(1px) scale(0.96); }
