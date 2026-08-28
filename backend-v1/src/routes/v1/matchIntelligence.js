@@ -1,10 +1,15 @@
-// backend-v1/src/routes/v1/match-intelligence.js
+'use strict';
+
 const express = require('express');
 const router = express.Router();
+
 const MatchIntelligenceService = require('../../services/MatchIntelligenceService');
 
-// GET /api/v1/match-intelligence?homeId=50&awayId=44   <- preferred (exact, instant)
-// GET /api/v1/match-intelligence?home=Man City&away=Liverpool   <- fallback
+/**
+ * GET /api/v1/match-intelligence
+ * Preferred:  ?homeId=50&awayId=44          (exact + instant)
+ * Fallback:   ?home=Man City&away=Liverpool (name resolution)
+ */
 router.get('/', async (req, res, next) => {
   try {
     const { home, away, homeId, awayId } = req.query;
@@ -16,7 +21,12 @@ router.get('/', async (req, res, next) => {
       });
     }
 
-    const data = await MatchIntelligenceService.getMatchIntelligence({ home, away, homeId, awayId });
+    const data = await MatchIntelligenceService.getMatchIntelligence({
+      home,
+      away,
+      homeId,
+      awayId,
+    });
 
     if (!data) {
       return res.status(404).json({

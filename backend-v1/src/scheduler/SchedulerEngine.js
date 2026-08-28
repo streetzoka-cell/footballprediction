@@ -1,4 +1,5 @@
-﻿const cron = require('node-cron');
+﻿// backend-v1/src/scheduler/SchedulerEngine.js
+const cron = require('node-cron');
 const logger = require('../utils/logger');
 const metrics = require('./metrics/JobMetrics');
 
@@ -7,6 +8,7 @@ class SchedulerEngine {
     this.jobs = [];
     this.livePollTimer = null;
     this.runningJobs = new Set();
+    this.backgroundTasks = []; // ★ NEW: intervals owned by the engine
   }
 
   schedule(name, cronExpression, taskFn) {
@@ -24,6 +26,27 @@ class SchedulerEngine {
     );
 
     this.jobs.push({ name, job });
+  }
+
+  /*
+   * ★ Background intervals registered through the engine so stopAll()
+   *   clears them — previously bare setInterval() calls kept firing
+   *   mid-shutdown, after server.close() and during WAL flush.
+   */
+  addBackgroundTask(name, intervalMs, taskFn) {
+    const timer = setInterval(async () => {
+      try {
+        await taskFn();
+      } catch (err) {
+        logger.error(`[SchedulerEngine] ${name} failed: ${err.message}`);
+      }
+    }, intervalMs);
+
+    timer.unref?.(); // never keep the process alive just for this
+    this.backgroundTasks.push({ name, timer });
+    logger.info(
+      `[SchedulerEngine] Background task '${name}' registered (every ${Math.round(intervalMs / 1000)}s)`
+    );
   }
 
   async runManually(name, taskFn) {
@@ -66,7 +89,6 @@ class SchedulerEngine {
         this.livePollTimer = setTimeout(poll, nextInterval || 30000);
       } catch (err) {
         logger.error(`[SchedulerEngine] Live polling error: ${err.message}`);
-        // Retry with longer interval on error
         this.livePollTimer = setTimeout(poll, 60000);
       }
     };
@@ -75,7 +97,15 @@ class SchedulerEngine {
 
   stopAll() {
     this.jobs.forEach(({ job }) => job.stop());
+
     if (this.livePollTimer) clearTimeout(this.livePollTimer);
+
+    this.backgroundTasks.forEach(({ name, timer }) => {
+      clearInterval(timer);
+      logger.info(`[SchedulerEngine] Stopped background task: ${name}`);
+    });
+    this.backgroundTasks = [];
+
     this.jobs = [];
     this.runningJobs.clear();
     logger.info('[SchedulerEngine] All schedulers stopped.');

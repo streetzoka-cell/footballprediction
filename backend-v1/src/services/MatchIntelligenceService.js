@@ -50,17 +50,34 @@ try {
   h2hSummaries = JSON.parse(fs.readFileSync(path.join(ENTITIES_DIR, 'h2h', 'summaries.json'), 'utf8'));
 } catch { logger.warn('[MatchIntel] h2h summaries.json not found'); }
 
-/* Each entity file read ONCE, then served from memory — this is what makes it instant. */
-const fileCache = new Map();
+/*
+ * Entity files: read ONCE, then served from memory — this is what makes it instant.
+ * Found files cache forever (refresh = restart). MISS results get a short TTL so
+ * files that appear after a pipeline re-run are picked up without a restart.
+ */
+const NULL_TTL_MS = 5 * 60 * 1000;
+const fileCache = new Map(); // zkId -> { value, expiresAt }  (expiresAt === null → forever)
+
 async function readEntity(zkId) {
-  if (fileCache.has(zkId)) return fileCache.get(zkId);
+  const cached = fileCache.get(zkId);
+  if (cached) {
+    if (cached.expiresAt === null || cached.expiresAt > Date.now()) return cached.value;
+    fileCache.delete(zkId); // stale miss — the file may exist now, retry disk
+  }
+
   let parsed = null;
   try {
     parsed = JSON.parse(
       await fsp.readFile(path.join(ENTITIES_DIR, 'team_intelligence', `${zkId}.json`), 'utf8')
     );
-  } catch { /* missing file -> cached as null */ }
-  fileCache.set(zkId, parsed);
+  } catch { /* missing file */ }
+
+  fileCache.set(
+    zkId,
+    parsed
+      ? { value: parsed, expiresAt: null }
+      : { value: null, expiresAt: Date.now() + NULL_TTL_MS }
+  );
   return parsed;
 }
 
@@ -69,17 +86,22 @@ function resolveTeamId(input) {
   if (!val) return null;
   if (val.startsWith('ZK_TEAM_')) return val;
 
-  if (/^\d+$/.test(val)) {
-    const hit = providerMap[val];
-    if (hit) return typeof hit === 'string' ? hit : (hit.zkId || hit.id || hit.canonical_id || null);
+  // provider map first, for ANY value (ids, slugs, keys)
+  const hit = providerMap[val];
+  if (hit) {
+    return typeof hit === 'string'
+      ? hit
+      : hit.zkId || hit.id || hit.canonical_id || null;
   }
 
   const slug = norm(val);
   if (nameToIdMap.has(slug)) return nameToIdMap.get(slug);
 
+  // strip suffixes: "newcastle_utd_fc" -> "newcastle"
   const stripped = slug.replace(/_(fc|cf|sc|afc|club)$/i, '');
   if (nameToIdMap.has(stripped)) return nameToIdMap.get(stripped);
 
+  // prefix fallback: "manchester" vs "manchester_city"
   for (const [key, id] of nameToIdMap) {
     if (key.length >= 5 && (key.startsWith(slug) || slug.startsWith(key))) return id;
   }
@@ -91,6 +113,38 @@ function resolveTeamId(input) {
   return null;
 }
 
+/*
+ * Aggregate H2H — pure memory, no entity file reads. idA is treated as HOME.
+ * Handles both sorted-key and unsorted-key summaries correctly by tracking
+ * which key actually hit before remapping team_a/team_b → home/away.
+ */
+function getH2H(idA, idB) {
+  const base = { meetings: 0, homeWins: 0, awayWins: 0, draws: 0 };
+  if (!idA || !idB) return base;
+
+  const home = String(idA);
+  const away = String(idB);
+  const [x, y] = [home, away].sort();
+
+  let raw = h2hSummaries[`${x}_vs_${y}`] || null;
+  let teamAIsHome;
+
+  if (raw) {
+    teamAIsHome = x === home;               // sorted key: team_a === x
+  } else {
+    raw = h2hSummaries[`${y}_vs_${x}`] || null;
+    if (!raw) return base;
+    teamAIsHome = y === home;               // reversed key: team_a === y
+  }
+
+  return {
+    meetings: raw.matches ?? raw.meetings ?? 0,
+    homeWins: teamAIsHome ? (raw.team_a_wins || 0) : (raw.team_b_wins || 0),
+    awayWins: teamAIsHome ? (raw.team_b_wins || 0) : (raw.team_a_wins || 0),
+    draws: raw.draws || 0,
+  };
+}
+
 async function getTeamData(zkId) {
   if (!zkId) return { id: null, name: null, elo: 1500, form: [], goalPatterns: {} };
   const stats = (await readEntity(zkId)) || {};
@@ -99,13 +153,11 @@ async function getTeamData(zkId) {
     name: teamsIndex[zkId]?.name || null,
     elo: currentElo[zkId] ?? 1500,
     form: stats.recent_form || stats.form || [],
-    // ★ canonical match route surfaces this as intelligence.goalPatterns
     goalPatterns: stats.goal_patterns || stats.goalPatterns || {},
   };
 }
 
-/* ★ Simple deterministic Elo-based pick (HOME/DRAW/AWAY + probabilities).
-   Replaces the always-null zokaPick the canonical route expected. */
+/* Deterministic Elo-based pick (HOME/DRAW/AWAY + probabilities). */
 function computeZokaPick(homeData, awayData) {
   const homeElo = homeData?.elo ?? 1500;
   const awayElo = awayData?.elo ?? 1500;
@@ -132,20 +184,8 @@ async function getMatchIntelligence({ home, away, homeId, awayId } = {}) {
 
   const [homeData, awayData] = await Promise.all([getTeamData(homeZk), getTeamData(awayZk)]);
 
-  let h2h = { meetings: 0, homeWins: 0, awayWins: 0, draws: 0 };
-  if (homeZk && awayZk) {
-    const [a, b] = [homeZk, awayZk].sort();
-    const raw = h2hSummaries[`${a}_vs_${b}`] || h2hSummaries[`${b}_vs_${a}`] || null;
-    if (raw) {
-      const aIsHome = a === homeZk;
-      h2h = {
-        meetings: raw.matches ?? raw.meetings ?? 0,
-        homeWins: aIsHome ? (raw.team_a_wins || 0) : (raw.team_b_wins || 0),
-        awayWins: aIsHome ? (raw.team_b_wins || 0) : (raw.team_a_wins || 0),
-        draws: raw.draws || 0,
-      };
-    }
-  }
+  // ★ single source of truth — same function the /intelligence/h2h route uses
+  const h2h = getH2H(homeZk, awayZk);
 
   if (!homeZk && !awayZk) return null;
 
@@ -164,4 +204,4 @@ async function getTeamIntelligence(idOrName) {
   return { zkId, data: await readEntity(zkId) };
 }
 
-module.exports = { getMatchIntelligence, getTeamIntelligence, resolveTeamId };
+module.exports = { getMatchIntelligence, getTeamIntelligence, getH2H, resolveTeamId };
