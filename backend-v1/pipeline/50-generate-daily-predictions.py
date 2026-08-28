@@ -1,38 +1,30 @@
 """
-ZOKASCORE V2 — STEP 50 PRODUCTION FINAL V3.2
-Master Picker + Generate + Finalize (single step, live-aware, rollover-safe)
+ZOKASCORE V2 — STEP 50 MASTER FINAL (V3.2)
+Master Picker + Generate + Finalize — single step, live-aware, rollover-safe
 ========================================================================================
-MODES (per match, from fixture status):
-  prematch (NS)  -> 34-feature ML models (Step 49 V4 contract, unchanged)
+MODES (per match, decided by fixture status):
+  prematch (NS)            -> 34-feature ML models (Step 49 V4 contract)
   live    (1H/2H/HT/ET/..) -> gamma-poisson conditional on CURRENT score +
-             derived minute; ML supplies the pre-match xG prior ONLY. Model
-             features are NEVER extended with live state (no corruption).
-  final   (FT/..) -> NO prediction; stale ones stripped.
+                              derived minute. ML supplies the pre-match xG
+                              prior ONLY — model features never see live state.
+  final   (FT/..)          -> NO prediction; stale ones stripped.
 
-CORRECT SCORE (V3.2):
-  · Grid widened to N_GOALS=8 (0-7 per side) — headroom for goal-heavy tilts.
-  · Prematch CS calibrated by IPF to the model's OWN 1x2 + Over-2.5
-    probabilities: a lopsided 1x2 or strong OVER signal moves CS mass off the
-    1-0/0-0 family automatically. No fake "1-0 everywhere".
-  · Live CS is the conditional grid from the current score (3-1 live -> grid
-    starts at 3-1).
+MERGED HIGHLIGHTS:
+  · MASTER PICKER: contract-aware trainer comparison -> selection_decision.json
+  · RESOLVER V3.1: by_provider_id + teams[] provider_ids + provider_club_id +
+    teams-index names (accent-folded, parens-stripped) + by_source_name aliases
+    -> state-norm -> md5 hash estimate (labeled 'estimated')
+  · WINDOW includes yesterday (UTC rollover safety — no stale live preds)
+  · MINUTE derived from kickoff timestamp (provider minute=0 mid-match garbage)
+  · THRESHOLD PICKS gated by validated gain (no degenerate 'OVER 41.6%' picks)
+  · SANITY VALIDATOR: live CS can never sit below the current score
+  · CORRECT SCORE V3.2: 8x8 grid (0-7), hybrid ML+Poisson, IPF-calibrated to
+    the model's OWN 1x2 + Over-2.5 — no fake '1-0 everywhere'
+  · FRESHNESS metadata per prediction (ttl 10min live / 60min prematch)
+  · RE-RUN SAFE: STRIP -> PREDICT -> MERGE · atomic writes · idempotent
 
-V3 FIXES RETAINED:
-  1. WINDOW includes yesterday (UTC rollover safety).
-  2. MINUTE derived from kickoff timestamp (provider minute=0 mid-match is
-     garbage): 1H->min(elapsed,45) · HT->45 · 2H->clamp(elapsed-15,45,90).
-  3. THRESHOLD PICKS gated (THRESH_MIN_GAIN pp over default).
-  4. SANITY VALIDATOR: live CS keys can never sit below the current score;
-     violations logged (⚠ LIVE SANITY FAILURE) and dropped.
-
-RESOLVER (V3.1 full expansion):
-  raw pid -> by_provider_id + teams[].provider_ids + provider_club_id ->
-  teams-index names (accent-folded + parens-stripped) -> by_source_name
-  aliases -> state-key norm -> md5 hash estimate (flagged 'estimated').
-
-RE-RUN SAFE: STRIP -> PREDICT -> MERGE · atomic writes · audit trail.
-Serve-time invariant enforced by services/livePredictionSync.js (API layer):
-  prediction.live_state == current fixture state at every read.
+Serve-time invariant (prediction.live_state == current fixture state) is
+enforced by services/livePredictionSync.js in the API layer.
 """
 import os, re, glob, json, math, sys, time, joblib, tempfile, logging, hashlib, unicodedata
 from datetime import datetime, timezone, timedelta
@@ -63,7 +55,7 @@ STRICT_XG_FLIP  = False
 CS_ML_WEIGHT, CS_POIS_WEIGHT = 0.7, 0.3
 LIVE_PRIOR_S    = 3.0             # gamma-prior pseudo-match strength
 THRESH_MIN_GAIN = 0.5             # pp — tuned threshold must beat default by this
-N_GOALS         = 8               # CS grid 0..7 per side (V3.2 widened)
+N_GOALS         = 8               # CS grid 0..7 per side (widened)
 IPF_ITERS       = 40
 DATE_RE         = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 INJECTED_KEYS   = ("prediction", "mlPredictions", "mlPrediction", "_tmp_markets")
@@ -416,7 +408,8 @@ def audit_consistency(markets):
                     ou["pick"], ou["pick_probability"] = other, ou["probabilities"][other]
     return warns
 
-def expand_proba(proba, classes, n=N_GOALS):
+def expand_proba(proba, classes, n=None):
+    n = n or N_GOALS
     out = np.zeros((proba.shape[0], n))
     for i, c in enumerate(classes):
         c = int(c)
@@ -432,7 +425,6 @@ def pois_matrix(r, n=None):
 def ipf_calibrate(grid, p13=None, p_over25=None, iters=IPF_ITERS):
     """Tilt a correct-score grid (fractions, N x N) so its marginals match the
     model's OWN 1x2 and Over-2.5 probabilities — iterative proportional fitting.
-    p13: {'HOME_WIN':f,'DRAW':f,'AWAY_WIN':f} (fractions) · p_over25: fraction/None.
     Amplification capped so we tilt, never hallucinate."""
     g = np.array(grid, dtype=float)
     if g.sum() <= 0: return g
@@ -726,8 +718,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
             s = joint.sum(axis=1, keepdims=True); s[s == 0] = 1.0
             joint = joint / s
             for bi, (di, r, p13f, o25f) in enumerate(prematch_pairs):
-                ml = np.zeros((N_GOALS, N_GOALS))
-                ml[:6, :6] = joint[bi].reshape(6, 6)          # goal models trained on 0-5
+                ml = joint[bi].reshape(N_GOALS, N_GOALS)   # already NxN; classes 6-7 zero-padded (models trained 0-5)
                 base = (CS_ML_WEIGHT * ml + CS_POIS_WEIGHT * pois_matrix(r)) if cs_flags[bi] else pois_matrix(r)
                 base = base / (base.sum() or 1.0)
                 cs_apply(di, ipf_calibrate(base, p13f, o25f))  # tilt to own 1x2 + OU2.5
@@ -746,7 +737,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
     return daily, final
 
 def run_generation():
-    log.info("="*70); log.info(" STEP 50 PRODUCTION FINAL V3.2 — PICKER + GENERATION"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V3.2 — PICKER + GENERATION"); log.info("="*70)
     decision = select_champion()
     models, label_maps, thresholds = {}, {}, {}
     for key, cfg in MODELS_CFG.items():
@@ -778,7 +769,7 @@ def run_generation():
         res_ctr = make_counters()
         daily, final = generate_day(fixture_data, models, label_maps, thresholds, live_state, resolver, res_ctr, now_ts)
 
-        # freshness metadata (V3.2) — consumed by frontend + serve-time sync
+        # freshness metadata — consumed by frontend + serve-time sync
         for p in daily:
             p["freshness"] = {"generated_at": now.isoformat(),
                               "ttl_minutes": 10 if p["markets"].get("mode") == "live" else 60}
@@ -787,7 +778,7 @@ def run_generation():
         out.update({"data": final, "count": len(final), "date": date_str})
         atomic_write_json(out, fpath)
 
-        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_PRODUCTION_FINAL_V3.2",
+        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V3.2",
             "date": date_str, "generated_at": now.isoformat(),
             "features": f"{len(FEATURE_ORDER)}_step49v4_parity", "modes": "prematch|live|final(none)",
             "cs": f"grid {N_GOALS}x{N_GOALS} ipf-calibrated to own 1x2+OU2.5",
@@ -821,7 +812,7 @@ def run_generation():
 
 # ================= PHASE 2: FINALIZE =================
 def run_finalize():
-    log.info("="*70); log.info(" STEP 50 PRODUCTION FINAL V3.2 — FINALIZE"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V3.2 — FINALIZE"); log.info("="*70)
     files = sorted(f for f in glob.glob(os.path.join(PREDICTIONS_DIR, "*.json"))
                    if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
     log.info(f"[FINALIZE] {len(files)} daily files")
@@ -861,7 +852,7 @@ def run_finalize():
     deduped.sort(key=lambda x: (x.get("markets",{}).get("mode","prematch") != "live",
                                 -x.get("markets",{}).get("1x2",{}).get("pick_probability",0)))
 
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_PRODUCTION_FINAL_V3.2",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V3.2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_predictions": len(deduped), "by_date": by_date,
         "features": f"{len(FEATURE_ORDER)}_step49v4_parity",
@@ -912,4 +903,4 @@ if __name__ == "__main__":
         if rc == 0: rc = run_finalize()
         sys.exit(rc)
     except Exception:
-        log.exception("Step 50 production final failed"); sys.exit(1)
+        log.exception("Step 50 master final failed"); sys.exit(1)
