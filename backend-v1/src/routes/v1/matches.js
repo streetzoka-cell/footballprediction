@@ -1,20 +1,125 @@
-﻿// backend-v1/src/routes/v1/matches.js
+﻿'use strict';
+
 const express = require('express');
 const router = express.Router();
+
 const snapshotService = require('../../services/SnapshotService');
 const { getDateOffset } = require('../../config/constants');
-const { rankAndTagMatches } = require('../../services/MatchRankingService'); // ★ NEW IMPORT
+const { isMustHaveLeague } = require('../../config/leagues');
+const { rankAndTagMatches } = require('../../services/MatchRankingService');
+const liveSync = require('../../services/livePredictionSync');
+
+const LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
+const SCHEDULED_STATUSES = ['NS', 'TBD', 'SCHEDULED', 'TIMED'];
+const NON_PLAYABLE = ['PST', 'CANC', 'ABD', 'SUSP', 'INT', 'CANCELLED', 'POSTPONED', 'AWD', 'WO'];
+
+/* ── time helpers: timestamp(s) and ISO kickoff mixed → normalize to ms ── */
+function toMs(v) {
+  if (v == null) return 0;
+  if (typeof v === 'number') return v > 1e12 ? v : v * 1000;
+  const t = new Date(v).getTime();
+  return Number.isNaN(t) ? 0 : t;
+}
+
+function kickoffMs(m) {
+  if (m.timestamp) return toMs(m.timestamp);
+  return toMs(m.utcDate || m.date || m.kickoff);
+}
 
 function sortMatchesByTime(a, b) {
-  return (a.timestamp || a.kickoff || 0) - (b.timestamp || b.kickoff || 0);
+  return kickoffMs(a) - kickoffMs(b);
+}
+
+/* ★ Top 12 first, then chronological — the "not hidden" ordering */
+function sortMustHaveFirst(a, b) {
+  const mh = (b.mustHave ? 1 : 0) - (a.mustHave ? 1 : 0);
+  return mh !== 0 ? mh : kickoffMs(a) - kickoffMs(b);
+}
+
+function sortFeatured(a, b) {
+  const mh = (b.mustHave ? 1 : 0) - (a.mustHave ? 1 : 0);
+  if (mh !== 0) return mh;
+  return (b.matchScore || 0) - (a.matchScore || 0);
 }
 
 function dedupMatches(matches) {
-  return Array.from(new Map(matches.map(m => [String(m.id), m])).values());
+  return Array.from(new Map(matches.map((m) => [String(m.id), m])).values());
 }
 
-const LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
-const SCHEDULED_STATUSES = ['NS', 'TBD'];
+/* Backfill the flag for snapshots published before SnapshotService tagged it */
+function withFlags(m) {
+  if (m.mustHave === true || m.mustHave === false) return m;
+  m.mustHave = isMustHaveLeague(m.leagueId);
+  return m;
+}
+
+function stripPreds(m) {
+  delete m.mlPredictions;
+  delete m.prediction;
+  delete m.mlPrediction;
+}
+
+/**
+ * Serve-time prediction reconciliation (invariant: prediction.live_state ==
+ * current fixture state). liveSync decides: fresh markets, recomputed markets,
+ * or null (finished/postponed/canceled → never serve predictions).
+ */
+function reconcilePrediction(m) {
+  if (!m.mlPredictions && !m.prediction && !m.mlPrediction) return;
+  const source = m.mlPredictions || m.prediction || m.mlPrediction;
+  const synced = liveSync.sync({ markets: source }, m);
+  if (!synced || !synced.markets) {
+    stripPreds(m);
+    return;
+  }
+  m.mlPredictions = synced.markets;
+  m.prediction = synced.markets;
+  m.mlPrediction = synced.markets;
+}
+
+/**
+ * GET /api/v1/matches/top?date=YYYY-MM-DD&days=3
+ * ★ ONLY top-12 league fixtures — the homepage surface that must never be empty.
+ *   days=1..7 → date + following days merged.
+ */
+router.get('/top', async (req, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days || '1', 10) || 1, 1), 7);
+    const center = req.query.date || getDateOffset(0);
+
+    const dates = [];
+    for (let i = 0; i < days; i++) {
+      const d = new Date(`${center}T00:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + i);
+      dates.push(d.toISOString().split('T')[0]);
+    }
+
+    const snaps = await Promise.all(dates.map((d) => snapshotService.getSnapshotData(d)));
+    const collected = snaps.flatMap((s) => s.all || []);
+
+    const top = dedupMatches(collected)
+      .map(withFlags)
+      .filter((m) => m.mustHave)
+      .map(reconcileIfPreds);
+
+    function reconcileIfPreds(m) { reconcilePrediction(m); return m; }
+
+    top.sort(sortMustHaveFirst);
+
+    if (top.length === 0) {
+      return res.status(404).json({
+        success: false,
+        error: 'No top-league fixtures published for this window',
+        dates,
+        hint: 'Snapshot job has not run for these dates yet',
+      });
+    }
+
+    return res.json({ success: true, dates, data: top, count: top.length });
+  } catch (err) {
+    next(err);
+  }
+});
 
 // GET /api/v1/matches?date=YYYY-MM-DD&status=live|finished&view=home
 router.get('/', async (req, res, next) => {
@@ -24,83 +129,103 @@ router.get('/', async (req, res, next) => {
     const yesterday = getDateOffset(-1);
     const tomorrow = getDateOffset(1);
 
-    // ==========================================
-    // VIEW: HOME (Uses the Ranking Engine)
-    // ==========================================
     if (view === 'home') {
       const snap = await snapshotService.getSnapshotData(today);
-      
-      // 1. Gather all matches for today
       let allMatches = dedupMatches([
-        ...(snap.matches || []), 
-        ...(snap.live || []), 
-        ...(snap.finished || [])
-      ]);
+        ...(snap.matches || []),
+        ...(snap.live || []),
+        ...(snap.finished || []),
+      ]).map(withFlags);
 
-      // 2. ★ PHASE 15: APPLY RANKING ENGINE
-      // This sorts them by importance and tags the top 3 as 'FEATURED'
-      allMatches = rankAndTagMatches(allMatches);
+      // Preserve predictions through ranking
+      const predsMap = new Map();
+      allMatches.forEach((m) => {
+        const p = m.mlPredictions || m.prediction || m.mlPrediction;
+        if (p) predsMap.set(String(m.id), p);
+      });
 
-      // 3. Split into views based on status
+      allMatches = rankAndTagMatches(allMatches).map(withFlags);
+
+      // Re-attach preds after ranking (in case ranking strips)
+      allMatches.forEach((m) => {
+        const p = predsMap.get(String(m.id));
+        if (p && !m.mlPredictions) {
+          m.mlPredictions = p;
+          m.prediction = p;
+          m.mlPrediction = p;
+        }
+      });
+
+      // Serve-time reconciliation: live preds follow score/minute; finished lose preds
+      allMatches.forEach(reconcilePrediction);
+
       const live = allMatches
-        .filter(m => LIVE_STATUSES.includes(m.status))
-        .sort(sortMatchesByTime);
-      
+        .filter((m) => LIVE_STATUSES.includes(m.status))
+        .sort(sortMustHaveFirst);
+
       const upcoming = allMatches
-        .filter(m => SCHEDULED_STATUSES.includes(m.status) || (m.timestamp && m.timestamp * 1000 > Date.now()))
-        .sort(sortMatchesByTime);
+        .filter((m) =>
+          !NON_PLAYABLE.includes(m.status) &&
+          (SCHEDULED_STATUSES.includes(m.status) || kickoffMs(m) > Date.now())
+        )
+        .sort(sortMustHaveFirst);
 
-      // 4. Extract the Top 3 (The algorithmic winners)
+      // ★ Featured pool: FEATURED category ∪ all top-12 — never empty when top leagues play
       const featured = allMatches
-        .filter(m => m.category === 'FEATURED')
-        .slice(0, 3); // ★ STRICTLY TOP 3
+        .filter((m) => m.category === 'FEATURED' || m.mustHave)
+        .sort(sortFeatured)
+        .slice(0, 3);
 
-      return res.json({ success: true, live, featured, upcoming });
+      // ★ Direct top-12 surface for the homepage section
+      const top = allMatches.filter((m) => m.mustHave).sort(sortMatchesByTime);
+
+      return res.json({ success: true, live, featured, upcoming, top });
     }
 
-    // ==========================================
-    // STATUS: LIVE
-    // ==========================================
     if (status === 'live') {
       const snaps = await Promise.all([
         snapshotService.getSnapshotData(today),
         snapshotService.getSnapshotData(yesterday),
         snapshotService.getSnapshotData(tomorrow),
       ]);
-
       let allMatches = [];
-      snaps.forEach(s => {
-        allMatches = allMatches.concat(s.matches || [], s.live || []);
-      });
+      snaps.forEach((s) => { allMatches = allMatches.concat(s.matches || [], s.live || []); });
 
-      const liveMatches = allMatches.filter(m => LIVE_STATUSES.includes(m.status));
-      const uniqueLive = dedupMatches(liveMatches);
+      const uniqueLive = dedupMatches(allMatches)
+        .map(withFlags)
+        .filter((m) => LIVE_STATUSES.includes(m.status));
 
-      return res.json({ success: true, data: uniqueLive.sort(sortMatchesByTime) });
+      // Live endpoint is the freshest surface — reconcile every match here
+      uniqueLive.forEach(reconcilePrediction);
+
+      return res.json({ success: true, data: uniqueLive.sort(sortMustHaveFirst) });
     }
 
-    // ==========================================
-    // STATUS: FINISHED
-    // ==========================================
     if (status === 'finished') {
       const snap = await snapshotService.getSnapshotData(today);
-      const finished = (snap.finished || []).sort(sortMatchesByTime);
-
+      const finished = (snap.finished || []).map(withFlags).sort(sortMatchesByTime);
+      // No predictions on finished matches — enforce at serve time
+      finished.forEach(stripPreds);
       return res.json({ success: true, data: finished });
     }
 
-    // ==========================================
-    // DATE: SPECIFIC DAY
-    // ==========================================
     if (date) {
       const snap = await snapshotService.getSnapshotData(date);
-      const allMatches = [...(snap.matches || []), ...(snap.live || []), ...(snap.finished || [])];
-      const unique = dedupMatches(allMatches);
+      const unique = dedupMatches([
+        ...(snap.matches || []),
+        ...(snap.live || []),
+        ...(snap.finished || []),
+      ]).map(withFlags);
+
+      unique.forEach(reconcilePrediction);
+      // Belt & braces: finished matches never carry predictions, whatever liveSync did
+      unique.forEach((m) => {
+        if (['FT', 'AET', 'PEN', 'FINISHED'].includes(m.status)) stripPreds(m);
+      });
 
       return res.json({ success: true, data: unique.sort(sortMatchesByTime) });
     }
 
-    // If no parameters are provided, return 400
     res.status(400).json({ success: false, error: 'Missing date, status, or view parameter' });
   } catch (err) {
     next(err);

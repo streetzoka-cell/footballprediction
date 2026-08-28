@@ -1,24 +1,34 @@
+// backend-v1/src/routes/v1/match-intelligence.js
 const express = require('express');
 const router = express.Router();
 const MatchIntelligenceService = require('../../services/MatchIntelligenceService');
 
-// GET /api/v1/match-intelligence?home=Man City&away=Liverpool
-router.get('/', async (req, res) => {
+// GET /api/v1/match-intelligence?homeId=50&awayId=44   <- preferred (exact, instant)
+// GET /api/v1/match-intelligence?home=Man City&away=Liverpool   <- fallback
+router.get('/', async (req, res, next) => {
   try {
-    const { home, away } = req.query;
-    if (!home || !away) {
-      return res.status(400).json({ success: false, error: 'Home and Away team names are required.' });
+    const { home, away, homeId, awayId } = req.query;
+
+    if ((!home && !homeId) || (!away && !awayId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Pass homeId & awayId (preferred) or home & away names.',
+      });
     }
-    
-    const data = await MatchIntelligenceService.getMatchIntelligence(home, away);
-    
+
+    const data = await MatchIntelligenceService.getMatchIntelligence({ home, away, homeId, awayId });
+
     if (!data) {
-      return res.status(404).json({ success: false, error: 'Intelligence data not found for these teams.' });
+      return res.status(404).json({
+        success: false,
+        error: 'Could not resolve either team.',
+        inputs: { home: homeId || home, away: awayId || away },
+      });
     }
-    
-    res.json({ success: true, data });
+
+    return res.json({ success: true, data });
   } catch (err) {
-    res.status(500).json({ success: false, error: 'Failed to load match intelligence.' });
+    next(err);
   }
 });
 

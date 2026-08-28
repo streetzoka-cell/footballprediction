@@ -1,90 +1,183 @@
-﻿const express = require('express');
+﻿'use strict';
+
+const express = require('express');
 const router = express.Router();
-const { getDb } = require('../../config/firebase');
 const fs = require('fs');
 const path = require('path');
-const MatchIntelligenceService = require('../../services/MatchIntelligenceService');
 
-// GET /api/v1/match/:id
-// Returns the Canonical Match Object
+const { getDb } = require('../../config/firebase');
+const { STATUS, getDateOffset } = require('../../config/constants');
+const snapshotService = require('../../services/SnapshotService');
+const MatchIntelligenceService = require('../../services/MatchIntelligenceService');
+const liveSync = require('../../services/livePredictionSync');
+
+const PREDICTIONS_DIR = path.join(process.cwd(), 'public_data', 'predictions');
+const FINISHED = new Set(STATUS.FOOTBALL_FINISHED);
+
+/* ── Step 50 markets file: mtime-validated cache → instant after first hit ── */
+const marketsCache = new Map(); // date -> { mtimeMs, map }
+
+function loadMarketsForDate(dateStr) {
+  const fp = path.join(PREDICTIONS_DIR, `${dateStr}.json`);
+  try {
+    const stat = fs.statSync(fp);
+    const cached = marketsCache.get(dateStr);
+    if (cached && cached.mtimeMs === stat.mtimeMs) return cached.map;
+
+    const data = JSON.parse(fs.readFileSync(fp, 'utf8'));
+    const map = new Map();
+    (data.predictions || data.data || []).forEach((p) => map.set(String(p.matchId), p.markets || null));
+
+    marketsCache.set(dateStr, { mtimeMs: stat.mtimeMs, map });
+    return map;
+  } catch {
+    return null;
+  }
+}
+
+/* ── Firestore doc cache: 30s TTL — protects quota without serving stale live data ── */
+const firestoreCache = new Map(); // key -> { expires, data }
+const FS_TTL_MS = 30 * 1000;
+
+async function getDocCached(collection, id) {
+  const key = `${collection}:${id}`;
+  const hit = firestoreCache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.data;
+
+  const db = getDb();
+  const doc = await db.collection(collection).doc(String(id)).get();
+  const data = doc.exists ? { id: doc.id, ...doc.data() } : null;
+
+  firestoreCache.set(key, { expires: Date.now() + FS_TTL_MS, data });
+  return data;
+}
+
+/* ── Local-first lookup: snapshot files cover live/finished/upcoming ── */
+async function findLocalMatch(matchId, dateHint) {
+  const dates = dateHint
+    ? [dateHint]
+    : [getDateOffset(0), getDateOffset(-1), getDateOffset(1)];
+
+  for (const date of dates) {
+    const snap = await snapshotService.getSnapshotData(date);
+    const hit = (snap.all || []).find(
+      (m) =>
+        String(m.id) === String(matchId) ||
+        (m.ids && Object.values(m.ids).some((v) => String(v) === String(matchId)))
+    );
+    if (hit) return { ...hit, _localDate: date };
+  }
+  return null;
+}
+
+function extractKickoff(m) {
+  if (m.utcDate || m.date || m.kickoff) return m.utcDate || m.date || m.kickoff;
+  if (m.timestamp) {
+    const ms = typeof m.timestamp === 'number' && m.timestamp < 1e12 ? m.timestamp * 1000 : m.timestamp;
+    return new Date(ms).toISOString();
+  }
+  return null;
+}
+
+// GET /api/v1/match/:id — Canonical Match Object + live-synced ML markets
 router.get('/:id', async (req, res) => {
   try {
-    const matchId = req.params.id;
-    const db = getDb();
-    
-    // 1. Fetch Base Match Data (Live or Finished)
-    let baseMatch = null;
-    const liveDoc = await db.collection('active_predictions').doc(matchId).get();
-    if (liveDoc.exists) {
-      baseMatch = { id: liveDoc.id, ...liveDoc.data() };
-    } else {
-      const finishedDoc = await db.collection('finished_matches').doc(matchId).get();
-      if (finishedDoc.exists) {
-        baseMatch = { id: finishedDoc.id, ...finishedDoc.data() };
-      }
+    const matchId = String(req.params.id);
+    const dateHint = req.query.date || null;
+
+    // 1. Base match: local snapshots first (instant, free), Firestore fallback
+    let baseMatch = await findLocalMatch(matchId, dateHint);
+
+    if (!baseMatch) {
+      baseMatch = await getDocCached('active_predictions', matchId);
+      if (!baseMatch) baseMatch = await getDocCached('finished_matches', matchId);
     }
 
     if (!baseMatch) {
-      return res.status(404).json({ success: false, error: 'Match not found' });
+      return res.status(404).json({ success: false, error: 'Match not found', matchId });
     }
 
-    // 2. Fetch Deep Intelligence (Elo, Form, H2H, Goal Patterns)
+    // 2. Deep intelligence — ★ ID-first (names are only a fallback),
+    //    matches the fixed service signature getMatchIntelligence({ homeId, awayId, home, away })
+    const homeId = baseMatch.homeTeam?.id || baseMatch.homeTeamId || null;
+    const awayId = baseMatch.awayTeam?.id || baseMatch.awayTeamId || null;
+    const homeName = baseMatch.homeTeam?.name || baseMatch.homeName || null;
+    const awayName = baseMatch.awayTeam?.name || baseMatch.awayName || null;
+
     let intelligence = null;
     try {
-      intelligence = await MatchIntelligenceService.getMatchIntelligence(
-        baseMatch.homeTeam?.name || baseMatch.homeName,
-        baseMatch.awayTeam?.name || baseMatch.awayName
-      );
+      intelligence = await MatchIntelligenceService.getMatchIntelligence({
+        homeId, awayId, home: homeName, away: awayName,
+      });
     } catch (e) {
       console.error('[Match API] Intel fetch failed:', e.message);
     }
 
-    // 3. Construct Canonical Schema
+    // 3. ML markets from Step 50 daily file
+    const kickoff = extractKickoff(baseMatch);
+    const dateStr = kickoff ? String(kickoff).slice(0, 10) : getDateOffset(0);
+    const marketsMap = loadMarketsForDate(dateStr);
+    let markets = marketsMap ? (marketsMap.get(matchId) || null) : null;
+
+    // 4. Serve-time reconciliation — the invariant:
+    //    prediction.live_state == current fixture state, ALWAYS.
+    if (markets) {
+      const synced = liveSync.sync({ markets }, baseMatch);
+      markets = synced ? synced.markets : null;
+    }
+
+    const isFinished = FINISHED.has(baseMatch.status);
+    if (isFinished) markets = null; // never serve predictions for finished matches
+
     const canonicalMatch = {
       identity: {
-        id: String(baseMatch.id),
+        id: matchId,
         source: baseMatch.source || 'zokascore',
-        lastUpdated: baseMatch.updatedAt || new Date().toISOString()
+        lastUpdated: baseMatch.updatedAt || new Date().toISOString(),
       },
       competition: {
         id: String(baseMatch.league?.id || baseMatch.leagueId || ''),
-        name: baseMatch.league?.name || baseMatch.leagueName || 'Unknown'
+        name: baseMatch.league?.name || baseMatch.leagueName || 'Unknown',
+        mustHave: baseMatch.mustHave ?? false,
       },
       status: baseMatch.status || 'NS',
-      kickoff: baseMatch.utcDate || baseMatch.date || null,
+      kickoff,
       teams: {
         home: {
-          id: String(baseMatch.homeTeam?.id || baseMatch.homeTeamId || ''),
-          name: baseMatch.homeTeam?.name || baseMatch.homeName || 'TBD',
-          logo: baseMatch.homeTeam?.crest || baseMatch.homeLogo || null
+          id: String(homeId || ''),
+          name: homeName || 'TBD',
+          logo: baseMatch.homeTeam?.crest || baseMatch.homeTeam?.logo ||
+                baseMatch.homeLogo || baseMatch.homeTeamLogo || null,
         },
         away: {
-          id: String(baseMatch.awayTeam?.id || baseMatch.awayTeamId || ''),
-          name: baseMatch.awayTeam?.name || baseMatch.awayName || 'TBD',
-          logo: baseMatch.awayTeam?.crest || baseMatch.awayLogo || null
-        }
+          id: String(awayId || ''),
+          name: awayName || 'TBD',
+          logo: baseMatch.awayTeam?.crest || baseMatch.awayTeam?.logo ||
+                baseMatch.awayLogo || baseMatch.awayTeamLogo || null,
+        },
       },
-      score: {
-        home: baseMatch.homeScore ?? null,
-        away: baseMatch.awayScore ?? null
-      },
-      odds: baseMatch.odds || null, // Pass through parsed odds if available
+      score: { home: baseMatch.homeScore ?? null, away: baseMatch.awayScore ?? null },
+      odds: baseMatch.odds || null,
+      mustHave: baseMatch.mustHave ?? false,
       intelligence: intelligence ? {
         elo: {
-          home: intelligence.home?.elo || null,
-          away: intelligence.away?.elo || null
+          home: intelligence.home?.elo ?? null,
+          away: intelligence.away?.elo ?? null,
         },
         form: {
           home: intelligence.home?.form || [],
-          away: intelligence.away?.form || []
+          away: intelligence.away?.form || [],
         },
         h2h: intelligence.h2h || null,
         goalPatterns: {
           home: intelligence.home?.goalPatterns || {},
-          away: intelligence.away?.goalPatterns || {}
-        }
+          away: intelligence.away?.goalPatterns || {},
+        },
       } : null,
-      zokaPrediction: intelligence?.zokaPick || null
+      markets,                       // ← Step 50 output, live-synced at read time
+      mlPredictions: markets,        // ← frontend alias (MatchDetails)
+      mlPrediction: markets,         // ← legacy alias
+      zokaPrediction: intelligence?.zokaPick || null, // ← now actually computed (Elo-based)
     };
 
     res.json({ success: true, data: canonicalMatch });

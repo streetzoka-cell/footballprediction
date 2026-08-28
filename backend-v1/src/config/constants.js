@@ -1,3 +1,7 @@
+// backend-v1/src/config/constants.js
+
+const CURRENT_SEASON = 2025; // 2025/26 — providers use the STARTING year. Verify with one curl!
+
 const COLLECTIONS = {
   MATCHES_LIVE: 'matches_live',
   MATCHES_TODAY: 'matches_today',
@@ -86,5 +90,6 @@ module.exports = {
   formatDate,
   BATCH_MAX_OPS: 50,
   WRITE_TIMEOUT_MS: 15000,
-  DEFAULT_FOOTBALL_SEASON: 2026,
+  CURRENT_SEASON,
+  DEFAULT_FOOTBALL_SEASON: CURRENT_SEASON, // was hardcoded 2026 → empty provider responses
 };

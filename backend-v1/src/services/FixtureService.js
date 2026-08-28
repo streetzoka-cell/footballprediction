@@ -1,4 +1,4 @@
-﻿// backend-v1/src/services/FixtureService.js
+﻿
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const path = require('path');
@@ -18,7 +18,7 @@ async function syncFixturesForDate(dateStr) {
       logger.warn(`[FixtureService] Fixtures file for ${dateStr} is empty (${stats.size} bytes). Re-fetching...`);
       await fs.unlink(filePath);
     } else {
-      logger.info(`[FixtureService] Fixtures for ${dateStr} already exist locally. Skipping API fetch.`);
+      logger.info(`[FixtureService] Fixtures for ${dateStr} already exist locally. Skipping API fetch to preserve mlPredictions.`);
       return 0;
     }
   }
@@ -31,7 +31,27 @@ async function syncFixturesForDate(dateStr) {
     return 0;
   }
 
+  // Try to preserve existing predictions if file exists (edge case)
+  let existingPreds = new Map();
+  try {
+    if (fsSync.existsSync(filePath)) {
+      const raw = await fs.readFile(filePath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const existing = Array.isArray(parsed) ? parsed : (parsed.data || []);
+      existing.forEach(m => {
+        const pred = m.mlPredictions || m.prediction || m.mlPrediction;
+        if (pred) existingPreds.set(String(m.id), pred);
+      });
+    }
+  } catch(e) {}
+
   const scored = matches.map(doc => {
+    const existingPred = existingPreds.get(String(doc.id));
+    if (existingPred) {
+      doc.prediction = existingPred;
+      doc.mlPredictions = existingPred;
+      doc.mlPrediction = existingPred;
+    }
     doc.matchScore = calculateMatchScore(doc);
     doc.category = categorizeMatch(doc.matchScore);
     return doc;
@@ -71,39 +91,35 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
       logger.warn(`[FixtureService] No local fixtures found for ${dateStr}.`);
       return [];
     }
-
-    logger.warn(
-      `[FixtureService] Local fixtures missing for ${dateStr}. Performing one-time API fetch.`
-    );
-
+    logger.warn(`[FixtureService] Local fixtures missing for ${dateStr}. Performing one-time API fetch.`);
     matches = await buildUnifiedFixtures(dateStr);
   }
+
+  // Preserve predictions map
+  let predsMap = new Map();
+  matches.forEach(m => {
+    const pred = m.mlPredictions || m.prediction || m.mlPrediction;
+    if (pred) predsMap.set(String(m.id), pred);
+  });
 
   const stillFixtures = [];
   const newlyFinished = [];
   const nowMs = Date.now();
-
-  const FT_FORCE_MS = 4 * 60 * 60 * 1000; // Increased to 4 hours to allow API to update scores
+  const FT_FORCE_MS = 4 * 60 * 60 * 1000;
   const STUCK_AT_90_MS = 3 * 60 * 60 * 1000;
 
   for (let match of matches) {
     const isFT = match.status === 'FT' || match.display?.isFinished === true;
     const minute = match.display?.minute || match.minute || 0;
     const atNinety = minute >= 90 || match.status === '90' || match.status === '2H';
-
     const elapsedMs = match.timestamp ? (nowMs - match.timestamp * 1000) : 0;
-
     const stuckAtNinety = atNinety && elapsedMs > STUCK_AT_90_MS;
     const isExpired = elapsedMs > FT_FORCE_MS;
-
-    // ★ FIX: Check if scores are actually present. 
-    // If status is FT but scores are 0-0, wait for API to update them unless it's an explicit 0-0 (display.score.home === 0)
     const hasScores = (match.homeScore != null && match.awayScore != null) && 
                       (match.homeScore > 0 || match.awayScore > 0 || match.display?.score?.home === 0);
 
     if (isFT || isExpired || stuckAtNinety) {
       if (!hasScores && !isExpired) {
-        // Match is FT but scores are 0-0 and not explicitly marked as 0-0. Keep in fixtures to wait for API update.
         match.status = 'FT';
         match.isLive = false;
         if (match.display) {
@@ -111,13 +127,10 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
           match.display.isFinished = true;
           match.display.minute = 90;
         }
-        logger.warn(
-          `[FixtureService] Match ${match.id} is FT but waiting for scores to update.`
-        );
+        logger.warn(`[FixtureService] Match ${match.id} is FT but waiting for scores to update.`);
         stillFixtures.push(match);
         continue;
       }
-
       if (match.homeScore == null || match.awayScore == null) {
         match.status = 'FT';
         match.isLive = false;
@@ -126,13 +139,10 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
           match.display.isFinished = true;
           match.display.minute = 90;
         }
-        logger.warn(
-          `[FixtureService] Match ${match.id} is FT with no score — marked finished (not live).`
-        );
+        logger.warn(`[FixtureService] Match ${match.id} is FT with no score — marked finished (not live).`);
         stillFixtures.push(match);
         continue;
       }
-
       if (match.display) {
         match.display.isFinished = true;
         match.display.isLive = false;
@@ -152,6 +162,12 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   if (newlyFinished.length === 0) {
     logger.info(`[FixtureService] No newly finished matches found for ${dateStr}.`);
     const scoredStill = stillFixtures.map(doc => {
+      const existingPred = predsMap.get(String(doc.id));
+      if (existingPred) {
+        doc.prediction = existingPred;
+        doc.mlPredictions = existingPred;
+        doc.mlPrediction = existingPred;
+      }
       doc.matchScore = calculateMatchScore(doc);
       doc.category = categorizeMatch(doc.matchScore);
       return doc;
@@ -161,6 +177,12 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
   }
 
   const scoredStill = stillFixtures.map(doc => {
+    const existingPred = predsMap.get(String(doc.id));
+    if (existingPred) {
+      doc.prediction = existingPred;
+      doc.mlPredictions = existingPred;
+      doc.mlPrediction = existingPred;
+    }
     doc.matchScore = calculateMatchScore(doc);
     doc.category = categorizeMatch(doc.matchScore);
     return doc;
@@ -175,15 +197,13 @@ async function syncFinishedFixtures(forceFetch = false, offset = 0) {
       const parsedRes = JSON.parse(rawRes);
       existingResults = Array.isArray(parsedRes) ? parsedRes : (parsedRes.data || []);
     }
-  } catch (e) { /* File doesn't exist yet */ }
+  } catch (e) {}
 
   const merged = [...existingResults, ...newlyFinished];
   const unique = Array.from(new Map(merged.map(m => [String(m.id || `${m.homeTeamName || m.homeTeam?.name}-${m.awayTeamName || m.awayTeam?.name}`), m])).values());
 
   logger.info(`[FixtureService] Moved ${newlyFinished.length} finished matches to results for ${dateStr}. Total results: ${unique.length}`);
-
   await writeFootballSnapshot(dateStr, { finished: unique });
-
   return newlyFinished;
 }
 
@@ -194,14 +214,24 @@ async function syncRecentFinishedFixtures(forceFetch = false) {
   return todayCount + yesterdayCount;
 }
 
-/**
- * ★ NEW: Smart Master Results Sync
- * Fetches ALL matches for a date directly from the API.
- * Safely updates fixtures and results JSONs without data loss.
- */
 async function syncMasterResults(offset = 0) {
   const dateStr = getDateOffset(offset);
   logger.info(`[FixtureService] Master Results Sync for ${dateStr}...`);
+
+  // Preserve predictions before fetching
+  let predsMap = new Map();
+  const fixturesPath = path.join(PUBLIC_DIR, 'fixtures', `${dateStr}.json`);
+  try {
+    if (fsSync.existsSync(fixturesPath)) {
+      const raw = await fs.readFile(fixturesPath, 'utf8');
+      const parsed = JSON.parse(raw);
+      const existing = Array.isArray(parsed) ? parsed : (parsed.data || []);
+      existing.forEach(m => {
+        const pred = m.mlPredictions || m.prediction || m.mlPrediction;
+        if (pred) predsMap.set(String(m.id), pred);
+      });
+    }
+  } catch(e) {}
 
   const matches = await buildUnifiedFixtures(dateStr);
   if (!Array.isArray(matches) || matches.length === 0) return 0;
@@ -209,8 +239,14 @@ async function syncMasterResults(offset = 0) {
   const finishedMatches = matches.filter(m => m.display?.isFinished || m.status === 'FT');
   const scheduledMatches = matches.filter(m => !m.display?.isFinished && m.status !== 'FT');
 
-  // 1. Update fixtures file with the remaining scheduled matches
+  // Attach preserved predictions to scheduled
   const scoredScheduled = scheduledMatches.map(doc => {
+    const existingPred = predsMap.get(String(doc.id));
+    if (existingPred) {
+      doc.prediction = existingPred;
+      doc.mlPredictions = existingPred;
+      doc.mlPrediction = existingPred;
+    }
     doc.matchScore = calculateMatchScore(doc);
     doc.category = categorizeMatch(doc.matchScore);
     return doc;
@@ -218,7 +254,6 @@ async function syncMasterResults(offset = 0) {
 
   await writeFootballSnapshot(dateStr, { matches: scoredScheduled });
 
-  // 2. Update results file
   let existingResults = [];
   const resultsPath = path.join(PUBLIC_DIR, 'results', `${dateStr}.json`);
   try {
@@ -227,16 +262,21 @@ async function syncMasterResults(offset = 0) {
       const parsedRes = JSON.parse(rawRes);
       existingResults = Array.isArray(parsedRes) ? parsedRes : (parsedRes.data || []);
     }
-  } catch (e) { /* File doesn't exist yet */ }
+  } catch (e) {}
 
   const resultMap = new Map();
   existingResults.forEach(m => resultMap.set(String(m.id), m));
   
   let newCount = 0;
   finishedMatches.forEach(m => {
+    const existingPred = predsMap.get(String(m.id));
+    if (existingPred) {
+      m.prediction = existingPred;
+      m.mlPredictions = existingPred;
+      m.mlPrediction = existingPred;
+    }
     if (m.homeScore != null && m.awayScore != null) {
       if (!resultMap.has(String(m.id))) newCount++;
-      // Overwrite with master API data to ensure accuracy
       resultMap.set(String(m.id), m); 
     }
   });
@@ -249,8 +289,8 @@ async function syncMasterResults(offset = 0) {
 }
 
 async function refreshFinishedMatches() {
-  await syncMasterResults(0); // Today
-  await syncMasterResults(-1); // Yesterday
+  await syncMasterResults(0);
+  await syncMasterResults(-1);
 }
 
 module.exports = {
@@ -260,7 +300,7 @@ module.exports = {
   syncYesterdayResults,
   syncFinishedFixtures,
   syncRecentFinishedFixtures,
-  syncMasterResults, // ★ Export new function
-  forceRefreshFinishedMatches: refreshFinishedMatches, // Alias for compatibility
+  syncMasterResults,
+  forceRefreshFinishedMatches: refreshFinishedMatches,
   refreshFinishedMatches
 };

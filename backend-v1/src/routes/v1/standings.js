@@ -3,24 +3,25 @@ const express = require('express');
 const router = express.Router();
 
 const localSnapshotRepo = require('../../repositories/LocalSnapshotRepository');
+const { findLeague, getLeagueAliases } = require('../../config/leagues');
 
-function matchesLeague(standing, queryId) {
+function matchesLeague(standing, identifiers) {
   if (!standing) return false;
 
   const candidates = [
-    String(standing.id || '').toLowerCase(),
-    String(standing.leagueId || '').toLowerCase(),
-    String(standing.competitionId || '').toLowerCase(),
-    String(standing.code || '').toLowerCase()
-  ].filter(Boolean);
+    standing.id,
+    standing.leagueId,
+    standing.competitionId,
+    standing.code,
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase());
 
-  return candidates.includes(String(queryId).toLowerCase());
+  return identifiers.some((id) => candidates.includes(String(id).toLowerCase()));
 }
 
-/**
- * GET /api/v1/standings
- * GET /api/v1/standings?league=39
- */
+// GET /api/v1/standings            -> all leagues
+// GET /api/v1/standings?league=39  -> one league (render data.rows)
 router.get('/', async (req, res, next) => {
   try {
     const standings = await localSnapshotRepo.getStandingsSnapshot();
@@ -28,40 +29,41 @@ router.get('/', async (req, res, next) => {
 
     if (!leagueQuery) {
       return res.json({
+        success: true,
         data: standings,
         count: standings.length,
       });
     }
 
-    // Safe lookup without relying on missing config functions
-    const match = standings.find((standing) => matchesLeague(standing, leagueQuery));
+    const league = findLeague(leagueQuery);
+    const identifiers = league
+      ? getLeagueAliases(league.id)
+      : [String(leagueQuery)];
+
+    const match = standings.find((standing) => matchesLeague(standing, identifiers));
 
     if (!match) {
       return res.status(404).json({
-        data: null,
+        success: false,
         error: 'Standings not found for this league',
+        league: leagueQuery,
+        availableLeagues: standings
+          .map((s) => s.leagueId ?? s.id)
+          .filter(Boolean),
       });
     }
 
-    return res.json({
-      data: match,
-    });
+    return res.json({ success: true, data: match });
   } catch (err) {
     next(err);
   }
 });
 
-/**
- * GET /api/v1/standings/overview
- */
+// GET /api/v1/standings/overview
 router.get('/overview', async (req, res, next) => {
   try {
     const standings = await localSnapshotRepo.getStandingsSnapshot();
-
-    return res.json({
-      data: standings,
-      count: standings.length,
-    });
+    return res.json({ success: true, data: standings, count: standings.length });
   } catch (err) {
     next(err);
   }
