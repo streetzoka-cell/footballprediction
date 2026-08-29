@@ -24,22 +24,25 @@ const FAMILY_META = {
   LOW_CONFIDENCE: { title: '⚠️ RISKY ZONE', risky: true },
 };
 
-const pickLabel = (p) => p.pick || p.label || p.market || p.prediction || '—';
-const pickTeams = (p) => p.teams || (p.home && p.away ? `${p.home} v ${p.away}` : p.match || p.fixture || '—');
-const pickProb = (p) => p.probability ?? p.prob ?? p.confidence ?? null;
-const pickQuality = (p) => String(p.quality || p.grade || 'STANDARD').toUpperCase();
-const pickLeague = (p) => p.league || p.competition || '';
+/* ★ LOCKED to pipeline contract §3 — no more defensive chains */
+const pickLabel = (p) => p.pick || '—';
+const pickTeams = (p) => `${p.home || 'Home'} v ${p.away || 'Away'}`;
+const pickProb = (p) => (p.probability != null ? Math.round(p.probability * 10) / 10 : null);
+const pickQuality = (p) => String(p.quality || 'STANDARD').toUpperCase();
+const pickLeague = (p) => p.league || '';
 const pickResult = (p) => String(p.result || 'PENDING').toUpperCase();
 const pickFinal = (p) => p.finalScore || null;
-const tierPicks = (t) => t.picks || t.matches || t.items || [];
-const tierShare = (t) => t.share_text || t.shareText || null;
-const tierShareResolved = (t) => t.share_text_resolved || tierShare(t);
+const tierPicks = (t) => t.picks || [];
+const tierShare = (t) => t.share_text || null;
+const tierShareResolved = (t) => t.share_text_resolved || t.share_text || null;
 const tierResults = (t) => t.results || null;
+const tierLabel = (t) => (t.tier === 1 ? 'TOP 10' : `Group ${t.tier}`);
 
 function Chip({ q }) {
   const c = CHIP[q] || CHIP.STANDARD;
   return <span style={{ background: c.bg, color: c.fg, borderRadius: 8, fontSize: 10, padding: '2px 6px', fontWeight: 700 }}>{c.label}</span>;
 }
+
 function ResultChip({ r, finalScore }) {
   const s = RESULT_STYLE[r] || RESULT_STYLE.PENDING;
   return (
@@ -49,11 +52,15 @@ function ResultChip({ r, finalScore }) {
   );
 }
 
-/**
- * Public pick-groups renderer.
- * data: curated payload { date, familyOrder, groups, results }
- * Primary Share = resulted text when any settled, else original.
- */
+/* ★ React #31 FIX: quality_summary is an OBJECT { PURE: 4, STRONG: 5 } —
+   never render it as a raw child */
+function QualitySummary({ qs }) {
+  if (!qs || typeof qs !== 'object' || Array.isArray(qs)) return null;
+  const parts = ['PURE', 'STRONG', 'STANDARD', 'RISKY'].filter((q) => qs[q]).map((q) => `${q} ${qs[q]}`);
+  if (!parts.length) return null;
+  return <span className="badge">{parts.join(' · ')}</span>;
+}
+
 export default function PickGroupsView({ data, date }) {
   const toast = useToast();
   const [busy, setBusy] = useState(null);
@@ -64,7 +71,7 @@ export default function PickGroupsView({ data, date }) {
   const groups = data?.groups || {};
   const overall = data?.results || null;
 
-  const flash = (m, err = false) => err ? toast.error(m) : toast.success(m);
+  const flash = (m, err = false) => (err ? toast.error(m) : toast.success(m));
 
   const doShare = async (key, tier) => {
     const res = tierResults(tier);
@@ -131,8 +138,8 @@ export default function PickGroupsView({ data, date }) {
                 <div key={id} className="glass-card p-14 mb-12">
                   <div ref={setShotRef(id)} style={{ padding: 4 }}>
                     <div className="flex-center gap-8 mb-8 flex-wrap">
-                      <strong>Group {tierNum}</strong>
-                      {tier.quality_summary && <span className="badge">{tier.quality_summary}</span>}
+                      <strong>{tierLabel(tier)}</strong>
+                      <QualitySummary qs={tier.quality_summary} />
                       {res && (
                         <span className="badge" style={{ background: res.complete ? '#1f7a3d' : '#444', color: '#fff' }}>
                           {res.complete ? 'FINAL ' : ''}✅ {res.won}W ❌ {res.lost}L{res.pending ? ` ⏳ ${res.pending}` : ''}{res.accuracy != null ? ` · ${res.accuracy}%` : ''}

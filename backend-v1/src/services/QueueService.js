@@ -1,4 +1,5 @@
-﻿const path = require('path');
+﻿// backend-v1/src/services/QueueService.js
+const path = require('path');
 const { randomUUID } = require('crypto');
 
 const { getDb } = require('../config/firebase');
@@ -31,6 +32,8 @@ const ALLOWED_COLLECTIONS = new Set([
   'zoka_picks',
   'zoka_vote_stats',
   'match_resolution_status',
+  'prediction_groups',       // ★ NEW — curated groups Firestore backup
+  'pick_groups_archive',     // ★ NEW — permanent history backup
 ]);
 
 const ALLOWED_TYPES = new Set(['set', 'update', 'delete']);
@@ -101,7 +104,7 @@ function sanitizeOp(op) {
   const type = ALLOWED_TYPES.has(op.type) ? op.type : 'set';
 
   if (type !== 'delete') {
-    if (!op.data || typeof op.data !== 'object' || Array.isArray(op.data)) {
+    if (!op.data || typeof op.data === 'object' || Array.isArray(op.data)) {
       throw new Error('Missing data object');
     }
   }
@@ -167,9 +170,8 @@ async function addToQueue(op) {
   if (existingIndex >= 0) {
     const existing = pending[existingIndex];
 
-    // FIXED: Better merge logic - 'set' merges data, 'delete' overrides
+    // 'set' merges data, 'delete' overrides
     if (existing.type === 'delete' && sanitized.type !== 'delete') {
-      // Was deleted, now setting again - replace entirely
       pending[existingIndex] = sanitized;
     } else if (existing.type === 'set' && sanitized.type === 'set') {
       existing.data = { ...existing.data, ...sanitized.data };
@@ -180,7 +182,6 @@ async function addToQueue(op) {
 
     existing.options = sanitized.options;
 
-    // Take the higher priority
     existing.priority =
       PRIORITY_WEIGHT[sanitized.priority] < PRIORITY_WEIGHT[existing.priority]
         ? sanitized.priority
@@ -223,7 +224,6 @@ async function applyOp(db, op) {
     return;
   }
 
-  // Clean data - remove any undefined values that Firestore rejects
   const cleanData = JSON.parse(JSON.stringify(op.data));
 
   await Promise.race([
@@ -243,7 +243,6 @@ async function commitChunk(db, chunk) {
     if (op.type === 'delete') {
       batch.delete(ref);
     } else {
-      // Clean data for Firestore
       const cleanData = JSON.parse(JSON.stringify(op.data));
       batch.set(ref, cleanData, op.options || { merge: true });
     }

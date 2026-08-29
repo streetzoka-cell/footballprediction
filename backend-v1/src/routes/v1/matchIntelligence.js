@@ -1,3 +1,4 @@
+// backend-v1/src/routes/v1/matchIntelligence.js
 'use strict';
 
 const express = require('express');
@@ -9,6 +10,10 @@ const MatchIntelligenceService = require('../../services/MatchIntelligenceServic
  * GET /api/v1/match-intelligence
  * Preferred:  ?homeId=50&awayId=44          (exact + instant)
  * Fallback:   ?home=Man City&away=Liverpool (name resolution)
+ *
+ * ★ Never 404s when inputs are present: unknown teams resolve to a
+ *   graceful shell (elo 1500, empty form/H2H) so the UI renders
+ *   immediately instead of spinning on a failed request.
  */
 router.get('/', async (req, res, next) => {
   try {
@@ -29,10 +34,16 @@ router.get('/', async (req, res, next) => {
     });
 
     if (!data) {
-      return res.status(404).json({
-        success: false,
-        error: 'Could not resolve either team.',
-        inputs: { home: homeId || home, away: awayId || away },
+      // Both teams unresolvable → honest empty shell, still 200
+      return res.json({
+        success: true,
+        data: {
+          resolved: { home: false, away: false },
+          home: { id: String(homeId || ''), name: home || null, elo: 1500, form: [], goalPatterns: {} },
+          away: { id: String(awayId || ''), name: away || null, elo: 1500, form: [], goalPatterns: {} },
+          h2h: { meetings: 0, homeWins: 0, awayWins: 0, draws: 0 },
+          zokaPick: null,
+        },
       });
     }
 

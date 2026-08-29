@@ -18,8 +18,19 @@ const CURATED_DIR = path.join(PUBLIC_DIR, 'prediction_groups');
 const EXCL_DIR = path.join(PUBLIC_DIR, 'prediction_groups_exclusions');
 
 const FAMILY_ORDER = ['TOP10_DAILY', 'PURE_1X2', 'GG_BTTS', 'OVER_UNDER', 'SCORE', 'LOW_CONFIDENCE'];
-/* ★ Never auto-published to the app; admin can still force-include via Publish */
-const AUTO_HIDE = ['LOW_CONFIDENCE'];
+const FAMILY_KEYS = FAMILY_ORDER;
+
+/* Contract §3 has { groups: {...} }; §4 unified latest/days have families AT ROOT */
+function withGroups(obj, date) {
+  if (!obj || typeof obj !== 'object') return null;
+  if (obj.groups && typeof obj.groups === 'object' && Object.keys(obj.groups).length) {
+    return { ...obj, date: obj.date || date };
+  }
+  if (FAMILY_KEYS.some((f) => obj[f])) {
+    return { date: obj.date || date, groups: obj, generatedAt: obj.generated_at || obj.generatedAt || null };
+  }
+  return null;
+}
 
 const tierPicks = (t) => t?.picks || t?.matches || t?.items || [];
 
@@ -32,12 +43,19 @@ async function readUnified() {
 
 async function readPipelineDay(date) {
   const dayFile = await readJSONSafe(path.join(GROUPS_DIR, `${date}.json`), null);
-  if (dayFile?.groups) return dayFile;
+  const fromDay = withGroups(dayFile, date);
+  if (fromDay) return fromDay;
 
   const unified = await readUnified();
-  const fromUnified = unified?.days?.[date] || (unified?.latest?.date === date ? unified.latest : null);
-  if (fromUnified?.groups) return fromUnified;
+  const fromDays = withGroups(unified?.days?.[date], date);
+  if (fromDays) return fromDays;
 
+  // latest as last resort — date derived from generated_at (UTC)
+  if (unified?.latest) {
+    const genDate = String(unified.generated_at || '').slice(0, 10);
+    const latest = withGroups(unified.latest, genDate || date);
+    if (latest && latest.date === date) return latest;
+  }
   return null;
 }
 
@@ -98,11 +116,11 @@ async function getDay(date) {
 
 async function getUnifiedLatest() {
   const unified = await readUnified();
-  if (unified?.latest?.groups) {
-    const base = { ...unified.latest, source: 'pipeline' };
-    return resolveForDate(base, base.date);
-  }
-  return null;
+  if (!unified?.latest) return null;
+  const genDate = String(unified.generated_at || '').slice(0, 10) || new Date().toISOString().split('T')[0];
+  const latest = withGroups(unified.latest, genDate);
+  if (!latest) return null;
+  return resolveForDate(latest, latest.date);
 }
 
 function orderFamilies(groupsObj) {
@@ -166,7 +184,7 @@ function applyExclusions(groups, excl) {
 
 async function publishCurated(date, selectedFamilies = null) {
   const excl = await loadExclusions(date);
-  if (excl.dayUnpublished) return null; // admin hid the day — stays hidden
+  if (excl.dayUnpublished) return null;
 
   const day = await getDay(date); // FT-resolved
   if (!day?.groups || Object.keys(day.groups).length === 0) return null;
@@ -195,24 +213,24 @@ async function publishCurated(date, selectedFamilies = null) {
     data: { date, families: Object.keys(groups), results: payload.results, updatedAt: payload.publishedAt },
     priority: 'normal',
     source: 'prediction-groups',
-  });
+  }).catch((err) => logger.warn(`[PickGroups] Firestore backup skipped: ${err.message}`));
 
   logger.info(`[PickGroups] Published ${date}: ${Object.keys(groups).join(', ')}`);
   return payload;
 }
 
-/* ── ★ AUTO-PUBLISH: called by scheduler after Step 50 / on refresh ── */
+/* ── ★ AUTO-PUBLISH (scheduler calls this) ── */
 async function autoPublish(date) {
   const excl = await loadExclusions(date);
   if (excl.dayUnpublished) return null;
 
   const day = await getDay(date);
-  const fams = orderFamilies(day?.groups).filter((f) => !AUTO_HIDE.includes(f));
+  const fams = orderFamilies(day?.groups).filter((f) => f !== 'LOW_CONFIDENCE');
   if (fams.length === 0) return null;
   return publishCurated(date, fams);
 }
 
-/* Refresh existing published file (keeps admin exclusions, drops nothing new) */
+/* Refresh existing published file (keeps admin's family set) */
 async function republishCurated(date) {
   const excl = await loadExclusions(date);
   if (excl.dayUnpublished) return null;
@@ -270,7 +288,7 @@ async function excludeMatch(date, matchId) {
   const id = String(matchId);
   if (!excl.matchExclusions.includes(id)) excl.matchExclusions.push(id);
   await saveExclusions(date, excl);
-  await republishCurated(date); // rewrite published file without this pick
+  await republishCurated(date);
   logger.info(`[PickGroups] Match excluded for ${date}: ${id}`);
   return { excluded: id, date };
 }
@@ -288,7 +306,6 @@ async function getExclusions(date) {
   return loadExclusions(date);
 }
 
-/* Republish a day the admin fully hid (explicit reversal) */
 async function republishAfterDayHide(date) {
   const excl = await loadExclusions(date);
   excl.dayUnpublished = false;
