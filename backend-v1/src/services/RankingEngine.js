@@ -1,3 +1,4 @@
+// backend-v1/src/services/RankingEngine.js
 const admin = require('firebase-admin');
 const { getDb } = require('../config/firebase');
 const logger = require('../utils/logger');
@@ -48,7 +49,7 @@ async function updateZokaPicksForMatch(date, matchId, homeScore, awayScore) {
     if (!published || !Array.isArray(published.matches)) return false;
 
     let changed = false;
-    const updatedMatches = published.matches.map(match => {
+    const updatedMatches = published.matches.map((match) => {
       if (String(match.matchId) === String(matchId) && match.status !== 'finished') {
         changed = true;
         return {
@@ -62,6 +63,7 @@ async function updateZokaPicksForMatch(date, matchId, homeScore, awayScore) {
       return match;
     });
 
+    // ★ no change → no publish, no queue write
     if (!changed) return false;
 
     const updatedPayload = {
@@ -93,8 +95,21 @@ async function updateZokaPicksForMatch(date, matchId, homeScore, awayScore) {
   }
 }
 
+/**
+ * ★ THE FIX: returns null (no publish, no queue write) when operations is
+ * empty. Previously every zero-prediction match republished the empty
+ * leaderboard JSON (the 0.16 KB file 60× in the logs) AND queued a
+ * no-op Firestore write each time — the source of the unbounded
+ * "Pending: N" queue growth.
+ */
 async function updateLocalLeaderboard(matchDate, operations) {
-  const filePath = path.join(process.cwd(), 'public_data', 'leaderboard', 'daily', `${matchDate}.json`);
+  if (!Array.isArray(operations) || operations.length === 0) {
+    return null;
+  }
+
+  const filePath = path.join(
+    process.cwd(), 'public_data', 'leaderboard', 'daily', `${matchDate}.json`
+  );
 
   let entries = [];
   try {
@@ -106,7 +121,8 @@ async function updateLocalLeaderboard(matchDate, operations) {
     // File doesn't exist yet
   }
 
-  const userMap = new Map(entries.map(u => [u.uid, { ...u }]));
+  const userMap = new Map();
+  entries.forEach((u) => userMap.set(u.uid, { ...u }));
 
   for (const op of operations) {
     if (!userMap.has(op.uid)) {
@@ -148,16 +164,18 @@ async function updateLocalLeaderboard(matchDate, operations) {
     }
   }
 
-  const sorted = Array.from(userMap.values()).sort((a, b) => {
-    if (b.points !== a.points) return b.points - a.points;
-    if (b.exact !== a.exact) return b.exact - a.exact;
-    if (b.result !== a.result) return b.result - a.result;
-    return (a.miss || 0) - (b.miss || 0);
-  }).map((u, i) => ({
-    ...u,
-    rank: i + 1,
-    accuracy: u.resolved > 0 ? Math.round(((u.exact + u.result) / u.resolved) * 100) : 0,
-  }));
+  const sorted = Array.from(userMap.values())
+    .sort((a, b) => {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.exact !== a.exact) return b.exact - a.exact;
+      if (b.result !== a.result) return b.result - a.result;
+      return (a.miss || 0) - (b.miss || 0);
+    })
+    .map((u, i) => ({
+      ...u,
+      rank: i + 1,
+      accuracy: u.resolved > 0 ? Math.round(((u.exact + u.result) / u.resolved) * 100) : 0,
+    }));
 
   const result = {
     date: matchDate,
@@ -165,7 +183,9 @@ async function updateLocalLeaderboard(matchDate, operations) {
     top3: sorted.slice(0, 3),
     rest: sorted.slice(3),
     stats: {
-      avg: sorted.length > 0 ? (sorted.reduce((s, u) => s + (u.accuracy || 0), 0) / sorted.length).toFixed(1) : '0.0',
+      avg: sorted.length > 0
+        ? (sorted.reduce((s, u) => s + (u.accuracy || 0), 0) / sorted.length).toFixed(1)
+        : '0.0',
       preds: sorted.reduce((s, u) => s + (u.predictions || 0), 0),
       exact: sorted.reduce((s, u) => s + (u.exact || 0), 0),
       players: sorted.length,
@@ -198,7 +218,9 @@ async function resolveMatch(input = {}) {
   const matchDate = String(input.matchDate || '').trim();
 
   if (!matchId) throw ApiError.badRequest('matchId is required');
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) throw ApiError.badRequest('matchDate must be YYYY-MM-DD');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(matchDate)) {
+    throw ApiError.badRequest('matchDate must be YYYY-MM-DD');
+  }
 
   const homeScore = normalizeScore(input.homeScore, 'homeScore');
   const awayScore = normalizeScore(input.awayScore, 'awayScore');
@@ -223,7 +245,7 @@ async function resolveMatch(input = {}) {
       .where('matchId', '==', String(matchId))
       .get();
 
-    processedSnap.forEach(doc => {
+    processedSnap.forEach((doc) => {
       const uid = doc.get('userId');
       if (uid) processed.add(String(uid));
     });
@@ -234,7 +256,7 @@ async function resolveMatch(input = {}) {
 
     const operations = [];
 
-    predsSnap.forEach(doc => {
+    predsSnap.forEach((doc) => {
       const prediction = doc.data() || {};
       const uid = String(prediction.userId || '');
       if (!uid || processed.has(uid)) return;
@@ -254,10 +276,10 @@ async function resolveMatch(input = {}) {
       });
     });
 
-    // 1. Update local leaderboard immediately + queue backup
+    // 1. Leaderboard update — ★ only touches disk/queue when operations exist
     await updateLocalLeaderboard(matchDate, operations);
 
-    // 2. Queue individual results with HIGH priority (was 'low' - caused data loss)
+    // 2. Queue individual results with HIGH priority
     const now = new Date().toISOString();
     for (const op of operations) {
       await QueueService.addToQueue({
@@ -283,7 +305,8 @@ async function resolveMatch(input = {}) {
       });
     }
 
-    // 3. Update featured prediction status
+    // 3. Featured prediction status (legit work even with 0 users —
+    //    marks the match finished for the app)
     const predId = `feat_${matchDate}_${matchId}`;
     await QueueService.addToQueue({
       collection: 'active_predictions',
@@ -305,31 +328,30 @@ async function resolveMatch(input = {}) {
       source: 'ranking-engine',
     });
 
-    // 4. Mark match as resolved (direct write - critical for preventing reprocessing)
+    // 4. Mark resolved (direct write — prevents reprocessing)
     await db.collection('match_resolution_status').doc(matchDate).set({
       resolvedMatches: admin.firestore.FieldValue.arrayUnion(String(matchId)),
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     }, { merge: true });
 
-    // 5. Update published Zoka Picks (reads from LOCAL JSON, not Firestore)
+    // 5. Zoka Picks — internally skips when nothing changed
     await updateZokaPicksForMatch(matchDate, matchId, homeScore, awayScore);
 
-    logger.info(`[RankingEngine] Match ${matchId} resolved. Applied ${operations.length} users. Skipped ${processed.size}.`);
+    logger.info(
+      `[RankingEngine] Match ${matchId} resolved. Applied ${operations.length} users. Skipped ${processed.size}.`
+    );
+
     return {
       resolved: true,
       matchId,
       matchDate,
       users: operations.length,
       skipped: processed.size,
-      leaderboardUpdateRequired: true,
+      leaderboardUpdateRequired: operations.length > 0, // ★ honest flag now
     };
   } finally {
     _resolving.delete(key);
   }
 }
 
-module.exports = {
-  resolveMatch,
-  calculatePoints,
-  alreadyResolved,
-};
+module.exports = { resolveMatch, calculatePoints, alreadyResolved };

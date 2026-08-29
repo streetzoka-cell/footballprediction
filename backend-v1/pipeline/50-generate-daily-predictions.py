@@ -1,30 +1,30 @@
 """
-ZOKASCORE V2 — STEP 50 MASTER FINAL (V3.2)
-Master Picker + Generate + Finalize — single step, live-aware, rollover-safe
-========================================================================================
-MODES (per match, decided by fixture status):
-  prematch (NS)            -> 34-feature ML models (Step 49 V4 contract)
-  live    (1H/2H/HT/ET/..) -> gamma-poisson conditional on CURRENT score +
-                              derived minute. ML supplies the pre-match xG
-                              prior ONLY — model features never see live state.
-  final   (FT/..)          -> NO prediction; stale ones stripped.
+ZOKASCORE V2 — STEP 50 MASTER FINAL V4.2
+Master Picker + Generate + Finalize — live-aware, strong-pick engine, PICK GROUPS
+==================================================================================
+MODES: prematch (34-feat ML, V5.1-calibrated 1X2) · live (gamma-poisson conditional)
+       · final (strip)
 
-MERGED HIGHLIGHTS:
-  · MASTER PICKER: contract-aware trainer comparison -> selection_decision.json
-  · RESOLVER V3.1: by_provider_id + teams[] provider_ids + provider_club_id +
-    teams-index names (accent-folded, parens-stripped) + by_source_name aliases
-    -> state-norm -> md5 hash estimate (labeled 'estimated')
-  · WINDOW includes yesterday (UTC rollover safety — no stale live preds)
-  · MINUTE derived from kickoff timestamp (provider minute=0 mid-match garbage)
-  · THRESHOLD PICKS gated by validated gain (no degenerate 'OVER 41.6%' picks)
-  · SANITY VALIDATOR: live CS can never sit below the current score
-  · CORRECT SCORE V3.2: 8x8 grid (0-7), hybrid ML+Poisson, IPF-calibrated to
-    the model's OWN 1x2 + Over-2.5 — no fake '1-0 everywhere'
-  · FRESHNESS metadata per prediction (ttl 10min live / 60min prematch)
-  · RE-RUN SAFE: STRIP -> PREDICT -> MERGE · atomic writes · idempotent
+V4.2 — QUALITY-GRADED PICK GROUPS:
+  · Per-pick quality: PURE / STRONG / STANDARD (per-market bars — 1X2 PURE is
+    strict at 66% because the honest model accuracy is 51.10%) · RISKY zone
+  · tier.quality_summary per tier · share_text announces the quality mix
+  · 🔥 TOP10_DAILY: cross-market premium group ranked by MASTER CONFIDENCE
+    (edge over family floor, normalized, resolved-state boosted, 1 pick/match)
+  · Families: 1X2 · GG_BTTS · OVER_UNDER · SCORE · LOW_CONFIDENCE (Risky Zone)
+  · Tiers of exactly 10 where possible — never padded, absent when empty
+  · Assignment mirrored to predictions, fixtures, unified + market files
 
-Serve-time invariant (prediction.live_state == current fixture state) is
-enforced by services/livePredictionSync.js in the API layer.
+V4.0 RETAINED — STRONG PICK ENGINE (prediction != advertisement):
+  ZokaPicks = prematch only, multi-signal eligibility (probability, margin,
+  xG agreement, goal-market agreement, state quality), never force-filled,
+  never modifies ML probabilities, stale-pick guard (kickoff >= today).
+
+RETAINED: V5.1 calibration · rollover window · derived minute · threshold
+gating (no sub-50% picks) · live sanity validator · 8x8 IPF-calibrated CS ·
+strip/predict/merge re-run safety · atomic writes · freshness telemetry.
+
+Serve-time invariant enforced by services/livePredictionSync.js.
 """
 import os, re, glob, json, math, sys, time, joblib, tempfile, logging, hashlib, unicodedata
 from datetime import datetime, timezone, timedelta
@@ -38,6 +38,7 @@ REPORTS_DIR     = os.path.join(BASE_DIR, "data", "processed")
 FIXTURES_DIR    = os.path.join(BASE_DIR, "public_data", "fixtures")
 PREDICTIONS_DIR = os.path.join(BASE_DIR, "public_data", "predictions")
 ZOKAPICKS_DIR   = os.path.join(BASE_DIR, "public_data", "zokapicks")
+PICK_GROUPS_DIR = os.path.join(BASE_DIR, "public_data", "pick_groups")
 PUBLIC_DATA     = os.path.join(BASE_DIR, "public_data")
 MASTER_FILE     = os.path.join(BASE_DIR, "data", "processed", "master_with_elo.csv")
 LIVE_STATE_FILE = os.path.join(MODELS_DIR, "live_team_state.json")
@@ -50,18 +51,44 @@ TEAMS_INDEX_FILES = [
 
 # ================= config =================
 DAYS_AHEAD      = 3
-WINDOW_START    = -1              # include yesterday (UTC rollover safety)
+WINDOW_START    = -1
 STRICT_XG_FLIP  = False
-CS_ML_WEIGHT, CS_POIS_WEIGHT = 0.7, 0.3
-LIVE_PRIOR_S    = 3.0             # gamma-prior pseudo-match strength
-THRESH_MIN_GAIN = 0.5             # pp — tuned threshold must beat default by this
-N_GOALS         = 8               # CS grid 0..7 per side (widened)
+CS_ML_WEIGHT, CS_POIS_WEIGHT = 0.70, 0.30
+LIVE_PRIOR_S    = 3.0
+THRESH_MIN_GAIN = 0.5
+N_GOALS         = 8
 IPF_ITERS       = 40
 DATE_RE         = re.compile(r"^\d{4}-\d{2}-\d{2}$")
-INJECTED_KEYS   = ("prediction", "mlPredictions", "mlPrediction", "_tmp_markets")
-
+INJECTED_KEYS   = ("prediction", "mlPredictions", "mlPrediction", "_tmp_markets", "pick_groups")
 LIVE_STATUSES     = {"1H", "2H", "HT", "ET", "BT", "P", "LIVE", "IN_PLAY", "PAUSED"}
 FINISHED_STATUSES = {"FT", "FIN", "FINISHED", "AET", "AP", "PEN", "AWARDED", "ABAN", "SUSP"}
+
+# ================= STRONG PICK CONFIG =================
+STRONG_PICK_CONFIG = {
+    "1x2":    {"min_probability": 54.0, "strong_probability": 60.0, "elite_probability": 66.0, "min_margin": 6.0},
+    "btts":   {"min_probability": 56.0, "strong_probability": 61.0, "elite_probability": 67.0, "min_margin": 8.0},
+    "ou_0_5": {"min_probability": 80.0, "strong_probability": 88.0, "elite_probability": 93.0, "min_margin": 20.0},
+    "ou_1_5": {"min_probability": 68.0, "strong_probability": 75.0, "elite_probability": 82.0, "min_margin": 12.0},
+    "ou_2_5": {"min_probability": 56.0, "strong_probability": 61.0, "elite_probability": 67.0, "min_margin": 8.0},
+    "ou_3_5": {"min_probability": 58.0, "strong_probability": 64.0, "elite_probability": 72.0, "min_margin": 10.0},
+}
+
+# ================= PICK GROUPS CONFIG (V4.2 — quality-graded) =================
+PICK_GROUPS_CONFIG = {
+    "PURE_1X2":   {"label": "1X2",            "emoji": "🔒", "market": "1x2",
+                   "min_probability": 54.0, "low_floor": 48.0,
+                   "grades": {"PURE": 66.0, "STRONG": 58.0}, "elite_probability": 72.0},
+    "GG_BTTS":    {"label": "GG / BTTS",      "emoji": "⚽", "market": "btts",
+                   "min_probability": 56.0, "low_floor": 50.0,
+                   "grades": {"PURE": 70.0, "STRONG": 62.0}, "elite_probability": 75.0},
+    "OVER_UNDER": {"label": "Over/Under 2.5", "emoji": "📈", "market": "ou_2_5",
+                   "min_probability": 56.0, "low_floor": 50.0,
+                   "grades": {"PURE": 70.0, "STRONG": 62.0}, "elite_probability": 75.0},
+    "SCORE":      {"label": "Correct Score",  "emoji": "🎯", "market": "top_cs",
+                   "min_probability": 12.0, "low_floor": 8.0,
+                   "grades": {"PURE": 18.0, "STRONG": 15.0}, "elite_probability": 20.0},
+}
+TIER_SIZE = 10
 
 MODELS_CFG = {
     "1x2":        {"file": "champion_model.joblib",          "mapfile": "champion_label_mapping.json",      "fallback_map": {0:"AWAY_WIN",1:"DRAW",2:"HOME_WIN"}, "positive": None},
@@ -75,7 +102,6 @@ MODELS_CFG = {
 }
 MARKET_KEYS = ["btts", "ou_0_5", "ou_1_5", "ou_2_5", "ou_3_5"]
 
-# ---- EXACT Step 49 V4 contract (matches champion_manifest.json byte-list) ----
 BASE_FEATURES = ["home_elo_pre","away_elo_pre","elo_diff",
     "home_ewma_pts","away_ewma_pts","home_ewma_gd","away_ewma_gd",
     "home_ewma_gf","away_ewma_gf","home_ewma_ga","away_ewma_ga",
@@ -130,6 +156,11 @@ def _pct(v):
     if not isinstance(v, (int, float)): return None
     return v * 100 if abs(v) <= 1 else float(v)
 
+def poisson_prob(k, lam):
+    lam = float(np.clip(lam, 0.05, 3.0))
+    return math.exp(-lam) * (lam ** k) / math.factorial(k)
+
+# ================= labels / thresholds =================
 def load_label_map(key):
     cfg = MODELS_CFG[key]
     if cfg["mapfile"]:
@@ -140,9 +171,7 @@ def load_label_map(key):
     return cfg["fallback_map"] or {}
 
 def load_threshold(key):
-    """(threshold, apply). Applied only when tuned beat default by >= THRESH_MIN_GAIN
-    pp — degenerate 'always-OVER' thresholds (0.15) have no real edge and would
-    expose picks like 'OVER 41.6%'."""
+    """(threshold, apply). Applied only when validation proved >= THRESH_MIN_GAIN pp."""
     try:
         meta = json.load(open(os.path.join(MODELS_DIR, f"market_{key}_metadata.json"), encoding="utf-8"))
         th = float(np.clip(float(meta.get("best_threshold", meta.get("threshold", 0.5))), 0.15, 0.85))
@@ -152,10 +181,6 @@ def load_threshold(key):
         return th, apply
     except Exception:
         return 0.5, False
-
-def poisson_prob(k, lam):
-    lam = float(np.clip(lam, 0.05, 3.0))
-    return math.exp(-lam) * (lam ** k) / math.factorial(k)
 
 # ================= MASTER PICKER =================
 def select_champion():
@@ -181,22 +206,23 @@ def select_champion():
     table.sort(key=lambda x: x["improvement"] if x["improvement"] is not None else -999, reverse=True)
 
     champ_file = os.path.join(MODELS_DIR, "champion_model.joblib")
-    champ_meta = next((r for r in candidates if "champion" in r["file"]), None)
+    champ_meta = next((r for r in candidates if "champion" in r["file"].lower()), None)
     if not os.path.exists(champ_file):
         decision, reason = "HEURISTIC", "no champion_model.joblib on disk"
     elif champ_meta and champ_meta["improvement"] is not None and champ_meta["improvement"] <= 0:
         decision, reason = "HEURISTIC", f"champion report shows no edge: {champ_meta}"
     elif champ_meta:
-        decision, reason = "MODEL", f"champion wins: {champ_meta}"
+        decision, reason = "MODEL", f"champion selected: {champ_meta}"
     else:
         decision, reason = "MODEL", "champion exists, no parseable report — serving with audit warning"
 
-    log.info("=" * 70); log.info(" MASTER PICKER — TRAINER COMPARISON"); log.info("=" * 70)
+    log.info("=" * 70); log.info(" MASTER PICKER — TRAINER COMPARISON "); log.info("=" * 70)
     for t in table[:8]:
-        log.info(f"   {t['file'][:44]:44s} acc {t['accuracy']:6.2f}%  "
-                 f"delta {('%+.2f' % t['improvement']) if t['improvement'] is not None else '  n/a':>7s}  "
-                 f"feats {t['features']:2d}  {'✅ contract' if t['contract_ok'] else '⛔ legacy-contract'}")
-    log.info(f"   👉 DECISION: {decision}  ({reason})")
+        delta = f"{t['improvement']:+.2f}" if t["improvement"] is not None else "n/a"
+        contract = "✅ contract" if t["contract_ok"] else "⛔ legacy-contract"
+        log.info(f"   {t['file'][:44]:44s} acc {t['accuracy']:6.2f}%  delta {delta:>7s}  "
+                 f"feats {t['features']:2d}  {contract}")
+    log.info(f"   👉 DECISION: {decision} ({reason})")
     atomic_write_json({"decided_at": datetime.now(timezone.utc).isoformat(),
                        "decision": decision, "reason": reason,
                        "contract": f"{len(FEATURE_ORDER)}_features",
@@ -239,7 +265,7 @@ def build_feature_row(h, a, h_elo, a_elo):
     })
     return row
 
-# ================= TEAM RESOLVER — V3.1 FULL EXPANSION =================
+# ================= TEAM RESOLVER — full expansion =================
 def build_resolver(live_state):
     pid_map, alias_index = {}, {}
     try:
@@ -377,8 +403,8 @@ def xg_directional_1x2(xg_h, xg_a):
     return {"probabilities": pm, "pick": pick, "pick_probability": conf, "engine": "xg_directional_degraded"}
 
 def predict_binary(m, label_map, positive, X, thresh, apply_thresh):
-    """Pick = threshold-based ONLY when validation proved its gain; else argmax.
-    Never exposes a pick whose probability < 50%."""
+    """Threshold pick only when validation proved its gain; argmax otherwise.
+    A pick can never carry pick_probability < 50."""
     proba = m.predict_proba(X)[0]
     labels = [label_map.get(int(c), str(c)) for c in m.classes_]
     pmap = {lb: round(float(p)*100, 2) for lb, p in zip(labels, proba)}
@@ -387,11 +413,112 @@ def predict_binary(m, label_map, positive, X, thresh, apply_thresh):
         neg = next((lb for lb in labels if lb != positive), positive)
         cutoff = thresh if apply_thresh else 0.5
         pick = positive if p_pos >= cutoff else neg
+        if pmap[pick] < 50.0:
+            pick = labels[int(np.argmax(proba))]
         return {"probabilities": pmap, "pick": pick, "pick_probability": pmap[pick],
                 "threshold": round(thresh, 2), "threshold_applied": bool(apply_thresh)}
     b = int(np.argmax(proba))
     return {"probabilities": pmap, "pick": labels[b], "pick_probability": pmap[labels[b]]}
 
+# ================= STRONG PICK ENGINE =================
+def probability_margin(market):
+    if not isinstance(market, dict): return 0.0
+    vals = []
+    for v in (market.get("probabilities") or {}).values():
+        try: vals.append(float(v))
+        except Exception: pass
+    if len(vals) < 2: return 0.0
+    vals.sort(reverse=True)
+    return float(vals[0] - vals[1])
+
+def market_confidence(market):
+    if not isinstance(market, dict): return 0.0
+    try: return float(market.get("pick_probability", 0.0))
+    except Exception: return 0.0
+
+def xg_direction_agrees(pick, xg_home, xg_away):
+    try: xh, xa = float(xg_home), float(xg_away)
+    except Exception: return 0
+    diff = xh - xa
+    if pick == "HOME_WIN":
+        if diff >= 0.25: return 1
+        if diff <= -0.20: return -1
+    elif pick == "AWAY_WIN":
+        if diff <= -0.25: return 1
+        if diff >= 0.20: return -1
+    elif pick == "DRAW":
+        if abs(diff) <= 0.18: return 1
+        if abs(diff) >= 0.45: return -1
+    return 0
+
+def goals_direction_agrees(pick, markets):
+    if not isinstance(markets, dict): return 0
+    ou25 = markets.get("ou_2_5") or {}
+    btts = markets.get("btts") or {}
+    if pick in ("HOME_WIN", "AWAY_WIN"):
+        if ou25.get("pick") == "OVER" and btts.get("pick") == "YES": return 1
+    if pick == "DRAW":
+        if ou25.get("pick") == "UNDER": return 1
+    return 0
+
+def strong_pick_grade(score, probability):
+    if score >= 82 and probability >= 66: return "ELITE"
+    if score >= 72 and probability >= 60: return "STRONG"
+    if score >= 62 and probability >= 56: return "GOOD"
+    if score >= 52: return "LEAN"
+    return "WEAK"
+
+def score_strong_1x2(markets, team_state):
+    m = markets.get("1x2") or {}
+    pick = m.get("pick")
+    if not pick:
+        return {"score": 0.0, "grade": "WEAK", "eligible": False,
+                "probability": 0.0, "margin": 0.0, "reasons": ["missing 1x2 pick"]}
+    prob = market_confidence(m)
+    margin = probability_margin(m)
+    cfg = STRONG_PICK_CONFIG["1x2"]
+    probability_score = float(np.clip((prob - 50.0) * 2.0, 0.0, 50.0))
+    margin_score = float(np.clip(margin * 1.25, 0.0, 20.0))
+    xg = markets.get("xG") or {}
+    xg_agreement = xg_direction_agrees(pick, xg.get("home", 1.2), xg.get("away", 1.2))
+    xg_score = 10.0 if xg_agreement > 0 else (-10.0 if xg_agreement < 0 else 0.0)
+    goal_agreement = goals_direction_agrees(pick, markets)
+    goal_score = 8.0 if goal_agreement > 0 else 0.0
+    state_score = 7.0 if team_state == "resolved" else -6.0
+    margin_penalty = 8.0 if margin < cfg["min_margin"] else 0.0
+    score = float(np.clip(probability_score + margin_score + xg_score + goal_score
+                          + state_score - margin_penalty, 0.0, 100.0))
+    eligible = bool(prob >= cfg["min_probability"] and margin >= cfg["min_margin"] and score >= 58.0)
+    reasons = []
+    if prob >= cfg["elite_probability"]: reasons.append("elite probability")
+    elif prob >= cfg["strong_probability"]: reasons.append("strong probability")
+    elif prob >= cfg["min_probability"]: reasons.append("acceptable probability")
+    if margin >= 12: reasons.append("clear separation")
+    elif margin >= cfg["min_margin"]: reasons.append("acceptable separation")
+    if xg_agreement > 0: reasons.append("xG agrees")
+    elif xg_agreement < 0: reasons.append("xG conflict")
+    if goal_agreement > 0: reasons.append("goal markets agree")
+    reasons.append("resolved team state" if team_state == "resolved" else "estimated team state")
+    return {"score": round(score, 2), "grade": strong_pick_grade(score, prob),
+            "eligible": eligible, "probability": round(prob, 2),
+            "margin": round(margin, 2), "reasons": reasons}
+
+def annotate_strong_pick(markets):
+    if not isinstance(markets, dict):
+        return markets
+    if markets.get("mode") != "prematch":
+        markets["strong_pick"] = {"eligible": False, "score": 0.0, "grade": "LIVE",
+                                  "reason": "strong-pick ranking is prematch only"}
+        return markets
+    result = score_strong_1x2(markets, markets.get("team_state", "estimated"))
+    markets["strong_pick"] = {
+        "eligible": result["eligible"], "score": result["score"],
+        "grade": result["grade"], "probability": result["probability"],
+        "margin": result["margin"], "reasons": result["reasons"],
+    }
+    return markets
+
+# ================= audit =================
 def audit_consistency(markets):
     warns = []
     if markets.get("mode") != "prematch":
@@ -408,6 +535,7 @@ def audit_consistency(markets):
                     ou["pick"], ou["pick_probability"] = other, ou["probabilities"][other]
     return warns
 
+# ================= CS (8x8 + IPF) =================
 def expand_proba(proba, classes, n=None):
     n = n or N_GOALS
     out = np.zeros((proba.shape[0], n))
@@ -416,16 +544,12 @@ def expand_proba(proba, classes, n=None):
         if 0 <= c < n: out[:, c] = proba[:, i]
     return out
 
-# ================= CS CALIBRATION (V3.2: IPF to model's own 1x2 + OU2.5) =================
 def pois_matrix(r, n=None):
     n = n or N_GOALS
     return np.array([[poisson_prob(h_, r["exp_home_xg"]) * poisson_prob(a_, r["exp_away_xg"])
                       for a_ in range(n)] for h_ in range(n)])
 
 def ipf_calibrate(grid, p13=None, p_over25=None, iters=IPF_ITERS):
-    """Tilt a correct-score grid (fractions, N x N) so its marginals match the
-    model's OWN 1x2 and Over-2.5 probabilities — iterative proportional fitting.
-    Amplification capped so we tilt, never hallucinate."""
     g = np.array(grid, dtype=float)
     if g.sum() <= 0: return g
     g /= g.sum()
@@ -439,46 +563,33 @@ def ipf_calibrate(grid, p13=None, p_over25=None, iters=IPF_ITERS):
         for mask, tgt in groups:
             if tgt is None: continue
             cur = g[mask].sum()
-            if cur > 1e-6:
-                g[mask] *= min(tgt / cur, 8.0)
+            if cur > 1e-6: g[mask] *= min(tgt / cur, 8.0)
             g /= (g.sum() or 1.0)
         if p_over25 is not None:
             cur = g[over_m].sum()
-            if cur > 1e-6:
-                g[over_m] *= min(p_over25 / cur, 8.0)
+            if cur > 1e-6: g[over_m] *= min(p_over25 / cur, 8.0)
             g /= (g.sum() or 1.0)
     return g
 
 # ================= LIVE LAYER =================
 def derive_minute(item, now_ts):
-    """Provider minute unreliable (0 mid-match). Derive from kickoff timestamp
-    with halftime adjustment; provider minute used only when sane."""
     disp = item.get("display") or {}
     status = str(item.get("status") or disp.get("status") or "").upper()
     m = _num(item.get("minute") or disp.get("minute"), 0)
     ko = _num(item.get("timestamp"), 0)
     elapsed = max(0.0, (now_ts - ko) / 60.0) if ko > 0 else 0.0
-    if status == "1H":
-        T = min(elapsed, 45.0)
-    elif status == "HT":
-        T = 45.0
-    elif status == "2H":
-        T = min(max(elapsed - 15.0, 45.0), 90.0)
-    elif status in ("ET", "BT", "P"):
-        T = 90.0
-    elif status in LIVE_STATUSES:
-        T = min(elapsed, 90.0)
-    else:
-        T = m if m > 0 else min(elapsed, 90.0)
+    if status == "1H": T = min(elapsed, 45.0)
+    elif status == "HT": T = 45.0
+    elif status == "2H": T = min(max(elapsed - 15.0, 45.0), 90.0)
+    elif status in ("ET", "BT", "P"): T = 90.0
+    elif status in LIVE_STATUSES: T = min(elapsed, 90.0)
+    else: T = m if m > 0 else min(elapsed, 90.0)
     if m > 0:
         if status == "1H": T = min(m, 45.0)
         elif status == "2H": T = min(max(m, 45.0), 90.0)
     return max(0.0, T)
 
 def build_live_markets(xg_h, xg_a, H0, A0, minute, team_state_label):
-    """Gamma-poisson conditional final-outcome distribution given (score, minute).
-    Prior = pre-match xG; shrinkage toward observed scoring via conjugacy.
-    Grid N_GOALS wide — final scores start AT the current score by construction."""
     T  = max(0.0, min(float(minute), 90.0))
     R  = max(0.0, 90.0 - T)
     t90 = T / 90.0
@@ -534,9 +645,9 @@ def build_live_markets(xg_h, xg_a, H0, A0, minute, team_state_label):
         "live_state": {"minute": round(T), "remaining_min": round(R, 1),
                        "score": f"{H0}-{A0}",
                        "rates_remaining": {"home": round(lam_h, 3), "away": round(lam_a, 3)}},
-        "1x2":    {**m(p13, pick13, p13[pick13]), "engine": "live_poisson_gamma"},
-        "btts":   m({"YES": round(btts_yes*100,2), "NO": round((1-btts_yes)*100,2)},
-                    "YES" if btts_yes >= 0.5 else "NO", round(max(btts_yes, 1-btts_yes)*100, 2)),
+        "1x2": {**m(p13, pick13, p13[pick13]), "engine": "live_poisson_gamma"},
+        "btts": m({"YES": round(btts_yes*100,2), "NO": round((1-btts_yes)*100,2)},
+                  "YES" if btts_yes >= 0.5 else "NO", round(max(btts_yes, 1-btts_yes)*100, 2)),
     }
     for line, key in ((0.5, "ou_0_5"), (1.5, "ou_1_5"), (2.5, "ou_2_5"), (3.5, "ou_3_5")):
         o = ou(line)
@@ -551,7 +662,6 @@ def build_live_markets(xg_h, xg_a, H0, A0, minute, team_state_label):
     return markets, top_cs, cs.get(top_cs, 0.0)
 
 def validate_live_sanity(markets):
-    """Final scores can never be below the current score. Returns violation list."""
     if not isinstance(markets, dict) or markets.get("mode") != "live": return []
     ls = markets.get("live_state") or {}
     try: H0, A0 = map(int, str(ls.get("score", "0-0")).split("-"))
@@ -564,7 +674,185 @@ def validate_live_sanity(markets):
             bad.append(f"CS {k} below live {H0}-{A0}")
     return bad
 
-# ================= PHASE 1: GENERATION (re-run safe, mode-aware) =================
+# ================= PICK GROUPS ENGINE (V4.2 — quality-graded) =================
+def _pick_of(p, gcfg):
+    """(pick, probability) for a group's market from a prediction."""
+    mk = p.get("markets", {})
+    if gcfg["market"] == "top_cs":
+        return p.get("top_correct_score"), float(p.get("top_cs_prob", 0) or 0)
+    mm = mk.get(gcfg["market"]) or {}
+    return mm.get("pick"), float(mm.get("pick_probability", 0) or 0)
+
+def _quality_of(gcfg, prob):
+    g = gcfg.get("grades") or {}
+    if prob >= g.get("PURE", 999.0):   return "PURE"
+    if prob >= g.get("STRONG", 999.0): return "STRONG"
+    return "STANDARD"
+
+def _master_score(gcfg, prob, team_state):
+    """Cross-market comparable confidence: edge over the family floor,
+    normalized to the family elite, boosted for resolved team state."""
+    floor = gcfg["min_probability"]
+    elite = gcfg.get("elite_probability", floor + 15.0)
+    s = (prob - floor) / max(elite - floor, 1.0)
+    s = max(0.0, min(s, 1.5))
+    if team_state == "resolved":
+        s += 0.08
+    return round(s, 4)
+
+def _share_line(emoji, p, pick, prob, rank):
+    st = "🟢" if p.get("markets", {}).get("team_state") == "resolved" else "🟡"
+    return (f"{rank}. {emoji} {pick} — {p['homeTeam']['name']} v "
+            f"{p['awayTeam']['name']} ({prob:.1f}%) · {p.get('league','')} {st}")
+
+def _tier_share_text(gcfg, tier_no, qsum, lines, date_str):
+    span = ("TOP 10" if tier_no == 1
+            else f"RANKS {(tier_no-1)*TIER_SIZE+1}-{tier_no*TIER_SIZE}")
+    qtxt = " · ".join(f"{k} {v}" for k, v in sorted(qsum.items())) if qsum else "empty"
+    return (f"{gcfg['emoji']} ZOKASCORE — {gcfg['label'].upper()} · "
+            f"GROUP {tier_no} ({span}) · {qtxt}\n\n"
+            + "\n".join(lines)
+            + f"\n\n📅 {date_str} · zokascore.xyz")
+
+def build_pick_groups(daily, date_str, generated_at):
+    """Quality-graded tiering per family + cross-market TOP10_DAILY +
+    LOW_CONFIDENCE. Returns (groups_doc, assignment_by_matchId)."""
+    groups, assignment = {}, {}
+    family_pools = {}
+
+    # ---------- market families ----------
+    for gkey, gcfg in PICK_GROUPS_CONFIG.items():
+        pool = []
+        for p in daily:
+            if p.get("markets", {}).get("mode") != "prematch":
+                continue
+            pick, prob = _pick_of(p, gcfg)
+            if not pick or prob < gcfg["min_probability"]:
+                continue
+            team_state = p.get("markets", {}).get("team_state", "estimated")
+            pool.append({"p": p, "pick": pick, "prob": prob,
+                         "quality": _quality_of(gcfg, prob),
+                         "master_score": _master_score(gcfg, prob, team_state)})
+        pool.sort(key=lambda x: (x["prob"],
+                                 1 if x["p"].get("markets", {}).get("team_state") == "resolved" else 0,
+                                 str(x["p"].get("date", ""))), reverse=True)
+        family_pools[gkey] = pool
+
+        tier_count = (len(pool) + TIER_SIZE - 1) // TIER_SIZE
+        tiers = []
+        for t in range(tier_count):
+            chunk = pool[t*TIER_SIZE:(t+1)*TIER_SIZE]
+            picks, lines, qsum = [], [], {}
+            for i, e in enumerate(chunk, start=1):
+                p, pick, prob = e["p"], e["pick"], e["prob"]
+                line = _share_line(gcfg["emoji"], p, pick, prob, i)
+                picks.append({"matchId": p["matchId"], "home": p["homeTeam"]["name"],
+                              "away": p["awayTeam"]["name"], "league": p.get("league",""),
+                              "kickoff": p.get("date",""), "pick": pick,
+                              "probability": round(prob, 2), "quality": e["quality"],
+                              "match_state": p.get("markets", {}).get("team_state", "estimated"),
+                              "share_line": line})
+                lines.append(line)
+                qsum[e["quality"]] = qsum.get(e["quality"], 0) + 1
+                assignment.setdefault(p["matchId"], {})[gkey] = {
+                    "tier": t + 1, "rank": i, "quality": e["quality"]}
+            tiers.append({"tier": t + 1, "quality_summary": qsum,
+                          "picks": picks,
+                          "share_text": _tier_share_text(gcfg, t + 1, qsum, lines, date_str)})
+        if tiers:
+            groups[gkey] = {"label": gcfg["label"], "emoji": gcfg["emoji"],
+                            "market": gcfg["market"], "tier_count": tier_count,
+                            "tiers": tiers}
+
+    # ---------- 🔥 TOP10_DAILY — cross-market, master-confidence ranked ----------
+    master_pool = []
+    for gkey, pool in family_pools.items():
+        for e in pool:
+            master_pool.append({**e, "gkey": gkey})
+    master_pool.sort(key=lambda x: (x["master_score"], x["prob"]), reverse=True)
+
+    top_picks, seen_matches = [], set()
+    for e in master_pool:                     # one pick per match — best market wins
+        mid = e["p"]["matchId"]
+        if mid in seen_matches:
+            continue
+        seen_matches.add(mid)
+        top_picks.append(e)
+        if len(top_picks) >= TIER_SIZE:
+            break
+
+    if top_picks:
+        picks, lines, qsum = [], [], {}
+        for i, e in enumerate(top_picks, start=1):
+            gcfg = PICK_GROUPS_CONFIG[e["gkey"]]
+            p, pick, prob = e["p"], e["pick"], e["prob"]
+            line = _share_line(gcfg["emoji"], p, f"{pick} [{gcfg['label']}]", prob, i)
+            picks.append({"matchId": p["matchId"], "home": p["homeTeam"]["name"],
+                          "away": p["awayTeam"]["name"], "league": p.get("league",""),
+                          "kickoff": p.get("date",""), "pick": pick,
+                          "family": e["gkey"], "probability": round(prob, 2),
+                          "quality": e["quality"], "master_score": e["master_score"],
+                          "match_state": p.get("markets", {}).get("team_state", "estimated"),
+                          "share_line": line})
+            lines.append(line)
+            qsum[e["quality"]] = qsum.get(e["quality"], 0) + 1
+            assignment.setdefault(p["matchId"], {})["TOP10_DAILY"] = {
+                "tier": 1, "rank": i, "quality": e["quality"]}
+        groups["TOP10_DAILY"] = {
+            "label": "Daily Strong Picks", "emoji": "🔥", "market": "mixed",
+            "selection": "master-confidence-score (edge over family floor, state-boosted, 1/match)",
+            "tier_count": 1,
+            "tiers": [{"tier": 1, "quality_summary": qsum, "picks": picks,
+                       "share_text": ("🔥 ZOKASCORE — TOP 10 STRONG PICKS · DAILY · "
+                                      + " · ".join(f"{k} {v}" for k, v in sorted(qsum.items()))
+                                      + "\n\n" + "\n".join(lines)
+                                      + f"\n\n📅 {date_str} · zokascore.xyz")}],
+        }
+
+    # ---------- ⚠️ LOW_CONFIDENCE — RISKY ZONE ----------
+    low_pool = []
+    for gkey in ("PURE_1X2", "GG_BTTS", "OVER_UNDER"):
+        gcfg = PICK_GROUPS_CONFIG[gkey]
+        for p in daily:
+            if p.get("markets", {}).get("mode") != "prematch":
+                continue
+            pick, prob = _pick_of(p, gcfg)
+            if not pick or not (gcfg["low_floor"] <= prob < gcfg["min_probability"]):
+                continue
+            low_pool.append({"p": p, "pick": pick, "prob": prob, "gkey": gkey})
+    low_pool.sort(key=lambda x: (x["prob"],
+                                 1 if x["p"].get("markets", {}).get("team_state") == "resolved" else 0),
+                  reverse=True)
+    chunk = low_pool[:TIER_SIZE]
+    if chunk:
+        picks, lines = [], []
+        for i, entry in enumerate(chunk, start=1):
+            p, pick, prob = entry["p"], entry["pick"], entry["prob"]
+            glabel = PICK_GROUPS_CONFIG[entry["gkey"]]["label"]
+            line = _share_line("⚠️", p, f"{pick} [{glabel}]", prob, i)
+            picks.append({"matchId": p["matchId"], "home": p["homeTeam"]["name"],
+                          "away": p["awayTeam"]["name"], "league": p.get("league",""),
+                          "kickoff": p.get("date",""), "pick": pick, "market": entry["gkey"],
+                          "probability": round(prob, 2), "quality": "RISKY",
+                          "share_line": line})
+            lines.append(line)
+            assignment.setdefault(p["matchId"], {})["LOW_CONFIDENCE"] = {
+                "tier": 1, "rank": i, "quality": "RISKY"}
+        groups["LOW_CONFIDENCE"] = {
+            "label": "Risky Zone", "emoji": "⚠️", "market": "mixed", "tier_count": 1,
+            "tiers": [{"tier": 1, "quality_summary": {"RISKY": len(picks)},
+                       "picks": picks,
+                       "share_text": ("⚠️ ZOKASCORE — RISKY ZONE · LOW CONFIDENCE (for the brave)\n\n"
+                                      + "\n".join(lines)
+                                      + f"\n\n📅 {date_str} · zokascore.xyz")}],
+        }
+
+    return {"date": date_str, "generated_at": generated_at,
+            "tier_size": TIER_SIZE,
+            "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
+            "groups": groups}, assignment
+
+# ================= PHASE 1: GENERATION =================
 def strip_injected(raw):
     clean, stripped = [], 0
     for item in raw:
@@ -583,7 +871,8 @@ def match_phase(item):
         return "live"
     return "prematch"
 
-def generate_day(fixture_data, models, label_maps, thresholds, live_state, resolver, res_ctr, now_ts):
+def generate_day(fixture_data, models, label_maps, thresholds, live_state,
+                 resolver, res_ctr, now_ts, calibration=None):
     raw = fixture_data.get("data", []) if isinstance(fixture_data, dict) else fixture_data
     if not isinstance(raw, list): raw = []
     raw, stripped = strip_injected(raw)
@@ -591,16 +880,14 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
         log.info(f"   re-run safety: stripped stale predictions from {stripped} matches (fresh compute below)")
 
     daily, updated, cs_flags = [], [], []
-    prematch_pairs = []   # (daily_index, feature_row, p13_frac|None, p_over25_frac|None)
-                          # recorded AT APPEND TIME — live matches append to daily
-                          # without a CS row, so indices must never be reconstructed
+    prematch_pairs = []   # (daily_index, feature_row, p13_frac|None, p_over25_frac|None) — AT APPEND TIME
     phase_counts = {"prematch": 0, "live": 0, "final": 0}
 
     for item in raw:
         phase = match_phase(item)
         phase_counts[phase] = phase_counts.get(phase, 0) + 1
         if phase == "final":
-            continue   # finished: no prediction (stale already stripped)
+            continue
 
         mid = str(item.get("id", ""))
         if not mid: continue
@@ -625,8 +912,8 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
         ts_label = "resolved" if (h_ok and a_ok) else "estimated"
         markets = {}
 
+        # -------- LIVE: gamma-poisson conditional (ML supplies xG prior only) --------
         if phase == "live":
-            # -------- LIVE: ML supplies xG prior; conditioning is pure math --------
             H0 = int(_num(item.get("homeScore"), 0))
             A0 = int(_num(item.get("awayScore"), 0))
             minute = derive_minute(item, now_ts)
@@ -645,16 +932,23 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
                 "markets": markets, "top_correct_score": top_cs, "top_cs_prob": top_cs_p})
             continue
 
-        # ---------- PREMATCH ----------
+        # -------- PREMATCH: 1X2 (with optional V5.1 calibration) --------
         cs_flags.append(bool(h_ok and a_ok))
         if "1x2" in models:
             try:
                 m = models["1x2"]
                 proba = m.predict_proba(prep(m))[0]
+                if calibration:
+                    W = np.asarray(calibration["W"], dtype=float)
+                    b = np.asarray(calibration["b"], dtype=float)
+                    z = np.log(np.clip(proba, 1e-12, 1.0)) @ W.T + b
+                    z -= z.max(); e = np.exp(z)
+                    proba = e / e.sum()
                 lm = label_maps.get("1x2") or MODELS_CFG["1x2"]["fallback_map"]
                 pmap = {lm.get(int(c), str(c)): round(float(p)*100, 2) for c, p in zip(m.classes_, proba)}
                 pick = max(pmap, key=pmap.get)
-                markets["1x2"] = {"probabilities": pmap, "pick": pick, "pick_probability": pmap[pick]}
+                markets["1x2"] = {"probabilities": pmap, "pick": pick, "pick_probability": pmap[pick],
+                                  "calibrated": bool(calibration)}
             except Exception as e:
                 log.warning(f"1x2 fail {h_name} v {a_name}: {e} -> heuristic")
                 markets["1x2"] = elo_heuristic_1x2(h_elo, a_elo, row["exp_home_xg"], row["exp_away_xg"])
@@ -673,6 +967,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
                          "total": round(row["exp_total_xg"], 2)}
         markets["mode"] = "prematch"
         markets["team_state"] = ts_label
+        markets = annotate_strong_pick(markets)
         markets = convert_floats(markets)
 
         u = dict(item); u["_tmp_markets"] = markets; updated.append(u)
@@ -682,7 +977,6 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
             "date": item.get("utcDate") or item.get("date",""),
             "markets": markets, "top_correct_score": "1-1", "top_cs_prob": 0})
 
-        # capture market probabilities (fractions) for CS calibration — V3.2
         _p13 = (markets.get("1x2") or {}).get("probabilities") or {}
         _o25 = (markets.get("ou_2_5") or {}).get("probabilities") or {}
         p13f = {k: float(v)/100.0 for k, v in _p13.items()} or None
@@ -718,10 +1012,10 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
             s = joint.sum(axis=1, keepdims=True); s[s == 0] = 1.0
             joint = joint / s
             for bi, (di, r, p13f, o25f) in enumerate(prematch_pairs):
-                ml = joint[bi].reshape(N_GOALS, N_GOALS)   # already NxN; classes 6-7 zero-padded (models trained 0-5)
+                ml = joint[bi].reshape(N_GOALS, N_GOALS)   # already NxN; classes 6-7 zero-padded
                 base = (CS_ML_WEIGHT * ml + CS_POIS_WEIGHT * pois_matrix(r)) if cs_flags[bi] else pois_matrix(r)
                 base = base / (base.sum() or 1.0)
-                cs_apply(di, ipf_calibrate(base, p13f, o25f))  # tilt to own 1x2 + OU2.5
+                cs_apply(di, ipf_calibrate(base, p13f, o25f))
         except Exception as e:
             log.warning(f"Hybrid CS failed: {e} -> Poisson+IPF")
             cs_poisson_all(prematch_pairs, cs_apply)
@@ -737,7 +1031,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state, resol
     return daily, final
 
 def run_generation():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V3.2 — PICKER + GENERATION"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2 — PICKER + GROUPS + GENERATION"); log.info("="*70)
     decision = select_champion()
     models, label_maps, thresholds = {}, {}, {}
     for key, cfg in MODELS_CFG.items():
@@ -757,9 +1051,23 @@ def run_generation():
                 if extra: log.warning(f"   ⚠ {key} expects features NOT in contract (will be 0!): {extra}")
         except Exception as e: log.warning(f"{key}: FAIL {e}")
 
+    # ---- V5.1 calibration (validation-fitted, log-loss gated) ----
+    calibration = None
+    cal_path = os.path.join(MODELS_DIR, "champion_calibration.json")
+    if os.path.exists(cal_path):
+        try:
+            cal = json.load(open(cal_path, encoding="utf-8"))
+            if cal.get("enabled"):
+                calibration = cal
+                log.info("1x2 calibration: ENABLED (validation-fitted, log-loss gated)")
+        except Exception as e:
+            log.warning(f"calibration load failed: {e}")
+
     live_state = load_live_state()
     resolver, make_counters = build_resolver(live_state)
-    os.makedirs(PREDICTIONS_DIR, exist_ok=True); os.makedirs(ZOKAPICKS_DIR, exist_ok=True)
+    os.makedirs(PREDICTIONS_DIR, exist_ok=True)
+    os.makedirs(ZOKAPICKS_DIR, exist_ok=True)
+    os.makedirs(PICK_GROUPS_DIR, exist_ok=True)
     now = datetime.now(timezone.utc); now_ts = time.time(); total = 0
     for off in range(WINDOW_START, DAYS_AHEAD):
         date_str = (now + timedelta(days=off)).date().isoformat()
@@ -767,52 +1075,87 @@ def run_generation():
         if not os.path.exists(fpath): log.info(f"Skip {date_str} — no fixtures"); continue
         fixture_data = json.load(open(fpath, encoding="utf-8"))
         res_ctr = make_counters()
-        daily, final = generate_day(fixture_data, models, label_maps, thresholds, live_state, resolver, res_ctr, now_ts)
+        daily, final = generate_day(fixture_data, models, label_maps, thresholds,
+                                    live_state, resolver, res_ctr, now_ts, calibration)
 
-        # freshness metadata — consumed by frontend + serve-time sync
         for p in daily:
             p["freshness"] = {"generated_at": now.isoformat(),
                               "ttl_minutes": 10 if p["markets"].get("mode") == "live" else 60}
+
+        # ---- PICK GROUPS (V4.2): tier + quality-grade + assign + mirror everywhere ----
+        groups_doc, assignment = build_pick_groups(daily, date_str, now.isoformat())
+        for p in daily:
+            if p["matchId"] in assignment:
+                p["pick_groups"] = assignment[p["matchId"]]
+        by_mid = {p["matchId"]: p.get("pick_groups") for p in daily}
+        for item in final:
+            ga = by_mid.get(str(item.get("id")))
+            if ga:
+                item["pick_groups"] = ga
+                if isinstance(item.get("prediction"), dict):
+                    item["prediction"]["pick_groups"] = ga
+        atomic_write_json(groups_doc, os.path.join(PICK_GROUPS_DIR, f"{date_str}.json"))
+        n_tiers = sum(g["tier_count"] for g in groups_doc["groups"].values())
+        log.info(f"[PICK-GROUPS] {date_str}: {len(groups_doc['groups'])} groups, {n_tiers} tiers")
 
         out = dict(fixture_data) if isinstance(fixture_data, dict) else {}
         out.update({"data": final, "count": len(final), "date": date_str})
         atomic_write_json(out, fpath)
 
-        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V3.2",
+        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V4.2",
             "date": date_str, "generated_at": now.isoformat(),
             "features": f"{len(FEATURE_ORDER)}_step49v4_parity", "modes": "prematch|live|final(none)",
             "cs": f"grid {N_GOALS}x{N_GOALS} ipf-calibrated to own 1x2+OU2.5",
+            "strong_pick_engine": "V4.0", "pick_groups_engine": "V4.2",
             "count": len(daily), "predictions": daily, "data": daily},
             os.path.join(PREDICTIONS_DIR, f"{date_str}.json"))
 
+        # ---- STRONG ZOKAPICKS: eligible-only, score-ranked, never force-filled ----
+        prematch = [p for p in daily if p.get("markets", {}).get("mode") == "prematch"]
+        strong_candidates = [p for p in prematch
+                             if p.get("markets", {}).get("strong_pick", {}).get("eligible") is True]
+        strong_candidates.sort(key=lambda p: (
+            float(p.get("markets", {}).get("strong_pick", {}).get("score", 0)),
+            float(p.get("markets", {}).get("1x2", {}).get("pick_probability", 0)),
+            float(p.get("markets", {}).get("strong_pick", {}).get("margin", 0)),
+        ), reverse=True)
+        top10 = strong_candidates[:10]
+        zp = []
+        for p in top10:
+            try: hh, aa = map(int, str(p.get("top_correct_score", "1-1")).split("-"))
+            except Exception: hh, aa = 1, 1
+            markets = p["markets"]
+            strong = markets.get("strong_pick", {})
+            zp.append({"matchId": p["matchId"], "homeTeam": p["homeTeam"]["name"],
+                       "awayTeam": p["awayTeam"]["name"], "league": p.get("league",""),
+                       "kickoff": p.get("date",""), "adminPick": {"home": hh, "away": aa},
+                       "topCS": p.get("top_correct_score"), "topCSProb": p.get("top_cs_prob",0),
+                       "markets": markets,
+                       "strongPick": {"pick": markets.get("1x2",{}).get("pick"),
+                                      "probability": markets.get("1x2",{}).get("pick_probability",0),
+                                      "score": strong.get("score",0), "grade": strong.get("grade","WEAK"),
+                                      "margin": strong.get("margin",0), "reasons": strong.get("reasons",[])}})
+        atomic_write_json({"date": date_str, "totalMatches": len(zp),
+                           "candidateCount": len(strong_candidates),
+                           "selection": "strong-pick-score", "maxPublished": 10,
+                           "matches": zp, "data": zp, "publishedAt": now.isoformat()},
+                          os.path.join(ZOKAPICKS_DIR, f"{date_str}.json"))
+
         if daily:
-            top10 = sorted((p for p in daily if p["markets"].get("mode") == "prematch"),
-                           key=lambda x: x["markets"].get("1x2",{}).get("pick_probability",0), reverse=True)[:10]
-            zp = []
-            for p in top10:
-                try: hh, aa = map(int, str(p.get("top_correct_score","1-1")).split("-"))
-                except Exception: hh, aa = 1, 1
-                zp.append({"matchId": p["matchId"], "homeTeam": p["homeTeam"]["name"],
-                           "awayTeam": p["awayTeam"]["name"], "league": p.get("league",""),
-                           "kickoff": p.get("date",""), "adminPick": {"home": hh, "away": aa},
-                           "topCS": p.get("top_correct_score"), "topCSProb": p.get("top_cs_prob",0),
-                           "markets": p["markets"]})
-            atomic_write_json({"date": date_str, "totalMatches": len(zp), "matches": zp,
-                               "data": zp, "publishedAt": now.isoformat()},
-                              os.path.join(ZOKAPICKS_DIR, f"{date_str}.json"))
-            s = daily[0]; m = s["markets"]
-            log.info(f"[OK] {date_str}: {len(daily)} preds | state live={res_ctr['live']} hash={res_ctr['hash']} | "
+            s = daily[0]; m = s["markets"]; sp = m.get("strong_pick", {})
+            log.info(f"[OK] {date_str}: {len(daily)} preds | strong={len(top10)}/{len(strong_candidates)} | "
+                     f"state live={res_ctr['live']} hash={res_ctr['hash']} | "
                      f"sample[{m.get('mode')}] {s['homeTeam']['name']} v {s['awayTeam']['name']} -> "
                      f"{m.get('1x2',{}).get('pick')} {m.get('1x2',{}).get('pick_probability')}% | "
-                     f"CS {s['top_correct_score']} {s['top_cs_prob']}% | xG {m.get('xG',{}).get('total')} "
-                     f"[{m.get('team_state','?')}]")
+                     f"CS {s['top_correct_score']} {s['top_cs_prob']}% | xG {m.get('xG',{}).get('total')} | "
+                     f"strong={sp.get('grade','N/A')} {sp.get('score',0)}")
             total += len(daily)
     log.info(f"[GEN] {total} predictions across window [{WINDOW_START}..+{DAYS_AHEAD-1}]")
     return 0
 
 # ================= PHASE 2: FINALIZE =================
 def run_finalize():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V3.2 — FINALIZE"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2 — FINALIZE"); log.info("="*70)
     files = sorted(f for f in glob.glob(os.path.join(PREDICTIONS_DIR, "*.json"))
                    if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
     log.info(f"[FINALIZE] {len(files)} daily files")
@@ -835,6 +1178,7 @@ def run_finalize():
             if not (isinstance(m.get("1x2"), dict) and m["1x2"].get("pick")):
                 m["1x2"] = xg_directional_1x2(float(m.get("xG",{}).get("home",1.2)),
                                               float(m.get("xG",{}).get("away",1.2)))
+                m = annotate_strong_pick(m)
                 log.warning(f"DEGRADED 1x2 via xG for {p.get('matchId')}")
             kept.append(p)
         by_date[date] = len(kept); all_preds.extend(kept)
@@ -852,29 +1196,73 @@ def run_finalize():
     deduped.sort(key=lambda x: (x.get("markets",{}).get("mode","prematch") != "live",
                                 -x.get("markets",{}).get("1x2",{}).get("pick_probability",0)))
 
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V3.2",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V4.2",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_predictions": len(deduped), "by_date": by_date,
         "features": f"{len(FEATURE_ORDER)}_step49v4_parity",
         "modes": "prematch (ML) · live (gamma-poisson conditional, sanity-validated) · final (none)",
-        "models": {"1x2": "champion 51.10% (+7.12%) full-contract (prematch)",
-                   "ou_3_5": "threshold 0.67 applied (validated gain)", "btts": "54.45% (+1.04%)",
-                   "correct_score": f"prematch: {N_GOALS}x{N_GOALS} hybrid, IPF-calibrated to own 1x2+OU2.5 · live: conditional grid"},
+        "strong_pick_engine": {"version": "4.0", "description": "Selective multi-signal prematch picker",
+                               "forced_top10": False, "max_published": 10},
+        "pick_groups_engine": {"version": "4.2", "tier_size": TIER_SIZE,
+                               "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
+                               "families": list(PICK_GROUPS_CONFIG.keys()) + ["TOP10_DAILY", "LOW_CONFIDENCE"]},
+        "models": {"1x2": "champion model (Step 49 contract)", "btts": "market_btts_model",
+                   "ou_0_5": "market_ou_0_5_model", "ou_1_5": "market_ou_1_5_model",
+                   "ou_2_5": "market_ou_2_5_model", "ou_3_5": "market_ou_3_5_model",
+                   "correct_score": f"prematch: {N_GOALS}x{N_GOALS} hybrid + IPF · live: conditional grid"},
         "predictions": deduped, "data": deduped},
         os.path.join(PUBLIC_DATA, "predictions.json"))
 
+    # ---- unified zokapicks: eligible-only, STALE-PICK GUARD (kickoff >= today) ----
+    today_str = datetime.now(timezone.utc).date().isoformat()
     zp_all = []
-    for fp in sorted(glob.glob(os.path.join(ZOKAPICKS_DIR, "*.json"))):
-        if not DATE_RE.match(os.path.splitext(os.path.basename(fp))[0]): continue
-        try: d = json.load(open(fp, encoding="utf-8"))
-        except Exception: continue
-        zp_all.extend(d.get("matches") or d.get("data") or [])
-    for m in zp_all:
-        if isinstance(m.get("markets"), dict): audit_consistency(m["markets"])
-    zp_all.sort(key=lambda x: x.get("markets",{}).get("1x2",{}).get("pick_probability",0) if isinstance(x.get("markets"), dict) else 0, reverse=True)
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "generated_at": datetime.now(timezone.utc).isoformat(),
-        "total": min(len(zp_all),50), "matches": zp_all[:50], "data": zp_all[:50]},
+    for p in deduped:
+        m = p.get("markets", {})
+        if m.get("mode") != "prematch": continue
+        kickoff = str(p.get("date", ""))[:10]
+        if kickoff and kickoff < today_str:
+            continue
+        strong = m.get("strong_pick", {})
+        if not strong.get("eligible", False): continue
+        try: hh, aa = map(int, str(p.get("top_correct_score", "1-1")).split("-"))
+        except Exception: hh, aa = 1, 1
+        zp_all.append({"matchId": p.get("matchId"),
+            "homeTeam": p.get("homeTeam",{}).get("name") if isinstance(p.get("homeTeam"),dict) else p.get("homeTeam"),
+            "awayTeam": p.get("awayTeam",{}).get("name") if isinstance(p.get("awayTeam"),dict) else p.get("awayTeam"),
+            "league": p.get("league",""), "kickoff": p.get("date",""),
+            "adminPick": {"home": hh, "away": aa},
+            "topCS": p.get("top_correct_score"), "topCSProb": p.get("top_cs_prob",0),
+            "markets": m,
+            "strongPick": {"pick": m.get("1x2",{}).get("pick"),
+                           "probability": m.get("1x2",{}).get("pick_probability",0),
+                           "score": strong.get("score",0), "grade": strong.get("grade","WEAK"),
+                           "margin": strong.get("margin",0), "reasons": strong.get("reasons",[])}})
+    zp_all.sort(key=lambda x: x.get("strongPick", {}).get("score", 0), reverse=True)
+    zp_all = zp_all[:50]
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "ZOKAPICKS_V4.0",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "total": len(zp_all), "selection": "strong-pick-score",
+        "stale_guard": f"kickoff >= {today_str}",
+        "matches": zp_all, "data": zp_all},
         os.path.join(PUBLIC_DATA, "zokapicks.json"))
+
+    # ---- unified pick_groups.json ----
+    pg_files = sorted(f for f in glob.glob(os.path.join(PICK_GROUPS_DIR, "*.json"))
+                      if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
+    pg_days = {}
+    for fp in pg_files:
+        try:
+            d = json.load(open(fp, encoding="utf-8"))
+            pg_days[d.get("date")] = d.get("groups", {})
+        except Exception:
+            continue
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "PICK_GROUPS_V4.2",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "tier_size": TIER_SIZE,
+        "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
+        "days": pg_days,
+        "latest": (pg_days.get(datetime.now(timezone.utc).date().isoformat()) or {})},
+        os.path.join(PUBLIC_DATA, "pick_groups.json"))
 
     mp = []
     for p in deduped:
@@ -887,12 +1275,15 @@ def run_finalize():
             "1x2": m.get("1x2",{}), "btts": m.get("btts",{}),
             "ou_1_5": m.get("ou_1_5",{}), "ou_2_5": m.get("ou_2_5",{}), "ou_3_5": m.get("ou_3_5",{}),
             "correct_scores": m.get("correct_scores",{}), "xG": m.get("xG",{}),
-            "live_state": m.get("live_state"),
+            "live_state": m.get("live_state"), "strong_pick": m.get("strong_pick",{}),
+            "pick_groups": p.get("pick_groups",{}),
             "top_correct_score": p.get("top_correct_score","1-1"), "top_cs_prob": p.get("top_cs_prob",0)})
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "generated_at": datetime.now(timezone.utc).isoformat(),
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "MARKET_PREDICTIONS_V4.2",
+        "generated_at": datetime.now(timezone.utc).isoformat(),
         "count": len(mp), "predictions": mp},
         os.path.join(PUBLIC_DATA, "market_predictions.json"))
-    log.info(f"[FINALIZE] predictions.json ({len(deduped)}) · zokapicks.json ({min(len(zp_all),50)}) · market_predictions.json ({len(mp)})")
+    log.info(f"[FINALIZE] predictions.json ({len(deduped)}) · zokapicks.json ({len(zp_all)}) · "
+             f"pick_groups.json ({len(pg_days)} days) · market_predictions.json ({len(mp)})")
     log.info("✅ READY FOR API")
     return 0
 

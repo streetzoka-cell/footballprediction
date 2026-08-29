@@ -70,6 +70,7 @@
     "firebase": "^12.16.0",
     "firebase-admin": "^12.7.0",
     "framer-motion": "^12.42.2",
+    "html2canvas": "^1.4.1",
     "konva": "^10.3.0",
     "lucide-react": "^1.27.0",
     "nprogress": "^0.2.0",

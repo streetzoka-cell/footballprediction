@@ -2627,3 +2627,8 @@ a { text-decoration: none; color: inherit; }
     bottom: calc(var(--bottom-nav-height) + 10px + env(safe-area-inset-bottom, 0px));
   }
 }
+
+.shot-no-img img { visibility: hidden; }
+.v21-tabs { display: flex; gap: 6px; padding: 4px; background: var(--bg-elevated); border-radius: 14px; margin: 12px 0 4px; }
+.v21-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; border-radius: 10px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .2s, color .2s; }
+.v21-tab.on { background: rgba(var(--primary-rgb), .12); color: var(--primary); }

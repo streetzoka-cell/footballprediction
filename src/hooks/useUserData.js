@@ -50,22 +50,37 @@ export function useUserPredictions(uid, dateStr) {
   return useQuery({
     queryKey: ['userPredictions', uid, dateStr],
     queryFn: async () => {
-      if (!uid || !dateStr) return {};
-      try {
-        const res = await footballApi.getUserPredictions(dateStr);
-        const backendMap = res?.data || {};
-        if (backendMap && Object.keys(backendMap).length > 0) return backendMap;
-      } catch (err) {
-        console.warn('[useUserPredictions] Backend read failed, falling back to Firebase:', err.message);
-      }
-
-      if (!db) return {};
-      const q = query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), where('matchDate', '==', dateStr));
-      const snap = await getDocs(q);
+  if (!uid || !dateStr) return {};
+  try {
+    const res = await footballApi.getUserPredictions(dateStr);
+    const backendMap = res?.data || {};
+    if (backendMap && Object.keys(backendMap).length > 0) {
+      // ★ Defensive dual-keying: the backend may key by predId
+      //   (uid_matchId) while components look up by matchId — register
+      //   the entry under BOTH keys so neither lookup misses.
       const map = {};
-      snap.docs.forEach((d) => { map[d.id] = { id: d.id, ...d.data() }; });
+      Object.entries(backendMap).forEach(([key, entry]) => {
+        map[key] = entry;
+        const mid = entry?.matchId ?? entry?.match_id;
+        if (mid && String(mid) !== String(key)) {
+          map[String(mid)] = { ...entry, id: key };
+        }
+      });
       return map;
-    },
+    }
+  } catch (err) {
+    console.warn('[useUserPredictions] Backend read failed, falling back to Firebase:', err.message);
+  }
+
+  if (!db) return {};
+  const q = query(collection(db, PATHS.USER_PREDICTIONS), where('userId', '==', uid), where('matchDate', '==', dateStr));
+  const snap = await getDocs(q);
+  const map = {};
+  snap.docs.forEach((d) => { map[d.id] = { id: d.id, ...d.data() }; });
+  return map;
+},
+
+
     enabled: !!uid && !!dateStr,
     staleTime: 5 * 60 * 1000,
     gcTime: 30 * 60 * 1000,
@@ -197,5 +212,21 @@ export function useGoatLeaderboard() {
       return snap.exists() ? snap.data() : { entries: [], stats: { players: 0 } };
     },
     staleTime: 10 * 60 * 1000,
+  });
+}
+
+/* Published pick groups (curated by admin, FT-auto-marked by backend) */
+export function usePublishedPickGroups(dateStr) {
+  return useQuery({
+    queryKey: ['publishedPickGroups', dateStr],
+    queryFn: async () => {
+      try {
+        const res = await footballApi.getPublishedPickGroups(dateStr);
+        return res?.data || null;
+      } catch { return null; } // nothing published → null, page shows empty state
+    },
+    enabled: !!dateStr,
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000, // tracks backend's 10-min FT re-publish
   });
 }

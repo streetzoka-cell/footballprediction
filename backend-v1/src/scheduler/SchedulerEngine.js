@@ -8,7 +8,8 @@ class SchedulerEngine {
     this.jobs = [];
     this.livePollTimer = null;
     this.runningJobs = new Set();
-    this.backgroundTasks = []; // ★ NEW: intervals owned by the engine
+    this.backgroundTasks = []; // intervals owned by the engine
+    this.stopping = false;     // ★ NEW: blocks new job starts after stopAll()
   }
 
   schedule(name, cronExpression, taskFn) {
@@ -29,14 +30,15 @@ class SchedulerEngine {
   }
 
   /*
-   * ★ Background intervals registered through the engine so stopAll()
-   *   clears them — previously bare setInterval() calls kept firing
-   *   mid-shutdown, after server.close() and during WAL flush.
+   * Background intervals registered through the engine so stopAll()
+   * clears them. ★ Routed through _runJob: same-name overlap guard
+   * (no overlapping executions if a run outlasts its interval) and
+   * metrics recording, identical to cron jobs.
    */
   addBackgroundTask(name, intervalMs, taskFn) {
     const timer = setInterval(async () => {
       try {
-        await taskFn();
+        await this._runJob(name, taskFn); // never throws — catches internally
       } catch (err) {
         logger.error(`[SchedulerEngine] ${name} failed: ${err.message}`);
       }
@@ -54,6 +56,10 @@ class SchedulerEngine {
   }
 
   async _runJob(name, taskFn) {
+    if (this.stopping) {
+      return { skipped: true, reason: 'STOPPING' };
+    }
+
     if (this.runningJobs.has(name)) {
       logger.warn(`[SchedulerEngine] Skipping ${name}. Already running.`);
       return { skipped: true, reason: 'RUNNING' };
@@ -84,10 +90,19 @@ class SchedulerEngine {
 
   startLivePolling(pollFn) {
     const poll = async () => {
+      if (this.stopping) return; // ★ do not start a poll after stopAll()
+
       try {
         const nextInterval = await pollFn();
+
+        // ★ BUG FIX: an in-flight poll resolving DURING shutdown used to
+        //   re-arm the timer here — resurrecting the loop after stopAll()
+        //   cleared it, so liveJob kept firing mid-flush.
+        if (this.stopping) return;
+
         this.livePollTimer = setTimeout(poll, nextInterval || 30000);
       } catch (err) {
+        if (this.stopping) return;
         logger.error(`[SchedulerEngine] Live polling error: ${err.message}`);
         this.livePollTimer = setTimeout(poll, 60000);
       }
@@ -95,7 +110,24 @@ class SchedulerEngine {
     poll();
   }
 
+  /*
+   * Waits for in-flight jobs to finish (bounded), so shutdown can flush
+   * WAL/queue without a job writing concurrently. Optional — call with
+   * await in bootstrap shutdown if you want fully quiesced stops.
+   */
+  async drain(timeoutMs = 30000) {
+    const start = Date.now();
+    while (this.runningJobs.size > 0 && Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 250));
+    }
+    if (this.runningJobs.size > 0) {
+      logger.warn(`[SchedulerEngine] Drain timeout — still running: ${[...this.runningJobs].join(', ')}`);
+    }
+  }
+
   stopAll() {
+    this.stopping = true; // ★ first: block new starts + poll re-arms
+
     this.jobs.forEach(({ job }) => job.stop());
 
     if (this.livePollTimer) clearTimeout(this.livePollTimer);

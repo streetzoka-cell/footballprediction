@@ -1,6 +1,18 @@
 // backend-v1/src/config/constants.js
 
-const CURRENT_SEASON = 2025; // 2025/26 — providers use the STARTING year. Verify with one curl!
+/**
+ * ★ Self-correcting season. Providers use the STARTING year:
+ *   Aug 2026 → season 2026 (the 2026/27 campaign).
+ * July (month index 6) onward belongs to the upcoming season.
+ * No more hardcoded value going stale every rollover.
+ */
+function computeCurrentSeason() {
+  const now = new Date();
+  const year = now.getUTCFullYear();
+  return now.getUTCMonth() >= 6 ? year : year - 1;
+}
+
+const CURRENT_SEASON = computeCurrentSeason();
 
 const COLLECTIONS = {
   MATCHES_LIVE: 'matches_live',
@@ -91,5 +103,5 @@ module.exports = {
   BATCH_MAX_OPS: 50,
   WRITE_TIMEOUT_MS: 15000,
   CURRENT_SEASON,
-  DEFAULT_FOOTBALL_SEASON: CURRENT_SEASON, // was hardcoded 2026 → empty provider responses
+  DEFAULT_FOOTBALL_SEASON: CURRENT_SEASON,
 };

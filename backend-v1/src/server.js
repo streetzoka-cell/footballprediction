@@ -43,6 +43,7 @@ const leaderboardRoutes = require('./routes/v1/admin/leaderboards');
 const adminSchedulers = require('./routes/v1/admin/schedulers');
 const kimGapsRoutes = require('./routes/v1/admin/kimGaps');
 const aiLabRoutes = require('./routes/v1/admin/aiLab');
+const adminPredictionGroupsRoute = require('./routes/v1/admin/predictionGroups'); // ★ NEW: pick-groups studio
 
 // Monitoring
 const monitoringDashboard = require('./routes/v1/monitoring/dashboard');
@@ -77,12 +78,10 @@ const allowedOrigins = new Set([
   'http://localhost:3000',
 ]);
 
-// Anchored: only this project's preview deployments
 const VERCEL_PREVIEW_RE = /^https:\/\/footballprediction-[a-z0-9-]+\.vercel\.app$/i;
 
 const corsOptions = {
   origin(origin, callback) {
-    // curl, server-to-server, mobile/native clients
     if (!origin) return callback(null, true);
     if (allowedOrigins.has(origin)) return callback(null, true);
     if (VERCEL_PREVIEW_RE.test(origin)) return callback(null, true);
@@ -170,7 +169,7 @@ app.use('/api/v1/match', matchRoute);           // canonical match object
 app.use('/api/v1/teams', teamsRoute);
 app.use('/api/v1/standings', standingsRoute);
 app.use('/api/v1/leagues', leaguesRoute);
-app.use('/api/v1/predictions', predictionsRoute);
+app.use('/api/v1/predictions', predictionsRoute); // includes /groups/:date (curated pick groups)
 app.use('/api/v1/queue', queueRoute);
 app.use('/api/v1/featured', featuredRoute);
 app.use('/api/v1/zoka-picks', zokaPicksRoute);
@@ -191,6 +190,7 @@ app.use('/api/v1/admin/leaderboards', leaderboardRoutes);
 app.use('/api/v1/admin/monitoring', monitoringDashboard);
 app.use('/api/v1/admin/kim', kimGapsRoutes);
 app.use('/api/v1/admin/ai-lab', aiLabRoutes);
+app.use('/api/v1/admin/prediction-groups', adminPredictionGroupsRoute); // ★ NEW: studio reads/publishes
 
 // ============================================================
 // MONITORING
@@ -216,8 +216,8 @@ app.use(sitemapRoute);
 // ============================================================
 
 // Graceful fallback for result files that do not exist yet.
-// ★ DATE GUARD: Express URL-decodes params — without this check,
-//   '..%2f..' in :date escapes public_data (arbitrary file read).
+// DATE GUARD: Express URL-decodes params — without this check,
+// '..%2f..' in :date escapes public_data (arbitrary file read).
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 app.get('/api/v1/data/results/:date.json', (req, res) => {
@@ -230,7 +230,6 @@ app.get('/api/v1/data/results/:date.json', (req, res) => {
   const filePath = path.join(process.cwd(), 'public_data', 'results', `${date}.json`);
 
   if (!fs.existsSync(filePath)) {
-    // Don't let intermediaries cache the empty fallback
     res.setHeader('Cache-Control', 'no-store');
     return res.json({
       success: true,

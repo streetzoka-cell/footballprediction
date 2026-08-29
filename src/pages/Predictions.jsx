@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef, useDeferredValue, memo } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation, useSearchParams, Link } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Clock, CheckCircle2, TrendingUp, Target, Star, Save, Trophy, Lock, LogIn, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Minus, X, ArrowRight, ArrowLeft, Plus, CircleX, ThumbsUp, ThumbsDown, Pencil, Share2, Zap, RefreshCw, Dice5 } from 'lucide-react';
+import { Clock, CheckCircle2, TrendingUp, Target, Star, Save, Trophy, Lock, LogIn, ChevronDown, ChevronRight, ChevronUp, ChevronLeft, Minus, X, ArrowRight, ArrowLeft, Plus, CircleX, ThumbsUp, ThumbsDown, Pencil, Share2, Zap, RefreshCw, Dice5, Sparkles, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
-import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints } from '../hooks/useUserData';
+import { useActivePredictions, useUserPredictions, useDailyLeaderboard, useZokaPicks, useZokaVotes, useUserPoints, usePublishedPickGroups } from '../hooks/useUserData';
 import { useFixtures } from '../hooks/useFixtures';
 import { todayStr, getLocalDateStr } from '../utils/dates';
 import { calcPoints, SPORT, isLiveStatus, isFinishedStatus } from '../utils/constants';
@@ -16,6 +16,9 @@ import { useToast } from '../core/ToastManager';
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
 import { buildMatchRoute } from '../utils/routes';
 import EmptyState from '../components/EmptyState';
+import PickGroupsView from '../components/PickGroupsView';
+import GroupInsights from '../components/GroupInsights';
+import GroupFeedback from '../components/GroupFeedback';
 import { SITE } from '../utils/seoBuilder';
 
 const FUTURE_DAYS = 3;
@@ -148,10 +151,17 @@ const ResultsOverlay = memo(function ResultsOverlay({date,preds=[],userPredsObj,
 export default function Predictions(){
   const {currentUser,userProfile}=useAuth(); const nav=useNavigate(); const location=useLocation(); const queryClient=useQueryClient(); const toast=useToast();
   const uid=currentUser?.uid; const loggedIn=!!uid; const displayName=currentUser?.displayName||currentUser?.email?.split('@')[0]||'Anonymous';
+
+  /* ★ TAB SWITCHER — URL-backed, 'groups' is the default first surface */
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = searchParams.get('tab') === 'mine' ? 'mine' : 'groups';
+  const switchTab = useCallback((t) => { setSearchParams(t === 'mine' ? { tab: 'mine' } : {}, { replace: true }); }, [setSearchParams]);
+
   const [selDate,setSelDate]=useState(todayStr()); const [now,setNow]=useState(Date.now());
   const [filter,setFilter]=useState('all'); const [showLogin,setShowLogin]=useState(false); const [showResults,setShowResults]=useState(false);
-  const [zokaExpanded,setZokaExpanded]=useState(false); const [editingId,setEditingId]=useState(null); const [editH,setEditH]=useState(''); const [editA,setEditA]=useState('');
+  const [zokaExpanded,setZokaExpanded]=useState(false); const [editingId,setEditingId]=useState(null); const [editH,setEditH]=useState(''); const [editA,setEditA]=useState(''); // ★ was broken: setEditA=''
   const [saving,setSaving]=useState(false); const [votingId,setVotingId]=useState(null); const [currentUserVotes,setCurrentUserVotes]=useState({}); const [joke,setJoke]=useState(getJoke());
+
   const {data:activePredictions=[],isLoading:loadingActive}=useActivePredictions(selDate);
   const {data:userPredictions,isLoading:loadingPreds}=useUserPredictions(uid,selDate);
   const {data:dailyLB=null}=useDailyLeaderboard(selDate);
@@ -159,7 +169,9 @@ export default function Predictions(){
   const {data:zokaVotesData={stats:{}}}=useZokaVotes(selDate);
   const {data:userPoints=null}=useUserPoints(uid);
   const {data:dateFixtures=[]}=useFixtures(selDate);
+  const {data:publishedGroups=null}=usePublishedPickGroups(selDate);
   const {data:officialResults=[]}=useQuery({queryKey:['userResults',uid,selDate],queryFn:async()=>{ if(!uid||!db||!selDate) return []; const q=query(collection(db,PATHS.PREDICTION_RESULTS),where('userId','==',uid),where('matchDate','==',selDate)); const snap=await getDocs(q); return snap.docs.map(d=>d.data());},enabled:!!uid&&!!selDate,staleTime:60*1000});
+
   const featuredPreds=activePredictions||[]; const zokaPicks=zokaPicksData; const zokaVoteStats=zokaVotesData?.stats||{}; const ctxUserPreds=userPredictions||{}; const dailyEntries=dailyLB?.entries||[]; const userStats=userPoints||{};
   const fixtureMap=useMemo(()=>{ const m=new Map(); (dateFixtures||[]).forEach(f=>m.set(String(f.id),f)); return m;},[dateFixtures]);
   useEffect(()=>{ try{ setCurrentUserVotes(JSON.parse(localStorage.getItem(`zoka_votes_${selDate}`)||'{}')); }catch{ setCurrentUserVotes({}); }},[selDate]);
@@ -190,25 +202,67 @@ export default function Predictions(){
   const getCommunityStats=useCallback((matchId)=>{ let home=0,draw=0,away=0; Object.values(ctxUserPreds).forEach(p=>{ if(String(p.matchId)===String(matchId)){ if(p.homeScore>p.awayScore) home++; else if(p.homeScore===p.awayScore) draw++; else away++; } }); return {home,draw,away,total:home+draw+away}; },[ctxUserPreds]);
   const itemListSchema=useMemo(()=>({ "@context":"https://schema.org","@type":"ItemList","name":"Daily Football Predictions & Expert Tips","itemListElement":filteredPreds.slice(0,20).map((p,i)=>({"@type":"ListItem","position":i+1,"name":`${p.homeTeam?.name||'Home'} vs ${p.awayTeam?.name||'Away'}`,"url":`${SITE.url}${buildMatchRoute(p.matchId,p.homeTeam?.name,p.awayTeam?.name)}`}))}),[filteredPreds]);
 
+  /* ★ Zoka Picks — bottom of the groups tab */
+  const zokaSection = mergedZoka.length>0 ? (
+    <div className="v21-zoka" style={{ marginTop: 20 }}>
+      <div className="v21-zoka-hd"><div className="v21-zoka-icon"><Star size={14} className="gold"/></div><div><div className="font-extrabold">Zoka Picks</div><div className="text-xs muted">{mergedZoka.length} picks · Not for competition</div></div></div>
+      {visibleZoka.map((pick,i)=><ZokaPickCard key={pick.matchId||i} pick={pick} index={i} voteStats={zokaVoteStats} userVote={currentUserVotes} onVote={handleVote} votingId={votingId} onShare={handleShare}/>)}
+      {hiddenZokaCount>0&&!zokaExpanded&&<button className="v21-zoka-more" onClick={()=>setZokaExpanded(true)}><ChevronDown size={14}/> Show {hiddenZokaCount} More</button>}
+      {zokaExpanded&&hiddenZokaCount>0&&<button className="v21-zoka-more" onClick={()=>setZokaExpanded(false)}><ChevronUp size={14}/> Show Less</button>}
+    </div>
+  ) : null;
+
   return <div className="pred-page">
     <SEO title="Predict Football Matches, Win Points & Climb Leaderboards | ZOKASCORE" description="Predict exact football scores, compete, climb global leaderboard. Zoka AI expert picks + community voting." keywords="football predictions, exact score, ZOKASCORE leaderboard" path="/predictions" structuredData={itemListSchema}/>
-    <div className="pred-hdr"><button className="btn btn-ghost btn-sm" onClick={()=>nav('/')}><ArrowLeft size={12}/> Home</button><div className="pred-hdr-title"><h1><span> MATCH</span><span className="primary">PREDICT</span></h1><div className="sub">Predict · Compete · Win</div></div><button className="btn btn-ghost btn-sm" onClick={()=>setShowResults(true)}>Results</button></div>
+    <div className="pred-hdr"><button className="btn btn-ghost btn-sm" onClick={()=>nav('/')}><ArrowLeft size={12}/> Home</button><div className="pred-hdr-title"><h1><span> MATCH</span><span className="primary">PREDICT</span></h1><div className="sub">Predict · Compete · Win</div></div>{tab==='mine'&&<button className="btn btn-ghost btn-sm" onClick={()=>setShowResults(true)}>Results</button>}</div>
     <div className="pred-date-wrap"><DateStrip date={selDate} onChange={handleDateChange} dates={dateList}/></div>
+
     <div className="pred-wrap">
-      <div className="glass-card editorial-card"><h2>Master the Art of Football Prediction</h2><p>Welcome to ZOKASCORE Prediction Hub. Analyze form, H2H, Zoka AI picks to lock exact scores. Earn 10 pts exact, 3 pts outcome. Climb leaderboards.</p></div>
-      <div className="v21-joke-box"><Zap size={14} className="gold"/><span>{joke}</span><button onClick={()=>setJoke(getJoke())} className="btn-icon-sm"><RefreshCw size={12}/></button></div>
-      {performanceMsg&&<div className="v21-perf-banner" style={{borderColor:`${performanceMsg.color}33`,color:performanceMsg.color,background:`${performanceMsg.color}11`}}>{performanceMsg.text}</div>}
-      {loggedIn&&<div className="my-stats-block"><div className="v21-stats"><div className="v21-stat"><div className="n gold"><AnimNum value={myDayStats.pts}/></div><div className="l">Points</div></div><div className="v21-stat"><div className="n primary"><AnimNum value={myDayStats.ex}/></div><div className="l">Exact</div></div><div className="v21-stat"><div className="n gold"><AnimNum value={myDayStats.rs}/></div><div className="l">Results</div></div><div className="v21-stat"><div className="n accent">{myRank?`#${myRank.rank}`:'—'}</div><div className="l">Rank</div></div></div>
-      {myDayStats.pred>0&&<div className="v21-progress"><div className="v21-progress-bar"><div className="v21-progress-fill" style={{width:`${((myDayStats.pred-myDayStats.pn)/myDayStats.pred)*100}%`}}/></div><div className="v21-progress-labels"><span>{myDayStats.pred} predicted · {myDayStats.accuracy}% accuracy</span><span>{myDayStats.allResolved?'✓ Complete':`${myDayStats.pn} pending`}</span></div></div>}
-      </div>}
-      {loggedIn&&myDayStats.pred>0&&<div className="glass-card v21-banner"><Trophy size={18} className="gold"/><span className="v21-banner-text">You've predicted {myDayStats.pred} matches today! Challenge friends.</span><button className="v21-banner-btn" onClick={handleBannerShare}><Share2 size={14}/> Share & Challenge</button></div>}
-      {!loggedIn&&<div className="glass-card v21-banner"><Lock size={18} className="accent"/><span className="v21-banner-text">Sign in to lock predictions and climb leaderboard.</span><Link to="/login" className="v21-banner-btn"><Zap size={14}/> Sign In to Predict</Link></div>}
-      <div className="v21-filter">{[{key:'all',label:'All',count:filterCounts.all},{key:'predicted',label:'Predicted',count:filterCounts.predicted},{key:'unpredicted',label:'Open',count:filterCounts.unpredicted},{key:'finished',label:'Finished',count:filterCounts.finished}].map(f=><button key={f.key} className={`v21-fbtn${filter===f.key?' on':''}`} onClick={()=>setFilter(f.key)}>{f.label} ({f.count})</button>)}</div>
-      {mergedZoka.length>0&&<div className="v21-zoka"><div className="v21-zoka-hd"><div className="v21-zoka-icon"><Star size={14} className="gold"/></div><div><div className="font-extrabold">Zoka Picks</div><div className="text-xs muted">{mergedZoka.length} picks · Not for competition</div></div></div>{visibleZoka.map((pick,i)=><ZokaPickCard key={pick.matchId||i} pick={pick} index={i} voteStats={zokaVoteStats} userVote={currentUserVotes} onVote={handleVote} votingId={votingId} onShare={handleShare}/>)}{hiddenZokaCount>0&&!zokaExpanded&&<button className="v21-zoka-more" onClick={()=>setZokaExpanded(true)}><ChevronDown size={14}/> Show {hiddenZokaCount} More</button>}{zokaExpanded&&hiddenZokaCount>0&&<button className="v21-zoka-more" onClick={()=>setZokaExpanded(false)}><ChevronUp size={14}/> Show Less</button>}</div>}
-      <div className="v21-featured-section"><div className="v21-sec"><div className="v21-sec-icon"><Target size={13}/></div><div className="font-extrabold text-sm">Featured — Compete</div><span className="v21-sec-badge">{filteredPreds.length}</span></div>
-        {loadingActive?Array.from({length:3}).map((_,i)=><Skeleton key={i}/>):filteredPreds.length>0?filteredPreds.map((pred,i)=>{ const predId=String(pred.matchId); return <React.Fragment key={predId}><PredCard pred={pred} index={i} userPred={userPredMap.get(predId)} result={resultMap.get(predId)} isEditing={editingId===predId} editH={editH} editA={editA} onEdit={startEdit} onSave={savePrediction} onCancel={cancelEdit} onQuickPick={quickPick} onEditH={setEditH} onEditA={setEditA} loggedIn={loggedIn} onLogin={openLogin} saving={saving} now={now} onShare={handleShare} zokaPick={mergedZoka.find(z=>String(z.matchId)===predId)} communityStats={getCommunityStats(predId)}/></React.Fragment>; }):<EmptyState icon={Target} title={filter==='predicted'?'No predictions yet':filter==='finished'?'No finished matches':filter==='unpredicted'?'All predicted!':'No featured matches'} hint="Check back later"/>}
+      {/* ★ TAB SWITCHER */}
+      <div className="v21-tabs">
+        <button className={`v21-tab${tab==='groups'?' on':''}`} onClick={()=>switchTab('groups')}><Sparkles size={14}/> Expert Groups</button>
+        <button className={`v21-tab${tab==='mine'?' on':''}`} onClick={()=>switchTab('mine')}><Users size={14}/> My Predictions</button>
       </div>
-      {myDayStats.allResolved&&myDayStats.pred>0&&<div className="rank-complete"><Trophy size={24} className="primary"/><div className="font-extrabold">All Results In!</div><div className="text-sm muted">You scored <strong className="accent">{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy</div><button className="btn btn-primary" onClick={()=>nav('/leaderboard')}>View Leaderboard <ArrowRight size={13}/></button></div>}
+
+      {/* ══════ TAB 1 — EXPERT GROUPS (default) ══════ */}
+      {tab==='groups'&&<div className="v21-groups-tab">
+        {publishedGroups ? (
+          <>
+            <PickGroupsView data={publishedGroups} date={selDate} />
+            <GroupInsights />
+            <GroupFeedback date={selDate} familyOrder={publishedGroups?.familyOrder || []} />
+          </>
+        ) : (
+          <>
+            <GroupInsights />
+            <div className="glass-card p-20 mb-16 text-center">
+              <Sparkles size={22} className="gold" style={{ margin: '0 auto 8px', display: 'block' }} />
+              <div className="font-extrabold">Expert groups are being prepared</div>
+              <p className="text-muted text-sm" style={{ margin: '6px 0 0' }}>
+                Curated ML picks for {dateLabel(selDate)} drop here once published.{selDate===todayStr()?' Check back shortly.':''}
+              </p>
+            </div>
+          </>
+        )}
+        {zokaSection}
+      </div>}
+
+      {/* ══════ TAB 2 — MY PREDICTIONS ══════ */}
+      {tab==='mine'&&<div className="v21-mine-tab">
+        <div className="glass-card editorial-card"><h2>Master the Art of Football Prediction</h2><p>Welcome to ZOKASCORE Prediction Hub. Analyze form, H2H, Zoka AI picks to lock exact scores. Earn 10 pts exact, 3 pts outcome. Climb leaderboards.</p></div>
+        <div className="v21-joke-box"><Zap size={14} className="gold"/><span>{joke}</span><button onClick={()=>setJoke(getJoke())} className="btn-icon-sm"><RefreshCw size={12}/></button></div>
+        {performanceMsg&&<div className="v21-perf-banner" style={{borderColor:`${performanceMsg.color}33`,color:performanceMsg.color,background:`${performanceMsg.color}11`}}>{performanceMsg.text}</div>}
+        {loggedIn&&<div className="my-stats-block"><div className="v21-stats"><div className="v21-stat"><div className="n gold"><AnimNum value={myDayStats.pts}/></div><div className="l">Points</div></div><div className="v21-stat"><div className="n primary"><AnimNum value={myDayStats.ex}/></div><div className="l">Exact</div></div><div className="v21-stat"><div className="n gold"><AnimNum value={myDayStats.rs}/></div><div className="l">Results</div></div><div className="v21-stat"><div className="n accent">{myRank?`#${myRank.rank}`:'—'}</div><div className="l">Rank</div></div></div>
+        {myDayStats.pred>0&&<div className="v21-progress"><div className="v21-progress-bar"><div className="v21-progress-fill" style={{width:`${((myDayStats.pred-myDayStats.pn)/myDayStats.pred)*100}%`}}/></div><div className="v21-progress-labels"><span>{myDayStats.pred} predicted · {myDayStats.accuracy}% accuracy</span><span>{myDayStats.allResolved?'✓ Complete':`${myDayStats.pn} pending`}</span></div></div>}
+        </div>}
+        {loggedIn&&myDayStats.pred>0&&<div className="glass-card v21-banner"><Trophy size={18} className="gold"/><span className="v21-banner-text">You've predicted {myDayStats.pred} matches today! Challenge friends.</span><button className="v21-banner-btn" onClick={handleBannerShare}><Share2 size={14}/> Share & Challenge</button></div>}
+        {!loggedIn&&<div className="glass-card v21-banner"><Lock size={18} className="accent"/><span className="v21-banner-text">Sign in to lock predictions and climb leaderboard.</span><Link to="/login" className="v21-banner-btn"><Zap size={14}/> Sign In to Predict</Link></div>}
+        <div className="v21-filter">{[{key:'all',label:'All',count:filterCounts.all},{key:'predicted',label:'Predicted',count:filterCounts.predicted},{key:'unpredicted',label:'Open',count:filterCounts.unpredicted},{key:'finished',label:'Finished',count:filterCounts.finished}].map(f=><button key={f.key} className={`v21-fbtn${filter===f.key?' on':''}`} onClick={()=>setFilter(f.key)}>{f.label} ({f.count})</button>)}</div>
+        <div className="v21-featured-section"><div className="v21-sec"><div className="v21-sec-icon"><Target size={13}/></div><div className="font-extrabold text-sm">Featured — Compete</div><span className="v21-sec-badge">{filteredPreds.length}</span></div>
+          {loadingActive?Array.from({length:3}).map((_,i)=><Skeleton key={i}/>):filteredPreds.length>0?filteredPreds.map((pred,i)=>{ const predId=String(pred.matchId); return <React.Fragment key={predId}><PredCard pred={pred} index={i} userPred={userPredMap.get(predId)} result={resultMap.get(predId)} isEditing={editingId===predId} editH={editH} editA={editA} onEdit={startEdit} onSave={savePrediction} onCancel={cancelEdit} onQuickPick={quickPick} onEditH={setEditH} onEditA={setEditA} loggedIn={loggedIn} onLogin={openLogin} saving={saving} now={now} onShare={handleShare} zokaPick={mergedZoka.find(z=>String(z.matchId)===predId)} communityStats={getCommunityStats(predId)}/></React.Fragment>; }):<EmptyState icon={Target} title={filter==='predicted'?'No predictions yet':filter==='finished'?'No finished matches':filter==='unpredicted'?'All predicted!':'No featured matches'} hint="Check back later"/>}
+        </div>
+        {myDayStats.allResolved&&myDayStats.pred>0&&<div className="rank-complete"><Trophy size={24} className="primary"/><div className="font-extrabold">All Results In!</div><div className="text-sm muted">You scored <strong className="accent">{myDayStats.pts} pts</strong> · {myDayStats.accuracy}% accuracy</div><button className="btn btn-primary" onClick={()=>nav('/leaderboard')}>View Leaderboard <ArrowRight size={13}/></button></div>}
+      </div>}
     </div>
     {showLogin&&<LoginModal onClose={()=>setShowLogin(false)} nav={nav}/>}
     {showResults&&<ResultsOverlay date={selDate} preds={mergedFeatured} userPredsObj={ctxUserPreds} results={officialResults} onClose={()=>setShowResults(false)} nav={nav}/>}

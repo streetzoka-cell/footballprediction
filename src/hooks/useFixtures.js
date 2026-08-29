@@ -18,23 +18,31 @@ function pairKey(m) {
   const away = nameKey(m.awayTeamName || m.awayTeam?.name);
   return home && away ? `${home}|${away}` : null;
 }
-
 /* Merge helper: id-first, then name-pair fallback via a precomputed index — O(n) not O(n²) */
 function mergeSnapshots({ fixtures = [], live = [], finished = [], dateStr }) {
   const map = new Map();
   const pairIndex = new Map(); // pairKey -> canonical id
 
-  const put = (m, override = false) => {
+  const put = (m, { override = false, requireDate = false } = {}) => {
     if (!m) return;
     const id = String(m.id);
     const pk = pairKey(m);
     const existingId = map.has(id) ? id : pairIndex.get(pk);
 
+    // Pair-match across sources is ALWAYS valid: a live match can never
+    // share a team pair with a not-yet-started fixture, so this covers
+    // provider-id mismatches (spillover late-night games included).
     if (existingId && existingId !== id) {
       const existing = map.get(existingId);
       map.set(existingId, override ? { ...existing, ...m, id: existingId } : { ...m, ...existing, id: existingId });
       return;
     }
+
+    // ★ No counterpart found: only append if the match belongs to THIS date.
+    //   live.json is one shared file fetched for every date — without this
+    //   guard, today's orphaned live matches leak into the yesterday and
+    //   tomorrow lists.
+    if (requireDate && m.dateStr && m.dateStr !== dateStr) return;
 
     if (map.has(id)) {
       map.set(id, override ? { ...map.get(id), ...m, id } : { ...m, ...map.get(id), id });
@@ -44,12 +52,13 @@ function mergeSnapshots({ fixtures = [], live = [], finished = [], dateStr }) {
     }
   };
 
-  fixtures.forEach((m) => put(m, false));
-  finished.forEach((m) => put(m, true)); // finished/live override fixtures (fresher status/score)
-  live.forEach((m) => put(m, true));
+  fixtures.forEach((m) => put(m));
+  finished.forEach((m) => put(m, { override: true }));                     // per-date file — safe to override
+  live.forEach((m) => put(m, { override: true, requireDate: true }));      // ★ shared file — date-guarded append
 
   return Array.from(map.values());
 }
+
 
 const FRESH_WINDOW = 3 * 60 * 1000;
 

@@ -221,14 +221,14 @@ function stats() {
     receiptFilesCached: receiptsCache.size,
   };
 }
-
 function cleanupOldPredictions(days = 30) {
   const cutoff = Date.now() - days * 86400000;
   let removed = 0;
 
   for (const mid of Object.keys(store)) {
-    const updated = new Date(store[mid].updatedAt).getTime();
-    if (updated < cutoff) {
+    const ts = Date.parse(store[mid]?.updatedAt || '') || 0;
+    // ★ only delete entries with a valid, old timestamp — NaN-safe now
+    if (ts > 0 && ts < cutoff) {
       delete store[mid];
       receiptsCache.delete(mid);
       removed++;
@@ -238,6 +238,7 @@ function cleanupOldPredictions(days = 30) {
   if (removed) saveAggregate();
   return removed;
 }
+
 
 function clearReceiptCache() {
   if (receiptsCache.size > 5000) {

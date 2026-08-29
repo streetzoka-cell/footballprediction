@@ -1,10 +1,33 @@
-﻿import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
+﻿// src/engine/matchEngine.js
+import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates';
 
 const FT_STATUSES = new Set(['FT', 'AET', 'PEN', 'AW', 'WO']);
 const FT_THRESHOLD = 3 * 60 * 60 * 1000;
 const HIDE_THRESHOLD = 24 * 60 * 60 * 1000;
 const HALF = 45, FULL = 90, HT_BREAK = 15, ET_HALF = 15, ET_BREAK = 5, ET_HT = 5;
 const ADDED_1H = 3, ADDED_2H = 8, ADDED_ET = 3;
+
+/* ★ Per-match pick_groups mirror (fixtures/<date>.json additive keys).
+   Renders as: 🔥 TOP10 · G1 · #5 · STRONG | 🔒 1X2 · G1 · #3 · STRONG | ... */
+const PG_PRIORITY = ['TOP10_DAILY', 'PURE_1X2', 'GG_BTTS', 'OVER_UNDER', 'SCORE'];
+const PG_LABEL = {
+  TOP10_DAILY: '🔥 TOP10', PURE_1X2: '🔒 1X2', GG_BTTS: '⚽ GG',
+  OVER_UNDER: '📈 O/U', SCORE: '🎯 CS',
+};
+
+export function bestPickGroupBadge(raw) {
+  const pg = raw?.pick_groups;
+  if (!pg || typeof pg !== 'object') return null;
+  const keys = [...PG_PRIORITY, ...Object.keys(pg).filter((k) => !PG_PRIORITY.includes(k))];
+  for (const fam of keys) {
+    const g = pg[fam];
+    if (g?.tier) {
+      const label = PG_LABEL[fam] || fam;
+      return `${label} · G${g.tier} · #${g.rank}${g.quality ? ` · ${g.quality}` : ''}`;
+    }
+  }
+  return null;
+}
 
 export function normalizeMatch(raw, isPrimary = true, now = Date.now(), isDataFresh = true) {
   if (!raw) return null;
@@ -98,7 +121,19 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now(), isDataFr
     awayTeamId: raw.awayTeamId, awayName, awayTeamName: awayName, awayTeamLogo: awayLogo, awayLogo,
     homeScore: score.home, awayScore: score.away, goalsHome: score.home, goalsAway: score.away,
     leagueId: raw.leagueId, leagueName, leagueLogo, leagueCountry: raw.leagueCountry,
-    matchScore: raw.importance || 0, category: raw.category || 'NORMAL',
+
+    /* ★ pipeline passthrough — was stripped before: */
+    mustHave: raw.mustHave === true,
+    matchScore: raw.matchScore ?? raw.importance ?? 0,
+    category: raw.category || 'NORMAL',
+    ids: raw.ids || null,
+    venue: raw.venue || null,
+    referee: raw.referee || null,
+    pickGroups: raw.pick_groups || null,                          // ★ per-match group mirror (badges)
+    pickGroupBadge: bestPickGroupBadge(raw),                      // ★ precomputed label
+    topCorrectScore: raw.top_correct_score || null,               // ★ CS headline on fixture rows
+    topCsProb: raw.top_cs_prob ?? null,
+
     stats, hasRealStats, odds, mlPredictions: raw.prediction || raw.mlPredictions || null, intelData: raw.intelData || null,
     homeTeam: { name: homeName, shortName: homeName, crest: homeLogo, id: raw.homeTeamId },
     awayTeam: { name: awayName, shortName: awayName, crest: awayLogo, id: raw.awayTeamId },
