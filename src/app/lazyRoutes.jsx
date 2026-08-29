@@ -33,7 +33,8 @@ export const FootballLawDetail = lazy(() => import("../pages/FootballLawDetail")
 export const MatchDetail = lazy(() => import("../pages/MatchDetail"));
 export const LeagueDetail = lazy(() => import("../pages/LeagueDetail"));
 export const TeamDetail = lazy(() => import("../pages/TeamDetail"));
-
+// add alongside the other exports:
+export const AdminPredictionGroups = lazy(() => import("../components/AdminPredictionGroups"));
 // Studio Pages
 export const StudioHome = lazy(() => import("../pages/studio/StudioHome"));
 export const StudioTemplates = lazy(() => import("../pages/studio/StudioTemplates"));

@@ -23,6 +23,9 @@ const Login = lazy(() => import("../pages/Login"));
 const Profile = lazy(() => import("../pages/Profile"));
 const Admin = lazy(() => import("../pages/Admin"));
 
+// ★ NEW: Pick-Groups Studio (lives in components/)
+const AdminPredictionGroups = lazy(() => import("../components/AdminPredictionGroups"));
+
 const About = lazy(() => import("../pages/company/About"));
 const PrivacyPolicy = lazy(() => import("../pages/PrivacyPolicy"));
 const Terms = lazy(() => import("../pages/Terms"));
@@ -51,7 +54,6 @@ const MediaStudio = lazy(() => import("../studio/pages/MediaStudio"));
 const FaceARStudio = lazy(() => import("../studio/pages/FaceARStudio"));
 const WebShowcaseStudio = lazy(() => import("../studio/pages/WebShowcaseStudio"));
 
-
 const pageFallback = (
   <div className="zk-page-loader">
     <div className="zk-page-loader-skeleton">
@@ -75,14 +77,14 @@ export default function AppRoutes() {
         <Route path={ROUTES.HIGHLIGHTS} element={<Highlights />} />
         <Route path={ROUTES.LIVESTREAM} element={<LiveStream />} />
         <Route path={ROUTES.LEADERBOARD} element={<Leaderboard />} />
-        
+
         <Route path="/match/:matchId/:slug" element={<MatchDetails />} />
         <Route path="/team/:teamId/:slug" element={<TeamPage />} />
         <Route path="/league/:leagueId/:slug" element={<LeaguePage />} />
         <Route path="/competition/:leagueId/:slug" element={<LeaguePage />} />
-        
+
         <Route path={ROUTES.SEARCH} element={<Search />} />
-        
+
         <Route path={ROUTES.ABOUT} element={<About />} />
         <Route path={ROUTES.PRIVACY} element={<PrivacyPolicy />} />
         <Route path={ROUTES.TERMS} element={<Terms />} />
@@ -91,12 +93,12 @@ export default function AppRoutes() {
         <Route path={ROUTES.CONTACT} element={<Contact />} />
         <Route path={ROUTES.PARTNERS} element={<Partners />} />
         <Route path={ROUTES.ADVERTISE} element={<Advertise />} />
-        
+
         <Route path={ROUTES.FAQ} element={<FAQ />} />
         <Route path={ROUTES.HELP} element={<HelpCenter />} />
         <Route path={ROUTES.FOOTBALL_KNOWLEDGE} element={<FootballKnowledge />} />
         <Route path="/developers" element={<Developers />} />
-        
+
         <Route path={STUDIO_ROUTES.HOME} element={<StudioHome />} />
         <Route path={STUDIO_ROUTES.TEMPLATES} element={<StudioTemplates />} />
         <Route path={STUDIO_ROUTES.EDITOR} element={<StudioEditor />} />
@@ -104,14 +106,17 @@ export default function AppRoutes() {
         <Route path={STUDIO_ROUTES.WEB_SHOWCASE} element={<WebShowcaseStudio />} />
         <Route path={STUDIO_ROUTES.MEDIA} element={<MediaStudio />} />
         <Route path={STUDIO_ROUTES.FACE_AR} element={<FaceARStudio />} />
-        
+
         <Route path={ROUTES.CHANGELOG} element={<Changelog />} />
         <Route path={ROUTES.STATUS} element={<Status />} />
-        
+
         <Route path={ROUTES.LOGIN} element={<Login />} />
         <Route path={ROUTES.PROFILE} element={<Profile />} />
-        
+
         <Route path={ROUTES.ADMIN} element={<AdminRoute><Admin /></AdminRoute>} />
+        {/* ★ NEW: Pick-Groups Studio — same guard as the Admin hub */}
+        <Route path={ROUTES.ADMIN_PREDICTION_GROUPS} element={<AdminRoute><AdminPredictionGroups /></AdminRoute>} />
+
         <Route path="*" element={<NotFound />} />
       </Routes>
     </Suspense>

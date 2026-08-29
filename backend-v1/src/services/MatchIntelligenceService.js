@@ -51,9 +51,10 @@ try {
 } catch { logger.warn('[MatchIntel] h2h summaries.json not found'); }
 
 /*
- * Entity files: read ONCE, then served from memory — this is what makes it instant.
- * Found files cache forever (refresh = restart). MISS results get a short TTL so
- * files that appear after a pipeline re-run are picked up without a restart.
+ * Entity files: read ONCE, then served from memory — instant.
+ * Found files cache forever (refresh = restart). MISS results get a short
+ * TTL so files that appear after a pipeline re-run are picked up without
+ * a restart.
  */
 const NULL_TTL_MS = 5 * 60 * 1000;
 const fileCache = new Map(); // zkId -> { value, expiresAt }  (expiresAt === null → forever)
@@ -109,6 +110,21 @@ function resolveTeamId(input) {
   if (!unresolvedOnce.has(slug)) {
     unresolvedOnce.add(slug);
     logger.warn(`[MatchIntel] Unresolved team "${val}" — add it to teams-index or pass an ID`);
+  }
+  return null;
+}
+
+/*
+ * ★ Two-stage resolution: try the primary value; if it fails and BOTH an id
+ *   and a name were supplied, retry with the other one.
+ *   Fixes the "?homeId=48" case where the id isn't in the provider map but
+ *   the team NAME resolves via teams-index.
+ */
+function resolveWithFallback(primary, secondary) {
+  const first = resolveTeamId(primary);
+  if (first) return first;
+  if (primary != null && secondary != null && String(primary) !== String(secondary)) {
+    return resolveTeamId(secondary);
   }
   return null;
 }
@@ -179,12 +195,13 @@ function computeZokaPick(homeData, awayData) {
 }
 
 async function getMatchIntelligence({ home, away, homeId, awayId } = {}) {
-  const homeZk = resolveTeamId(homeId ?? home);
-  const awayZk = resolveTeamId(awayId ?? away);
+  // ★ two-stage: id first, name fallback (was: homeId ?? home — short-circuited)
+  const homeZk = resolveWithFallback(homeId, home);
+  const awayZk = resolveWithFallback(awayId, away);
 
   const [homeData, awayData] = await Promise.all([getTeamData(homeZk), getTeamData(awayZk)]);
 
-  // ★ single source of truth — same function the /intelligence/h2h route uses
+  // single source of truth — same function the /intelligence/h2h route uses
   const h2h = getH2H(homeZk, awayZk);
 
   if (!homeZk && !awayZk) return null;

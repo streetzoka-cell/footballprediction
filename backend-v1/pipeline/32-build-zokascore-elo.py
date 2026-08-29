@@ -1,10 +1,20 @@
-
 import os
+import sys
+import io
 import json
 import csv
 import pandas as pd
 import unicodedata
 import re
+
+# ============================================================
+# ENCODING GUARD — force UTF-8 stdout/stderr on Windows (cp1252
+# kills any print containing ↳ or ✅). Must run BEFORE any print.
+# ============================================================
+if sys.stdout and getattr(sys.stdout, "encoding", "").lower() not in ("utf-8", "utf8"):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+if sys.stderr and getattr(sys.stderr, "encoding", "").lower() not in ("utf-8", "utf8"):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DIR = os.path.join(BASE_DIR, "data", "source", "ZOKASCORE_FINAL")
@@ -25,7 +35,6 @@ def clean_name(value):
     val = unicodedata.normalize("NFKD", val)
     val = "".join(c for c in val if not unicodedata.combining(c))
     val = val.replace("&", " and ")
-    # Fixed regex: triple-quoted to avoid " termination
     val = re.sub(r"""[.'’‘`"]""", "", val)
     val = re.sub(r"[^a-z0-9]+", " ", val)
     val = re.sub(r"\s+", " ", val).strip()
@@ -68,9 +77,10 @@ def load_team_identity():
             keep=ids[0]
             unique_name_to_id[name]=keep
             print(f"[ELO-32] KEEP-FIRST: {keep} for \"{name}\" dups: {ids}")
-    print(f"   ↳ Canonical teams:      {len(teams_index):,}")
-    print(f"   ↳ Unique compact names: {len(unique_name_to_id):,} | Ambiguous: {ambiguous}")
-    print(f"   ↳ Note: keep-first uses country/competition context upstream (00-gate). See data_audit/canonical_gate/fix-proposals.json for audit trail\n")
+    # ASCII-safe prints (were ↳ — crashed under cp1252)
+    print(f"   -> Canonical teams:      {len(teams_index):,}")
+    print(f"   -> Unique compact names: {len(unique_name_to_id):,} | Ambiguous: {ambiguous}")
+    print(f"   -> Note: keep-first uses country/competition context upstream (00-gate). See data_audit/canonical_gate/fix-proposals.json for audit trail\n")
     return unique_name_to_id
 
 def calculate_elo():
@@ -112,7 +122,7 @@ def calculate_elo():
             })
     df = pd.DataFrame(matches)
     master_rows = len(df)
-    print(f"   ↳ MASTER rows after dedup: {master_rows:,} (expected 436,441)")
+    print(f"   -> MASTER rows after dedup: {master_rows:,} (expected 436,441)")
 
     print("\n[3/7] Structural validation...")
     if df["zokascore_match_id"].duplicated().sum() > 0:
@@ -127,7 +137,7 @@ def calculate_elo():
     df["away_team_id"] = df["away_key"].map(name_to_id)
     unresolved = int((df["home_team_id"].isna() | df["away_team_id"].isna()).sum())
     self_match = int((df["home_team_id"].notna() & df["away_team_id"].notna() & (df["home_team_id"]==df["away_team_id"])).sum())
-    print(f"   ↳ Unresolved: {unresolved} | Self: {self_match}")
+    print(f"   -> Unresolved: {unresolved} | Self: {self_match}")
 
     print("\n[5/7] Score validation...")
     df["home_score_num"] = pd.to_numeric(df["home_score"], errors="coerce")
@@ -135,7 +145,7 @@ def calculate_elo():
     invalid = int((df["home_score_num"].isna() | df["away_score_num"].isna()).sum())
     valid_mask = ~(df["home_team_id"].isna() | df["away_team_id"].isna()) & ~(df["home_team_id"]==df["away_team_id"]) & ~(df["home_score_num"].isna() | df["away_score_num"].isna())
     valid_count = int(valid_mask.sum())
-    print(f"   ↳ Invalid scores: {invalid} | Valid ELO population: {valid_count:,} (expected 436,433)")
+    print(f"   -> Invalid scores: {invalid} | Valid ELO population: {valid_count:,} (expected 436,433)")
 
     print("\n[6/7] Chronological ordering...")
     elo_df = df.loc[valid_mask].copy().sort_values(by=["date","zokascore_match_id"], kind="mergesort").reset_index(drop=True)
@@ -208,7 +218,7 @@ def calculate_elo():
     print(f"MASTER: {master_rows:,} | ELO: {valid_count:,} | Teams: {len(team_elos):,}")
     print(f"Home wins: {hw:,} | Draws: {dr:,} | Away wins: {aw:,}")
     print(f"Dataset: {OUTPUT_FILE}")
-    print("Pre-match ELO = no leakage ✅ | MOV aware ✅")
+    print("Pre-match ELO = no leakage [OK] | MOV aware [OK]")
     print("="*60)
 
 if __name__=="__main__":

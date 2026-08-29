@@ -1,4 +1,5 @@
-﻿'use strict';
+﻿// backend-v1/src/routes/v1/matches.js
+'use strict';
 
 const express = require('express');
 const router = express.Router();
@@ -12,6 +13,8 @@ const liveSync = require('../../services/livePredictionSync');
 const LIVE_STATUSES = ['1H', '2H', 'HT', 'ET', 'BT', 'P', 'LIVE', 'IN_PLAY', 'PAUSED'];
 const SCHEDULED_STATUSES = ['NS', 'TBD', 'SCHEDULED', 'TIMED'];
 const NON_PLAYABLE = ['PST', 'CANC', 'ABD', 'SUSP', 'INT', 'CANCELLED', 'POSTPONED', 'AWD', 'WO'];
+const FINISHED_STATUSES = ['FT', 'AET', 'PEN', 'FINISHED'];
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 /* ── time helpers: timestamp(s) and ISO kickoff mixed → normalize to ms ── */
 function toMs(v) {
@@ -46,11 +49,22 @@ function dedupMatches(matches) {
   return Array.from(new Map(matches.map((m) => [String(m.id), m])).values());
 }
 
-/* Backfill the flag for snapshots published before SnapshotService tagged it */
+/*
+ * ★ BUG FIX — cache contamination.
+ * LocalSnapshotRepository returns the SAME parsed object references on
+ * mtime-cache hits. Mutating them here (mustHave, reconcilePrediction's
+ * delete/set of preds) leaked across requests: stripped preds stayed
+ * stripped, live-synced state persisted stale. This now returns a shallow
+ * copy — every downstream mutation hits the copy, the cached snapshot
+ * object stays pristine. Shallow is sufficient: reconcile only touches
+ * top-level keys.
+ */
 function withFlags(m) {
-  if (m.mustHave === true || m.mustHave === false) return m;
-  m.mustHave = isMustHaveLeague(m.leagueId);
-  return m;
+  const copy = { ...m };
+  if (copy.mustHave !== true && copy.mustHave !== false) {
+    copy.mustHave = isMustHaveLeague(copy.leagueId);
+  }
+  return copy;
 }
 
 function stripPreds(m) {
@@ -98,11 +112,9 @@ router.get('/top', async (req, res, next) => {
     const collected = snaps.flatMap((s) => s.all || []);
 
     const top = dedupMatches(collected)
-      .map(withFlags)
+      .map(withFlags)                                   // ★ copy — safe to mutate below
       .filter((m) => m.mustHave)
-      .map(reconcileIfPreds);
-
-    function reconcileIfPreds(m) { reconcilePrediction(m); return m; }
+      .map((m) => { reconcilePrediction(m); return m; }); // inlined (was hoisted fn decl)
 
     top.sort(sortMustHaveFirst);
 
@@ -135,7 +147,7 @@ router.get('/', async (req, res, next) => {
         ...(snap.matches || []),
         ...(snap.live || []),
         ...(snap.finished || []),
-      ]).map(withFlags);
+      ]).map(withFlags);                                // ★ copies
 
       // Preserve predictions through ranking
       const predsMap = new Map();
@@ -192,7 +204,7 @@ router.get('/', async (req, res, next) => {
       snaps.forEach((s) => { allMatches = allMatches.concat(s.matches || [], s.live || []); });
 
       const uniqueLive = dedupMatches(allMatches)
-        .map(withFlags)
+        .map(withFlags)                               // ★ copies
         .filter((m) => LIVE_STATUSES.includes(m.status));
 
       // Live endpoint is the freshest surface — reconcile every match here
@@ -202,11 +214,13 @@ router.get('/', async (req, res, next) => {
     }
 
     if (status === 'finished') {
-      const snap = await snapshotService.getSnapshotData(today);
+      // ★ CONTRACT FIX: honor ?date= (was hardcoded to today)
+      const targetDate = DATE_RE.test(date || '') ? date : today;
+      const snap = await snapshotService.getSnapshotData(targetDate);
       const finished = (snap.finished || []).map(withFlags).sort(sortMatchesByTime);
       // No predictions on finished matches — enforce at serve time
       finished.forEach(stripPreds);
-      return res.json({ success: true, data: finished });
+      return res.json({ success: true, date: targetDate, data: finished });
     }
 
     if (date) {
@@ -215,12 +229,12 @@ router.get('/', async (req, res, next) => {
         ...(snap.matches || []),
         ...(snap.live || []),
         ...(snap.finished || []),
-      ]).map(withFlags);
+      ]).map(withFlags);                              // ★ copies
 
       unique.forEach(reconcilePrediction);
       // Belt & braces: finished matches never carry predictions, whatever liveSync did
       unique.forEach((m) => {
-        if (['FT', 'AET', 'PEN', 'FINISHED'].includes(m.status)) stripPreds(m);
+        if (FINISHED_STATUSES.includes(m.status)) stripPreds(m);
       });
 
       return res.json({ success: true, data: unique.sort(sortMatchesByTime) });

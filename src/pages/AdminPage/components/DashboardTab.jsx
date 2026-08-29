@@ -1,12 +1,14 @@
-﻿import React, { useState, memo } from 'react';
-import { Activity, RotateCcw, CalendarDays, Crown, Timer, BarChart3, Sparkles, Loader2, Brain, Cpu, TrendingUp } from 'lucide-react';
+﻿// src/pages/components/DashboardTab.jsx
+import React, { useState, useMemo, memo } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { Activity, RotateCcw, CalendarDays, Crown, Timer, BarChart3, Sparkles, Loader2, Brain, Cpu, TrendingUp, Flame, Rocket } from 'lucide-react';
 import { dateLabel } from './common';
 import { footballApi } from '../../../services/footballApi';
 
 const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, liveCount, finCount, date, onRebuild, rebuilding, toast }) {
   const pr = pubPicks?.matches || [];
   let zE = 0, zR = 0, zM = 0, zP = 0;
-  
+
   pr.forEach(p => {
     if (p.status !== 'finished' || p.homeScore == null) { zP++; return; }
     const h = p.adminPick?.home, a = p.adminPick?.away;
@@ -14,7 +16,7 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
     if ((h > a ? 'H' : h < a ? 'A' : 'D') === (p.homeScore > p.awayScore ? 'H' : p.homeScore < p.awayScore ? 'A' : 'D')) { zR++; return; }
     zM++;
   });
-  
+
   const zT = pr.length, res = Math.max(zT - zP, 1);
   const zAcc = zT > 0 ? Math.round(((zE + zR) / res) * 100) : 0;
 
@@ -45,6 +47,47 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
     }
   };
 
+  /* ── ★ NEW: Pick Groups status (graceful on unpublished days) ── */
+  const { data: groupsData } = useQuery({
+    queryKey: ['adminPickGroups', date, 'dashboard'],
+    queryFn: () => footballApi.getAdminPickGroups(date),
+    staleTime: 2 * 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
+  });
+
+  const { data: publishedData } = useQuery({
+    queryKey: ['publishedPickGroups', date, 'dashboard'],
+    queryFn: () => footballApi.getPublishedPickGroups(date),
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const { data: historyData } = useQuery({
+    queryKey: ['groupHistory', 10, 'dashboard'],
+    queryFn: () => footballApi.getGroupHistory(10).then((r) => r?.data || null),
+    staleTime: 5 * 60 * 1000,
+    refetchInterval: 10 * 60 * 1000,
+  });
+
+  const groupsStatus = useMemo(() => {
+    const families = groupsData?.familyOrder || [];
+    const overall = groupsData?.results || null;
+    return {
+      loaded: !!groupsData,
+      source: groupsData?.source || null,
+      fallback: !!groupsData?.fallback,
+      families: families.length,
+      published: !!publishedData,
+      publishedFamilies: publishedData?.familyOrder?.length || 0,
+      won: overall?.won ?? null,
+      lost: overall?.lost ?? null,
+      pending: overall?.pending ?? null,
+      accuracy: overall?.accuracy ?? null,
+      streak: historyData?.streaks?.current ?? 0,
+      rangeAccuracy: historyData?.totals?.accuracy ?? null,
+      rangeDays: historyData?.totals?.days ?? 0,
+    };
+  }, [groupsData, publishedData, historyData]);
+
   return (
     <div className="flex flex-col gap-16">
       {/* AI LAB CONTROL PANEL */}
@@ -72,18 +115,91 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
           )}
         </button>
 
+        {/* ★ UPDATED: V2 is the deployed champion (Step 49 V5.1, honest test numbers) */}
         <div className="admin-grid-100 mt-8">
           <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
             <TrendingUp size={14} className="text-primary" />
-            <span className="text-muted text-xs">Model V1 Status</span>
-            <span className="text-danger font-bold text-xs">NOT DEPLOYED (-9% ROI)</span>
+            <span className="text-muted text-xs">V2 1X2 (deployed)</span>
+            <span className="text-primary font-bold text-xs">51.1% (+7.1 vs base)</span>
           </div>
           <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
             <Activity size={14} className="text-accent" />
-            <span className="text-muted text-xs">Historical DB</span>
-            <span className="text-primary font-bold text-xs">~227,000 Matches</span>
+            <span className="text-muted text-xs">V2 Markets</span>
+            <span className="text-primary font-bold text-xs">OU2.5 55.7% · BTTS 54.4%</span>
           </div>
         </div>
+      </div>
+
+      {/* ★ NEW: PICK GROUPS STATUS */}
+      <div className="glass-card p-16 flex flex-col gap-12">
+        <h3 className="text-primary font-bold flex-center gap-8">
+          <Sparkles size={15} /> Pick Groups — {dateLabel(date)}
+        </h3>
+
+        {!groupsStatus.loaded ? (
+          <p className="text-muted text-xs">Loading groups status…</p>
+        ) : groupsStatus.families === 0 ? (
+          <p className="text-muted text-xs">
+            No groups generated for this date yet — Step 50 runs every 15 min. Check the Pick Groups tab.
+          </p>
+        ) : (
+          <>
+            <div className="admin-grid-100">
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                <span className={`font-extrabold text-xs ${groupsStatus.fallback ? 'text-gold' : 'text-primary'}`}>
+                  {groupsStatus.fallback ? 'FALLBACK ⚠' : 'PIPELINE'}
+                </span>
+                <span className="text-muted text-xs">Source</span>
+              </div>
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                <span className="font-extrabold text-accent">{groupsStatus.families}</span>
+                <span className="text-muted text-xs">Families built</span>
+              </div>
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                <span className={`font-extrabold text-xs ${groupsStatus.published ? 'text-primary' : 'text-muted'}`}>
+                  {groupsStatus.published ? `LIVE (${groupsStatus.publishedFamilies})` : 'NOT PUBLISHED'}
+                </span>
+                <span className="text-muted text-xs">App surface</span>
+              </div>
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                {groupsStatus.accuracy != null && groupsStatus.settledAvailable ? null : null}
+                <span className="text-danger font-extrabold">{groupsStatus.lost ?? '—'}</span>
+                <span className="text-muted text-xs">Lost</span>
+              </div>
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                <span className="text-primary font-extrabold">{groupsStatus.won ?? '—'}</span>
+                <span className="text-muted text-xs">Won</span>
+              </div>
+              <div className="glass-card p-8 flex flex-col items-center gap-4 text-center">
+                <span className="text-gold font-extrabold">{groupsStatus.accuracy != null ? `${groupsStatus.accuracy}%` : '—'}</span>
+                <span className="text-muted text-xs">Hit rate</span>
+              </div>
+            </div>
+            <div className="flex-between flex-wrap gap-8 text-xs">
+              <span className="text-muted">
+                {groupsStatus.pending != null && groupsStatus.pending > 0
+                  ? `⏳ ${groupsStatus.pending} pending FT · auto-marks every 10 min`
+                  : 'All picks settled for this date'}
+              </span>
+              {groupsStatus.streak > 1 && (
+                <span className="flex-center gap-4 text-gold font-bold">
+                  <Flame size={12} /> {groupsStatus.streak}-day streak
+                </span>
+              )}
+              {groupsStatus.rangeAccuracy != null && (
+                <span className="text-muted">
+                  10-day: {groupsStatus.rangeAccuracy}% over {groupsStatus.rangeDays} days
+                </span>
+              )}
+            </div>
+            {!groupsStatus.published && (
+              <div className="flex-center gap-8">
+                <Rocket size={12} className="text-gold" />
+                <span className="text-xs text-muted">Publish from the <strong>Pick Groups</strong> tab to go live.</span>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {/* OVERVIEW STATS */}
@@ -98,7 +214,7 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
           <div className="glass-card p-8 flex flex-col items-center"><span className="font-extrabold text-primary">{zAcc}%</span><span className="text-muted text-xs">Zoka Acc</span></div>
         </div>
       </div>
-      
+
       {/* LEADERBOARD REBUILDS */}
       <div className="glass-card p-16 flex flex-col gap-12">
         <h3 className="text-primary font-bold flex-center gap-8"><RotateCcw size={15} /> Rebuild Data & Leaderboards</h3>

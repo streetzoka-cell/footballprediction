@@ -63,31 +63,41 @@ function container(id, name, season, rows) {
     rows,
   };
 }
-
-/* Normalize whatever the adapter returned into our container+rows shape.
-   Unknown shapes are rejected instead of published as garbage. */
 function normalizeLeagueStandings(raw, meta) {
   if (!raw) return null;
 
-  if (raw.league?.standings) {                                 // API-Football container
-    return container(meta.id, meta.name, meta.season, raw.league.standings.flat().map(mapRow));
-  }
+  /* ★ Unwrap provider HTTP envelopes (adapter may return the axios body):
+     { response: [ { league: { standings: [[...]] } } ] } */
+  let inner = raw;
+  if (Array.isArray(raw?.response)) inner = raw.response[0] ?? null;
+  else if (Array.isArray(raw?.data?.response)) inner = raw.data.response[0] ?? null;
+  else if (raw?.data && typeof raw.data === 'object' && !Array.isArray(raw.data)) inner = raw.data;
 
-  const tables = Array.isArray(raw) ? raw : raw.standings;     // football-data.org
-  if (Array.isArray(tables)) {
-    const total = tables.find((t) => t.type === 'TOTAL') || tables[0];
-    if (total?.table) return container(meta.id, meta.name, meta.season, total.table.map(mapRow));
-    if (tables[0] && (tables[0].rank !== undefined || tables[0].position !== undefined)) {
-      return container(meta.id, meta.name, meta.season, tables.map(mapRow));
+  for (const candidate of [raw, inner]) {
+    if (!candidate || typeof candidate !== 'object') continue;
+
+    if (candidate.league?.standings) {                       // API-Football container
+      return container(meta.id, meta.name, meta.season, candidate.league.standings.flat().map(mapRow));
     }
+    const tables = Array.isArray(candidate) ? candidate : candidate.standings;
+    if (Array.isArray(tables)) {
+      const total = tables.find((t) => t.type === 'TOTAL') || tables[0];
+      if (total?.table) return container(meta.id, meta.name, meta.season, total.table.map(mapRow));
+      if (tables[0] && (tables[0].rank !== undefined || tables[0].position !== undefined)) {
+        return container(meta.id, meta.name, meta.season, tables.map(mapRow));
+      }
+    }
+    if (Array.isArray(candidate.rows)) return container(meta.id, meta.name, meta.season, candidate.rows.map(mapRow));
+    if (Array.isArray(candidate.table)) return container(meta.id, meta.name, meta.season, candidate.table.map(mapRow));
   }
 
-  if (Array.isArray(raw.rows)) return container(meta.id, meta.name, meta.season, raw.rows.map(mapRow));
-  if (Array.isArray(raw.table)) return container(meta.id, meta.name, meta.season, raw.table.map(mapRow));
-
+  /* ★ Diagnostic: log the actual shape so a miss is diagnosable in one run */
+  logger.warn(
+    `[StandingsService] Unrecognized standings shape for ${meta.name}: ` +
+    JSON.stringify(raw).slice(0, 300)
+  );
   return null;
 }
-
 async function syncStandings(force = false) {
   logger.info(`[StandingsService] Syncing standings for ${LEAGUES_TO_SYNC.length} leagues (season ${CURRENT_SEASON})`);
   let ok = 0, fail = 0;

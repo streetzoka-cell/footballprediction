@@ -1,10 +1,12 @@
-﻿import React, { useState, useMemo, useCallback } from 'react';
+﻿// src/pages/Admin.jsx
+import React, { useState, useMemo, useCallback } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import {
   ShieldAlert, Star, Radio, Trophy, Megaphone, UserCog, Users, Activity,
   LayoutDashboard, BarChart3, ScrollText, ArrowLeft, ChevronUp, ChevronDown,
   Zap, Check, Copy, CheckCircle2, TrendingUp, XCircle, Loader2,
-  Cpu, AlertTriangle, Terminal, X, Wifi, Ban, Search, RefreshCw, History, Save, Send, Pencil, CalendarDays
+  Cpu, AlertTriangle, Terminal, X, Wifi, Ban, Search, RefreshCw, History, Save, Send, Pencil, CalendarDays,
+  Sparkles
 } from 'lucide-react';
 
 import { useAuth } from '../../context/AuthContext';
@@ -17,6 +19,7 @@ import { footballApi } from '../../services/footballApi';
 import { useMounted, cleanObj, dateLabel, isLive, isFin, Toast, Confirm, extractDate } from './components/common';
 import { useActivePredictions, useZokaPicks } from '../../hooks/useUserData';
 import SEO from '../../components/SEO';
+import AdminPredictionGroups from '../../components/AdminPredictionGroups'; // ★ NEW
 
 import DashboardTab from './components/DashboardTab';
 import AnalyticsTab from './components/AnalyticsTab';
@@ -32,6 +35,7 @@ import SystemHealthTab from './components/SystemHealthTab';
 const TABS = [
   { key: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { key: 'analytics', label: 'Analytics', icon: BarChart3 },
+  { key: 'groups', label: 'Pick Groups', icon: Sparkles },      // ★ NEW
   { key: 'logs', label: 'NOC & Logs', icon: ScrollText },
   { key: 'zoka', label: 'Zoka Picks', icon: Star },
   { key: 'featured', label: 'Featured', icon: Radio },
@@ -204,6 +208,8 @@ export default function AdminPage() {
       queryClient.invalidateQueries({ queryKey: ['userPoints'] });
       queryClient.invalidateQueries({ queryKey: ['userPredictions'] });
       queryClient.invalidateQueries(['zokaPicks', date]);
+      // ★ NEW: pick groups re-resolve against fresh results on the next
+      //   10-min CuratedGroupsRefresh — no manual action needed here.
 
       eventBus.emit(EVENT.PREDICTIONS_UPDATED, { dateStr: date, predictions: updated });
       eventBus.emit(EVENT.MATCH_RESOLVED, { matchId, dateStr: date, actualH: h, actualA: a });
@@ -320,6 +326,7 @@ export default function AdminPage() {
 
         {tab === 'dashboard' && <DashboardTab preds={preds} pubPicks={pubPicks} fxCount={dayFixtures.length} liveCount={liveCount} finCount={finCount} date={date} onRebuild={handleRebuild} rebuilding={rebuilding} toast={showToast} />}
         {tab === 'analytics' && <AnalyticsTab toast={showToast} />}
+        {tab === 'groups' && <AdminPredictionGroups embedded date={date} />} {/* ★ NEW — shares the admin date bar */}
         {tab === 'logs' && <LogsTab />}
         {tab === 'zoka' && <ZokaTab date={date} fixtures={allFixtures} fxLoading={fxLoading} pubPicks={pubPicks} onPublish={handleZokaPublish} onUnpublish={handleZokaUnpublish} onSaveDraft={handleZokaSaveDraft} toast={showToast} />}
         {tab === 'featured' && <FeaturedTab date={date} preds={preds} fixtures={allFixtures} onAdd={handleFeaturedAdd} onRemove={handleFeaturedRemove} fxLoading={fxLoading || predsLoading} toast={showToast} />}
