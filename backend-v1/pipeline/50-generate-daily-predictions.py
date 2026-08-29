@@ -1,28 +1,25 @@
 """
-ZOKASCORE V2 — STEP 50 MASTER FINAL V4.2
-Master Picker + Generate + Finalize — live-aware, strong-pick engine, PICK GROUPS
+ZOKASCORE V2 — STEP 50 MASTER FINAL V4.2.1
+Master Picker + Generate + Finalize — live-aware, strong-pick engine,
+PICK GROUPS (quality-graded), CANONICAL DUPLICATE-MATCH SUPPRESSION
 ==================================================================================
-MODES: prematch (34-feat ML, V5.1-calibrated 1X2) · live (gamma-poisson conditional)
-       · final (strip)
+V4.2.1 — CANONICAL DEDUP (the fix for 'double preds' in ZokaPicks):
+  Provider snapshots can contain the same physical match twice under
+  different ids/name variants ('Göztepe'/'Goztepe', 'Tottenham'/
+  'Tottenham Hotspur'). matchId-dedup is blind to these.
+  Canonical key = fuzzy team pair (accent-folded, prefix-containment,
+  min len 6) + kickoff hour. Enforced at FOUR surfaces:
+    1. daily strong-pick candidates (run_generation)
+    2. TOP10_DAILY group selection (one pick per canonical match)
+    3. unified predictions.json (newest valid wins)
+    4. unified zokapicks.json (resolved-state / score / freshness preference)
 
-V4.2 — QUALITY-GRADED PICK GROUPS:
-  · Per-pick quality: PURE / STRONG / STANDARD (per-market bars — 1X2 PURE is
-    strict at 66% because the honest model accuracy is 51.10%) · RISKY zone
-  · tier.quality_summary per tier · share_text announces the quality mix
-  · 🔥 TOP10_DAILY: cross-market premium group ranked by MASTER CONFIDENCE
-    (edge over family floor, normalized, resolved-state boosted, 1 pick/match)
-  · Families: 1X2 · GG_BTTS · OVER_UNDER · SCORE · LOW_CONFIDENCE (Risky Zone)
-  · Tiers of exactly 10 where possible — never padded, absent when empty
-  · Assignment mirrored to predictions, fixtures, unified + market files
-
-V4.0 RETAINED — STRONG PICK ENGINE (prediction != advertisement):
-  ZokaPicks = prematch only, multi-signal eligibility (probability, margin,
-  xG agreement, goal-market agreement, state quality), never force-filled,
-  never modifies ML probabilities, stale-pick guard (kickoff >= today).
-
-RETAINED: V5.1 calibration · rollover window · derived minute · threshold
-gating (no sub-50% picks) · live sanity validator · 8x8 IPF-calibrated CS ·
-strip/predict/merge re-run safety · atomic writes · freshness telemetry.
+RETAINED (full V4.2): quality-graded PICK GROUPS (PURE/STRONG/STANDARD/RISKY,
+per-market bars) · 🔥 TOP10_DAILY via master-confidence score · Strong Pick
+Engine (prediction != advertisement, stale guard) · V5.1 calibration ·
+rollover window · derived minute · threshold gating (no sub-50% picks) ·
+live sanity validator · 8x8 IPF-calibrated CS · strip/predict/merge ·
+atomic writes · freshness · resolved/estimated telemetry.
 
 Serve-time invariant enforced by services/livePredictionSync.js.
 """
@@ -63,7 +60,6 @@ INJECTED_KEYS   = ("prediction", "mlPredictions", "mlPrediction", "_tmp_markets"
 LIVE_STATUSES     = {"1H", "2H", "HT", "ET", "BT", "P", "LIVE", "IN_PLAY", "PAUSED"}
 FINISHED_STATUSES = {"FT", "FIN", "FINISHED", "AET", "AP", "PEN", "AWARDED", "ABAN", "SUSP"}
 
-# ================= STRONG PICK CONFIG =================
 STRONG_PICK_CONFIG = {
     "1x2":    {"min_probability": 54.0, "strong_probability": 60.0, "elite_probability": 66.0, "min_margin": 6.0},
     "btts":   {"min_probability": 56.0, "strong_probability": 61.0, "elite_probability": 67.0, "min_margin": 8.0},
@@ -73,7 +69,6 @@ STRONG_PICK_CONFIG = {
     "ou_3_5": {"min_probability": 58.0, "strong_probability": 64.0, "elite_probability": 72.0, "min_margin": 10.0},
 }
 
-# ================= PICK GROUPS CONFIG (V4.2 — quality-graded) =================
 PICK_GROUPS_CONFIG = {
     "PURE_1X2":   {"label": "1X2",            "emoji": "🔒", "market": "1x2",
                    "min_probability": 54.0, "low_floor": 48.0,
@@ -160,6 +155,29 @@ def poisson_prob(k, lam):
     lam = float(np.clip(lam, 0.05, 3.0))
     return math.exp(-lam) * (lam ** k) / math.factorial(k)
 
+# ================= CANONICAL MATCH IDENTITY (V4.2.1) =================
+def _team_same(a, b):
+    """Accent-folded team-name equality with prefix containment (min len 6)
+    — catches 'Tottenham' vs 'Tottenham Hotspur', 'Goztepe' vs 'Göztepe'."""
+    a, b = _norm(a), _norm(b)
+    if not a or not b:
+        return False
+    if a == b:
+        return True
+    shorter, longer = (a, b) if len(a) <= len(b) else (b, a)
+    return len(shorter) >= 6 and longer.startswith(shorter)
+
+def _canonical_key(home, away, kickoff):
+    """Duplicate-match identity: fuzzy team pair + kickoff hour (YYYY-MM-DDTHH
+    tolerates small minute shifts)."""
+    h, a = str(home or ""), str(away or "")
+    ko = str(kickoff or "")[:13]
+    if _team_same(h, a):
+        pair = "-".join(sorted([_norm(h), _norm(a)]))
+    else:
+        pair = f"{_norm(h)}|{_norm(a)}"
+    return f"{pair}|{ko}"
+
 # ================= labels / thresholds =================
 def load_label_map(key):
     cfg = MODELS_CFG[key]
@@ -171,7 +189,6 @@ def load_label_map(key):
     return cfg["fallback_map"] or {}
 
 def load_threshold(key):
-    """(threshold, apply). Applied only when validation proved >= THRESH_MIN_GAIN pp."""
     try:
         meta = json.load(open(os.path.join(MODELS_DIR, f"market_{key}_metadata.json"), encoding="utf-8"))
         th = float(np.clip(float(meta.get("best_threshold", meta.get("threshold", 0.5))), 0.15, 0.85))
@@ -265,7 +282,7 @@ def build_feature_row(h, a, h_elo, a_elo):
     })
     return row
 
-# ================= TEAM RESOLVER — full expansion =================
+# ================= TEAM RESOLVER =================
 def build_resolver(live_state):
     pid_map, alias_index = {}, {}
     try:
@@ -674,9 +691,8 @@ def validate_live_sanity(markets):
             bad.append(f"CS {k} below live {H0}-{A0}")
     return bad
 
-# ================= PICK GROUPS ENGINE (V4.2 — quality-graded) =================
+# ================= PICK GROUPS ENGINE (V4.2 + canonical dedup) =================
 def _pick_of(p, gcfg):
-    """(pick, probability) for a group's market from a prediction."""
     mk = p.get("markets", {})
     if gcfg["market"] == "top_cs":
         return p.get("top_correct_score"), float(p.get("top_cs_prob", 0) or 0)
@@ -690,8 +706,6 @@ def _quality_of(gcfg, prob):
     return "STANDARD"
 
 def _master_score(gcfg, prob, team_state):
-    """Cross-market comparable confidence: edge over the family floor,
-    normalized to the family elite, boosted for resolved team state."""
     floor = gcfg["min_probability"]
     elite = gcfg.get("elite_probability", floor + 15.0)
     s = (prob - floor) / max(elite - floor, 1.0)
@@ -715,20 +729,24 @@ def _tier_share_text(gcfg, tier_no, qsum, lines, date_str):
             + f"\n\n📅 {date_str} · zokascore.xyz")
 
 def build_pick_groups(daily, date_str, generated_at):
-    """Quality-graded tiering per family + cross-market TOP10_DAILY +
-    LOW_CONFIDENCE. Returns (groups_doc, assignment_by_matchId)."""
     groups, assignment = {}, {}
     family_pools = {}
 
-    # ---------- market families ----------
     for gkey, gcfg in PICK_GROUPS_CONFIG.items():
         pool = []
+        seen_canon = set()
         for p in daily:
             if p.get("markets", {}).get("mode") != "prematch":
                 continue
             pick, prob = _pick_of(p, gcfg)
             if not pick or prob < gcfg["min_probability"]:
                 continue
+            ck = _canonical_key(p["homeTeam"]["name"], p["awayTeam"]["name"], p.get("date"))
+            if ck in seen_canon:
+                log.warning(f"DUPLICATE-PICK suppressed (canonical, group {gkey}): "
+                            f"{p['homeTeam']['name']} v {p['awayTeam']['name']}")
+                continue
+            seen_canon.add(ck)
             team_state = p.get("markets", {}).get("team_state", "estimated")
             pool.append({"p": p, "pick": pick, "prob": prob,
                          "quality": _quality_of(gcfg, prob),
@@ -764,19 +782,21 @@ def build_pick_groups(daily, date_str, generated_at):
                             "market": gcfg["market"], "tier_count": tier_count,
                             "tiers": tiers}
 
-    # ---------- 🔥 TOP10_DAILY — cross-market, master-confidence ranked ----------
+    # ---------- 🔥 TOP10_DAILY — cross-market, canonical-deduped, master-ranked ----------
     master_pool = []
     for gkey, pool in family_pools.items():
         for e in pool:
             master_pool.append({**e, "gkey": gkey})
     master_pool.sort(key=lambda x: (x["master_score"], x["prob"]), reverse=True)
 
-    top_picks, seen_matches = [], set()
-    for e in master_pool:                     # one pick per match — best market wins
-        mid = e["p"]["matchId"]
-        if mid in seen_matches:
+    top_picks, seen_canon = [], set()
+    for e in master_pool:
+        p = e["p"]
+        mid = p["matchId"]
+        ck = _canonical_key(p["homeTeam"]["name"], p["awayTeam"]["name"], p.get("date"))
+        if mid in seen_canon or ck in seen_canon:
             continue
-        seen_matches.add(mid)
+        seen_canon.add(mid); seen_canon.add(ck)
         top_picks.append(e)
         if len(top_picks) >= TIER_SIZE:
             break
@@ -809,8 +829,9 @@ def build_pick_groups(daily, date_str, generated_at):
                                       + f"\n\n📅 {date_str} · zokascore.xyz")}],
         }
 
-    # ---------- ⚠️ LOW_CONFIDENCE — RISKY ZONE ----------
+    # ---------- ⚠️ LOW_CONFIDENCE — RISKY ZONE (canonical-deduped) ----------
     low_pool = []
+    seen_canon = set()
     for gkey in ("PURE_1X2", "GG_BTTS", "OVER_UNDER"):
         gcfg = PICK_GROUPS_CONFIG[gkey]
         for p in daily:
@@ -819,6 +840,10 @@ def build_pick_groups(daily, date_str, generated_at):
             pick, prob = _pick_of(p, gcfg)
             if not pick or not (gcfg["low_floor"] <= prob < gcfg["min_probability"]):
                 continue
+            ck = _canonical_key(p["homeTeam"]["name"], p["awayTeam"]["name"], p.get("date"))
+            if ck in seen_canon:
+                continue
+            seen_canon.add(ck)
             low_pool.append({"p": p, "pick": pick, "prob": prob, "gkey": gkey})
     low_pool.sort(key=lambda x: (x["prob"],
                                  1 if x["p"].get("markets", {}).get("team_state") == "resolved" else 0),
@@ -880,7 +905,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         log.info(f"   re-run safety: stripped stale predictions from {stripped} matches (fresh compute below)")
 
     daily, updated, cs_flags = [], [], []
-    prematch_pairs = []   # (daily_index, feature_row, p13_frac|None, p_over25_frac|None) — AT APPEND TIME
+    prematch_pairs = []
     phase_counts = {"prematch": 0, "live": 0, "final": 0}
 
     for item in raw:
@@ -903,7 +928,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         h_elo = float(np.clip(_num(h_st.get("elo"), 1500), 1200, 2100))
         a_elo = float(np.clip(_num(a_st.get("elo"), 1500), 1200, 2100))
 
-        row = build_feature_row(h_st, a_st, h_elo, a_elo)   # pre-match features ONLY
+        row = build_feature_row(h_st, a_st, h_elo, a_elo)
         X_df = pd.DataFrame([row])
         def prep(m):
             cols = list(m.feature_names_in_) if hasattr(m, "feature_names_in_") else FEATURE_ORDER
@@ -912,7 +937,6 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         ts_label = "resolved" if (h_ok and a_ok) else "estimated"
         markets = {}
 
-        # -------- LIVE: gamma-poisson conditional (ML supplies xG prior only) --------
         if phase == "live":
             H0 = int(_num(item.get("homeScore"), 0))
             A0 = int(_num(item.get("awayScore"), 0))
@@ -932,7 +956,6 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
                 "markets": markets, "top_correct_score": top_cs, "top_cs_prob": top_cs_p})
             continue
 
-        # -------- PREMATCH: 1X2 (with optional V5.1 calibration) --------
         cs_flags.append(bool(h_ok and a_ok))
         if "1x2" in models:
             try:
@@ -983,7 +1006,6 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         o25f = float(_o25["OVER"])/100.0 if "OVER" in _o25 else None
         prematch_pairs.append((len(daily) - 1, row, p13f, o25f))
 
-    # ---- PREMATCH hybrid Correct Score: ML joint + Poisson, IPF-calibrated ----
     def cs_apply(di, grid):
         tot = grid.sum() or 1.0
         scores = {f"{h_}-{a_}": round(float(grid[h_, a_] / tot * 100), 2)
@@ -1012,7 +1034,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
             s = joint.sum(axis=1, keepdims=True); s[s == 0] = 1.0
             joint = joint / s
             for bi, (di, r, p13f, o25f) in enumerate(prematch_pairs):
-                ml = joint[bi].reshape(N_GOALS, N_GOALS)   # already NxN; classes 6-7 zero-padded
+                ml = joint[bi].reshape(N_GOALS, N_GOALS)
                 base = (CS_ML_WEIGHT * ml + CS_POIS_WEIGHT * pois_matrix(r)) if cs_flags[bi] else pois_matrix(r)
                 base = base / (base.sum() or 1.0)
                 cs_apply(di, ipf_calibrate(base, p13f, o25f))
@@ -1031,7 +1053,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
     return daily, final
 
 def run_generation():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2 — PICKER + GROUPS + GENERATION"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.1 — PICKER + GROUPS + GENERATION"); log.info("="*70)
     decision = select_champion()
     models, label_maps, thresholds = {}, {}, {}
     for key, cfg in MODELS_CFG.items():
@@ -1051,7 +1073,6 @@ def run_generation():
                 if extra: log.warning(f"   ⚠ {key} expects features NOT in contract (will be 0!): {extra}")
         except Exception as e: log.warning(f"{key}: FAIL {e}")
 
-    # ---- V5.1 calibration (validation-fitted, log-loss gated) ----
     calibration = None
     cal_path = os.path.join(MODELS_DIR, "champion_calibration.json")
     if os.path.exists(cal_path):
@@ -1082,7 +1103,6 @@ def run_generation():
             p["freshness"] = {"generated_at": now.isoformat(),
                               "ttl_minutes": 10 if p["markets"].get("mode") == "live" else 60}
 
-        # ---- PICK GROUPS (V4.2): tier + quality-grade + assign + mirror everywhere ----
         groups_doc, assignment = build_pick_groups(daily, date_str, now.isoformat())
         for p in daily:
             if p["matchId"] in assignment:
@@ -1102,15 +1122,15 @@ def run_generation():
         out.update({"data": final, "count": len(final), "date": date_str})
         atomic_write_json(out, fpath)
 
-        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V4.2",
+        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V4.2.1",
             "date": date_str, "generated_at": now.isoformat(),
             "features": f"{len(FEATURE_ORDER)}_step49v4_parity", "modes": "prematch|live|final(none)",
             "cs": f"grid {N_GOALS}x{N_GOALS} ipf-calibrated to own 1x2+OU2.5",
-            "strong_pick_engine": "V4.0", "pick_groups_engine": "V4.2",
+            "strong_pick_engine": "V4.0", "pick_groups_engine": "V4.2.1",
             "count": len(daily), "predictions": daily, "data": daily},
             os.path.join(PREDICTIONS_DIR, f"{date_str}.json"))
 
-        # ---- STRONG ZOKAPICKS: eligible-only, score-ranked, never force-filled ----
+        # ---- STRONG ZOKAPICKS: eligible + canonical dedup + stale guard ----
         prematch = [p for p in daily if p.get("markets", {}).get("mode") == "prematch"]
         strong_candidates = [p for p in prematch
                              if p.get("markets", {}).get("strong_pick", {}).get("eligible") is True]
@@ -1119,6 +1139,18 @@ def run_generation():
             float(p.get("markets", {}).get("1x2", {}).get("pick_probability", 0)),
             float(p.get("markets", {}).get("strong_pick", {}).get("margin", 0)),
         ), reverse=True)
+
+        _seen_canon, _deduped_candidates = set(), []
+        for p in strong_candidates:
+            _k = _canonical_key(p["homeTeam"]["name"], p["awayTeam"]["name"], p.get("date"))
+            if _k in _seen_canon:
+                log.warning(f"DUPLICATE-PICK suppressed (canonical): "
+                            f"{p['homeTeam']['name']} v {p['awayTeam']['name']}")
+                continue
+            _seen_canon.add(_k)
+            _deduped_candidates.append(p)
+        strong_candidates = _deduped_candidates
+
         top10 = strong_candidates[:10]
         zp = []
         for p in top10:
@@ -1155,7 +1187,7 @@ def run_generation():
 
 # ================= PHASE 2: FINALIZE =================
 def run_finalize():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2 — FINALIZE"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.1 — FINALIZE"); log.info("="*70)
     files = sorted(f for f in glob.glob(os.path.join(PREDICTIONS_DIR, "*.json"))
                    if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
     log.info(f"[FINALIZE] {len(files)} daily files")
@@ -1192,19 +1224,36 @@ def run_finalize():
         cur = seen.get(mid)
         if cur is None or _ok(p): seen[mid] = p
     deduped = list(seen.values())
-    log.info(f"[FINALIZE] dedup: {len(deduped)} unique (from {len(all_preds)})")
+    log.info(f"[FINALIZE] matchId dedup: {len(deduped)} unique (from {len(all_preds)})")
+
+    # ---- canonical second pass: collapse name-variant duplicate records ----
+    _canon = {}
+    for p in sorted(deduped,
+                    key=lambda x: str(x.get("freshness", {}).get("generated_at", "")),
+                    reverse=True):                       # newest wins
+        _home = p.get("homeTeam", {}).get("name") if isinstance(p.get("homeTeam"), dict) else p.get("homeTeam")
+        _away = p.get("awayTeam", {}).get("name") if isinstance(p.get("awayTeam"), dict) else p.get("awayTeam")
+        _k = _canonical_key(_home, _away, p.get("date"))
+        if _k in _canon:
+            log.warning(f"DUPLICATE-PRED suppressed (canonical): {_home} v {_away}")
+            continue
+        _canon[_k] = p
+    deduped = list(_canon.values())
+    log.info(f"[FINALIZE] canonical dedup: {len(deduped)} unique")
+
     deduped.sort(key=lambda x: (x.get("markets",{}).get("mode","prematch") != "live",
                                 -x.get("markets",{}).get("1x2",{}).get("pick_probability",0)))
 
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V4.2",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V4.2.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_predictions": len(deduped), "by_date": by_date,
         "features": f"{len(FEATURE_ORDER)}_step49v4_parity",
         "modes": "prematch (ML) · live (gamma-poisson conditional, sanity-validated) · final (none)",
         "strong_pick_engine": {"version": "4.0", "description": "Selective multi-signal prematch picker",
                                "forced_top10": False, "max_published": 10},
-        "pick_groups_engine": {"version": "4.2", "tier_size": TIER_SIZE,
+        "pick_groups_engine": {"version": "4.2.1", "tier_size": TIER_SIZE,
                                "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
+                               "canonical_dedup": True,
                                "families": list(PICK_GROUPS_CONFIG.keys()) + ["TOP10_DAILY", "LOW_CONFIDENCE"]},
         "models": {"1x2": "champion model (Step 49 contract)", "btts": "market_btts_model",
                    "ou_0_5": "market_ou_0_5_model", "ou_1_5": "market_ou_1_5_model",
@@ -1213,9 +1262,9 @@ def run_finalize():
         "predictions": deduped, "data": deduped},
         os.path.join(PUBLIC_DATA, "predictions.json"))
 
-    # ---- unified zokapicks: eligible-only, STALE-PICK GUARD (kickoff >= today) ----
+    # ---- unified zokapicks: eligible + stale guard + canonical dedup (prefer best) ----
     today_str = datetime.now(timezone.utc).date().isoformat()
-    zp_all = []
+    candidates = []
     for p in deduped:
         m = p.get("markets", {})
         if m.get("mode") != "prematch": continue
@@ -1224,8 +1273,31 @@ def run_finalize():
             continue
         strong = m.get("strong_pick", {})
         if not strong.get("eligible", False): continue
+        candidates.append(p)
+
+    def _pref(p):
+        m = p.get("markets", {})
+        sp = m.get("strong_pick", {})
+        return (1 if m.get("team_state") == "resolved" else 0,
+                float(sp.get("score", 0)),
+                str(p.get("freshness", {}).get("generated_at", "")))
+
+    seen_canon = {}
+    for p in sorted(candidates, key=_pref, reverse=True):
+        _home = p.get("homeTeam", {}).get("name") if isinstance(p.get("homeTeam"), dict) else p.get("homeTeam")
+        _away = p.get("awayTeam", {}).get("name") if isinstance(p.get("awayTeam"), dict) else p.get("awayTeam")
+        _k = _canonical_key(_home, _away, p.get("date"))
+        if _k in seen_canon:
+            log.warning(f"DUPLICATE-PICK suppressed (canonical, finalize): {_home} v {_away}")
+            continue
+        seen_canon[_k] = p
+
+    zp_all = []
+    for p in seen_canon.values():
         try: hh, aa = map(int, str(p.get("top_correct_score", "1-1")).split("-"))
         except Exception: hh, aa = 1, 1
+        m = p.get("markets", {})
+        strong = m.get("strong_pick", {})
         zp_all.append({"matchId": p.get("matchId"),
             "homeTeam": p.get("homeTeam",{}).get("name") if isinstance(p.get("homeTeam"),dict) else p.get("homeTeam"),
             "awayTeam": p.get("awayTeam",{}).get("name") if isinstance(p.get("awayTeam"),dict) else p.get("awayTeam"),
@@ -1243,10 +1315,10 @@ def run_finalize():
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total": len(zp_all), "selection": "strong-pick-score",
         "stale_guard": f"kickoff >= {today_str}",
+        "canonical_dedup": True,
         "matches": zp_all, "data": zp_all},
         os.path.join(PUBLIC_DATA, "zokapicks.json"))
 
-    # ---- unified pick_groups.json ----
     pg_files = sorted(f for f in glob.glob(os.path.join(PICK_GROUPS_DIR, "*.json"))
                       if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
     pg_days = {}
@@ -1256,10 +1328,11 @@ def run_finalize():
             pg_days[d.get("date")] = d.get("groups", {})
         except Exception:
             continue
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "PICK_GROUPS_V4.2",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "PICK_GROUPS_V4.2.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "tier_size": TIER_SIZE,
         "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
+        "canonical_dedup": True,
         "days": pg_days,
         "latest": (pg_days.get(datetime.now(timezone.utc).date().isoformat()) or {})},
         os.path.join(PUBLIC_DATA, "pick_groups.json"))
@@ -1278,7 +1351,7 @@ def run_finalize():
             "live_state": m.get("live_state"), "strong_pick": m.get("strong_pick",{}),
             "pick_groups": p.get("pick_groups",{}),
             "top_correct_score": p.get("top_correct_score","1-1"), "top_cs_prob": p.get("top_cs_prob",0)})
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "MARKET_PREDICTIONS_V4.2",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "MARKET_PREDICTIONS_V4.2.1",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "count": len(mp), "predictions": mp},
         os.path.join(PUBLIC_DATA, "market_predictions.json"))

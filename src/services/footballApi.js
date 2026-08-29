@@ -282,6 +282,12 @@ export const footballApi = {
     authFetchJSON(`${API_BASE}/predictions/groups/${date}/comments`, { method: 'POST', body: JSON.stringify(payload) })),
   rateGroup: (date, payload) => monitorApiCall(`POST /predictions/groups/${date}/rate`, () =>
     authFetchJSON(`${API_BASE}/predictions/groups/${date}/rate`, { method: 'POST', body: JSON.stringify(payload) })),
+    unpublishAdminPickGroups: (date, opts) => monitorApiCall(`POST /admin/prediction-groups/${date}/unpublish`, () =>
+    authFetchJSON(`${API_BASE}/admin/prediction-groups/${encodeURIComponent(date)}/unpublish`, { method: 'POST', body: JSON.stringify(opts || {}) })),
+  excludeGroupMatch: (date, matchId) => monitorApiCall(`POST /admin/prediction-groups/${date}/exclude-match`, () =>
+    authFetchJSON(`${API_BASE}/admin/prediction-groups/${encodeURIComponent(date)}/exclude-match`, { method: 'POST', body: JSON.stringify({ matchId }) })),
+  restoreGroupMatch: (date, matchId) => monitorApiCall(`POST /admin/prediction-groups/${date}/restore-match`, () =>
+    authFetchJSON(`${API_BASE}/admin/prediction-groups/${encodeURIComponent(date)}/restore-match`, { method: 'POST', body: JSON.stringify({ matchId }) })),
   
 
   // ★ PATH FIX: was /leaderboards/rebuild/backfill-results → 404.

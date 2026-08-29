@@ -214,19 +214,20 @@ export function useGoatLeaderboard() {
     staleTime: 10 * 60 * 1000,
   });
 }
-
-/* Published pick groups (curated by admin, FT-auto-marked by backend) */
 export function usePublishedPickGroups(dateStr) {
   return useQuery({
     queryKey: ['publishedPickGroups', dateStr],
     queryFn: async () => {
       try {
         const res = await footballApi.getPublishedPickGroups(dateStr);
-        return res?.data || null;
-      } catch { return null; } // nothing published → null, page shows empty state
+        // ★ 404s arrive disguised as { data: [], notFound: true } — not a payload
+        if (!res || res.notFound || Array.isArray(res.data) || !res.data) return null;
+        if (!res.data.groups || Object.keys(res.data.groups).length === 0) return null;
+        return res.data;
+      } catch { return null; }
     },
     enabled: !!dateStr,
     staleTime: 2 * 60 * 1000,
-    refetchInterval: 5 * 60 * 1000, // tracks backend's 10-min FT re-publish
+    refetchInterval: 5 * 60 * 1000,
   });
 }

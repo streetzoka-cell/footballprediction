@@ -18,34 +18,18 @@ const LEAGUES_TO_SYNC = [
 
 /* Map both provider row shapes to ONE canonical row shape */
 function mapRow(r) {
-  if (r?.team && 'points' in r && r.all) {                    // API-Football
+  if (r?.team && 'points' in r && r.all) {                    // API-Football & football-data rows
     return {
-      rank: r.rank,
+      rank: r.rank ?? r.position,
       teamId: r.team.id,
       teamName: r.team.name,
-      played: r.all.played,
-      won: r.all.win,
-      drawn: r.all.draw,
-      lost: r.all.lose,
-      goalsFor: r.all.goals?.for,
-      goalsAgainst: r.all.goals?.against,
-      goalDiff: r.goalsDiff,
-      points: r.points,
-      form: r.form || null,
-    };
-  }
-  if (r?.team && 'playedGames' in r) {                        // football-data.org
-    return {
-      rank: r.position,
-      teamId: r.team.id,
-      teamName: r.team.name,
-      played: r.playedGames,
-      won: r.won,
-      drawn: r.draw,
-      lost: r.lost,
-      goalsFor: r.goalsFor,
-      goalsAgainst: r.goalsAgainst,
-      goalDiff: r.goalDifference,
+      played: r.all.played ?? r.playedGames,
+      won: r.all.win ?? r.won,
+      drawn: r.all.draw ?? r.draw,
+      lost: r.all.lose ?? r.lost,
+      goalsFor: r.all.goals?.for ?? r.goalsFor,
+      goalsAgainst: r.all.goals?.against ?? r.goalsAgainst,
+      goalDiff: r.goalsDiff ?? r.goalDifference,
       points: r.points,
       form: r.form || null,
     };
@@ -63,11 +47,20 @@ function container(id, name, season, rows) {
     rows,
   };
 }
+
+/*
+ * Normalize whatever the adapter returned into container+rows.
+ * Handles every shape seen in production:
+ *  A) API-Football container:  { league: { standings: [[rows]] } }
+ *  B) HTTP envelope:           { response: [ { league: {...} } ] }
+ *  C) football-data table objs:[ { type:'TOTAL', table:[rows] } ]
+ *  D) football-data competition:{ id:'PL', standings: [[rows]] }   ← the one from the logs
+ *  E) plain arrays:            { rows: [...] } / { table: [...] }
+ */
 function normalizeLeagueStandings(raw, meta) {
   if (!raw) return null;
 
-  /* ★ Unwrap provider HTTP envelopes (adapter may return the axios body):
-     { response: [ { league: { standings: [[...]] } } ] } */
+  /* B) unwrap provider HTTP envelopes */
   let inner = raw;
   if (Array.isArray(raw?.response)) inner = raw.response[0] ?? null;
   else if (Array.isArray(raw?.data?.response)) inner = raw.data.response[0] ?? null;
@@ -76,28 +69,40 @@ function normalizeLeagueStandings(raw, meta) {
   for (const candidate of [raw, inner]) {
     if (!candidate || typeof candidate !== 'object') continue;
 
-    if (candidate.league?.standings) {                       // API-Football container
+    // A) API-Football container
+    if (candidate.league?.standings) {
       return container(meta.id, meta.name, meta.season, candidate.league.standings.flat().map(mapRow));
     }
+
     const tables = Array.isArray(candidate) ? candidate : candidate.standings;
     if (Array.isArray(tables)) {
-      const total = tables.find((t) => t.type === 'TOTAL') || tables[0];
-      if (total?.table) return container(meta.id, meta.name, meta.season, total.table.map(mapRow));
-      if (tables[0] && (tables[0].rank !== undefined || tables[0].position !== undefined)) {
-        return container(meta.id, meta.name, meta.season, tables.map(mapRow));
+      // C) objects with .table
+      const tableObj = tables.find((t) => t?.table);
+      if (tableObj?.table) {
+        return container(meta.id, meta.name, meta.season, tableObj.table.map(mapRow));
+      }
+
+      // D) ★ nested array-of-arrays whose rows carry rank/position directly
+      //    ({ id:'PL', standings: [[ {rank, team, points, all:{...}} ]] })
+      const flattened = tables.flat();
+      if (flattened[0] && (flattened[0].rank !== undefined || flattened[0].position !== undefined)) {
+        return container(meta.id, meta.name, meta.season, flattened.map(mapRow));
       }
     }
+
+    // E) plain arrays
     if (Array.isArray(candidate.rows)) return container(meta.id, meta.name, meta.season, candidate.rows.map(mapRow));
     if (Array.isArray(candidate.table)) return container(meta.id, meta.name, meta.season, candidate.table.map(mapRow));
   }
 
-  /* ★ Diagnostic: log the actual shape so a miss is diagnosable in one run */
+  /* Diagnostic — one run tells us exactly what arrived */
   logger.warn(
     `[StandingsService] Unrecognized standings shape for ${meta.name}: ` +
     JSON.stringify(raw).slice(0, 300)
   );
   return null;
 }
+
 async function syncStandings(force = false) {
   logger.info(`[StandingsService] Syncing standings for ${LEAGUES_TO_SYNC.length} leagues (season ${CURRENT_SEASON})`);
   let ok = 0, fail = 0;
@@ -149,4 +154,6 @@ async function syncStandings(force = false) {
   return { ok, fail };
 }
 
-module.exports = { syncStandings };
+// normalizeLeagueStandings exported so the shape can be self-tested
+// without touching providers or PM2.
+module.exports = { syncStandings, normalizeLeagueStandings };

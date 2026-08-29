@@ -11,8 +11,8 @@ const statsJob = require('./jobs/statsJob');
 const MasterResultsJob = require('./jobs/MasterResultsJob');
 const BackfillResultsJob = require('./jobs/BackfillResultsJob');
 const step50Job = require('./jobs/step50Job');                                 // roadmap #1 — live preds track snapshots
-const predictionGroupsService = require('../services/PredictionGroupsService'); // FT auto-mark + curated republish
-const pickGroupsArchive = require('../services/PickGroupsArchiveService');      // ★ permanent history archive
+const predictionGroupsService = require('../services/PredictionGroupsService'); // auto-publish + FT auto-mark
+const pickGroupsArchive = require('../services/PickGroupsArchiveService');      // permanent history archive
 
 const { processQueue } = require('../services/QueueService');
 const internetMonitor = require('../services/InternetMonitor');
@@ -42,9 +42,7 @@ const USER_PREDICTION_SYNC_CHECK_MS = parseInt(
 const STEP50_REFRESH_MS = parseInt(process.env.STEP50_REFRESH_MS || String(15 * 60 * 1000), 10);
 const STEP50_ENABLED = process.env.STEP50_REFRESH !== 'off';
 
-// FT auto-mark interval: published pick groups re-resolve against
-// results/<date>.json every 10 min so the app surface shows ✅/❌
-// as FTs land. Self-gating: no-op until the admin publishes once.
+// FT auto-mark + auto-publish interval.
 const CURATED_REFRESH_MS = parseInt(process.env.CURATED_REFRESH_MS || String(10 * 60 * 1000), 10);
 
 /*
@@ -57,18 +55,43 @@ function runLiveJob() {
 }
 
 /*
- * ★ FT auto-mark + permanent archive for one day pair (today + yesterday).
- * - republishCurated: re-resolves the published app file against fresh
- *   results (no-op when nothing published for that date)
- * - archiveDay: rolls the day into prediction_groups_archive/<date>.json
- *   + Firestore copy (idempotent, flips final:true when fully settled)
+ * ★ THE AUTO-PUBLISH ENGINE — one place, three jobs per date:
+ *
+ *   1. BOOTSTRAP: no published file + not admin-hidden → auto-publish.
+ *      This is what makes groups go live with ZERO button presses:
+ *      Step 50 lands → within 10 min the app surface exists.
+ *      (Risky zone auto-hidden; every admin exclusion respected.)
+ *
+ *   2. REFRESH: file exists → republish with fresh FT results, keeping
+ *      the admin's published family set (a deliberate single-family
+ *      curation is not overridden by auto-publish).
+ *
+ *   3. ARCHIVE: roll the day into the permanent archive (idempotent,
+ *      flips final:true when fully settled) + Firestore copy.
+ *
+ * All three respect prediction_groups_exclusions/<date>.json forever:
+ * a hidden day stays hidden; hidden families/matches never resurrect.
  */
 async function refreshCuratedAndArchive(dateStr) {
   try {
-    await predictionGroupsService.republishCurated(dateStr);
+    const existing = await predictionGroupsService.getCurated(dateStr);
+    const excl = await predictionGroupsService.getExclusions(dateStr);
+
+    if (excl.dayUnpublished) {
+      // Admin hid this day — leave it alone (no publish, no refresh).
+      // Archive still runs below: history keeps building from the studio view.
+    } else if (!existing) {
+      const published = await predictionGroupsService.autoPublish(dateStr);
+      if (published) {
+        logger.info(`[Scheduler] Auto-published pick groups for ${dateStr} (${Object.keys(published.groups).join(', ')})`);
+      }
+    } else {
+      await predictionGroupsService.republishCurated(dateStr);
+    }
   } catch (err) {
     logger.warn(`[Scheduler] Curated refresh failed for ${dateStr}: ${err.message}`);
   }
+
   try {
     await pickGroupsArchive.archiveDay(dateStr);
   } catch (err) {
@@ -90,8 +113,9 @@ async function runStartupSync() {
     await statsJob.execute();
     await processQueue();
     await userPredictionSyncJob.execute(false);
-    // ★ pick up FTs that landed while we were down (no-op if nothing published)
+    // ★ bootstraps publish + picks up FTs that landed while we were down
     await refreshCuratedAndArchive(getDateOffset(0));
+    await refreshCuratedAndArchive(getDateOffset(1));
     await refreshCuratedAndArchive(getDateOffset(-1));
   } catch (err) {
     logger.error(`[Scheduler] Initial sync failed: ${err.message}`);
@@ -139,19 +163,19 @@ function startScheduler() {
     }
   });
 
-  // pick_groups.json + live predictions refresh (Step 50, idempotent ~100s)
+  // pick_groups.json + live predictions refresh (Step 50, idempotent ~100s).
+  // Publishing is handled by CuratedGroupsRefresh below — single owner.
   if (STEP50_ENABLED) {
     schedulerEngine.addBackgroundTask('Step50Refresh', STEP50_REFRESH_MS, () => step50Job.execute());
   }
 
-  // ★ FT auto-mark + permanent archive:
-  //   every 10 min, re-resolve published curated groups against fresh
-  //   results (✅ WON / ❌ LOST appear without manual action) and roll
-  //   the day into the permanent archive. Yesterday covers day rollover
-  //   (late finishers after midnight finalize into a FINAL archive).
+  // ★ AUTO-PUBLISH + FT auto-mark + permanent archive, every 10 min:
+  //   today + tomorrow (new pipeline output goes live) + yesterday
+  //   (late finishers finalize the archive after midnight).
   schedulerEngine.addBackgroundTask('CuratedGroupsRefresh', CURATED_REFRESH_MS, async () => {
     if (internetMonitor.isOnline) {
       await refreshCuratedAndArchive(getDateOffset(0));
+      await refreshCuratedAndArchive(getDateOffset(1));
       await refreshCuratedAndArchive(getDateOffset(-1));
     }
   });
@@ -171,8 +195,9 @@ function startScheduler() {
       await statsJob.execute();
       await processQueue();
       await userPredictionSyncJob.execute(false);
-      // ★ FTs that landed during the outage get marked + archived immediately
+      // ★ publish/refresh/archive everything the outage affected
       await refreshCuratedAndArchive(getDateOffset(0));
+      await refreshCuratedAndArchive(getDateOffset(1));
       await refreshCuratedAndArchive(getDateOffset(-1));
     } catch (err) {
       logger.error(`[Scheduler] Catch-up sync failed: ${err.message}`);

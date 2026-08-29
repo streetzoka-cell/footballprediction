@@ -27,48 +27,62 @@ async function loadResults(date) {
   }
   return map;
 }
-
 /* ── detect the market from defensive field variants ── */
 function detectMarket(pick) {
   const market = String(pick.market || pick.marketName || '').toUpperCase().replace(/_/g, ' ');
   const label = String(pick.pick || pick.label || pick.prediction || pick.selection || '').toUpperCase().replace(/_/g, ' ');
   const text = `${market} | ${label}`;
-  const hasOU = /OVER|UNDER/.test(text);
   const hasBTTS = /\bGG\b|\bNG\b|BTTS/.test(text);
 
   // 1X2 (guarded against O/U & BTTS tokens)
-  if (!hasOU && !hasBTTS) {
+  if (!hasBTTS && !/\bOVER\b|\bUNDER\b/.test(text)) {
     if (/\bHOME\b/.test(text)) return { type: '1X2', side: 'HOME' };
     if (/\bAWAY\b/.test(text)) return { type: '1X2', side: 'AWAY' };
     if (/\bDRAW\b/.test(text)) return { type: '1X2', side: 'DRAW' };
   }
 
-  // Over/Under — "OVER 2.5" / "OVER 2_5" / "OVER 2 5"
+  // Over/Under — line from the label first ("UNDER 1.5"), then dedicated fields
   const ou = text.match(/\b(OVER|UNDER)\s*O?\s*(\d)(?:\s*[.\-_\s]\s*(\d))?/);
   if (ou) {
     const line = ou[3] != null ? Number(`${ou[2]}.${ou[3]}`) : Number(ou[2]);
     return { type: ou[1], line };
   }
 
+  // ★ bare "OVER"/"UNDER" — hunt the line in dedicated fields or the raw market key
+  if (/\b(OVER|UNDER)\b/.test(text)) {
+    const side = text.match(/\b(OVER|UNDER)\b/)[1];
+    const lineRaw =
+      pick.line ?? pick.lineValue ?? pick.marketLine ?? pick.goalsLine ??
+      String(pick.market || pick.marketName || '').match(/(\d)\s*[._\-]?\s*(\d)/)?.[0];
+    const line = lineRaw != null ? parseFloat(String(lineRaw).replace(/[^0-9.]/g, '')) : null;
+    if (Number.isFinite(line)) return { type: side, line };
+    return { type: side, line: null }; // resolver will treat as PENDING (honest), not guess
+  }
+
   // BTTS
   if (/\bGG\b|BTTS\s*YES|\bYES\b/.test(text)) return { type: 'BTTS', side: 'YES' };
   if (/\bNG\b|BTTS\s*NO|\bNO\b/.test(text)) return { type: 'BTTS', side: 'NO' };
 
-  // Correct score — "CS 1-0" / "1-0" / "1:0"
+  // Correct score
   const cs = text.match(/\b(\d{1,2})\s*[-:]\s*(\d{1,2})\b/);
   if (cs) return { type: 'CS', home: Number(cs[1]), away: Number(cs[2]) };
 
   return null;
 }
 
+
 /* ── one pick vs one final score ── */
 function resolvePick(pick, score) {
   if (!score) {
     return { ...pick, result: 'PENDING', finalScore: null };
   }
-  const m = detectMarket(pick);
+
+   const m = detectMarket(pick);
   if (!m) {
     logger.warn?.(`[PickResolver] Unrecognized market for match ${pick.matchId}: "${pick.pick || pick.label}"`);
+    return { ...pick, result: 'PENDING', finalScore: `${score.home}-${score.away}` };
+  }
+  if ((m.type === 'OVER' || m.type === 'UNDER') && m.line == null) {
     return { ...pick, result: 'PENDING', finalScore: `${score.home}-${score.away}` };
   }
 

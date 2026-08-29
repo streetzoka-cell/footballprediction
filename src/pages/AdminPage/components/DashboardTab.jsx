@@ -67,18 +67,19 @@ const DashboardTab = memo(function DashboardTab({ preds, pubPicks, fxCount, live
     staleTime: 5 * 60 * 1000,
     refetchInterval: 10 * 60 * 1000,
   });
-
-  const groupsStatus = useMemo(() => {
-    const families = groupsData?.familyOrder || [];
-    const overall = groupsData?.results || null;
-    return {
+const groupsStatus = useMemo(() => {
+  const families = groupsData?.familyOrder || [];
+  const overall = groupsData?.results || null;
+  const pub = publishedData && !Array.isArray(publishedData) ? publishedData : null;
+  const pubFamilyCount = pub?.groups ? Object.keys(pub.groups).length : 0;
+  return {
       loaded: !!groupsData,
       source: groupsData?.source || null,
       fallback: !!groupsData?.fallback,
       families: families.length,
-      published: !!publishedData,
-      publishedFamilies: publishedData?.familyOrder?.length || 0,
-      won: overall?.won ?? null,
+      published: !!(pub && pubFamilyCount > 0),
+    publishedFamilies: pubFamilyCount,
+    won: overall?.won ?? null,
       lost: overall?.lost ?? null,
       pending: overall?.pending ?? null,
       accuracy: overall?.accuracy ?? null,
