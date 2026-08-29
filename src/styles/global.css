@@ -2628,7 +2628,119 @@ a { text-decoration: none; color: inherit; }
   }
 }
 
+/* ════════════════════════════════════════════════════════════════════
+   ZOKASCORE — Prediction Groups & Insights (session additions)
+   Appended: tab switcher · pick groups view · insights · feedback ·
+   match-card badges · admin studio · screenshot fallback helper
+   ════════════════════════════════════════════════════════════════════ */
+
+/* ── Predictions page: Expert Groups / My Predictions tab switcher ── */
+.v21-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--bg-elevated);
+  border-radius: 14px;
+  margin: 12px 0 4px;
+}
+
+.v21-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 8px;
+  border-radius: 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.v21-tab.on {
+  background: rgba(var(--primary-rgb), 0.12);
+  color: var(--primary);
+}
+
+/* ── Pick Groups view (public tab + admin studio share these) ── */
+.pg-view { display: block; }
+
+.pg-view .rank {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* pick rows: soft separators */
+.pg-view .flex-col.gap-6 > div,
+.glass-card .flex-col.gap-6 > div {
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--border);
+}
+.pg-view .flex-col.gap-6 > div:last-child,
+.glass-card .flex-col.gap-6 > div:last-child {
+  border-bottom: none;
+}
+
+/* probability + score columns align numerically */
+.pg-view .primary { font-variant-numeric: tabular-nums; }
+
+/* group/summary badges never wrap mid-chip */
+.pg-view .badge { white-space: nowrap; }
+
+/* ── GroupInsights — chart + 10-day list ── */
+.pg-view svg text { font-family: inherit; }
+.pg-view .md-mini-row { transition: border-color 0.15s, background 0.15s; }
+.pg-view .md-mini-row:hover { border-color: rgba(var(--primary-rgb), 0.4); }
+
+/* ── GroupFeedback — avatars ── */
+.pg-view .v21-zoka-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 9px;
+  background: rgba(var(--gold-rgb), 0.12);
+  color: var(--gold);
+  font-weight: 800;
+  flex-shrink: 0;
+}
+
+/* ── MatchCard — group badge chip (per-match pick_groups mirror) ── */
+.zoka-card .badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  white-space: nowrap;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Admin studio — toolbar wrapping on mobile ── */
+.glass-card.flex-center { row-gap: 8px; }
+.glass-card .btn-ghost.btn-sm { white-space: nowrap; }
+
+/* ── Dashboard status grids (only if not already defined above) ── */
+
+.admin-grid-150 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 8px;
+}
+
+/* ── Screenshot helper: html2canvas taint-fallback hides logos but
+      keeps layout, so the retry capture doesn't shift ── */
 .shot-no-img img { visibility: hidden; }
-.v21-tabs { display: flex; gap: 6px; padding: 4px; background: var(--bg-elevated); border-radius: 14px; margin: 12px 0 4px; }
-.v21-tab { flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 8px; border-radius: 10px; border: none; background: transparent; color: var(--text-muted); font-weight: 700; font-size: 13px; cursor: pointer; transition: background .2s, color .2s; }
-.v21-tab.on { background: rgba(var(--primary-rgb), .12); color: var(--primary); }
