@@ -1,25 +1,55 @@
 """
-ZOKASCORE V2 — STEP 50 MASTER FINAL V4.2.1
+ZOKASCORE V2 — STEP 50 MASTER FINAL V4.2.3
 Master Picker + Generate + Finalize — live-aware, strong-pick engine,
-PICK GROUPS (quality-graded), CANONICAL DUPLICATE-MATCH SUPPRESSION
+PICK GROUPS (quality-graded), CANONICAL DEDUP, FT-PRESERVATION,
+CONFIDENCE CALIBRATION (anti-overconfidence)
 ==================================================================================
-V4.2.1 — CANONICAL DEDUP (the fix for 'double preds' in ZokaPicks):
-  Provider snapshots can contain the same physical match twice under
-  different ids/name variants ('Göztepe'/'Goztepe', 'Tottenham'/
-  'Tottenham Hotspur'). matchId-dedup is blind to these.
-  Canonical key = fuzzy team pair (accent-folded, prefix-containment,
-  min len 6) + kickoff hour. Enforced at FOUR surfaces:
-    1. daily strong-pick candidates (run_generation)
-    2. TOP10_DAILY group selection (one pick per canonical match)
-    3. unified predictions.json (newest valid wins)
-    4. unified zokapicks.json (resolved-state / score / freshness preference)
+V4.2.3 — CONFIDENCE CALIBRATION (NEW):
+  Two bugs made prematch predictions look "fake":
+    1. Teams that can't be resolved to real data (`fallback_state_from_hash`)
+       were assigned a WIDE, hash-driven Elo/form spread. That's noise, not
+       signal, but it fed straight into the models and came out looking like
+       a confident pick — explains the 90-100% readings on obscure fixtures.
+    2. Nothing capped a single market or a single correct-score cell from
+       reading near-certain pre-kickoff, which football never legitimately is.
+  Fix: fallback state variance narrowed to stay close to league-average, and
+  a shrinkage + hard-cap layer (`shrink_market` / `regularize_cs_grid`) pulls
+  every PREMATCH probability toward a realistic baseline before it's shown —
+  more aggressively when team_state == "estimated" than when "resolved".
+  LIVE markets (build_live_markets) are untouched: near-certainty in the 88th
+  minute of a 4-0 game is real, not a modeling artifact.
 
-RETAINED (full V4.2): quality-graded PICK GROUPS (PURE/STRONG/STANDARD/RISKY,
-per-market bars) · 🔥 TOP10_DAILY via master-confidence score · Strong Pick
-Engine (prediction != advertisement, stale guard) · V5.1 calibration ·
-rollover window · derived minute · threshold gating (no sub-50% picks) ·
-live sanity validator · 8x8 IPF-calibrated CS · strip/predict/merge ·
-atomic writes · freshness · resolved/estimated telemetry.
+V4.2.2 — STATUS-AWARE RE-RUN SEMANTICS:
+  FINISHED (FT) matches are HISTORICAL RECORD:
+    · their embedded predictions are NEVER deleted on re-run
+    · they are passed through untouched (never regenerated)
+    · they are excluded from forecast feeds (predictions.json, zokapicks,
+      pick_groups, market_predictions) — a finished match is not a pick
+    · they stay in the fixture file with count/data intact
+  LIVE + UPCOMING (NS): full strip -> predict -> merge cycle as before.
+
+V4.2.1 RETAINED — CANONICAL DEDUP at four surfaces:
+  1. daily strong-pick candidates  2. TOP10_DAILY selection
+  3. unified predictions.json (newest wins)  4. unified zokapicks.json
+  Canonical key = accent-folded fuzzy team pair (prefix containment, min 6)
+  + kickoff hour — catches 'Göztepe'/'Goztepe', 'Tottenham'/'Tottenham Hotspur'.
+
+V4.2 RETAINED — QUALITY-GRADED PICK GROUPS:
+  Families: 1X2 · GG_BTTS · OVER_UNDER · SCORE · 🔥 TOP10_DAILY (master-
+  confidence, 1/match) · ⚠️ LOW_CONFIDENCE. Tiers of exactly 10 where possible,
+  never padded, absent when empty. Per-pick quality PURE/STRONG/STANDARD/RISKY
+  (per-market bars — 1X2 PURE strict at 66% vs honest 51.10% model).
+  Pre-composed share_text per tier (copy/share/screenshot ready).
+
+V4.0 RETAINED — STRONG PICK ENGINE: prediction != advertisement. ZokaPicks =
+  prematch, multi-signal eligibility, never force-filled, never modifies ML
+  probabilities, stale guard (kickoff >= today).
+
+RETAINED: V5.1 calibration (champion_calibration.json, log-loss gated) ·
+rollover window (yesterday included) · derived minute (provider minute=0
+garbage handled) · threshold gating (validated gain only) · live sanity
+validator (CS never below current score) · 8x8 IPF-calibrated CS · atomic
+writes · freshness telemetry · resolved/estimated honesty labels.
 
 Serve-time invariant enforced by services/livePredictionSync.js.
 """
@@ -57,6 +87,8 @@ N_GOALS         = 8
 IPF_ITERS       = 40
 DATE_RE         = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 INJECTED_KEYS   = ("prediction", "mlPredictions", "mlPrediction", "_tmp_markets", "pick_groups")
+FT_RECORD_MARKER = "prediction_final_record"   # V4.2.2 — NOT in INJECTED_KEYS:
+                                               # FT records survive strip by design
 LIVE_STATUSES     = {"1H", "2H", "HT", "ET", "BT", "P", "LIVE", "IN_PLAY", "PAUSED"}
 FINISHED_STATUSES = {"FT", "FIN", "FINISHED", "AET", "AP", "PEN", "AWARDED", "ABAN", "SUSP"}
 
@@ -84,6 +116,19 @@ PICK_GROUPS_CONFIG = {
                    "grades": {"PURE": 18.0, "STRONG": 15.0}, "elite_probability": 20.0},
 }
 TIER_SIZE = 10
+
+# ================= CONFIDENCE CALIBRATION (anti-overconfidence) — V4.2.3 =================
+# Raw model / Poisson output can look "fake" for fixtures where team state is
+# only "estimated" (hash-fallback, no real data resolved) — the underlying
+# signal there is closer to noise than to knowledge, so it must never be
+# shown with the same certainty as a "resolved" match. These knobs shrink
+# every PREMATCH probability toward a realistic baseline and hard-cap the
+# extremes. LIVE markets are exempt — see build_live_markets.
+CONF_SHRINK_RESOLVED   = 0.90   # keep 90% of raw signal when team state is known
+CONF_SHRINK_ESTIMATED  = 0.55   # keep only 55% of raw signal when team state is guessed
+CONF_HARD_CAP_PREMATCH = 90.0   # no single prematch 1x2/market pick may exceed this
+CS_UNIFORM_BLEND       = 0.12   # blend correct-score grid with uniform mass (prematch)
+CS_HARD_CAP_PREMATCH   = 35.0   # no single prematch correct-score cell may exceed this
 
 MODELS_CFG = {
     "1x2":        {"file": "champion_model.joblib",          "mapfile": "champion_label_mapping.json",      "fallback_map": {0:"AWAY_WIN",1:"DRAW",2:"HOME_WIN"}, "positive": None},
@@ -168,8 +213,7 @@ def _team_same(a, b):
     return len(shorter) >= 6 and longer.startswith(shorter)
 
 def _canonical_key(home, away, kickoff):
-    """Duplicate-match identity: fuzzy team pair + kickoff hour (YYYY-MM-DDTHH
-    tolerates small minute shifts)."""
+    """Duplicate-match identity: fuzzy team pair + kickoff hour."""
     h, a = str(home or ""), str(away or "")
     ko = str(kickoff or "")[:13]
     if _team_same(h, a):
@@ -362,10 +406,20 @@ def build_resolver(live_state):
 
 # ================= state + fallbacks =================
 def fallback_state_from_hash(pid, name, is_home):
+    """V4.2.3 — narrowed on purpose. This is a GUESS for a team we could not
+    resolve to real data, not a signal. The previous ±100 Elo / wide-band
+    spread let pure hash noise masquerade as a confident opinion once it hit
+    the models downstream — that's the root cause of implausible 90-100%
+    readings on obscure fixtures. Keeping this close to league-average means
+    an unresolved team can no longer manufacture false certainty; the
+    shrink_market()/regularize_cs_grid() layer below adds a second, explicit
+    safety net on top of this."""
     s = hashlib.md5((pid or name or ("home" if is_home else "away")).encode()).hexdigest()
-    return {"elo": 1500+(int(s[:4],16)%200-100), "ewma_points": 6.0+(int(s[4:8],16)%40)/10.0,
-            "ewma_gd": (int(s[8:12],16)%60-30)/20.0, "ewma_gf": 1.0+(int(s[12:16],16)%80)/100.0,
-            "ewma_ga": 1.0+(int(s[16:20],16)%80)/100.0,
+    return {"elo": 1500+(int(s[:4],16)%60-30),
+            "ewma_points": 7.0+(int(s[4:8],16)%16-8)/10.0,
+            "ewma_gd": (int(s[8:12],16)%20-10)/20.0,
+            "ewma_gf": 1.15+(int(s[12:16],16)%20-10)/100.0,
+            "ewma_ga": 1.15+(int(s[16:20],16)%20-10)/100.0,
             "ewma_home_points": 7.0, "ewma_away_points": 6.5, "ewma_home_gd": 0.0, "ewma_away_gd": 0.0,
             "ewma_home_gf": 1.15, "ewma_away_gf": 1.1, "ewma_home_ga": 1.1, "ewma_away_ga": 1.15}
 
@@ -436,6 +490,55 @@ def predict_binary(m, label_map, positive, X, thresh, apply_thresh):
                 "threshold": round(thresh, 2), "threshold_applied": bool(apply_thresh)}
     b = int(np.argmax(proba))
     return {"probabilities": pmap, "pick": labels[b], "pick_probability": pmap[labels[b]]}
+
+# ================= CONFIDENCE CALIBRATION ENGINE — V4.2.3 =================
+def shrink_market(pmap, team_state, hard_cap=CONF_HARD_CAP_PREMATCH):
+    """Pull a probability map toward its own uniform baseline so a match with
+    only an "estimated" (hash-fallback) team state can never present
+    implausible near-certainty, then apply a hard ceiling. Shrinkage is a
+    monotonic affine transform, so the argmax pick never changes — only its
+    displayed magnitude does."""
+    if not isinstance(pmap, dict) or not pmap:
+        return pmap
+    n = len(pmap)
+    uni = 100.0 / n
+    factor = CONF_SHRINK_RESOLVED if team_state == "resolved" else CONF_SHRINK_ESTIMATED
+    shrunk = {k: uni + (v - uni) * factor for k, v in pmap.items()}
+    total = sum(shrunk.values()) or 100.0
+    shrunk = {k: v * 100.0 / total for k, v in shrunk.items()}
+    if hard_cap:
+        capped = {k: min(v, hard_cap) for k, v in shrunk.items()}
+        trimmed = sum(shrunk.values()) - sum(capped.values())
+        others = [k for k in capped if shrunk[k] < hard_cap]
+        if trimmed > 0 and others:
+            share = trimmed / len(others)
+            for k in others:
+                capped[k] += share
+        shrunk = capped
+    return {k: round(v, 2) for k, v in shrunk.items()}
+
+def regularize_cs_grid(grid, blend=CS_UNIFORM_BLEND, hard_cap=CS_HARD_CAP_PREMATCH):
+    """Blend a PREMATCH correct-score grid with a small amount of uniform mass
+    and cap the single most-likely cell. Correct scores are inherently
+    long-tailed; a cell reading 80-100% before kickoff is not a real signal,
+    it's a degenerate Poisson/IPF collapse and gets shown as such."""
+    g = np.array(grid, dtype=float)
+    if g.sum() <= 0:
+        return g
+    g = g / g.sum()
+    uni = np.full_like(g, 1.0 / g.size)
+    g = (1 - blend) * g + blend * uni
+    g = g / g.sum()
+    if hard_cap:
+        cap = hard_cap / 100.0
+        excess = np.clip(g - cap, 0, None)
+        if excess.sum() > 0:
+            g = np.minimum(g, cap)
+            room = np.clip(cap - g, 0, None)
+            if room.sum() > 0:
+                g = g + room * (excess.sum() / room.sum())
+            g = g / g.sum()
+    return g
 
 # ================= STRONG PICK ENGINE =================
 def probability_margin(market):
@@ -879,12 +982,29 @@ def build_pick_groups(daily, date_str, generated_at):
 
 # ================= PHASE 1: GENERATION =================
 def strip_injected(raw):
-    clean, stripped = [], 0
+    """V4.2.2 STATUS-AWARE stale-key cleanup.
+    - final/FT matches: prediction keys are HISTORICAL RECORD — never stripped,
+      never regenerated. Passed through untouched.
+    - live + prematch: stale keys stripped; fresh computation follows."""
+    clean, stripped, preserved_ft = [], 0, 0
     for item in raw:
-        if not isinstance(item, dict): continue
+        if not isinstance(item, dict):
+            continue
+        phase = match_phase(item)
+        has_pred = any(k in item for k in INJECTED_KEYS)
+        if phase == "final":
+            if has_pred:
+                preserved_ft += 1
+            clean.append(item)          # keep EVERYTHING, untouched
+            continue
         c = {k: v for k, v in item.items() if k not in INJECTED_KEYS}
-        if len(c) != len(item): stripped += 1
+        if len(c) != len(item):
+            stripped += 1
         clean.append(c)
+    if stripped:
+        log.info(f"   re-run safety: stripped stale predictions from {stripped} live/upcoming matches (fresh compute below)")
+    if preserved_ft:
+        log.info(f"   FT preservation: {preserved_ft} finished matches kept their recorded predictions (never deleted)")
     return clean, stripped
 
 def match_phase(item):
@@ -901,8 +1021,6 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
     raw = fixture_data.get("data", []) if isinstance(fixture_data, dict) else fixture_data
     if not isinstance(raw, list): raw = []
     raw, stripped = strip_injected(raw)
-    if stripped:
-        log.info(f"   re-run safety: stripped stale predictions from {stripped} matches (fresh compute below)")
 
     daily, updated, cs_flags = [], [], []
     prematch_pairs = []
@@ -911,7 +1029,15 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
     for item in raw:
         phase = match_phase(item)
         phase_counts[phase] = phase_counts.get(phase, 0) + 1
+
         if phase == "final":
+            # V4.2.2: FT — prediction keys (if any) were preserved by
+            # strip_injected. Pass the record through untouched. Never
+            # regenerate, never delete.
+            if any(k in item for k in INJECTED_KEYS):
+                u = dict(item)
+                u[FT_RECORD_MARKER] = True
+                updated.append(u)
             continue
 
         mid = str(item.get("id", ""))
@@ -928,7 +1054,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         h_elo = float(np.clip(_num(h_st.get("elo"), 1500), 1200, 2100))
         a_elo = float(np.clip(_num(a_st.get("elo"), 1500), 1200, 2100))
 
-        row = build_feature_row(h_st, a_st, h_elo, a_elo)
+        row = build_feature_row(h_st, a_st, h_elo, a_elo)   # pre-match features ONLY
         X_df = pd.DataFrame([row])
         def prep(m):
             cols = list(m.feature_names_in_) if hasattr(m, "feature_names_in_") else FEATURE_ORDER
@@ -937,6 +1063,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         ts_label = "resolved" if (h_ok and a_ok) else "estimated"
         markets = {}
 
+        # -------- LIVE: gamma-poisson conditional (ML supplies xG prior only) --------
         if phase == "live":
             H0 = int(_num(item.get("homeScore"), 0))
             A0 = int(_num(item.get("awayScore"), 0))
@@ -956,6 +1083,7 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
                 "markets": markets, "top_correct_score": top_cs, "top_cs_prob": top_cs_p})
             continue
 
+        # -------- PREMATCH: 1X2 (with optional V5.1 calibration) --------
         cs_flags.append(bool(h_ok and a_ok))
         if "1x2" in models:
             try:
@@ -986,6 +1114,19 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
                                              MODELS_CFG[mk]["positive"], prep(models[mk]), th, apply)
             except Exception as e: log.warning(f"{mk} fail {h_name} v {a_name}: {e}")
 
+        # -------- V4.2.3 CONFIDENCE CALIBRATION — apply BEFORE strong-pick
+        # scoring so "estimated" fixtures can no longer read as falsely
+        # confident, and so strong-pick / pick-group eligibility (which is
+        # threshold-based) reflects the same calibrated numbers users see. --
+        for mk_key in ["1x2"] + MARKET_KEYS:
+            mkt = markets.get(mk_key)
+            if isinstance(mkt, dict) and mkt.get("probabilities"):
+                shrunk = shrink_market(mkt["probabilities"], ts_label)
+                new_pick = max(shrunk, key=shrunk.get)
+                mkt["probabilities"] = shrunk
+                mkt["pick"] = new_pick
+                mkt["pick_probability"] = shrunk[new_pick]
+
         markets["xG"] = {"home": round(row["exp_home_xg"], 2), "away": round(row["exp_away_xg"], 2),
                          "total": round(row["exp_total_xg"], 2)}
         markets["mode"] = "prematch"
@@ -1006,7 +1147,11 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         o25f = float(_o25["OVER"])/100.0 if "OVER" in _o25 else None
         prematch_pairs.append((len(daily) - 1, row, p13f, o25f))
 
+    # ---- PREMATCH hybrid Correct Score: ML joint + Poisson, IPF-calibrated ----
+    # V4.2.3: regularize_cs_grid() blends in uniform mass + hard-caps the top
+    # cell so a prematch correct score can never claim near-certainty.
     def cs_apply(di, grid):
+        grid = regularize_cs_grid(grid)
         tot = grid.sum() or 1.0
         scores = {f"{h_}-{a_}": round(float(grid[h_, a_] / tot * 100), 2)
                   for h_ in range(grid.shape[0]) for a_ in range(grid.shape[1])}
@@ -1049,11 +1194,12 @@ def generate_day(fixture_data, models, label_maps, thresholds, live_state,
         mk = it.pop("_tmp_markets", {})
         it["prediction"] = mk; it["mlPredictions"] = mk; it["mlPrediction"] = mk
         final.append(it)
-    log.info(f"   phases: prematch={phase_counts.get('prematch',0)} live={phase_counts.get('live',0)} final(skipped)={phase_counts.get('final',0)}")
+    log.info(f"   phases: prematch={phase_counts.get('prematch',0)} live={phase_counts.get('live',0)} "
+             f"final(preserved)={phase_counts.get('final',0)}")
     return daily, final
 
 def run_generation():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.1 — PICKER + GROUPS + GENERATION"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.3 — PICKER + GROUPS + GENERATION"); log.info("="*70)
     decision = select_champion()
     models, label_maps, thresholds = {}, {}, {}
     for key, cfg in MODELS_CFG.items():
@@ -1084,6 +1230,10 @@ def run_generation():
         except Exception as e:
             log.warning(f"calibration load failed: {e}")
 
+    log.info(f"Confidence calibration: ENABLED — resolved x{CONF_SHRINK_RESOLVED} / "
+             f"estimated x{CONF_SHRINK_ESTIMATED} / hard cap {CONF_HARD_CAP_PREMATCH}% "
+             f"/ CS cap {CS_HARD_CAP_PREMATCH}% (prematch only)")
+
     live_state = load_live_state()
     resolver, make_counters = build_resolver(live_state)
     os.makedirs(PREDICTIONS_DIR, exist_ok=True)
@@ -1109,6 +1259,8 @@ def run_generation():
                 p["pick_groups"] = assignment[p["matchId"]]
         by_mid = {p["matchId"]: p.get("pick_groups") for p in daily}
         for item in final:
+            if item.get(FT_RECORD_MARKER):
+                continue                       # FT historical record — no group badges
             ga = by_mid.get(str(item.get("id")))
             if ga:
                 item["pick_groups"] = ga
@@ -1122,11 +1274,15 @@ def run_generation():
         out.update({"data": final, "count": len(final), "date": date_str})
         atomic_write_json(out, fpath)
 
-        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V4.2.1",
+        atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "pipeline": "50_MASTER_FINAL_V4.2.3",
             "date": date_str, "generated_at": now.isoformat(),
-            "features": f"{len(FEATURE_ORDER)}_step49v4_parity", "modes": "prematch|live|final(none)",
-            "cs": f"grid {N_GOALS}x{N_GOALS} ipf-calibrated to own 1x2+OU2.5",
-            "strong_pick_engine": "V4.0", "pick_groups_engine": "V4.2.1",
+            "features": f"{len(FEATURE_ORDER)}_step49v4_parity", "modes": "prematch|live|final(preserved)",
+            "cs": f"grid {N_GOALS}x{N_GOALS} ipf-calibrated to own 1x2+OU2.5, regularized (prematch)",
+            "strong_pick_engine": "V4.0", "pick_groups_engine": "V4.2.3",
+            "ft_preservation": True,
+            "confidence_calibration": {"enabled": True,
+                "resolved_shrink": CONF_SHRINK_RESOLVED, "estimated_shrink": CONF_SHRINK_ESTIMATED,
+                "market_hard_cap": CONF_HARD_CAP_PREMATCH, "cs_hard_cap": CS_HARD_CAP_PREMATCH},
             "count": len(daily), "predictions": daily, "data": daily},
             os.path.join(PREDICTIONS_DIR, f"{date_str}.json"))
 
@@ -1187,7 +1343,7 @@ def run_generation():
 
 # ================= PHASE 2: FINALIZE =================
 def run_finalize():
-    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.1 — FINALIZE"); log.info("="*70)
+    log.info("="*70); log.info(" STEP 50 MASTER FINAL V4.2.3 — FINALIZE"); log.info("="*70)
     files = sorted(f for f in glob.glob(os.path.join(PREDICTIONS_DIR, "*.json"))
                    if DATE_RE.match(os.path.splitext(os.path.basename(f))[0]))
     log.info(f"[FINALIZE] {len(files)} daily files")
@@ -1199,6 +1355,10 @@ def run_finalize():
         preds = data.get("predictions") or data.get("data") or []
         kept = []
         for p in preds:
+            # V4.2.2: FT historical records are not forecasts — exclude from
+            # forecast feeds (they remain preserved in fixture files)
+            if p.get(FT_RECORD_MARKER):
+                continue
             m = p.get("markets")
             if not isinstance(m, dict): continue
             for w in audit_consistency(m):
@@ -1214,7 +1374,7 @@ def run_finalize():
                 log.warning(f"DEGRADED 1x2 via xG for {p.get('matchId')}")
             kept.append(p)
         by_date[date] = len(kept); all_preds.extend(kept)
-        log.info(f"   {date}: {len(kept)}")
+        log.info(f"   {date}: {len(kept)} (forecast feed; FT records excluded)")
 
     seen = {}
     def _ok(x): return isinstance(x, dict) and isinstance(x.get("markets",{}).get("1x2"), dict) and x["markets"]["1x2"].get("pick")
@@ -1230,7 +1390,7 @@ def run_finalize():
     _canon = {}
     for p in sorted(deduped,
                     key=lambda x: str(x.get("freshness", {}).get("generated_at", "")),
-                    reverse=True):                       # newest wins
+                    reverse=True):
         _home = p.get("homeTeam", {}).get("name") if isinstance(p.get("homeTeam"), dict) else p.get("homeTeam")
         _away = p.get("awayTeam", {}).get("name") if isinstance(p.get("awayTeam"), dict) else p.get("awayTeam")
         _k = _canonical_key(_home, _away, p.get("date"))
@@ -1244,25 +1404,29 @@ def run_finalize():
     deduped.sort(key=lambda x: (x.get("markets",{}).get("mode","prematch") != "live",
                                 -x.get("markets",{}).get("1x2",{}).get("pick_probability",0)))
 
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V4.2.1",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "50_MASTER_FINAL_V4.2.3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "total_predictions": len(deduped), "by_date": by_date,
         "features": f"{len(FEATURE_ORDER)}_step49v4_parity",
-        "modes": "prematch (ML) · live (gamma-poisson conditional, sanity-validated) · final (none)",
+        "modes": "prematch (ML, confidence-calibrated) · live (gamma-poisson conditional, sanity-validated) · final (preserved in fixtures, excluded here)",
+        "ft_preservation": True,
+        "confidence_calibration": {"enabled": True,
+            "resolved_shrink": CONF_SHRINK_RESOLVED, "estimated_shrink": CONF_SHRINK_ESTIMATED,
+            "market_hard_cap": CONF_HARD_CAP_PREMATCH, "cs_hard_cap": CS_HARD_CAP_PREMATCH},
         "strong_pick_engine": {"version": "4.0", "description": "Selective multi-signal prematch picker",
                                "forced_top10": False, "max_published": 10},
-        "pick_groups_engine": {"version": "4.2.1", "tier_size": TIER_SIZE,
+        "pick_groups_engine": {"version": "4.2.3", "tier_size": TIER_SIZE,
                                "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
                                "canonical_dedup": True,
                                "families": list(PICK_GROUPS_CONFIG.keys()) + ["TOP10_DAILY", "LOW_CONFIDENCE"]},
         "models": {"1x2": "champion model (Step 49 contract)", "btts": "market_btts_model",
                    "ou_0_5": "market_ou_0_5_model", "ou_1_5": "market_ou_1_5_model",
                    "ou_2_5": "market_ou_2_5_model", "ou_3_5": "market_ou_3_5_model",
-                   "correct_score": f"prematch: {N_GOALS}x{N_GOALS} hybrid + IPF · live: conditional grid"},
+                   "correct_score": f"prematch: {N_GOALS}x{N_GOALS} hybrid + IPF + regularized · live: conditional grid"},
         "predictions": deduped, "data": deduped},
         os.path.join(PUBLIC_DATA, "predictions.json"))
 
-    # ---- unified zokapicks: eligible + stale guard + canonical dedup (prefer best) ----
+    # ---- unified zokapicks: eligible + stale guard + canonical dedup ----
     today_str = datetime.now(timezone.utc).date().isoformat()
     candidates = []
     for p in deduped:
@@ -1328,7 +1492,7 @@ def run_finalize():
             pg_days[d.get("date")] = d.get("groups", {})
         except Exception:
             continue
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "PICK_GROUPS_V4.2.1",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "PICK_GROUPS_V4.2.3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "tier_size": TIER_SIZE,
         "quality_scale": ["PURE", "STRONG", "STANDARD", "RISKY"],
@@ -1351,7 +1515,7 @@ def run_finalize():
             "live_state": m.get("live_state"), "strong_pick": m.get("strong_pick",{}),
             "pick_groups": p.get("pick_groups",{}),
             "top_correct_score": p.get("top_correct_score","1-1"), "top_cs_prob": p.get("top_cs_prob",0)})
-    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "MARKET_PREDICTIONS_V4.2.1",
+    atomic_write_json({"engine": "ZOKASCORE_V2_UNIFIED", "version": "MARKET_PREDICTIONS_V4.2.3",
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "count": len(mp), "predictions": mp},
         os.path.join(PUBLIC_DATA, "market_predictions.json"))

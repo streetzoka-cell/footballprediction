@@ -69,6 +69,14 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
   const hasStats = m.stats && (m.stats.possession || m.stats.shots || m.stats.corners);
   const aiPick = m.mlPredictions?.["1x2"]?.pick;
   const aiProb = m.mlPredictions?.["1x2"]?.pick_probability;
+  // Fake-confidence guardrails:
+  // - "a pick exists" is not the same as "the backend's strong-pick engine
+  //   thinks it's strong" — trust strong_pick.eligible, don't infer it.
+  // - "estimated" means the backend had no real data for at least one team
+  //   (see fallback_state_from_hash / team_state in the prediction engine).
+  //   Say so instead of presenting it identically to a resolved fixture.
+  const aiStrong = m.mlPredictions?.strong_pick?.eligible === true;
+  const aiEstimated = m.mlPredictions?.team_state === 'estimated';
   const formatPick = (pick) => {
     if (!pick) return null;
     if (pick === 'HOME_WIN') return m.homeName?.split(' ')[0] || 'HOME';
@@ -120,7 +128,16 @@ const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite,
             {m.leagueLogo && <img src={m.leagueLogo} alt="" width="12" height="12" />}
             <span className="truncate">{m.leagueName}</span>
           </div>
-          {aiPick && <div className="ai-pick-badge"><Zap size={10} fill="currentColor" />{formatPick(aiPick)} ({aiProb}%)</div>}
+          {aiPick && (
+            <div
+              className={`ai-pick-badge${aiStrong ? ' strong' : ''}`}
+              title={aiEstimated ? 'Estimated — limited data for one or both teams' : undefined}
+            >
+              <Zap size={10} fill="currentColor" />
+              {formatPick(aiPick)}{typeof aiProb === 'number' ? ` (${aiProb.toFixed(0)}%)` : ''}
+              {aiEstimated && <span className="ai-pick-estimated">~</span>}
+            </div>
+          )}
         </div>
       </Link>
       {hasStats && (

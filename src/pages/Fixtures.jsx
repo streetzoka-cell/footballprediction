@@ -183,6 +183,10 @@ const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
   const totalVotes = voteData?.totalVotes || 0;
   const aiPick = mlPredictions?.["1x2"]?.pick;
   const aiProb = mlPredictions?.["1x2"]?.pick_probability;
+  // See getBestCorrectScore/isStrongPick/isEstimated below — same
+  // fake-confidence guardrails applied here.
+  const aiStrong = isStrongPick(mlPredictions);
+  const aiEstimated = isEstimated(mlPredictions);
   const formatPick = (p) => {
     if (!p) return null;
     if (p === 'HOME_WIN') return match.homeName?.split(' ')[0] || 'HOME';
@@ -218,9 +222,13 @@ const MatchOfTheDayCard = memo(({ match, mlPredictions }) => {
           </div>
 
           {aiPick && (
-            <div className="motd-ai-pick">
-              <span className="flex-center gap-4"><Zap size={12} fill="currentColor" /> Zoka AI Pick</span>
-              <span className="font-extrabold">{formatPick(aiPick)} ({aiProb}%)</span>
+            <div className={`motd-ai-pick${aiStrong ? ' strong' : ''}`}>
+              <span className="flex-center gap-4">
+                <Zap size={12} fill="currentColor" /> Zoka AI Pick{aiEstimated ? ' (estimated)' : ''}
+              </span>
+              <span className="font-extrabold">
+                {formatPick(aiPick)}{typeof aiProb === 'number' ? ` (${aiProb.toFixed(0)}%)` : ''}
+              </span>
             </div>
           )}
 
@@ -315,6 +323,25 @@ const sortMatches = (a, b) => {
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
 const matchQ = (m, terms) => [m.homeName, m.awayName, m.leagueName].map(norm).some(x => x && terms.every(t => x.includes(t)));
+
+// ---- Prediction-confidence helpers -----------------------------------------
+// The backend (step50_master_final.py, V4.2.3) already computes an
+// eligibility-gated "strong pick" verdict and a "resolved"/"estimated"
+// data-quality label per match. The UI must use them, not re-derive its own
+// (weaker) notion of confidence — that's how "every match gets a Strong Pick
+// badge" and "missing data quietly becomes a fake 33/33/33 split" happen.
+const getBestCorrectScore = (mlPredictions) => {
+  const cs = mlPredictions?.correct_scores;
+  if (!cs || typeof cs !== 'object') return null;
+  const entries = Object.entries(cs);
+  if (!entries.length) return null;
+  // Pick by max value explicitly — don't rely on the backend having
+  // serialized the object in sorted order, even though it currently does.
+  const [score, prob] = entries.reduce((best, cur) => (cur[1] > best[1] ? cur : best));
+  return { score, prob };
+};
+const isStrongPick = (mlPredictions) => mlPredictions?.strong_pick?.eligible === true;
+const isEstimated = (mlPredictions) => mlPredictions?.team_state === 'estimated';
 
 export default function Fixtures() {
   const navigate = useNavigate();
@@ -651,18 +678,47 @@ export default function Fixtures() {
               <div className="zoka-section zoka-ai-section">
                 <div className="zoka-league-hd"><Brain size={18} className="accent" /><span className="zoka-league-name">Zoka AI Predictions</span></div>
                 {predictedMatches.slice(0, 3).map((m, i) => {
-                  const bestScore = m.mlPredictions?.correct_scores ? Object.keys(m.mlPredictions.correct_scores)[0] : null;
+                  const probs = m.mlPredictions?.["1x2"]?.probabilities;
+                  const bestCS = getBestCorrectScore(m.mlPredictions);
+                  const strong = isStrongPick(m.mlPredictions);
+                  const estimated = isEstimated(m.mlPredictions);
                   return (
                     <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`ai-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 50}ms` }}>
-                      <div className="zoka-ai-top"><span className="zoka-ai-comp">{m.leagueName}</span><span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span></div>
-                      <div className="zoka-ai-teams"><span className="zoka-ai-team">{m.homeName}</span><span className="zoka-ai-vs">VS</span><span className="zoka-ai-team">{m.awayName}</span></div>
-                      <div className="zoka-ai-probbar">
-                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%` }} className="prob-home" />
-                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%` }} className="prob-draw" />
-                        <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%` }} className="prob-away" />
+                      <div className="zoka-ai-top">
+                        <span className="zoka-ai-comp">{m.leagueName}</span>
+                        <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
+                        {estimated && (
+                          <span className="zoka-ai-estimated" title="Limited data for one or both teams — treat with extra caution">
+                            ~ estimated
+                          </span>
+                        )}
                       </div>
-                      <div className="zoka-ai-labels"><span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN?.toFixed(0) || 33}%</span><span>{m.mlPredictions["1x2"]?.probabilities.DRAW?.toFixed(0) || 33}%</span><span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN?.toFixed(0) || 33}%</span></div>
-                      {bestScore && <div className="zoka-ai-extras"><div className="zoka-ai-stat strong"><span className="lbl">Strong Pick</span><span className="val accent">{bestScore}</span></div></div>}
+                      <div className="zoka-ai-teams"><span className="zoka-ai-team">{m.homeName}</span><span className="zoka-ai-vs">VS</span><span className="zoka-ai-team">{m.awayName}</span></div>
+                      {probs ? (
+                        <>
+                          <div className="zoka-ai-probbar">
+                            <div style={{ width: `${probs.HOME_WIN ?? 0}%` }} className="prob-home" />
+                            <div style={{ width: `${probs.DRAW ?? 0}%` }} className="prob-draw" />
+                            <div style={{ width: `${probs.AWAY_WIN ?? 0}%` }} className="prob-away" />
+                          </div>
+                          <div className="zoka-ai-labels">
+                            <span>{probs.HOME_WIN?.toFixed(0) ?? '–'}%</span>
+                            <span>{probs.DRAW?.toFixed(0) ?? '–'}%</span>
+                            <span>{probs.AWAY_WIN?.toFixed(0) ?? '–'}%</span>
+                          </div>
+                        </>
+                      ) : (
+                        <div className="zoka-ai-noprob">No 1X2 prediction for this match yet</div>
+                      )}
+                      {bestCS && (
+                        <div className="zoka-ai-extras">
+                          <div className={`zoka-ai-stat${strong ? ' strong' : ''}`}>
+                            <span className="lbl">{strong ? 'Strong Pick' : 'Top Score'}</span>
+                            <span className="val accent">{bestCS.score}</span>
+                            <span className="prob">{bestCS.prob?.toFixed(0)}%</span>
+                          </div>
+                        </div>
+                      )}
                     </Link>
                   );
                 })}
@@ -762,21 +818,48 @@ export default function Fixtures() {
           <div className="zoka-section">
             <div className="zoka-league-hd"><Brain size={18} className="accent" /><span className="zoka-league-name">Zoka AI Predictions</span><span className="zoka-league-count">{predictedMatches.length}</span></div>
             {predictedMatches.length > 0 ? predictedMatches.map((m, i) => {
-              const bestScore = m.mlPredictions?.correct_scores ? Object.keys(m.mlPredictions.correct_scores)[0] : null;
+              const probs = m.mlPredictions?.["1x2"]?.probabilities;
+              const bestCS = getBestCorrectScore(m.mlPredictions);
+              const strong = isStrongPick(m.mlPredictions);
+              const estimated = isEstimated(m.mlPredictions);
               return (
                 <Link to={buildMatchRoute(m.id, m.homeName, m.awayName)} key={`pred-${m.id}`} className="zoka-card zoka-ai-card" style={{ animationDelay: `${i * 40}ms` }}>
-                  <div className="zoka-ai-top"><span className="zoka-ai-comp">{m.leagueName}</span><span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span></div>
-                  <div className="zoka-ai-teams"><span className="zoka-ai-team">{m.homeName}</span><span className="zoka-ai-vs">VS</span><span className="zoka-ai-team">{m.awayName}</span></div>
-                  <div className="zoka-ai-probbar">
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.HOME_WIN || 33}%` }} className="prob-home" />
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.DRAW || 33}%` }} className="prob-draw" />
-                    <div style={{ width: `${m.mlPredictions["1x2"]?.probabilities.AWAY_WIN || 33}%` }} className="prob-away" />
+                  <div className="zoka-ai-top">
+                    <span className="zoka-ai-comp">{m.leagueName}</span>
+                    <span className="zoka-ai-time">{m.kickoff || m.statusLabel}</span>
+                    {estimated && (
+                      <span className="zoka-ai-estimated" title="Limited data for one or both teams — treat with extra caution">
+                        ~ estimated
+                      </span>
+                    )}
                   </div>
-                  <div className="zoka-ai-labels"><span>{m.mlPredictions["1x2"]?.probabilities.HOME_WIN?.toFixed(0) || 33}%</span><span>{m.mlPredictions["1x2"]?.probabilities.DRAW?.toFixed(0) || 33}%</span><span>{m.mlPredictions["1x2"]?.probabilities.AWAY_WIN?.toFixed(0) || 33}%</span></div>
+                  <div className="zoka-ai-teams"><span className="zoka-ai-team">{m.homeName}</span><span className="zoka-ai-vs">VS</span><span className="zoka-ai-team">{m.awayName}</span></div>
+                  {probs ? (
+                    <>
+                      <div className="zoka-ai-probbar">
+                        <div style={{ width: `${probs.HOME_WIN ?? 0}%` }} className="prob-home" />
+                        <div style={{ width: `${probs.DRAW ?? 0}%` }} className="prob-draw" />
+                        <div style={{ width: `${probs.AWAY_WIN ?? 0}%` }} className="prob-away" />
+                      </div>
+                      <div className="zoka-ai-labels">
+                        <span>{probs.HOME_WIN?.toFixed(0) ?? '–'}%</span>
+                        <span>{probs.DRAW?.toFixed(0) ?? '–'}%</span>
+                        <span>{probs.AWAY_WIN?.toFixed(0) ?? '–'}%</span>
+                      </div>
+                    </>
+                  ) : (
+                    <div className="zoka-ai-noprob">No 1X2 prediction for this match yet</div>
+                  )}
                   <div className="zoka-ai-extras">
-                    <div className="zoka-ai-stat"><span className="lbl">O/U 2.5</span><span className="val">{m.mlPredictions["ou_2_5"]?.pick || '-'}</span><span className="prob">{m.mlPredictions["ou_2_5"]?.pick_probability?.toFixed(0) || 0}%</span></div>
-                    <div className="zoka-ai-stat"><span className="lbl">BTTS</span><span className="val">{m.mlPredictions["btts"]?.pick || '-'}</span><span className="prob">{m.mlPredictions["btts"]?.pick_probability?.toFixed(0) || 0}%</span></div>
-                    {bestScore && <div className="zoka-ai-stat strong"><span className="lbl">Score</span><span className="val accent">{bestScore}</span></div>}
+                    <div className="zoka-ai-stat"><span className="lbl">O/U 2.5</span><span className="val">{m.mlPredictions["ou_2_5"]?.pick || '-'}</span><span className="prob">{m.mlPredictions["ou_2_5"]?.pick_probability?.toFixed(0) ?? '–'}%</span></div>
+                    <div className="zoka-ai-stat"><span className="lbl">BTTS</span><span className="val">{m.mlPredictions["btts"]?.pick || '-'}</span><span className="prob">{m.mlPredictions["btts"]?.pick_probability?.toFixed(0) ?? '–'}%</span></div>
+                    {bestCS && (
+                      <div className={`zoka-ai-stat${strong ? ' strong' : ''}`}>
+                        <span className="lbl">{strong ? 'Strong Pick' : 'Score'}</span>
+                        <span className="val accent">{bestCS.score}</span>
+                        <span className="prob">{bestCS.prob?.toFixed(0)}%</span>
+                      </div>
+                    )}
                   </div>
                 </Link>
               );
