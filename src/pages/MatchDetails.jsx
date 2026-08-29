@@ -65,6 +65,11 @@ const StatBar = ({ label, home, away, isPercentage = false }) => {
   );
 };
 
+/* ★ TBD detector — 'TBD' is truthy, so naive || never replaces it */
+const isMissing = (v) => v == null || v === '' || v === 'TBD' || v === 'Unknown';
+const pickReal = (canonicalVal, listVal) =>
+  isMissing(canonicalVal) ? (listVal ?? canonicalVal ?? null) : canonicalVal;
+
 export default function MatchDetails() {
   const { matchId } = useParams();
   const now = useNow(1000);
@@ -97,48 +102,103 @@ export default function MatchDetails() {
     return found ? applySmartMinute(normalizeMatch(found, true, now, true), now) : null;
   }, [todayFx, tomFx, yestFx, matchId, now]);
 
-  // Canonical is source of truth once it lands; list match is the instant shell
+  /*
+   * ★ THE TBD FIX — gap-fill merge.
+   * Canonical is source of truth for LIVE state: status, score, markets,
+   * intelligence. But when its identity fields are TBD/empty (old backend,
+   * sparse snapshot entry), the list match — which always had real names —
+   * backfills them. 'TBD' can no longer win over real data.
+   */
   const match = useMemo(() => {
-    if (canonical) {
-      // map canonical shape → the list-shape the UI already renders
-      return applySmartMinute(
-        normalizeMatch(
-          {
-            id: canonical.identity?.id || matchId,
-            status: canonical.status,
-            utcDate: canonical.kickoff,
-            date: canonical.kickoff,
-            leagueId: canonical.competition?.id,
-            leagueName: canonical.competition?.name,
-            leagueLogo: canonical.competition?.logo,
-            homeTeamName: canonical.teams?.home?.name,
-            awayTeamName: canonical.teams?.away?.name,
-            homeTeamId: canonical.teams?.home?.id,
-            awayTeamId: canonical.teams?.away?.id,
-            homeLogo: canonical.teams?.home?.logo,
-            awayLogo: canonical.teams?.away?.logo,
-            homeScore: canonical.score?.home,
-            awayScore: canonical.score?.away,
-            odds: canonical.odds,
-            mlPredictions: canonical.markets || canonical.mlPredictions || null,
-            intelData: canonical.intelligence
-              ? {
-                  elo: canonical.intelligence.elo,
-                  form: canonical.intelligence.form,
-                  h2h: canonical.intelligence.h2h,
-                  goalPatterns: canonical.intelligence.goalPatterns,
-                  zokaPick: canonical.zokaPrediction,
-                }
-              : null,
-          },
-          true,
-          now,
-          true
-        ),
-        now
-      );
-    }
-    return listMatch;
+    if (!canonical) return listMatch;
+
+    const canonicalMapped = applySmartMinute(
+      normalizeMatch(
+        {
+          id: canonical.identity?.id || matchId,
+          status: canonical.status,
+          utcDate: canonical.kickoff,
+          date: canonical.kickoff,
+          leagueId: canonical.competition?.id,
+          leagueName: canonical.competition?.name,
+          leagueLogo: canonical.competition?.logo,
+          homeTeamName: canonical.teams?.home?.name,
+          awayTeamName: canonical.teams?.away?.name,
+          homeTeamId: canonical.teams?.home?.id,
+          awayTeamId: canonical.teams?.away?.id,
+          homeLogo: canonical.teams?.home?.logo,
+          awayLogo: canonical.teams?.away?.logo,
+          homeScore: canonical.score?.home,
+          awayScore: canonical.score?.away,
+          odds: canonical.odds,
+          mlPredictions: canonical.markets || canonical.mlPredictions || null,
+          pickGroups: canonical.pickGroups || null,
+          intelData: canonical.intelligence
+            ? {
+                elo: canonical.intelligence.elo,
+                form: canonical.intelligence.form,
+                h2h: canonical.intelligence.h2h,
+                goalPatterns: canonical.intelligence.goalPatterns,
+                zokaPick: canonical.zokaPrediction,
+              }
+            : null,
+        },
+        true,
+        now,
+        true
+      ),
+      now
+    );
+
+    if (!listMatch) return canonicalMapped;
+
+    return {
+      ...canonicalMapped,
+      // identity: real values win over TBD/empty
+      homeName: pickReal(canonicalMapped.homeName, listMatch.homeName),
+      awayName: pickReal(canonicalMapped.awayName, listMatch.awayName),
+      homeLogo: canonicalMapped.homeLogo || listMatch.homeLogo,
+      awayLogo: canonicalMapped.awayLogo || listMatch.awayLogo,
+      homeTeamId: canonicalMapped.homeTeamId || listMatch.homeTeamId,
+      awayTeamId: canonicalMapped.awayTeamId || listMatch.awayTeamId,
+      homeTeam: {
+        ...canonicalMapped.homeTeam,
+        name: pickReal(canonicalMapped.homeTeam?.name, listMatch.homeTeam?.name),
+        crest: canonicalMapped.homeTeam?.crest || listMatch.homeTeam?.crest,
+        id: canonicalMapped.homeTeam?.id || listMatch.homeTeam?.id,
+      },
+      awayTeam: {
+        ...canonicalMapped.awayTeam,
+        name: pickReal(canonicalMapped.awayTeam?.name, listMatch.awayTeam?.name),
+        crest: canonicalMapped.awayTeam?.crest || listMatch.awayTeam?.crest,
+        id: canonicalMapped.awayTeam?.id || listMatch.awayTeam?.id,
+      },
+      // league enrichment
+      leagueId: isMissing(canonicalMapped.leagueId) ? listMatch.leagueId : canonicalMapped.leagueId,
+      leagueName: pickReal(canonicalMapped.leagueName, listMatch.leagueName),
+      leagueLogo: canonicalMapped.leagueLogo || listMatch.leagueLogo,
+      league: {
+        ...canonicalMapped.league,
+        name: pickReal(canonicalMapped.league?.name, listMatch.league?.name),
+        emblem: canonicalMapped.league?.emblem || listMatch.league?.emblem,
+        id: canonicalMapped.league?.id || listMatch.league?.id,
+      },
+      competition: {
+        ...canonicalMapped.competition,
+        name: pickReal(canonicalMapped.competition?.name, listMatch.competition?.name),
+        emblem: canonicalMapped.competition?.emblem || listMatch.competition?.emblem,
+        id: canonicalMapped.competition?.id || listMatch.competition?.id,
+      },
+      // context + grouping data the canonical payload may not carry
+      venue: canonicalMapped.venue || listMatch.venue,
+      referee: canonicalMapped.referee || listMatch.referee,
+      dateStr: canonicalMapped.dateStr || listMatch.dateStr,
+      mustHave: canonicalMapped.mustHave || listMatch.mustHave,
+      category: canonicalMapped.category !== 'NORMAL' ? canonicalMapped.category : listMatch.category,
+      pickGroups: canonicalMapped.pickGroups || listMatch.pickGroups,
+      pickGroupBadge: canonicalMapped.pickGroupBadge || listMatch.pickGroupBadge,
+      ids: canonicalMapped.ids || listMatch.ids,
+    };
   }, [canonical, listMatch, now, matchId]);
 
   const injectedPrediction = useMemo(() => match?.mlPredictions || null, [match]);
@@ -158,20 +218,28 @@ export default function MatchDetails() {
     return found ? found.markets : null;
   }, [injectedPrediction, dailyPredictions, match]);
 
-  // ── Intelligence fallback for list-sourced matches (canonical covers its own) ──
+  // ── Intelligence: fallback now runs whenever intel is MISSING —
+  //    including when canonical exists but returned intelligence: null.
+  //    ★ Passes BOTH ids and names so the backend's two-stage resolver
+  //    can use whichever succeeds (id misses map → name resolves).
   const homeTeamId = match?.homeTeamId || match?.homeTeam?.id;
   const awayTeamId = match?.awayTeamId || match?.awayTeam?.id;
-  const needsIntelFallback = !!match && !canonical;
+  const homeName = match?.homeName;
+  const awayName = match?.awayName;
+  const intelMissing = !!match && (!match.intelData || match.intelData.elo?.home == null);
 
   const { data: fallbackIntel } = useQuery({
-    queryKey: ['match-intel', homeTeamId, awayTeamId],
-    queryFn: () => footballApi.getMatchIntelligence(homeTeamId, awayTeamId).then((r) => r?.data || null),
-    enabled: needsIntelFallback && !!homeTeamId && !!awayTeamId,
+    queryKey: ['match-intel', homeTeamId, awayTeamId, homeName, awayName],
+    queryFn: () =>
+      footballApi
+        .getMatchIntelligence(homeName, awayName, homeTeamId, awayTeamId)
+        .then((r) => r?.data || null),
+    enabled: intelMissing && !!(homeTeamId || homeName) && !!(awayTeamId || awayName),
     staleTime: 10 * 60 * 1000,
   });
 
   const intelData = useMemo(() => {
-    if (match?.intelData) return match.intelData;
+    if (match?.intelData && match.intelData.elo?.home != null) return match.intelData;
     if (fallbackIntel) {
       return {
         elo: { home: fallbackIntel.home?.elo, away: fallbackIntel.away?.elo },
@@ -181,9 +249,10 @@ export default function MatchDetails() {
           home: fallbackIntel.home?.goalPatterns || {},
           away: fallbackIntel.away?.goalPatterns || {},
         },
+        zokaPick: fallbackIntel.zokaPick || null,
       };
     }
-    return null;
+    return match?.intelData || null;
   }, [match, fallbackIntel]);
 
   // ── Standings (fixed shape: data.rows) ──
