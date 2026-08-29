@@ -1,0 +1,30 @@
+{
+  "engine": "ZOKASCORE_V2_UNIFIED",
+  "pipeline": "50_MASTER_FINAL_V4.2.2-can",
+  "date": "2026-08-28",
+  "generated_at": "2026-08-29T06:39:11.819208+00:00",
+  "features": "34_step49v4_parity",
+  "modes": "prematch|live|final(preserved)",
+  "cs": "grid 8x8 ipf-calibrated, regularized (prematch)",
+  "strong_pick_engine": "V4.0",
+  "pick_groups_engine": "V4.2.2-can",
+  "ft_preservation": true,
+  "canonical_match_identity": true,
+  "confidence_calibration": {
+    "enabled": true,
+    "resolved_shrink": 1.0,
+    "estimated_shrink": 0.55,
+    "market_hard_cap": 90.0,
+    "cs_hard_cap": 35.0,
+    "anchor": "per-market historical base rates"
+  },
+  "diversity_guard": {
+    "max_same_pick_per_family": 12
+  },
+  "strong_pick_excluded_families": [
+    "SCORE"
+  ],
+  "count": 0,
+  "predictions": [],
+  "data": []
+}

@@ -1,13 +1,35 @@
+"""
+ZOKASCORE V2 — STEP 46
+BUILD MARKET TARGETS — PRODUCTION / UNIFIED — V5.1
+================================================================================
+Builds the canonical training dataset: features joined to canonical scores,
+1X2 targets verified against goals, OU/BTTS market targets generated and
+validated, deterministic ordering, atomic write, read-back verification.
+
+V5.1 NEW — BASE-RATES EXPORT (feeds the V5.0 unified grid engine):
+  · Computes HISTORICAL BASE RATES from this dataset for every market:
+    1x2 (3-way) · btts · ou_0_5 / ou_1_5 / ou_2_5 / ou_3_5
+  · Writes data/models/market_base_rates.json
+  · Step 50's confidence calibration anchors to these REAL rates instead of
+    uniform fallback constants — legit market skew (e.g. OU_0_5 ≈ 92% OVER)
+    survives the anti-overconfidence shrinkage instead of being erased.
+
+INTEGRITY (unchanged): canonical goal attachment · 1X2-vs-score reconciliation
+· full market validation · duplicate/NULL/negative checks · atomic write ·
+read-back verification.
+"""
+
 import os
 import tempfile
 import shutil
+import json
+
 import pandas as pd
 import numpy as np
 
 
 # ============================================================
-# ZOKASCORE V2 — STEP 46
-# BUILD MARKET TARGETS — PRODUCTION / UNIFIED
+# PATHS
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -38,6 +60,14 @@ REPORT_FILE = os.path.join(
     "data",
     "ml",
     "features_v4_unified_report.txt"
+)
+
+# V5.1: base rates export target (consumed by Step 49/50)
+BASE_RATE_FILE = os.path.join(
+    BASE_DIR,
+    "data",
+    "models",
+    "market_base_rates.json"
 )
 
 VALID_1X2 = {
@@ -86,7 +116,7 @@ def warning(message):
 
 
 def section(number, title):
-    print(f"\n[{number}/10] {title}...")
+    print(f"\n[{number}/11] {title}...")
     print("-" * 70)
 
 
@@ -115,7 +145,7 @@ def verify_input_file(path, label):
 
 
 # ============================================================
-# ATOMIC CSV WRITER
+# ATOMIC WRITERS
 # ============================================================
 
 def atomic_write_csv(df, output_file):
@@ -138,7 +168,6 @@ def atomic_write_csv(df, output_file):
             encoding="utf-8"
         )
 
-        # Basic sanity check before replacing production file.
         if not os.path.isfile(temp_file):
             fail("Temporary output file was not created.")
 
@@ -152,9 +181,28 @@ def atomic_write_csv(df, output_file):
             os.remove(temp_file)
 
 
-# ============================================================
-# REPORT WRITER
-# ============================================================
+def atomic_write_json(data, path):
+    """V5.1: atomic JSON writer for base rates export."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    fd, temp_file = tempfile.mkstemp(
+        prefix="pipeline46_rates_",
+        suffix=".json",
+        dir=os.path.dirname(path)
+    )
+
+    os.close(fd)
+
+    try:
+        with open(temp_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+
+        shutil.move(temp_file, path)
+
+    finally:
+        if os.path.exists(temp_file):
+            os.remove(temp_file)
+
 
 def write_report(lines):
     os.makedirs(os.path.dirname(REPORT_FILE), exist_ok=True)
@@ -295,19 +343,61 @@ def validate_markets(df):
 
 
 # ============================================================
+# V5.1 — BASE RATES EXPORT
+# ============================================================
+
+def compute_base_rates(df):
+    """
+    V5.1: HISTORICAL BASE RATES from the canonical dataset.
+
+    Consumed by:
+      - Step 50 shrink_market()  -> anti-overconfidence anchoring
+      - future market-prior blends
+
+    These are REAL frequencies from 430k matches — not constants.
+    """
+    return {
+        "1x2": {
+            k: round((df["target"] == k).mean() * 100, 2)
+            for k in ["HOME_WIN", "DRAW", "AWAY_WIN"]
+        },
+        "btts": {
+            k: round((df["btts"] == k).mean() * 100, 2)
+            for k in ["YES", "NO"]
+        },
+        "ou_0_5": {
+            k: round((df["ou_0_5"] == k).mean() * 100, 2)
+            for k in ["OVER", "UNDER"]
+        },
+        "ou_1_5": {
+            k: round((df["ou_1_5"] == k).mean() * 100, 2)
+            for k in ["OVER", "UNDER"]
+        },
+        "ou_2_5": {
+            k: round((df["ou_2_5"] == k).mean() * 100, 2)
+            for k in ["OVER", "UNDER"]
+        },
+        "ou_3_5": {
+            k: round((df["ou_3_5"] == k).mean() * 100, 2)
+            for k in ["OVER", "UNDER"]
+        },
+    }
+
+
+# ============================================================
 # MAIN PIPELINE
 # ============================================================
 
 def run():
 
     print("\n" + "=" * 70)
-    print(" ZOKASCORE V2 — STEP 46")
-    print(" BUILD MARKET TARGETS — PRODUCTION / UNIFIED")
+    print(" ZOKASCORE V2 — STEP 46 (V5.1)")
+    print(" BUILD MARKET TARGETS — PRODUCTION / UNIFIED + BASE RATES")
     print("=" * 70)
 
     report = []
 
-    report.append("ZOKASCORE V2 — STEP 46 REPORT")
+    report.append("ZOKASCORE V2 — STEP 46 REPORT (V5.1)")
     report.append("=" * 70)
 
     # --------------------------------------------------------
@@ -382,7 +472,6 @@ def run():
             )
         )
 
-    # Match ID validation
     if df["match_id"].isna().any():
         missing_ids = int(
             df["match_id"].isna().sum()
@@ -399,7 +488,6 @@ def run():
     if (df["match_id"] == "").any():
         fail("Feature dataset contains empty match_id values.")
 
-    # Target validation
     if df["target"].isna().any():
         missing_targets = int(
             df["target"].isna().sum()
@@ -429,7 +517,6 @@ def run():
             )
         )
 
-    # Duplicate feature IDs
     duplicate_count = int(
         df["match_id"].duplicated().sum()
     )
@@ -482,7 +569,6 @@ def run():
     if master.empty:
         fail("Master dataset contains zero rows.")
 
-    # Determine ID column
     if "zokascore_match_id" in master.columns:
         master_id_column = "zokascore_match_id"
 
@@ -531,7 +617,6 @@ def run():
         master["match_id"]
     )
 
-    # Master ID validation
     if master["match_id"].isna().any():
         fail("Master contains missing match_ids.")
 
@@ -548,7 +633,6 @@ def run():
             f"{master_duplicate_count:,} duplicate match_ids found."
         )
 
-    # Score validation
     master["home_score"] = pd.to_numeric(
         master["home_score"],
         errors="coerce"
@@ -575,7 +659,6 @@ def run():
             f"with invalid/missing scores."
         )
 
-    # Scores must be non-negative integers
     non_integer_scores = (
         (master["home_score"] % 1 != 0) |
         (master["away_score"] % 1 != 0)
@@ -733,7 +816,6 @@ def run():
             "Existing 1X2 targets perfectly match scores."
         )
 
-    # Final target validation
     invalid_targets = sorted(
         set(df["target"].unique())
         - VALID_1X2
@@ -757,7 +839,6 @@ def run():
 
     df = build_market_targets(df)
 
-    # Impossible sanity checks
     if (df["total_goals"] < 0).any():
         fail("Negative total_goals detected.")
 
@@ -876,19 +957,16 @@ def run():
 
     section(9, "Running final integrity checks")
 
-    # No duplicate match IDs
     if df["match_id"].duplicated().any():
         fail(
             "FINAL CHECK FAILED: duplicate match_ids."
         )
 
-    # No missing IDs
     if df["match_id"].isna().any():
         fail(
             "FINAL CHECK FAILED: missing match_ids."
         )
 
-    # No missing goals
     if (
         df["home_goals"].isna().any() or
         df["away_goals"].isna().any()
@@ -897,13 +975,11 @@ def run():
             "FINAL CHECK FAILED: missing goals."
         )
 
-    # No missing target
     if df["target"].isna().any():
         fail(
             "FINAL CHECK FAILED: missing target."
         )
 
-    # No missing market values
     for column in MARKET_COLUMNS:
 
         if df[column].isna().any():
@@ -912,7 +988,6 @@ def run():
                 f"{column} contains NULL values."
             )
 
-    # Target must equal score
     final_target = derive_1x2(
         df["home_goals"].to_numpy(),
         df["away_goals"].to_numpy()
@@ -927,7 +1002,6 @@ def run():
             "1X2 target does not match goals."
         )
 
-    # Total goals must equal score sum
     if not np.array_equal(
         df["total_goals"].to_numpy(),
         (
@@ -940,7 +1014,6 @@ def run():
             "total_goals mismatch."
         )
 
-    # Verify market logic
     expected_25 = np.where(
         df["total_goals"] > 2.5,
         "OVER",
@@ -982,13 +1055,11 @@ def run():
 
     section(10, "Writing unified production dataset")
 
-    # Deterministic ordering.
     df = df.sort_values(
         by=["match_id"],
         kind="stable"
     ).reset_index(drop=True)
 
-    # Put important columns first.
     priority_columns = [
         "match_id",
         "target",
@@ -1018,7 +1089,6 @@ def run():
         OUTPUT_FILE
     )
 
-    # Confirm output exists
     if not os.path.isfile(OUTPUT_FILE):
         fail(
             "Output file was not created."
@@ -1033,7 +1103,6 @@ def run():
             "Output file is empty."
         )
 
-    # Read-back validation
     try:
         verification = pd.read_csv(
             OUTPUT_FILE,
@@ -1067,6 +1136,56 @@ def run():
     )
 
     # --------------------------------------------------------
+    # 11. V5.1 — BASE RATES EXPORT
+    # --------------------------------------------------------
+
+    section(11, "Exporting market base rates (V5.1)")
+
+    base_rates = compute_base_rates(df)
+
+    print("   BASE RATES (from canonical data):")
+    print(f"      1X2       : {base_rates['1x2']}")
+    print(f"      BTTS      : {base_rates['btts']}")
+    print(f"      OVER 0.5  : {base_rates['ou_0_5']}")
+    print(f"      OVER 1.5  : {base_rates['ou_1_5']}")
+    print(f"      OVER 2.5  : {base_rates['ou_2_5']}")
+    print(f"      OVER 3.5  : {base_rates['ou_3_5']}")
+
+    atomic_write_json(
+        base_rates,
+        BASE_RATE_FILE
+    )
+
+    # read-back verification
+    try:
+        rates_check = json.load(
+            open(BASE_RATE_FILE, encoding="utf-8")
+        )
+        if rates_check != base_rates:
+            fail("Base rates read-back verification failed.")
+    except Exception as exc:
+        fail(f"Base rates read-back failed:\n{exc}")
+
+    success(
+        f"Base rates exported: {BASE_RATE_FILE}"
+    )
+
+    report.extend([
+        "",
+        "BASE RATES (V5.1)",
+        "-" * 70,
+        f"Export file: {BASE_RATE_FILE}",
+        f"1x2: {base_rates['1x2']}",
+        f"btts: {base_rates['btts']}",
+        f"ou_0_5: {base_rates['ou_0_5']}",
+        f"ou_1_5: {base_rates['ou_1_5']}",
+        f"ou_2_5: {base_rates['ou_2_5']}",
+        f"ou_3_5: {base_rates['ou_3_5']}",
+        "",
+        "STATUS: PASS",
+    ])
+
+    # --------------------------------------------------------
     # REPORT
     # --------------------------------------------------------
 
@@ -1089,7 +1208,7 @@ def run():
     # --------------------------------------------------------
 
     print("\n" + "=" * 70)
-    print(" STEP 46 COMPLETE — PASS")
+    print(" STEP 46 COMPLETE — PASS (V5.1)")
     print("=" * 70)
 
     print(f"📊 Records       : {len(df):,}")
@@ -1103,12 +1222,14 @@ def run():
     print()
     print(f"📁 Dataset       : {OUTPUT_FILE}")
     print(f"📄 Report        : {REPORT_FILE}")
+    print(f"📈 Base rates    : {BASE_RATE_FILE}")
     print()
     print("🔒 Canonical 1X2 labels verified")
     print("🔒 Canonical goals verified")
     print("🔒 Market targets verified")
     print("🔒 Duplicate IDs verified")
     print("🔒 Output read-back verified")
+    print("🔒 Base rates exported (consumed by Step 49/50)")
     print("=" * 70)
 
 
