@@ -1,7 +1,13 @@
+// api/ssr.js — SSR meta injection for entity pages. v2:
+// ★ shape-flexible parsing (API nesting won't silently break it)
+// ★ ?__ssr_debug=1 → JSON diagnostics instead of HTML
+// ★ 4s fetch timeout, Accept header, error capture
 import fs from "fs";
 import path from "path";
 
-const API_BASE = "https://api.zokascore.xyz/api/v1";
+const API_BASE = process.env.SSR_API_BASE || "https://api.zokascore.xyz/api/v1";
+const SITE_URL = "https://zokascore.xyz";
+const FETCH_TIMEOUT_MS = 4000;
 
 const escapeHtml = (str = "") =>
   String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -45,65 +51,139 @@ function injectMeta(html, { title, description, url, image }) {
   return out;
 }
 
-async function safeFetchJson(url) {
+async function fetchJson(url) {
+  const t0 = Date.now();
   try {
-    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch { return null; }
+    const res = await fetch(url, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      headers: { Accept: "application/json" },
+    });
+    if (!res.ok) return { ok: false, status: res.status, json: null, ms: Date.now() - t0 };
+    const json = await res.json().catch(() => null);
+    return { ok: true, status: res.status, json, ms: Date.now() - t0 };
+  } catch (e) {
+    return { ok: false, status: 0, json: null, error: e?.message || "fetch failed", ms: Date.now() - t0 };
+  }
+}
+
+// ★ Try every response layout we've seen: json.data, json.match, json.data.match,
+//   json.response, or bare json — with every team-name spelling.
+function extractMatch(json) {
+  for (const c of [json?.data, json?.match, json?.data?.match, json?.response, json]) {
+    if (!c || typeof c !== "object") continue;
+    const home = c.homeTeam?.name || c.home?.name || c.homeName || c.teams?.home?.name || null;
+    const away = c.awayTeam?.name || c.away?.name || c.awayName || c.teams?.away?.name || null;
+    if (home && away) {
+      return {
+        home, away,
+        league: c.league?.name || c.competition?.name || c.leagueName || "",
+        image: c.homeTeam?.logo || c.teams?.home?.logo || null,
+      };
+    }
+  }
+  return null;
+}
+
+function extractTeam(json) {
+  for (const c of [json?.data, json?.team, json?.response, json]) {
+    if (c && typeof c === "object" && c.name) return { name: c.name, image: c.logo || c.crest || null };
+  }
+  return null;
+}
+
+function extractLeague(json) {
+  for (const c of [json?.data, json?.response, json]) {
+    const name = c?.league?.name || c?.competition?.name || (typeof c?.name === "string" ? c.name : null);
+    if (name) return { name };
+  }
+  return null;
+}
+
+// Shape description for the debug endpoint — shows what the API actually sent
+function describeShape(json) {
+  if (json == null) return "null";
+  if (Array.isArray(json)) return `array(${json.length})`;
+  const top = Object.keys(json).slice(0, 12).join(",");
+  const dataKeys = json.data && typeof json.data === "object" && !Array.isArray(json.data)
+    ? ` | data: ${Object.keys(json.data).slice(0, 12).join(",")}` : "";
+  return `{${top}}${dataKeys}`;
 }
 
 async function buildMeta(pathname) {
   const mMatch = pathname.match(/^\/match\/([^/]+)/);
   if (mMatch) {
-    const json = await safeFetchJson(`${API_BASE}/match/${mMatch[1]}`);
-    const m = json?.data;
-    if (m) {
-      const home = m.homeTeam?.name || m.homeName || "Home";
-      const away = m.awayTeam?.name || m.awayName || "Away";
-      const league = m.league?.name || "";
-      return {
-        title: `${home} vs ${away} Live Score, Prediction & H2H | ZOKASCORE`,
-        description: `${home} vs ${away} ${league} live score, lineups, head-to-head and AI prediction on ZOKASCORE.`,
-        url: `https://zokascore.xyz${pathname}`,
-        image: m.homeTeam?.logo,
-      };
-    }
+    const r = await fetchJson(`${API_BASE}/match/${mMatch[1]}`);
+    const m = extractMatch(r.json);
+    return m
+      ? { meta: {
+          title: `${m.home} vs ${m.away} Live Score, Prediction & H2H | ZOKASCORE`,
+          description: `${m.home} vs ${m.away}${m.league ? ` (${m.league})` : ""} live score, lineups, head-to-head and AI prediction on ZOKASCORE.`,
+          url: `${SITE_URL}${pathname}`,
+          image: m.image || undefined,
+        }, diag: { endpoint: `/match/${mMatch[1]}`, status: r.status, ms: r.ms, error: r.error, extracted: m } }
+      : { meta: null, diag: { endpoint: `/match/${mMatch[1]}`, status: r.status, ms: r.ms, error: r.error, shape: describeShape(r.json) } };
   }
+
   const tMatch = pathname.match(/^\/team\/([^/]+)/);
   if (tMatch) {
-    const json = await safeFetchJson(`${API_BASE}/teams/${tMatch[1]}`);
-    const t = json?.data || json;
-    if (t?.name) return {
-      title: `${t.name} Live Scores, Fixtures, Results & Stats | ZOKASCORE`,
-      description: `${t.name} fixtures, results, standings and player stats. Live scores and schedule on ZOKASCORE.`,
-      url: `https://zokascore.xyz${pathname}`,
-      image: t.logo,
-    };
+    const r = await fetchJson(`${API_BASE}/teams/${tMatch[1]}`);
+    const t = extractTeam(r.json);
+    return t
+      ? { meta: {
+          title: `${t.name} Live Scores, Fixtures, Results & Stats | ZOKASCORE`,
+          description: `${t.name} fixtures, results, standings and player stats. Live scores and schedule on ZOKASCORE.`,
+          url: `${SITE_URL}${pathname}`,
+          image: t.image || undefined,
+        }, diag: { endpoint: `/teams/${tMatch[1]}`, status: r.status, ms: r.ms, error: r.error, extracted: t } }
+      : { meta: null, diag: { endpoint: `/teams/${tMatch[1]}`, status: r.status, ms: r.ms, error: r.error, shape: describeShape(r.json) } };
   }
+
   const lMatch = pathname.match(/^\/(league|competition)\/([^/]+)/);
   if (lMatch) {
-    const json = await safeFetchJson(`${API_BASE}/standings?league=${lMatch[2]}`);
-    const name = json?.data?.league?.name || "Football League";
-    return {
-      title: `${name} Table, Live Scores, Fixtures & Results 2026/2027 | ZOKASCORE`,
-      description: `Live ${name} standings, fixtures, results and top scorers. Updated hourly on ZOKASCORE.`,
-      url: `https://zokascore.xyz${pathname}`,
-    };
+    const r = await fetchJson(`${API_BASE}/standings?league=${lMatch[2]}`);
+    const l = extractLeague(r.json);
+    const name = l?.name || "Football League";
+    return { meta: {
+        title: `${name} Table, Live Scores, Fixtures & Results 2026/2027 | ZOKASCORE`,
+        description: `Live ${name} standings, fixtures, results and top scorers. Updated hourly on ZOKASCORE.`,
+        url: `${SITE_URL}${pathname}`,
+      }, diag: { endpoint: `/standings?league=${lMatch[2]}`, status: r.status, ms: r.ms, error: r.error, extracted: l || describeShape(r.json) } };
   }
-  return null;
+
+  const hMatch = pathname.match(/^\/highlights\/(.+)/);
+  if (hMatch) {
+    const pretty = decodeURIComponent(hMatch[1]).replace(/-\d+$/, "").split("-")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+    return { meta: {
+        title: `${pretty} — Highlights, Goals & Recap | ZOKASCORE`,
+        description: `Watch ${pretty} highlights: every goal, key moment and the full match recap on ZOKASCORE.`,
+        url: `${SITE_URL}${pathname}`,
+      }, diag: { endpoint: null, note: "highlight slug (no API call)" } };
+  }
+
+  return { meta: null, diag: { note: "no entity pattern matched — plain SPA route" } };
 }
 
 export default async function handler(req, res) {
   const baseHtml = getBaseHtml();
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
+  const pathname = req.url.split("?")[0].replace(/\/$/, "") || "/";
 
   try {
-    const pathname = req.url.split("?")[0].replace(/\/$/, "") || "/";
-    const meta = await buildMeta(pathname);
+    const { meta, diag } = await buildMeta(pathname);
+
+    // ★ DEBUG: /match/<id>/x?__ssr_debug=1 → JSON report instead of HTML
+    if (req.query.__ssr_debug) {
+      return res.status(200).json({
+        pathname, apiBase: API_BASE, injected: !!meta, meta, diag,
+        hint: "status:0 = fetch failed/timeout · shape shows what the API returned · extracted:null = shape mismatch",
+      });
+    }
+
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
+    res.setHeader("Cache-Control", "public, s-maxage=3600, stale-while-revalidate=86400");
     return res.status(200).send(meta ? injectMeta(baseHtml, meta) : baseHtml);
   } catch {
+    res.setHeader("Content-Type", "text/html; charset=utf-8");
     return res.status(200).send(baseHtml);
   }
 }

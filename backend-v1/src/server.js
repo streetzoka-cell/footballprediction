@@ -82,6 +82,8 @@ const VERCEL_PREVIEW_RE = /^https:\/\/footballprediction-[a-z0-9-]+\.vercel\.app
 
 const corsOptions = {
   origin(origin, callback) {
+    // ★ No Origin header = server-to-server (Googlebot, the Vercel sitemap proxy)
+    //   → allowed. Crawlers must never be CORS-blocked.
     if (!origin) return callback(null, true);
     if (allowedOrigins.has(origin)) return callback(null, true);
     if (VERCEL_PREVIEW_RE.test(origin)) return callback(null, true);
@@ -124,7 +126,8 @@ app.use((req, res, next) => {
 });
 
 // ============================================================
-// RATE LIMITING — static JSON exempt (cacheable, high-frequency)
+// RATE LIMITING — static JSON + sitemap index exempt
+// (cacheable, high-frequency — Google must never get a 429 on the index)
 // ============================================================
 
 const globalLimiter = rateLimit({
@@ -133,7 +136,9 @@ const globalLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, error: 'Too many requests. Please slow down.' },
-  skip: (req) => req.path.startsWith('/api/v1/data'),
+  skip: (req) =>
+    req.path.startsWith('/api/v1/data') ||
+    req.path.startsWith('/api/v1/zokascore-index'), // ★ CHANGED: index path exempt
 });
 
 app.use(globalLimiter);
@@ -206,10 +211,23 @@ app.use('/api/v1/ai', aiRoutes);
 app.use('/api/v1/knowledge', knowledgeRoutes);
 
 // ============================================================
-// SITEMAP
+// SITEMAP INDEX (★ CHANGED — was `app.use(sitemapRoute)` at root)
+// Public surface:
+//   /api/v1/zokascore-index/              → sitemapindex (Vercel proxies zokascore.xyz/zokascore-index.xml here)
+//   /api/v1/zokascore-index/static.xml    → static pages
+//   /api/v1/zokascore-index/matches-N.xml → match URLs
+//   /api/v1/zokascore-index/teams-N.xml   → team URLs
+//   /api/v1/zokascore-index/leagues-N.xml → league URLs
+//   /api/v1/zokascore-index/status.json   → debug counts
 // ============================================================
 
-app.use(sitemapRoute);
+// Legacy backend-root sitemap paths (old mount) → explicit 410, not a silent 404
+app.get(['/sitemap.xml', '/zokascore-sitemap.xml', '/sitemaps/:legacyFile'], (_req, res) => {
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.status(410).type('text/plain').send('Gone — index moved to /api/v1/zokascore-index');
+});
+
+app.use('/api/v1/zokascore-index', sitemapRoute);
 
 // ============================================================
 // STATIC DATA
