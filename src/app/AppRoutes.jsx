@@ -1,3 +1,4 @@
+// src/app/AppRoutes.jsx
 import { Suspense, lazy } from "react";
 import { Routes, Route } from "react-router-dom";
 import { ROUTES, STUDIO_ROUTES } from "../utils/routes";
@@ -9,10 +10,9 @@ const Home = lazy(() => import("../pages/Home"));
 const Fixtures = lazy(() => import("../pages/Fixtures"));
 const Results = lazy(() => import("../pages/Results"));
 const Predictions = lazy(() => import("../pages/Predictions"));
-// ★ ROUTES.PREDICTION_V21 existed but was never routed → linked users hit NotFound.
-// If your v21 view lives INSIDE Predictions.jsx instead, swap the element below
-// to <Predictions /> (or delete this import + the route + ROUTES.PREDICTION_V21).
-const PredictionsV21 = lazy(() => import("../pages/PredictionsV21"));
+// ★ NOTE: there is NO pages/PredictionsV21.jsx — the v21 view lives inside
+// Predictions.jsx (it can read the /predictions/v21 path via useLocation).
+// ROUTES.PREDICTION_V21 is routed to <Predictions /> below.
 const MasterGames = lazy(() => import("../pages/MasterGames"));
 const Basketball = lazy(() => import("../pages/Basketball"));
 const Highlights = lazy(() => import("../pages/Highlights"));
@@ -77,7 +77,8 @@ export default function AppRoutes() {
         <Route path={ROUTES.FIXTURES} element={<Fixtures />} />
         <Route path={ROUTES.RESULTS} element={<Results />} />
         <Route path={ROUTES.PREDICTIONS} element={<Predictions />} />
-        <Route path={ROUTES.PREDICTION_V21} element={<PredictionsV21 />} />
+        {/* ★ v21 URL exists (linked from nav/ROUTES) — same page, no dead 404 */}
+        <Route path={ROUTES.PREDICTION_V21} element={<Predictions />} />
         <Route path={ROUTES.MASTERGAMES} element={<MasterGames />} />
         <Route path={ROUTES.BASKETBALL} element={<Basketball />} />
         <Route path={ROUTES.HIGHLIGHTS} element={<Highlights />} />
@@ -85,8 +86,8 @@ export default function AppRoutes() {
         <Route path={ROUTES.LEADERBOARD} element={<Leaderboard />} />
 
         {/* Entity details — patterns live in routes.js; slug optional (RR >= 6.5).
-            Highlights.jsx can read the :slug param to render a single highlight;
-            if it ignores the param it safely shows the list instead of a 404. */}
+            Highlights.jsx reads the :slug param to render a single highlight;
+            bare /highlights still shows the list. */}
         <Route path={ROUTES.MATCH_DETAIL} element={<MatchDetails />} />
         <Route path={ROUTES.TEAM_DETAIL} element={<TeamPage />} />
         <Route path={ROUTES.LEAGUE_DETAIL} element={<LeaguePage />} />
@@ -130,7 +131,7 @@ export default function AppRoutes() {
 
         {/* Admin (guarded + noindex via RouteMeta) */}
         <Route path={ROUTES.ADMIN} element={<AdminRoute><Admin /></AdminRoute>} />
-        {/* ★ Pick-Groups Studio — same guard as the Admin hub, now with a real path */}
+        {/* ★ Pick-Groups Studio — same guard as the Admin hub */}
         <Route path={ROUTES.ADMIN_PREDICTION_GROUPS} element={<AdminRoute><AdminPredictionGroups /></AdminRoute>} />
 
         <Route path="*" element={<NotFound />} />
