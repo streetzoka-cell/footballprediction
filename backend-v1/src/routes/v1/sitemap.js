@@ -30,12 +30,12 @@ const REBUILD_TIMEOUT = 30000;        // never let a hung fs read pin requests
       automatically keep serving the last good data (stale-safe) ─────────── */
 const cache = {
   static: null,
-  matches: [],   // ★ arrays, never null — old code could 500 on .forEach
-  teams: [],
-  leagues: [],
+  matches: [], teams: [], leagues: [],
+  matchIndex: new Map(), teamIndex: new Map(),   // ★ NEW: id → meta for SSR
   lastUpdated: 0,
   counts: { matches: 0, teams: 0, leagues: 0, records: 0 },
 };
+
 let rebuildPromise = null;
 
 /* ── HELPERS ────────────────────────────────────────────────────────────── */
@@ -159,6 +159,7 @@ async function doRebuild() {
 
   const seenM = new Set(), seenT = new Set(), seenL = new Set();
   const matchUrls = [], teamUrls = [], leagueUrls = [];
+  const matchIndex = new Map(), teamIndex = new Map();
 
   const pushLeague = (id, name, logo) => {
     const k = String(id);
@@ -166,13 +167,27 @@ async function doRebuild() {
   };
   const pushTeam = (id, name, logo) => {
     const k = String(id);
-    if (id && name && !seenT.has(k)) { seenT.add(k); teamUrls.push(teamXml(k, name, logo)); }
+    if (id && name && !seenT.has(k)) {
+      seenT.add(k);
+      teamUrls.push(teamXml(k, name, logo));
+      teamIndex.set(k, { name, logo: absoluteUrl(logo) }); // ★ SSR lookup
+    }
   };
 
   for (const m of all) {
     if (isValidMatch(m)) {
       const k = String(m.id);
-      if (!seenM.has(k)) { seenM.add(k); matchUrls.push(matchXml(m)); }
+      if (!seenM.has(k)) {
+        seenM.add(k);
+        matchUrls.push(matchXml(m));
+        matchIndex.set(k, { // ★ SSR lookup — every fixture/result id
+          home: getHomeName(m),
+          away: getAwayName(m),
+          league: m.league?.name || m.leagueName || "",
+          date: m.date || null,
+          logo: absoluteUrl(m.homeTeam?.logo || m.homeLogo),
+        });
+      }
     }
     pushLeague(m.league?.id || m.leagueId, m.league?.name || m.leagueName, absoluteUrl(m.league?.emblem || m.leagueLogo));
     pushTeam(m.homeTeam?.id || m.homeTeamId, m.homeTeam?.name || m.homeName, absoluteUrl(m.homeTeam?.logo || m.homeLogo));
@@ -185,12 +200,14 @@ async function doRebuild() {
     matches: chunkArray(matchUrls, MAX_URLS_PER_SITEMAP).map(buildUrlset),
     teams: chunkArray(teamUrls, MAX_URLS_PER_SITEMAP).map(buildUrlset),
     leagues: chunkArray(leagueUrls, MAX_URLS_PER_SITEMAP).map(buildUrlset),
+    matchIndex, teamIndex,
     lastUpdated: Date.now(),
     counts: { matches: matchUrls.length, teams: teamUrls.length, leagues: leagueUrls.length, records: all.length },
   });
 
   console.log(`[Sitemap] rebuilt in ${Date.now() - started}ms — matches:${cache.counts.matches} teams:${cache.counts.teams} leagues:${cache.counts.leagues} records:${cache.counts.records}`);
 }
+
 
 const isFresh = () => cache.static && Date.now() - cache.lastUpdated < CACHE_TTL;
 
@@ -261,6 +278,20 @@ router.get("/status.json", async (_req, res) => {
     },
   });
 });
+
+// SSR meta lookups — in-memory Map = microseconds. Must come before the /:file catch-all.
+router.get("/meta/match/:id", (req, res) => {
+  const hit = cache.matchIndex && cache.matchIndex.get(String(req.params.id));
+  if (!hit) return res.status(404).json({ success: false, error: "match not in index" });
+  res.set("Cache-Control", "public, max-age=1800").json({ success: true, data: hit });
+});
+
+router.get("/meta/team/:id", (req, res) => {
+  const hit = cache.teamIndex && cache.teamIndex.get(String(req.params.id));
+  if (!hit) return res.status(404).json({ success: false, error: "team not in index" });
+  res.set("Cache-Control", "public, max-age=1800").json({ success: true, data: hit });
+});
+
 
 // 3) Index → <sitemapindex> pointing at HOST/{INDEX_NAME}/... (public paths)
 router.get("/", async (req, res) => {
