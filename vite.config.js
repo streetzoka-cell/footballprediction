@@ -37,7 +37,10 @@ export default defineConfig({
       },
       workbox: {
         navigateFallback: '/index.html',
-        navigateFallbackDenylist: [/^\/api\//, /^\/zokascore-sitemap\.xml/, /^\/sitemaps\//, /^\/robots\.txt/, /^\/opensearch\.xml/],
+        navigateFallbackDenylist: [
+  /^\/api\//, /^\/sitemap\.xml$/, /^\/zokascore-sitemap\.xml$/, /^\/sitemaps\//,
+  /^\/zokascore-index(\.xml|\/|$)/, /^\/robots\.txt$/, /^\/opensearch\.xml$/,
+],
         runtimeCaching: [
           { urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i, handler: 'CacheFirst', options: { cacheName: 'google-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 31536000 } } },
           { urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i, handler: 'CacheFirst', options: { cacheName: 'gstatic-fonts', expiration: { maxEntries: 10, maxAgeSeconds: 31536000 } } },

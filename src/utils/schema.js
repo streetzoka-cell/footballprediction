@@ -1,34 +1,37 @@
 ﻿// COMPAT SHIM — src/utils/schema.js
-// Old file duplicated SITE + schemas from seoBuilder.js = 3 copies of SITE = schema conflict
-// This shim keeps old imports working, but points to single source
+// ─────────────────────────────────────────────────────────────
+// This file used to carry its own SITE + schemas = 3 divergent copies
+// (the "schema conflict"). Now ./seoBuilder.js is the ONLY definition;
+// this shim just keeps old `from "./schema"` imports alive.
+// ★ FIX: removed require() — illegal in Vite ESM, crashed at runtime.
+// ★ FIX: hardcoded URLs replaced with SITE.
 
-export { SITE, websiteSchema, organizationSchema, breadcrumbSchema } from './seoBuilder';
+import { SITE, websiteSchema, organizationSchema, breadcrumbSchema } from './seoBuilder';
 
-// Legacy wrappers that existed in old schema.js — mapped to new seoBuilder equivalents
-export function webpageSchema({ title, description, path }) {
-  const { buildSEO } = require('./seoBuilder');
-  // fallback simple WebPage schema
+export { SITE, websiteSchema, organizationSchema, breadcrumbSchema };
+
+export function webpageSchema({ title, description, path } = {}) {
   return {
     "@context": "https://schema.org",
     "@type": "WebPage",
     name: title,
     description,
-    url: `https://zokascore.xyz${path || "/"}`,
-    isPartOf: { "@type": "WebSite", name: "ZOKASCORE", url: "https://zokascore.xyz" },
+    url: `${SITE.url}${path || "/"}`,
+    isPartOf: { "@type": "WebSite", name: SITE.name, url: SITE.url },
   };
 }
 
-export function collectionSchema({ title, description, path }) {
+export function collectionSchema({ title, description, path } = {}) {
   return {
     "@context": "https://schema.org",
     "@type": "CollectionPage",
     name: title,
     description,
-    url: `https://zokascore.xyz${path || "/"}`,
+    url: `${SITE.url}${path || "/"}`,
   };
 }
 
-export function faqSchema(items) {
+export function faqSchema(items = []) {
   return {
     "@context": "https://schema.org",
     "@type": "FAQPage",

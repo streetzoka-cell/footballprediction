@@ -1,8 +1,7 @@
 User-agent: *
 Allow: /
-Disallow: /admin
 Disallow: /api/
-Disallow: /search?
-
-Sitemap: https://zokascore.xyz/zokascore-sitemap.xml
-Sitemap: https://zokascore.xyz/sitemaps/static.xml
+Disallow: /studio
+Disallow: /zks-admin-8f9x2-control-panel
+Disallow: /search
+Disallow: /profile

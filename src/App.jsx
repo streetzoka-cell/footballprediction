@@ -2,6 +2,7 @@
 import { useLocation } from "react-router-dom";
 import Providers from "./app/providers";
 import AppRoutes from "./app/AppRoutes";
+import RouteMeta from "./app/RouteMeta"; // ★ NEW
 import ScrollToTop from "./app/ScrollToTop";
 import Breadcrumbs from "./components/Breadcrumbs";
 import Navbar from "./components/Navbar";
@@ -64,7 +65,7 @@ function AppShell() {
   useEffect(() => {
     document.body.classList.remove('breaking');
     document.querySelector('.app-layout')?.classList.remove('breaking');
-    const stage = document.querySelector('.main-content');   // ← delta 1
+    const stage = document.querySelector('.main-content');
     if (stage && stage.style.animation) stage.style.animation = '';
   }, [location.pathname]);
 
@@ -86,28 +87,25 @@ function AppShell() {
       );
       if(!link) return;
 
-      // skip modified clicks & non-navigations                    ← delta 2
+      // skip modified clicks & non-navigations
       const href = link.getAttribute('href');
       if(!href || !href.startsWith('/') || e.ctrlKey || e.metaKey ||
          e.shiftKey || e.altKey || e.button !== 0) return;
       if(link.target === '_blank' || link.hasAttribute('download')) return;
-      if(href === location.pathname) return;              // same-route tap: no show
+      if(href === location.pathname) return; // same-route tap: no show
 
-      const stage = document.querySelector('.main-content');    // ← delta 3
-      if(stage){
-        // v3 keyframes are OPACITY-ONLY → zero containing-block risk,
-        // forwards-fill is now safe anywhere.
-        stage.style.animation = 'z-page-break 0.32s cubic-bezier(0.4,0,0.6,1) forwards';
-        // Safety net: if navigation never happens (blocked/slow),
-        // restore visibility instead of leaving content invisible.
-        setTimeout(() => {
-          if (!location.pathname || document.contains(stage)) {
-            // cleared properly by the pathname effect on real nav;
-            // this only rescues the no-navigation edge case
-          }
-          if(stage.style.animation) {/* keep if nav landed — effect owns clearing */}
-        }, 0);
-      }
+      const stage = document.querySelector('.main-content');
+      if(!stage || stage.style.animation) return; // don't stack a second break mid-flight
+
+      // v3 keyframes are OPACITY-ONLY → zero containing-block risk.
+      stage.style.animation = 'z-page-break 0.32s cubic-bezier(0.4,0,0.6,1) forwards';
+
+      // ★ REAL safety net: if navigation never lands (blocked/slow/cancelled),
+      // the pathname effect never runs → clear the forwards-fill ourselves.
+      // (The old timeout here was a no-op and could leave the page invisible.)
+      setTimeout(() => {
+        if (stage.isConnected && stage.style.animation) stage.style.animation = '';
+      }, 600);
     };
     document.addEventListener('click', handler, {capture:true});
     return () => document.removeEventListener('click', handler, {capture:true});
@@ -116,6 +114,7 @@ function AppShell() {
   return (
     <>
       <ScrollToTop />
+      <RouteMeta /> {/* ★ NEW: per-route title/meta/canonical for Google */}
       <ConnectionManager />
       <PwaManager />
       <KeyboardManager />

@@ -4,6 +4,10 @@ import { getLocalDateFromUtc, formatTime, toLocalDateStr } from '../utils/dates'
 const FT_STATUSES = new Set(['FT', 'AET', 'PEN', 'AW', 'WO']);
 const FT_THRESHOLD = 3 * 60 * 60 * 1000;
 const HIDE_THRESHOLD = 24 * 60 * 60 * 1000;
+/* ★ statuses that must NEVER be force-finished by the elapsed-time heuristic —
+   postponed/canceled/abandoned/suspended matches were not (or are not) in play,
+   so "3h since kickoff" must not fabricate FT for them */
+const NEVER_PLAYED = ['PST', 'POSTP', 'CANC', 'ABD', 'SUSP', 'INT'];
 const HALF = 45, FULL = 90, HT_BREAK = 15, ET_HALF = 15, ET_BREAK = 5, ET_HT = 5;
 const ADDED_1H = 3, ADDED_2H = 8, ADDED_ET = 3;
 
@@ -33,7 +37,15 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now(), isDataFr
   if (!raw) return null;
   const display = raw.display || {};
   const time = raw.time || {};
-  const score = { home: raw.homeScore || display.score?.home || 0, away: raw.awayScore || display.score?.away || 0 };
+  /* ★ FIX 1 — null-safe score:
+     - `??` instead of `||` preserves a REAL 0-0 (the old `|| 0` chain was fine
+       with 0 but the trailing `|| 0` fabricated 0-0 when NO score existed)
+     - "no score data yet" now stays null; downstream UI renders '--' / '-'
+       instead of a fake 0-0 that clobbers the live snapshot on merge */
+  const score = {
+    home: raw.homeScore ?? display.score?.home ?? null,
+    away: raw.awayScore ?? display.score?.away ?? null,
+  };
   const homeName = raw.homeName || raw.homeTeam?.name || 'TBD';
   const awayName = raw.awayName || raw.awayTeam?.name || 'TBD';
   const homeLogo = raw.homeLogo || raw.homeTeam?.crest || null;
@@ -60,7 +72,11 @@ export function normalizeMatch(raw, isPrimary = true, now = Date.now(), isDataFr
     const start = timestamp * 1000;
     const elapsed = now - start;
     if (elapsed > HIDE_THRESHOLD && !isFinished) { isHidden = true; isLive = false; isFinished = false; status = 'HIDDEN'; }
-    else if (elapsed > FT_THRESHOLD && !isFinished) { isLive = false; isFinished = true; status = 'FT'; minute = 90; }
+    /* ★ FIX 2 — never force-FT matches that were never played / are interrupted.
+       (Postponed match + old kickoff date used to become "FT 0-0" here.) */
+    else if (elapsed > FT_THRESHOLD && !isFinished && !NEVER_PLAYED.includes(status)) {
+      isLive = false; isFinished = true; status = 'FT'; minute = 90;
+    }
   }
 
   const isHT = display.isHalfTime || status === 'HT';

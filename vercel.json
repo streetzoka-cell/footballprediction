@@ -1,18 +1,22 @@
 {
   "functions": {
-    "api/ssr.js": { "maxDuration": 10, "includeFiles": "dist/**" }
+    "api/ssr.js": { "maxDuration": 10, "includeFiles": "dist/**" },
+    "api/zokascore-index.js": { "maxDuration": 15 }
   },
   "rewrites": [
-    { "source": "/robots.txt", "destination": "/robots.txt" },
-    { "source": "/opensearch.xml", "destination": "/opensearch.xml" },
-    { "source": "/manifest.webmanifest", "destination": "/manifest.webmanifest" },
-    { "source": "/zokascore-sitemap.xml", "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml" },
-    { "source": "/sitemap.xml", "destination": "https://api.zokascore.xyz/zokascore-sitemap.xml" },
-    { "source": "/sitemaps/:type*", "destination": "https://api.zokascore.xyz/sitemaps/:type*" },
+    { "source": "/zokascore-index.xml", "destination": "/api/zokascore-index?target=index" },
+    { "source": "/zokascore-index/:file*", "destination": "/api/zokascore-index?target=:file*" },
+
+    { "source": "/sitemap.xml", "destination": "/api/zokascore-index?target=gone" },
+    { "source": "/zokascore-sitemap.xml", "destination": "/api/zokascore-index?target=gone" },
+    { "source": "/sitemaps/:file*", "destination": "/api/zokascore-index?target=gone" },
+
     { "source": "/match/:path*", "destination": "/api/ssr" },
     { "source": "/team/:path*", "destination": "/api/ssr" },
     { "source": "/league/:path*", "destination": "/api/ssr" },
     { "source": "/competition/:path*", "destination": "/api/ssr" },
+    { "source": "/highlights/:path*", "destination": "/api/ssr" },
+
     { "source": "/(.*)", "destination": "/index.html" }
   ],
   "headers": [

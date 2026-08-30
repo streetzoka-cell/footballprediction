@@ -16,6 +16,13 @@ import { applySmartMinute, normalizeMatch } from '../engine/matchEngine';
 import { seoGenerators, buildSEO, howToSchema } from '../utils/seoBuilder';
 import { footballApi } from '../services/footballApi';
 
+/* ★ statuses after which the canonical endpoint must stop polling —
+   case-normalized before compare, includes long-form variants */
+const CANONICAL_TERMINAL_STATUSES = [
+  'FT', 'AET', 'PEN', 'FINISHED', 'NS', 'TBD', 'PST', 'POSTP', 'CANC', 'ABD', 'SUSP',
+  'MATCH FINISHED', 'NOT STARTED',
+];
+
 function useNow(interval = 1000) {
   const [now, setNow] = useState(Date.now());
   useEffect(() => {
@@ -81,33 +88,45 @@ export default function MatchDetails() {
     enabled: !!matchId,
     staleTime: 30 * 1000,
     refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      return status && !['FT', 'AET', 'PEN', 'FINISHED', 'NS'].includes(status) ? 30000 : false;
+      /* ★ case-normalize + recognize more terminal statuses so finished /
+         postponed matches stop polling */
+      const status = String(query.state.data?.status || '').toUpperCase();
+      return status && !CANONICAL_TERMINAL_STATUSES.includes(status) ? 30000 : false;
     },
     retry: 1,
   });
 
   // ── Fast path: today/tomorrow/yesterday fixture lists (instant render, canonical refines) ──
-  const { data: todayFx = [] } = useFixtures(todayStr());
-  const { data: tomFx = [] } = useFixtures(getLocalDateStr(1));
-  const { data: yestFx = [] } = useFixtures(getLocalDateStr(-1));
+  // ★ also grab each list's REAL freshness flag — no more hardcoded `true`
+  const { data: todayFx = [], isLiveDataStale: todayStale } = useFixtures(todayStr());
+  const { data: tomFx = [], isLiveDataStale: tomStale } = useFixtures(getLocalDateStr(1));
+  const { data: yestFx = [], isLiveDataStale: yestStale } = useFixtures(getLocalDateStr(-1));
 
   const listMatch = useMemo(() => {
-    const all = [...todayFx, ...tomFx, ...yestFx];
-    const found = all.find(
-      (m) =>
-        String(m.id) === String(matchId) ||
-        (m.ids && Object.values(m.ids).some((v) => String(v) === String(matchId)))
-    );
-    return found ? applySmartMinute(normalizeMatch(found, true, now, true), now) : null;
-  }, [todayFx, tomFx, yestFx, matchId, now]);
+    const sources = [
+      { list: todayFx, fresh: !todayStale },
+      { list: tomFx, fresh: !tomStale },
+      { list: yestFx, fresh: !yestStale },
+    ];
+    for (const { list, fresh } of sources) {
+      const found = list.find(
+        (m) =>
+          String(m.id) === String(matchId) ||
+          (m.ids && Object.values(m.ids).some((v) => String(v) === String(matchId)))
+      );
+      if (found) return applySmartMinute(normalizeMatch(found, true, now, fresh), now);
+    }
+    return null;
+  }, [todayFx, tomFx, yestFx, todayStale, tomStale, yestStale, matchId, now]);
 
   /*
-   * ★ THE TBD FIX — gap-fill merge.
-   * Canonical is source of truth for LIVE state: status, score, markets,
-   * intelligence. But when its identity fields are TBD/empty (old backend,
-   * sparse snapshot entry), the list match — which always had real names —
-   * backfills them. 'TBD' can no longer win over real data.
+   * ★ THE TBD FIX v2 — gap-fill merge + STATE GUARD.
+   * Canonical is source of truth for markets/intelligence/identity. But it only
+   * outranks the live snapshot for match STATE (score/status/live flags) when
+   * it demonstrably carries real score data AND a started/finished status.
+   * A sparse/stale canonical entry (score: null → old engine fabricated 0-0;
+   * missing status → the 3h heuristic forced FT) must NOT clobber the live
+   * list state backed by live.json / finished.json.
    */
   const match = useMemo(() => {
     if (!canonical) return listMatch;
@@ -128,8 +147,9 @@ export default function MatchDetails() {
           awayTeamId: canonical.teams?.away?.id,
           homeLogo: canonical.teams?.home?.logo,
           awayLogo: canonical.teams?.away?.logo,
-          homeScore: canonical.score?.home,
-          awayScore: canonical.score?.away,
+          // ★ cover both flat and football-api nested score shapes
+          homeScore: canonical.score?.home ?? canonical.score?.fullTime?.home,
+          awayScore: canonical.score?.away ?? canonical.score?.fullTime?.away,
           odds: canonical.odds,
           mlPredictions: canonical.markets || canonical.mlPredictions || null,
           pickGroups: canonical.pickGroups || null,
@@ -152,8 +172,56 @@ export default function MatchDetails() {
 
     if (!listMatch) return canonicalMapped;
 
+    /* ★ THE STATE GUARD */
+    const canonicalHasScore =
+      canonical?.score?.home != null && canonical?.score?.away != null;
+    const canonicalStatus = String(canonical?.status || '').toUpperCase();
+    const canonicalPreMatch =
+      !canonicalStatus || ['NS', 'TBD', 'PST', 'POSTP'].includes(canonicalStatus);
+    const canonicalOwnsState = canonicalHasScore && !canonicalPreMatch;
+
+    const stateFields = (m) => ({
+      status: m.status,
+      statusLong: m.statusLong,
+      isLive: m.isLive,
+      isFinished: m.isFinished,
+      isScheduled: m.isScheduled,
+      isHT: m.isHT,
+      isStarted: m.isStarted,
+      isStaleData: m.isStaleData,
+      isHidden: m.isHidden,
+      minute: m.minute,
+      displayMinute: m.displayMinute,
+      statusLabel: m.statusLabel,
+      statusClass: m.statusClass,
+      timelineProgress: m.timelineProgress,
+      updatedAt: m.updatedAt,
+      homeScore: m.homeScore,
+      awayScore: m.awayScore,
+      goalsHome: m.goalsHome,
+      goalsAway: m.goalsAway,
+    });
+
     return {
       ...canonicalMapped,
+      ...(canonicalOwnsState ? stateFields(canonicalMapped) : stateFields(listMatch)),
+
+      // ★ stats follow the same rule — an empty canonical must not hide live stats
+      stats: canonicalMapped.hasRealStats
+        ? canonicalMapped.stats
+        : listMatch.hasRealStats
+          ? listMatch.stats
+          : canonicalMapped.stats,
+      hasRealStats: canonicalMapped.hasRealStats || listMatch.hasRealStats,
+
+      // ★ timing backfill — needed when listMatch state wins (countdown, kickoff card)
+      date: canonicalMapped.date || listMatch.date,
+      utcDate: canonicalMapped.utcDate || listMatch.utcDate,
+      timestamp: canonicalMapped.timestamp || listMatch.timestamp,
+      kickoff: canonicalMapped.kickoff || listMatch.kickoff,
+      kickoffUtc: canonicalMapped.kickoffUtc || listMatch.kickoffUtc,
+      localDateStr: canonicalMapped.localDateStr || listMatch.localDateStr,
+
       // identity: real values win over TBD/empty
       homeName: pickReal(canonicalMapped.homeName, listMatch.homeName),
       awayName: pickReal(canonicalMapped.awayName, listMatch.awayName),
