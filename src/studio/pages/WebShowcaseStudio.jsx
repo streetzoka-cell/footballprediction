@@ -1,8 +1,8 @@
 ﻿import React, { useReducer, useRef, useEffect, useCallback, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Download, Monitor, Camera, Mic, MicOff, Volume2, Square, Circle, 
-  Trash2, Move, AppWindow, Palette, Settings, X, Layers, Crop, Sliders, Check, AlertTriangle, Info
+  Trash2, Move, Palette, Settings, X, Crop, Sliders, Check, AlertTriangle, Info
 } from 'lucide-react';
 
 // ═══════════════════════════════════════════════════════════
@@ -13,41 +13,65 @@ const fixWebmDuration = async (blob, durationMs) => {
   const arrayBuffer = await blob.arrayBuffer();
   const uint8 = new Uint8Array(arrayBuffer);
   const view = new DataView(arrayBuffer);
+  
   let segInfoOffset = -1;
   for (let i = 0; i < uint8.length - 4; i++) {
     if (view.getUint32(i) === 0x1549A966) { segInfoOffset = i; break; }
   }
   if (segInfoOffset === -1) return blob;
+  
   let timecodeOffset = -1;
   for (let i = segInfoOffset; i < uint8.length - 3; i++) {
-    if (view.getUint8(i) === 0x2A && view.getUint8(i + 1) === 0xD7 && view.getUint8(i + 2) === 0xB1) { timecodeOffset = i; break; }
+    if (view.getUint8(i) === 0x2A && view.getUint8(i + 1) === 0xD7 && view.getUint8(i + 2) === 0xB1) { 
+      timecodeOffset = i; break; 
+    }
   }
   if (timecodeOffset === -1) return blob;
+  
   let timecodeScale = 1000000;
   const tsSize = view.getUint8(timecodeOffset + 3);
-  if (tsSize === 3) timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | (view.getUint8(timecodeOffset + 5) << 8) | view.getUint8(timecodeOffset + 6);
+  if (tsSize === 3) {
+    timecodeScale = (view.getUint8(timecodeOffset + 4) << 16) | 
+                    (view.getUint8(timecodeOffset + 5) << 8) | 
+                    view.getUint8(timecodeOffset + 6);
+  }
+  
   const durationInMkvUnits = durationMs * (timecodeScale / 1000000);
   const insertAt = timecodeOffset + 7;
   const durationElement = new Uint8Array(2 + 1 + 8);
   const durView = new DataView(durationElement.buffer);
-  durView.setUint16(0, 0x4489); durView.setUint8(2, 0x88); durView.setFloat64(3, durationInMkvUnits);
+  
+  durView.setUint16(0, 0x4489); 
+  durView.setUint8(2, 0x88); 
+  durView.setFloat64(3, durationInMkvUnits);
+  
   const segInfoSizeOffset = segInfoOffset + 4;
   const firstByte = view.getUint8(segInfoSizeOffset);
   let sizeBytes = 1, mask = 0x80;
   while (sizeBytes <= 8 && (firstByte & mask) === 0) { mask >>= 1; sizeBytes++; }
+  
   let segInfoSize = (firstByte & (mask - 1));
-  for (let i = 1; i < sizeBytes; i++) segInfoSize = (segInfoSize << 8) + view.getUint8(segInfoSizeOffset + i);
+  for (let i = 1; i < sizeBytes; i++) {
+    segInfoSize = (segInfoSize << 8) + view.getUint8(segInfoSizeOffset + i);
+  }
+  
   const newSize = segInfoSize + durationElement.length;
   const maxValForWidth = (1 << (7 * sizeBytes - 1)) - 1;
   if (newSize > maxValForWidth) return blob;
+  
   const newUint8 = new Uint8Array(uint8.length + durationElement.length);
   newUint8.set(uint8.subarray(0, insertAt), 0);
   newUint8.set(durationElement, insertAt);
   newUint8.set(uint8.subarray(insertAt), insertAt + durationElement.length);
+  
   const newView = new DataView(newUint8.buffer);
   let patchVal = newSize;
-  for (let i = sizeBytes - 1; i >= 1; i--) { newView.setUint8(segInfoSizeOffset + i, patchVal & 0xFF); patchVal >>= 8; }
+  for (let i = sizeBytes - 1; i >= 1; i--) { 
+    newView.setUint8(segInfoSizeOffset + i, patchVal & 0xFF); 
+    patchVal >>= 8; 
+  }
   newView.setUint8(segInfoSizeOffset, (firstByte & (mask - 1)) | (patchVal & (mask - 1)));
+  
   return new Blob([newUint8], { type: 'video/webm' });
 };
 
@@ -55,10 +79,10 @@ const fixWebmDuration = async (blob, durationMs) => {
 // CONFIG & PRESETS
 // ═══════════════════════════════════════════════════════════
 const ASPECT_RATIOS = [
-  { id: '16:9', name: 'YT (16:9)' },
-  { id: '9:16', name: 'Shorts (9:16)' },
-  { id: '1:1', name: 'Square (1:1)' },
-  { id: '4:3', name: 'Classic (4:3)' }
+  { id: '16:9', name: 'YT (16:9)', w: 1280, h: 720 },
+  { id: '9:16', name: 'Shorts (9:16)', w: 720, h: 1280 },
+  { id: '1:1', name: 'Square (1:1)', w: 1080, h: 1080 },
+  { id: '4:3', name: 'Classic (4:3)', w: 1024, h: 768 }
 ];
 
 const CAMERA_FRAMES = [
@@ -220,8 +244,7 @@ export default function WebShowcaseStudio() {
     const ctx = canvas?.getContext('2d');
     if (!ctx) return;
     
-    const dims = { '16:9': {w:1280,h:720}, '9:16': {w:720,h:1280}, '1:1': {w:1080,h:1080}, '4:3': {w:1024,h:768} };
-    const dim = dims[settings.aspectRatio] || dims['16:9'];
+    const dim = activeRatio || ASPECT_RATIOS[0];
     if (canvas.width !== dim.w) canvas.width = dim.w;
     if (canvas.height !== dim.h) canvas.height = dim.h;
 
@@ -270,19 +293,34 @@ export default function WebShowcaseStudio() {
       
       // Draw Frame/Border
       if (settings.cameraFrame === 'neon') {
-        ctx.shadowColor = '#3b82f6'; ctx.shadowBlur = 20; ctx.strokeStyle = '#3b82f6'; ctx.lineWidth = 4;
-        ctx.beginPath(); ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2); ctx.closePath(); ctx.stroke();
+        ctx.shadowColor = '#3b82f6'; 
+        ctx.shadowBlur = 20; 
+        ctx.strokeStyle = '#3b82f6'; 
+        ctx.lineWidth = 4;
+        ctx.beginPath(); 
+        ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2); 
+        ctx.closePath(); 
+        ctx.stroke();
         ctx.shadowBlur = 0;
       }
       
       // Clip and draw webcam
       ctx.save();
       if (settings.cameraFrame === 'circle' || settings.cameraFrame === 'neon') {
-        ctx.beginPath(); ctx.arc(x + size/2, y + size/2, size/2 - (settings.cameraFrame === 'neon' ? 4 : 0), 0, Math.PI * 2); ctx.closePath(); ctx.clip();
+        const inset = settings.cameraFrame === 'neon' ? 4 : 0;
+        ctx.beginPath(); 
+        ctx.arc(x + size/2, y + size/2, size/2 - inset, 0, Math.PI * 2); 
+        ctx.closePath(); 
+        ctx.clip();
       } else if (settings.cameraFrame === 'rounded') {
         const r = 24; ctx.beginPath();
-        ctx.moveTo(x + r, y); ctx.arcTo(x + size, y, x + size, y + size, r); ctx.arcTo(x + size, y + size, x, y + size, r);
-        ctx.arcTo(x, y + size, x, y, r); ctx.arcTo(x, y, x + size, y, r); ctx.closePath(); ctx.clip();
+        ctx.moveTo(x + r, y); 
+        ctx.arcTo(x + size, y, x + size, y + size, r); 
+        ctx.arcTo(x + size, y + size, x, y + size, r);
+        ctx.arcTo(x, y + size, x, y, r); 
+        ctx.arcTo(x, y, x + size, y, r); 
+        ctx.closePath(); 
+        ctx.clip();
       } else if (settings.cameraFrame === 'square') {
         ctx.rect(x, y, size, size); ctx.clip();
       }
@@ -319,7 +357,7 @@ export default function WebShowcaseStudio() {
     const loop = () => { drawFrameRef.current(); animFrame = requestAnimationFrame(loop); };
     animFrame = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animFrame);
-  }, [state]);
+  }, []);
 
   // ═══════════════════════════════════════════════════════════
   // POINTER & DRAG LOGIC
@@ -327,7 +365,8 @@ export default function WebShowcaseStudio() {
   const getCanvasCoords = (e) => {
     const canvas = canvasRef.current; if (!canvas) return { x: 0, y: 0 };
     const rect = canvas.getBoundingClientRect();
-    const scaleX = canvas.width / rect.width; const scaleY = canvas.height / rect.height;
+    const scaleX = canvas.width / rect.width; 
+    const scaleY = canvas.height / rect.height;
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
     return { x: (clientX - rect.left) * scaleX, y: (clientY - rect.top) * scaleY };
@@ -403,9 +442,15 @@ export default function WebShowcaseStudio() {
         micGainRef.current.connect(audioDest);
       }
 
+      // Keep context alive
       const osc = audioCtxRef.current.createOscillator();
       const gain = audioCtxRef.current.createGain();
-      gain.gain.value = 0.0; osc.connect(gain); gain.connect(audioDest); gain.connect(audioCtxRef.current.destination); osc.start();
+      gain.gain.value = 0.0; 
+      osc.connect(gain); 
+      gain.connect(audioDest); 
+      gain.connect(audioCtxRef.current.destination); 
+      osc.start();
+      
       audioDest.stream.getAudioTracks().forEach(t => mixedStreamRef.current.addTrack(t));
     } catch(e) { console.warn("Audio mix failed", e); }
 
@@ -437,7 +482,10 @@ export default function WebShowcaseStudio() {
   };
 
   const discardRecording = () => {
-    if (exportData.recordedUrl) { URL.revokeObjectURL(exportData.recordedUrl); dispatch({ type: 'SET_EXPORT', payload: { recordedUrl: null } }); }
+    if (exportData.recordedUrl) { 
+      URL.revokeObjectURL(exportData.recordedUrl); 
+      dispatch({ type: 'SET_EXPORT', payload: { recordedUrl: null } }); 
+    }
   };
 
   const formatTime = (s) => `${Math.floor(s / 60).toString().padStart(2, '0')}:${(s % 60).toString().padStart(2, '0')}`;
@@ -451,9 +499,12 @@ export default function WebShowcaseStudio() {
         <div className="wss-panel-title"><Crop size={14} /> Aspect Ratio</div>
         <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
           {ASPECT_RATIOS.map(r => (
-            <button key={r.id} onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { aspectRatio: r.id } })} 
+            <button 
+              key={r.id} 
+              onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { aspectRatio: r.id } })} 
               className="wss-btn" 
-              style={{ flex: 1, background: settings.aspectRatio === r.id ? 'var(--wss-accent)' : undefined, borderColor: settings.aspectRatio === r.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>
+              style={{ flex: 1, background: settings.aspectRatio === r.id ? 'var(--wss-accent)' : undefined, borderColor: settings.aspectRatio === r.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+            >
               {r.name}
             </button>
           ))}
@@ -464,9 +515,12 @@ export default function WebShowcaseStudio() {
         <div className="wss-panel-title"><Monitor size={14} /> Screen Fit</div>
         <div style={{ display: 'flex', gap: '8px' }}>
           {SCREEN_FIT_MODES.map(m => (
-            <button key={m.id} onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { screenFit: m.id } })} 
+            <button 
+              key={m.id} 
+              onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { screenFit: m.id } })} 
               className="wss-btn" 
-              style={{ flex: 1, background: settings.screenFit === m.id ? 'var(--wss-accent)' : undefined, borderColor: settings.screenFit === m.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>
+              style={{ flex: 1, background: settings.screenFit === m.id ? 'var(--wss-accent)' : undefined, borderColor: settings.screenFit === m.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+            >
               {m.name}
             </button>
           ))}
@@ -479,7 +533,11 @@ export default function WebShowcaseStudio() {
           <input type="color" value={settings.bgColor} onChange={(e) => dispatch({ type: 'SET_SETTINGS', payload: { bgColor: e.target.value } })} className="wss-input-color" />
           <input type="text" value={settings.bgColor} onChange={(e) => dispatch({ type: 'SET_SETTINGS', payload: { bgColor: e.target.value } })} className="wss-input" />
         </div>
-        <button onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { bgBlur: !settings.bgBlur } })} className="wss-btn" style={{ width: '100%', background: settings.bgBlur ? 'var(--wss-accent)' : undefined, borderColor: settings.bgBlur ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>
+        <button 
+          onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { bgBlur: !settings.bgBlur } })} 
+          className="wss-btn" 
+          style={{ width: '100%', background: settings.bgBlur ? 'var(--wss-accent)' : undefined, borderColor: settings.bgBlur ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+        >
           Blur BG: {settings.bgBlur ? 'On' : 'Off'}
         </button>
         <span className="wss-hint">Shown if website doesn't fill screen.</span>
@@ -488,7 +546,16 @@ export default function WebShowcaseStudio() {
       <div className="wss-panel">
         <div className="wss-panel-title"><Sliders size={14} /> Screen Filter</div>
         <div className="rs-filters-scroll" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-          {FILTERS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { screenFilter: f.id } })} className="wss-btn" style={{ background: settings.screenFilter === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.screenFilter === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>{f.name}</button>)}
+          {FILTERS.map(f => (
+            <button 
+              key={f.id} 
+              onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { screenFilter: f.id } })} 
+              className="wss-btn" 
+              style={{ background: settings.screenFilter === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.screenFilter === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+            >
+              {f.name}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -496,12 +563,32 @@ export default function WebShowcaseStudio() {
         <div className="wss-panel">
           <div className="wss-panel-title"><Camera size={14} /> Webcam Shape & Filter</div>
           <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginBottom: '12px' }}>
-            {CAMERA_FRAMES.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { cameraFrame: f.id } })} className="wss-btn" style={{ background: settings.cameraFrame === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.cameraFrame === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>{f.name}</button>)}
+            {CAMERA_FRAMES.map(f => (
+              <button 
+                key={f.id} 
+                onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { cameraFrame: f.id } })} 
+                className="wss-btn" 
+                style={{ background: settings.cameraFrame === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.cameraFrame === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+              >
+                {f.name}
+              </button>
+            ))}
           </div>
           <div className="rs-filters-scroll" style={{ display: 'flex', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
-            {FILTERS.map(f => <button key={f.id} onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { webcamFilter: f.id } })} className="wss-btn" style={{ background: settings.webcamFilter === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.webcamFilter === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}>{f.name}</button>)}
+            {FILTERS.map(f => (
+              <button 
+                key={f.id} 
+                onClick={() => dispatch({ type: 'SET_SETTINGS', payload: { webcamFilter: f.id } })} 
+                className="wss-btn" 
+                style={{ background: settings.webcamFilter === f.id ? 'var(--wss-accent)' : undefined, borderColor: settings.webcamFilter === f.id ? 'var(--wss-accent)' : undefined, justifyContent: 'center' }}
+              >
+                {f.name}
+              </button>
+            ))}
           </div>
-          <span className="wss-hint" style={{ display: 'flex', marginTop: '8px' }}><Move size={12} /> Drag webcam to move. Drag white circle to resize.</span>
+          <span className="wss-hint" style={{ display: 'flex', marginTop: '8px' }}>
+            <Move size={12} /> Drag webcam to move. Drag white circle to resize.
+          </span>
         </div>
       )}
 
@@ -509,14 +596,28 @@ export default function WebShowcaseStudio() {
         <div className="wss-panel">
           <div className="wss-panel-title"><Mic size={14} /> Mic Volume</div>
           <label className="wss-hint" style={{ fontSize: '0.75rem', marginBottom: '4px' }}>Gain: {settings.micVolume}%</label>
-          <input type="range" min="0" max="200" value={settings.micVolume} onChange={(e) => { dispatch({ type: 'SET_SETTINGS', payload: { micVolume: parseInt(e.target.value) } }); if (micGainRef.current) micGainRef.current.gain.value = parseInt(e.target.value) / 100; }} className="rs-range" style={{ width: '100%' }} />
+          <input 
+            type="range" 
+            min="0" max="200" 
+            value={settings.micVolume} 
+            onChange={(e) => { 
+              dispatch({ type: 'SET_SETTINGS', payload: { micVolume: parseInt(e.target.value) } }); 
+              if (micGainRef.current) micGainRef.current.gain.value = parseInt(e.target.value) / 100; 
+            }} 
+            className="rs-range" 
+            style={{ width: '100%' }} 
+          />
         </div>
       )}
     </>
   );
 
   const SidebarButton = ({ icon, label, active, onClick }) => (
-    <button onClick={onClick} className="wss-btn wss-btn-icon" style={{ color: active ? 'var(--wss-accent)' : undefined, flexDirection: 'column', height: '60px', width: '48px', gap: '4px' }}>
+    <button 
+      onClick={onClick} 
+      className="wss-btn wss-btn-icon" 
+      style={{ color: active ? 'var(--wss-accent)' : undefined, flexDirection: 'column', height: '60px', width: '48px', gap: '4px' }}
+    >
       {icon}
       <span style={{ fontSize: '0.6rem' }}>{label}</span>
     </button>

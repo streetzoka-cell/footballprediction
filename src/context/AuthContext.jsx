@@ -1,16 +1,18 @@
-﻿import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+﻿import { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   onAuthStateChanged,
   signOut as fbSignOut,
   updateProfile as fbUpdateProfile,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signInWithPopup,
   signInWithRedirect,
   getRedirectResult,
   GoogleAuthProvider,
   setPersistence,
   browserLocalPersistence,
+  browserSessionPersistence,
 } from 'firebase/auth';
 import { auth, db } from '../utils/firebase';
 import { doc, getDoc, setDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
@@ -18,10 +20,47 @@ import { clearCachedToken } from '../services/backendAuth';
 
 const AuthContext = createContext(null);
 
+// ★ LAST-ACCOUNT MEMORY — survives logout so returning users/admins are
+//   greeted by name (and role) on the login screen. Cleared only via
+//   forgetLastAccount() or when a different account signs in.
+const LAST_ACCOUNT_KEY = 'zokascore-last-account';
+
+const readLastAccount = () => {
+  try { return JSON.parse(localStorage.getItem(LAST_ACCOUNT_KEY)) || null; }
+  catch { return null; }
+};
+const writeLastAccount = (acc) => {
+  try { localStorage.setItem(LAST_ACCOUNT_KEY, JSON.stringify(acc)); } catch {}
+};
+
+const isAdminRole = (role) => ['admin', 'staff', 'super_admin'].includes(String(role || '').toLowerCase());
+
 export function AuthProvider({ children }) {
   const [currentUser, setCurrentUser] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
+  const [lastAccount, setLastAccount] = useState(readLastAccount);
+  const rememberedRef = useRef(null); // guard: write localStorage once per sign-in
+
+  const rememberAccount = useCallback((user, role) => {
+    if (!user || rememberedRef.current === user.uid) return;
+    rememberedRef.current = user.uid;
+    const acc = {
+      uid: user.uid,
+      email: user.email,
+      displayName: user.displayName || user.email?.split('@')[0] || 'Player',
+      photoURL: user.photoURL || null,
+      role: String(role || 'user').toLowerCase(),
+      at: Date.now(),
+    };
+    writeLastAccount(acc);
+    setLastAccount(acc);
+  }, []);
+
+  const forgetLastAccount = useCallback(() => {
+    try { localStorage.removeItem(LAST_ACCOUNT_KEY); } catch {}
+    setLastAccount(null);
+  }, []);
 
   useEffect(() => {
     if (!auth) {
@@ -30,6 +69,8 @@ export function AuthProvider({ children }) {
       return;
     }
 
+    // Default: keep users signed in across visits (Remember-me default = ON).
+    // A login with remember=false overrides this to session-only for that session.
     setPersistence(auth, browserLocalPersistence).catch(err => {
       console.error('[Auth] Error setting persistence:', err);
     });
@@ -87,7 +128,7 @@ export function AuthProvider({ children }) {
             if (docSnap.exists()) {
               const baseData = docSnap.data();
               const role = String(baseData.role || 'user').toLowerCase();
-              const isRoleAdmin = role === 'admin' || role === 'staff' || role === 'super_admin';
+              const isRoleAdmin = isAdminRole(role);
 
               setUserProfile({
                 uid: user.uid,
@@ -95,6 +136,7 @@ export function AuthProvider({ children }) {
                 role,
                 isAdmin: isRoleAdmin,
               });
+              rememberAccount(user, role); // ★ persist for the welcome-back chip
             } else {
               setUserProfile(prev => ({
                 ...(prev || {}),
@@ -102,11 +144,11 @@ export function AuthProvider({ children }) {
                 role: 'user',
                 isAdmin: false,
               }));
+              rememberAccount(user, 'user');
             }
             setAuthLoading(false);
           }, (err) => {
             console.error('[Auth] Profile listener error:', err.message);
-            // Fallback: set basic profile without Firestore data
             setUserProfile({
               uid: user.uid,
               email: user.email,
@@ -115,6 +157,7 @@ export function AuthProvider({ children }) {
               role: 'user',
               isAdmin: false,
             });
+            rememberAccount(user, 'user');
             setAuthLoading(false);
           });
         } catch (err) {
@@ -127,10 +170,12 @@ export function AuthProvider({ children }) {
             role: 'user',
             isAdmin: false,
           });
+          rememberAccount(user, 'user');
           setAuthLoading(false);
         }
       } else {
         setUserProfile(null);
+        rememberedRef.current = null; // ★ next sign-in re-remembers (fresh role too)
         setAuthLoading(false);
       }
     });
@@ -140,16 +185,28 @@ export function AuthProvider({ children }) {
       if (unsubProfile) unsubProfile();
       unsubscribe();
     };
+  }, [auth, rememberAccount]);
+
+  // ★ Remember-me: local = survive browser restarts · session = tab lifetime only
+  const applyPersistence = useCallback(async (remember) => {
+    if (!auth) return;
+    try {
+      await setPersistence(auth, remember === false ? browserSessionPersistence : browserLocalPersistence);
+    } catch (err) {
+      console.warn('[Auth] Persistence not applied:', err.code);
+    }
   }, [auth]);
 
-  const login = useCallback(async (email, password) => {
+  const login = useCallback(async (email, password, remember = true) => {
     if (!auth) throw new Error('Auth not initialized');
+    await applyPersistence(remember);
     const cred = await signInWithEmailAndPassword(auth, email, password);
     return cred.user;
-  }, []);
+  }, [applyPersistence]);
 
-  const register = useCallback(async (email, password, displayName) => {
+  const register = useCallback(async (email, password, displayName, remember = true) => {
     if (!auth) throw new Error('Auth not initialized');
+    await applyPersistence(remember);
     const cred = await createUserWithEmailAndPassword(auth, email, password);
     if (displayName) await fbUpdateProfile(cred.user, { displayName });
 
@@ -165,10 +222,11 @@ export function AuthProvider({ children }) {
     await setDoc(doc(db, 'users', cred.user.uid), profile);
     setUserProfile({ ...profile, role: 'user', isAdmin: false });
     return cred.user;
-  }, []);
+  }, [applyPersistence]);
 
-  const loginWithGoogle = useCallback(async () => {
+  const loginWithGoogle = useCallback(async (remember = true) => {
     if (!auth) throw new Error('Auth not initialized');
+    await applyPersistence(remember);
     const provider = new GoogleAuthProvider();
     try {
       const result = await signInWithPopup(auth, provider);
@@ -180,6 +238,11 @@ export function AuthProvider({ children }) {
       }
       throw err;
     }
+  }, [applyPersistence]);
+
+  const resetPassword = useCallback(async (email) => {
+    if (!auth) throw new Error('Auth not initialized');
+    await sendPasswordResetEmail(auth, email);
   }, []);
 
   const signOut = useCallback(async () => {
@@ -189,6 +252,7 @@ export function AuthProvider({ children }) {
       await fbSignOut(auth);
       setCurrentUser(null);
       setUserProfile(null);
+      // ★ lastAccount is intentionally KEPT — that's the welcome-back memory.
     } catch (err) {
       console.error('[Auth] Sign out failed:', err.message);
       throw err;
@@ -217,12 +281,15 @@ export function AuthProvider({ children }) {
     currentUser,
     userProfile,
     authLoading,
+    lastAccount,
     login,
     register,
     loginWithGoogle,
+    resetPassword,
     signOut,
     updateProfile,
-  }), [currentUser, userProfile, authLoading, login, register, loginWithGoogle, signOut, updateProfile]);
+    forgetLastAccount,
+  }), [currentUser, userProfile, authLoading, lastAccount, login, register, loginWithGoogle, resetPassword, signOut, updateProfile, forgetLastAccount]);
 
   return (
     <AuthContext.Provider value={value}>
