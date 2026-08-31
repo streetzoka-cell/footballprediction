@@ -346,7 +346,7 @@ export default function Home(){
         <footer className="zoka-seo-footer">
           <h3>ZOKASCORE Platform</h3>
           <nav className="seo-nav">
-            <Link to="/fixtures">Football Fixtures</Link><Link to="/predictions">Predictions Hub</Link><Link to="/leaderboard">Leaderboards</Link><Link to="/highlights">Football News</Link><Link to="/master-games">Master Games</Link><Link to="/faq">FAQ</Link><Link to="/contact">Contact</Link>
+            <Link to="/fixtures">Football Fixtures</Link><Link to="/predictions">Predictions Hub</Link><Link to="/leaderboard">Leaderboards</Link><Link to="/highlights">Football News</Link><Link to={ROUTES.MASTERGAMES}>Master Games</Link><Link to="/faq">FAQ</Link><Link to="/contact">Contact</Link>
           </nav>
           <p className="seo-desc">ZOKASCORE is premier football intelligence platform providing real-time live scores, AI predictions, daily leaderboards, and breaking news from Premier League, La Liga, Serie A, Bundesliga, Champions League worldwide.</p>
           <p className="seo-copy">© {new Date().getFullYear()} ZOKASCORE. All rights reserved.</p>

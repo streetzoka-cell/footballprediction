@@ -4,23 +4,44 @@ import { ShieldCheck, Lock, Smartphone, Download, Activity, CheckCircle, Phone }
 import { useFixtures } from '../hooks/useFixtures';
 import { useDailyLeaderboard } from '../hooks/useUserData';
 import { todayStr } from '../utils/dates';
+import { ROUTES, STUDIO_ROUTES, buildLeagueRoute, buildTeamRoute } from '../utils/routes';
 
 const year = new Date().getFullYear();
 
+// ★ SINGLE SOURCE OF TRUTH — zero hardcoded route strings below.
 const sections = [
   { title: "Platform", links: [
-    { label: "Live Scores", to: "/fixtures" }, { label: "Predictions", to: "/predictions" },
-    { label: "Leaderboard", to: "/leaderboard" }, { label: "Highlights", to: "/highlights" },
-    { label: "Live Stream", to: "/livestream" }, { label: "Creator Studio", to: "/studio" },
+    { label: "Live Scores", to: ROUTES.FIXTURES }, { label: "Predictions", to: ROUTES.PREDICTIONS },
+    { label: "Leaderboard", to: ROUTES.LEADERBOARD }, { label: "Highlights", to: ROUTES.HIGHLIGHTS },
+    { label: "Live Stream", to: ROUTES.LIVESTREAM }, { label: "Creator Studio", to: STUDIO_ROUTES.HOME },
   ]},
   { title: "Company", links: [
-    { label: "About Us", to: "/about" }, { label: "Contact", to: "/contact" },
-    { label: "Careers", to: "/careers" }, { label: "Advertise", to: "/advertise" },
+    { label: "About Us", to: ROUTES.ABOUT }, { label: "Contact", to: ROUTES.CONTACT },
+    { label: "Careers", to: ROUTES.CAREERS }, { label: "Advertise", to: ROUTES.ADVERTISE },
   ]},
   { title: "Support & Legal", links: [
-    { label: "Help Center", to: "/help-center" }, { label: "FAQ", to: "/faq" },
-    { label: "Privacy Policy", to: "/privacy" }, { label: "Terms of Service", to: "/terms" },
+    { label: "Help Center", to: ROUTES.HELP }, { label: "FAQ", to: ROUTES.FAQ },
+    { label: "Privacy Policy", to: ROUTES.PRIVACY }, { label: "Terms of Service", to: ROUTES.TERMS },
   ]},
+];
+
+// ★ VERIFY — your store uses couch-style team ids (cmri8zcsgeeudlb07e2w4yakv),
+//   but these are legacy NUMERIC api-football ids. If the backend no longer
+//   serves numeric ids these four links render an empty TeamPage.
+//   Pull the live URLs and swap the ids if needed:
+//   curl.exe -s https://zokascore.xyz/zokascore-index/teams-1.xml | Select-String "manchester-united|liverpool|real-madrid|barcelona"
+//   curl.exe -s https://zokascore.xyz/zokascore-index/leagues-1.xml | Select-String "premier-league|la-liga|champions-league|serie-a"
+const TOP_LEAGUES = [
+  { id: 39,  name: 'Premier League' },
+  { id: 140, name: 'La Liga' },
+  { id: 2,   name: 'UEFA Champions League' },
+  { id: 135, name: 'Serie A' },
+];
+const TOP_TEAMS = [
+  { id: 33,  name: 'Manchester United' },
+  { id: 40,  name: 'Liverpool' },
+  { id: 541, name: 'Real Madrid' },
+  { id: 529, name: 'Barcelona' },
 ];
 
 const socialLinks = [
@@ -116,7 +137,7 @@ export default function Footer() {
         {/* 3. Main Grid */}
         <nav className="admin-grid-200" aria-label="Footer Navigation">
           <div className="flex-col gap-12">
-            <Link to="/" className="flex-center gap-8" aria-label="ZOKASCORE Home">
+            <Link to={ROUTES.HOME} className="flex-center gap-8" aria-label="ZOKASCORE Home">
               <img src="/icons/icon-192.png" alt="ZOKASCORE" width="40" height="40" className="rounded-12" />
               <span className="font-extrabold text-primary text-lg">ZOKASCORE</span>
             </Link>
@@ -153,44 +174,43 @@ export default function Footer() {
           ))}
         </nav>
 
-        {/* 4. EXPLORE ZOKASCORE (SEO Mega-Directory) */}
+        {/* 4. EXPLORE ZOKASCORE (SEO Mega-Directory) — ★ converted: <a href> → <Link to>
+              (full page reloads killed; SPA state + PWA session preserved on every click) */}
         <nav className="glass-card p-20 mb-24" aria-label="Explore ZOKASCORE Directory">
           <h3 className="text-primary font-bold text-lg mb-16 text-center">Explore ZOKASCORE</h3>
           <div className="admin-grid-160">
              <div>
                <h4 className="text-muted text-xs font-bold uppercase mb-8">Live Data</h4>
                <ul className="flex-col gap-4 text-sm">
-                 <li><a href="/fixtures" className="text-secondary hover:text-primary">Live Scores</a></li>
-                 <li><a href="/results" className="text-secondary hover:text-primary">Historical Results</a></li>
-                 <li><a href="/predictions" className="text-secondary hover:text-primary">AI Predictions</a></li>
-                 <li><a href="/leaderboard" className="text-secondary hover:text-primary">Leaderboards</a></li>
+                 <li><Link to={ROUTES.FIXTURES} className="text-secondary hover:text-primary">Live Scores</Link></li>
+                 <li><Link to={ROUTES.RESULTS} className="text-secondary hover:text-primary">Historical Results</Link></li>
+                 <li><Link to={ROUTES.PREDICTIONS} className="text-secondary hover:text-primary">AI Predictions</Link></li>
+                 <li><Link to={ROUTES.LEADERBOARD} className="text-secondary hover:text-primary">Leaderboards</Link></li>
                </ul>
              </div>
              <div>
                <h4 className="text-muted text-xs font-bold uppercase mb-8">Top Leagues</h4>
                <ul className="flex-col gap-4 text-sm">
-                 <li><a href="/league/39/premier-league" className="text-secondary hover:text-primary">Premier League</a></li>
-                 <li><a href="/league/140/la-liga" className="text-secondary hover:text-primary">La Liga</a></li>
-                 <li><a href="/league/2/uefa-champions-league" className="text-secondary hover:text-primary">Champions League</a></li>
-                 <li><a href="/league/135/serie-a" className="text-secondary hover:text-primary">Serie A</a></li>
+                 {TOP_LEAGUES.map((l) => (
+                   <li key={l.id}><Link to={buildLeagueRoute(l.id, l.name)} className="text-secondary hover:text-primary">{l.name}</Link></li>
+                 ))}
                </ul>
              </div>
              <div>
                <h4 className="text-muted text-xs font-bold uppercase mb-8">Popular Teams</h4>
                <ul className="flex-col gap-4 text-sm">
-                 <li><a href="/team/33/manchester-united" className="text-secondary hover:text-primary">Man Utd</a></li>
-                 <li><a href="/team/40/liverpool" className="text-secondary hover:text-primary">Liverpool</a></li>
-                 <li><a href="/team/541/real-madrid" className="text-secondary hover:text-primary">Real Madrid</a></li>
-                 <li><a href="/team/529/barcelona" className="text-secondary hover:text-primary">Barcelona</a></li>
+                 {TOP_TEAMS.map((t) => (
+                   <li key={t.id}><Link to={buildTeamRoute(t.id, t.name)} className="text-secondary hover:text-primary">{t.name}</Link></li>
+                 ))}
                </ul>
              </div>
              <div>
                <h4 className="text-muted text-xs font-bold uppercase mb-8">Tools & Knowledge</h4>
                <ul className="flex-col gap-4 text-sm">
-                 <li><a href="/studio" className="text-secondary hover:text-primary">Creator Studio</a></li>
-                 <li><a href="/football-knowledge" className="text-secondary hover:text-primary">Football Laws</a></li>
-                 <li><a href="/faq" className="text-secondary hover:text-primary">FAQ</a></li>
-                 <li><a href="/highlights" className="text-secondary hover:text-primary">News & Highlights</a></li>
+                 <li><Link to={STUDIO_ROUTES.HOME} className="text-secondary hover:text-primary">Creator Studio</Link></li>
+                 <li><Link to={ROUTES.FOOTBALL_KNOWLEDGE} className="text-secondary hover:text-primary">Football Laws</Link></li>
+                 <li><Link to={ROUTES.FAQ} className="text-secondary hover:text-primary">FAQ</Link></li>
+                 <li><Link to={ROUTES.HIGHLIGHTS} className="text-secondary hover:text-primary">News & Highlights</Link></li>
                </ul>
              </div>
           </div>
