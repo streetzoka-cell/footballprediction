@@ -9,6 +9,7 @@ import { useUserPredictions, useActivePredictions, useUserPoints } from '../hook
 import { useLiveMatches } from '../hooks/useFixtures';
 import { ACHIEVEMENTS } from '../utils/constants';
 import { todayStr } from '../utils/dates';
+import { ROUTES } from '../utils/routes';
 import SEO from '../components/SEO';
 import { calculateUserStats } from '../engine/predictionEngine';
 
@@ -131,18 +132,19 @@ const ProfileSkeleton = () => (
 );
 
 export default function Profile() {
+  // ── ALL HOOKS FIRST — unconditional, same order every render ──────────
   const { currentUser, userProfile, signOut, authLoading } = useAuth();
   const navigate = useNavigate();
-  const isDemo = !authLoading && !currentUser;
-
-  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
 
   const { data: userPredictions = {} } = useUserPredictions(currentUser?.uid, todayStr());
   const { data: activePredictions = [] } = useActivePredictions(todayStr());
   const { data: userPoints = null } = useUserPoints();
   const { data: liveFixtures = [] } = useLiveMatches();
 
-  const liveStats = useMemo(() => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures), [userPredictions, activePredictions, liveFixtures]);
+  const liveStats = useMemo(
+    () => calculateUserStats(Object.values(userPredictions), activePredictions, liveFixtures),
+    [userPredictions, activePredictions, liveFixtures]
+  );
 
   const baseProfile = useMemo(() => userProfile || {
     displayName: 'Guest', email: 'Sign in to get started',
@@ -151,32 +153,24 @@ export default function Profile() {
 
   const dbPoints = useMemo(() => userPoints || {}, [userPoints]);
 
-  const profile = useMemo(() => {
-    return {
-      ...baseProfile,
-      ...dbPoints,
-      points: (dbPoints.totalPoints || 0) + liveStats.pts,
-      predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
-      correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
-      correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
-      missCount: (dbPoints.missCount || 0), 
-      streak: liveStats.streak, 
-      beatZoka: false, 
-      bestRank: dbPoints.bestRank || 0,
-    };
-  }, [baseProfile, dbPoints, liveStats]);
+  const profile = useMemo(() => ({
+    ...baseProfile,
+    ...dbPoints,
+    points: (dbPoints.totalPoints || 0) + liveStats.pts,
+    predictions: (dbPoints.predictionsCount || 0) + liveStats.pred,
+    correctScore: (dbPoints.exactCount || 0) + liveStats.ex,
+    correctResult: (dbPoints.resultCount || 0) + liveStats.rs,
+    missCount: (dbPoints.missCount || 0), 
+    streak: liveStats.streak, 
+    beatZoka: false, 
+    bestRank: dbPoints.bestRank || 0,
+  }), [baseProfile, dbPoints, liveStats]);
 
-  if (authLoading) return <ProfileSkeleton />;
+  const initials = useMemo(
+    () => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2),
+    [profile.displayName]
+  );
 
-  const exact = getExact(profile);
-  const result = getResult(profile);
-  const miss = profile.missCount || 0;
-  const totalResolved = exact + result + miss; 
-  const total = getPredictions(profile);
-  const points = getPoints(profile);
-  const accuracyNum = calculateAccuracy(exact, result, totalResolved);
-  
-  const initials = useMemo(() => (profile.displayName || 'G').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2), [profile.displayName]);
   const memberSince = useMemo(
     () => currentUser?.metadata?.creationTime
       ? new Date(currentUser.metadata.creationTime).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
@@ -189,8 +183,23 @@ export default function Profile() {
 
   const handleLogout = useCallback(async () => {
     try { await signOut(); } catch {}
-    navigate('/');
+    navigate(ROUTES.HOME);
   }, [signOut, navigate]);
+
+  // ── Derived values (plain consts — not hooks, order-independent) ──────
+  const isDemo = !authLoading && !currentUser;
+  const isAdmin = userProfile?.isAdmin || userProfile?.role === 'admin' || userProfile?.role === 'staff';
+
+  const exact = getExact(profile);
+  const result = getResult(profile);
+  const miss = profile.missCount || 0;
+  const totalResolved = exact + result + miss; 
+  const total = getPredictions(profile);
+  const points = getPoints(profile);
+  const accuracyNum = calculateAccuracy(exact, result, totalResolved);
+
+  // ── Early return — only AFTER every hook has run ──────────────────────
+  if (authLoading) return <ProfileSkeleton />;
 
   const profileSchema = {
     "@context": "https://schema.org",
@@ -312,7 +321,7 @@ export default function Profile() {
               <>
                 <h2>Start Predicting</h2>
                 <p>Sign in to track your predictions, earn badges, and climb the leaderboard.</p>
-                <button onClick={() => navigate('/login')} className="btn btn-primary">
+                <button onClick={() => navigate(ROUTES.LOGIN)} className="btn btn-primary">
                   Sign In <ArrowRight size={18} />
                 </button>
               </>
@@ -323,11 +332,11 @@ export default function Profile() {
                   {total > 0 ? "Predict today's matches and climb the global leaderboard." : "Browse today's fixtures and make your first prediction to start earning badges."}
                 </p>
                 <div className="pro-cta-actions">
-                  <button onClick={() => navigate('/fixtures')} className="btn btn-primary">
+                  <button onClick={() => navigate(ROUTES.FIXTURES)} className="btn btn-primary">
                     <Zap size={18} /> {total > 0 ? "Today's Picks" : 'Browse Fixtures'}
                   </button>
                   {total > 0 && (
-                    <button onClick={() => navigate('/leaderboard')} className="btn btn-secondary">
+                    <button onClick={() => navigate(ROUTES.LEADERBOARD)} className="btn btn-secondary">
                       <Trophy size={18} /> Leaderboard
                     </button>
                   )}
