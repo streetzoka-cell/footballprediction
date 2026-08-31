@@ -10,7 +10,7 @@ import { useFixtures, useStandings, useTeams } from '../hooks/useFixtures';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from "../store/usePreferencesStore";
 import { getLocalDateStr, formatDateShort, todayStr, yesterdayStr, tomorrowStr } from '../utils/dates';
-import { buildMatchRoute } from '../utils/routes';
+import { buildMatchRoute, ROUTES } from '../utils/routes';
 import { slugify } from '../utils/seoBuilder';
 import { SITE } from '../utils/seoBuilder';
 import { Sound } from '../utils/soundEngine';

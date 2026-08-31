@@ -2,7 +2,7 @@
 import React, { memo, useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { Star, Pin, Camera, Clock, Zap, ChevronRight } from 'lucide-react';
-import { buildMatchRoute } from '../utils/routes';
+import { buildMatchRoute, ROUTES } from '../utils/routes';
 import { formatMinute } from '../engine/matchEngine';
 
 const MatchCard = memo(({ m, i, isFav, isPinned, togglePinMatch, toggleFavorite, handleReactNow }) => {

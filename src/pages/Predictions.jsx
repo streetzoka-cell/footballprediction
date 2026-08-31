@@ -14,7 +14,7 @@ import { PATHS } from '../utils/constants';
 import SEO from '../components/SEO';
 import { useToast } from '../core/ToastManager';
 import { mergeLiveIntoPredictions, calculateUserStats } from '../engine/predictionEngine';
-import { buildMatchRoute } from '../utils/routes';
+import { buildMatchRoute, ROUTES } from '../utils/routes';
 import EmptyState from '../components/EmptyState';
 import PickGroupsView from '../components/PickGroupsView';
 import GroupInsights from '../components/GroupInsights';

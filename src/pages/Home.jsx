@@ -12,6 +12,7 @@ import AdSlot from '../components/AdSlot';
 import { ListSkeleton } from '../components/StateFeedback';
 import { applySmartMinute } from '../engine/matchEngine';
 import { useGlobalStats } from '../hooks/useGlobalStats';
+import { ROUTES } from '../utils/routes';
 
 function useNow(interval=10000){ const [now,setNow]=useState(Date.now()); useEffect(()=>{ const id=setInterval(()=>setNow(Date.now()),interval); return()=>clearInterval(id); },[interval]); return now; }
 const getGreeting=()=>{ const h=new Date().getHours(); if(h<5) return {text:'Burning the midnight oil',emoji:'🦉'}; if(h<12) return {text:'Good morning',emoji:'☀'}; if(h<17) return {text:'Good afternoon',emoji:'🌤'}; if(h<21) return {text:'Good evening',emoji:'🌆'}; return {text:'Good night',emoji:'🦉'}; };
