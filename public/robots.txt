@@ -1,7 +1,0 @@
-User-agent: *
-Allow: /
-Disallow: /api/
-Disallow: /studio
-Disallow: /zks-admin-8f9x2-control-panel
-Disallow: /search
-Disallow: /profile
